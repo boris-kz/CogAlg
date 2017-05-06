@@ -27,8 +27,3 @@ level 3 compares contiguous 2D patterns within a frame, forming discontinuous 2D
 
 level 4 compares discontinuous 2D patterns between different images, forming groups of blobs that match across images
 
-Level 1: comparison of consecutive pixels within horizontal line, evaluation of resulting match, formation of
-
-difference patterns dPs: spans of pixels forming same-sign differences, and overlapping
-
-value patterns vPs: spans of pixels forming same-sign predictive value:
