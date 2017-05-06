@@ -27,3 +27,10 @@ level 3 compares contiguous 2D patterns within a frame, forming discontinuous 2D
 
 level 4 compares discontinuous 2D patterns between different images, forming groups of blobs that match across images
 
+Initial testing will be done on labeled images, something like ImageNet, starting with level 4. 
+
+It can’t be done on lower levels because human vision is natively 2D, while my algorithm is incremental in dimensionality. 
+
+So, my lower levels are defined theoretically.  
+ 
+ 
