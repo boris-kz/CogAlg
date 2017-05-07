@@ -1,3 +1,12 @@
+'''
+Level 2:
+Clustering (patterning) and selective cross-comparison between vertically adjacent
+and horizontally overlapping 1D patterns, formed by level 1.
+These patterns: interlaced and overlapping dPs and vPs, are clustered and
+cross-compared separately, forming 2D patterns (blobs).
+
+'''
+
 FP_ = Le1(Fp_) # input frame of 1D patterns: vP or dP
 
 def Le2(FP_, H, a, aV, aD, A, AV, AD):  # or Le2-specific filters?
@@ -23,7 +32,7 @@ def Le2(FP_, H, a, aV, aD, A, AV, AD):  # or Le2-specific filters?
 def overlap(iP_): # computes rdn_w: total width of stronger alt.Ps overlap to P
 
     xd, xv, rdn_w, alt_P = (0, 0, 0, {})
-    buff_ = []  # alt_Ps re-inputted into vP_ or dP_ for next-P overlap()
+    buff_ = []  # alt_Ps re-inputted into vP_ or dP_ to compute next-P overlap()
     disp_ = []  # alt_Ps outputted into ovP_ or odP_ for:
     ovP_, odP_= ([],[]) # output to patt()
 
@@ -49,17 +58,17 @@ def overlap(iP_): # computes rdn_w: total width of stronger alt.Ps overlap to P
             _rdn_w, _s, _ix, _x, _w, _I, _p, _D, _d, _V, _v, _r, _e_ = alt_P # first "_" denotes alt_P var
 
             dx = x -_x  # always > 0
-            rem_ow = w - dx  # remaining width of overlap between P and uP_
+            rem_ow = w - dx  # remaining width of overlap between P and alt_P_
 
             while rem_ow > 0:
-                ow = min(rem_ow, _w)  # w of overlap between P and uP
+                ow = min(rem_ow, _w)  # w of overlap between P and alt_P
 
                 if abs(d) + v > abs(_d) +_v:  # relative evaluation, uni ave v, no + p: redundant to d,v?
                     _rdn_w += ow  # alternative redundancy allocation
                 else: rdn_w += ow
 
                 if rem_ow > _w:
-                    disp_.append(alt_P) # including overlap per uP, from forward and backward overlap() runs
+                    disp_.append(alt_P) # including overlap per P, from forward and backward overlap() runs
                 else:
                     buff_.append(alt_P) # overlap accumulated in forward (as P) and backward (as alt_P) runs
 
@@ -90,7 +99,7 @@ def patt(P_, _P_): # patterning vertically adjacent and horizontal aligned vPs o
 
     for i in range(len(P_)):
 
-        P = P_.pop()
+        P = P_.pop()  # after P_ order reversal?
         rdn_w, s, ix, x, w, I, p, D, d, V, v, r, e_ = P
 
         while x >_x: # horizontal overlap between P and next _P, initially from overlap() in Le2
@@ -123,7 +132,7 @@ def patt(P_, _P_): # patterning vertically adjacent and horizontal aligned vPs o
 
             else: o = _P, _sP_, _SP_; buff_.append(o)
                 
-        _P_ += buff_ # re-input to next_P patt()
+        _P_ += buff_ # re-input to next_P patt(), after _P_ order reversal?
         o = P, sP_, SP_; next_.append(o)  # prior-line _sP_ and _SP_ were transferred at match
 
         if sn or Sn == 0 and S and (abs(sD) + sV + a * sw) - (_sn +_Sn) * aSS > 0:
@@ -136,8 +145,19 @@ def patt(P_, _P_): # patterning vertically adjacent and horizontal aligned vPs o
 
     return next_ # re-inputted as _P_
 
-def comp_P(_P_)
+def comp_P(_P_):
+        """
+        :param _P_:
+        :return:
+        """
+        pass
 
+def cons(term_):
+        """
+        :param term_:
+        :return:
+        """
+        pass
 '''
     mw = min(w, _w); dw = w - _w
     ax = x - w/2; _ax = _x - _w/2  # median x, more stable than last x?
