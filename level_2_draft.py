@@ -1,15 +1,17 @@
 '''
 Level 2:
+
 Clustering (patterning) and selective cross-comparison between vertically adjacent
 and horizontally overlapping 1D patterns, formed by level 1.
-These patterns: interlaced and overlapping dPs and vPs, are clustered and
+These patterns are interlaced and overlapping dPs and vPs, clustered and
 cross-compared separately, forming 2D patterns (blobs).
 
 '''
 
-FP_ = Le1(Fp_) # input frame of 1D patterns: vP or dP
+FP_, H = Le1(Fp_)  # input frame of 1D patterns: vP or dP
 
-def Le2(FP_, H, a, aV, aD, A, AV, AD):  # or Le2-specific filters?
+
+def Le2(FP_, H,):  # also a, aV, aD, *= Le2-specific multiples?
 
     FP2_, P2_, P2 = ([],[],{})  # output frame, line, and 2D patterns: vP2 or dP2
 
@@ -20,8 +22,8 @@ def Le2(FP_, H, a, aV, aD, A, AV, AD):  # or Le2-specific filters?
 
         if y > 0: # patterning vertically adjacent and horizontal aligned iPs into sPs and SPs
 
-           _vP_= patt(vP_,_vP_); patt(vP_,_vP_) # vP_s -> vsP_ and vSP_
-           _dP_= patt(dP_,_dP_); patt(dP_,_dP_) # dP_s -> dsP_ and dSP_
+           _vP_ = patt(vP_, _vP_); patt(vP_, _vP_)  # vP_s -> vsP_ and vSP_
+           _dP_ = patt(dP_, _dP_); patt(dP_, _dP_)  # dP_s -> dsP_ and dSP_
 
         else: _vP_= vP_; _dP_= dP_ # prior line initialization, y>1 lines get _P_ from patt()
 
@@ -29,12 +31,13 @@ def Le2(FP_, H, a, aV, aD, A, AV, AD):  # or Le2-specific filters?
 
     return FP2_  # frame of 2D patterns (vP2 or dP2) is outputted to level 3
 
-def overlap(iP_): # computes rdn_w: total width of stronger alt.Ps overlap to P
+
+def overlap(iP_):  # computes rdn_w: total width of stronger alt.Ps overlap to P
 
     xd, xv, rdn_w, alt_P = (0, 0, 0, {})
     buff_ = []  # alt_Ps re-inputted into vP_ or dP_ to compute next-P overlap()
-    disp_ = []  # alt_Ps outputted into ovP_ or odP_ for:
-    ovP_, odP_= ([],[]) # output to patt()
+    disp_ = []  # alt_Ps outputted into ovP_ or odP_ for output to patt():
+    ovP_, odP_= ([],[])
 
     for i in range(len(iP_)):  # row of Le1 patterns: dPs or vPs, min_r or r per root e_?
 
@@ -52,7 +55,7 @@ def overlap(iP_): # computes rdn_w: total width of stronger alt.Ps overlap to P
             x = xv + w  # last x coordinate of vP
             alt_P_= dP_
 
-        if len(alt_P_) > 0: # skip and alt_P_ initialization if len(alt_P_) == 0
+        if len(alt_P_) > 0:  # skip and alt_P_ initialization if len(alt_P_) == 0
 
             alt_P = alt_P_.pop() # reassigned buff_, why number? accessed only for rdn_w, x, w, d, v?
             _rdn_w, _s, _ix, _x, _w, _I, _p, _D, _d, _V, _v, _r, _e_ = alt_P # first "_" denotes alt_P var
@@ -61,16 +64,16 @@ def overlap(iP_): # computes rdn_w: total width of stronger alt.Ps overlap to P
             rem_ow = w - dx  # remaining width of overlap between P and alt_P_
 
             while rem_ow > 0:
-                ow = min(rem_ow, _w)  # w of overlap between P and alt_P
+                ow = min(rem_ow, _w)  # width of overlap between P and current alt_P
 
-                if abs(d) + v > abs(_d) +_v:  # relative evaluation, uni ave v, no + p: redundant to d,v?
-                    _rdn_w += ow  # alternative redundancy allocation
+                if abs(d) + v > abs(_d) +_v:  # relative evaluation, unilateral ave v, p is redundant to d,v
+                    _rdn_w += ow  # alternative overlap (redundancy) assignment
                 else: rdn_w += ow
 
                 if rem_ow > _w:
-                    disp_.append(alt_P) # including overlap per P, from forward and backward overlap() runs
+                    disp_.append(alt_P)  # _P -> disp_ if no next P overlap
                 else:
-                    buff_.append(alt_P) # overlap accumulated in forward (as P) and backward (as alt_P) runs
+                    buff_.append(alt_P)  # with rdn_w from forward (as P) and backward (as alt_P) overlap()
 
                 rem_ow -= ow  # remaining overlap, possibly negative
                 if rem_ow > 0:
@@ -78,18 +81,17 @@ def overlap(iP_): # computes rdn_w: total width of stronger alt.Ps overlap to P
                    _rdn_w, _s, _ix, _x, _w, _I, _p, _D, _d, _V, _v, _r, _e_ = alt_P  # no rem_ow = w - dx
 
             P = rdn_w, s, ix, x, w, I, p, D, d, V, v, r, e_
-            # overlap() splits iP_ into vP_ and dP_, adds rdn_w, ix, x, averages to each P
 
         if type > 0:
-            dP_.append(P); vP_+= buff_; ovP_+= disp_
+            dP_.append(P); vP_.reverse(); vP_+= buff_; vP_.reverse(); ovP_+= disp_  # vP_ front concat?
         else:
-            vP_.append(P); dP_+= buff_; odP_+= disp_  # disp_ if no next P overlap, concat in right order?
+            vP_.append(P); dP_.reverse(); dP_+= buff_; dP_.reverse(); odP_+= disp_
 
-    return ovP_, odP_  # vP2 are formed over complete output ovP_ or odP_:
+    return ovP_, odP_  # overlap() splits iP_ into (o)vP_ and (o)dP_, adds rdn_w, ix, x, p, d, v to each P
 
 
-def patt(P_, _P_): # patterning vertically adjacent and horizontal aligned vPs or dPs
-                   # first "_" denotes pri_ pattern or variable
+def patt(P_, _P_):  # patterning (clustering) vertically adjacent and horizontally overlapping vPs or dPs
+                    # first "_" denotes array, pattern, or variable from higher line
 
     P, _P, sP_, SP_, _sP_, _SP_, dP2_, vP2_, buff_, term_, next_ = ({},{},[],[],[],[],[],[],[],[],[])
     _x = 0; a = 127; aS = 511; aSS = 2047 # Le1_a * aw: vert patt() and comp() cost, A = a*r: vert comp range?
@@ -131,11 +133,12 @@ def patt(P_, _P_): # patterning vertically adjacent and horizontal aligned vPs o
                elif Sn == 0: o = _P, _SP_; term_.append(o) # _sP_ = []?
 
             else: o = _P, _sP_, _SP_; buff_.append(o)
-                
-        _P_ += buff_ # re-input to next_P patt(), after _P_ order reversal?
+
+        _P_.reverse(); _P_ += buff_; _P_.reverse() # front concat: re-input to next_P patt()?
         o = P, sP_, SP_; next_.append(o)  # prior-line _sP_ and _SP_ were transferred at match
 
         if sn or Sn == 0 and S and (abs(sD) + sV + a * sw) - (_sn +_Sn) * aSS > 0:
+
            # intra - +SP comp eval at sP or SP termination, (_sn +_Sn) * rrdn?
 
            comp_P(_P_)  # after _P term?

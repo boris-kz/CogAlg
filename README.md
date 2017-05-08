@@ -17,7 +17,8 @@ Hierarchical approaches are common in unsupervised learning, and all do some sor
 
 Search space (above) is the number of patterns * number of their variables. Number of variables per pattern is incremental, starting from single-variable inputs, such as pixels in video. Each level of search adds new variables: match and miss, to every compared variable of an input pattern. So, the number of variables multiplies at every level, new variables are summed within a pattern, then combined to evaluate that pattern for expanded search. Feedback of averaged new variables extends lower-level algorithm by adding operations that filter future inputs, and then by adjusting the filters.
 
-CogAlg implementation for image recognition: incremental-dimensionality pattern discovery (partial implementation of “incremental space-time dimensionality” section of part 2 in my core article):
+CogAlg implementation for image recognition: incremental-dimensionality pattern discovery
+(partial implementation of “incremental space-time dimensionality” section of part 2 in my intro):
 
 level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments
 
@@ -27,10 +28,10 @@ level 3 compares contiguous 2D patterns within a frame, forming discontinuous 2D
 
 level 4 compares discontinuous 2D patterns between different images, forming groups of blobs that match across images
 
-Initial testing will be done on labeled images, something like ImageNet, starting with level 4.
-
-It can’t be done on lower levels because human vision is natively 2D, while my algorithm is incremental in dimensionality.
-
+Initial testing will be recognition and automatic labeling of manually labeled images, from something like ImageNet. Because human vision is natively 2D, while my algorithm is incremental in dimensionality, testing will start from level 4.
 So, my lower levels are defined theoretically.
+
+This algorithm will be organically extended to process colors, then video, then stereo video (from multiple confocal cameras).
+For video, level 3 will process consecutive frames and derive temporal patterns, and levels 4 and higher will process discontinuous 2D + time patterns.
 
 
