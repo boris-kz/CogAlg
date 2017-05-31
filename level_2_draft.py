@@ -17,8 +17,9 @@ def Le2(FP_, H,):  # also a, aV, aD, *= Le2-specific multiples?
 
     for y in range(H):
 
-        iP_ = FP_[y, :]  # y is index of new line iP_
-        vP_, dP_= overlap(iP_)  # forms rdn_w to define S: filter *= 1 + w / rdn_w
+        ivP_, idP_ = FP_[y, :]  # y is index of new line iP_
+        vP_= overlap(ivP_)  # forms rdn_w to define S: filter *= 1 + w / rdn_w
+        dP_= overlap(idP_)
 
         if y > 0: # patterning vertically adjacent and horizontal aligned iPs into sPs and SPs
 
@@ -34,30 +35,51 @@ def Le2(FP_, H,):  # also a, aV, aD, *= Le2-specific multiples?
 
 def overlap(iP_):  # computes rdn_w: total width of stronger alt.Ps overlap to P
 
-    xd, xv, rdn_w, alt_P = (0, 0, 0, {})
+    xd, xv, _rdn_w, rdn_w, alt_P = (0, 0, 0, 0, {})
     buff_ = []  # alt_Ps re-inputted into vP_ or dP_ to compute next-P overlap()
     disp_ = []  # alt_Ps outputted into ovP_ or odP_ for output to patt():
     ovP_, odP_= ([],[])
 
     for i in range(len(iP_)):  # row of Le1 patterns: dPs or vPs, min_r or r per root e_?
 
-        dP_, vP_ = ([],[]) # initialized empty for each line of 1D patterns, why numbers?
+        dP_, vP_ = ([],[])  # for each line of 1D patterns, or separation at output, for easy access?
 
-        type, s, w, I, D, V, r, e_ = iP_[i]  # type: flag indicating alternative vP or dP
-        p = I / w; d = D / w; v = V / w  # default to eval overlap, poss. for div.comp?
+        type, s, w, p, I, d, D, v, V, r, e_, alt_ = iP_[i]  # type: flag indicating alternative vP or dP
 
         if type > 0:
-            ix = xd  # first x coordinate of dP
+            ix = xd   # first x coordinate of dP, all computed on Le2 to avoid transfer
             x = xd + w  # last x coordinate of dP
-            alt_P_= vP_ # alternative-type array and pattern to compute overlap
         else:
-            ix = xv  # first x coordinate of vP
+            ix = xv   # first x coordinate of vP
             x = xv + w  # last x coordinate of vP
-            alt_P_= dP_
 
+        for i in range(len(alt_)):  # alternative patterns' buffer
+
+            _i, ow = alt_[i]
+            _s, _w, _p, _I, _d, _D, _v, _V, _r, _e_, _alt_ = iP_[_i]  # if present: full frame input?
+
+            if abs(d) + v > abs(_d) + _v:  # relative evaluation, unilateral ave v, p is redundant to d,v
+                _rdn_w += ow  # alternative overlap (redundancy) assignment
+            else:
+                rdn_w += ow
+
+            P = rdn_w, s, ix, x, w, p, I, d, D, v, V, r, e_
+
+        # full frame process before pattern(), dP_ and vP_ by Le1: recorded alt_, separate coord, access?
+
+        if type > 0:
+            dP_.append(P); vP_.reverse(); vP_+= buff_; vP_.reverse()  # vP_ front concat?
+            ovP_ += disp_  # ultimate eval in pattern()?
+        else:
+            vP_.append(P); dP_.reverse(); dP_+= buff_; dP_.reverse()
+            odP_ += disp_
+
+    return ovP_, odP_  # overlap() splits iP_ into (o)vP_ and (o)dP_, adds rdn_w, ix, x, to each P
+
+'''
         if len(alt_P_) > 0:  # skip and alt_P_ initialization if len(alt_P_) == 0
 
-            alt_P = alt_P_.pop() # reassigned buff_, why number? accessed only for rdn_w, x, w, d, v?
+            alt_P = alt_P_.pop() # reassigned buff_, accessed only for rdn_w, x, w, d, v?
             _rdn_w, _s, _ix, _x, _w, _I, _p, _D, _d, _V, _v, _r, _e_ = alt_P # first "_" denotes alt_P var
 
             dx = x -_x  # always > 0
@@ -88,7 +110,7 @@ def overlap(iP_):  # computes rdn_w: total width of stronger alt.Ps overlap to P
             vP_.append(P); dP_.reverse(); dP_+= buff_; dP_.reverse(); odP_+= disp_
 
     return ovP_, odP_  # overlap() splits iP_ into (o)vP_ and (o)dP_, adds rdn_w, ix, x, p, d, v to each P
-
+'''
 
 def patt(P_, _P_):  # patterning (clustering) vertically adjacent and horizontally overlapping vPs or dPs
                     # first "_" denotes array, pattern, or variable from higher line
@@ -102,7 +124,7 @@ def patt(P_, _P_):  # patterning (clustering) vertically adjacent and horizontal
     for i in range(len(P_)):
 
         P = P_.pop()  # after P_ order reversal?
-        rdn_w, s, ix, x, w, I, p, D, d, V, v, r, e_ = P
+        rdn_w, s, ix, x, w, p, I, d, D, v, V, r, e_ = P
 
         while x >_x: # horizontal overlap between P and next _P, initially from overlap() in Le2
 
