@@ -17,6 +17,9 @@ Hierarchical approaches are common in unsupervised learning, and all do some sor
 
 Search space (above) is the number of patterns * number of their variables. Number of variables per pattern is incremental, starting from single-variable inputs, such as pixels in video. Each level of search adds new variables: match and miss, to every compared variable of an input pattern. So, the number of variables multiplies at every level, new variables are summed within a pattern, then combined to evaluate that pattern for expanded search. Feedback of averaged new variables extends lower-level algorithm by adding operations that filter future inputs, and then by adjusting the filters.
 
+Explanation below is out of date,
+my current work-in-progress on combined-dimensionality search is in level_1_2_draft.py
+
 CogAlg implementation for image recognition: incremental-dimensionality pattern discovery
 (partial implementation of “incremental space-time dimensionality” section of part 2 in my intro):
 

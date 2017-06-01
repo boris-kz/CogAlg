@@ -1,4 +1,8 @@
+
+FP_, H = Le1(Fp_)  # input frame of 1D patterns: vP or dP
+
 '''
+
 Level 2:
 
 Clustering (patterning) and selective cross-comparison between vertically adjacent
@@ -7,9 +11,6 @@ These patterns are interlaced and overlapping dPs and vPs, clustered and
 cross-compared separately, forming 2D patterns (blobs).
 
 '''
-
-FP_, H = Le1(Fp_)  # input frame of 1D patterns: vP or dP
-
 
 def Le2(FP_, H,):  # also a, aV, aD, *= Le2-specific multiples?
 

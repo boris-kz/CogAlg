@@ -1,4 +1,7 @@
+from scipy import misc
+
 '''
+
 Level 1:
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
@@ -7,9 +10,6 @@ and relative match patterns vPs: spans of pixels forming same-sign predictive va
 overlap within each line of pixels.
 
 '''
-
-from scipy import misc
-
 
 def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
 
@@ -99,7 +99,7 @@ def comp(p, pri_p, fd, fv, W, x,  # x is from higher-scope for loop w
 
         p = I / len(p_); d = D / len(p_); v = V / len(p_)  # default to eval overlap, poss. div.comp?
         vP = 0, pri_s, p, I, d, D, v, V, rv, p_, alt_
-        vP_.append(vP)  # output of vP
+        vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont comp till Le3?
 
         alt = len(vP_), ow  # len(P_) is an address of last overlapping vP
         alt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
