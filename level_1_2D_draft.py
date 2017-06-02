@@ -10,13 +10,13 @@ performed on the same level because average lateral match ~ average vertical mat
 
 average of rightward and downward match or difference per pixel (they equally representative samples of quadrant).
 
-Quadrant gradient is a minimal unit of 2D gradient, so 2D pattern is defined by matching sign
+Quadrant gradient is a minimal unit of 2D gradient, so 2D pattern is defined by matching sign of 
 
-of quadrant value gradient for vP or quadrant difference gradient for dP.
+quadrant gradient of value for vP, or quadrant gradient of difference for dP.
 
 '''
 
-def comp(p, pri_p, pri_py, fd, fv, W, H, x, y, A, r, vP_, dP_,  # x is from higher-scope for loop w
+def comp(p, pri_p, pri_py, fd, fv, x, y, W, H, A, r, vP_, dP_,  # x and y are from higher-scope for loop w, h
          pri_s, I, D, V, rv, p_, ow, alt_,
          pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
          pri_sy, # summation is per 1D P, them comp? or all sums are 2D?
@@ -25,44 +25,45 @@ def comp(p, pri_p, pri_py, fd, fv, W, H, x, y, A, r, vP_, dP_,  # x is from high
 
     d = p - pri_p    # difference between consecutive pixels
     dy = p - pri_py  # difference between vertically consecutive pixels
-    dg = d + dy      # 2D gradient of difference
-    fd += dg         # all shorter + current- range dg s within extended quadrant?
+    dq = d + dy      # quadrant gradient of difference
+    fd += dq         # all shorter + current- range dq s within extended quadrant?
 
     m = min(p, pri_p)  # match between consecutive pixels
     my = min(p, pri_py)  # match between vertically consecutive pixels
-    vg = m + my - A    # 2D gradient of predictive value (relative match)
-    fv += vg           # all shorter + current- range v s within extended quadrant
+    vq = m + my - A    # quadrant gradient of predictive value (relative match)
+    fv += vq           # all shorter + current- range vq s within extended quadrant
 
-    # formation of value pattern vP: span of pixels forming same-sign v s:
+    # formation of 1D value pattern vP: span of pixels forming same-sign v s:
 
-    s = 1 if vg > 0 else 0  # s: positive sign of v
+    s = 1 if vq > 0 else 0  # s: positive sign of v
     if x > r+2 and (s != pri_s or x == W-1):  # if derived pri_s miss, vP is terminated
 
-        vP = 0, pri_s, I, D, V, rv, p_, alt_  # no default div: redundancy eval per P2 on Le2?
-        vP_.append(vP)  # output of vP
+        vP = pri_s, I, D, V, rv, p_, alt_  # no default div: redundancy eval per P2 on Le2?
 
-        alt = len(vP_), ow  # len(P_) is an address of last overlapping vP
+        # P term, formation of 2D value pattern vP2: blob of pixels forming same-sign v s:
+        # comp to vertically prior Ps in _P_:
+        # synchronized with input p? or pri_py, to be terminated?
+        # addition to P2
+
+        vP_.append(vP)  # vP_ is within vP2,
+
+        alt = len(vP_), ow  # len(P_) is an index of last overlapping vP
         alt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
 
         I, D, V, rv, ow, owd, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # initialization of new vP and ow
 
-        # P term and eval of comp to vertically prior P in P_ of P2?
-        # also eval of rotate, 1D re-scan and re-comp at P2 term?
-
     pri_s = s   # vP (span of pixels forming same-sign v) is incremented:
     ow += 1     # overlap to current dP
     I += pri_p  # ps summed within vP
-    D += dg     # fds summed within vP into fuzzy D
+    D += dq     # fds summed within vP into fuzzy D
     V += fv     # fvs summed within vP into fuzzy V
-    pri = pri_p, dg, fv
+    pri = pri_p, dq, fv
     p_.append(pri)  # buffered within w for selective extended comp
 
 
-    # formation of 2D value pattern vP2: blob of pixels forming same-sign v s:
-    # summation per P vs. p?
+    if y > r+2 and (s != pri_sy or y == H-1):  # if derived pri_sy miss, vP2 is terminated,
 
-    if y > r+2 and (s != pri_sy or y == H-1):  # if derived pri_s miss, vP is terminated
-
+       # also eval of rotate, 1D re-scan and re-comp
 
     # formation of difference pattern dP: span of pixels forming same-sign d s:
 
@@ -159,6 +160,9 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
     for y in range(H):
 
         ip_ = Fp_[y, :]  # y is index of new line ip_
+        if y > 0: _ip_ = Fp_[y-1, :]  # _ip_: higher line of pixels
+        else: _ip_ = 0  # W * 0?  
+
         if min_r == 0: A = a
         else: A = 0;
 
@@ -169,6 +173,8 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
         for x in range(W):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
 
             p = ip_[x]  # could use pop()? new pixel, comp to prior pixel:
+            _p = _ip_[x]  # also contains patterns:
+
             if x > 0:
                 pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP_, dP_ = \
                 comp(p, pri_p, fd, fv, W, x, A, r, vP_, dP_,

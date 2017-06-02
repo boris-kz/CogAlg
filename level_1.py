@@ -74,10 +74,10 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
     return vP_, dP_  # local vPs and dPs to replace d_
 
 
-def comp(p, pri_p, fd, fv, W, x,  # x is from higher-scope for loop w
-         pri_s, I, D, V, rv, p_, ow, alt_,
-         pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
-         a, aV, aD, min_r, A, AV, AD, r, vP_, dP_):
+def comp(p, pri_p, fd, fv, W, x,  # input variables
+         pri_s, I, D, V, rv, p_, ow, alt_,  # variables of vP
+         pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,  # variables of dP
+         a, aV, aD, min_r, A, AV, AD, r, vP_, dP_):  # filter variables and output patterns
 
     d = p - pri_p      # difference between consecutive pixels
     m = min(p, pri_p)  # match between consecutive pixels
@@ -86,19 +86,20 @@ def comp(p, pri_p, fd, fv, W, x,  # x is from higher-scope for loop w
     fd += d  # fd includes all shorter + current- range ds between comparands
     fv += v  # fv includes all shorter + current- range vs between comparands
 
+
     # formation of value pattern vP: span of pixels forming same-sign v s:
 
     s = 1 if v > 0 else 0  # s: positive sign of v
-    if x > r+2 and (s != pri_s or x == W-1): # if derived pri_s miss, vP is terminated
+    if x > r+2 and (s != pri_s or x == W-1):  # if derived pri_s miss, vP is terminated
 
         if len(p_) > r+3 and pri_s == 1 and V > AV:  # min 3 comp over extended distance within p_:
 
-            r += 1  # r: incremental range of comp
+            r += 1  # r: incremental range-of-comp counter
             rv = 1  # rv: incremental range flag:
             p_.append(inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_))
 
         p = I / len(p_); d = D / len(p_); v = V / len(p_)  # default to eval overlap, poss. div.comp?
-        vP = 0, pri_s, p, I, d, D, v, V, rv, p_, alt_
+        vP = pri_s, p, I, d, D, v, V, rv, p_, alt_
         vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont comp till Le3?
 
         alt = len(vP_), ow  # len(P_) is an address of last overlapping vP
@@ -114,6 +115,7 @@ def comp(p, pri_p, fd, fv, W, x,  # x is from higher-scope for loop w
     pri = pri_p, fd, fv
     p_.append(pri)  # buffered within w for selective extended comp
 
+
     # formation of difference pattern dP: span of pixels forming same-sign d s:
 
     sd = 1 if d > 0 else 0  # sd: positive sign of d;
@@ -124,8 +126,8 @@ def comp(p, pri_p, fd, fv, W, x,  # x is from higher-scope for loop w
             rd = 1  # rd: incremental derivation flag:
             d_.append(inc_der(a, aV, aD, min_r, A, AV, AD, r, d_))
 
-        pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # all alt Ps can be immediately evaluated?
-        dP = 1, pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dalt_
+        pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # so all alt Ps can be directly evaluated
+        dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dalt_
         dP_.append(dP)  # output of dP
 
         dalt = len(dP_), owd  # len(P_) is an address of last overlapping dP
