@@ -103,7 +103,7 @@ def comp(p, pri_p, fd, fv, W, x,  # input variables
         vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont comp till Le3?
 
         alt = len(vP_), ow  # len(P_) is an address of last overlapping vP
-        alt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
+        dalt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
 
         I, D, V, rv, ow, owd, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # initialization of new vP and ow
 
@@ -130,8 +130,8 @@ def comp(p, pri_p, fd, fv, W, x,  # input variables
         dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dalt_
         dP_.append(dP)  # output of dP
 
-        dalt = len(dP_), owd  # len(P_) is an address of last overlapping dP
-        dalt_.append(dalt)  # addresses of overlapping dPs and owds are buffered at current vP
+        alt = len(dP_), owd  # len(P_) is an address of last overlapping dP
+        alt_.append(alt)  # addresses of overlapping dPs and owds are buffered at current vP
 
         Id, Dd, Vd, rd, ow, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # initialization of new dP and ow
 
