@@ -42,11 +42,11 @@ def overlap(iP_):  # computes ix, x, rdn_w: total width of stronger alt.Ps overl
 
         s, p, I, d, D, v, V, r, e_, alt_ = iP_[i]
         ix = x  # first x coordinate of P, computed on Le2 to avoid transfer
-        x = x + len(e_)  # last x coordinate of P
+        x += len(e_)  # last x coordinate of P
 
-        for i in range(len(alt_)):  # alternative patterns' buffer
+        for ii in range(len(alt_)):  # alternative patterns' buffer
 
-            _i, ow = alt_[i]
+            _i, ow = alt_[ii]
             _s, _p, _I, _d, _D, _v, _V, _r, _e_, _alt_ = iP_[_i]  # if present: full frame input?
 
             if abs(d) + v > abs(_d) + _v:  # relative evaluation, unilateral ave v, p is redundant to d,v
@@ -59,54 +59,15 @@ def overlap(iP_):  # computes ix, x, rdn_w: total width of stronger alt.Ps overl
 
     return P_  # overlap() adds rdn_w, ix, x, to each P
 
-'''
-    buff_ = []  # alt_Ps re-inputted into vP_ or dP_ to compute next-P overlap()
-    disp_ = []  # alt_Ps to be added to outp_ for output to patt():
-    outp_ = []
-    
-        if len(alt_P_) > 0:  # skip and alt_P_ initialization if len(alt_P_) == 0
-
-            alt_P = alt_P_.pop() # reassigned buff_, accessed only for rdn_w, x, w, d, v?
-            _rdn_w, _s, _ix, _x, _w, _I, _p, _D, _d, _V, _v, _r, _e_ = alt_P # first "_" denotes alt_P var
-
-            dx = x -_x  # always > 0
-            rem_ow = w - dx  # remaining width of overlap between P and alt_P_
-
-            while rem_ow > 0:
-                ow = min(rem_ow, _w)  # width of overlap between P and current alt_P
-
-                if abs(d) + v > abs(_d) +_v:  # relative evaluation, unilateral ave v, p is redundant to d,v
-                    _rdn_w += ow  # alternative overlap (redundancy) assignment
-                else: rdn_w += ow
-
-                if rem_ow > _w:
-                    disp_.append(alt_P)  # _P -> disp_ if no next P overlap
-                else:
-                    buff_.append(alt_P)  # with rdn_w from forward (as P) and backward (as alt_P) overlap()
-
-                rem_ow -= ow  # remaining overlap, possibly negative
-                if rem_ow > 0:
-                   alt_P = alt_P_.pop()
-                   _rdn_w, _s, _ix, _x, _w, _I, _p, _D, _d, _V, _v, _r, _e_ = alt_P  # no rem_ow = w - dx
-
-            P = rdn_w, s, ix, x, w, I, p, D, d, V, v, r, e_
-
-        if type > 0:
-            dP_.append(P); vP_.reverse(); vP_+= buff_; vP_.reverse(); ovP_+= disp_  # vP_ front concat?
-        else:
-            vP_.append(P); dP_.reverse(); dP_+= buff_; dP_.reverse(); odP_+= disp_
-
-    return ovP_, odP_  # overlap() splits iP_ into (o)vP_ and (o)dP_, adds rdn_w, ix, x, p, d, v to each P
-'''
 
 def patt(P_, _P_):  # patterning (clustering) vertically adjacent and horizontally overlapping vPs or dPs
                     # first "_" denotes array, pattern, or variable from higher line
 
     P, _P, sP_, SP_, _sP_, _SP_, dP2_, vP2_, buff_, term_, next_ = ({},{},[],[],[],[],[],[],[],[],[])
-    _x = 0; a = 127; aS = 511; aSS = 2047 # Le1_a * aw: vert patt() and comp() cost, A = a*r: vert comp range?
+    _x = 0; a = 127; aS = 511; aSS = 2047  # Le1_a * aw: vert patt() and comp() cost, A = a*r: vert comp range?
 
     sw, sI, sD, sV, sn = (0, 0, 0, 0, 0)
-    Sw, SI, SD, SV, Sn, S = (0, 0, 0, 0, 0, 0) # also at the end of while?
+    Sw, SI, SD, SV, Sn, S = (0, 0, 0, 0, 0, 0)  # also at the end of while?
 
     for i in range(len(P_)):
 
@@ -115,7 +76,7 @@ def patt(P_, _P_):  # patterning (clustering) vertically adjacent and horizontal
 
         while x >_x: # horizontal overlap between P and next _P, initially from overlap() in Le2
 
-            _P, _sP_, _SP_ = _P_.pop() # SPs may include dP2_ and vP2_: arrays of root P2s
+            _P, _sP_, _SP_ = _P_.pop()  # SPs may include dP2_ and vP2_: arrays of root P2s
             _rrdn, _s, _sn, _S, _Sn, _ix, _x, _I, _p, _D, _d, _V, _v, _r, _e_ = _P
 
             # _rrdn is kept for indexed overlap adjustment, and combined sP_ x SP_ rdn eval?

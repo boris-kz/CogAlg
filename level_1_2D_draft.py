@@ -5,21 +5,20 @@ from scipy import misc
 Level 1 with 2D gradient: modified combination of core algorithm levels 1 and 2 
 
 Initial 2D comparison forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. Both lateral and vertical comparison is
-
 performed on the same level because average lateral match ~ average vertical match. These derivatives form quadrant gradients:
-
-average of rightward and downward match or difference per pixel (they equally representative samples of quadrant).
-
-Quadrant gradient is a minimal unit of 2D gradient, so 2D pattern is defined by matching sign of 
-
+average of rightward and downward match or difference per pixel (they are equally representative samples of quadrant).
+Quadrant gradient is a minimal unit of 2D gradient, so 2D pattern (blob) is defined by matching sign of 
 quadrant gradient of value for vP, or quadrant gradient of difference for dP.
 
 '''
 
-def comp(p, pri_p, _p, _d, _m, fd, fv, x, y, W, A, r, _ip_, vP_, dP_,  # x and y from higher-scope for loop w, h
-         pri_s, I, D, V, rv, p_, ow, alt_,
-         pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
-         dy, my): # summation is per 1D P, them comp? or all sums are 2D? _s is for P2 inclusion, at comp_P?
+def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, x, y, _x, W, r, A, # input variables, x and y from higher-scope for loop w, h
+         pri_s, I, D, V, rv, p_, ow, alt_,  # variables of vP
+         pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,  # variables of dP
+         _ip_, vP_, dP_, _vP_, _dP_):  # template array and output pattern arrays
+
+    # last "_" denotes array vs. element, first "_" denotes array, pattern, or variable from higher line
+    # summation is per 1D P, them comp? or all sums are 2D? _s is for P2 inclusion, at comp_P?
 
     d = p - pri_p    # difference between laterally consecutive pixels
     if y > 0: dy = p - _p  # difference between vertically consecutive pixels, else dy = 0
@@ -40,7 +39,9 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, x, y, W, A, r, _ip_, vP_, dP_,  # x and y
     if x > r+2 and (s != pri_s or x == W-1):  # vP is terminated if vq sign miss or line ends
 
         vP = pri_s, I, D, V, rv, p_, alt_  # no default div: redundancy eval per P2 on Le2?
-        vP_.append(vP)  # vP_ is within vP2
+        vP_.append(vP)  # or vP_ is within vP2, after comp_vP:
+
+        if y > 1: comp_P(vP, _vP_, x, _x, y)  # called from comp() if P term, separate comp_vP and comp_dP?
 
         alt = len(vP_), ow  # len(P_) is an index of last overlapping vP
         dalt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
@@ -48,9 +49,9 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, x, y, W, A, r, _ip_, vP_, dP_,  # x and y
 
     pri_s = s   # vP (representing span of same-sign vq s) is incremented:
     ow += 1     # overlap to current dP
-    I += pri_p  # ps summed within vP
-    D += dq     # fds summed within vP into fuzzy D
-    V += fv     # fvs summed within vP into fuzzy V
+    I += pri_p  # ps summed within P width
+    D += dq     # fds summed within P width
+    V += fv     # fvs summed within P width
 
     pri = pri_p, fd, fv  # same-line prior tuple,
     p_.append(pri)  # buffered within P for selective inc_rng comp
@@ -67,22 +68,74 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, x, y, W, A, r, _ip_, vP_, dP_,  # x and y
         dP = pri_sd, Id, Dd, Vd, rd, d_, dalt_
         dP_.append(dP)  # output of dP
 
+        if y > 1: comp_P(dP, _dP_, x, _x, y)  # called from comp() if P term, separate comp_vP and comp_dP?
+
         alt = len(dP_), owd  # len(P_) is an address of last overlapping dP
         alt_.append(alt)  # addresses of overlapping dPs and owds are buffered at current vP
         Id, Dd, Vd, rd, ow, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # initialization of new dP and ow
 
     pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
     owd += 1     # overlap to current vP
-    Id += pri_p  # ps summed within wd
-    Dd += fd     # fds summed within wd
-    Vd += fv     # fvs summed within wd
+    Id += pri_p  # ps summed within P width
+    Dd += fd     # fds summed within P width
+    Vd += fv     # fvs summed within P width
     d_.append(fd)  # prior fds are buffered within P for selective inc_der comp
 
 
-    return pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, _ip_, vP_, dP_
-    # for next p comparison, vP and dP increment, and output
+    return pri_s, I, D, V, rv, p_, ow, alt_, \
+           pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, \
+           _x, _ip_, vP_, dP_, _vP_, _dP_ # for next p comparison and P increment
 
-def comp_P(  #
+'''
+incremental depth of comp per prior line, up to 4 levels:
+
+- array of pixels on current y line: lateral comp ->
+- array of p,m,d tuples on y-1 line: vertical comp ->
+- array of 1D patterns on y -2 line: vertical comp_P()->
+- array of 2D patterns on y -3 line: term(), comp_P2 is on Le2: higher-composition inputs
+
+1D alt_ are combined into P2 alt_:?
+'''
+
+def comp_P(P, _P_, x, _x, y):  # called from comp() if P term, _x is from last comp_P() within line
+
+    s, I, D, V, r, e_, alt_ = P
+    ix = x - len(e_)
+
+    while x > _x:  # horizontal overlap between P and next _P, no overlap redun eval till P2?
+
+        _P, _P2_ = _P_.pop()  # root P2s, inclusion by sign only: ~dP, !comp
+        _s, _n, _ix, _x, _I, _D, _V, _r, _e_, _alt_ = _P  # n: number of P inclusions in _P
+
+        if s == _s: # inclusion into _P, then comp?
+
+            w += len(_e_); I2 += _I; D2 += _D; V2 += _V; n += 1
+            P2 = w, I2, D2, V2, n
+
+        out = _P, _P2_
+
+        if _x <= ix: # no horizontal overlap between _P and next P
+
+            if _n == 0: term_.append(out) # terminated _P output
+            else: next_.append(out) # also: P_ += _P_: transfer to P?
+
+        else: buff_.append(out)
+
+    _P_.reverse(); _P_ += buff_; _P_.reverse() # front concat: re-input to next_P patt()?
+    o = P, sP_, SP_; next_.append(o)  # prior-line _sP_ and _SP_ were transferred at match
+
+
+        if y > r + 3 and (_n == 0 or y == H - 1):  # called from comp_P() if vertical s miss
+
+            term()  # called from comp_P(): no new input needed
+
+            # P2 is terminated if all exposed Ps are displaced without vertical s match to lower line
+            # and evaluated for rotation, 1D re-scan and re-comp:
+
+            # rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
+            # S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I?
+
+def term():
 
 
 def Le1(Fp_): # last '_' distinguishes array name from element name
@@ -95,10 +148,9 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
 
     for y in range(H):
 
-        dy = 0; my = 0  # used by comp in 1st line
-        ip_ = Fp_[y, :]  # y is index of new line ip_
-        if y > 0: _ip_ = Fp_[y-1, :]  # no, _ip_: prior line, else no comp, dq = d + 0, vq = m + 0 - A
-
+        dy = 0; my = 0  # used by comp within 1st line
+        ip_ = Fp_[y, :]  # y is index of input line ip_ (vs. p_ of P)
+        if y > 0: _ip_ = Fp_[y-1, :]  # else dq = d + 0, vq = m + 0 - A
 
         if min_r == 0: A = a
         else: A = 0;
@@ -109,26 +161,19 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
 
         for x in range(W):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
 
-            p = ip_[x]  # p_ within P only, could use pop()? new pixel, comp to prior pixel:
-            if y > 0: _p, _m, _d = _ip_[x]  # also contains patterns:
+            p = ip_[x]  # p_ within P only, could use pop()? comp to prior pixel:
+            if y > 0: _p, _m, _d = _ip_[x]  # replaced with patterns by comp:
 
             if x > 0:
-                pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, _ip_, vP_, dP_ = \
-                comp(p, pri_p, _p, _d, _m, fd, fv, x, y, W, A, r, _ip_, vP_, dP_,  # x and y from higher-scope for loop w, h
-                pri_s, I, D, V, rv, p_, ow, alt_,
-                pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
-                dy, my)
+                pri_s, I, D, V, rv, p_, ow, alt_, \
+                pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, \
+                _x, _ip_, vP_, dP_, _vP_, _dP_= \
+                comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, x, y, _x, W, r, A, # input variables
+                     pri_s, I, D, V, rv, p_, ow, alt_,  # variables of vP
+                     pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,  # variables of dP
+                     _ip_, vP_, dP_, _vP_, _dP_)  # template array and output pattern arrays
 
             pri_p = p  # prior pixel, pri_ values are always derived before use
-
-            if y > 1: comp_P() # also if P term: called from comp()? separate comp_vP and comp_dP?
-
-            if y > r + 3 and (s != _s or y == H - 1):  # if vertical s miss
-            term_P2()  # called from comp_P()
-
-            # P2 is terminated if all exposed Ps are displaced without vertical s match to lower line
-            # and evaluated for rotation, 1D re-scan and re-comp
-
 
         LP_ = vP_, dP_
         FP_.append(LP_)  # line of patterns P_ is added to frame of patterns, y = len(FP_)
