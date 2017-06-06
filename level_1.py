@@ -20,14 +20,14 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
     if r > min_r-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
         AD += aD     # aV: min |D| for comp() recursion over d_[w], AD: min |D| for recursion
 
-    W = len(p_)
+    X = len(p_)
     ip_ = p_  # to differentiate from new p_; local nP is initialized:
 
     vP_, dP_ = ([],[])  # r was incremented in higher-scope p_
     pri_s, I, D, V, rv, ow, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple vP=0
     pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple dP=0
 
-    for x in range(r+1, W):
+    for x in range(r+1, X):
 
         p, fd, fv = ip_[x]       # compared to a pixel at x-r-1:
         pp, pfd, pfv = ip_[x-r]  # previously compared p(ignored), its fd, fv to next p
@@ -37,7 +37,7 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
         pri_p, pri_fd, pri_fv = ip_[x-r-1]  # for comp(p, pri_p), pri_fd and pri_fv ignored
 
         pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP, dP_ = \
-        comp(p, pri_p, fd, fv, W, x,
+        comp(p, pri_p, fd, fv, x, X,
              pri_s, I, D, V, rv, p_, ow, alt_,
              pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
              a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
@@ -52,19 +52,19 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
     if r > min_r-1:
         AD += aD
 
-    W = len(d_)
+    X = len(d_)
     ip_ = d_  # to differentiate from new d_; local nP is initialized:
 
     fd, fv, r, vP_, dP_ = (0, 0, 0, [], [])  # r is initialized for each d_
     pri_s, I, D, V, rv, ow, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple vP=0,
     pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple dP=0
 
-    for x in range(W):
+    for x in range(X):
 
         p = ip_[x]  # better than pop()?
         if x > 0:
             pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP, dP_ = \
-            comp(p, pri_p, fd, fv, W, x,
+            comp(p, pri_p, fd, fv, x, X,
                  pri_s, I, D, V, rv, p_, ow, alt_,
                  pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
                  a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
@@ -74,7 +74,7 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
     return vP_, dP_  # local vPs and dPs to replace d_
 
 
-def comp(p, pri_p, fd, fv, W, x,  # input variables
+def comp(p, pri_p, fd, fv, x, X,  # input variables
          pri_s, I, D, V, rv, p_, ow, alt_,  # variables of vP
          pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,  # variables of dP
          a, aV, aD, min_r, A, AV, AD, r, vP_, dP_):  # filter variables and output patterns
@@ -90,7 +90,7 @@ def comp(p, pri_p, fd, fv, W, x,  # input variables
     # formation of value pattern vP: span of pixels forming same-sign v s:
 
     s = 1 if v > 0 else 0  # s: positive sign of v
-    if x > r+2 and (s != pri_s or x == W-1):  # if derived pri_s miss, vP is terminated
+    if x > r+2 and (s != pri_s or x == X-1):  # if derived pri_s miss, vP is terminated
 
         if len(p_) > r+3 and pri_s == 1 and V > AV:  # min 3 comp over extended distance within p_:
 
@@ -119,7 +119,7 @@ def comp(p, pri_p, fd, fv, W, x,  # input variables
     # formation of difference pattern dP: span of pixels forming same-sign d s:
 
     sd = 1 if d > 0 else 0  # sd: positive sign of d;
-    if x > r+2 and (sd != pri_sd or x == W-1):  # if derived pri_sd miss, dP is terminated
+    if x > r+2 and (sd != pri_sd or x == X-1):  # if derived pri_sd miss, dP is terminated
 
         if len(d_) > 3 and abs(Dd) > AD:  # min 3 comp within d_:
 
@@ -149,14 +149,14 @@ def comp(p, pri_p, fd, fv, W, x,  # input variables
 def Le1(Fp_): # last '_' distinguishes array name from element name
 
     FP_ = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
-    H, W = Fp_.shape  # H: frame height, W: frame width
+    Y, X = Fp_.shape  # Y: frame height, X: frame width
 
     a = 127  # minimal filter for vP inclusion
     aV = 63  # minimal filter for incremental-range comp
     aD = 63  # minimal filter for incremental-derivation comp
     min_r=0  # default range of fuzzy comparison, initially 0
 
-    for y in range(H):
+    for y in range(Y):
 
         ip_ = Fp_[y, :]  # y is index of new line ip_
         # or p_ = dict(zip(range(len(p_)), p_.values())))
@@ -167,16 +167,16 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
         if min_r <= 1: AD = aD
         else: AD = 0
 
-        fd, fv, r, x, vP_, dP_ = (0, 0, 0, 0, [], [])  # nP tuple = (P_, r, A, AV, AD)
+        fd, fv, r, x, vP_, dP_ = (0, 0, 0, 0, [], [])  # i/o tuple
         pri_s, I, D, V, rv, ow, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # vP tuple
         pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # dP tuple
 
-        for x in range(W):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
+        for x in range(X):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
 
-            p = ip_[x]  # could use pop()? new pixel, comp to prior pixel:
+            p = ip_[x]  # new pixel, for comp to prior pixel, could use pop()?
             if x > 0:
                 pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP_, dP_ = \
-                comp(p, pri_p, fd, fv, W, x,
+                comp(p, pri_p, fd, fv, x, X,
                      pri_s, I, D, V, rv, p_, ow, alt_,
                      pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
                      a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
