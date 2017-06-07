@@ -23,9 +23,9 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
     X = len(p_)
     ip_ = p_  # to differentiate from new p_; local nP is initialized:
 
-    vP_, dP_ = ([],[])  # r was incremented in higher-scope p_
-    pri_s, I, D, V, rv, ow, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple vP=0
-    pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple dP=0
+    vP_, dP_ = [],[]  # r was incremented in higher-scope p_
+    pri_s, I, D, V, rv, ow, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
+    pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
     for x in range(r+1, X):
 
@@ -55,9 +55,9 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
     X = len(d_)
     ip_ = d_  # to differentiate from new d_; local nP is initialized:
 
-    fd, fv, r, vP_, dP_ = (0, 0, 0, [], [])  # r is initialized for each d_
-    pri_s, I, D, V, rv, ow, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple vP=0,
-    pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # tuple dP=0
+    fd, fv, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
+    pri_s, I, D, V, rv, ow, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
+    pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
     for x in range(X):
 
@@ -105,7 +105,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
         alt = len(vP_), ow  # len(P_) is an address of last overlapping vP
         dalt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
 
-        I, D, V, rv, ow, owd, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # initialization of new vP and ow
+        I, D, V, rv, ow, owd, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and ow
 
     pri_s = s   # vP (span of pixels forming same-sign v) is incremented:
     ow += 1     # overlap to current dP
@@ -133,7 +133,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
         alt = len(dP_), owd  # len(P_) is an address of last overlapping dP
         alt_.append(alt)  # addresses of overlapping dPs and owds are buffered at current vP
 
-        Id, Dd, Vd, rd, ow, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # initialization of new dP and ow
+        Id, Dd, Vd, rd, ow, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new dP and ow
 
     pri_sd = sd  # dP (span of pixels forming same-sign d) is incremented:
     owd += 1     # overlap to current vP
@@ -167,9 +167,9 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
         if min_r <= 1: AD = aD
         else: AD = 0
 
-        fd, fv, r, x, vP_, dP_ = (0, 0, 0, 0, [], [])  # i/o tuple
-        pri_s, I, D, V, rv, ow, p_, alt_ = (0, 0, 0, 0, 0, 0, [], [])  # vP tuple
-        pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = (0, 0, 0, 0, 0, 0, [], [])  # dP tuple
+        fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
+        pri_s, I, D, V, rv, ow, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
+        pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
         for x in range(X):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
 

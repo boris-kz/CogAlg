@@ -12,10 +12,10 @@ quadrant gradient of value for vP, or quadrant gradient of difference for dP.
 
 '''
 
-def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_, # input variables
+def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_,  # input variables
          pri_s, I, D, V, p_, ow, alt_,  # variables of vP
          pri_sd, Id, Dd, Vd, d_, owd, dalt_,  # variables of dP
-         x, _x, X, y, r, A, vP_, dP_, _vP_, _dP_):  # parameters and output
+         x, _x, X, y, Y, r, A, vP_, dP_, _vP_, _dP_): # parameters and output
 
     # last "_" denotes array vs. element, first "_" denotes array, pattern, or variable from higher line
 
@@ -40,11 +40,11 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_, # input variables
         vP = pri_s, I, D, V, p_, alt_  # no default div: redundancy eval per P2 on Le2?
         vP_.append(vP)  # or vP_ is within vP2, after comp_vP:
 
-        if y > 1: comp_P(vP, _vP_, x, _x, y)  # called from comp() if P term, separate comp_vP and comp_dP?
+        if y > 1: comp_P(vP, _vP_, x, _x, y, Y)  # called from comp() if P term, separate comp_vP and comp_dP?
 
         alt = len(vP_), ow  # len(P_) is an index of last overlapping vP
         dalt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
-        I, D, V, ow, owd, p_, alt_ = (0, 0, 0, 0, 0, [], [])  # initialization of new vP and ow
+        I, D, V, ow, owd, p_, alt_ = 0, 0, 0, 0, 0, [], []  # initialization of new vP and ow
 
     pri_s = s   # vP (representing span of same-sign vq s) is incremented:
     ow += 1     # overlap to current dP
@@ -67,11 +67,11 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_, # input variables
         dP = pri_sd, Id, Dd, Vd, d_, dalt_
         dP_.append(dP)  # output of dP
 
-        if y > 1: comp_P(dP, _dP_, x, _x, y)  # called from comp() if P term, separate comp_vP and comp_dP?
+        if y > 1: comp_P(dP, _dP_, x, _x, y, Y)  # called from comp() if P term, separate comp_vP and comp_dP?
 
         alt = len(dP_), owd  # len(P_) is an address of last overlapping dP
         alt_.append(alt)  # addresses and owd of overlapping dPs are buffered at current vP
-        Id, Dd, Vd, ow, owd, d_, dalt_ = (0, 0, 0, 0, 0, [], [])  # initialization of new dP and ow
+        Id, Dd, Vd, ow, owd, d_, dalt_ = 0, 0, 0, 0, 0, [], []  # initialization of new dP and ow
 
     pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
     owd += 1     # overlap to current vP
@@ -92,31 +92,33 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_, # input variables
 y:    p_ array of pixels, lateral comp -> p,m,d,
 y-1: _p_ array of tuples, vertical comp -> 1D P,
 y-2:  P_ array of 1D patterns, vertical comp, sum -> P2,
-y-3: _P_ array of 2D patterns, alt_ eval? consolidation, Le2: comp_P2
+y-3: _P_ array of 2D patterns, overlap, eval? P2 consolidation;
 
 '''
 
-def comp_P(P, _P_, x, _x, y):  # called from comp() if P term, _x is from last comp_P() within line
+def comp_P(P, _P_, x, _x, y, Y):  # called from comp() if P term, _x is from last comp_P() within line
 
-    buff_, next_, term_, _fork_ = ([],[],[],[])  # output arrays
-    W, I2, D2, M2, fork_, P2 = (0, 0, 0, 0, [], {})  # sum of fork _Ps per P? or per fork?
+    x_buff_, y_buff_ = [],[]  # output arrays, direct cons() of P2: trunk between forks, CP2:
+    fork_, root_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
+    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2s
+    CW, CI2, CD2, CM2, P2_ = 0,0,0,0,[] # variables of CP2: connected P2s
 
     s, I, D, M, r, e_, alt_ = P  # M vs. V: no lateral eval, V = M - 2a * W?
     w = len(e_); ix = x - w  # initial x coordinate?
 
-    while x > _x:  # horizontal overlap between P and next _P, no redundancy and eval till P2?
+    while x > _x:  # horizontal overlap between P and next _P, no redundancy and eval till P2 term?
 
-        _P = _P_.pop()  # P2s are within forks, inclusion by sign only: ~dP, !comp?
-        _s, _ix, _x, _I, _D, _M, _r, _e_, _fork_, _alt_ = _P
-        _w = len(_e_)
+        _P = _P_.pop()
+        _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _alt_, _fork_, _root_ = _P
 
-        if s == _s: # inclusion in fork fP: W, I2, D2, M2, P_, also sum per total P2, also comp?
+        if s == _s: # !eval, ~dP? or selective per redundancy eval at y_buff_.append(P)?
 
-            W += w; I2 += _I; D2 += _D; M2 += _M  # or selective per redundancy eval, assigned at next_.append(P)?
-            fork_.append(len(_P_))  # index, multiple inclusions per P, forks possible at every line?
+            W +=_w; I2 +=_I; D2 +=_D; M2 +=_M; P_.append(_P)
+            root_.append(len(_P_))  # index of connected _P within _P_
+            _fork_.append(len(y_buff_))  # index of connected P within y_buff_: next _P_
 
             dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx, signed, or unsigned overlap?
-            dw = w -_w; mw = min(w, _w)  # orientation if projected difference decr / match incr for min.1D Ps over max.2D:
+            dw = w -_w; mw = min(w, _w)  # orientation if proj difference decr / match incr for min.1D Ps over max.2D:
 
             comp(dx), comp(dw, ddx) # at dxP term?
             if match(dw, ddx) > a: _w *= cos(ddx); comp(w, _w)  # proj w*cos match, if same-sign dw, ddx, not |.|
@@ -141,29 +143,43 @@ def comp_P(P, _P_, x, _x, y):  # called from comp() if P term, _x is from last c
 
         if _x <= ix:  # no horizontal overlap between _P and next P
 
-            if len(_fork_) == 0: term_.append(_P)  # if y > r + 3 and (_n == 0 or y == Y - 1)?
+            P2 = W, I2, D2, M2, P_
 
-            # cons() only if len(_higher_cont_fork_) == 0: P2 is terminated if all forked higher-line Ps are terminated?
+            if len(_fork_) == 0 and y > r + 3 and y < Y - 1:  # no continuation for current _P and its P2:
 
-            # and evaluated for rotation, 1D re-scan and re-comp:
+               cons(P2)  # P2 is evaluated for rotation, 1D re-scan and re-comp
+               CW += W; CI2 += I2; CD2 += D2; CM2 += M2; P2_.append(P2) # forming variables of CP2
+               CP2 = CW, CI2, CI2, CD2, CM2, P2_
 
-            # rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
-            # S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I?
+            else: x_buff_.append(_P) # _Ps re-inputted for next-P comp, fork_ was transferred to _P?
 
-            else: buff_.append(_P) # _Ps re-inputted for next P comp, fork_ was transferred to _P?
+            cfork_.append(_fork_) # all continuing _Ps
 
-    next_.append(P) # _P_ = for next line comp, if no horizontal overlap between P and next _P
+            if len(cfork_) == 0 and y > r + 3 and y < Y - 1:  # no continuation per CP2:
 
-    _P_.reverse(); _P_ += buff_; _P_.reverse() # front concat for re-input for next P comp
+               cons(CP2)  # eval for rotation, re-scan, cross-comp of P2_?
+
+            elif len(_fork_) == len(cfork_):
+
+               x_buff_.append(CP2)  # CP2 follows last _P of cfork_?
+
+    y_buff_.append(P) # _P_ = for next line comp, if no horizontal overlap between P and next _P
+
+    _P_.reverse(); _P_ += x_buff_; _P_.reverse() # front concat for re-input for next P comp
 
 
-def cons(): # at full P2 term?
+def cons(P): # at full P2 term?
+
+    # rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
+    # S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I?
 
     mean_dx = 1  # fractional?
     dx = Dx / H
     if dx > a: comp(abs(dx))  # or if dxP Dx: fixed ddx cost?  comp of same-sign dx only
 
     vx = mean_dx - dx  # normalized compression of distance: min. cost decrease, not min. benefit?
+
+def sumP(P2,_P):
 
 
 def Le1(Fp_): # last '_' distinguishes array name from element name
@@ -183,9 +199,9 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
         if min_r == 0: A = a
         else: A = 0;
 
-        _p, _m, _d, fd, fv, r, x, vP_, dP_ = (0, 0, 0, 0, 0, 0, 0, [], [])  # i/o tuple
-        pri_s, I, D, V, ow, p_, alt_ = (0, 0, 0, 0, 0, [], [])  # vP tuple
-        pri_sd, Id, Dd, Vd, owd, d_, dalt_ = (0, 0, 0, 0, 0, [], [])  # dP tuple
+        _p, _m, _d, fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, 0, 0, 0, [], []  # i/o tuple
+        pri_s, I, D, V, ow, p_, alt_ = 0, 0, 0, 0, 0, [], []  # vP tuple
+        pri_sd, Id, Dd, Vd, owd, d_, dalt_ = 0, 0, 0, 0, 0, [], []  # dP tuple
 
         for x in range(X):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
 
