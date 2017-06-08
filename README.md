@@ -17,24 +17,30 @@ Hierarchical approaches are common in unsupervised learning, and all do some sor
 
 Search space (above) is the number of patterns * number of their variables. Number of variables per pattern is incremental, starting from single-variable inputs, such as pixels in video. Each level of search adds new variables: match and miss, to every compared variable of an input pattern. So, the number of variables multiplies at every level, new variables are summed within a pattern, then combined to evaluate that pattern for expanded search. Feedback of averaged new variables extends lower-level algorithm by adding operations that filter future inputs, and then by adjusting the filters.
 
-Explanation below is out of date,
-my current work-in-progress on combined-dimensionality search is in level_1_2_draft.py
+.
 
-CogAlg implementation for image recognition: incremental-dimensionality pattern discovery
-(partial implementation of “incremental space-time dimensionality” section of part 2 in my intro):
+Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than the inputs themselves, Hence, precision of where (spans of and distances between patterns) is very low, and so is predictive value of combined representations. There is no such immediate degradation of positional information in my method.
 
-level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments
+My core algorithm is 1D: time only (part 4). Our space-time is 4D, but each of  these dimensions can be mapped on one level of search. This way, each level can form patterns that are strong enough to justify the cost of representing additional dimension and derivatives (matches and differences) in that dimension.
+Again, initial inputs are pixels of video, or equivalent limit of positional resolution in other modalities.
+Initial 4D cycle of search would compare contiguous inputs, analogously to connected-component analysis:
 
-level 2 compares contiguous 1D patterns between consecutive lines in a frame, forming 2D patterns: blobs
+level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments.
+level 2 compares contiguous 1D patterns between consecutive lines in a frame, forming 2D patterns: blobs.
+level 3 compares contiguous 2D patterns between incremental-depth frames, forming 3D patterns: objects.
+level 4 compares contiguous 3D patterns in temporal sequence, forming 4D patterns: processes.
 
-level 3 compares contiguous 2D patterns within a frame, forming discontinuous 2D patterns: groups of similar blobs
+Subsequent cycles would compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions. More in part 6.
 
-level 4 compares discontinuous 2D patterns between different images, forming groups of blobs that match across images
+However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased to the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D, or at least over 2D for images.
 
-Initial testing will be recognition and automatic labeling of manually labeled images, from something like ImageNet. Because human vision is natively 2D, while my algorithm is incremental in dimensionality, testing will start from level 4.
-So, my lower levels are defined theoretically.
+I am currently working on implementation of core algorithm to process images: level_1.py and level_2.py here,
+and also on its natively-2D adaptation: level_1_2D.py here.
+Initial testing will be recognition and automatic labeling of manually labeled images, from something like ImageNet.
 
 This algorithm will be organically extended to process colors, then video, then stereo video (from multiple confocal cameras).
-For video, level 3 will process consecutive frames and derive temporal patterns, and levels 4 and higher will process discontinuous 2D + time patterns.
+For video, level 3 will process consecutive frames and derive temporal patterns, and levels 4 and higher will process discontinuous 2D + time patterns. It should also extend to any type and scope of data.
+
+Suggestions and collaboration is most welcome, see last part of my intro on prizes.
 
 

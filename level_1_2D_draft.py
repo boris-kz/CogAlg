@@ -86,39 +86,38 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_,  # input variables
            pri_sd, Id, Dd, Vd, d_, owd, dalt_ # for next p comparison and P increment
 
 '''
-
 4 levels of incremental depth of comp per higher line:
 
 y:    p_ array of pixels, lateral comp -> p,m,d,
 y-1: _p_ array of tuples, vertical comp -> 1D P,
 y-2:  P_ array of 1D patterns, vertical comp, sum -> P2,
 y-3: _P_ array of 2D patterns, overlap, eval? P2 consolidation;
-
 '''
 
 def comp_P(P, _P_, x, _x, y, Y):  # called from comp() if P term, _x is from last comp_P() within line
 
-    x_buff_, y_buff_ = [],[]  # output arrays, direct cons() of P2: trunk between forks, CP2:
+    n, x_buff_, y_buff_, CP2_ = 0,[],[],[]  # output arrays, direct cons() of P2: trunk between forks?
     fork_, root_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
-    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2s
-    CW, CI2, CD2, CM2, P2_ = 0,0,0,0,[] # variables of CP2: connected P2s
+
+    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2, per root
+    CW, CI2, CD2, CM2, P2_ = 0,0,0,0,[]  # variables of CP2: connected P2s, per cfork_
 
     s, I, D, M, r, e_, alt_ = P  # M vs. V: no lateral eval, V = M - 2a * W?
     w = len(e_); ix = x - w  # initial x coordinate?
 
-    while x > _x:  # horizontal overlap between P and next _P, no redundancy and eval till P2 term?
+    while x > _x:  # horizontal overlap between P and next _P, no redundancy eval till CP2 term?
 
-        _P = _P_.pop()
-        _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _alt_, _fork_, _root_ = _P
+        _P = _P_.pop(); n += 1  # to sync with cfork_
+        _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _alt_, _fork_, _root_ = _P  # old _fork_, _root_ for trunk tracing?
 
-        if s == _s: # !eval, ~dP? or selective per redundancy eval at y_buff_.append(P)?
+        if s == _s: # !eval, ~dP? selected at y_buff_.append(P): - cost of fork for weaker matches?
 
             W +=_w; I2 +=_I; D2 +=_D; M2 +=_M; P_.append(_P)
             root_.append(len(_P_))  # index of connected _P within _P_
             _fork_.append(len(y_buff_))  # index of connected P within y_buff_: next _P_
 
             dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx, signed, or unsigned overlap?
-            dw = w -_w; mw = min(w, _w)  # orientation if proj difference decr / match incr for min.1D Ps over max.2D:
+            dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D:
 
             comp(dx), comp(dw, ddx) # at dxP term?
             if match(dw, ddx) > a: _w *= cos(ddx); comp(w, _w)  # proj w*cos match, if same-sign dw, ddx, not |.|
@@ -141,31 +140,36 @@ def comp_P(P, _P_, x, _x, y, Y):  # called from comp() if P term, _x is from las
         else: comp (S) # even if norm for redun assign?
         '''
 
-        if _x <= ix:  # no horizontal overlap between _P and next P
+        if _x <= ix:  # no horizontal overlap between _P and next P, _P output:
 
             P2 = W, I2, D2, M2, P_
+            cfork_.append(_fork_)  # all continuing _Ps of CP2
 
-            if len(_fork_) == 0 and y > r + 3 and y < Y - 1:  # no continuation for current _P and its P2:
+            if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation for current _P and its P2:
 
-               cons(P2)  # P2 is evaluated for rotation, 1D re-scan and re-comp
-               CW += W; CI2 += I2; CD2 += D2; CM2 += M2; P2_.append(P2) # forming variables of CP2
-               CP2 = CW, CI2, CI2, CD2, CM2, P2_
+                cons(P2)  # including _P? eval for rotation, re-scan, re-comp
+                CW += W; CI2 += I2; CD2 += D2; CM2 += M2; P2_.append(P2)  # forming variables of CP2
 
-            else: x_buff_.append(_P) # _Ps re-inputted for next-P comp, fork_ was transferred to _P?
+            else:
+                _P = _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _alt_, _fork_, _root_, P2
+                # old _root_, new _fork_, old _fork_ is displaced with old P2?
+                x_buff_.append(_P)  # _P is re-inputted for next-P comp
 
-            cfork_.append(_fork_) # all continuing _Ps
+            CP2 = cfork_, CW, CI2, CI2, CD2, CM2, P2_
 
-            if len(cfork_) == 0 and y > r + 3 and y < Y - 1:  # no continuation per CP2:
+            if (len(cfork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP2:
 
-               cons(CP2)  # eval for rotation, re-scan, cross-comp of P2_?
+                cons(CP2)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
-            elif len(_fork_) == len(cfork_):
+            elif n == len(cfork_):  # CP2_ to _P_ sync for P2 inclusion and cons(CP2) trigger by cfork_?
+            # or last fork in cfork_, possibly disc.?
 
-               x_buff_.append(CP2)  # CP2 follows last _P of cfork_?
+                CP2_.append(CP2)
 
-    y_buff_.append(P) # _P_ = for next line comp, if no horizontal overlap between P and next _P
+    P = s, w, I, D, M, r, e_, alt_, root_  # each root is new, includes P2
+    y_buff_.append(P)  # _P_ = for next line comp, if no horizontal overlap between P and next _P
 
-    _P_.reverse(); _P_ += x_buff_; _P_.reverse() # front concat for re-input for next P comp
+    _P_.reverse(); _P_ += x_buff_; _P_.reverse() # front concat for next P comp
 
 
 def cons(P): # at full P2 term?
@@ -178,8 +182,6 @@ def cons(P): # at full P2 term?
     if dx > a: comp(abs(dx))  # or if dxP Dx: fixed ddx cost?  comp of same-sign dx only
 
     vx = mean_dx - dx  # normalized compression of distance: min. cost decrease, not min. benefit?
-
-def sumP(P2,_P):
 
 
 def Le1(Fp_): # last '_' distinguishes array name from element name
