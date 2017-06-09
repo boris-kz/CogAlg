@@ -61,14 +61,15 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
 
     for x in range(X):
 
-        p = ip_[x]  # better than pop()?
+        p = ip_[x]  # better than pop()?  T. Pop would remove it
+        
         if x > 0:
             pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP, dP_ = \
             comp(p, pri_p, fd, fv, x, X,
                  pri_s, I, D, V, rv, p_, ow, alt_,
                  pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
                  a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
-
+        
         pri_p = p
 
     return vP_, dP_  # local vPs and dPs to replace d_
