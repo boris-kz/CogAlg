@@ -13,23 +13,23 @@ quadrant gradient of value for vP, or quadrant gradient of difference for dP.
 '''
 
 def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_,  # input variables
-         pri_s, I, D, V, p_, ow, alt_,  # variables of vP
-         pri_sd, Id, Dd, Vd, d_, owd, dalt_,  # variables of dP
+         pri_s, I, D, V, p_, olp, olp_,  # variables of vP
+         pri_sd, Id, Dd, Vd, d_, dolp, dolp_,  # variables of dP
          x, _x, X, y, Y, r, A, vP_, dP_, _vP_, _dP_): # parameters and output
 
     # last "_" denotes array vs. element, first "_" denotes template: higher-line array, pattern, or variable
 
-    d = p - pri_p    # difference between laterally consecutive pixels, also -> D for vertical comp?
-    if y > 0: dy = p - _p  # difference between vertically consecutive pixels, else dy = 0
+    d = p - pri_p    # lateral difference between pixels, -> lat.D for vert.comp, orient min,max cross-cancel in dq?
+    if y > 0: dy = p - _p  # vertical difference between pixels, -> vert.D, comb with lat.D for orient eval per P2
 
-    dq = _d + dy     # quadrant gradient of difference per prior-line pixel _p,
-    fd += dq         # all shorter + current- range dq s within extended quadrant?
+    dq = _d + dy     # quadrant gradient of difference, formed at prior-line pixel _p, -> Dq for "variation" eval?
+    fd += dq         # all shorter + current- range dq s within extended quadrant, for pixel inclusion
 
-    m = min(p, pri_p)  # match between laterally consecutive pixels, -> M for vertical comp, vq sum per P2?
-    if y > 0: my = min(p, _p)  # match between vertically consecutive pixels, else my = 0
+    m = min(p, pri_p)  # lateral match between pixels, -> lat.M for vert.comp, directional res.loss in vq?
+    if y > 0: my = min(p, _p)  # vertical match between pixels, else my = 0
 
-    vq = _m + my - A  # quadrant gradient of predictive value (relative match) per prior-line _p
-    fv += vq         # all shorter + current- range vq s within extended quadrant
+    vq = _m + my -A  # quadrant gradient of predictive value (relative match) at prior-line _p, -> Mq for P2 eval?
+    fv += vq         # all shorter + current- range vq s within extended quadrant?
 
 
     # formation of 1D value pattern vP: horizontal span of same-sign vq s:
@@ -37,24 +37,26 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_,  # input variables
     s = 1 if vq > 0 else 0  # s: positive sign of vq
     if x > r+2 and (s != pri_s or x == X-1):  # if vq sign miss or line ends, vP is terminated
 
-        vP = pri_s, I, D, V, p_, alt_
-        if y > 1: comp_P(vP, _vP_, x, _x, y, Y)  # end: vP_.append(vP), separate comp_vP and comp_dP?
+        vP = pri_s, I, D, V, p_, olp_
+        if y > 1:
+           n = len(vP_); comp_P(vP, _vP_, x, _x, y, Y, n)  # or comp_vP and comp_dP, with vP_.append(vP)?
 
-        alt = len(vP_), ow  # len(vP_) is index of current vP
-        dalt_.append(alt)  # index and ow of terminated vP is buffered at current dP
+        o = len(vP_), olp  # len(vP_) is index of current vP
+        dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
 
-        I, D, V, ow, owd, p_, alt_ = 0, 0, 0, 0, 0, [], []  # initialization of new vP and ow
+        I, D, V, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
 
     pri_s = s   # vP (representing span of same-sign vq s) is incremented:
-    ow += 1     # overlap to current dP
-    I += pri_p  # ps summed within P width
-    D += dq     # fds summed within P width
-    V += fv     # fvs summed within P width, generic name for summed vars is S:
+    olp += 1    # overlap to current dP
+    I += pri_p  # ps summed within vP
+    D += dq     # fds summed within vP
+    V += fv     # fvs summed within vP
 
-    # lateral S for vertical comp -> potential adjustment by orientation? not for ow: relative to w?
+    # S denotes summed vars above, except olp: relative to w
+    # lateral S for vertical comp -> potential adjustment by orientation?
     # vertical S for complementary adjustment and P2 gradient, no dq or vq sum: redundant?
 
-    pri = pri_p, fd, fv  # same-line prior tuple, buffered for selective inc_rng comp
+    pri = pri_p, fd, fv  # same-line prior 2D tuple, buffered for selective inc_rng comp
     p_.append(pri)
     high = p, d, m  # next-higher-line tuple, buffered for spec of next-line vertical D, M comp?
     _ip_.append(high)
@@ -64,25 +66,26 @@ def comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_,  # input variables
     sd = 1 if d > 0 else 0  # sd: positive sign of d;
     if x > r+2 and (sd != pri_sd or x == X-1):  # if derived pri_sd miss or line ends, dP is terminated
 
-        dP = pri_sd, Id, Dd, Vd, d_, dalt_
-        if y > 1: comp_P(dP, _dP_, x, _x, y, Y)  # end: dP_.append(dP), separate comp_vP and comp_dP?
+        dP = pri_sd, Id, Dd, Vd, d_, dolp_
+        if y > 1:
+           n = len(dP_); comp_P(dP, _dP_, x, _x, y, Y, n)  # or comp_vP and comp_dP, with dP_.append(dP)?
 
-        alt = len(dP_), owd  # len(dP_) is index of current dP
-        alt_.append(alt)  # index and owd of terminated dP is buffered at current vP
+        o = len(dP_), dolp  # len(dP_) is index of current dP
+        olp_.append(o)  # index and dolp of terminated dP is buffered at current vP
 
-        Id, Dd, Vd, ow, owd, d_, dalt_ = 0, 0, 0, 0, 0, [], []  # initialization of new dP and ow
+        Id, Dd, Vd, olp, dolp, d_, dolp_ = 0, 0, 0, 0, 0, [], []  # initialization of new dP and olp
 
     pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
-    owd += 1     # overlap to current vP
-    Id += pri_p  # ps summed within P width
-    Dd += fd     # fds summed within P width
-    Vd += fv     # fvs summed within P width
-    d_.append(fd)  # same fds as in p_, no associated derivatives, separate for spec of vert dP D comp?
+    dolp += 1    # overlap to current vP
+    Id += pri_p  # ps summed within dP
+    Dd += fd     # fds summed within dP
+    Vd += fv     # fvs summed within dP
+    d_.append(fd)  # same fds as in p_, no associated derivatives, separate for spec of vertical Dd comp?
 
 
     return _x, _ip_, vP_, dP_, _vP_, _dP_, \
-           pri_s, I, D, V, p_, ow, alt_, \
-           pri_sd, Id, Dd, Vd, d_, owd, dalt_ # for next p comparison and P increment
+           pri_s, I, D, V, p_, olp, olp_, \
+           pri_sd, Id, Dd, Vd, d_, dolp, dolp_ # for next p comparison and P increment
 
 '''
 4 levels of incremental depth of comp per higher line:
@@ -93,27 +96,26 @@ y-2:  P_ array of 1D patterns, vertical comp, sum -> P2,
 y-3: _P_ array of 2D patterns, overlap, eval? P2 consolidation;
 '''
 
-def comp_P(P, _P_, x, _x, y, Y):  # called from comp() if P term, _x is from last comp_P() within line
+def comp_P(P, _P_, x, _x, y, Y, n):  # _x: of last P within line
 
-    n, x_buff_, y_buff_, CP2_ = 0,[],[],[]  # output arrays, direct cons() of P2: trunk between forks?
-    fork_, root_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
+    _n, x_buff_, y_buff_, CP2_ = 0,[],[],[]  # output arrays, direct cons() of P2: trunk between forks?
+    root_, _fork_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
 
-    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2, per root
+    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2, poss. per root
     CW, CI2, CD2, CM2, P2_ = 0,0,0,0,[]  # variables of CP2: connected P2s, per cfork_
 
-    s, I, D, M, r, e_, alt_ = P  # M vs. V: no lateral eval, V = M - 2a * W?
-    w = len(e_); ix = x - w  # initial x coordinate?
+    s, I, D, M, r, e_, olp_ = P  # M vs. V: no lateral eval, V = M - 2a * W?
+    w = len(e_); ix = x - w  # w: width, ix: initial coordinate of a P
 
     while x > _x:  # horizontal overlap between P and next _P, forks are not redundant, P2: mult. uni-forks only?
 
-        _P = _P_.pop(); n += 1  # to sync with cfork_
-        _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _alt_, _fork_, _root_ = _P  # old _fork_, _root_ for trunk tracing?
+        _P = _P_.pop(); _n += 1  # to sync with cfork_, better than len(in_P_) - len(_P_)?
+        _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _olp_, _root_, hfork_ = _P  # hfork_, _root_ for trunk tracing in CP2?
 
-        if s == _s: # !eval, ~dP? - cost of fork unless unique, at y_buff_.append(P), -> P2 if only one recorded?
+        if s == _s:  # !eval, ~dP? -> P2 at y_buff_.append(P) if vertically cont. 1-forks, known after while x > _x?
 
-            W +=_w; I2 +=_I; D2 +=_D; M2 +=_M; P_.append(_P)
             root_.append(len(_P_))  # index of connected _P within _P_
-            _fork_.append(len(y_buff_))  # index of connected P within y_buff_: next _P_
+            _fork_.append(n)  # future index of connected P within y_buff_, not yet displaced
 
             dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx, signed, or unsigned overlap?
             dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D:
@@ -142,18 +144,22 @@ def comp_P(P, _P_, x, _x, y, Y):  # called from comp() if P term, _x is from las
         else: comp (S) # even if norm for redun assign?
         '''
 
+        if len(hfork_) == 1 and len(_fork_) == 1: # _P includes trunk P2:
+           t = 1; W +=_w; I2 +=_I; D2 +=_D; M2 +=_M; P_.append(_P)
+        else: t = 0 
+
         if _x <= ix:  # no horizontal overlap between _P and next P, _P output:
 
-            P2 = W, I2, D2, M2, P_
+            P2 = W, I2, D2, M2, P_  # ?
             cfork_.append(_fork_)  # all continuing _Ps of CP2
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation for current _P and its P2:
 
-                cons(P2)  # including _P? eval for rotation, re-scan, re-comp
+                if t > 0: cons(P2)  # including _P? eval for rotation, re-scan, re-comp
                 CW += W; CI2 += I2; CD2 += D2; CM2 += M2; P2_.append(P2)  # forming variables of CP2
 
             else:
-                _P = _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _alt_, _fork_, _root_, P2
+                _P = _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _olp_, _fork_, _root_, P2
                 # old _root_, new _fork_, old _fork_ is displaced with old P2?
                 x_buff_.append(_P)  # _P is re-inputted for next-P comp
 
@@ -168,7 +174,7 @@ def comp_P(P, _P_, x, _x, y, Y):  # called from comp() if P term, _x is from las
 
                 CP2_.append(CP2)
 
-    P = s, w, I, D, M, r, e_, alt_, root_  # each root is new, includes P2
+    P = s, w, I, D, M, r, e_, olp_, root_  # each root is new, includes P2 if unique cont:
     y_buff_.append(P)  # _P_ = for next line comp, if no horizontal overlap between P and next _P
 
     _P_.reverse(); _P_ += x_buff_; _P_.reverse() # front concat for next P comp
@@ -204,8 +210,8 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
         else: A = 0;
 
         _p, _m, _d, fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, 0, 0, 0, [], []  # i/o tuple
-        pri_s, I, D, V, ow, p_, alt_ = 0, 0, 0, 0, 0, [], []  # vP tuple
-        pri_sd, Id, Dd, Vd, owd, d_, dalt_ = 0, 0, 0, 0, 0, [], []  # dP tuple
+        pri_s, I, D, V, olp, p_, olp_ = 0, 0, 0, 0, 0, [], []  # vP tuple
+        pri_sd, Id, Dd, Vd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, [], []  # dP tuple
 
         for x in range(X):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
 
@@ -214,12 +220,12 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
 
             if x > 0:
                 _x, _ip_, vP_, dP_, _vP_, _dP_, \
-                pri_s, I, D, V, p_, ow, alt_, \
-                pri_sd, Id, Dd, Vd, d_, owd, dalt_ = \
+                pri_s, I, D, V, p_, olp, olp_, \
+                pri_sd, Id, Dd, Vd, d_, dolp, dolp_ = \
                 \
                 comp(p, pri_p, _p, _d, _m, fd, fv, dy, my, _ip_, # input variables
-                     pri_s, I, D, V, p_, ow, alt_,  # variables of vP
-                     pri_sd, Id, Dd, Vd, d_, owd, dalt_,  # variables of dP
+                     pri_s, I, D, V, p_, olp, olp_,  # variables of vP
+                     pri_sd, Id, Dd, Vd, d_, dolp, dolp_,  # variables of dP
                      x, _x, X, y, r, A, vP_, dP_, _vP_, _dP_)  # parameters and output
 
             pri_p = p  # prior pixel, pri_ values are always derived before use
@@ -237,7 +243,7 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
 
 - elements of p_ (but not d_) contain both leftward and downward derivatives,
 
-- overlap () records area of overlap per alt_P2s, assigned to both and selected at 2Le eval 
+- overlap () records area of overlap per olp_P2s, assigned to both and selected at 2Le eval 
 
 
 2D P includes array of initial 1D Ps and their variables, external vars x and w (new first) are cross-compared within 2D P (P2) by default:

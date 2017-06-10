@@ -21,11 +21,11 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
         AD += aD     # aV: min |D| for comp() recursion over d_[w], AD: min |D| for recursion
 
     X = len(p_)
-    ip_ = p_  # to differentiate from new p_; local nP is initialized:
+    ip_ = p_  # to differentiate from new p_
 
     vP_, dP_ = [],[]  # r was incremented in higher-scope p_
-    pri_s, I, D, V, rv, ow, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
-    pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
+    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
+    pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
     for x in range(r+1, X):
 
@@ -36,10 +36,10 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
 
         pri_p, pri_fd, pri_fv = ip_[x-r-1]  # for comp(p, pri_p), pri_fd and pri_fv ignored
 
-        pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP, dP_ = \
+        pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
         comp(p, pri_p, fd, fv, x, X,
-             pri_s, I, D, V, rv, p_, ow, alt_,
-             pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
+             pri_s, I, D, V, rv, p_, olp, olp_,
+             pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
              a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
 
     return vP_, dP_  # local vPs and dPs to replace p_, A, AV, AD accumulated per comp recursion
@@ -53,21 +53,23 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
         AD += aD
 
     X = len(d_)
-    ip_ = d_  # to differentiate from new d_; local nP is initialized:
+    ip_ = d_  # to differentiate from new d_
 
     fd, fv, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
-    pri_s, I, D, V, rv, ow, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
-    pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
+    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
+    pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
-    for x in range(X):
+    pri_p = ip_[0]
+
+    for x in range(1, X):
 
         p = ip_[x]  # better than pop()?
-        if x > 0:
-            pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP, dP_ = \
-            comp(p, pri_p, fd, fv, x, X,
-                 pri_s, I, D, V, rv, p_, ow, alt_,
-                 pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
-                 a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
+
+        pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
+        comp(p, pri_p, fd, fv, x, X,
+             pri_s, I, D, V, rv, p_, olp, olp_,
+             pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
+             a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
 
         pri_p = p
 
@@ -75,8 +77,8 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
 
 
 def comp(p, pri_p, fd, fv, x, X,  # input variables
-         pri_s, I, D, V, rv, p_, ow, alt_,  # variables of vP
-         pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,  # variables of dP
+         pri_s, I, D, V, rv, p_, olp, olp_,  # variables of vP
+         pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,  # variables of dP
          a, aV, aD, min_r, A, AV, AD, r, vP_, dP_):  # filter variables and output patterns
 
     d = p - pri_p      # difference between consecutive pixels
@@ -99,21 +101,21 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
             p_.append(inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_))
 
         p = I / len(p_); d = D / len(p_); v = V / len(p_)  # default to eval overlap, poss. div.comp?
-        vP = pri_s, p, I, d, D, v, V, rv, p_, alt_
+        vP = pri_s, p, I, d, D, v, V, rv, p_, olp_
         vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont comp till Le3?
 
-        alt = len(vP_), ow  # len(P_) is an address of last overlapping vP
-        dalt_.append(alt)  # addresses of overlapping vPs and ow are buffered at current dP
+        o = len(vP_), olp  # len(P_) is index of current vP
+        dolp_.append(o)  # indexes of overlapping vPs and olp are buffered at current dP
 
-        I, D, V, rv, ow, owd, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and ow
+        I, D, V, rv, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
 
     pri_s = s   # vP (span of pixels forming same-sign v) is incremented:
-    ow += 1     # overlap to current dP
+    olp += 1    # overlap to current dP
     I += pri_p  # ps summed within vP
     D += fd     # fds summed within vP into fuzzy D
     V += fv     # fvs summed within vP into fuzzy V
     pri = pri_p, fd, fv
-    p_.append(pri)  # buffered within w for selective extended comp
+    p_.append(pri)  # buffered within vP for selective extended comp
 
 
     # formation of difference pattern dP: span of pixels forming same-sign d s:
@@ -126,23 +128,23 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
             rd = 1  # rd: incremental derivation flag:
             d_.append(inc_der(a, aV, aD, min_r, A, AV, AD, r, d_))
 
-        pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # so all alt Ps can be directly evaluated
-        dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dalt_
+        pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # so all olp Ps can be directly evaluated
+        dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dolp_
         dP_.append(dP)  # output of dP
 
-        alt = len(dP_), owd  # len(P_) is an address of last overlapping dP
-        alt_.append(alt)  # addresses of overlapping dPs and owds are buffered at current vP
+        o = len(dP_), dolp  # len(P_) is index of current dP
+        olp_.append(o)  # indexes of overlapping dPs and dolps are buffered at current vP
 
-        Id, Dd, Vd, rd, ow, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new dP and ow
+        Id, Dd, Vd, rd, olp, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new dP and olp
 
     pri_sd = sd  # dP (span of pixels forming same-sign d) is incremented:
-    owd += 1     # overlap to current vP
-    Id += pri_p  # ps summed within wd
-    Dd += fd     # fds summed within wd
-    Vd += fv     # fvs summed within wd
-    d_.append(fd)  # prior fds are buffered in d_, same-sign as distinct from in p_
+    dolp += 1    # overlap to current vP
+    Id += pri_p  # ps summed within dP
+    Dd += fd     # fds summed within dP
+    Vd += fv     # fvs summed within dP
+    d_.append(fd)  # prior fds are buffered within dP, all of the same sign
 
-    return pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP_, dP_
+    return pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_
     # for next p comparison, vP and dP increment, and output
 
 
@@ -168,30 +170,32 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
         else: AD = 0
 
         fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
-        pri_s, I, D, V, rv, ow, p_, alt_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
-        pri_sd, Id, Dd, Vd, rd, owd, d_, dalt_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
+        pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
+        pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
-        for x in range(X):  # cross-compares consecutive pixels, outputs sequence of d, m, v:
+        pri_p = ip_[0]
 
-            p = ip_[x]  # new pixel, for comp to prior pixel, could use pop()?
-            if x > 0:
-                pri_s, I, D, V, rv, p_, ow, alt_, pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_, vP_, dP_ = \
-                comp(p, pri_p, fd, fv, x, X,
-                     pri_s, I, D, V, rv, p_, ow, alt_,
-                     pri_sd, Id, Dd, Vd, rd, d_, owd, dalt_,
-                     a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
+        for x in range(1, X):  # cross-compares consecutive pixels
+
+            p = ip_[x]  # new pixel for comp to prior pixel, could use pop()?
+
+            pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
+            comp(p, pri_p, fd, fv, x, X,
+                 pri_s, I, D, V, rv, p_, olp, olp_,
+                 pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
+                 a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
 
             pri_p = p  # prior pixel, pri_ values are always derived before use
 
         LP_ = vP_, dP_
-        FP_.append(LP_)  # line of patterns P_ is added to frame of patterns, y = len(FP_)
+        FP_.append(LP_)  # line of patterns is added to frame of patterns, y = len(FP_)
 
-    return FP_  # or return FP_  # frame of patterns (vP or dP): output to level 2;
+    return FP_  # output to level 2
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
 Le1(f)
 
-# print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
-# print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
+# at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
+# at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
 
