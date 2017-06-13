@@ -4,7 +4,12 @@ from scipy import misc
 
 Level 1 with 2D gradient: modified combination of core algorithm levels 1 and 2 
 
-Initial 2D comparison forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. Both lateral and vertical comparison is performed on the same level because average lateral match ~ average vertical match. These derivatives form quadrant gradients: average of rightward and downward match or difference per pixel (these are equally representative samples of quadrant). Quadrant gradient is a minimal unit of 2D gradient, so 2D pattern (blob) is defined by matching sign of quadrant gradient of value for vP, or quadrant gradient of difference for dP.
+Initial 2D comparison forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
+Both lateral and vertical comparison is performed on the same level because average lateral match ~ average vertical match. 
+These derivatives form quadrant gradients: average of rightward and downward match or difference per pixel 
+(they are equally representative samples of quadrant). 
+Quadrant gradient is a minimal unit of 2D gradient, 
+so 2D pattern is defined by matching sign of quadrant gradient of value for vP, or quadrant gradient of difference for dP.
 
 '''
 
