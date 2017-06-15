@@ -1,15 +1,17 @@
 from scipy import misc
 
 '''
-    Level 1 with 2D gradient: modified core algorithm levels 1 and 2 
+    Level 1 with 2D gradient: modified core algorithm of levels 1 + 2. 
 
-    2D pixel comparison forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
-    Lateral and vertical comparison is performed on the same level because average lateral match ~ average vertical match. 
-    These derivatives form quadrant gradients: average of rightward and downward match or difference per pixel 
-    (they are equally representative samples of quadrant). Quadrant gradient is a minimal unit of 2D gradient, so 
-    2D pattern is defined by matching sign of quadrant gradient of value for vP, or quadrant gradient of difference for dP.
+    Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
+    They are formed on the same level because average lateral match ~ average vertical match. 
+    Minimal unit of 2D is quadrant defined by 4 pixels. 
+    
+    Derivatives in a given quadrant have two equally representative samples, unique per pixel: 
+    right-of-pixel and down-of-pixel. Hence, quadrant gradient is computed as an average of the two.  
+    2D pattern is defined by matching sign of quadrant gradient of value for vP and of difference for dP.
 
-    4 levels of incremental encoding per line:
+    Level 1 has 4 steps of incremental encoding per added scan line, defined by coordinate y:
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
     y-1: ycomp()   t_ array of tuples, vertical comp, der.comb -> 1D P,
@@ -18,7 +20,7 @@ from scipy import misc
     
 '''
 
-def comp(p_, X):  # comparison between consecutive pixels in a row, forming tuples: pixel, match, difference
+def comp(p_, X):  # comparison between consecutive pixels within scan line, forming tuples: pixel, match, difference
 
     t_ = []
     pri_p = p_[0]
@@ -36,18 +38,15 @@ def comp(p_, X):  # comparison between consecutive pixels in a row, forming tupl
 
     return t_
 
-def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, A, vP_, dP_, _vP_, _dP_,  # i/o variables, output is Ps, comp to _Ps?
-          pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_,  # vP variables
-          pri_sd, Id, Dd, Dyd, Md, Myd, Dq, d_, dolp, dolp_):  # dP variables
+def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
-
-    pri_p = 0
+    A = a * r; pri_p = 0
 
     for x in range(X):  # compares vertically consecutive tuples
 
         t = t_[x];  p, d, m = t
-        _t = _t_[x]; _p, _d, _m = _t  # My, Dy are per P?
+        _t = _t_[x]; _p, _d, _m = _t  # also _my, _dy, fd, fv per _p but not p?
 
         dy = p - _p   # vertical difference between pixels, -> Dy
         dq = _d + dy  # quadrant gradient of difference, formed at prior-line pixel _p, -> Dq: variation eval?
@@ -57,20 +56,19 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, A, vP_, dP_, _vP_, _dP_,  # i/o varia
         vq = _m + my - A  # quadrant gradient of predictive value (relative match) at prior-line _p, -> Mq?
         fv += vq          # all shorter + current- range vq s within extended quadrant
 
-        # lat D, M: vertical comp, + Dy, My for orient adjust eval and P2 gradient,
-        # vs. Dq, Vq: P2 cons eval? or directional res.loss: *cos, /cos cross-cancellation?
-
         # formation of 1D value pattern vP: horizontal span of same-sign vq s:
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
-        if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
+        pri_s = vP.pop()  # vP tuple: pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_: same as dP, re-assignment?
 
-            vP = pri_s, I, D, Dy, M, My, Vq, p_, olp_  # 2D P
+        if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign
+            #  miss or line ends, vP is terminated
+
             if y > 1:
-               n = len(vP_)
+               n = len(vP_)  # vP is  packed in ycomp declaration:
                comb_P(vP, _vP_, _x, x, y, Y, n)  # or comb_vP and comb_dP, with vP_.append(vP)
 
-            o = len(vP_), olp  # len(vP_) is index of current vP
+            o = len(vP_), olp  # len(vP_) is index of current vP, olp formed by comb_P()
             dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
 
             I, D, V, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
@@ -78,21 +76,18 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, A, vP_, dP_, _vP_, _dP_,  # i/o varia
         pri_s = s   # vP (representing span of same-sign vq s) is incremented:
         olp += 1    # overlap to current dP
         I += pri_p  # p s summed within vP
-        D += d; Dy += dy  # summed within vP and vP2
+        D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
         M += m; My += my  # summed within vP and vP2
-        Vq += fv  # fvs summed within vP
-
-        pri = pri_p, fd, fv  # same-line prior 2D tuple, buffered for selective inc_rng comp
-        t_.append(pri)
-        high = p, d, m  # next-higher-line tuple, buffered for spec of next-line vertical D, M comp?
-        _t_.append(high)
+        Vq += fv  # fvs summed to define vP value, but directional res.loss for orient eval
+        p_.append(p) # pri = pri_p, fd, fv: same-line prior 2D tuple, buffered for selective inc_rng comp
 
         # formation of difference pattern dP: horizontal span of same-sign dq s:
 
         sd = 1 if d > 0 else 0  # sd: positive sign of d;
+        pri_sd = dP.pop()  # dP tuple: pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
+
         if x > r + 2 and (sd != pri_sd or x == X - 1):  # if dq sign miss or line ends, dP is terminated
 
-            dP = pri_sd, Id, Dd, Dyd, Md, Myd, Dq, d_, dolp_  # 1D P
             if y > 1:
                n = len(dP_)
                comb_P(dP, _dP_, _x, x, y, Y, n)  # or comb_vP and comb_dP, with dP_.append(dP)
@@ -105,9 +100,9 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, A, vP_, dP_, _vP_, _dP_,  # i/o varia
         pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
         dolp += 1  # overlap to current vP
         Id += pri_p  # p s summed within dP
-        Dd += d; Dyd += dy  # summed within dP and dP2
-        Md += m; Myd += my  # summed within dP and dP2
-        Dq += fd  # fds summed within dP
+        Dd += d; Ddy += dy  # summed within dP and dP2
+        Md += m; Mdy += my  # summed within dP and dP2
+        Dq += fd  # fds summed to define dP value?
         d_.append(fd)  # same fds as in p_ but within dP, to spec vert.Dd comp, no associated derivatives
 
         pri_p = _p
@@ -124,7 +119,7 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
     x_buff_, y_buff_, CP2_, _n = [],[],[],0  # output arrays and template (prior comparand) counter
     root_, _fork_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
 
-    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2, poss. per root
+    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2, if formed per root?
     CW, CI2, CD2, CM2, P2_ = 0,0,0,0,[]  # variables of CP2: connected P2s, per cfork_
 
     s, I, D, M, r, e_, olp_ = P  # M vs. V: no lateral eval, V = M - 2a * W?
@@ -215,31 +210,27 @@ def cons_P2(P): # at CP2 term, sub-level 4?
     vx = mean_dx - dx  # normalized compression of distance: min. cost decrease, not min. benefit?
 
 
-def Le1(Fp_): # last '_' distinguishes array name from element name
+def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, variable
 
-    FP_ = []  # output frame and line of template tuples
-    Y, X = Fp_.shape  # Y: frame height, X: frame width
+    r = 1; a = 127  # feedback filters
+    Y, X = f.shape  # Y: frame height, X: frame width
 
-    fd, fv, y, r, A, vP_, dP_, _vP_, _dP_ = 0,0,0,0,0,[],[],[],[]  # i/o variables
-    pri_s, I, D, V, p_, olp, olp_ = 0,0,0,0,[],0,[]  # vP variables
-    pri_sd, Id, Dd, Vd, d_, dolp, dolp_ = 0,0,0,0,[],0,[]  # dP variables
+    fd, fv, _x, y, vP, dP, vP_, dP_, _vP_, _dP_, F_  = 0,0,0,0, {},{}, [],[],[],[],[]
 
-    p_ = Fp_[0, :]  # y is index of new line ip_
-    _t_= comp(p_, X)
+    p_ = f[0, :]  # y is index of new line ip_
+    _t_= comp(p_, X)  # _t_ includes ycomp() results: My, Dy, Vq, initialized = 0?
 
     for y in range(1, Y):
 
-        p_ = Fp_[y, :]  # y is index of new line ip_
+        p_ = f[y, :]  # y is index of new line ip_
         t_ = comp(p_, X)
-        ycomp(t_, _t_, fd, fv, y, X, Y, r, A, vP_, dP_, _vP_, _dP_,  # i/o variables, output is Ps, comp to _Ps?
-              pri_s, I, D, V, p_, olp, olp_,  # vP variables
-              pri_sd, Id, Dd, Vd, d_, dolp, dolp_)  # dP variables
+        ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_)
         # internal comb_P()) cons_P2(): triggered by P2) C2 termination
         _t_ = t_
 
-    FP_.append(P_)  # line of patterns is added to frame of patterns, y = len(Ft_)
+    F_.append(P_)  # line of patterns is added to frame of patterns, y = len(FP_)
 
-    return FP_  # output to level 2
+    return F_  # output to level 2
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
