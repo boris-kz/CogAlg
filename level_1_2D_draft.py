@@ -20,7 +20,7 @@ from scipy import misc
     
 '''
 
-def comp(p_, X):  # comparison between consecutive pixels within scan line, forming tuples: pixel, match, difference
+def comp(p_, X):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
 
     t_ = []
     pri_p = p_[0]
@@ -29,7 +29,7 @@ def comp(p_, X):  # comparison between consecutive pixels within scan line, form
 
     for x in range(1, X):  # cross-compares consecutive pixels
 
-        p = p_[x]  # new pixel, comp to prior pixel, could use pop()?
+        p = p_[x]  # new pixel, comp to prior pixel, pop() is faster?
         d = p - pri_p  # lateral difference between consecutive pixels
         m = min(p, pri_p)  # lateral match between consecutive pixels
         t = p, d, m
@@ -43,10 +43,10 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
     A = a * r; pri_p = 0
 
-    for x in range(X):  # compares vertically consecutive tuples
+    for x in range(X):  # compares vertically consecutive tuples, resulting derivatives end with 'y' and 'q':
 
         t = t_[x];  p, d, m = t
-        _t = _t_[x]; _p, _d, _m = _t  # also _my, _dy, fd, fv per _p but not p?
+        _t = _t_[x]; _p, _d, _m = _t  # _my, _dy, fd, fv are accumulated within current P
 
         dy = p - _p   # vertical difference between pixels, -> Dy
         dq = _d + dy  # quadrant gradient of difference, formed at prior-line pixel _p, -> Dq: variation eval?
@@ -56,13 +56,14 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         vq = _m + my - A  # quadrant gradient of predictive value (relative match) at prior-line _p, -> Mq?
         fv += vq          # all shorter + current- range vq s within extended quadrant
 
-        # formation of 1D value pattern vP: horizontal span of same-sign vq s:
+
+        # formation of 1D value pattern vP: horizontal span of same-sign vq s with associated vars:
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
-        pri_s = vP.pop()  # vP tuple: pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_: same as dP, re-assignment?
+        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, same vars re-assigned by dP?
+        dolp_ = dP[8]
 
-        if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign
-            #  miss or line ends, vP is terminated
+        if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
 
             if y > 1:
                n = len(vP_)  # vP is  packed in ycomp declaration:
@@ -71,20 +72,21 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
             o = len(vP_), olp  # len(vP_) is index of current vP, olp formed by comb_P()
             dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
 
-            I, D, V, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
+            I, D, Dy, M, My, Vq, p_, olp_, olp, dolp = 0,0,0,0,0,0, [],[], 0,0  # init. vP and dolp
 
         pri_s = s   # vP (representing span of same-sign vq s) is incremented:
         olp += 1    # overlap to current dP
         I += pri_p  # p s summed within vP
         D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
-        M += m; My += my  # summed within vP and vP2
+        M += m; My += my  # lateral and vertical summation within vP and vP2
         Vq += fv  # fvs summed to define vP value, but directional res.loss for orient eval
         p_.append(p) # pri = pri_p, fd, fv: same-line prior 2D tuple, buffered for selective inc_rng comp
 
-        # formation of difference pattern dP: horizontal span of same-sign dq s:
+
+        # formation of difference pattern dP: horizontal span of same-sign dq s with associated vars:
 
         sd = 1 if d > 0 else 0  # sd: positive sign of d;
-        pri_sd = dP.pop()  # dP tuple: pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
+        pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp = dP  # dP tuple
 
         if x > r + 2 and (sd != pri_sd or x == X - 1):  # if dq sign miss or line ends, dP is terminated
 
@@ -92,45 +94,45 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
                n = len(dP_)
                comb_P(dP, _dP_, _x, x, y, Y, n)  # or comb_vP and comb_dP, with dP_.append(dP)
 
-            o = len(dP_), dolp  # len(dP_) is index of current dP
+            o = len(dP_), dolp  # len(dP_) is index of current dP, dolp formed by comb_P()
             olp_.append(o)  # index and dolp of terminated dP is buffered at current vP
 
-            Id, Dd, Vd, olp, dolp, d_, dolp_ = 0, 0, 0, 0, 0, [], []  # initialization of new dP and olp
+            Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp_, olp, dolp = 0,0,0,0,0,0, [],[], 0,0  # init. dP and olp
 
         pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
         dolp += 1  # overlap to current vP
         Id += pri_p  # p s summed within dP
-        Dd += d; Ddy += dy  # summed within dP and dP2
-        Md += m; Mdy += my  # summed within dP and dP2
-        Dq += fd  # fds summed to define dP value?
+        Dd += d; Ddy += dy  # lateral and vertical summation within dP and dP2
+        Md += m; Mdy += my  # lateral and vertical summation within dP and dP2
+        Dq += fd  # fds summed to define dP value, for cons_P2 and level 2 eval
         d_.append(fd)  # same fds as in p_ but within dP, to spec vert.Dd comp, no associated derivatives
 
-        pri_p = _p
+        dP = pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
+        vP = pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_
+
+        pri_p = _p  # for laterally-next p' ycomp() inclusion into vP and dP
 
     return vP_, dP_  # or vC2_, dC2_ formed by comb_P and then cons_P2?
 
-''' 
-    _p, vP_, dP_, _vP_, _dP_,  pri_s, I, D, V, p_, olp, olp_,  pri_sd, Id, Dd, Vd, d_, dolp, dolp_  
-    for accumulation at comb_P, not cons_P2? 
-'''
 
 def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last comb_P(), initially = 0
 
     x_buff_, y_buff_, CP2_, _n = [],[],[],0  # output arrays and template (prior comparand) counter
     root_, _fork_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
 
-    W, I2, D2, M2, P_ = 0,0,0,0,[]  # variables of P2, if formed per root?
-    CW, CI2, CD2, CM2, P2_ = 0,0,0,0,[]  # variables of CP2: connected P2s, per cfork_
+    W, I2, D2, Dy2, M2, My2, V2, P_ = 0,0,0,0,0,0,0,[]  # variables of root P2, spec if len(P_) > 1
+    WC, IC, DC, MC, DyC, MyC, VC, P2_ = 0,0,0,0,0,0,0,[]  # variables of CP2: connected P2s, per cfork_
 
-    s, I, D, M, r, e_, olp_ = P  # M vs. V: no lateral eval, V = M - 2a * W?
+    s, I, D, Dy, M, My, V, r, e_, olp_ = P  # M vs. V: eval per quadrant only, V = M - 2a * W?
     w = len(e_); ix = x - w  # w: width, ix: initial coordinate of a P
 
-    while x >= _x:  # horizontal overlap between P and next _P, forks are not redundant, P2 if multiple 1-forks only?
+    while x >= _x:  # horizontal overlap between P and next _P, forks are not redundant?
 
         _P = _P_.pop(); _n += 1  # to sync with cfork_, better than len(in_P_) - len(_P_)?
-        _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _olp_, _root_, __fork_ = _P  # __fork_, _root_: connection tracing in CP2?
+        _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _V, _r, _e_, _olp_, _root_, __fork_ = _P
+        # __fork_, _root_ for connection tracing within CP2
 
-        if s == _s:  # !eval, ~dP? -> P2 at y_buff_.append(P) if vertically cont. 1-forks, known after while x > _x?
+        if s == _s:  # -> P2, ~dP?
 
             root_.append(len(_P_))  # index of connected _P within _P_
             _fork_.append(n)  # future index of connected P within y_buff_, not yet displaced
@@ -174,14 +176,14 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation for current _P and its P2:
 
                 if t > 0: cons_P2(P2)  # including _P? eval for rotation, re-scan, re-comp
-                CW += W; CI2 += I2; CD2 += D2; CM2 += M2; P2_.append(P2)  # forming variables of CP2
+                WC += W; IC += I2; DC += D2; MC += M2; P2_.append(P2)  # forming variables of CP2
 
             else:
-                _P = _s, _ix, _x, _w, _I, _D, _M, _r, _e_, _olp_, _fork_, _root_, P2
+                _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, V, _r, _e_, _olp_, _fork_, _root_, P2
                 # old _root_, new _fork_, old _fork_ is displaced with old P2?
                 x_buff_.append(_P)  # _P is re-inputted for next-P comp
 
-            CP2 = cfork_, CW, CI2, CI2, CD2, CM2, P2_
+            CP2 = cfork_, WC, IC, DC, MC, P2_
 
             if (len(cfork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP2:
 
