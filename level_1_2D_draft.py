@@ -62,8 +62,8 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         # formation of 1D value pattern vP: horizontal span of same-sign vq s with associated vars:
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
-        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple initialized as list, vars re-assigned by dP?
-        dolp_ = dP[8]
+        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, vars re-assigned by dP?
+        dolp_ = dP[9]
 
         if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
 
@@ -88,7 +88,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         # formation of difference pattern dP: horizontal span of same-sign dq s with associated vars:
 
         sd = 1 if d > 0 else 0  # sd: positive sign of d;
-        pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp = dP  # dP tuple
+        pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_ = dP  # dP tuple
 
         if x > r + 2 and (sd != pri_sd or x == X - 1):  # if dq sign miss or line ends, dP is terminated
 
@@ -228,10 +228,10 @@ def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line 
 
     fd, fv, _x, y, vP_, dP_, _vP_, _dP_, F_  = 0,0,0,0,[],[],[],[],[]
 
-    I, D, Dy, M, My, Vq, p_, olp, olp_ = 0,0,0,0,0,0,[],0,[]
-    vP = I, D, Dy, M, My, Vq, p_, olp, olp_
-    Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_ = 0,0,0,0,0,0,[],0,[]
-    dP = Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
+    pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = 0,0,0,0,0,0,0,[],0,[]
+    vP = pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_
+    pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_ = 0,0,0,0,0,0,0,[],0,[]
+    dP = pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
 
     p_ = f[0, :]  # y is index of new line ip_
     _t_= comp(p_, X)  # _t_ includes ycomp() results: My, Dy, Vq, initialized = 0?
