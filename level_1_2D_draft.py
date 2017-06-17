@@ -40,7 +40,9 @@ def comp(p_, X):  # comparison of consecutive pixels in a scan line forms tuples
 
 def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
+    # vertical comparison between pixels, forming 1D slices of 2D patterns
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
+
     A = a * r; pri_p = 0
 
     for x in range(X):  # compares vertically consecutive tuples, resulting derivatives end with 'y' and 'q':
@@ -60,7 +62,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         # formation of 1D value pattern vP: horizontal span of same-sign vq s with associated vars:
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
-        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, same vars re-assigned by dP?
+        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, or a list? same vars re-assigned by dP?
         dolp_ = dP[8]
 
         if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
@@ -80,7 +82,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
         M += m; My += my  # lateral and vertical summation within vP and vP2
         Vq += fv  # fvs summed to define vP value, but directional res.loss for orient eval
-        p_.append(p) # pri = pri_p, fd, fv: same-line prior 2D tuple, buffered for selective inc_rng comp
+        p_.append(p) # pri = pri_p, fd, fv: same-line prior quadrant, buffered for selective inc_rng comp
 
 
         # formation of difference pattern dP: horizontal span of same-sign dq s with associated vars:
@@ -112,89 +114,96 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
         pri_p = _p  # for laterally-next p' ycomp() inclusion into vP and dP
 
-    return vP_, dP_  # or vC2_, dC2_ formed by comb_P and then cons_P2?
+    return vP_, dP_  # or vCP_, dCP_ formed by comb_P and then cons_P2?
 
 
 def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last comb_P(), initially = 0
 
-    x_buff_, y_buff_, CP2_, _n = [],[],[],0  # output arrays and template (prior comparand) counter
-    root_, _fork_, cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
+    x_buff_, y_buff_, CP_, _n = [],[],[],0  # output arrays and template (prior comparand) counter
+    root_, _fork_, Cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
 
-    W, I2, D2, Dy2, M2, My2, V2, P_ = 0,0,0,0,0,0,0,[]  # variables of root P2, spec if len(P_) > 1
-    WC, IC, DC, MC, DyC, MyC, VC, P2_ = 0,0,0,0,0,0,0,[]  # variables of CP2: connected P2s, per cfork_
+    W, I2, D2, Dy2, M2, My2, Q2, P_ = 0,0,0,0,0,0,0,[]  # variables of root P2, spec if len(P_) > 1
+    WC, IC, DC, MC, DyC, MyC, QC, P2_ = 0,0,0,0,0,0,0,[]  # variables of CP: connected P2s, per Cfork_
 
-    s, I, D, Dy, M, My, V, r, e_, olp_ = P  # M vs. V: eval per quadrant only, V = M - 2a * W?
+    # olp2_: adjusted and preserved post eval, for hLe eval?
+
+    s, I, D, Dy, M, My, Q, r, e_, olp_ = P  # M vs. V: eval per quadrant only, V = M - 2a * W?
     w = len(e_); ix = x - w  # w: width, ix: initial coordinate of a P
 
-    while x >= _x:  # horizontal overlap between P and next _P, forks are not redundant?
+    while x >= _x:  # horizontal overlap between P and next _P, forks don't overlap but full P2s do?
 
-        _P = _P_.pop(); _n += 1  # to sync with cfork_, better than len(in_P_) - len(_P_)?
-        _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _V, _r, _e_, _olp_, _root_, __fork_ = _P
-        # __fork_, _root_ for connection tracing within CP2
+        _P = _P_.pop(); _n += 1  # to sync with Cfork_, better than len(in_P_) - len(_P_)?
+        _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp_, _root_ = _P
 
-        if s == _s:  # -> P2, ~dP?
+        # _root_ to trace redundancy of adjusted olp_, buffered _fork_ s trace connections within CP,
+        # no __fork_: sequential _fork_ s access?
+
+        if s == _s:  # accumulation of P2, ~dP?
 
             root_.append(len(_P_))  # index of connected _P within _P_
-            _fork_.append(n)  # future index of connected P within y_buff_, not yet displaced
+            _fork_.append(n)  # future index of connected P within y_buff_, which is not formed yet
 
             dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx, signed, or unsigned overlap?
             dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D:
 
-            # comp(dx), comp(dw, ddx) at dxP term?
-            # if match(dw, ddx) > a: _w *= cos(ddx); comp(w, _w)  # proj w*cos match, if same-sign dw, ddx, not |.|
+            ''' 
+            comp(dx), comp(dw, ddx) at dxP term?
+            if match(dw, ddx) > a: _w *= cos(ddx); comp(w, _w)  # proj w*cos match, if same-sign dw, ddx, not |.|
 
-            # comp of separate lateral D and M
-            # default div and overlap eval per P2? not CP2: sparse coverage?
+            comp of separate lateral D and M
+            default div and overlap eval per P2? not CP: sparse coverage?
 
-        ''' 
-        if mx+mw > a: # conditional input vars norm and comp, also at P2 term: rotation if match (-DS, Ddx),  div_comp if rw?  
+            if mx+mw > a: # input vars norm and comp, also at P2 term: rotation if match (-DS, Ddx), div_comp if rw?  
 
-           comp (dw, ddx) -> m_dw_ddx # to angle-normalize S vars for comp:
+            comp (dw, ddx) -> m_dw_ddx # to angle-normalize S vars for comp:
 
-        if m_dw_ddx > a: _S /= cos (ddx)
+            if m_dw_ddx > a: _S /= cos (ddx)
 
-           if dw > a: div_comp (w) -> rw # to width-normalize S vars for comp: 
+            if dw > a: div_comp (w) -> rw # to width-normalize S vars for comp: 
 
-              if rw > a: pn = I/w; dn = D/w; vn = V/w; 
+                if rw > a: pn = I/w; dn = D/w; vn = V/w; 
 
-                 comp (_n) # or default norm for redun assign, but comp (S) if low rw?
+                    comp (_n) # or default norm for redun assign, but comp (S) if low rw?
 
-                 if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
+                    if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
 
-        else: comp (S) # even if norm for redun assign?
-        '''
+            else: comp (S) # even if norm for redun assign?
+            
+            if len(__fork_) == 1 and len(_fork_) == 1:  # then _P includes trunk P2?
+            '''
 
-        if len(__fork_) == 1 and len(_fork_) == 1: # then _P includes trunk P2:
-           t = 1; W +=_w; I2 +=_I; D2 +=_D; M2 +=_M; P_.append(_P)
-        else: t = 0
+        # P2 accumulation per fork, including P comp derivatives, or pertial overlap only?
+
+        W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; Q2 += Q; P_.append(_P)
+
 
         if _x <= ix:  # _P output if no horizontal overlap between _P and next P:
 
-            P2 = W, I2, D2, M2, P_  # ?
-            cfork_.append(_fork_)  # all continuing _Ps of CP2
+            P2 = W, I2, D2, Dy2, M2, My2, Q2, P_  # for output?
+            Cfork_.append(_fork_)  # all continuing _Ps of CP
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation for current _P and its P2:
 
-                if t > 0: cons_P2(P2)  # including _P? eval for rotation, re-scan, re-comp
-                WC += W; IC += I2; DC += D2; MC += M2; P2_.append(P2)  # forming variables of CP2
+                if t > 0: cons_P2(P2)  # eval for rotation, re-scan, re-comp
+                WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; QC += Q2; P2_.append(P2) # CP vars
 
             else:
-                _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, V, _r, _e_, _olp_, _fork_, _root_, P2
+                _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, Q, _r, _e_, _olp_, _fork_, _root_, P2
                 # old _root_, new _fork_, old _fork_ is displaced with old P2?
                 x_buff_.append(_P)  # _P is re-inputted for next-P comp
 
-            CP2 = cfork_, WC, IC, DC, MC, P2_
+            CP = Cfork_, WC, IC, DC, DyC, MC, MyC, QC, P2_
 
-            if (len(cfork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP2:
+            if (len(Cfork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP2:
 
-                cons_P2(CP2)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
+                cons_P2(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
-            elif n == len(cfork_):  # CP2_ to _P_ sync for P2 inclusion and cons(CP2) trigger by cfork_?
-            # or last fork in cfork_, possibly disc.?
+            elif n == len(Cfork_):  # CP_ to _P_ sync for P2 inclusion and cons(CP) trigger by Cfork_?
+            # or last fork in Cfork_, possibly disc.?
 
-                CP2_.append(CP2)
+                CP_.append(CP)
 
-    P = s, w, I, D, M, r, e_, olp_, root_  # each root is new, includes P2 if unique cont:
+    P = s, w, I, D, Dy, M, My, Q, r, e_, olp_, root_  # each root is new, includes P2 if unique cont:
     y_buff_.append(P)  # _P_ = for next line comp, if no horizontal overlap between P and next _P
 
     _P_.reverse(); _P_ += x_buff_; _P_.reverse() # front concat for next P comp
@@ -227,10 +236,10 @@ def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line 
         p_ = f[y, :]  # y is index of new line ip_
         t_ = comp(p_, X)
         ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_)
-        # internal comb_P()) cons_P2(): triggered by P2) C2 termination
+        # comb_P() and cons_P2() are triggered by P2 ) CP termination within ycomp()
         _t_ = t_
 
-    F_.append(P_)  # line of patterns is added to frame of patterns, y = len(FP_)
+    F_.append(P_)  # line of patterns is added to frame of patterns, y = len(F_)
 
     return F_  # output to level 2
 
