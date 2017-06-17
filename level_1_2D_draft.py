@@ -62,7 +62,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         # formation of 1D value pattern vP: horizontal span of same-sign vq s with associated vars:
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
-        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, or a list? same vars re-assigned by dP?
+        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple initialized as list, vars re-assigned by dP?
         dolp_ = dP[8]
 
         if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
@@ -74,7 +74,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
             o = len(vP_), olp  # len(vP_) is index of current vP, olp formed by comb_P()
             dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
 
-            I, D, Dy, M, My, Vq, p_, olp_, olp, dolp = 0,0,0,0,0,0, [],[], 0,0  # init. vP and dolp
+            I, D, Dy, M, My, Vq, p_, olp, olp_, dolp = 0,0,0,0,0,0,[],0,[],0  # init. vP and dolp
 
         pri_s = s   # vP (representing span of same-sign vq s) is incremented:
         olp += 1    # overlap to current dP
@@ -99,7 +99,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
             o = len(dP_), dolp  # len(dP_) is index of current dP, dolp formed by comb_P()
             olp_.append(o)  # index and dolp of terminated dP is buffered at current vP
 
-            Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp_, olp, dolp = 0,0,0,0,0,0, [],[], 0,0  # init. dP and olp
+            Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp , dolp_, olp = 0,0,0,0,0,0,[],0,[],0  # init. dP and olp
 
         pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
         dolp += 1  # overlap to current vP
@@ -172,7 +172,7 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
             if len(__fork_) == 1 and len(_fork_) == 1:  # then _P includes trunk P2?
             '''
 
-        # P2 accumulation per fork, including P comp derivatives, or pertial overlap only?
+        # P2 accumulation per fork, vars *= overlap ratio?  including P comp derivatives
 
         W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; Q2 += Q; P_.append(_P)
 
@@ -226,7 +226,12 @@ def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line 
     r = 1; a = 127  # feedback filters
     Y, X = f.shape  # Y: frame height, X: frame width
 
-    fd, fv, _x, y, vP, dP, vP_, dP_, _vP_, _dP_, F_  = 0,0,0,0, {},{}, [],[],[],[],[]
+    fd, fv, _x, y, vP_, dP_, _vP_, _dP_, F_  = 0,0,0,0,[],[],[],[],[]
+
+    I, D, Dy, M, My, Vq, p_, olp, olp_ = 0,0,0,0,0,0,[],0,[]
+    vP = I, D, Dy, M, My, Vq, p_, olp, olp_
+    Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_ = 0,0,0,0,0,0,[],0,[]
+    dP = Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
 
     p_ = f[0, :]  # y is index of new line ip_
     _t_= comp(p_, X)  # _t_ includes ycomp() results: My, Dy, Vq, initialized = 0?
