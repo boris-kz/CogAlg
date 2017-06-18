@@ -81,8 +81,8 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         I += pri_p  # p s summed within vP
         D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
         M += m; My += my  # lateral and vertical summation within vP and vP2
-        Vq += fv  # fvs summed to define vP value, but directional res.loss for orient eval
-        p_.append(p) # pri = pri_p, fd, fv: same-line prior quadrant, buffered for selective inc_rng comp
+        Vq += fv    # fvs summed to define vP value, but directional res.loss for orient eval
+        p_.append(p)  # pri = pri_p, fd, fv: prior same-line quadrant, buffered for selective inc_rng comp
 
 
         # formation of difference pattern dP: horizontal span of same-sign dq s with associated vars:
@@ -116,6 +116,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
     return vP_, dP_  # or vCP_, dCP_ formed by comb_P and then cons_P2?
 
+    # draft below:
 
 def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last comb_P(), initially = 0
 
@@ -125,18 +126,17 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
     W, I2, D2, Dy2, M2, My2, Q2, P_ = 0,0,0,0,0,0,0,[]  # variables of root P2, spec if len(P_) > 1
     WC, IC, DC, MC, DyC, MyC, QC, P2_ = 0,0,0,0,0,0,0,[]  # variables of CP: connected P2s, per Cfork_
 
-    # olp2_: adjusted and preserved post eval, for hLe eval?
-
     s, I, D, Dy, M, My, Q, r, e_, olp_ = P  # M vs. V: eval per quadrant only, V = M - 2a * W?
     w = len(e_); ix = x - w  # w: width, ix: initial coordinate of a P
 
-    while x >= _x:  # horizontal overlap between P and next _P, forks don't overlap but full P2s do?
+    # olp2_: adjusted and preserved post fork eval, for P2, CP, and hLe eval?
+
+    while x >= _x:  # horizontal overlap between P and next _P
 
         _P = _P_.pop(); _n += 1  # to sync with Cfork_, better than len(in_P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp_, _root_ = _P
 
-        # _root_ to trace redundancy of adjusted olp_, buffered _fork_ s trace connections within CP,
-        # no __fork_: sequential _fork_ s access?
+        # _root_ traces redundancy of evaluated olp_, displaced P _fork_: connections in CP, sequential: no __fork_
 
         if s == _s:  # accumulation of P2, ~dP?
 
@@ -168,11 +168,12 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
                     if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
 
             else: comp (S) # even if norm for redun assign?
-            
-            if len(__fork_) == 1 and len(_fork_) == 1:  # then _P includes trunk P2?
             '''
 
-        # P2 accumulation per fork, vars *= overlap ratio?  including P comp derivatives
+        # P2 accumulation per fork, including P comp derivatives, term at next fork?
+        # vars *= overlap ratio cost, per fork?
+        # P2 accumulation if len(__fork_) == 1 and len(_fork_) == 1: while unique only?
+
 
         W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; Q2 += Q; P_.append(_P)
 
@@ -184,8 +185,8 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation for current _P and its P2:
 
-                if t > 0: cons_P2(P2)  # eval for rotation, re-scan, re-comp
-                WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; QC += Q2; P2_.append(P2) # CP vars
+                cons_P2(P2)  # eval for rotation, re-scan, re-comp within primary fork?
+                WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; QC += Q2; P2_.append(P2)  # CP vars
 
             else:
                 _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, Q, _r, _e_, _olp_, _fork_, _root_, P2
@@ -240,7 +241,7 @@ def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line 
 
         p_ = f[y, :]  # y is index of new line ip_
         t_ = comp(p_, X)
-        ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_)
+        vP_, dP_ = ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_)
         # comb_P() and cons_P2() are triggered by P2 ) CP termination within ycomp()
         _t_ = t_
 
