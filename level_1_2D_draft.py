@@ -62,7 +62,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         # formation of 1D value pattern vP: horizontal span of same-sign vq s with associated vars:
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
-        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, vars re-assigned by dP?
+        pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, vars maybe re-assigned to dP tuple?
         dolp_ = dP[9]
 
         if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
@@ -114,11 +114,11 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
         pri_p = _p  # for laterally-next p' ycomp() inclusion into vP and dP
 
-    return vP_, dP_  # or vCP_, dCP_ formed by comb_P and then cons_P2?
+    return vP_, dP_  # also vP2_, dP2_ and vCP_, dCP_ formed by comb_P and adjusted by cons_P2
 
     # draft below:
 
-def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last comb_P(), initially = 0
+def comb_P(P, _P_, _x, x, y, Y, n):  # _x: x of last _P displaced from _P_ by last comb_P(), init = 0
 
     x_buff_, y_buff_, CP_, _n = [],[],[],0  # output arrays and template (prior comparand) counter
     root_, _fork_, Cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
@@ -127,31 +127,26 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
     WC, IC, DC, MC, DyC, MyC, QC, P2_ = 0,0,0,0,0,0,0,[]  # variables of CP: connected P2s, per Cfork_
 
     s, I, D, Dy, M, My, Q, r, e_, olp_ = P  # M vs. V: eval per quadrant only, V = M - 2a * W?
-    w = len(e_); ix = x - w  # w: width, ix: initial coordinate of a P
-
-    # olp2_: adjusted and preserved post fork eval, for P2, CP, and hLe eval?
+    w = len(e_); ix = x - w  # w: width, ix: initial coordinate of P
 
     while x >= _x:  # horizontal overlap between P and next _P
 
         _P = _P_.pop(); _n += 1  # to sync with Cfork_, better than len(in_P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp_, _root_ = _P
 
-        # _root_ traces redundancy of evaluated olp_, displaced P _fork_: connections in CP, sequential: no __fork_
+        if s == _s:  # P comp, match - redundancy per _P_, or overlap eval per P2 term?
 
-        if s == _s:  # accumulation of P2, ~dP?
+            root_.append(len(_P_))  # index of connected _P in _P_, then _root_ to trace redundancy
+            _fork_.append(n)  # index of connected P in future y_buff_, buffered for sequential connect in CP
 
-            root_.append(len(_P_))  # index of connected _P within _P_
-            _fork_.append(n)  # future index of connected P within y_buff_, which is not formed yet
+            dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx: signed, or w overlap: match is partial x identity?
+            # dxP term: Dx > ave? comp(dx)?
 
-            dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx, signed, or unsigned overlap?
-            dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D:
+            dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D
+            # ddxP term: dw sign == ddx sign? comp(dw, ddx), match -> w*cos match: _w *= cos(ddx), comp(w, _w)?
 
-            ''' 
-            comp(dx), comp(dw, ddx) at dxP term?
-            if match(dw, ddx) > a: _w *= cos(ddx); comp(w, _w)  # proj w*cos match, if same-sign dw, ddx, not |.|
-
-            comp of separate lateral D and M
-            default div and overlap eval per P2? not CP: sparse coverage?
+            '''             
+            comp of lateral D and M, /=cos?  default div and overlap eval per P2? not per CP: sparse coverage?
 
             if mx+mw > a: # input vars norm and comp, also at P2 term: rotation if match (-DS, Ddx), div_comp if rw?  
 
@@ -170,13 +165,10 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x of last _P displaced from _P_ by last 
             else: comp (S) # even if norm for redun assign?
             '''
 
-        # P2 accumulation per fork, including P comp derivatives, term at next fork?
-        # vars *= overlap ratio cost, per fork?
-        # P2 accumulation if len(__fork_) == 1 and len(_fork_) == 1: while unique only?
-
-
         W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; Q2 += Q; P_.append(_P)
 
+        # P2 accumulation per fork, including P comp derivatives, term if no fork per _P_?
+        # redundant or vars *= overlap ratio cost, per fork?
 
         if _x <= ix:  # _P output if no horizontal overlap between _P and next P:
 
