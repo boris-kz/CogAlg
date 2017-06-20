@@ -15,8 +15,8 @@ from scipy import misc
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
     y-1: ycomp()   t_ array of tuples, vertical comp, der.comb -> 1D P,
-    y-2: comb_P()  P_ array of 1D patterns, vertical comb eval, comp -> P2 ) C2
-    y-3: cons_P2() C_ array of 2D connected patterns, overlap, eval, P2 consolidation:
+    y-2: comb_P()  P_ array of 1D patterns, vertical comb eval, comp -> PP ) C2
+    y-3: cons_P2() P2_ array of 2D connected patterns, overlap, eval, P2 consolidation:
     
 '''
 
@@ -24,7 +24,7 @@ def comp(p_, X):  # comparison of consecutive pixels in a scan line forms tuples
 
     t_ = []
     pri_p = p_[0]
-    t = pri_p, 0, 0  # ignored anyway?
+    t = pri_p, 0, 0  # initial _d and _m are ignored anyway?
     t_.append(t)
 
     for x in range(1, X):  # cross-compares consecutive pixels
@@ -69,7 +69,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
             if y > 1:
                n = len(vP_)  # vP is  packed in ycomp declaration:
-               comb_P(vP, _vP_, _x, x, y, Y, n)  # or comb_vP and comb_dP, with vP_.append(vP)
+               comb_P(vP, _vP_, A, _x, x, y, Y, n)  # or comb_vP and comb_dP, with vP_.append(vP)
 
             o = len(vP_), olp  # len(vP_) is index of current vP, olp formed by comb_P()
             dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
@@ -94,7 +94,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
             if y > 1:
                n = len(dP_)
-               comb_P(dP, _dP_, _x, x, y, Y, n)  # or comb_vP and comb_dP, with dP_.append(dP)
+               comb_P(dP, _dP_, A, _x, x, y, Y, n)  # or comb_vP and comb_dP, with dP_.append(dP)
 
             o = len(dP_), dolp  # len(dP_) is index of current dP, dolp formed by comb_P()
             olp_.append(o)  # index and dolp of terminated dP is buffered at current vP
@@ -104,8 +104,8 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
         dolp += 1  # overlap to current vP
         Id += pri_p  # p s summed within dP
-        Dd += d; Ddy += dy  # lateral and vertical summation within dP and dP2
-        Md += m; Mdy += my  # lateral and vertical summation within dP and dP2
+        Dd += d; Ddy += dy  # lateral and vertical summation within dP and dPP
+        Md += m; Mdy += my  # lateral and vertical summation within dP and dPP
         Dq += fd  # fds summed to define dP value, for cons_P2 and level 2 eval
         d_.append(fd)  # same fds as in p_ but within dP, to spec vert.Dd comp, no associated derivatives
 
@@ -114,27 +114,27 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
         pri_p = _p  # for laterally-next p' ycomp() inclusion into vP and dP
 
-    return vP_, dP_  # also vP2_, dP2_ and vCP_, dCP_ formed by comb_P and adjusted by cons_P2
+    return vP_, dP_  # also vPP_, dPP_ and vCP_, dCP_ formed by comb_P and adjusted by cons_P2
 
     # draft below:
 
-def comb_P(P, _P_, _x, x, y, Y, n):  # _x: x of last _P displaced from _P_ by last comb_P(), init = 0
+def comb_P(P, _P_, A, _x, x, y, Y, n):  # _x: x of _P displaced from _P_ by last comb_P(), initially = 0
 
     x_buff_, y_buff_, CP_, _n = [],[],[],0  # output arrays and template (prior comparand) counter
     root_, _fork_, Cfork_ = [],[],[]  # arrays of same-sign lower- or higher- line Ps
 
-    W, I2, D2, Dy2, M2, My2, Q2, P_ = 0,0,0,0,0,0,0,[]  # variables of root P2, spec if len(P_) > 1
-    WC, IC, DC, MC, DyC, MyC, QC, P2_ = 0,0,0,0,0,0,0,[]  # variables of CP: connected P2s, per Cfork_
+    W, IP, DP, DyP, MP, MyP, QP, P_ = 0,0,0,0,0,0,0,[]  # variables of PP (pattern of patterns) per fork
+    WC, IC, DC, DyC, MC, MyC, QC, PP_ = 0,0,0,0,0,0,0,[]  # variables of CP (connected PPs) at last Cfork
 
     s, I, D, Dy, M, My, Q, r, e_, olp_ = P  # M vs. V: eval per quadrant only, V = M - 2a * W?
     w = len(e_); ix = x - w  # w: width, ix: initial coordinate of P
 
     while x >= _x:  # horizontal overlap between P and next _P
 
-        _P = _P_.pop(); _n += 1  # to sync with Cfork_, better than len(in_P_) - len(_P_)?
+        _P = _P_.pop(); _n += 1  # _n to sync with Cfork_, better than len(in_P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp_, _root_ = _P
 
-        if s == _s:  # P comp, match - redundancy per _P_, or overlap eval per P2 term?
+        if s == _s:  # P comp, combined match (vPP, no dPP?) - _P_ fork overlap redundancy, or eval at P2 term?
 
             root_.append(len(_P_))  # index of connected _P in _P_, then _root_ to trace redundancy
             _fork_.append(n)  # index of connected P in future y_buff_, buffered for sequential connect in CP
@@ -165,27 +165,30 @@ def comb_P(P, _P_, _x, x, y, Y, n):  # _x: x of last _P displaced from _P_ by la
             else: comp (S) # even if norm for redun assign?
             '''
 
-        W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; Q2 += Q; P_.append(_P)
+        if cM > A*10:  # PP incr per match per fork, including P comp derivatives, vars *= overlap ratio cost? or:
+                       # also redundant to past forks, no eval till term if no fork per _P_?
 
-        # P2 accumulation per fork, including P comp derivatives, term if no fork per _P_?
-        # redundant or vars *= overlap ratio cost, per fork?
+            W +=_w; IP +=_I; DP +=_D; DyP +=_Dy; MP +=_M; MyP +=_My; QP += Q; P_.append(_P)
+            PP = W, IP, DP, DyP, MP, MyP, QP, P_
+            _root = PP, len(_P_)  # PP per _root per _P: multiple inclusions?
+            _root_.append(_root)
 
         if _x <= ix:  # _P output if no horizontal overlap between _P and next P:
 
-            P2 = W, I2, D2, Dy2, M2, My2, Q2, P_  # for output?
+            PP = W, IP, DP, DyP, MP, MyP, QP, P_  # PP per _root per _P: multiple inclusions?
             Cfork_.append(_fork_)  # all continuing _Ps of CP
 
-            if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation for current _P and its P2:
+            if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP, accum of CP:
 
-                cons_P2(P2)  # eval for rotation, re-scan, re-comp within primary fork?
-                WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; QC += Q2; P2_.append(P2)  # CP vars
+                cons_P2(PP)  # eval for rotation, re-scan, re-comp
+                WC += W; IC += IP; DC += DP; DyC += DyP; MC += MP; MyC += MyP; QC += QP; PP_.append(PP)  # CP vars
 
             else:
-                _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, Q, _r, _e_, _olp_, _fork_, _root_, P2
-                # old _root_, new _fork_, old _fork_ is displaced with old P2?
+                _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp_, _fork_, _root_, PP  # attached
+                # old _root_, new _fork_, old _fork_ is displaced with old PP1?
                 x_buff_.append(_P)  # _P is re-inputted for next-P comp
 
-            CP = Cfork_, WC, IC, DC, DyC, MC, MyC, QC, P2_
+            CP = Cfork_, WC, IC, DC, DyC, MC, MyC, QC, PP_
 
             if (len(Cfork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP2:
 
@@ -234,9 +237,10 @@ def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line 
         p_ = f[y, :]  # y is index of new line ip_
         t_ = comp(p_, X)
         vP_, dP_ = ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_)
-        # comb_P() and cons_P2() are triggered by P2 ) CP termination within ycomp()
+        # comb_P() and cons_P2() are triggered by PP ) CP termination within ycomp()
         _t_ = t_
 
+    P_ = vP_, dP_
     F_.append(P_)  # line of patterns is added to frame of patterns, y = len(F_)
 
     return F_  # output to level 2
