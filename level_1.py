@@ -161,7 +161,6 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
     for y in range(Y):
 
         ip_ = Fp_[y, :]  # y is index of new line ip_
-        # or p_ = dict(zip(range(len(p_)), p_.values())))
 
         if min_r == 0: A = a; AV = aV  # actual filters, incremented per comp recursion
         else: A = 0; AV = 0  # if r > min_r
