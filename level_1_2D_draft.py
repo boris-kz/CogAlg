@@ -7,16 +7,16 @@ from scipy import misc
     They are formed on the same level because average lateral match ~ average vertical match. 
     Minimal unit of 2D is quadrant defined by 4 pixels. 
     
-    Derivatives in a given quadrant have two equally representative samples, unique per its first pixel: 
-    right-of-pixel and down-of-pixel. Hence, quadrant gradient is computed as an average of the two.  
-    2D pattern is defined by matching sign of quadrant gradient of value for vP or difference for dP.
+    Each quadrant is represented by two unique sample derivatives: rightward and downward from its first pixel. 
+    So, quadrant gradient is computed as the average of these two derivatives. 
+    2D patterns are blobs of same-sign quadrant gradient: of value for vP or difference for dP.
 
     Level 1 has 4 steps of incremental encoding per added scan line, defined by coordinate y:
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
     y-1: ycomp()   t_ array of tuples, vertical comp, der.comb -> 1D P,
-    y-2: comb_P()  P_ array of 1D patterns, vertical comb eval, comp -> PP ) C2
-    y-3: cons_P2() P2_ array of 2D connected patterns, overlap, eval, P2 consolidation:
+    y-2: comb_P()  P_ array of 1D patterns, vertical comp, eval, comb -> PP ) CP
+    y-3: cons_P2() P2_ array of 2D patterns, fork overlap, eval, PP or CP consolidation:
     
 '''
 
@@ -68,9 +68,8 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
         if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
 
-            if y > 1:
-               n = len(vP_)
-               _P_, next_P_ = comb_P(vP, _vP_, A, _x, x, y, Y, n, _P_, next_P_)  # or comb_vP and comb_dP?
+            if y > 1:  # separate comb_vP and comb_dP?
+               _P_, next_P_ = comb_P(vP, len(vP_), _vP_, A, _x, x, y, Y, _P_, next_P_)
 
             o = len(vP_), olp  # len(vP_) is index of current vP, olp formed by comb_P()
             dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
@@ -93,9 +92,8 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
         if x > r + 2 and (sd != pri_sd or x == X - 1):  # if dq sign miss or line ends, dP is terminated
 
-            if y > 1:
-               n = len(dP_)
-               _P_, next_P_ = comb_P(dP, _dP_, A, _x, x, y, Y, n, _P_, next_P_)  # or comb_vP and comb_dP?
+            if y > 1:  # separate comb_vP and comb_dP?
+               _P_, next_P_ = comb_P(dP, len(dP_), _dP_, A, _x, x, y, Y, _P_, next_P_)
 
             o = len(dP_), dolp  # len(dP_) is index of current dP, dolp formed by comb_P()
             olp_.append(o)  # index and dolp of terminated dP is buffered at current vP
@@ -113,17 +111,18 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
         dP = pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
         vP = pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_
 
-        pri_p = _p  # for laterally-next p' ycomp() inclusion into vP and dP
+        pri_p = _p  # for inclusion into vP and dP by laterally-next p' ycomp()
 
-    return vP_, dP_  # also vPP_, dPP_ and vCP_, dCP_ formed by comb_P and adjusted by cons_P2
+    return vP_, dP_  # also attached vPP_, dPP_ and vCP_, dCP_ formed by comb_P and adjusted by cons_P2
 
     # draft below:
 
-def comb_P(P, _P_, A, _x, x, y, Y, n, P_, next_P_):  # combines matching _Ps into PP, and then PPs into CP
+
+def comb_P(P, nP, _P_, A, _x, x, y, Y, P_, next_P_):  # combines matching _Ps into PP, and then PPs into CP
     # _x: x of _P displaced from _P_ by last comb_P
 
-    buff_, CP_, _n = [],[], 0  # output arrays and _P counter
-    root_, _fork_, Fork_ = [],[],[]  # root_: same-sign overlapping higher Ps, fork_: same-sign overlapping lower Ps
+    buff_, CP_, n_P = [],[], 0  # output arrays and _P counter
+    root_, _fork_, Fork_ = [],[],[]  # root_: same-sign higher Ps, fork_: same-sign lower Ps, overlapping P
 
     W, IP, DP, DyP, MP, MyP, QP = 0,0,0,0,0,0,0  # variables of PP (pattern of patterns), multiple per fork
     WC, IC, DC, DyC, MC, MyC, QC, PP_ = 0,0,0,0,0,0,0,[]  # variables of CP (connected PPs), at last Fork
@@ -133,10 +132,10 @@ def comb_P(P, _P_, A, _x, x, y, Y, n, P_, next_P_):  # combines matching _Ps int
 
     while x >= _x:  # horizontal overlap between P and next _P
 
-        _P = _P_.pop(); _n += 1  # _n is _P counter to sync Fork_ with _P_, better than len(P_) - len(_P_)?
+        _P = _P_.pop(); n_P += 1  # n_P is _P counter to sync Fork_ with _P_, better than len(P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp_, _root_ = _P
 
-        if s == _s:  # P comp, PM (comb P vars match) eval: P -> PP inclusion if PM > A * len(stronger_root_)?
+        if s == _s:  # P comp, combined P match (PM) eval: P -> PP inclusion if PM > A * len(stronger_root_)?
 
             dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx: signed, or w overlap: match is partial x identity?
             # dxP term: Dx > ave? comp(dx)?
@@ -164,28 +163,28 @@ def comb_P(P, _P_, A, _x, x, y, Y, n, P_, next_P_):  # combines matching _Ps int
             else: comp (S) # even if norm for redun assign?
             '''
 
-            # redundant to stronger roots (previous _P inclusions) in root_
-            # no actual eval till P2 term: if no forks per _P?
-            # or vars *= overlap ratio, + cost?
+            # redundant to stronger roots (previous _P inclusions) in root_ (or vars *= overlap ratio, + cost?)
+            # no actual eval till PP term: if no forks per _P?  _root_ fb?
 
-            if PM > A*10:  # PP inclusion if combined-P match, with P comp derivatives
+            if PM > _PM: _rdn+=1 # PM comp, neg v count -> rdn for PP incl eval:
+            else: rdn += 1
+
+            if PM > A*10 * rdn:  # PP inclusion if combined-P match, with P comp derivatives
 
                 W +=_w; IP +=_I; DP +=_D; DyP +=_Dy; MP +=_M; MyP +=_My; QP += Q; P_.append(_P)
-                PP = W, IP, DP, DyP, MP, MyP, QP, P_
-
-                # also summed olP and rolP: root_ olP, before P2 eval, _root_ fb?
+                PP = W, IP, DP, DyP, MP, MyP, QP, P_  # also olP_: concat of roots? no rolP_: same as root_
 
                 root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
-                _fork_.append(n)  # index of connected P in future next_P_, buffered for sequential connect in CP
+                _fork_.append(n_P)  # index of connected P in future next_P_, to be buffered in Fork_ of CP
 
         if _x <= ix:  # _P output if no horizontal overlap between _P and next P:
 
             PP = W, IP, DP, DyP, MP, MyP, QP, P_  # PP per _root in _root_
-            Fork_.append(_fork_)  # all continuing _Ps of CP, stored at its first fork
+            Fork_ += _fork_  # all continuing _Ps of CP, attached to its first fork _P: CP flag?
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP, accum of CP:
 
-                cons_P2(_root_)  # eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP?
+                cons_P2(PP)  # eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP?
                 WC += W; IC += IP; DC += DP; DyC += DyP; MC += MP; MyC += MyP; QC += QP; PP_.append(PP)  # CP vars
 
             else:
@@ -193,14 +192,13 @@ def comb_P(P, _P_, A, _x, x, y, Y, n, P_, next_P_):  # combines matching _Ps int
                 # old _root_, new _fork_. old _fork_ is displaced with old _P?
                 buff_.append(_P)  # _P is re-inputted for next-P comp
 
-            CP = Fork_, WC, IC, DC, DyC, MC, MyC, QC, PP_
+            CP = WC, IC, DC, DyC, MC, MyC, QC, PP_, Fork_
 
             if (len(Fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP:
 
                 cons_P2(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
-            elif _n == len(Fork_):  # CP_ to _P_ sync for P2 inclusion and cons(CP) trigger by last fork in Fork_?
-
+            elif nP == last_Fork_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
                 CP_.append(CP)
 
     P = s, w, I, D, Dy, M, My, Q, r, e_, olp_, root_  # each root is new, includes P2 if unique cont:
