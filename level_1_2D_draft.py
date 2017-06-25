@@ -64,7 +64,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
         s = 1 if vq > 0 else 0  # s: positive sign of vq
         pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_ = vP  # vP tuple, vars maybe re-assigned to dP tuple?
-        dolp_ = dP[9]
+        dolp_ = dP[9]  # vs. dP = dP.astype([]); dolp_ = dP.pop()
 
         if x > r + 2 and (s != pri_s or x == X - 1):  # if vq sign miss or line ends, vP is terminated
 
@@ -117,9 +117,8 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP, dP, vP_, dP_, _vP_, _dP_):
 
     # draft below:
 
-
 def comb_P(P, nP, _P_, A, _x, x, y, Y, P_, next_P_):  # combines matching _Ps into PP, and then PPs into CP
-    # _x: x of _P displaced from _P_ by last comb_P
+                                                      # _x: x of _P displaced from _P_ by last comb_P
 
     buff_, CP_, n_P = [],[], 0  # output arrays and _P counter
     root_, _fork_, Fork_ = [],[],[]  # root_: same-sign higher Ps, fork_: same-sign lower Ps, overlapping P
@@ -163,19 +162,26 @@ def comb_P(P, nP, _P_, A, _x, x, y, Y, P_, next_P_):  # combines matching _Ps in
             else: comp (S) # even if norm for redun assign?
             '''
 
-            # redundant to stronger roots (previous _P inclusions) in root_ (or vars *= overlap ratio, + cost?)
-            # no actual eval till PP term: if no forks per _P?  _root_ fb?
+            root_.append(PP)  # root temporarily includes current P and its P comp derivatives, as well as prior PP
 
-            if PM > _PM: _rdn+=1 # PM comp, neg v count -> rdn for PP incl eval:
-            else: rdn += 1
+        rdn = 0; _rdn = 0  # compute rdn: number of stronger-PM roots per root of root_, vs. vars *= overlap ratio?
 
-            if PM > A*10 * rdn:  # PP inclusion if combined-P match, with P comp derivatives
+        while len(root_) > 0: # vs. for i in range(len(root_)): root = root_[i]
 
-                W +=_w; IP +=_I; DP +=_D; DyP +=_Dy; MP +=_M; MyP +=_My; QP += Q; P_.append(_P)
-                PP = W, IP, DP, DyP, MP, MyP, QP, P_  # also olP_: concat of roots? no rolP_: same as root_
+            PP = root_.pop(); PM = PP[n]
 
-                root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
-                _fork_.append(n_P)  # index of connected P in future next_P_, to be buffered in Fork_ of CP
+            while len(root_) > 0: # a copy?
+
+                if PM > _PM: _rdn+=1 # PM comp, neg v count -> rdn for PP incl eval:
+                else: rdn+=1
+
+        if PM > A*10 * rdn:  # PP inclusion by combined-P match value
+
+            W +=_w; IP +=_I; DP +=_D; DyP +=_Dy; MP +=_M; MyP +=_My; QP += Q; P_.append(_P)
+            PP = W, IP, DP, DyP, MP, MyP, QP, P_  # also olP_: concat of roots? no rolP_: same as root_
+
+            root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
+            _fork_.append(n_P)  # index of connected P in future next_P_, to be buffered in Fork_ of CP
 
         if _x <= ix:  # _P output if no horizontal overlap between _P and next P:
 
@@ -184,7 +190,8 @@ def comb_P(P, nP, _P_, A, _x, x, y, Y, P_, next_P_):  # combines matching _Ps in
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP, accum of CP:
 
-                cons_P2(PP)  # eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP?
+                cons_P2(PP)  # term' PP eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP?
+                # then _root_ eval at adjusted redundancy?
                 WC += W; IC += IP; DC += DP; DyC += DyP; MC += MP; MyC += MyP; QC += QP; PP_.append(PP)  # CP vars
 
             else:
