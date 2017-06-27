@@ -2,7 +2,6 @@ from scipy import misc
 
 '''
     Level 1 with patterns defined by the sign of quadrant gradient: modified core algorithm of levels 1 + 2.
-    
     (updated level_1_2D without dP and vP packing in ycomp()) 
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
@@ -40,7 +39,7 @@ def comp(p_, X):  # comparison of consecutive pixels in a scan line forms tuples
 
     return t_
 
-def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP_, dP_, _vP_, _dP_,
+def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, vP_, dP_, _vP_, _dP_,
           pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_,  # vP tuple
           pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_):  # dP tuple
 
@@ -72,9 +71,9 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP_, dP_, _vP_, _dP_,
             if y > 1:  # comb_P() or separate comb_vP() and comb_dP()?
 
                vP = pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_  # M vs V: eval per quadrant, V = M - 2a * W?
-               _P_, next_P_ = comb_P(vP, len(vP_), _vP_, r, A, _x, x, y, Y, _P_, next_P_)
-
-               vP_.append(vP)  # vP includes reference to its vPP, formed by comb_P
+               i_vPP, _P_, next_P_ = comb_P(vP, len(vP_), _vP_, r, A, _x, x, y, Y, _P_, next_P_)
+               vP = vP, i_vPP
+               vP_.append(vP)  # vP includes index of its vPP, formed by comb_P
 
             o = len(vP_), olp  # len(vP_) is index of current vP, olp formed by comb_P()
             dolp_.append(o)  # index and olp of terminated vP is buffered at current dP
@@ -98,9 +97,9 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP_, dP_, _vP_, _dP_,
             if y > 1:  # comb_P() or separate comb_vP() and comb_dP()?
 
                dP = pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_
-               _P_, next_P_ = comb_P(dP, len(dP_), _dP_, r, A, _x, x, y, Y, _P_, next_P_)
-
-               dP_.append(dP)  # dP includes reference to its dPP, formed by comb_P
+               i_dPP, _P_, next_P_ = comb_P(dP, len(dP_), _dP_, r, A, _x, x, y, Y, _P_, next_P_)
+               dP = dP, i_dPP
+               dP_.append(dP)  # dP includes index of its dPP, formed by comb_P
 
             o = len(dP_), dolp  # len(dP_) is index of current dP, dolp formed by comb_P()
             olp_.append(o)  # index and dolp of terminated dP is buffered at current vP
@@ -115,7 +114,7 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP_, dP_, _vP_, _dP_,
         Dq += fd  # fds summed to define dP value, for cons_P2 and level 2 eval
         d_.append(fd)  # same fds as in p_ but no other derivatives, within dP for selective inc_der comp
 
-        pri_p = _p  # for inclusion into vP and dP by laterally-next p' ycomp()
+        pri_p = _p   # for inclusion into vP and dP by laterally-next p' ycomp()
 
     return vP_, dP_  # with references to vPPs, dPPs, vCPs, dCPs formed by comb_P and adjusted by cons_P2
 
@@ -127,7 +126,7 @@ def comb_P(P, nP, _P_, r, A, _x, x, y, Y, P_, next_P_):  # _x: x of _P displaced
     # combines matching _Ps into PP, and then PPs into CP
 
     buff_, CP_, n_P = [],[], 0  # output arrays and _P counter
-    root_, _fork_, Fork_ = [],[],[]  # root_: same-sign higher Ps, fork_: same-sign lower Ps, overlapping P
+    root_, _fork_, Fork_ = [],[],[]  # overlapping Ps: root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
     W, IP, DP, DyP, MP, MyP, QP = 0,0,0,0,0,0,0  # variables of PP (pattern of patterns), multiple per fork
     WC, IC, DC, DyC, MC, MyC, QC, PP_ = 0,0,0,0,0,0,0,[]  # variables of CP (connected PPs), at last Fork
@@ -135,40 +134,40 @@ def comb_P(P, nP, _P_, r, A, _x, x, y, Y, P_, next_P_):  # _x: x of _P displaced
     s, I, D, Dy, M, My, Q, e_, olp, olp_ = P
     w = len(e_); ix = x - w  # w: P width, ix: P initial coordinate
 
-    while x >= _x:  # horizontal overlap between P and next _P
+    while x >= _x:  # P scans over remaining _P_ while there is some horizontal overlap between P and next _P
 
         _P = _P_.pop(); n_P += 1  # n_P is _P counter to sync Fork_ with _P_, better than len(P_) - len(_P_)?
-        _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp, _olp_, _root_ = _P  # or only olp: PM eval?
+        _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _Q, _r, _e_, _olp, _olp_, _root_ = _P  # or only olp for PM eval?
 
         if s == _s:  # P comp, combined P match (PM) eval: P -> PP inclusion if PM > A * len(stronger_root_)?
 
-            dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx: signed, or w overlap: match is partial x identity?
-            # dxP term: Dx > ave? comp(dx)?
+           dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx: signed, or w overlap: match is partial x identity?
+           # dxP term: Dx > ave? comp(dx)?
 
-            dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D
-            # ddxP term: dw sign == ddx sign? comp(dw, ddx), match -> w*cos match: _w *= cos(ddx), comp(w, _w)?
+           dw = w -_w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D
+           # ddxP term: dw sign == ddx sign? comp(dw, ddx), match -> w*cos match: _w *= cos(ddx), comp(w, _w)?
 
-            '''             
-            comp of lateral D and M, /=cos?  default div and overlap eval per P2? not per CP: sparse coverage?
+           '''             
+           comp of lateral D and M, /=cos?  default div and overlap eval per P2? not per CP: sparse coverage?
 
-            if mx+mw > a: # input vars norm and comp, also at P2 term: rotation if match (-DS, Ddx), div_comp if rw?  
+           if mx+mw > a: # input vars norm and comp, also at P2 term: rotation if match (-DS, Ddx), div_comp if rw?  
 
-            comp (dw, ddx) -> m_dw_ddx # to angle-normalize S vars for comp:
+           comp (dw, ddx) -> m_dw_ddx # to angle-normalize S vars for comp:
 
-            if m_dw_ddx > a: _S /= cos (ddx)
+           if m_dw_ddx > a: _S /= cos (ddx)
 
-            if dw > a: div_comp (w) -> rw # to width-normalize S vars for comp: 
+           if dw > a: div_comp (w) -> rw # to width-normalize S vars for comp: 
 
-                if rw > a: pn = I/w; dn = D/w; vn = V/w; 
+               if rw > a: pn = I/w; dn = D/w; vn = V/w; 
 
-                    comp (_n) # or default norm for redun assign, but comp (S) if low rw?
+                  comp (_n) # or default norm for redun assign, but comp (S) if low rw?
 
-                    if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
+                  if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
 
-            else: comp (S) # even if norm for redun assign?
-            '''
+           else: comp (S) # even if norm for redun assign?
+           '''
 
-            root_.append(PP)  # root temporarily includes current P and its P comp derivatives, as well as prior PP
+           root_.append(PP)  # root temporarily includes current P and its P comp derivatives, as well as prior PP
 
         rdn = 0; _rdn = 0  # compute rdn: number of stronger-PM roots per root of root_, vs. vars *= overlap ratio?
 
@@ -179,10 +178,16 @@ def comb_P(P, nP, _P_, r, A, _x, x, y, Y, P_, next_P_):  # _x: x of _P displaced
             for i in range(len(root_)):  # remaining PPs are reused by next iter. of while len(root_)
 
                 _PP = root_[i]; _PM = _PP[0]
-                if PM > _PM: _rdn+=1  # PM comp, neg v count -> rdn for PP inclusion eval:
-                else: rdn+=1
+                if PM > _PM: _rdn += 1  # lateral PM comp, neg v count -> rdn for PP inclusion eval:
+                else: rdn += 1
 
-        if PM > A*10 * rdn:  # also * olp, no _olp? PP inclusion by combined-P match value
+        for i in range(len(olp_)):  # olp_ s are accumulated into olP_, for potential adjustment of PM and then rdn
+
+            i_PP = olp_[i]; _PP = alt_PP_[i_PP]; _PM = _PP[0]  # indirect access of _PP in alt. vPP_ | dPP_?
+            if PM > _PM: _rdn += 1  # dP vs. vP PM comp, neg v count -> rdn for PP inclusion eval:
+            else: rdn += 1
+
+        if PM > A*10 * rdn:  # redundancy includes olp, no _olp? PP inclusion by combined-P match value
 
             W +=_w; IP +=_I; DP +=_D; DyP +=_Dy; MP +=_M; MyP +=_My; QP += Q; P_.append(_P)
             PP = W, IP, DP, DyP, MP, MyP, QP, P_  # also olP_: concat of roots? no rolP_: same as root_
@@ -190,7 +195,7 @@ def comb_P(P, nP, _P_, r, A, _x, x, y, Y, P_, next_P_):  # _x: x of _P displaced
             root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
             _fork_.append(n_P)  # index of connected P in future next_P_, to be buffered in Fork_ of CP
 
-        if _x <= ix:  # _P output if no horizontal overlap between _P and next P:
+        if _x <= ix:  # _P and PP output if no horizontal overlap between _P and next P:
 
             PP = W, IP, DP, DyP, MP, MyP, QP, P_  # PP per _root in _root_
             Fork_ += _fork_  # all continuing _Ps of CP, attached to its first fork _P: CP flag?
@@ -213,14 +218,17 @@ def comb_P(P, nP, _P_, r, A, _x, x, y, Y, P_, next_P_):  # _x: x of _P displaced
                 cons_P2(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
             elif nP == last_Fork_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
+
                 CP_.append(CP)
+
+            PP_.append(PP)
 
     P = s, w, I, D, Dy, M, My, Q, r, e_, olp_, root_  # each root is new, includes P2 if unique cont:
     next_P_.append(P)  # _P_ = for next line comp, if no horizontal overlap between P and next _P
 
-    _P_.reverse(); _P_ += buff_; _P_.reverse() # front concat for next-P comp_P()
+    buff_.reverse(); _P_ += buff_  # first to pop() in _P_ for next-P comb_P()
 
-    return _P_, next_P_  # also len(PP_): index to be included in P?
+    return len(PP_), _P_, next_P_  # len(PP_) is index of PP (which may include len(CP_)), for inclusion in P
 
 
 def cons_P2(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term
@@ -251,10 +259,13 @@ def Le1(f): # last "_" denotes array vs. element, first "_" denotes higher-line 
 
         p_ = f[y, :]  # y is index of new line ip_
         t_ = comp(p_, X)
-        vP_, dP_ = ycomp(t_, _t_, fd, fv, _x, y, X, Y, a, r, vP_, dP_, _vP_, _dP_,
+        _vP_.reverse(); _dP_.reverse()  # for pop(), at the start of each line
+
+        vP_, dP_ = ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, vP_, dP_, _vP_, _dP_,
                          pri_s, I, D, Dy, M, My, Vq, p_, olp, olp_,
                          pri_sd, Id, Dd, Ddy, Md, Mdy, Dq, d_, dolp, dolp_)
         # comb_P() and cons_P2() are triggered by PP ) CP termination within ycomp()
+
         _t_ = t_
 
     P_ = vP_, dP_
