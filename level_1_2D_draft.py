@@ -14,37 +14,36 @@ from collections import deque
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
     y-1: ycomp()   t_ array of tuples, vertical comp, der.comb -> 1D P,
-    y-2: comb_P()  P_ array of 1D patterns, vertical comp, eval, comb -> PP ) CP
+    y-2: comp_P()  P_ array of 1D patterns, vertical comp, eval, comb -> PP ) CP
     y-3: cons_P2() P2_ array of 2D patterns, fork overlap, eval, PP or CP consolidation:
-    
-    or ycomp( form_P), comp_P( form_PP): vP, dP and vPP, dPP are formed by default, 1D is tentative              
-
 '''
 
 def comp(p_, X):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
 
-    t_ = []
+    t_ = deque()
     pri_p = p_[0]  # no d, m at x=0
-    t = pri_p; t_.append(t)
+    t = pri_p; t_.appendleft(t)
 
     for x in range(1, X):  # cross-compares consecutive pixels
 
         p = p_[x]  # new pixel, comp to prior pixel:
         d = p - pri_p  # lateral difference between consecutive pixels
         m = min(p, pri_p)  # lateral match between consecutive pixels
-        t = p, d, m; t_.append(t)
+        t = p, d, m; t_.appendleft(t)
         pri_p = p
 
     return t_
 
-def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, vP, dP, vP_, dP_, _vP_, _dP_):
+def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, _vP_, _dP_):
 
     # vertical comparison between pixels, forming 1D slices of 2D patterns
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
     vP_, dP_, next_vP_, next_dP_ = [],[], deque(), deque()
-    # or full vP_, dP_ initialization per line, out as _vP_, _dP_?
-    pri_sv, pri_sd = 0,0
+    pri_s, I, D, Dy, M, My, g, e_, = 0, 0, 0, 0, 0, 0, 0, []
+    vP = pri_s, I, D, Dy, M, My, g, e_
+    dP = pri_s, I, D, Dy, M, My, g, e_
+    alt_, dalt_ = [],[]  # filled by alt_P, inclusion in P at term, rdn from alt_ eval in form_PP()?
 
     A = a * r
     pri_p = t_[0]  # no d, m at x=0
@@ -64,10 +63,10 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, vP, dP, vP_, dP_, _vP_, _dP_):
 
         t2 = pri_p, d, dy, m, my, vg, dg
 
-        pri_sv = form_P(pri_sv, t2, fv, x, _x, y, X, Y, r, a, vP, dP, vP_, _vP_)
+        sv, alt_, dalt_, vP, vP_ = form_P(t2, fv, alt_, dalt_, vP, vP_, _vP_, x, _x, y, X, Y, r, A)
         # forms 1D value pattern vP: horizontal span of same-sign vg s with associated vars
 
-        pri_sd = form_P(pri_sd, t2, fd, x, _x, y, X, Y, r, a, dP, vP, dP_, _dP_)
+        sd, dalt_, alt_, dP, dP_ = form_P(t2, fd, dalt_, alt_, dP, dP_, _dP_, x, _x, y, X, Y, r, A)
         # forms 1D difference pattern dP: horizontal span of same-sign dg s with associated vars
 
         pri_p = _p   # for inclusion into vP and dP by laterally-next p' ycomp()
@@ -75,65 +74,45 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, vP, dP, vP_, dP_, _vP_, _dP_):
     return _vP_, _dP_  # with references to vPPs, dPPs, vCPs, dCPs formed by comb_P and adjusted by cons_P2
 
 
-def form_P(pri_s, t2, f, x, _x, y, X, Y, r, a, P, alt_P, P_, _P_):
+def form_P(t2, f, alt_, _alt_, P, P_, _P_, x, _x, y, X, Y, r, A):
 
-    s, I, D, Dy, M, My, g, p_, rdn, alt_ = 0, 0, 0, 0, 0, 0, 0, [], 0, []
+    rdn = 0; next_ = deque()
     p, d, dy, m, my = t2
+    pri_s, I, D, Dy, M, My, g, p_ = P
 
     s = 1 if g > 0 else 0  # s: positive sign of vg
     if x > r + 2 and (s != pri_s or x == X - 1):  # if vg sign miss or line ends, vP is terminated
 
-        if y > 1:  # comb_P() or separate comb_vP() and comb_dP()?
+        if y > 1:  # comp_P() or separate comb_vP() and comb_dP()?
 
-           vP = pri_s, I, D, Dy, M, My, Vg, p_, rdn, alt_  # M vs V: eval per vertex, V = M - 2a * W?
-           root_, _vP_, next_vP_ = comb_P(vP, len(vP_), _vP_, _dP_, next_vP_, r, A, _x, x, y, Y)
-           vP = vP, root_
-           vP_.append(vP)  # vPs include root_ formed by comb_P
+           P = pri_s, I, D, Dy, M, My, g, p_, alt_  # M vs V: eval per vertex, V = M - 2a * W?
+           root_, _vP_, next_vP_ = comp_P(P, len(P_), _P_, _alt_, next_, x, _x, y, Y, r, A)
+           P = P, root_
+           P_.append(P)  # vPs include root_ formed by comb_P
 
-           o = len(vP_), rdn  # len(vP_) is index of current vP, alt formed by comb_P()
-           dalt_.append(o)  # index and alt of terminated vP is buffered at current dP
+           o = len(P_), rdn  # len(vP_) is index of current vP, alt formed by comb_P()
+           alt_.append(o)  # index and alt of terminated vP is buffered at current dP
 
-           I, D, Dy, M, My, Vg, p_, alt, alt_, dalt = 0,0,0,0,0,0,[],0,[],0  # init. vP and dalt
+           I, D, Dy, M, My, Vg, p_, alt_, _alt_ = 0,0,0,0,0,0,[],[],[]  # init. vP and dalt
+           # vP (representing span of same-sign vg s) is incremented:
 
-        pri_s = s   # vP (representing span of same-sign vg s) is incremented:
-        rdn += 1    # alternative-type overlap to concurrent dPs
-        I += pri_p  # p s summed within vP
+        rdn += 1  # P overlap to concurrent alternative-type P
+        I += p  # p s summed within vP
         D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
         M += m; My += my  # lateral and vertical summation within vP and vP2
         g += f    # fvs summed to define vP value, but directional res.loss for orient eval
-        pri = pri_p, fd, fv
+
+        if P==vP:
+            pri = p, fd, fv
+            
         p_.append(pri)  # prior same-line quadrant vertex, buffered for selective inc_rng comp
 
-
-        # formation of difference pattern dP: horizontal span of same-sign dg s with associated vars:
-
-        sd = 1 if d > 0 else 0  # sd: positive sign of d;
-        if x > r + 2 and (sd != pri_sd or x == X - 1):  # if dg sign miss or line ends, dP is terminated
-
-            if y > 1:  # comb_P() or separate comb_vP() and comb_dP()?
-
-               dP = pri_sd, Id, Dd, Ddy, Md, Mdy, Dg, d_, drdn, dalt_
-               root_, _dP_, next_dP_ = comb_P(dP, len(dP_), _dP_, _vP_, next_dP_, r, A, _x, x, y, Y)
-               dP = dP, root_
-               dP_.append(dP)  # dPs include root_ formed by comb_P
-
-            o = len(dP_), drdn  # len(dP_) is index of current dP, dalt formed by comb_P()
-            alt_.append(o)  # index and dalt of terminated dP is buffered at current vP
-
-            Id, Dd, Ddy, Md, Mdy, Dg, d_, drdn, dalt_, alt = 0,0,0,0,0,0,[],0,[],0  # init. dP and alt
-
-        pri_sd = sd  # dP (representing span of same-sign dq s) is incremented:
-        drdn += 1    # alternative-type overlap to concurrent vPs
-        Id += pri_p  # p s summed within dP
-        Dd += d; Ddy += dy  # lateral and vertical summation within dP and dPP
-        Md += m; Mdy += my  # lateral and vertical summation within dP and dPP
-        Dg += fd     # fds summed to define dP value, for cons_P2 and level 2 eval
-        d_.append(fd)  # same fds as in p_ but no other derivatives, within dP for selective inc_der comp
+    return s, alt_, _alt_, P, P_
 
     # draft below:
 
 
-def comb_P(P, n, _P_, _alt_P_, next_P_, r, A, _x, x, y, Y):  # _x: x of _P displaced from _P_ by last comb_P
+def comp_P(P, n, _P_, _alt_P, next_P, x, _x, y, Y, r, A):  # _x: x of _P displaced from _P_ by last comb_P
 
     # combines matching _Ps into PP and then PPs into CP, _alt_P_: address only
 
