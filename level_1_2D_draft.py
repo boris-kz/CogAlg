@@ -14,20 +14,20 @@ from collections import deque
     y-2: comp_P()  P_ array of 1D patterns, vertical comp, eval, comb -> PP ) CP
     y-3: cons_P2() P2_ array of 2D patterns, fork overlap, eval, PP or CP consolidation:
 '''
-
+#after refactoring, deque is not needed for comp and ycomp - iterator reads both t, _t in the for loop
 def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
 
-    t_ = deque()
-    pri_p = p_.poplelf()  # no d, m at x=0
-    t = pri_p; t_.append(t)
+    t_ = [] #.deque()
+    pri_p = p_[0] #was p_.poplelf(), but p_ is a list, not deque # no d, m at x=0
+    t = pri_p; 
+    t_.append(t) #right append
 
-    for p in p_:  # new pixel, comp to prior pixel, vs. for x in range(1, X)
-
+    for p in p_[1:] :  # new pixel, comp to prior pixel, vs. for x in range(1, X)
         d = p - pri_p  # lateral difference between consecutive pixels
         m = min(p, pri_p)  # lateral match between consecutive pixels
-        t = p, d, m; t_.append(t)
+        t = p, d, m 
+        t_.append(t) #right append, deque; 
         pri_p = p
-
     return t_
 
 def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, _vP_, _dP_):
@@ -42,12 +42,12 @@ def ycomp(t_, _t_, fd, fv, _x, y, X, Y, r, a, _vP_, _dP_):
     alt_, dalt_ = [],[]  # filled by alt_P, inclusion in P at term, rdn from alt_ eval in form_PP()?
 
     A = a * r
-    pri_p = t_.popleft()  # no d, m at x=0
+    pri_p = t_[0] #.popleft()  # no d, m at x=0
 
-    for t in t_:  # compares vertically consecutive tuples, resulting derivatives end with 'y' and 'g':
+    for t, _t in zip(t_, _t_):  # compares vertically consecutive tuples, resulting derivatives end with 'y' and 'g':
+    #straight traversal for both lists - now pop or popleft are not needed
 
         p, d, m = t
-        _t = _t_.popleft()
         _p, _d, _m = _t
 
         dy = p - _p   # vertical difference between pixels, -> Dy
