@@ -17,6 +17,8 @@ Hierarchical approaches are common in unsupervised learning, and all do some sor
 
 Search space (above) is the number of patterns * number of their variables. Number of variables per pattern is incremental, starting from single-variable inputs, such as pixels in video. Each level of search adds new variables: match and miss, to every compared variable of an input pattern. So, the number of variables multiplies at every level, new variables are summed within a pattern, then combined to evaluate that pattern for expanded search. Feedback of averaged new variables extends lower-level algorithm by adding operations that filter future inputs, and then by adjusting the filters.
 
+This content is published under the Creative Commons Attribution 4.0 International License. You are encouraged to republish and rewrite it in any way you see fit, as long as you provide attribution and a link.
+
 .
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than the inputs themselves, Hence, precision of where (spans of and distances between patterns) is very low, and so is predictive value of combined representations. There is no such immediate degradation of positional information in my method.
