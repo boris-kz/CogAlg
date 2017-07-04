@@ -20,80 +20,71 @@ from collections import deque
 
 def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
 
-    t_ = deque()
+    t_ = []
     pri_p = p_.poplelf()  # no d, m at x=0, lagging t_.append(t)
 
     for p in p_:  # new pixel, comp to prior pixel, x += len(e_) at term? vs. for x in range(1, X)
 
-        d = p - pri_p  # lateral difference between consecutive pixels
-        m = min(p, pri_p)  # lateral match between consecutive pixels
+        d = p - pri_p  # difference between consecutive pixels
+        m = min(p, pri_p)  # match between consecutive pixels
         t = pri_p, d, m
         t_.append(t)
         pri_p = p
 
-    t_.append(pri_p)  # last t is a single pixel
+    t = pri_p, 0, 0; t_.append(t)  # last pixel is no compared
     return t_
 
 
-def ycomp(t_, _t_, fd, fv, y, X, Y, r, a, _vP_, _dP_):
+def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 
     # vertical comparison between pixels forms vertex tuples t2: p, d, dy, m, my, fd, fv
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
-    alt_, dalt_, vP_, dP_, next_, dnext_ = [],[],[],[], deque(), deque()
+    x, alt_, dalt_, vP_, dP_, next_, dnext_ = 0,[],[],[],[], deque(), deque()
     pri_s, I, D, Dy, M, My, G, olp, e_ = 0,0,0,0,0,0,0,0,[]  # also _G?
     vP = pri_s, I, D, Dy, M, My, G, olp, e_
     dP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ included at term, rdn from alt_ eval in form_PP?
 
     A = a * r
 
-    for x in range(X-1):  # compares vertically consecutive tuples, new derivatives end with 'y' and 'g':
+    for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels
 
         x += 1
-        t = t_.popleft(); p, d, m = t
-        _t = _t_.popleft(); _p, _d, _m = _t
+        p, d, m = t
+        _p, _d, _m = _t
 
-        dy = p - _p   # vertical difference between pixels, -> Dy
-        dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> Dg: variation eval?
+        dy = p - _p   # vertical difference between pixels, summed -> Dy
+        dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> dG: variation eval?
         fd += dg      # all shorter + current- range dg s within extended quadrant
 
-        my = min(p, _p)   # vertical match between pixels, -> My
-        vg = _m + my - A  # gradient of predictive value (relative match) at prior-line _p, -> Mg?
+        my = min(p, _p)   # vertical match between pixels, summed -> My
+        vg = _m + my - A  # gradient of predictive value (relative match) at prior-line _p, -> vG
         fv += vg          # all shorter + current- range vg s within extended quadrant
 
         t2 = p, d, dy, m, my  # all of which are accumulated within P:
 
-        # forms 1D value pattern vP: horizontal span of same-sign vg s with associated vars:
+        # forms 1D slice of value pattern vP: horizontal span of same-sign vg s with associated vars:
 
         sv, alt_, dalt_, vP, vP_, next_ = \
         form_P(0, t2, fv, fd, alt_, dalt_, vP, vP_, _vP_, next_, x, y, Y, r, A)
 
-        # forms 1D difference pattern dP: horizontal span of same-sign dg s with associated vars:
+        # forms 1D slice of difference pattern dP: horizontal span of same-sign dg s with associated vars:
 
         sd, dalt_, alt_, dP, dP_, dnext_ = \
         form_P(1, t2, fd, fv, dalt_, alt_, dP, dP_, _dP_, dnext_, x, y, Y, r, A)
 
-    # line term, last ycomp, vP term, dP term, no initialization:
+    # line end, last ycomp: lateral d = 0, m = 0, inclusion per incomplete gradient?
+    # vP term, no initialization:
 
-    p = t_.popleft()  # no d, m at last t
-    _p = _t_.popleft()  # vertical comp only, or discard anyway?
-    dy = p - _p; my = min(p, _p); t = _p, dy, my  # no gradient, but inclusion regardless?
-
-    # root_, olp are unpacked from Ps, only init. here, no ref in comp_P?
-
-    dalt = len(vP_), dolp  # len(P_) is index of current P, olp accumulated by form_P()
-    dalt_.append(dalt)  # index and rdn of terminated P is buffered at current alt_P
-
+    dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)
     root_, _vP_, next_ = comp_P(vP, len(vP_), _vP_, dalt_, next_, x, y, Y, r, A)
-    vP = vP, alt_, root_
-    vP_.append(vP)  # Ps include root_ from form_PP, olps are packed in alt_:
+    vP = vP, alt_, root_; vP_.append(vP)
 
-    alt = len(dP_), olp  # len(P_) is index of current P, olp accumulated by form_P()
-    alt_.append(alt)  # index and rdn of terminated P is buffered at current alt_P
+    # dP term, no initialization:
 
+    olp = vP[7]; alt = len(dP_), olp; alt_.append(alt)
     droot_, _dP_, dnext_ = comp_P(dP, len(dP_), _dP_, alt_, dnext_, x, y, Y, r, A)
-    dP = dP, dalt_, droot_
-    dP_.append(dP)  # Ps include root_ from form_PP, olps are packed in alt_:
+    dP = dP, dalt_, droot_; dP_.append(dP)
 
     return _vP_, _dP_  # with references to vPPs, dPPs, vCPs, dCPs, from comp_P and adjusted by cons_P2
 
@@ -107,13 +98,12 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, next_, x, y, Y, r, A):  # f
     if s != pri_s and x > r + 2:  # P is terminated and compared to overlapping _Ps:
 
         root_, _P_, next_ = comp_P(P, len(P_), _P_, alt_, next_, x, y, Y, r, A)
-        P = P, alt_, root_
+        P = P, alt_, root_  # vs. packed in P? or root_ is accumulated within comp_P only?
         P_.append(P)  # Ps include root_ added by comp_P, olps are packed in alt_:
 
-        _alt = len(P_), olp  # len(P_) is index of current P, olp accumulated by form_P()
+        _alt = len(P_), olp  # len(P_) is index of current P, olp accumulated by form_P() for
         _alt_.append(_alt)  # index and rdn of terminated P is buffered at current alt_P
-
-        I, D, Dy, M, My, g, rdn, e_, alt_, _alt_ = 0,0,0,0,0,0,0,[],[],[]  # initialized P and dalt
+        I, D, Dy, M, My, G, olp, e_, alt_ = 0,0,0,0,0,0,0,[],[]  # initialized P and alt_
 
     # P (representing span of same-sign gs) is incremented regardless of termination:
 
@@ -124,7 +114,7 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, next_, x, y, Y, r, A):  # f
     G += g  # fd|fv summed to define P value, with directional resolution loss
 
     if type == 0:
-        pri = p, g, _g  # for fuzzy accumulation within r, also d, dy, m, my?
+        pri = p, g, _g  # also d, dy, m, my, for fuzzy accumulation within r?
         e_.append(pri)  # prior same-line vertex, buffered for selective inc_rng comp
     else:
         e_.append(g)  # prior same-line fuzzy difference gradient, buffered for inc_der comp?
@@ -145,7 +135,7 @@ def comp_P(P, n, _P_, alt_, next_, x, y, Y, r, A):  # _x: x of _P displaced from
     W, IP, DP, DyP, MP, MyP, GP, Rdn, Alt_, P_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns), per fork
     WC, IC, DC, DyC, MC, MyC, GC, RdnC, AltC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
 
-    s, I, D, Dy, M, My, G, e_ = P
+    s, I, D, Dy, M, My, G, e_ = P  # also alt_, root_: doesn't to be returned?
     w = len(e_); ix = x - w  # w: P width, ix: P initial coordinate
 
     while x >= _x:  # P scans over remaining _P_ while there is some horizontal overlap between P and next _P
@@ -274,7 +264,7 @@ def Le1(f):  # last "_" denotes array vs. element, first "_" denotes higher-line
 
         p_ = f[y, :]
         t_ = comp(p_)  # lateral comp of pixels
-        _vP_, _dP_ = ycomp(t_, _t_, fd, fv, y, X, Y, r, a, _vP_, _dP_)  # vertical comp of pixels
+        _vP_, _dP_ = ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_)  # vertical comp of pixels
         # accumulates vP, dP, vP_, dP_; P ) PP ) CP termination triggers comp_P, cons_P2()
         _t_ = t_
 
