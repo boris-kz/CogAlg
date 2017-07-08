@@ -2,7 +2,7 @@ from scipy import misc
 from collections import deque
 
 '''
-    Level 1 with patterns defined by the sign of quadrant gradient: modified core algorithm of levels 1 + 2.
+    Level 1 with patterns defined by the sign of vertex gradient: modified core algorithm of levels 1 + 2.
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match. 
@@ -94,16 +94,16 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     if s != pri_s and x > r + 2:  # P is terminated and compared to overlapping _Ps:
 
         P_, _P_, term_P_ = comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
-        _alt = len(P_), olp; _alt_.append(_alt)  # index len(P_) and overlap of P are buffered in _P'_alt_
-
+        _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P' _alt_:
+        _alt_.append(_alt)
         I, D, Dy, M, My, G, olp, e_, alt_ = 0,0,0,0,0,0,0,[],[]  # initialized P and alt_
 
-    # P (representing span of same-sign gs) is incremented regardless of termination:
+    # P vars (representing span of same-sign gs) are accumulated regardless of termination:
 
     olp += 1  # P overlap to concurrent alternative-type P, accumulated till either P or _P is terminated
     I += p  # p s summed within P
     D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
-    M += m; My += my  # lateral and vertical M vs V: eval is per gradient, V = M - 2a * W?
+    M += m; My += my  # lateral and vertical M for P2 orient, vs V gradient eval, V = M - 2a * W?
     G += g  # fd | fv summed to define P value, with directional resolution loss
 
     if type == 0:
@@ -120,14 +120,16 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
 
 def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced from _P_ by last comb_P
 
-    # vertical comparison between 1D slices, for selective inclusion in 2D patterns
+    # vertical comparison between 1D slices, for selective inclusion in 2D patterns, vPP and dPP?
 
-    _x, _n = 0,0  # coordinate and index of _P
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
     W, I2, D2, Dy2, M2, My2, G2, Rdn, Alt_, yP_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns), per fork
     WC, IC, DC, DyC, MC, MyC, GC, RdnC, AltC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
+
+    _x, _n = 0, 0  # coordinate and index of _P
+    a_dx = 1; a_dw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs: variable value patterns
 
     s, I, D, Dy, M, My, G, e_ = P  # also alt_, root_: doesn't need to be returned?
     w = len(e_); ix = x - w  # w: P width, ix: P initial coordinate
@@ -137,12 +139,20 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         _P = _P_.popleft(); _n += 1  # _n is _P counter to sync Fork_ with _P_, or len(P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_ = _P
 
-        if s == _s:  # P comp, combined P match (PM) eval: P -> PP inclusion if PM > A * len(stronger_root_)?
+        if s == _s:  # P comp, separate var_dP and var_vP to eval for internal and external comp?
 
-            dx = x - w/2 - _x - _w/2  # mx = mean_dx - dx: signed, or w overlap: match is partial x identity?
-            # dxP term: Dx > ave? comp(dx)?
+            dx = x - w/2 - _x - _w/2; mx = a_dx - dx  # reverse neg eval, or mx = w overlap: partial x identity?
+            # dxP term: Dx > ave? comp(dx), Ddx > ave? summed-variable' dS *= cos(Ddx), mS /= cos(Ddx)?
+            # vxP if reverse neg eval, else no eval?  norm per ddxP | PP: comb eval only?
 
-            dw = w - _w; mw = min(w, _w)  # orientation if difference decr / match incr for min.1D Ps over max.2D
+            dw = w - _w; mw = min(w, _w); PM += mw  # form dwP, reorient if dw-, mw+ for min.1D Ps over max.2D?
+
+            if dw < a_dw:  # comp(S), aS if norm for redun assign? match -> w*cos match: _w *= cos(ddx), comp(w, _w)?
+
+                dI = I - _I; mI = min(I, _I); PM += mI  # term PP | var_P: eval of MI vs. Mh for rdn to derivatives:
+                dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
+                dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y derivatives
+
             '''    
             ddxP term: dw sign == ddx sign? 
 
@@ -155,11 +165,6 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
                    comp (_n) # or default norm for redun assign, but comp (S) if low rw?
 
                    if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
-
-            else: comp (S) # even if norm for redun assign? match -> w*cos match: _w *= cos(ddx), comp(w, _w)?
-
-            dD = D - _D; mD = min(D, _D)  # /=cos at PP term?
-            dM = M - _M; mD = min(M, _M)
 
             comp Dy and My, /=cos at PP term?  default div and overlap eval per PP? not per CP: sparse coverage?
             '''
@@ -176,25 +181,25 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             for i in range(len(root_)):  # remaining roots are reused by while len(root_)
 
                 _root = root_[i]; _PM = _root[0]  # lateral PM comp, neg v count -> rdn for PP inclusion eval:
-                if PM > _PM: _root[1] += 1; root_[i] = _root  # _root P rdn increment: added var?
-                else: rdn += 1  # redundancy within root_ and alt_:
+                if PM > _PM: _root[1] += 1; root_[i] = _root  # root_rdn increment, separate alt_rdn?
+                else: rdn += 1  # redundancy = len(stronger_root_) + len(stronger_alt_):
 
-        for i in range(len(alt_)):  # refs within alterm_P_, dP vs. vP PM comp, P rdn coef = neg v Olp / w?
+        for i in range(len(alt_)):  # refs within alt_P_, dP vs. vP PM comp, P rdn coef = neg v Olp / w?
 
-            ialt_P = alt_[_alt_ + i]; alt_P = alt_[ialt_P]; _PM = alt_P[0]  # _alterm_P_ + i: composite address of _P?
+            ialt_P = alt_[_alt_ + i]; alt_P = alt_[ialt_P]; _PM = alt_P[0]  # _alt_P_ + i: composite address of _P?
             if PM > _PM: alt_[ialt_P[1]] += 1; alt_[_alt_ + i] = ialt_P  # alt_P rdn increment???
             else: rdn += 1
 
-        # combining matching _Ps into PP, and then all connected PPs into CP:
-        # selective, no form_dPP?
+        # combined P match (PM) eval for P inclusion into PP, and then all connected PPs into CP
+        # also form_dPP per PD, eval for internal and external comp?
 
-        if PM > A*8 * rdn:  # P inclusion by combined-P match value
+        if PM > A*8 * rdn:  # P inclusion by combined-P match value, unique representation tracing through max PM PPs?
 
             W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; Alt_ += alt_, P_.append(_P)  # PP vars
             PP = W, I2, D2, Dy2, M2, My2, G2, Alt_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
 
             root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
-            _fork_.appendleft(_n)  # index of connected P in future nexterm_P_, to be buffered in Fork_ of CP
+            _fork_.appendleft(_n)  # index of connected P in future term_P_, to be buffered in Fork_ of CP
 
         if _x <= ix:  # _P and PP output if no horizontal overlap between _P and next P:
 
