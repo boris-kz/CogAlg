@@ -37,7 +37,7 @@ def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: p
 
 def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 
-    # vertical comparison between pixels forms vertex tuples t2: p, d, dy, m, my, + separate fd, fv
+    # vertical comparison between pixels, forms vertex tuples t2: p, d, dy, m, my, separate fd, fv
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
     x, valt_, dalt_, vP_, dP_, term_vP_, term_dP_ = 0,[],[],[],[],[],[]  # term_P_: terminated _Ps
@@ -125,29 +125,31 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
+    _x, _n = 0, 0  # coordinate and index of _P
     W, I2, D2, Dy2, M2, My2, G2, Rdn, Alt_, yP_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns), per fork
     WC, IC, DC, DyC, MC, MyC, GC, RdnC, AltC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
 
-    _x, _n = 0, 0  # coordinate and index of _P
-    a_dx = 1; a_dw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs: variable value patterns
+    a_dx = 1; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
+    a_PM = 512  # or sum of a_m_vars? rdn accum per var_P, alt eval per vertical overlap?
 
     s, I, D, Dy, M, My, G, e_ = P  # also alt_, root_: doesn't need to be returned?
     w = len(e_); ix = x - w  # w: P width, ix: P initial coordinate
 
-    while x >= _x:  # P scans over remaining _P_ while there is some horizontal overlap between P and next _P
+    while x >= _x:  # P is compared to next _P in _P_ while there remains some horizontal overlap between them
 
         _P = _P_.popleft(); _n += 1  # _n is _P counter to sync Fork_ with _P_, or len(P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_ = _P
 
-        if s == _s:  # P comp, separate var_dP and var_vP to eval for internal and external comp?
+        if s == _s:  # P var comp, forming separate var_dP and var_vP, to eval for internal and external comp?
 
-            dx = x - w/2 - _x - _w/2; mx = a_dx - dx  # reverse neg eval, or mx = w overlap: partial x identity?
-            # dxP term: Dx > ave? comp(dx), Ddx > ave? summed-variable' dS *= cos(Ddx), mS /= cos(Ddx)?
-            # vxP if reverse neg eval, else no eval?  norm per ddxP | PP: comb eval only?
+            dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), Ddx > ave? summed var dS *= cos(Ddx), mS /= cos(Ddx)?
+            mx = a_dx - dx  # reverse neg eval, or mx = w overlap: partial x identity? +vxP Mx > ave? comp(x, __x)?
 
-            dw = w - _w; mw = min(w, _w); PM += mw  # form dwP, reorient if dw-, mw+ for min.1D Ps over max.2D?
+            # not P representative: no summed x?
+            # adjust: _w *= cos(ddx), re- comp(w, _w)? per ddxP or PP only?
 
-            if dw < a_dw:  # comp(S), aS if norm for redun assign? match -> w*cos match: _w *= cos(ddx), comp(w, _w)?
+            dw = w - _w; mw = min(w, _w); PM += mw  # form dwP, vwP, reorient if dw-, mw+ for min.1D Ps over max.2D?
+            if mw < a_mw:  # higher-dim var m triggers comp(S), or aS if norm for rdn assign?
 
                 dI = I - _I; mI = min(I, _I); PM += mI  # term PP | var_P: eval of MI vs. Mh for rdn to derivatives:
                 dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
