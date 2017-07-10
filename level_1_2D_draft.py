@@ -142,16 +142,15 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
 
         if s == _s:  # P var comp, forming separate var_dP and var_vP, to eval for internal and external comp?
 
-            dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), Ddx > ave? summed var dS *= cos(Ddx), mS /= cos(Ddx)?
-            mx = a_dx - dx  # reverse neg eval, or mx = w overlap: partial x identity? +vxP Mx > ave? comp(x, __x)?
+            dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), ddx = Ddx / h? S var dS *= cos(ddx), mS /= cos(ddx)?
+            mx = x - _ix; PM += mx  # x overlap, vs. neg rel dx: mx = a_dx - dx? +vxP Mx? comp(x,__x)?
 
-            # not P representative: no summed x?
-            # adjust: _w *= cos(ddx), re- comp(w, _w)? per ddxP or PP only?
+            dw = w - _w  # -> dwP, var_P | PP' Ddx + Dw (higher-Dim D) triggers S var *= cos(ddx), comp(w, _w)
+            mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS if norm for rdn assign):
 
-            dw = w - _w; mw = min(w, _w); PM += mw  # form dwP, vwP, reorient if dw-, mw+ for min.1D Ps over max.2D?
-            if mw < a_mw:  # higher-dim var m triggers comp(S), or aS if norm for rdn assign?
+            if mw < a_mw:  # S(summed) variables comp:  # re-orient if projected dS -, mS + for min.1D Ps over max.2D
 
-                dI = I - _I; mI = min(I, _I); PM += mI  # term PP | var_P: eval of MI vs. Mh for rdn to derivatives:
+                dI = I - _I; mI = min(I, _I); PM += mI  # also eval of MI vs. Mh rdn, at term PP | var_P?
                 dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
                 dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y derivatives
 
