@@ -91,17 +91,17 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     pri_s, I, D, Dy, M, My, G, olp, e_ = P  # unpacked to increment or initialize, + _G to eval alt_P rdn?
 
     s = 1 if g > 0 else 0
-    if s != pri_s and x > r + 2:  # P is terminated and compared to overlapping _Ps:
+    if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and compared to overlapping _Ps:
 
         P_, _P_, term_P_ = comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
         _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P' _alt_:
         _alt_.append(_alt)
         I, D, Dy, M, My, G, olp, e_, alt_ = 0,0,0,0,0,0,0,[],[]  # initialized P and alt_
 
-    # P vars (representing span of same-sign gs) are accumulated regardless of termination:
+    # continued or initialized P vars are accumulated:
 
     olp += 1  # P overlap to concurrent alternative-type P, accumulated till either P or _P is terminated
-    I += p  # p s summed within P
+    I += p    # p s summed within P
     D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
     M += m; My += my  # lateral and vertical M for P2 orient, vs V gradient eval, V = M - 2a * W?
     G += g  # fd | fv summed to define P value, with directional resolution loss
@@ -129,7 +129,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     W, I2, D2, Dy2, M2, My2, G2, Rdn, Alt_, yP_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns), per fork
     WC, IC, DC, DyC, MC, MyC, GC, RdnC, AltC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
 
-    a_dx = 1; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
+    a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
     a_PM = 512  # or sum of a_m_vars? rdn accum per var_P, alt eval per vertical overlap?
 
     s, I, D, Dy, M, My, G, e_ = P  # also alt_, root_: doesn't need to be returned?
@@ -140,24 +140,26 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         _P = _P_.popleft(); _n += 1  # _n is _P counter to sync Fork_ with _P_, or len(P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_ = _P
 
-        if s == _s:  # P var comp, forming separate var_dP and var_vP, to eval for internal and external comp?
+        if s == _s:  # P var comp, forming separate var_dP and var_vP? to eval for internal and external comp?
 
-            dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), ddx = Ddx / h? S var dS *= cos(ddx), mS /= cos(ddx)?
-            mx = x - _ix; PM += mx  # x overlap, vs. neg rel dx: mx = a_dx - dx? +vxP Mx? comp(x,__x)?
+            dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
+            mx = x - _ix; PM += mx  # x overlap (vs. neg rel dx: mx = a_dx - dx?) +vxP Mx? comp(x,__x)
 
-            dw = w - _w  # -> dwP, var_P | PP' Ddx + Dw (higher-Dim D) triggers S var *= cos(ddx), comp(w, _w)
-            mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS if norm for rdn assign):
+            dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
+            mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun)):
 
-            if mw < a_mw:  # S(summed) variables comp:  # re-orient if projected dS -, mS + for min.1D Ps over max.2D
+            if mx + mw < a_mx + a_mw:  # S(summed) variables comp if likely match?
 
                 dI = I - _I; mI = min(I, _I); PM += mI  # also eval of MI vs. Mh rdn, at term PP | var_P?
                 dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
                 dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y derivatives
 
             '''    
-            ddxP term: dw sign == ddx sign? 
+            term PP -> cons_P2, -> CP, var_P: just in case? 
+            
+            eval of d,m adjust | _var adjust | scan adjust if projected dS-, mS+ for min.1D Ps over max.2D
 
-                if min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
+                if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
 
             if dw > a: div_comp (w): rw = w / _w, to width-normalize S vars for comp: 
 
@@ -202,7 +204,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
             _fork_.appendleft(_n)  # index of connected P in future term_P_, to be buffered in Fork_ of CP
 
-        if _x <= ix:  # _P and PP output if no horizontal overlap between _P and next P:
+        if _x <= ix:  # _P and attached PP output if no horizontal overlap between _P and next P:
 
             PP = W, I2, D2, Dy2, M2, My2, G2, Alt_, yP_  # PP per _root P in _root_
             Fork_ += _fork_  # all continuing _Ps of CP, referenced from its first fork _P: CP flag per _P?
