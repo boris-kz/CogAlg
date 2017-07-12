@@ -88,7 +88,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 1D slices of 2D patterns
 
     p, d, dy, m, my = t2
-    pri_s, I, D, Dy, M, My, G, olp, e_ = P  # unpacked to increment or initialize, + _G to eval alt_P rdn?
+    pri_s, I, D, Dy, M, My, G, olp, e_ = P  # unpacked to increment or initialize vars, +_G to eval alt_P rdn?
 
     s = 1 if g > 0 else 0
     if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and compared to overlapping _Ps:
@@ -125,7 +125,9 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
-    _x, _n = 0, 0  # coordinate and index of _P
+    _x = 0  # coordinate of _P
+    _n = 0  # index of _P, for tracing root Ps in root_
+
     W, I2, D2, Dy2, M2, My2, G2, Rdn, Alt_, yP_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns), per fork
     WC, IC, DC, DyC, MC, MyC, GC, RdnC, AltC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
 
@@ -148,16 +150,16 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
             mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun)):
 
-            if mx + mw < a_mx + a_mw:  # S(summed) variables comp if likely match?
+            if mx + mw < a_mx + a_mw:  # mx and wx are overlapping subsets of new dimension w. S(summed) vars comp:
 
-                dI = I - _I; mI = min(I, _I); PM += mI  # also eval of MI vs. Mh rdn, at term PP | var_P?
+                dI = I - _I; mI = min(I, _I); PM += mI  # no eval of MI vs. Mh rdn till term PP | var_P?
                 dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
-                dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y derivatives
+                dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y-derivatives
 
             '''    
-            term PP -> cons_P2, -> CP, var_P: just in case? 
+            var comp -> var_P: dim_H ( der_H ( res_H?  costly rdn eval, but after hierarchical var selection? 
             
-            eval of d,m adjust | _var adjust | scan adjust if projected dS-, mS+ for min.1D Ps over max.2D
+            cons_P2(PP): eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
 
                 if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
 
@@ -172,12 +174,12 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             comp Dy and My, /=cos at PP term?  default div and overlap eval per PP? not per CP: sparse coverage?
             '''
 
-        root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as prior P
+            root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as _P and PP
 
         rdn = 0  # redundancy (recreated vs. stored): number of stronger-PM root Ps in root_ + alt Ps in alt_
                  # vs.vars *= overlap ratio: prohibitive cost?
 
-        while len(root_) > 0:
+        while len(root_) > 0: # rdn assignment within root_
 
             root = root_.pop(); PM = root[0]  # PM (P match: sum of var matches between Ps) is first variable of root P
 
@@ -264,8 +266,8 @@ def Le1(f):  # last "_" denotes array vs. element, first "_" denotes higher-line
     for y in range(1, Y):
 
         p_ = f[y, :]
-        t_ = comp(p_)  # lateral pixel comp
-        _vP_, _dP_, term_vP_, term_dP_ = ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_)  # vertical comp
+        t_ = comp(p_)  # lateral pixel comp, then vertical pixel comp:
+        _vP_, _dP_, term_vP_, term_dP_ = ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_)
         _t_ = t_
 
         PP_ = term_vP_, term_dP_  # PP term by comp_P, adjust by cons_P2, after P ) PP ) CP termination

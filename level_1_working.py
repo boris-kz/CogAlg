@@ -5,9 +5,9 @@ from scipy import misc
 Level 1:
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
-Resulting difference patterns dPs: spans of pixels forming same-sign differences,
-and relative match patterns vPs: spans of pixels forming same-sign predictive value,
-overlap within each line of pixels.
+Resulting difference patterns dPs (spans of pixels forming same-sign differences)
+and relative match patterns vPs (spans of pixels forming same-sign predictive value)
+are redundant representations of each line of pixels.
 
 '''
 
