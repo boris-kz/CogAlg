@@ -120,7 +120,7 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
 
 def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced from _P_ by last comb_P
 
-    # vertical comparison between 1D slices, for selective inclusion in 2D patterns, vPP and dPP?
+    # vertical comparison between 1D slices, for selective inclusion in 2D patterns vPP and dPP?
 
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
@@ -128,8 +128,8 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     _x = 0  # coordinate of _P
     _n = 0  # index of _P, for tracing root Ps in root_
 
-    W, I2, D2, Dy2, M2, My2, G2, Rdn, Alt_, yP_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns), per fork
-    WC, IC, DC, DyC, MC, MyC, GC, RdnC, AltC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
+    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, P2_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns) per fork
+    WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
 
     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
     a_PM = 512  # or sum of a_m_vars? rdn accum per var_P, alt eval per vertical overlap?
@@ -142,7 +142,8 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         _P = _P_.popleft(); _n += 1  # _n is _P counter to sync Fork_ with _P_, or len(P_) - len(_P_)?
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_ = _P
 
-        if s == _s:  # P var comp, forming separate var_dP and var_vP? to eval for internal and external comp?
+        if s == _s:  # P var comp -> var_dP and var_vP, to always eval for internal and external comp?
+                     # hierarchical var selection vs. higher-var rdn: dim_H ( der_H ( res_H:
 
             dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
             mx = x - _ix; PM += mx  # x overlap (vs. neg rel dx: mx = a_dx - dx?) +vxP Mx? comp(x,__x)
@@ -156,30 +157,12 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
                 dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
                 dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y-derivatives
 
-            '''    
-            var comp -> var_P: dim_H ( der_H ( res_H?  costly rdn eval, but after hierarchical var selection? 
-            
-            cons_P2(PP): eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
-
-                if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
-
-            if dw > a: div_comp (w): rw = w / _w, to width-normalize S vars for comp: 
-
-                if rw > a: pn = I/w; dn = D/w; vn = V/w; 
-
-                   comp (_n) # or default norm for redun assign, but comp (S) if low rw?
-
-                   if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
-
-            comp Dy and My, /=cos at PP term?  default div and overlap eval per PP? not per CP: sparse coverage?
-            '''
-
             root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as _P and PP
 
         rdn = 0  # redundancy (recreated vs. stored): number of stronger-PM root Ps in root_ + alt Ps in alt_
                  # vs.vars *= overlap ratio: prohibitive cost?
 
-        while len(root_) > 0: # rdn assignment within root_
+        while len(root_) > 0:  # rdn assignment within root_
 
             root = root_.pop(); PM = root[0]  # PM (P match: sum of var matches between Ps) is first variable of root P
 
@@ -200,29 +183,30 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
 
         if PM > A*8 * rdn:  # P inclusion by combined-P match value, unique representation tracing through max PM PPs?
 
-            W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; Alt_ += alt_, P_.append(_P)  # PP vars
-            PP = W, I2, D2, Dy2, M2, My2, G2, Alt_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
+            W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; alt2_ += alt_, P_.append(_P)  # PP vars
+            PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
 
             root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
             _fork_.appendleft(_n)  # index of connected P in future term_P_, to be buffered in Fork_ of CP
 
         if _x <= ix:  # _P and attached PP output if no horizontal overlap between _P and next P:
 
-            PP = W, I2, D2, Dy2, M2, My2, G2, Alt_, yP_  # PP per _root P in _root_
+            PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P2_  # PP per _root P in _root_
             Fork_ += _fork_  # all continuing _Ps of CP, referenced from its first fork _P: CP flag per _P?
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP, accum of CP:
 
-                cons_P2(PP)  # term' PP eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP,
-                # then _root_ eval at adjusted redundancy? CP vars:
-                WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; AltC_ += Alt_; PP_.append(PP)
+                cons_P2(PP)  # separate for vPP: summed var_vs, and dPP: summed var_ds?
+                # PP eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP, _root_ rdn adjust, eval?
+
+                WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; altC_ += alt2_; PP_.append(PP)
 
             else:
                 _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _alt_, _fork_, _root_  # PP index per root
                 # old _root_, new _fork_ (old _fork_ is displaced with old _P_?)
                 buff_.appendleft(_P)  # _P is re-inputted for next-P comp
 
-            CP = WC, IC, DC, DyC, MC, MyC, GC, AltC_, PP_, Fork_
+            CP = WC, IC, DC, DyC, MC, MyC, GC, altC_, PP_, Fork_
 
             if (len(Fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP:
 
@@ -232,7 +216,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
 
                 CP_.append(CP)  # PP may include len(CP_): CP index
 
-            yP_.append(P)  # vertical inclusion, per P per root?
+            P2_.append(P)  # vertical inclusion, per P per root?
 
         P = s, w, I, D, Dy, M, My, G, r, e_, alt_, root_  # each root is new, includes P2 if unique cont:
         P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
@@ -244,8 +228,27 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
 
 def cons_P2(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term
 
-    # rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
-    # S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I?
+    ''' 
+    :param P2: 
+    :return: 
+    ''''''
+    cons_P2(PP): eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
+
+        if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
+
+    if dw > a: div_comp (w): rw = w / _w, to width-normalize S vars for comp: 
+
+        if rw > a: pn = I/w; dn = D/w; vn = V/w; 
+
+            comp (_n) # or default norm for redun assign, but comp (S) if low rw?
+
+            if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
+
+        comp Dy and My, /=cos at PP term?  default div and overlap eval per PP? not per CP: sparse coverage?
+        
+    rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
+    S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I?
+    '''
 
     mean_dx = 1  # fractional?
     dx = Dx / H
@@ -258,7 +261,7 @@ def Le1(f):  # last "_" denotes array vs. element, first "_" denotes higher-line
 
     r = 1; a = 127  # feedback filters
     Y, X = f.shape  # Y: frame height, X: frame width
-    fd, fv, y, _vP_, _dP_, term_vP_, term_dP_, F_  = 0,0,0,[],[],[],[],[]
+    fd, fv, y, _vP_, _dP_, term_vP_, term_dP_, F_ = 0,0,0,[],[],[],[],[]
 
     p_ = f[0, :]  # y is index of new line p_
     _t_= comp(p_)  # _t_ includes ycomp() results, with Dy, My, dG, vG initialized at 0
