@@ -41,7 +41,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
     x, valt_, dalt_, vP_, dP_, term_vP_, term_dP_ = 0,[],[],[],[],[],[]  # term_P_: terminated _Ps
-    pri_s, I, D, Dy, M, My, G, olp, e_ = 0,0,0,0,0,0,0,0,[]  # also _G as interference | redundancy?
+    pri_s, I, D, Dy, M, My, G, olp, e_ = 0,0,0,0,0,0,0,0,[]  # also _G: interference | redundancy?
     vP = pri_s, I, D, Dy, M, My, G, olp, e_
     dP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ included at term, rdn from alt_ eval in form_PP?
 
@@ -125,10 +125,10 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
-    _x = 0  # coordinate of _P
+    nvar = 1; _x = 0  # coordinate of _P
     _n = 0  # index of _P, for tracing root Ps in root_
 
-    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, P2_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns) per fork
+    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns) per fork
     WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
 
     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
@@ -143,19 +143,27 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_ = _P
 
         if s == _s:  # P var comp -> var_dP and var_vP, to always eval for internal and external comp?
-                     # hierarchical var selection vs. higher-var rdn: dim_H ( der_H ( res_H:
+            ''' 
+            PP def per combined-var vertical der sign, lower-vars comp while minimal higher-vars M or |D|
+            conditional next-var comp -> var_P?, nvar ++, M|D += m|d *= rdn to prior vars: 
+            external x ( higher dim w ( lower der I ( lower res D,M ( e_: '''
 
             dx = x - w/2 - _x - _w/2  # dxP Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
             mx = x - _ix; PM += mx  # x overlap (vs. neg rel dx: mx = a_dx - dx?) +vxP Mx? comp(x,__x)
 
-            dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
-            mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun)):
+            if mx > a_mx:
+                nvar+=1
 
-            if mx + mw < a_mx + a_mw:  # mx and wx are overlapping subsets of new dimension w. S(summed) vars comp:
+                dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
+                mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun)):
 
-                dI = I - _I; mI = min(I, _I); PM += mI  # no eval of MI vs. Mh rdn till term PP | var_P?
-                dD = D - _D; mD = min(D, _D); PM += mD  # no eval per slice, only at 2D continuity term
-                dM = M - _M; mM = min(M, _M); PM += mM  # no G comp: incomplete y-derivatives
+                if mx + mw < a_mx + a_mw:  # mx and wx are overlapping subsets of new dimension w. S(summed) vars comp:
+
+                    dI = I - _I; mI = min(I, _I); PM += mI  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
+                    dD = D - _D; mD = min(D, _D); PM += mD
+                    dM = M - _M; mM = min(M, _M); PM += mM
+
+                    # no G comp: y-derivatives are incomplete. len(alt_) comp?
 
             root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as _P and PP
 
@@ -181,7 +189,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         # combined P match (PM) eval for P inclusion into PP, and then all connected PPs into CP
         # also form_dPP per PD, eval for internal and external comp?
 
-        if PM > A*8 * rdn:  # P inclusion by combined-P match value, unique representation tracing through max PM PPs?
+        if PM > A * nvar * rdn:  # P inclusion by combined match, unique representation tracing through max PM PPs?
 
             W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; alt2_ += alt_, P_.append(_P)  # PP vars
             PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
@@ -191,7 +199,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
 
         if _x <= ix:  # _P and attached PP output if no horizontal overlap between _P and next P:
 
-            PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P2_  # PP per _root P in _root_
+            PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # PP per _root P in _root_
             Fork_ += _fork_  # all continuing _Ps of CP, referenced from its first fork _P: CP flag per _P?
 
             if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP, accum of CP:
@@ -216,7 +224,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
 
                 CP_.append(CP)  # PP may include len(CP_): CP index
 
-            P2_.append(P)  # vertical inclusion, per P per root?
+            Py_.append(P)  # vertical inclusion, per P per root?
 
         P = s, w, I, D, Dy, M, My, G, r, e_, alt_, root_  # each root is new, includes P2 if unique cont:
         P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
