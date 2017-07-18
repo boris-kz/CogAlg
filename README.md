@@ -33,7 +33,7 @@ level 4 compares contiguous 3D patterns in temporal sequence, forming 4D pattern
 Subsequent cycles would compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions. More in part 6.
 
 However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D, or at least over 2D for images.
-This will be our-universe-specific extension of core algorithm.
+This is a universe-specific extension of core algorithm.
 
 I am currently working on implementation of core algorithm to process images: level_1_working.py and level_2_old.py here, and also on its natively-2D adaptation: level_1_2D_draft.py here.
 Initial testing will be recognition and automatic labeling of manually labeled images, from something like ImageNet.

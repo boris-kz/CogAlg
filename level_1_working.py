@@ -1,14 +1,12 @@
 from scipy import misc
 
 '''
-
 Level 1:
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
-
 '''
 
 def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
