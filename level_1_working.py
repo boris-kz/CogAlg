@@ -29,8 +29,8 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
 
         p, fd, fv = ip_[x]       # compared to a pixel at x-r-1:
         pp, pfd, pfv = ip_[x-r]  # previously compared p(ignored), its fd, fv to next p
-        fv += pfv  # fv is summed over extended-comp range
-        fd += pfd  # fd is summed over extended-comp range
+        fv += pfv  # fuzzy v is summed over extended-comp range
+        fd += pfd  # fuzzy d is summed over extended-comp range
 
         pri_p, pri_fd, pri_fv = ip_[x-r-1]  # for comp(p, pri_p), pri_fd and pri_fv ignored
 
@@ -83,8 +83,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     m = min(p, pri_p)  # match between consecutive pixels
     v = m - A          # relative match (predictive value) between consecutive pixels
 
-    fd += d  # fd includes all shorter + current- range ds between comparands
-    fv += v  # fv includes all shorter + current- range vs between comparands
+    fd += d  # fuzzy d includes all shorter + current- range ds between comparands
+    fv += v  # fuzzy v includes all shorter + current- range vs between comparands
 
 
     # formation of value pattern vP: span of pixels forming same-sign v s:
@@ -110,8 +110,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     pri_s = s   # vP (span of pixels forming same-sign v) is incremented:
     olp += 1    # overlap to current dP
     I += pri_p  # ps summed within vP
-    D += fd     # fds summed within vP into fuzzy D
-    V += fv     # fvs summed within vP into fuzzy V
+    D += fd     # fuzzy ds summed within vP
+    V += fv     # fuzzy vs summed within vP
     pri = pri_p, fd, fv
     p_.append(pri)  # buffered within vP for selective extended comp
 
@@ -138,8 +138,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     pri_sd = sd  # dP (span of pixels forming same-sign d) is incremented:
     dolp += 1    # overlap to current vP
     Id += pri_p  # ps summed within dP
-    Dd += fd     # fds summed within dP
-    Vd += fv     # fvs summed within dP
+    Dd += fd     # fuzzy ds summed within dP
+    Vd += fv     # fuzzy vs summed within dP
     d_.append(fd)  # prior fds are buffered within dP, all of the same sign
 
     return pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_

@@ -149,18 +149,22 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             conditional next-var comp -> var_P?, nvar ++, M|D += m|d *= rdn to prior vars: 
             
             external x ( higher dim w ( lower der I ( lower res D,M ( e_., vs. per P?
-            if positive value of var eval (forming var_Ps): only per level of origin' var group?
+            if value of var eval -> var_Ps: smaller than or redundant to pixels? 
+            
+            inc Le group: L, LDV, IDV DDV VDV: added DV and i_, d_ per input variable, higher-Le comp priority? or
+            all-Le comp, cross-derivative comp, eval for higher-power re-comp and higher-derivation specification?
+            
             '''
 
             dx = x - w/2 - _x - _w/2  # form_P(dxP), Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
             mx = x - _ix  # mx- a_mx -> form_P(vxP), mx = x overlap vs. - (a_dx - dx)? recursion per var_P2 | PP?
 
-            PD += dx  # defines dPP, or per ddx + dw: signs correlate, no dxP: dx and dw signs don't correlate?
+            PD += dx  # defines dPP, or per ddx + dw: signs correlate, dx (direction) and dw (dimension) signs don't?
             PM += mx  # defines vPP, or per mx + mw, proximity value = mx / w, not redundant to mw: similarity?
 
             if PM*2 + PD > A:  # PM * 2: rep value?
 
-                nvar+=1  # redundancy is also added to nvar?
+                nvar+=1  # or immediate, var_P form within PP only? redundancy is also added to nvar?
 
                 dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
                 mw = min(w, _w); PM += mw  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun)):
