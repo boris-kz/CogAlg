@@ -112,7 +112,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     I += pri_p  # ps summed within vP
     D += fd     # fuzzy ds summed within vP
     V += fv     # fuzzy vs summed within vP
-    pri = pri_p, fd, fv
+    pri = pri_p, fd, fv  # inputs for recursive comp are tuples vs. pixels
     p_.append(pri)  # buffered within vP for selective extended comp
 
 
