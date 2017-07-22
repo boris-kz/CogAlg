@@ -125,10 +125,10 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
-    ddx = 0; nvar = 1  # same nvar for dPP and vPP: var comp -> d_vars and m_vars, depth incr if PM + PD?
-    # or full comp till min number of lower-D | higher-d: -> S? var_P form within PP only, redundant?
+    ddx = 0; nvar = 1  # same nvar for dPP and vPP: var comp -> d_vars and m_vars, depth incr if PM*2 + PD?
+    # full comp till min number of lower-D | higher-d? var_P form within PP only, redundant?
 
-    _x = 0  # coordinate of _P
+    _x = 0  # coordinate of _P  # combined 2D ee_ per PP, or per P in Py_? separate vPP and dPP?
     _n = 0  # index of _P, for addressing root Ps in root_
 
     W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns) per fork
@@ -164,24 +164,26 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             dx = x - w/2 - _x - _w/2  # form_P(dxP), Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
             mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx - a_mx -> form_P(vxP), vs. mx = -(a_dx - dx): if discont.?
 
+            # proximity value = mx / w, not redundant to mw: similarity?
+
             dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
             mw = min(w, _w)  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun))? or full comb?
+
+            # ddx and dw signs correlate, dx (direction) and dw (dimension) don't?
 
             dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
             dD = D - _D; mD = min(D, _D)
             dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. len(alt_) comp?
 
-            PD = ddx + dw + dI + dD + dM  # defines dPP, or per ddx + dw: signs correlate, dx (direction) and dw (dimension) signs don't?
-            PM = mx + mw + mI + mD + mM  # defines vPP, or per mx + mw, proximity value = mx / w, not redundant to mw: similarity?
+            PD = ddx + dw + dI + dD + dM  # defines dPP; var_P term is conditional on PP term, but formed anyway?
+            PM = mx + mw + mI + mD + mM   # defines vPP; if PM * 2(rep value) + PD > A: redundancy or comb spec eval?
 
-            # if PM * 2(rep value) + PD > A: combined spec eval?
-
-            P = PM, PD, x, mx, dx, w, mw, dw, I, mI, dI, D, mD, dD, M, mM, dM, Dy, My, G, e_
+            P = PM, PD, x, mx, dx, w, mw, dw, I, mI, dI, D, mD, dD, M, mM, dM, Dy, My, G  # initialized PP?
 
             root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as _P and PP
 
         rdn = 0  # redundancy (recreated vs. stored): number of stronger-PM root Ps in root_ + alt Ps in alt_
-                 # vs.vars *= overlap ratio: prohibitive cost?  average redundancy: no ind.var eval, only per var_P?
+                 # vs.vars *= overlap ratio: prohibitive cost?  average redundancy: eval per var_P, not var?
 
         while len(root_) > 0:  # rdn assignment within root_, separate for vPP and dPP?
 
