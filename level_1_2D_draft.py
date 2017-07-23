@@ -125,8 +125,8 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
-    ddx = 0; nvar = 1  # same nvar for dPP and vPP: var comp -> d_vars and m_vars, depth incr if PM*2 + PD?
-    # full comp till min number of lower-D | higher-d? var_P form within PP only, redundant?
+    ddx = 0 # no nvar: full comp till min number of lower-D | higher-d? var_P form within PP only, redundant?
+    # else same nvar for dPP and vPP: var comp -> d_vars and m_vars, depth incr if PM*2 + PD?
 
     _x = 0  # coordinate of _P  # combined 2D ee_ per PP, or per P in Py_? separate vPP and dPP?
     _n = 0  # index of _P, for addressing root Ps in root_
@@ -164,21 +164,20 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             dx = x - w/2 - _x - _w/2  # form_P(dxP), Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
             mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx - a_mx -> form_P(vxP), vs. mx = -(a_dx - dx): if discont.?
 
-            # proximity value = mx / w, not redundant to mw: similarity?
+            # proximity = mx / w, not mw-redundant? ddx and dw signs correlate, dx (direction) and dw (dimension) don't
 
-            dw = w - _w  # -> dwP, var_P or PP' Ddx + Dw (higher-Dim D) triggers adjustment of derivatives or _vars?
-            mw = min(w, _w)  # -> vwP, mx + mw (higher-Dim m) triggers comp(S | aS(norm to assign redun))? or full comb?
-
-            # ddx and dw signs correlate, dx (direction) and dw (dimension) don't?
+            dw = w - _w  # -> dwP, Ddx + Dw (higher-Dim Ds) triggers adjustment of derivatives or _vars?
+            mw = min(w, _w)  # vwP, mx + mw (higher-Dim ms) triggers comp(S | aS(norm to assign redun))? or default:
 
             dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
             dD = D - _D; mD = min(D, _D)
             dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. len(alt_) comp?
 
-            PD = ddx + dw + dI + dD + dM  # defines dPP; var_P term is conditional on PP term, but formed anyway?
-            PM = mx + mw + mI + mD + mM   # defines vPP; if PM * 2(rep value) + PD > A: redundancy or comb spec eval?
+            PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term conditional on PP term?
+            PM = mx + mw + mI + mD + mM   # defines vPP; spec if PM * 2(rep value) + PD > A?
 
-            P = PM, PD, x, mx, dx, w, mw, dw, I, mI, dI, D, mD, dD, M, mM, dM, Dy, My, G  # initialized PP?
+            P = PM, PD, x, mx, dx, w, mw, dw, I, mI, dI, D, mD, dD, M, mM, dM, Dy, My, G  # PP face
+            # select per root, var_P select after cons: spec, not independent?
 
             root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as _P and PP
 
@@ -204,7 +203,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         # combined P match (PM) eval for P inclusion into PP, and then all connected PPs into CP
         # also form_dPP per PD, eval for internal and external comp? spec eval?
 
-        if PM > A * nvar * rdn:  # P inclusion by combined match, unique representation tracing through max PM PPs?
+        if PM > A * 5 * rdn:  # P inclusion by combined match, unique representation tracing through max PM PPs?
 
             W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; alt2_ += alt_, P_.append(_P)  # PP vars
             PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
