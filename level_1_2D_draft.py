@@ -79,8 +79,8 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)
     olp = vP[7]; valt = len(dP_), olp; valt_.append(valt)
 
-    vP_, _vP_, term_vP_ = comp_P(valt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_?
-    dP_, _dP_, term_dP_ = comp_P(dalt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)  # empty _dP_?
+    vP_, _vP_, term_vP_ = comp_P(valt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_
+    dP_, _dP_, term_dP_ = comp_P(dalt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)  # empty _dP_
 
     return vP_, dP_, term_vP_, term_dP_  # with refs to vPPs, dPPs, vCPs, dCPs from comp_P, adjusted by cons_P2
 
@@ -125,9 +125,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
     buff_, CP_, = deque(), deque()
     root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
-    ddx = 0 # no nvar: full comp till min number of lower-D | higher-d? var_P form within PP only, redundant?
-    # else same nvar for dPP and vPP: var comp -> d_vars and m_vars, depth incr if PM*2 + PD?
-
+    ddx= 0  # no nvar: full comp till min number of lower-D | higher-d: same nvar for dPP and vPP, depth incr if PM*2 + PD?
     _x = 0  # coordinate of _P  # combined 2D ee_ per PP, or per P in Py_? separate vPP and dPP?
     _n = 0  # index of _P, for addressing root Ps in root_
 
@@ -146,25 +144,25 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
         _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_ = _P
 
         if s == _s:  # P var comp -> var_dP and var_vP, to always eval for internal and external comp?
+
             ''' 
-            PP def per combined-var vertical der sign, lower-vars comp while minimal higher-vars M or |D|
-            conditional next-var comp -> var_P?, nvar ++, M|D += m|d *= rdn to prior vars: 
+            vertical var comp -> combined-var der sign -> PP, var_P is selective: smaller and redundant to pixels?
+            generic: cross-derivative comp, higher-power re-comp and higher-derivation specification eval?
             
-            external x ( higher dim w ( lower der I ( lower res D,M ( e_., vs. per P?
-            if value of var eval -> var_Ps: smaller than or redundant to pixels? 
+            2Le: distance ( width ( lower der I ( lower res D,M ( e_, rdn assign to weaker alternative?
+            nLe: L, L D V, IDV DDV VDV: new D,d_, V,p_ per input var, separate +,-LDV sum, neg: internal distance?
             
-            incr Le group: L, L D V, IDV DDV VDV: new D, d_ and V, p_ per input variable, higher-Le comp priority? or
-            all- Le comp, cross-derivative comp, eval of higher-power re-comp and higher-derivation specification?
+            min Le nvar -> S; !neg proximity vs. pos match relative value -> coordinate vs input resolution?
+            min P' nLe -> PS: PS += S * decay * distance / 2(rdn to discrete), PS > aPS? pri PS comp, spec if M or |D|?  
             
-            proximity (pri neg) vs. match (pri pos) relative value adjusts coordinate vs input resolution?
-            var_Ps for spec in PP? recursion per var_P2 | PP? mx and wx are subsets of w, trigger S(summed) vars comp?
-            
+            xLe eval if PS -> Le_Ps, for internal comp eval? 
+            xLe comp if pos Le_P_SS (min value span): div, sub -> proportions? 
             '''
 
             dx = x - w/2 - _x - _w/2  # form_P(dxP), Dx > ave? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
             mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx - a_mx -> form_P(vxP), vs. mx = -(a_dx - dx): if discont.?
 
-            # proximity = mx / w, not mw-redundant? ddx and dw signs correlate, dx (direction) and dw (dimension) don't
+            # rel.proximity: mx / w, similarity: mw? ddx & dw signs correlate, dx (direction) & dw (dimension) don't?
 
             dw = w - _w  # -> dwP, Ddx + Dw (higher-Dim Ds) triggers adjustment of derivatives or _vars?
             mw = min(w, _w)  # vwP, mx + mw (higher-Dim ms) triggers comp(S | aS(norm to assign redun))? or default:
@@ -173,20 +171,21 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             dD = D - _D; mD = min(D, _D)
             dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. len(alt_) comp?
 
-            PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term conditional on PP term?
-            PM = mx + mw + mI + mD + mM   # defines vPP; spec if PM * 2(rep value) + PD > A?
+            PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term
+            PM = mx + mw + mI + mD + mM   # defines vPP; spec per var or input if PM * 2(rep value) + PD > A?
 
-            P = PM, PD, x, mx, dx, w, mw, dw, I, mI, dI, D, mD, dD, M, mM, dM, Dy, My, G  # PP face
-            # select per root, var_P select after cons: spec, not independent?
+            P = PM, PD, x, mx, dx, w, mw, dw, I, mI, dI, D, mD, dD, M, mM, dM, Dy, My, G  # root PP face
+            # select per root, 2D var_P select after cons, not independent?
 
             root_.append(P)  # root temporarily includes current P and its P comp derivatives, as well as _P and PP
 
-        rdn = 0  # redundancy (recreated vs. stored): number of stronger-PM root Ps in root_ + alt Ps in alt_
-                 # vs.vars *= overlap ratio: prohibitive cost?  average redundancy: eval per var_P, not var?
+        # separate form_vPP, vrdn, and form_dPP, drdn per root_:
 
-        while len(root_) > 0:  # rdn assignment within root_, separate for vPP and dPP?
+        rdn = 0  # number of higher-PM root Ps in root_ + alt Ps in alt_; overlap eval per var_P, not var: high cost
 
-            root = root_.pop(); PM = root[0]  # PM (P match: sum of var matches between Ps) is first variable of root P
+        while len(root_) > 0:  # redundancy assignment within root_, separate for vPP / PM and dPP / PD?
+
+            root = root_.pop(); PM = root[0]
 
             for i in range(len(root_)):  # remaining roots are reused by while len(root_)
 
@@ -200,12 +199,11 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             if PM > _PM: alt_[ialt_P[1]] += 1; alt_[_alt_ + i] = ialt_P  # alt_P rdn increment???
             else: rdn += 1
 
-        # combined P match (PM) eval for P inclusion into PP, and then all connected PPs into CP
-        # also form_dPP per PD, eval for internal and external comp? spec eval?
+        # combined P match (PM) eval, P inclusion in PP, then all connected PPs in CP, unique tracing of max_PM PPs:
 
-        if PM > A * 5 * rdn:  # P inclusion by combined match, unique representation tracing through max PM PPs?
+        if PM > A * 5 * rdn:  # PP vars increment:
 
-            W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; alt2_ += alt_, P_.append(_P)  # PP vars
+            W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; alt2_ += alt_, P_.append(_P)
             PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
 
             root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
@@ -216,10 +214,10 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # _x: x of _P displaced f
             PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # PP per _root P in _root_
             Fork_ += _fork_  # all continuing _Ps of CP, referenced from its first fork _P: CP flag per _P?
 
-            if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP, accum of CP:
+            if (len(_fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP
 
-                cons_P2(PP)  # separate for vPP: summed var_vs, and dPP: summed var_ds?
-                # PP eval for rotation, re-scan, re-comp, recursion, accumulation per _root PP, _root_ rdn adjust, eval?
+                cons_P2(PP)  # _root PP eval for rotation, re-scan, re-comp, recursion, rdn, eval? CP vars increment:
+                # separate for vPP: summed var_vs, and dPP: summed var_ds?
 
                 WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; altC_ += alt2_; PP_.append(PP)
 
