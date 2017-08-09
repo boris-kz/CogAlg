@@ -120,23 +120,23 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     # draft below:
 
 
-def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # selective same type and sign slice P inclusion in blob P2
+def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # 1D slice comp -> select same type and sign inclusion in PP:
 
-    # parallel slice comp -> vPP, dPP: redundant composition level, spec per var_P eval within PP?
+    # P2 ( vPP ( dPP: redundant composition and feedback levels, var_P form within each PP type?
 
-    root_ = deque()  # for root rdn eval at the close of while x >= _x
-    rdn = 0  # number of higher-PM | PD root Ps in root_ + alt Ps in alt_
+    root_ = deque()  # root rdn eval at x < _ix
+    rdn = 0  # number of higher- PM or PD root Ps in root_ + alt Ps in alt_
     ddx = 0  # no nvar: comp till min number of levels per P, then par nvar + for dPP || vPP per PM * 2 + PD
 
-    _x = 0  # coordinate of _P displaced from _P_ by last comb_P  # combined 2D ee_ per PP, or per P in Py_?
-    _n = 0  # index of _P, for addressing root Ps in root_
+    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P  # 2D ee_ per P in Py_?
+    n = 0  # index of _P for addressing selected roots Ps in discontinuous root_
 
     s, I, D, Dy, M, My, G, e_ = P  # also alt_, root_: doesn't need to be returned?
-    ix = x - len(e_)  # len(e_) is w: P width, ix: P initial coordinate
+    ix = x - len(e_)  # len(e_) is w: P width, ix: initial coordinate of P
 
-    while x >= _x:  # comp_P while horizontal overlap between P and next _P in _P_:
+    while x >= _ix:  # comp while P and _P horizontal overlap
 
-        _P = _P_.popleft(); _n += 1  # _n | len(P_) - len(_P_): _P counter to sync Fork_ with _P_
+        _P = _P_.popleft(); n += 1  # _n | len(P_) - len(_P_): _P counter to sync Fork_ with _P_
         _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _root_, _root_vPP_, _root_dPP_ = _P
 
         if s == _s:  # 1D vars comp -> PM + PD value and vertical direction, for dim reduction to axis and contour:
@@ -149,6 +149,8 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # selective same type and
             dw = len(e_) - len(_e_)  # -> dwP, Ddx + Dw (higher-Dim Ds) triggers adjustment of derivatives or _vars?
             mw = min(len(e_), len(_e_))  # comp(S | aS(norm to assign redun)) if higher-Dim (mx + mw) vP, or default:
 
+            oG = G * mw / len(e_)  # or while (i > mw) _e_ -> g; oG += g?
+
             dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
             dD = D - _D; mD = min(D, _D)
             dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. also len(alt_) comp?
@@ -156,10 +158,10 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # selective same type and
             PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
             PM = mx + mw + mI + mD + mM   # defines vPP; spec per var or input if PM * 2(rep value) + PD > A?
 
-            root = PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P
+            root = oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P
             root_.append(root)
 
-    while len(root_) > 0:  # redundancy assigned to weaker root: P2 per PM + PD, vPP per PM, dPP per PD
+    while len(root_) > 0:  # redundancy is assigned to weaker root: P2 per PM + PD, vPP per PM, dPP per PD
 
         root = root_.pop(); PM = root[0]; PD = root[1]
 
@@ -175,48 +177,52 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # selective same type and
         if PM > _PM: alt_[ialt_P[1]] += 1; alt_[_alt_ + i] = ialt_P  # alt_P rdn increment???
         else: rdn += 1
 
-    # P2, vPP, dPP by form_PP:
-    
-    # increasing rdn and selective rep, only P2 tracks area with all vars?
-
-    # P2: I, G, w, or _P? contains higher-composition vPP, dPP: 1D var ders, summed in P2?
-
-    # cons_PP: at term PP !P2, eval for orientation (dim reduction to axis | contour) and consolidation?
-
     sv, valt_, dalt_, vP, vP_, _vP_, term_vP_ = \
-    form_PP(0, P, fv, fd, valt_, dalt_, vPP, vPP_, _vPP_, term_vP_, x, y, Y, r, A)
+    form_PP(0, oG, root, root_, _root_, term_P_, x, y, Y, r, A)
 
-    # forms 2D value pattern vPP, alt_ PPs vs. Ps?
+    '''
+    same-root P2 ( vPP ( dPP form_PP:
 
-    sd, dalt_, valt_, dP, dP_, _dP_, term_dP_ = \
-    form_PP(1, P, fd, fv, dalt_, valt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)
+    oG? form sP2: gs blob, rdn alt_: fb vPPs and dPPs
+    
+    PM? form vPP: 2D value pattern, rdn alt_: fb dPPs and adjusted P2s
+    
+    PD? form dPP: 2D difference pattern, rdn alt_: feedback adjusted alt_ P2s and vPPs?
+    
 
-    # forms 2D difference pattern dPP
+    incl in root_ if lower-type value *= rdn to higher-span P2, same filter per P? 
+    
+    term: cons_PP and rdn fb, core P2: I, G, w?  core vPP, dPP: 1D var derivatives, full syntax? 
+    
+    fork_ for term only: P2 ( vPP ( dPP: eval for orientation (dim reduction to axis | contour) and consolidation?
+    '''
 
     return P_, _P_ , term_P_  # interlaced term_vP_ and term_dP_? + refs to vPPs, dPPs, vCPs, dCPs?
 
 
-def form_PP(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D patterns vPP and dPP per root
-
+def form_PP(type, root, root_, _P_, _root_, term_P_, n, _x, y, Y, r, A):  # forms 2D patterns per root core var: oG | PM | PD?
 
     buff_, CP_, = deque(), deque()
-    root_, _fork_, Fork_ = deque(), deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
+    fork_, Fork_ = deque(), deque()  # olp root_: same-sign higher _Ps, fork_: same-sign lower Ps
 
     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
-    a_PM = 512  # or sum of a_m_vars? rdn accum per var_P, alt eval per vertical overlap?
+    # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
 
     W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0, 0, 0, 0, 0, 0, 0, 0, [], []  # PP vars (pattern of patterns) per fork
     WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0, 0, 0, 0, 0, 0, 0, 0, [], []  # CP vars (connected PPs) at first Fork
+
+    oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = root
+    s, ix, x, I, D, Dy, M, My, G, r, e_, rdn, alt_, root_, root_vPP_, root_dPP_ = P
 
     # combined P match (PM) eval, P inclusion in PP, then all connected PPs in CP, unique tracing of max_PM PPs:
 
     if PM > A * 5 * rdn:  # PP vars increment:
 
-        W +=_w; I2 +=_I; D2 +=_D; Dy2 +=_Dy; M2 +=_M; My2 +=_My; G2 += G; alt2_ += alt_, P_.append(_P)
-        PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, P_  # Alt_: root_ alt_ concat, to re-compute redundancy per PP
+        W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_, Py_.append(P)
+        PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: root_ alt_ concat, to re-compute redundancy per PP
 
         root = len(_P_), PP; root_.append(root)  # _P index and PP per root, possibly multiple roots per P
-        _fork_.appendleft(_n)  # index of connected P in future term_P_, to be buffered in Fork_ of CP
+        fork_.appendleft(n)  # index of connected P in future term_P_, to be buffered in Fork_ of CP
 
     if _x <= ix:  # _P and attached PP output if no horizontal overlap between _P and next P:
 
