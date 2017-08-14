@@ -5,17 +5,19 @@ from collections import deque
     Level 1 with patterns defined by the sign of vertex gradient: modified core algorithm of levels 1 + 2.
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
-    They are formed on the same level because average lateral match ~ average vertical match. 
-    Minimal and unique unit of 2D gradient is a vertex of rightward and downward derivatives per pixel.
-
-    Vertex gradient is computed as an average of these two equally representative sample derivatives. 
+    They are formed on the same level because average lateral match ~ average vertical match.
+    
+    Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
+    equally representative samples of continuous 90-degree gradient: minimal unique unit of 2D gradient. 
+    Hence, such vertex gradient is computed as average of these two orthogonally diverging derivatives.
+   
     2D patterns are blobs of same-sign vertex gradient, of value for vP or difference for dP.
-    Level 1 has 4 steps of encoding, incremental per line defined by coordinate y:
+    Level 1 has 4 steps of encoding, incremental per line defined by vertical coordinate y:
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
     y-1: ycomp()   t_ array of tuples, vertical comp, der.comb -> 1D P,
     y-2: comp_P()  P_ array of 1D patterns, vertical comp, eval, comb -> PP ) CP
-    y-3: cons_P2() P2_ array of 2D patterns, root overlap, eval, PP or CP consolidation:
+    y-3: term_PP() PP_ array of 2D patterns PP or CP, eval for termination and consolidation
 '''
 
 def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
@@ -124,8 +126,12 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # same type and sign 1D s
 
     # blob P2 ( vPP ( dPP: redundant composition and feedback levels, var_P form within each PP type?
 
-    fork_, buff_ = deque(),[]  # for fork rdn eval and re-input at x < _ix
-    n = 0  # index of _P for addressing selected forks Ps in discontinuous fork_
+    fork_, buff_ = deque(),deque()  # _P -> fork_ for rdn eval, -> buff_ for re-input at x < _ix
+    fork_PP_ = []  # includes both vPP and dPP?
+
+    root_, Root_ = deque(),deque()  # olp fork_: same-sign higher _Ps, root_: same-sign lower Ps, PP term tracker
+
+    n = 0  # index of _P for addressing selected forks Ps in discontinuous fork_?
     rdn_oG, rdn_PM, rdn_PD = 0,0,0  # number of higher-value Ps in fork_ + alt Ps in alt_
 
     ddx = 0  # no nvar: comp till min number of levels per P, then par nvar + for dPP || vPP per PM * 2 + PD
@@ -171,7 +177,7 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # same type and sign 1D s
             if oG > _oG: fork_[i][1] += 1
             else: rdn_oG += 1
 
-            if oG > A:  # continuity bias: blob-first, possible re-scan at cons_PP?
+            if oG > A:  # continuity bias: blob-first, possible re-scan at term_PP?
 
                 _PM = fork_[i][2]
                 if PM > _PM: fork_[i][3] += 1
@@ -195,38 +201,48 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # same type and sign 1D s
 
     while len(fork_) > 0:  # fork eval by form_PP, PP eval within selected P2, at least 1 else 1D bias?
 
-        fork = fork_.pop()  # same-fork P2 ( vPP, dPP form:
+        fork = fork_.pop()  # same-fork _P: one P2 (vPP, dPP), multiple roots and _forks:
 
-        sv, valt_, dalt_, vP, vP_, _vP_, term_vP_ = \
-        form_PP(0, oG, fork, fork_, _fork_, term_P_, x, y, Y, r, A)
+        P2 = form_PP(P2)  # g-sign blob, rdn alt_: feedback vPPs and dPPs
+        if oG * rdn_oG > A:
 
-    '''
-    oG? form sP2: gs blob, rdn alt_: fb vPPs and dPPs
-    
-    PM? form vPP: 2D value pattern, rdn alt_: fb dPPs and adjusted P2s
-    
-    PD? form dPP: 2D difference pattern, rdn alt_: feedback adjusted alt_ P2s and vPPs?
-    
-    fork_PP.append(fork) if P2 *= rdn > A, full syntax?   term per root_: 
-    
-    cons_PP(P2 | vPP | dPP): eval orientation (dim reduction -> axis | contour) and consolidation?  P2 rdn fb?
-    '''
+            fork_PP_.append(fork)  # same fork and full syntax for vPP and dPP:
 
-    return P_, _P_ , term_P_  # interlaced term_vP_ and term_dP_? + refs to vPPs, dPPs, vCPs, dCPs?
+            vPP = form_PP(vPP)  # 2D value pattern, rdn alt_: feedback dPPs and adjusted P2s
+            dPP = form_PP(dPP)  # 2D difference pattern, rdn alt_: fb adjusted alt_ P2s and vPPs
+
+    if _x <= ix:  # no horizontal overlap between _P and next P, test for downward continuation of _P:
+
+        if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # termination of P2_, vPP_, dPP_ within _P:
+            # term_PP per PP: eval for rotation, re-scan, re-comp, recursion, redund, inclusion in CP:
+
+            for i in len(_fork_): _P2 = _fork_[i]; term_PP(_P2)  # conditional spec?:
+            for i in len(_fork_vPP_): _vPP = _fork_vPP_[i]; term_PP(_vPP)
+            for i in len(_fork_dPP_): _dPP = _fork_dPP_[i]; term_PP(_dPP)
+
+        # else _P is represented by Ps in its root_, no term, no op?
+
+    else:
+        _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _r, _e_, _alt_, _root_, _fork_, _fork_vPP_, _fork_dPP_
+        buff_.appendleft(_P)  # old _fork_, new _root_
+
+        # or fork_ buffers same _Ps while P search, selection in form_PP(P2)?
+
+    _P_ += buff_  # at P comp end for next-P comp? first to pop() in _P_ for next-P comp_P()
+    P = s, I, D, Dy, M, My, G, r, e_, alt_, fork_  # each fork is new, includes P2 if unique cont:
+    P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
+
+    return P_, _P_, term_P_  # _P_ and term_P_ include _P and ref PP, fork_ is accumulated within comp_P
 
 
-def form_PP(crit, fork, fork_, _P_, _fork_, term_P_, n, _x, y, Y, r, A):
+def form_PP(crit, fork, fork_, root_, _P_, _fork_, term_P_, n, _x, y, Y, r, A):  # forms 2D patterns per criterion:
 
-    # forms 2D patterns per criterion: oG | PM | PD, crit is an index?
-
-    buff_, CP_, = deque(), deque()
-    root_, Root_ = deque(), deque()  # olp fork_: same-sign higher _Ps, root_: same-sign lower Ps
+    crit = fork[crit]  # input crit is an index of oG | PM | PD, for control only
 
     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
     # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
 
-    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0, 0, 0, 0, 0, 0, 0, 0, [], []  # PP vars (pattern of patterns) per root
-    WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0, 0, 0, 0, 0, 0, 0, 0, [], []  # CP vars (connected PPs) at first Fork
+    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns) per root
 
     oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork
     s, ix, x, I, D, Dy, M, My, G, r, e_, rdn, alt_, fork_, fork_vPP_, fork_dPP_ = P
@@ -239,52 +255,34 @@ def form_PP(crit, fork, fork_, _P_, _fork_, term_P_, n, _x, y, Y, r, A):
         PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
 
         fork = len(_P_), PP; fork_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
-        root_.appendleft(n)  # index of connected P in future term_P_, to be buffered in Fork_ of CP
 
-    if _x <= ix:  # _P and attached PP output if no horizontal overlap between _P and next P:
-
-        PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # PP per _fork P in _fork_
+        root_.appendleft(n)  # index of connected P in future term_P_, to be buffered in Root_ of CP?  or:
         Root_ += root_  # all continuing _Ps of CP, referenced from its first root _P: CP flag per _P?
 
-        if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per _P, term of PP
+    return P_, _P_ , term_P_  # interlaced term_vP_ and term_dP_? + refs to vPPs, dPPs, vCPs, dCPs?
 
-            cons_PP(PP)  # _fork PP eval for rotation, re-scan, re-comp, recursion, rdn, eval? CP vars increment:
-            # separate for vPP: summed var_vs, and dPP: summed var_ds?
 
-            WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; altC_ += alt2_; PP_.append(PP)
+def term_PP(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term
+                  # orientation (D reduction -> axis | outline), consolidation, P2 rdn fb?
 
-        else:
-            _P = _s, _ix, _x, _w, _I, _D, _Dy, _M, _My, _G, _r, _e_, _alt_, _root_, _fork_  # PP index per fork
-            # old _fork_, new _root_ (old _root_ is displaced with old _P_?)
-            buff_.appendleft(_P)  # _P is re-inputted for next-P comp
+    WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
+    WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; altC_ += alt2_; PP_.append(PP)
 
-        CP = WC, IC, DC, DyC, MC, MyC, GC, altC_, PP_, Root_
+    # CP of terminated PP, no CP per terminated _P in comp_P
 
-        if (len(Root_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP:
+        if (len(Root_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP (CP and returned by term):
 
-            cons_PP(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
+            term_PP(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
         elif len(_P_) == last_Root_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
 
             CP_.append(CP)  # PP may include len(CP_): CP index
 
-        Py_.append(P)  # vertical inclusion, per P per fork?
-
-    P = s, w, I, D, Dy, M, My, G, r, e_, alt_, fork_  # each fork is new, includes P2 if unique cont:
-    P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
-
-    _P_ += buff_  # first to pop() in _P_ for next-P comb_P()
-
-    return P_, _P_, term_P_  # _P_ and term_P_ include _P and ref PP, fork_ is accumulated within comp_P
-    
-
-def cons_PP(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term
-
-    ''' 
+''' 
     :param P2: 
     :return: 
     ''''''
-    cons_P2(PP): eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
+    eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
 
         if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
 
