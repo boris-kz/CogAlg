@@ -76,7 +76,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
         sd, dalt_, valt_, dP, dP_, _dP_, term_dP_ = \
         form_P(1, t2, fd, fv, dalt_, valt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)
 
-    # line's end, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient?
+    # line ends, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient?
     # vP, dP term, no initialization:
 
     dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)
@@ -122,27 +122,39 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     # draft below:
 
 
-def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # same type and sign 1D slice comp, select inclusion in PP:
+def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D slice comp, select inclusion in PP:
 
-    # blob P2 ( vPP ( dPP: redundant composition and feedback levels, var_P form within each PP type?
+    # blob P2( vPP, dPP: redundant composition and feedback levels, var_P form within each PP type?
+    # no nvar: comp till min nLe per P, then nvar + for dPP || vPP per PM * 2 + PD
 
-    fork_, buff_ = deque(),deque()  # _P -> fork_ for rdn eval, -> buff_ for re-input at x < _ix
-    fork_PP_ = []  # includes both vPP and dPP?
+    fork_ = deque()  # higher-line matches per _P, for rdn eval, also represented in root_:
+    root_ = deque()  # same-line matches per P, for term _P and transfer to connected _P' fork_?
 
-    root_, Root_ = deque(),deque()  # olp fork_: same-sign higher _Ps, root_: same-sign lower Ps, PP term tracker
+    _fork_= deque()  # higher-line forks, each has same-sign P2 with optional vPP and dPP
+    _root_= deque()  # terminated roots? or converted into fork_? no n = 0 (redundancy), = len(root_)?
 
-    n = 0  # index of _P for addressing selected forks Ps in discontinuous fork_?
+    buff_ = deque()  # generic buffer, such as for displaced _Ps, re-inputted into _P_ for next P
+
     rdn_oG, rdn_PM, rdn_PD = 0,0,0  # number of higher-value Ps in fork_ + alt Ps in alt_
+    ddx, _ix = 0,0  # initial coordinate of _P displaced from _P_ by last comp_P  # 2D ee_ per P in Py_?
 
-    ddx = 0  # no nvar: comp till min number of levels per P, then par nvar + for dPP || vPP per PM * 2 + PD
-    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P  # 2D ee_ per P in Py_?
-
-    s, I, D, Dy, M, My, G, e_ = P  # also alt_, fork_: doesn't need to be returned?
+    s, I, D, Dy, M, My, G, e_ = P
     ix = x - len(e_)  # len(e_) is w: P width, ix: initial coordinate of P
+
+    '''
+    DV = D + M  # total value of P, to eval rdn alt_ Ps: 1D, same coef for P2, vPP, dPP, no complete alt PPs yet?
+    for i in range(len(alt_)):  # refs to alt-type Ps overlapping P, to compute ralt, regardless of overlap?
+
+        _DV = alt_[i][3] + alt_[i][5]
+        if..: alt_[i][3] += 1  # alt_P' rdn_PM increment, or *= rdn coef: neg_v_Olp / w?
+        else: rdn_PM += 1
+        
+    or alt_ rdn eval after selection, per PP only?
+    '''
 
     while x >= _ix:  # comp while P and _P horizontal overlap
 
-        _P = _P_.popleft(); n += 1  # _n | len(P_) - len(_P_): _P counter to sync Fork_ with _P_
+        _P = _P_.popleft() # n += 1 ->_n: _P counter to sync cfork_ with _P_? | len(P_) - len(_P_)?
         _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _fork_, _fork_vPP_, _fork_dPP_ = _P
 
         if s == _s:  # 1D vars comp -> PM + PD value and vertical direction, for dim reduction to axis and contour:
@@ -164,12 +176,14 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # same type and sign 1D s
             PM = mx + mw + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?
             oG = G * mw / len(e_)  # overlap of summed gradient, or while (i > mw) _e_ -> g; oG += g?
 
-            fork = oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P
+            fork = oG, rdn_oG, PM, rdn_PM, PD, rdn_PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, _P, root_, _fork_
+            # group by val_vars, y_ders,  _fork group by P2, vPP, dPP, for access by rdn and form eval:
             fork_.append(fork)
 
     while len(fork_) > 0:  # redundancy is assigned to weaker fork: of P2 per oG ( vPP per PM, dPP per PD
 
-        fork = fork_.pop(); oG = fork[0]; PM = fork[2]; PD = fork[4]  # buffered till len(fork_) = 0
+        fork = fork_.pop()  # cached till len(fork_) = 0
+        oG = fork[0]; rdn_oG = fork[1]; PM = fork[2]; rdn_PM = fork[3]; PD = fork[4]; rdn_PD = fork[5]
 
         for i in range(len(fork_)):  # remaining forks are reused vs. popped:
 
@@ -187,62 +201,67 @@ def comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # same type and sign 1D s
                 if PD > _PD: fork_[i][5] += 1
                 else: rdn_PD += 1
 
-        # separate fork_ and alt_ rdn, total redundancy = len(stronger_fork_) + len(stronger_alt_):
-
-        for i in range(len(alt_)):  # refs to alt_P_ per fork_P, comp of oG, PM, PD?:
-
-            _PM = alt_[i][2]
-            if PM > _PM: alt_[i][3] += 1  # alt_P' rdn_PM increment, or *= rdn coef: neg_v_Olp / w?
-            else: rdn_PM += 1
-
-        buff_.append(fork)
+        buff_.appendleft(fork)
 
     fork_ = buff_
 
-    while len(fork_) > 0:  # fork eval by form_PP, PP eval within selected P2, at least 1 else 1D bias?
+    while len(fork_) > 0:  # fork eval to form_PP (pattern of patterns) per criterion: oG, PM, PD
 
-        fork = fork_.pop()  # same-fork _P: one P2 (vPP, dPP), multiple roots and _forks:
+        fork = fork_.pop(); _P, root_, _fork_ = fork  # _P: val_vars, y_ders, P; _fork: P2 (opt. vPP, dPP:
 
-        P2 = form_PP(P2)  # g-sign blob, rdn alt_: feedback vPPs and dPPs
-        if oG * rdn_oG > A:
+        while len(_fork_) > 0:
 
-            fork_PP_.append(fork)  # same fork and full syntax for vPP and dPP:
+            _fork = _fork_.pop(); P2, vPP, dPP = _fork
 
-            vPP = form_PP(vPP)  # 2D value pattern, rdn alt_: feedback dPPs and adjusted P2s
-            dPP = form_PP(dPP)  # 2D difference pattern, rdn alt_: fb adjusted alt_ P2s and vPPs
+            P2 = form_PP(P2)  # g-sign blob, rdn alt_: feedback vPPs and dPPs
+            oG = P2[0]; rdn_oG = P2[1]  # or loaded by form_PP?
 
-    if _x <= ix:  # no horizontal overlap between _P and next P, test for downward continuation of _P:
+            if oG * rdn_oG > A:  # else no negative g|v|d PP rep? form eval A > rdn eval A: more selective?
 
-        if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # termination of P2_, vPP_, dPP_ within _P:
-            # term_PP per PP: eval for rotation, re-scan, re-comp, recursion, redund, inclusion in CP:
+                root_.append(P); buff_.appendleft(fork)  # same fork, syntax for vPP and dPP, eval per P2:
+                vPP = form_PP(vPP)  # 2D value pattern, rdn alt_: feedback dPPs and adjusted P2s
+                dPP = form_PP(dPP)  # 2D difference pattern, rdn alt_: fb adjusted alt_ P2s and vPPs?
 
-            for i in len(_fork_): _P2 = _fork_[i]; term_PP(_P2)  # conditional spec?:
-            for i in len(_fork_vPP_): _vPP = _fork_vPP_[i]; term_PP(_vPP)
-            for i in len(_fork_dPP_): _dPP = _fork_dPP_[i]; term_PP(_dPP)
+        fork_ = buff_ # selected forks?
 
-        # else _P is represented by Ps in its root_, no term, no op?
+        if _x <= ix:  # no horizontal overlap between _P and next P, test for downward continuation of _P:
 
-    else:
-        _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _r, _e_, _alt_, _root_, _fork_, _fork_vPP_, _fork_dPP_
-        buff_.appendleft(_P)  # old _fork_, new _root_
+            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # termination of fork PPs: P2_, vPP_, dPP_:
+                # term_PP per PP: eval for rotation, re-scan, re-comp, recursion, redund, inclusion in CP:
 
-        # or fork_ buffers same _Ps while P search, selection in form_PP(P2)?
+                for i in len(_fork_):
+
+                    _fork = _fork_[i]  # one set of ders, conditionally included in _fork_ PPs:
+                    P2  = _fork[3]; term_PP(P2)  # no more than one vPP_ and dPP_ per P2:
+                    vPP = _fork[4]; if vPP: term_PP(vPP)  # if vPP is not empty?
+                    dPP = _fork[5]; if dPP: term_PP(dPP)
+
+            # else no term and no buff, _P is continued by its root Ps
+
+        else: # fork is buffered for next P: next call of comp_P
+
+            fork = _P, root_, _fork_  # _P includes y_ders, higher-line _fork_, lower-line match root_
+            buff_.appendleft(fork)
 
     _P_ += buff_  # at P comp end for next-P comp? first to pop() in _P_ for next-P comp_P()
+
     P = s, I, D, Dy, M, My, G, r, e_, alt_, fork_  # each fork is new, includes P2 if unique cont:
     P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
 
-    return P_, _P_, term_P_  # _P_ and term_P_ include _P and ref PP, fork_ is accumulated within comp_P
+    return P_, _P_, term_P_  # _P_ and term_P_ include _P and PPs? fork_ is accumulated within comp_P
 
 
-def form_PP(crit, fork, fork_, root_, _P_, _fork_, term_P_, n, _x, y, Y, r, A):  # forms 2D patterns per criterion:
+def form_PP(crit, fork, _fork_, root_, _P_, term_P_, n, _x, y, Y, r, A):
 
-    crit = fork[crit]  # input crit is an index of oG | PM | PD, for control only
+    # no croot_, same-line cross-references are unfolded per P in Py_,
+    # terminated Ps are represented in _root_ of continuing roots, last connected root represents full CP?
+
+    crit = fork[crit]  # forms 2D patterns per input criterion: index of oG | PM | PD, for control only
 
     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
     # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
 
-    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars (pattern of patterns) per root
+    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars per root
 
     oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork
     s, ix, x, I, D, Dy, M, My, G, r, e_, rdn, alt_, fork_, fork_vPP_, fork_dPP_ = P
@@ -251,15 +270,19 @@ def form_PP(crit, fork, fork_, root_, _P_, _fork_, term_P_, n, _x, y, Y, r, A): 
 
     if crit > A * 5 * rdn:  # PP vars increment, else empty fork ref?
 
-        W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_, Py_.append(P)
+        n += 1; W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
+        Py_.append(P)
+
+        # also var_P form: LIDV per dx, w, I, D, M? select per term?
         PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
 
-        fork = len(_P_), PP; fork_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
+        fork = len(_P_), PP
+        fork_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
 
-        root_.appendleft(n)  # index of connected P in future term_P_, to be buffered in Root_ of CP?  or:
-        Root_ += root_  # all continuing _Ps of CP, referenced from its first root _P: CP flag per _P?
+        root_.appendleft(P)  # connected Ps in future term_P_, buffered in Root_ of CP to track their termination:
+        croot_ += root_  # all continuing _Ps of CP, referenced from its first root _P: CP flag per _P?
 
-    return P_, _P_ , term_P_  # interlaced term_vP_ and term_dP_? + refs to vPPs, dPPs, vCPs, dCPs?
+    return _P_, term_P_  # laced term_vP_ and term_dP_? + refs to vPPs, dPPs, vCPs, dCPs?
 
 
 def term_PP(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term
@@ -270,11 +293,11 @@ def term_PP(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion,
 
     # CP of terminated PP, no CP per terminated _P in comp_P
 
-        if (len(Root_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP (CP and returned by term):
+        if (len(croot_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP (CP and returned by term):
 
             term_PP(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
-        elif len(_P_) == last_Root_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
+        elif len(_P_) == last_croot_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
 
             CP_.append(CP)  # PP may include len(CP_): CP index
 
@@ -311,7 +334,7 @@ def Le1(f):  # last "_" denotes array vs. element, first "_" denotes higher-line
 
     r = 1; a = 127  # feedback filters
     Y, X = f.shape  # Y: frame height, X: frame width
-    fd, fv, y, _vP_, _dP_, term_vP_, term_dP_, F_ = 0,0,0,[],[],[],[],[]
+    fd, fv, y, _vP_, _dP_, term_vP_, term_dP_, frame_ = 0,0,0,[],[],[],[],[]
 
     p_ = f[0, :]   # first line / row of pixels
     _t_= comp(p_)  # _t_ includes ycomp() results, with Dy, My, dG, vG initialized at 0
@@ -324,9 +347,9 @@ def Le1(f):  # last "_" denotes array vs. element, first "_" denotes higher-line
         _t_ = t_
 
         PP_ = term_vP_, term_dP_  # PP term by comp_P, adjust by cons_P2, after P ) PP ) CP termination
-        F_.append(PP_)  # line of patterns is added to frame of patterns, y = len(F_)
+        frame_.append(PP_)  # line of patterns is added to frame of patterns, y = len(F_)
 
-    return F_  # output to level 2
+    return frame_  # output to level 2
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
