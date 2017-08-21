@@ -125,18 +125,18 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
 def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D slice comp, select inclusion in PP:
 
     # blob P2( vPP, dPP: redundant composition and feedback levels, var_P form within each PP type?
-    # no nvar: comp till min nLe per P, then nvar + for dPP || vPP per PM * 2 + PD
 
-    fork_ = deque()  # higher-line matches per _P, for rdn eval, also represented in root_:
-    root_ = deque()  # same-line matches per P, for term _P and transfer to connected _P' fork_?
+    fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
+    root_ = deque()  # lower-line matches per _P, to transfer terminated _P to connected _P_fork_?
 
-    _fork_= deque()  # higher-line forks, each has same-sign P2 with optional vPP and dPP
-    _root_= deque()  # terminated roots? or converted into fork_? no n = 0 (redundancy), = len(root_)?
+    # _fork_: higher-line matches per _P: same-sign P2 with optional vPP and dPP, from P re-input,
+    # _root_: no simult with root_, same for term_, access by term_PP?
 
     buff_ = deque()  # generic buffer, such as for displaced _Ps, re-inputted into _P_ for next P
+    # no n(rdn): len(root_), no nvar: comp till min nLe per P, then nvar + for dPP || vPP per PM * 2 + PD
 
     rdn_oG, rdn_PM, rdn_PD = 0,0,0  # number of higher-value Ps in fork_ + alt Ps in alt_
-    ddx, _ix = 0,0  # initial coordinate of _P displaced from _P_ by last comp_P  # 2D ee_ per P in Py_?
+    ddx, _ix = 0, 0  # initial coordinate of _P displaced from _P_ by last comp_P  # 2D ee_ per P in Py_?
 
     s, I, D, Dy, M, My, G, e_ = P
     ix = x - len(e_)  # len(e_) is w: P width, ix: initial coordinate of P
@@ -149,7 +149,7 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
         if..: alt_[i][3] += 1  # alt_P' rdn_PM increment, or *= rdn coef: neg_v_Olp / w?
         else: rdn_PM += 1
         
-    or alt_ rdn eval after selection, per PP only?
+    or  alt_ rdn eval per PP: value variation > cost of selection, 1D variation is too low?
     '''
 
     while x >= _ix:  # comp while P and _P horizontal overlap
@@ -177,7 +177,7 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
             oG = G * mw / len(e_)  # overlap of summed gradient, or while (i > mw) _e_ -> g; oG += g?
 
             fork = oG, rdn_oG, PM, rdn_PM, PD, rdn_PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, _P, root_, _fork_
-            # group by val_vars, y_ders,  _fork group by P2, vPP, dPP, for access by rdn and form eval:
+            # group by val_vars, y_ders,  _fork group by P2, vPP, dPP?
             fork_.append(fork)
 
     while len(fork_) > 0:  # redundancy is assigned to weaker fork: of P2 per oG ( vPP per PM, dPP per PD
@@ -226,17 +226,19 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
 
         if _x <= ix:  # no horizontal overlap between _P and next P, test for downward continuation of _P:
 
-            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # termination of fork PPs: P2_, vPP_, dPP_:
-                # term_PP per PP: eval for rotation, re-scan, re-comp, recursion, redund, inclusion in CP:
+            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # no-match connections recorded per match?
+
+                # term of fork PPs: P2_, vPP_, dPP_ eval for rotation, re-scan, re-comp, recursion, rdn:
+                # same as form_CP:
 
                 for i in len(_fork_):
 
-                    _fork = _fork_[i]  # one set of ders, conditionally included in _fork_ PPs:
+                    _fork = _fork_[i]  # one set of ders, conditionally included in all _fork PPs:
                     P2  = _fork[3]; term_PP(P2)  # no more than one vPP_ and dPP_ per P2:
                     vPP = _fork[4]; if vPP: term_PP(vPP)  # if vPP is not empty?
                     dPP = _fork[5]; if dPP: term_PP(dPP)
 
-            # else no term and no buff, _P is continued by its root Ps
+            # else no term and no buff, _P is included in its root Ps
 
         else: # fork is buffered for next P: next call of comp_P
 
@@ -245,16 +247,22 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
 
     _P_ += buff_  # at P comp end for next-P comp? first to pop() in _P_ for next-P comp_P()
 
-    P = s, I, D, Dy, M, My, G, r, e_, alt_, fork_  # each fork is new, includes P2 if unique cont:
+    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars type declaration
+
+    P2  = W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
+    vPP = W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
+    dPP = W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
+
+    PP  = P2, vPP, dPP  # PPs are initialized with unique P transfer to _P_, per fork of _P:
+    fork_.append(PP)  # only fork_ element type declaration, buffered?
+
+    P = s, I, D, Dy, M, My, G, r, e_, alt_, fork_  # each fork is new
     P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
 
     return P_, _P_, term_P_  # _P_ and term_P_ include _P and PPs? fork_ is accumulated within comp_P
 
 
-def form_PP(crit, fork, _fork_, root_, _P_, term_P_, n, _x, y, Y, r, A):
-
-    # no croot_, same-line cross-references are unfolded per P in Py_,
-    # terminated Ps are represented in _root_ of continuing roots, last connected root represents full CP?
+def form_PP(crit, fork, root_, _fork_, _P_, term_P_, _x, y, Y, r, A):
 
     crit = fork[crit]  # forms 2D patterns per input criterion: index of oG | PM | PD, for control only
 
@@ -263,6 +271,8 @@ def form_PP(crit, fork, _fork_, root_, _P_, term_P_, n, _x, y, Y, r, A):
 
     W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars per root
 
+    # initialized at P re-input in comp_P, accumulated per PP?
+
     oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork
     s, ix, x, I, D, Dy, M, My, G, r, e_, rdn, alt_, fork_, fork_vPP_, fork_dPP_ = P
 
@@ -270,7 +280,7 @@ def form_PP(crit, fork, _fork_, root_, _P_, term_P_, n, _x, y, Y, r, A):
 
     if crit > A * 5 * rdn:  # PP vars increment, else empty fork ref?
 
-        n += 1; W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
+        W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
         Py_.append(P)
 
         # also var_P form: LIDV per dx, w, I, D, M? select per term?
@@ -279,27 +289,29 @@ def form_PP(crit, fork, _fork_, root_, _P_, term_P_, n, _x, y, Y, r, A):
         fork = len(_P_), PP
         fork_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
 
-        root_.appendleft(P)  # connected Ps in future term_P_, buffered in Root_ of CP to track their termination:
-        croot_ += root_  # all continuing _Ps of CP, referenced from its first root _P: CP flag per _P?
+        root_.appendleft(P)  # connected Ps in future term_ and term_P_
+        # all continuing _Ps of CP, referenced from its first root _P: CP flag per _P?
 
     return _P_, term_P_  # laced term_vP_ and term_dP_? + refs to vPPs, dPPs, vCPs, dCPs?
 
 
-def term_PP(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term
-                  # orientation (D reduction -> axis | outline), consolidation, P2 rdn fb?
+def term_PP(P2):  # sub-level 4: eval for rotation, re-scan, re-comp, recursion, accumulation, at PP or CP term?
+
+    term_ = []  # terminated root Ps per next fork P in Py_, last fork (CP) is stored in term_PP_?
+                # accumulated per term_PP within root?  incomplete inclusion: no-match Ps -> _P' cont_?
 
     WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
     WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; altC_ += alt2_; PP_.append(PP)
 
-    # CP of terminated PP, no CP per terminated _P in comp_P
+    # orientation (D reduction -> axis | outline), consolidation, P2 rdn fb?
 
-        if (len(croot_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP (CP and returned by term):
+    if (len(fork_) == 0 and y > r + 3) or y == Y - 1:  # no continuation per CP (CP and returned by term):
 
-            term_PP(CP)  # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
+       # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
 
-        elif len(_P_) == last_croot_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
+    elif len(_P_) == last_croot_nP:  # CP_ to _P_ sync for PP inclusion and cons(CP) trigger by Fork_' last _P?
 
-            CP_.append(CP)  # PP may include len(CP_): CP index
+        CP_.append(CP)  # PP may include len(CP_): CP index
 
 ''' 
     :param P2: 
