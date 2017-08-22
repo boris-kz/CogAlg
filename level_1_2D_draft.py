@@ -129,8 +129,8 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
     fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
     root_ = deque()  # lower-line matches per _P, to transfer terminated _P to connected _P_fork_?
 
-    # _fork_: higher-line matches per _P: same-sign P2 with optional vPP and dPP, from P re-input,
-    # _root_: no simult with root_, same for term_, access by term_PP?
+    _fork_ = [] # higher-line matches per _P: same-sign P2 with optional vPP and dPP, for P re-input
+    # _root_: not simult with root_, same for term_, access by term_PP?
 
     buff_ = deque()  # generic buffer, such as for displaced _Ps, re-inputted into _P_ for next P
     # no n(rdn): len(root_), no nvar: comp till min nLe per P, then nvar + for dPP || vPP per PM * 2 + PD
@@ -177,7 +177,7 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
             oG = G * mw / len(e_)  # overlap of summed gradient, or while (i > mw) _e_ -> g; oG += g?
 
             fork = oG, rdn_oG, PM, rdn_PM, PD, rdn_PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, _P, root_, _fork_
-            # group by val_vars, y_ders,  _fork group by P2, vPP, dPP?
+            # group by val_vars, y_ders; _fork group by P2, vPP, dPP?
             fork_.append(fork)
 
     while len(fork_) > 0:  # redundancy is assigned to weaker fork: of P2 per oG ( vPP per PM, dPP per PD
@@ -191,7 +191,7 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
             if oG > _oG: fork_[i][1] += 1
             else: rdn_oG += 1
 
-            if oG > A:  # continuity bias: blob-first, possible re-scan at term_PP?
+            if oG > A:  # continuity vs. match bias: blob-first, possible re-scan at term_PP?
 
                 _PM = fork_[i][2]
                 if PM > _PM: fork_[i][3] += 1
@@ -245,36 +245,32 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
             fork = _P, root_, _fork_  # _P includes y_ders, higher-line _fork_, lower-line match root_
             buff_.appendleft(fork)
 
-    _P_ += buff_  # at P comp end for next-P comp? first to pop() in _P_ for next-P comp_P()
+    _P_ += buff_ # at P comp end for next-P comp? first to pop() in _P_ for next-P comp_P()
 
-    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars type declaration
+    crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,0,0,[],[]  # PP vars declaration
 
-    P2  = W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
-    vPP = W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
-    dPP = W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
+    P2  = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
+    vPP = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
+    dPP = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
 
-    PP  = P2, vPP, dPP  # PPs are initialized with unique P transfer to _P_, per fork of _P:
-    fork_.append(PP)  # only fork_ element type declaration, buffered?
+    _fork = P2, vPP, dPP  # PPs are initialized at non-matching P transfer to _P_, as generic element of _fork_
+    _fork_.append(_fork)  # not really append, only _fork type declaration, re-used per lower P?
 
-    P = s, I, D, Dy, M, My, G, r, e_, alt_, fork_  # each fork is new
+    P = s, I, D, Dy, M, My, G, r, e_, alt_, _fork_  # _fork_ is empty, similar to tuple declaration?
     P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
 
     return P_, _P_, term_P_  # _P_ and term_P_ include _P and PPs? fork_ is accumulated within comp_P
 
 
-def form_PP(crit, fork, root_, _fork_, _P_, term_P_, _x, y, Y, r, A):
-
-    crit = fork[crit]  # forms 2D patterns per input criterion: index of oG | PM | PD, for control only
+def form_PP(PP, fork, root_, _fork_, _P_, term_P_, _x, y, Y, r, A):  # forms 2D patterns, criterion: oG | PM | PD
 
     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
     # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
 
-    W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,[],[]  # PP vars per root
+    crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = PP  # initialized at P re-input in comp_P
 
-    # initialized at P re-input in comp_P, accumulated per PP?
-
-    oG, PM, PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork
-    s, ix, x, I, D, Dy, M, My, G, r, e_, rdn, alt_, fork_, fork_vPP_, fork_dPP_ = P
+    mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork  # current derivatives, to be included if match
+    s, ix, x, I, D, Dy, M, My, G, r, e_, alt_ = P  # input P or _P: no inclusion of last input?
 
     # criterion eval, P inclusion in PP, then all connected PPs in CP, unique tracing of max_crit PPs:
 
