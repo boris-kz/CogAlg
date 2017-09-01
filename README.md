@@ -3,7 +3,7 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It is derived from my definitions: pattern is a span of matching inputs, where match is partial overlap between the inputs, discovered by hierarchical search. This search is strictly incremental, primarily in distance between comparands, then in their derivation and composition produced by lower levels. “Strictly incremental” means that operations should be unique for each level of search, hence a singular in “cognitive algorithm“.
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It is derived from my definitions: pattern is a span of matching inputs, and match is overlap of inputs’ value, discovered by hierarchical search. This search is strictly incremental, primarily in the distance between comparands, and then in their derivation order and compositional scope, increased by each level of search. “Strictly incremental” means that operations per step are unique, hence a singular in “cognitive algorithm“.
 
 This looks similar to hierarchical clustering, but the latter defines match as inverted difference between inputs. Which is wrong, match is a subset common for both comparands, distinct from and complementary to their difference. Also, neither deep ANN nor conventional hierarchical clustering implements incremental syntax: number of variables per input, parts 2 and 4, and incremental spatio-temporal dimensionality: parts 2 and 6.
 

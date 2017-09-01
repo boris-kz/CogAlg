@@ -79,11 +79,11 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     # line ends, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient?
     # vP, dP term, no initialization:
 
-    dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)
+    dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)  # olp: selected alt?
     volp = vP[7]; valt = len(dP_), volp; valt_.append(valt)
 
-    vP_, _vP_, term_vP_ = comp_P(valt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_
-    dP_, _dP_, term_dP_ = comp_P(dalt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)  # empty _dP_
+    vP_, _vP_, term_vP_ = form_B(valt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_
+    dP_, _dP_, term_dP_ = form_B(dalt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)  # empty _dP_
 
     return vP_, dP_, term_vP_, term_dP_  # with refs to vPPs, dPPs, vCPs, dCPs from comp_P, adjusted by cons_P2
 
@@ -96,10 +96,10 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     s = 1 if g > 0 else 0
     if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and compared to overlapping _Ps:
 
-        P_, _P_, term_P_ = comp_P(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
-        _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P' _alt_:
+        P_, _P_, term_P_ = form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
+        _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P' _alt_, total olp = len(e_):
         _alt_.append(_alt)
-        I, D, Dy, M, My, G, olp, e_, alt_ = 0,0,0,0,0,0,0,[],[]  # initialized P and alt_
+        I, D, Dy, M, My, G, e_, alt_ = 0,0,0,0,0,0,[],[]  # initialized P and alt_
 
     # continued or initialized P vars are accumulated:
 
@@ -110,100 +110,113 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     G += g  # fd | fv summed to define P value, with directional resolution loss
 
     if type == 0:
-        pri = p, g, _g  # also d, dy, m, my, for fuzzy accumulation within P-specific r?
+        pri = p, g, _g  # v gradient, also d, dy, m, my for fuzzy accumulation within P-specific r?
         e_.append(pri)  # prior same-line vertex, buffered for selective inc_rng comp
     else:
-        e_.append(g)  # prior same-line difference gradient, buffered for inc_der comp
+        e_.append(g)  # prior same-line d gradient, buffered for selective inc_der comp
 
-    P = s, I, D, Dy, M, My, G, olp, e_
+    P = s, I, D, Dy, M, My, G, e_  # alt_ is accumulated in ycomp, eval for PP cost before comp_P?
 
     return s, alt_, _alt_, P, P_, _P_, term_P_
 
     # draft below:
 
 
-def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D slice comp, select inclusion in PP:
-
-    # blob P2( vPP, dPP: redundant composition and feedback levels, var_P form within each PP type?
+def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms same type and sign blob, 2D-specific
 
     fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
     root_ = deque()  # lower-line matches per _P, to transfer terminated _P to connected _P_fork_?
 
-    _fork_ = [] # higher-line matches per _P: same-sign P2 with optional vPP and dPP, for P re-input
-    # _root_: not simult with root_, same for term_, access by term_PP?
+    _fork_ = []  # higher-line matches per _P: same-sign P2 with optional vPP and dPP, for re-input
+    buff_ = deque()  # generic buffer; no _root_ with root_, term_ at term_PP? no ee_: Py_( P( e_?
 
-    buff_ = deque()  # generic buffer, such as for displaced _Ps, re-inputted into _P_ for next P
-    # no n(rdn): len(root_), no nvar: comp till min nLe per P, then nvar + for dPP || vPP per PM * 2 + PD
+    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
+    s = P[0]; e_ = P[7]  # sign and array of lower-level inputs per pattern
 
-    rdn_oG, rdn_PM, rdn_PD = 0,0,0  # number of higher-value Ps in fork_ + alt Ps in alt_
-    ddx, _ix = 0, 0  # initial coordinate of _P displaced from _P_ by last comp_P  # 2D ee_ per P in Py_?
+    while x >= _ix:  # while P and _P horizontal overlap
 
-    s, I, D, Dy, M, My, G, e_ = P
-    ix = x - len(e_)  # len(e_) is w: P width, ix: initial coordinate of P
+        _P = _P_.popleft()
+        _s = _P[0]; _ix = _P[1]
+        ex = x  # coordinate of current P element
+        oG = 0  # overlapping gradient oG += g, approx: oG = G * mw / len(e_)
 
-    '''
-    DV = D + M  # total value of P, to eval rdn alt_ Ps: 1D, same coef for P2, vPP, dPP, no complete alt PPs yet?
-    for i in range(len(alt_)):  # refs to alt-type Ps overlapping P, to compute ralt, regardless of overlap?
+        if s == _s:  # P2 inclusion, rdn oG eval? 1D P rep and comp, max oG fork represents fork_)Py_
 
-        _DV = alt_[i][3] + alt_[i][5]
-        if..: alt_[i][3] += 1  # alt_P' rdn_PM increment, or *= rdn coef: neg_v_Olp / w?
-        else: rdn_PM += 1
-        
-    or  alt_ rdn eval per PP: value variation > cost of selection, 1D variation is too low?
-    '''
+            while ex > _ix:
+                for i in range (len(e_)):
+                    g = e_[i]; oG += g; ex += 1
 
-    while x >= _ix:  # comp while P and _P horizontal overlap
-
-        _P = _P_.popleft() # n += 1 ->_n: _P counter to sync cfork_ with _P_? | len(P_) - len(_P_)?
-        _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _r, _e_, _rdn, _alt_, _fork_, _fork_vPP_, _fork_dPP_ = _P
-
-        if s == _s:  # 1D vars comp -> PM + PD value and vertical direction, for dim reduction to axis and contour:
-
-            dx = x - len(e_)/2 - _x - len(_e_)/2  # -> Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
-            mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx - a_mx -> form_P(vxP), vs. mx = -(a_dx - dx): discont?
-
-            dw = len(e_) - len(_e_)  # -> dwP, Ddx + Dw (higher-Dim Ds) triggers adjustment of derivatives or _vars
-            mw = min(len(e_), len(_e_))  # comp(S | aS(norm to assign redun)) if higher-Dim (mx+mw) vP, or default:
-
-            # w: P width = len(e_), relative overlap: mx / w, similarity: mw?
-            # ddx and dw signs correlate, dx (direction) and dw (dimension) don't
-
-            dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
-            dD = D - _D; mD = min(D, _D)
-            dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. also len(alt_) comp?
-
-            PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
-            PM = mx + mw + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?
-            oG = G * mw / len(e_)  # overlap of summed gradient, or while (i > mw) _e_ -> g; oG += g?
-
-            fork = oG, rdn_oG, PM, rdn_PM, PD, rdn_PD, mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, _P, root_, _fork_
-            # group by val_vars, y_ders; _fork group by P2, vPP, dPP?
+            fork = oG, _P
             fork_.append(fork)
 
-    while len(fork_) > 0:  # redundancy is assigned to weaker fork: of P2 per oG ( vPP per PM, dPP per PD
+    while len(fork_) > 0:  # weaker-fork redundancy is incremented
 
+        max_oG = 0; rdn = 0  # number of higher-value Ps in fork_, + alt Ps in alt_
         fork = fork_.pop()  # cached till len(fork_) = 0
-        oG = fork[0]; rdn_oG = fork[1]; PM = fork[2]; rdn_PM = fork[3]; PD = fork[4]; rdn_PD = fork[5]
+        oG = fork[0]  # rdn_oG = fork[1]; PM = fork[2]; rdn_PM = fork[3]; PD = fork[4]; rdn_PD = fork[5]
 
-        for i in range(len(fork_)):  # remaining forks are reused vs. popped:
+        for i in range(len(fork_)):  # len(fork_) > 1: remaining forks are reused vs. popped:
 
             _oG = fork_[i][0]  # criterion comp, redundancy assignment, max if rdn=0:
             if oG > _oG: fork_[i][1] += 1
-            else: rdn_oG += 1
+            else: rdn += 1
+            
+            if oG > max_oG: 
+                if max_oG > 0: buff_.appendleft(max_fork); max_fork = fork
+            else: buff_.appendleft(fork)  # except for max_fork
 
-            if oG > A:  # continuity vs. match bias: blob-first, possible re-scan at term_PP?
+    if max_oG > 0:  # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
 
-                _PM = fork_[i][2]
-                if PM > _PM: fork_[i][3] += 1
-                else: rdn_PM += 1
+       if max_oG > A * rdn:
+          comp_P(max_fork)  # max_fork (if any) is local, updates _P and term_P_?
 
-                _PD = fork_[i][4]
-                if PD > _PD: fork_[i][5] += 1
-                else: rdn_PD += 1
+          while len(buff_) > 0:
+              fork = buff_.pop
 
-        buff_.appendleft(fork)
+              if fork[0] > A * fork[1]:
+                 comp_P(fork)  # then selective fork_.append(fork)?
 
-    fork_ = buff_
+       cont = max_fork, fork_  # P continuity over higher line, regardless of selection?
+
+    return P_, _P_, term_P_  # also alt_? _P_ and term_P_ include _P and PPs, fork_ is accumulated in comp_P?
+
+
+def comp_P(P, fork, x):  # var comp -> var Ps (dxP: direction), PM -> vPP, PD -> dPP: dim.reduced axis | contour
+
+    ddx = 0 # optional; no more than one vPP and dPP per fork, same per _fork?
+
+    s, I, D, Dy, M, My, G, e_, oG, rdn = P  # select alt_ per fork, no olp: = mx?
+    _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, r, _alt_, _fork_ = _P  # fork = r, _alt_, _fork_, P?
+
+    ix = x - len(e_)  # len(e_) or w: P width, initial coordinate of P, for output only?
+
+    dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
+    mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx - a_mx, form_P(vxP), vs. mx = -(a_dx - dx): discont?
+
+    dw = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + Dw triggers adjustment of derivatives or _vars?
+    mw = min(len(e_), len(_e_))  # w: P width = len(e_), relative overlap: mx / w, similarity: mw?
+
+    # ddx and dw signs correlate, dx (position) and dw (dimension) signs don't correlate?
+    # comp(S| aS(L rdn norm) in positive eM = mx + mw, more predictive than eD? or input comp: CLIDV?
+
+    dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
+    dD = D - _D; mD = min(D, _D)
+    dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. also len(alt_) comp?
+
+    PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
+    PM = mx + mw + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?
+
+    # eval after comp, for rdn to alt_ and fork_ per P
+
+
+        _PM = fork_[i][2]
+        if PM > _PM: fork_[i][3] += 1
+        else: rdn_PM += 1
+
+            _PD = fork_[i][4]
+            if PD > _PD: fork_[i][5] += 1
+            else: rdn_PD += 1
+
 
     while len(fork_) > 0:  # fork eval to form_PP (pattern of patterns) per criterion: oG, PM, PD
 
@@ -233,8 +246,7 @@ def comp_P(P, P_, _P_, term_P_, alt_, x, y, Y, r, A):  # same type and sign 1D s
 
                 for i in len(_fork_):
 
-                    _fork = _fork_[i]  # one set of ders, conditionally included in all _fork PPs:
-                    P2  = _fork[3]; term_PP(P2)  # no more than one vPP_ and dPP_ per P2:
+                    _fork = _fork_[i]  # no more than one vPP_ and dPP_ per P2, same set of ders inclusion:
                     vPP = _fork[4]; if vPP: term_PP(vPP)  # if vPP is not empty?
                     dPP = _fork[5]; if dPP: term_PP(dPP)
 
