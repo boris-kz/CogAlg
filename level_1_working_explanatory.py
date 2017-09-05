@@ -9,122 +9,237 @@ and relative match patterns vPs (spans of pixels forming same-sign predictive va
 are redundant representations of each line of pixels.
 '''
 
-def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
+def incremental_range(a, aV, aD, min_range, A, AV, AD, r, p_):
 
-    if r > min_r:  # A, AV, AD inc.to adjust for redundancy to patterns formed by prior comp:
+    if r > min_range:  # A, AV, AD inc.to adjust for redundancy to patterns formed by prior compare:
         A += a     # a: min m for inclusion into positive vP
-        AV += aV   # aV: min V for initial comp() recursion, AV: min V for higher recursions
+        AV += aV   # aV: min V for initial compare() recursion, AV: min V for higher recursions
 
-    if r > min_r-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
-        AD += aD     # aV: min |D| for comp() recursion over d_[w], AD: min |D| for recursion
+    if r > min_range-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
+        AD += aD     # aV: min |D| for compare() recursion over d_[w], AD: min |D| for recursion
 
-    X = len(p_)
+    frame_width = len(p_)
     ip_ = p_  # to differentiate from new p_
 
     vP_, dP_ = [],[]  # r was incremented in higher-scope p_
     pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
     pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
-    for x in range(r+1, X):
+    for x in range(r+1, frame_width):
 
-        p, fd, fv = ip_[x]       # compared to a pixel at x-r-1:
-        pp, pfd, pfv = ip_[x-r]  # previously compared p(ignored), its fd, fv to next p
-        fv += pfv  # fuzzy v is summed over extended-comp range
-        fd += pfd  # fuzzy d is summed over extended-comp range
+        new_pixel, fuzzy_difference, fuzzy_variable = ip_[x]       # compared to a pixel at x-r-1:
+        previous_pixel, pfd, pfv = ip_[x-r]  # previously compared p(ignored), its fuzzy_difference, fuzzy_variable to next p
+        fuzzy_variable += pfv  # fuzzy v is summed over extended-compare range
+        fuzzy_difference += pfd  # fuzzy d is summed over extended-compare range
 
-        pri_p, pri_fd, pri_fv = ip_[x-r-1]  # for comp(p, pri_p), pri_fd and pri_fv ignored
+        previous_pixel, pri_fd, pri_fv = ip_[x-r-1]  # for compare(p, previous_pixel), pri_fd and pri_fv ignored
+        compare_inputs = {
+                'input_variable': {
+                    'new_pixel':new_pixel,
+                    'previous_pixel':previous_pixel,
+                    'fuzzy_difference':fuzzy_difference,
+                    'fuzzy_variable':fuzzy_variable,
+                    'x':x,
+                    'frame_width':frame_width,
+                },
+                'vP': {
+                    'pri_s':pri_s, 
+                    'I':I, 
+                    'D':D, 
+                    'V':V, 
+                    'rv':rv, 
+                    'p_':p_, 
+                    'olp':olp, 
+                    'olp_':olp_,
+                },
+                'dP': {
+                    'pri_sd':pri_sd,
+                    'Id':Id,
+                    'Dd':Dd,
+                    'Vd':Vd,
+                    'rd':rd,
+                    'd_':d_,
+                    'dolp':dolp,
+                    'dolp_':dolp_,
+                },
+                'filter_variable':{
+                    'a': a,
+                    'aV': aV,
+                    'aD': aD,
+                    'min_range': min_range,
+                    'A': A,
+                    'AV': AV,
+                    'AD': AD,
+                    'r': r,
+                    'vP_': vP_,
+                    'dP_': dP_,
+                },
+            }
+
 
         pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
-        comp(p, pri_p, fd, fv, x, X,
-             pri_s, I, D, V, rv, p_, olp, olp_,
-             pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
-             a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
+        compare(compare_inputs)
 
-    return vP_, dP_  # local vPs and dPs to replace p_, A, AV, AD accumulated per comp recursion
+    return vP_, dP_  # local vPs and dPs to replace p_, A, AV, AD accumulated per compare recursion
 
 
-def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
+def incremental_derivation(a, aV, aD, min_range, A, AV, AD, r, d_):
 
-    if r > min_r:
+    if r > min_range:
         A += a; AV += aV
-    if r > min_r-1:
+    if r > min_range-1:
         AD += aD
 
-    X = len(d_)
+    frame_width = len(d_)
     ip_ = d_  # to differentiate from new d_
 
-    fd, fv, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
+    fuzzy_difference, fuzzy_variable, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
     pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
     pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
-    pri_p = ip_[0]
+    previous_pixel = ip_[0]
 
-    for x in range(1, X):
+    for x in range(1, frame_width):
 
-        p = ip_[x]  # better than pop()?
+        new_pixel = ip_[x]  # better than pop()?
+        compare_inputs = {
+                'input_variable': {
+                    'new_pixel':new_pixel,
+                    'previous_pixel':previous_pixel,
+                    'fuzzy_difference':fuzzy_difference,
+                    'fuzzy_variable':fuzzy_variable,
+                    'x':x,
+                    'frame_width':frame_width,
+                },
+                'vP': {
+                    'pri_s':pri_s, 
+                    'I':I, 
+                    'D':D, 
+                    'V':V, 
+                    'rv':rv, 
+                    'p_':p_, 
+                    'olp':olp, 
+                    'olp_':olp_,
+                },
+                'dP': {
+                    'pri_sd':pri_sd,
+                    'Id':Id,
+                    'Dd':Dd,
+                    'Vd':Vd,
+                    'rd':rd,
+                    'd_':d_,
+                    'dolp':dolp,
+                    'dolp_':dolp_,
+                },
+                'filter_variable':{
+                    'a': a,
+                    'aV': aV,
+                    'aD': aD,
+                    'min_range': min_range,
+                    'A': A,
+                    'AV': AV,
+                    'AD': AD,
+                    'r': r,
+                    'vP_': vP_,
+                    'dP_': dP_,
+                },
+            }
 
         pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
-        comp(p, pri_p, fd, fv, x, X,
-             pri_s, I, D, V, rv, p_, olp, olp_,
-             pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
-             a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
+        compare(compare_inputs)
 
-        pri_p = p
+        previous_pixel = new_pixel
 
     return vP_, dP_  # local vPs and dPs to replace d_
 
 
-def comp(p, pri_p, fd, fv, x, X,  # input variables
-         pri_s, I, D, V, rv, p_, olp, olp_,  # variables of vP
-         pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,  # variables of dP
-         a, aV, aD, min_r, A, AV, AD, r, vP_, dP_):  # filter variables and output patterns
+def compare(inputs):
+    # input variables
+    new_pixel = inputs['input_variable']['new_pixel']
+    previous_pixel = inputs['input_variable']['previous_pixel']
+    fuzzy_difference = inputs['input_variable']['fuzzy_difference']
+    fuzzy_variable = inputs['input_variable']['fuzzy_variable']
+    x = inputs['input_variable']['x']
+    frame_width = inputs['input_variable']['frame_width']
 
-    d = p - pri_p      # difference between consecutive pixels
-    m = min(p, pri_p)  # match between consecutive pixels
-    v = m - A          # relative match (predictive value) between consecutive pixels
+    # variables of vP
+    pri_s = inputs['vP']['pri_s']
+    I = inputs['vP']['I']
+    D = inputs['vP']['D']
+    V = inputs['vP']['V']
+    rv = inputs['vP']['rv']
+    p_ = inputs['vP']['p_']
+    olp = inputs['vP']['olp']
+    olp_ = inputs['vP']['olp_']
 
-    fd += d  # fuzzy d includes all shorter + current- range ds between comparands
-    fv += v  # fuzzy v includes all shorter + current- range vs between comparands
+    # variables of dP
+    pri_sd = inputs['dP']['pri_sd']
+    Id = inputs['dP']['Id']
+    Dd = inputs['dP']['Dd']
+    Vd = inputs['dP']['Vd']
+    rd = inputs['dP']['rd']
+    d_ = inputs['dP']['d_']
+    dolp = inputs['dP']['dolp']
+    dolp_ = inputs['dP']['dolp_']
+
+    # filter variables and output patterns
+    a = inputs['filter_variable']['a']
+    aV = inputs['filter_variable']['aV']
+    aD = inputs['filter_variable']['aD']
+    min_range = inputs['filter_variable']['min_range']
+    A = inputs['filter_variable']['A']
+    AV = inputs['filter_variable']['AV']
+    AD = inputs['filter_variable']['AD']
+    r = inputs['filter_variable']['r']
+    vP_ = inputs['filter_variable']['vP_']
+    dP_ = inputs['filter_variable']['dP_']
+
+    difference_pixel = new_pixel - previous_pixel      # difference between consecutive pixels
+    match_pixel = min(new_pixel, previous_pixel)  # match between consecutive pixels
+    relative_match = match_pixel - A          # relative match (predictive value) between consecutive pixels
+
+    fuzzy_difference += difference_pixel  # fuzzy difference_pixel includes all shorter + current- range ds between comparands
+    fuzzy_variable += relative_match  # fuzzy relative_match includes all shorter + current- range vs between comparands
 
 
-    # formation of value pattern vP: span of pixels forming same-sign v s:
+    # formation of value pattern vP: span of pixels forming same-sign relative_match s:
 
-    s = 1 if v > 0 else 0  # s: positive sign of v
-    if x > r+2 and (s != pri_s or x == X-1):  # if derived pri_s miss, vP is terminated
+    s = 1 if relative_match > 0 else 0  # s: positive sign of relative_match
+    if x > r+2 and (s != pri_s or x == frame_width-1):  # if derived pri_s miss, vP is terminated
 
-        if len(p_) > r+3 and pri_s == 1 and V > AV:  # min 3 comp over extended distance within p_:
+        if len(p_) > r+3 and pri_s == 1 and V > AV:  # min 3 compare over extended distance within p_:
 
-            r += 1  # r: incremental range-of-comp counter
+            r += 1  # r: incremental range-of-compare counter
             rv = 1  # rv: incremental range flag:
-            p_.append(inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_))
+            p_.append(incremental_range(a, aV, aD, min_range, A, AV, AD, r, p_))
 
-        p = I / len(p_); d = D / len(p_); v = V / len(p_)  # default to eval overlap, poss. div.comp?
-        vP = pri_s, p, I, d, D, v, V, rv, p_, olp_
-        vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont comp till Le3?
+        p = I / len(p_); difference_pixel = D / len(p_); relative_match = V / len(p_)  # default to eval overlap, poss. div.compare?
+        vP = pri_s, p, I, difference_pixel, D, relative_match, V, rv, p_, olp_
+        vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont compare till Le3?
 
         o = len(vP_), olp  # len(P_) is index of current vP
         dolp_.append(o)  # indexes of overlapping vPs and olp are buffered at current dP
 
         I, D, V, rv, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
 
-    pri_s = s   # vP (span of pixels forming same-sign v) is incremented:
+    pri_s = s   # vP (span of pixels forming same-sign relative_match) is incremented:
     olp += 1    # overlap to current dP
-    I += pri_p  # ps summed within vP
-    D += fd     # fuzzy ds summed within vP
-    V += fv     # fuzzy vs summed within vP
-    pri = pri_p, fd, fv  # inputs for recursive comp are tuples vs. pixels
-    p_.append(pri)  # buffered within vP for selective extended comp
+    I += previous_pixel  # ps summed within vP
+    D += fuzzy_difference     # fuzzy ds summed within vP
+    V += fuzzy_variable     # fuzzy vs summed within vP
+    pri = previous_pixel, fuzzy_difference, fuzzy_variable  # inputs for recursive compare are tuples vs. pixels
+    p_.append(pri)  # buffered within vP for selective extended compare
 
 
-    # formation of difference pattern dP: span of pixels forming same-sign d s:
+    # formation of difference pattern dP: span of pixels forming same-sign difference_pixel s:
 
-    sd = 1 if d > 0 else 0  # sd: positive sign of d;
-    if x > r+2 and (sd != pri_sd or x == X-1):  # if derived pri_sd miss, dP is terminated
+    sd = 1 if difference_pixel > 0 else 0  # sd: positive sign of difference_pixel;
+    if x > r+2 and (sd != pri_sd or x == frame_width-1):  # if derived pri_sd miss, dP is terminated
 
-        if len(d_) > 3 and abs(Dd) > AD:  # min 3 comp within d_:
+        if len(d_) > 3 and abs(Dd) > AD:  # min 3 compare within d_:
 
             rd = 1  # rd: incremental derivation flag:
-            d_.append(inc_der(a, aV, aD, min_r, A, AV, AD, r, d_))
+            d_.append(incremental_derivation(a, aV, aD, min_range, A, AV, AD, r, d_))
 
         pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # so all olp Ps can be directly evaluated
         dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dolp_
@@ -135,65 +250,110 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
 
         Id, Dd, Vd, rd, olp, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new dP and olp
 
-    pri_sd = sd  # dP (span of pixels forming same-sign d) is incremented:
+    pri_sd = sd  # dP (span of pixels forming same-sign difference_pixel) is incremented:
     dolp += 1    # overlap to current vP
-    Id += pri_p  # ps summed within dP
-    Dd += fd     # fuzzy ds summed within dP
-    Vd += fv     # fuzzy vs summed within dP
-    d_.append(fd)  # prior fds are buffered within dP, all of the same sign
+    Id += previous_pixel  # ps summed within dP
+    Dd += fuzzy_difference     # fuzzy ds summed within dP
+    Vd += fuzzy_variable     # fuzzy vs summed within dP
+    d_.append(fuzzy_difference)  # prior fds are buffered within dP, all of the same sign
 
     return pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_
     # for next p comparison, vP and dP increment, and output
 
+def level_1(frame_pixels):
 
-def Le1(Fp_): # last '_' distinguishes array name from element name
-
-    FP_ = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
-    Y, X = Fp_.shape  # Y: frame height, X: frame width
+    output_frame_pixels = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
+    frame_height, frame_width = frame_pixels.shape  # Y: frame height, frame_width: frame width
 
     a = 127  # minimal filter for vP inclusion
-    aV = 63  # minimal filter for incremental-range comp
-    aD = 63  # minimal filter for incremental-derivation comp
-    min_r=0  # default range of fuzzy comparison, initially 0
+    aV = 63  # minimal filter for incremental-range compare
+    aD = 63  # minimal filter for incremental-derivation compare
+    min_range = 0  # default range of fuzzy comparison, initially 0
 
-    for y in range(Y):
+    for y in range(frame_height):
 
-        ip_ = Fp_[y, :]  # y is index of new line ip_
+        new_line = frame_pixels[y, :]  # y is index of new line ip_
 
-        if min_r == 0: A = a; AV = aV  # actual filters, incremented per comp recursion
-        else: A = 0; AV = 0  # if r > min_r
+        if min_range == 0:
+            A = a
+            AV = aV  # actual filters, incremented per compare recursion
+        else:
+            A = 0
+            AV = 0  # if r > min_range
 
-        if min_r <= 1: AD = aD
-        else: AD = 0
+        if min_range <= 1:
+            AD = aD
+        else:
+            AD = 0
 
-        fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
+        fuzzy_difference, fuzzy_variable, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
         pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
         pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
-        pri_p = ip_[0]
+        previous_pixel = new_line[0]
 
-        for x in range(1, X):  # cross-compares consecutive pixels
+        for x in range(1, frame_width):  # cross-compares consecutive pixels
 
-            p = ip_[x]  # new pixel for comp to prior pixel, could use pop()?
+            new_pixel = new_line[x]  # new pixel for compare to prior pixel, could use pop()?
+
+            compare_inputs = {
+                'input_variable': {
+                    'new_pixel':new_pixel,
+                    'previous_pixel':previous_pixel,
+                    'fuzzy_difference':fuzzy_difference,
+                    'fuzzy_variable':fuzzy_variable,
+                    'x':x,
+                    'frame_width':frame_width,
+                },
+                'vP': {
+                    'pri_s':pri_s, 
+                    'I':I, 
+                    'D':D, 
+                    'V':V, 
+                    'rv':rv, 
+                    'p_':p_, 
+                    'olp':olp, 
+                    'olp_':olp_,
+                },
+                'dP': {
+                    'pri_sd':pri_sd,
+                    'Id':Id,
+                    'Dd':Dd,
+                    'Vd':Vd,
+                    'rd':rd,
+                    'd_':d_,
+                    'dolp':dolp,
+                    'dolp_':dolp_,
+                },
+                'filter_variable':{
+                    'a': a,
+                    'aV': aV,
+                    'aD': aD,
+                    'min_range': min_range,
+                    'A': A,
+                    'AV': AV,
+                    'AD': AD,
+                    'r': r,
+                    'vP_': vP_,
+                    'dP_': dP_,
+                },
+            }
 
             pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
-            comp(p, pri_p, fd, fv, x, X,
-                 pri_s, I, D, V, rv, p_, olp, olp_,
-                 pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
-                 a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
+            compare(compare_inputs)
 
-            pri_p = p  # prior pixel, pri_ values are always derived before use
+            previous_pixel = new_pixel  # prior pixel, pri_ values are always derived before use
 
         LP_ = vP_, dP_
-        FP_.append(LP_)  # line of patterns is added to frame of patterns, y = len(FP_)
+        output_frame_pixels.append(LP_)  # line of patterns is added to frame of patterns, y = len(output_frame_pixels)
 
-    return FP_  # output to level 2
+    return output_frame_pixels  # output to level 2
 
-f = misc.face(gray=True)  # input frame of pixels
-f = f.astype(int)
-print(f)
-Le1(f)
 
 # at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
 # at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
 
+if __name__ == '__main__':
+    frame_pixels = misc.face(gray=True)  # input frame of pixels
+    frame_pixels = frame_pixels.astype(int)
+    level_1(frame_pixels)
