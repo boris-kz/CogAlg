@@ -15,9 +15,9 @@ from collections import deque
     Level 1 has 4 steps of encoding, incremental per line defined by vertical coordinate y:
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
-    y-1: ycomp()   t_ array of tuples, vertical comp, der.comb -> 1D P,
-    y-2: comp_P()  P_ array of 1D patterns, vertical comp, eval, comb -> PP ) CP
-    y-3: term_PP() PP_ array of 2D patterns PP or CP, eval for termination and consolidation
+    y-1: ycomp()   t_ array of tuples, vertical comp, 1D comb.in form_P,
+    y-2: comp_P()  P_ array of 1D patterns, vertical comp, 2D comb.in form_B, form_PP
+    y-3: term_PP() PP_ array of 2D patterns PPs, evaluated for termination and consolidation
 '''
 
 def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
@@ -50,7 +50,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 
     A = a * r
 
-    for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels, forms gradients
+    for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels, forms vertex gradients
 
         x += 1
         p, d, m = t
@@ -64,7 +64,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
         vg = _m + my - A  # gradient of predictive value (relative match) at prior-line _p, -> vG
         fv += vg          # all shorter + current- range vg s within extended quadrant
 
-        t2 = p, d, dy, m, my  # fd, fv -> type-specific g, _g; all are accumulated within P:
+        t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
 
         # forms 1D slice of value pattern vP: horizontal span of same-sign vg s with associated vars:
 
@@ -79,27 +79,27 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     # line ends, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient?
     # vP, dP term, no initialization:
 
-    dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)  # olp: selected alt?
+    dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)  # olp: total overlap by stronger alt_Ps
     volp = vP[7]; valt = len(dP_), volp; valt_.append(valt)
 
     vP_, _vP_, term_vP_ = form_B(valt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_
     dP_, _dP_, term_dP_ = form_B(dalt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)  # empty _dP_
 
-    return vP_, dP_, term_vP_, term_dP_  # with refs to vPPs, dPPs, vCPs, dCPs from comp_P, adjusted by cons_P2
+    return vP_, dP_, term_vP_, term_dP_  # with refs to vPPs, dPPs from comp_P, adjusted by cons_P2?
 
 
-def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 1D slices of 2D patterns
+def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 1D slices of a blob
 
-    p, d, dy, m, my = t2
-    pri_s, I, D, Dy, M, My, G, olp, e_ = P  # unpacked to increment or initialize vars, +_G to eval alt_P rdn?
+    p, d, dy, m, my = t2  # 2D tuple per pixel
+    pri_s, I, D, Dy, M, My, G, olp, e_ = P  # to increment or initialize vars, also _G to eval alt_P rdn?
 
     s = 1 if g > 0 else 0
     if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and compared to overlapping _Ps:
 
         P_, _P_, term_P_ = form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
-        _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P' _alt_, total olp = len(e_):
+        _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P_alt_, total olp = len(e_):
         _alt_.append(_alt)
-        I, D, Dy, M, My, G, e_, alt_ = 0,0,0,0,0,0,[],[]  # initialized P and alt_
+        I, D, Dy, M, My, G, e_, alt_ = 0,0,0,0,0,0,[],[]  # P and alt_ are initialized
 
     # continued or initialized P vars are accumulated:
 
@@ -115,7 +115,7 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     else:
         e_.append(g)  # prior same-line d gradient, buffered for selective inc_der comp
 
-    P = s, I, D, Dy, M, My, G, e_  # alt_ is accumulated in ycomp, eval for PP cost before comp_P?
+    P = s, I, D, Dy, M, My, G, olp, e_  # alt_ is accumulated in ycomp, for PP cost eval before comp_P?
 
     return s, alt_, _alt_, P, P_, _P_, term_P_
 
@@ -125,65 +125,90 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
 def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms same type and sign blob, 2D-specific
 
     fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
-    root_ = deque()  # lower-line matches per _P, to transfer terminated _P to connected _P_fork_?
+    root_ = deque()  # lower-line matches per _P, to transfer terminated _P to connected _P_fork_
 
-    _fork_ = []  # higher-line matches per _P: same-sign P2 with optional vPP and dPP, for re-input
-    buff_ = deque()  # generic buffer; no _root_ with root_, term_ at term_PP? no ee_: Py_( P( e_?
+    _vPP_, _dPP_ = deque(), deque() # forks formed by comp_P, also roots: vPP_, dPP_? no local _root_
 
     _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
     s = P[0]; e_ = P[7]  # sign and array of lower-level inputs per pattern
 
     while x >= _ix:  # while P and _P horizontal overlap
 
-        _P = _P_.popleft()
-        _s = _P[0]; _ix = _P[1]
+        oG = 0  # overlapping gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # coordinate of current P element
-        oG = 0  # overlapping gradient oG += g, approx: oG = G * mw / len(e_)
+        _P = _P_.popleft()
 
-        if s == _s:  # P2 inclusion, rdn oG eval? 1D P rep and comp, max oG fork represents fork_)Py_
+        if s == _P[0]:  # = if s == _s:
 
-            while ex > _ix:
-                for i in range (len(e_)):
-                    g = e_[i]; oG += g; ex += 1
+            while ex > _P[1]:  # _ix = _P[1]
+                for e in e_:  # if dP, e is tuple in vP
+                    oG += e; ex += 1  # oG accumulation, not PM, PD: per comp_P only
 
-            fork = oG, _P
-            fork_.append(fork)
+            fork = oG, _P # alt_, blob_, _vPP_, _dPP_ within _P, or separate?
+            fork_.append(fork)  # _P inclusion in P
+            root_.append(P)  # P inclusion in _P, to track continuing roots in form_PP
 
-    while len(fork_) > 0:  # weaker-fork redundancy is incremented
-
-        max_oG = 0; rdn = 0  # number of higher-value Ps in fork_, + alt Ps in alt_
-        fork = fork_.pop()  # cached till len(fork_) = 0
-        oG = fork[0]  # rdn_oG = fork[1]; PM = fork[2]; rdn_PM = fork[3]; PD = fork[4]; rdn_PD = fork[5]
-
-        for i in range(len(fork_)):  # len(fork_) > 1: remaining forks are reused vs. popped:
-
-            _oG = fork_[i][0]  # criterion comp, redundancy assignment, max if rdn=0:
-            if oG > _oG: fork_[i][1] += 1
-            else: rdn += 1
+            '''
+            also B accumulation, to evaluate for re-oriented 1D scan and comp:
+            I2 += P  
+            D2 += D; Dy2 += Dy  
+            M2 += M; My2 += My  # V = M - 2a * W?
+            G2 += G  # possibly fuzzy
+            e2_+= e_ # blob area = len(e2_)
             
-            if oG > max_oG: 
-                if max_oG > 0: buff_.appendleft(max_fork); max_fork = fork
-            else: buff_.appendleft(fork)  # except for max_fork
+            alt2_ += alt_ # or replaced by alt_blob_, with olp2 per alt2 (P2)? 
+            olp2 += olp # area overlap to stronger alt2_, after alt blobs eval?
+            '''
 
-    if max_oG > 0:  # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
+    eval_Q(0, fork_, A)  # fork_ eval for comp_P -> _vPP_, _dPP_, vPP_, dPP_ append
+    eval_Q(1, _vPP_, A)  # _vPP_ eval for form_PP(vPP), conditional?
+    eval_Q(2, _dPP_, A)  # _dPP_ eval for form_PP(dPP)
 
-       if max_oG > A * rdn:
-          comp_P(max_fork)  # max_fork (if any) is local, updates _P and term_P_?
-
-          while len(buff_) > 0:
-              fork = buff_.pop
-
-              if fork[0] > A * fork[1]:
-                 comp_P(fork)  # then selective fork_.append(fork)?
-
-       cont = max_fork, fork_  # P continuity over higher line, regardless of selection?
-
-    return P_, _P_, term_P_  # also alt_? _P_ and term_P_ include _P and PPs, fork_ is accumulated in comp_P?
+    return P_, _P_, term_P_  # _P and term_P include _P, alt_?, blob_, _vPP_, _dPP_ formed in comp_P
 
 
-def comp_P(P, fork, x):  # var comp -> var Ps (dxP: direction), PM -> vPP, PD -> dPP: dim.reduced axis | contour
+def eval_Q(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append, then _PP_ eval for form_PP:
 
-    ddx = 0 # optional; no more than one vPP and dPP per fork, same per _fork?
+    buff_ = deque()  # generic buffer; term_ at term_PP? no ee_: Py_( P( e_?
+    max = 0  # maximal val: oG for fork | PM for vPP | PD for dPP
+    rdn = 0  # number of higher-val Ps in fork_, + alt Ps in alt_?
+
+    while len(fork_) > 0: # increment weaker-forks redundancy
+
+        fork = fork_.pop; val = fork[0]
+
+        for fork in fork_:  # remaining forks are reused vs. popped
+
+            _val = fork[0]  # criterion comp, redundancy assignment, max if rdn=0:
+            if val > _val: fork[1] += 1  # _rdn += 1
+            else: rdn += 1
+
+            if val > max:  # separate _vPP_, _dPP_ per P, appended within comp_P?
+                if max > 0: buff_.appendleft(max_fork); max_fork = fork
+            else:
+                buff_.appendleft(fork)  # val-ordered buff_, vs. C-ordered fork_? except for max_fork?
+
+    if max > 0:  # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
+
+        if max > A * rdn:  # max_fork is local, represents fork_)Py_?
+
+            if type == 0: comp_P(max_fork)  # updates _P and term_
+            else: form_PP(max_fork)  # same for vPP and dPP?
+
+            while len(buff_) > 0:
+                fork = buff_.pop
+
+                if fork[0] > A * fork[1]:  # rdn = fork[1]
+
+                    if type == 0: comp_P(fork)
+                    else: form_PP(fork)  # then selective fork_.append(fork)?
+
+        cont = max_fork, fork_  # P continuity over higher line, regardless of selection?
+
+
+def comp_P(P, fork, x, vPP_, dPP_):  # -> var Ps (dxP: direction), vPP, dPP: dim. reduced axis | contour
+
+    ddx = 0 # optional
 
     s, I, D, Dy, M, My, G, e_, oG, rdn = P  # select alt_ per fork, no olp: = mx?
     _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, r, _alt_, _fork_ = _P  # fork = r, _alt_, _fork_, P?
@@ -191,13 +216,14 @@ def comp_P(P, fork, x):  # var comp -> var Ps (dxP: direction), PM -> vPP, PD ->
     ix = x - len(e_)  # len(e_) or w: P width, initial coordinate of P, for output only?
 
     dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
-    mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx - a_mx, form_P(vxP), vs. mx = -(a_dx - dx): discont?
+    mx = x - _ix
+    if ix > _ix: mx -= ix - _ix  # x overlap, mx - a_mx, form_P(vxP), vs. discont: mx = -(a_dx - dx)?
 
     dw = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + Dw triggers adjustment of derivatives or _vars?
     mw = min(len(e_), len(_e_))  # w: P width = len(e_), relative overlap: mx / w, similarity: mw?
 
     # ddx and dw signs correlate, dx (position) and dw (dimension) signs don't correlate?
-    # comp(S| aS(L rdn norm) in positive eM = mx + mw, more predictive than eD? or input comp: CLIDV?
+    # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mw, more predictive than eD?
 
     dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
     dD = D - _D; mD = min(D, _D)
@@ -206,8 +232,7 @@ def comp_P(P, fork, x):  # var comp -> var Ps (dxP: direction), PM -> vPP, PD ->
     PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
     PM = mx + mw + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?
 
-    # eval after comp, for rdn to alt_ and fork_ per P
-
+    # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_B?
 
         _PM = fork_[i][2]
         if PM > _PM: fork_[i][3] += 1
