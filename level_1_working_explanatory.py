@@ -18,7 +18,8 @@ def incremental_range(a, aV, aD, min_range, A, AV, AD, r, p_):
     if r > min_range-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
         AD += aD     # aV: min |D| for compare() recursion over d_[w], AD: min |D| for recursion
 
-    frame_width = len(p_)
+    frame_width = len(p_)  
+    # BK: this is recursing pattern width now, not a global frame width
     ip_ = p_  # to differentiate from new p_
 
     vP_, dP_ = [],[]  # r was incremented in higher-scope p_
@@ -35,16 +36,19 @@ def incremental_range(a, aV, aD, min_range, A, AV, AD, r, p_):
         previous_pixel, pri_fd, pri_fv = ip_[x-r-1]  # for compare(p, previous_pixel), pri_fd and pri_fv ignored
         compare_inputs = {
                 'input_variable': {
-                    'new_pixel':new_pixel,
+                    'new_pixel':new_pixel,  
+                    '' BK: what does this repetition do? ''
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
-                    'fuzzy_variable':fuzzy_variable,
+                    'fuzzy_variable':fuzzy_variable,  
+                    # no, this is fuzzy predictive predictive predictive predictive value: relative match = m - A
                     'x':x,
                     'frame_width':frame_width,
                 },
                 'vP': {
-                    'pri_s':pri_s, 
-                    'I':I, 
+                    'pri_s':pri_s, # BK: this is boolean, but treated as integer for simplicity
+                    # all other vars are integers, except for arrays which end with _
+                    'I':I, # BK: capitalized variables are small-case variables summed over pattern width
                     'D':D, 
                     'V':V, 
                     'rv':rv, 
@@ -62,12 +66,14 @@ def incremental_range(a, aV, aD, min_range, A, AV, AD, r, p_):
                     'dolp':dolp,
                     'dolp_':dolp_,
                 },
-                'filter_variable':{
+                'filter_variable':{  
+                    # BK: initialized | feedback value if starts with a
                     'a': a,
                     'aV': aV,
                     'aD': aD,
                     'min_range': min_range,
-                    'A': A,
+                     # BK: initialized *= number of inc_rng recursions if starts with A
+                    'A': A, 
                     'AV': AV,
                     'AD': AD,
                     'r': r,
@@ -91,6 +97,7 @@ def incremental_derivation(a, aV, aD, min_range, A, AV, AD, r, d_):
         AD += aD
 
     frame_width = len(d_)
+    # BK: this is recursing pattern width, not a global frame width
     ip_ = d_  # to differentiate from new d_
 
     fuzzy_difference, fuzzy_variable, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
@@ -108,6 +115,7 @@ def incremental_derivation(a, aV, aD, min_range, A, AV, AD, r, d_):
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
                     'fuzzy_variable':fuzzy_variable,
+                    # no, this is fuzzy predictive value: relative match = m - A
                     'x':x,
                     'frame_width':frame_width,
                 },
@@ -154,11 +162,13 @@ def incremental_derivation(a, aV, aD, min_range, A, AV, AD, r, d_):
 
 
 def compare(inputs):
-    # input variables
+    # input variables 
+    '' BK: what does this repetition do? ''
     new_pixel = inputs['input_variable']['new_pixel']
     previous_pixel = inputs['input_variable']['previous_pixel']
     fuzzy_difference = inputs['input_variable']['fuzzy_difference']
     fuzzy_variable = inputs['input_variable']['fuzzy_variable']
+    # no, this is fuzzy value: relative match = m - A
     x = inputs['input_variable']['x']
     frame_width = inputs['input_variable']['frame_width']
 
@@ -200,7 +210,7 @@ def compare(inputs):
 
     fuzzy_difference += difference_pixel  # fuzzy difference_pixel includes all shorter + current- range ds between comparands
     fuzzy_variable += relative_match  # fuzzy relative_match includes all shorter + current- range vs between comparands
-
+    # no, this is fuzzy predictive value = relative match
 
     # formation of value pattern vP: span of pixels forming same-sign relative_match s:
 
@@ -227,6 +237,8 @@ def compare(inputs):
     I += previous_pixel  # ps summed within vP
     D += fuzzy_difference     # fuzzy ds summed within vP
     V += fuzzy_variable     # fuzzy vs summed within vP
+    # no, this is fuzzy predictive value: relative match = m - A
+    
     pri = previous_pixel, fuzzy_difference, fuzzy_variable  # inputs for recursive compare are tuples vs. pixels
     p_.append(pri)  # buffered within vP for selective extended compare
 
@@ -255,6 +267,8 @@ def compare(inputs):
     Id += previous_pixel  # ps summed within dP
     Dd += fuzzy_difference     # fuzzy ds summed within dP
     Vd += fuzzy_variable     # fuzzy vs summed within dP
+    # no, this is fuzzy predictive value: relative match = m - A
+    
     d_.append(fuzzy_difference)  # prior fds are buffered within dP, all of the same sign
 
     return pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_
@@ -263,6 +277,8 @@ def compare(inputs):
 def level_1(frame_pixels):
 
     output_frame_pixels = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
+    # this is a frame of vPs, not of pixels
+    
     frame_height, frame_width = frame_pixels.shape  # Y: frame height, frame_width: frame width
 
     a = 127  # minimal filter for vP inclusion
@@ -286,7 +302,7 @@ def level_1(frame_pixels):
         else:
             AD = 0
 
-        fuzzy_difference, fuzzy_variable, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
+        fuzzy_difference, fuzzy_value, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
         pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
         pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
@@ -301,7 +317,7 @@ def level_1(frame_pixels):
                     'new_pixel':new_pixel,
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
-                    'fuzzy_variable':fuzzy_variable,
+                    'fuzzy_variable':fuzzy_value,
                     'x':x,
                     'frame_width':frame_width,
                 },
@@ -345,9 +361,9 @@ def level_1(frame_pixels):
             previous_pixel = new_pixel  # prior pixel, pri_ values are always derived before use
 
         LP_ = vP_, dP_
-        output_frame_pixels.append(LP_)  # line of patterns is added to frame of patterns, y = len(output_frame_pixels)
+        output_frame_patterns.append(LP_)  # line of patterns is added to frame of patterns, y = len(output_frame_pixels)
 
-    return output_frame_pixels  # output to level 2
+    return output_frame_patterns  # output to level 2
 
 
 # at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
