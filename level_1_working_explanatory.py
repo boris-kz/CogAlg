@@ -19,7 +19,6 @@ def incremental_range(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivatio
         AD += aD_min_inc_derivation_filter     # aV: min |D| for compare() recursion over d_[w], AD: min |D| for recursion
 
     current_pattern_width = len(p_)  
-    # BK: this is recursing pattern width now, not a global frame width
     ip_ = p_  # to differentiate from new p_
 
     vP_, dP_ = [],[]  # inc_compare_counter_range was incremented in higher-scope p_
@@ -39,11 +38,12 @@ def incremental_range(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivatio
                     'new_pixel':new_pixel,  
                     # ''' BK: what does this repetition do? '''
                     # KK: Basically it is encapsulating and grouping the arguments. 
+                    # BK: so you can change all of their instances at once?
+                    
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
                     'fuzzy_value':fuzzy_value,  
-                    # no, this is fuzzy predictive predictive predictive predictive value: relative match = m - A
-                    'width_index':width_index,
+                    'width_index':width_index, 
                     'current_pattern_width':current_pattern_width,
                 },
                 'vP': {
@@ -98,7 +98,6 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
         AD += aD_min_inc_derivation_filter
 
     current_pattern_width = len(d_)
-    # BK: this is recursing pattern width, not a global frame width
     ip_ = d_  # to differentiate from new d_
 
     fuzzy_difference, fuzzy_value, inc_compare_counter_range, vP_, dP_ = 0, 0, 0, [], []  # inc_compare_counter_range is initialized for each d_
@@ -108,6 +107,7 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
     previous_pixel = ip_[0]
 
     for index in range(1, current_pattern_width):
+        # BK: isn't 'i' self-explanatory?
 
         new_pixel = ip_[index]  # better than pop()?
         compare_inputs = {
@@ -116,7 +116,6 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
                     'fuzzy_value':fuzzy_value,
-                    # no, this is fuzzy predictive value: relative match = m - A
                     'index':index,
                     'current_pattern_width':current_pattern_width,
                 },
@@ -164,12 +163,10 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
 
 def compare(inputs):
     # input variables 
-    ''' BK: what does this repetition do? '''
     new_pixel = inputs['input_variable']['new_pixel']
     previous_pixel = inputs['input_variable']['previous_pixel']
     fuzzy_difference = inputs['input_variable']['fuzzy_difference']
     fuzzy_value = inputs['input_variable']['fuzzy_value']
-    # no, this is fuzzy value: relative match = m - A
     width_index = inputs['input_variable']['width_index']
     current_pattern_width = inputs['input_variable']['current_pattern_width']
 
@@ -211,7 +208,6 @@ def compare(inputs):
 
     fuzzy_difference += difference_pixel  # fuzzy difference_pixel includes all shorter + current- range ds between comparands
     fuzzy_value += relative_match  # fuzzy relative_match includes all shorter + current- range vs between comparands
-    # no, this is fuzzy predictive value = relative match
 
     # formation of value pattern vP: span of pixels forming same-sign relative_match s:
 
@@ -268,7 +264,6 @@ def compare(inputs):
     Id += previous_pixel  # ps summed within dP
     Dd += fuzzy_difference     # fuzzy ds summed within dP
     Vd += fuzzy_value     # fuzzy vs summed within dP
-    # no, this is fuzzy predictive value: relative match = m - A
     
     d_.append(fuzzy_difference)  # prior fds are buffered within dP, all of the same sign
 
@@ -359,7 +354,7 @@ def level_1(frame_pixels):
             pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
             compare(compare_inputs)
 
-            previous_pixel = new_pixel  # prior pixel, pri_ values are always derived before use
+            previous_pixel = new_pixel  # prior pixel, pri_ values are formed by prior run of compare
 
         LP_ = vP_, dP_
         output_frame_patterns.append(LP_)  # line of patterns is added to frame of patterns, height_index = len(output_frame_patterns)
