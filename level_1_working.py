@@ -105,10 +105,10 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
         o = len(vP_), olp  # len(P_) is index of current vP
         dolp_.append(o)  # indexes of overlapping vPs and olp are buffered at current dP
 
-        I, D, V, rv, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
+        I, D, V, rv, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp_
 
     pri_s = s   # vP (span of pixels forming same-sign v) is incremented:
-    olp += 1    # overlap to current dP
+    olp += 1    # overlap to concurrent dP
     I += pri_p  # ps summed within vP
     D += fd     # fuzzy ds summed within vP
     V += fv     # fuzzy vs summed within vP
@@ -133,10 +133,10 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
         o = len(dP_), dolp  # len(P_) is index of current dP
         olp_.append(o)  # indexes of overlapping dPs and dolps are buffered at current vP
 
-        Id, Dd, Vd, rd, olp, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new dP and olp
+        Id, Dd, Vd, rd, olp, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new dP and dolp_
 
     pri_sd = sd  # dP (span of pixels forming same-sign d) is incremented:
-    dolp += 1    # overlap to current vP
+    dolp += 1    # overlap to concurrent vP
     Id += pri_p  # ps summed within dP
     Dd += fd     # fuzzy ds summed within dP
     Vd += fv     # fuzzy vs summed within dP

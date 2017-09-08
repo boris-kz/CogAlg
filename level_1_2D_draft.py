@@ -15,8 +15,8 @@ from collections import deque
     Level 1 has 4 steps of encoding, incremental per line defined by vertical coordinate y:
 
     y:   comp()    p_ array of pixels, lateral comp -> p,m,d,
-    y-1: ycomp()   t_ array of tuples, vertical comp, 1D comb.in form_P,
-    y-2: comp_P()  P_ array of 1D patterns, vertical comp, 2D comb.in form_B, form_PP
+    y-1: ycomp()   t_ array of tuples, vertical comp, 1D comb in form_P,
+    y-2: comp_P()  P_ array of 1D patterns, vertical comp, 2D comb in form_B, form_PP
     y-3: term_PP() PP_ array of 2D patterns PPs, evaluated for termination and consolidation
 '''
 
@@ -33,7 +33,8 @@ def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: p
         t_.append(t)
         pri_p = p
 
-    t = pri_p, 0, 0; t_.append(t)  # last pixel is not compared
+    t = pri_p, 0, 0
+    t_.append(t)  # last pixel is not compared
     return t_
 
 
@@ -46,7 +47,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     pri_s, I, D, Dy, M, My, G, olp, e_ = 0,0,0,0,0,0,0,0,[]  # also _G: interference | redundancy?
 
     vP = pri_s, I, D, Dy, M, My, G, olp, e_  # _fork_, _fork_vPP_, _fork_dPP_ for comp_P: += in ycomp?
-    dP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ included at term, rdn from alt_ eval in comp_P?
+    dP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ and rdn over alt_ are included in P by comp_P?
 
     A = a * r
 
@@ -94,7 +95,7 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     pri_s, I, D, Dy, M, My, G, olp, e_ = P  # to increment or initialize vars, also _G to eval alt_P rdn?
 
     s = 1 if g > 0 else 0
-    if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and compared to overlapping _Ps:
+    if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and merged with overlapping _Ps
 
         P_, _P_, term_P_ = form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
         _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P_alt_, total olp = len(e_):
@@ -107,11 +108,11 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     I += p    # p s summed within P
     D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
     M += m; My += my  # lateral and vertical M for P2 orient, vs V gradient eval, V = M - 2a * W?
-    G += g  # fd | fv summed to define P value, with directional resolution loss
+    G += g  # fd | fv gradient summed to define P value, with directional resolution loss
 
     if type == 0:
         pri = p, g, _g  # v gradient, also d, dy, m, my for fuzzy accumulation within P-specific r?
-        e_.append(pri)  # prior same-line vertex, buffered for selective inc_rng comp
+        e_.append(pri)  # pattern element: prior same-line vertex, buffered for selective inc_rng comp
     else:
         e_.append(g)  # prior same-line d gradient, buffered for selective inc_der comp
 
@@ -122,10 +123,12 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     # draft below:
 
 
-def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms same type and sign blob, 2D-specific
+def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # 2D specific,
+
+    # merges vertically contiguous and horizontally overlapping same-type and sign Ps into blob
 
     fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
-    root_ = deque()  # lower-line matches per _P, to transfer terminated _P to connected _P_fork_
+    # root_: lower-line matches per _P, transfer terminated _P to next _fork_, added to P_ at line end
 
     _vPP_, _dPP_ = deque(), deque() # forks formed by comp_P, also roots: vPP_, dPP_? no local _root_
 
@@ -136,7 +139,9 @@ def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms same type and sig
 
         oG = 0  # overlapping gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # coordinate of current P element
+
         _P = _P_.popleft()
+        _P, root_ = _P  # _Ps are updated by root_.append(P) and | or termination?
 
         if s == _P[0]:  # = if s == _s:
 
@@ -144,66 +149,74 @@ def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms same type and sig
                 for e in e_:  # if dP, e is tuple in vP
                     oG += e; ex += 1  # oG accumulation, not PM, PD: per comp_P only
 
-            fork = oG, _P # alt_, blob_, _vPP_, _dPP_ within _P, or separate?
+            fork = oG, _P # alt_, blob_, _vPP_, _dPP_ are within _P, or separate?
             fork_.append(fork)  # _P inclusion in P
             root_.append(P)  # P inclusion in _P, to track continuing roots in form_PP
 
             '''
-            also B accumulation, to evaluate for re-oriented 1D scan and comp:
+            accumulation within B, to evaluate for re-oriented 1D scan and comp, at term or split:
             I2 += P  
             D2 += D; Dy2 += Dy  
             M2 += M; My2 += My  # V = M - 2a * W?
             G2 += G  # possibly fuzzy
-            e2_+= e_ # blob area = len(e2_)
+            e2_+= e_ # blob area = len(e2_), or no e2_: Py_( P( e_?
             
             alt2_ += alt_ # or replaced by alt_blob_, with olp2 per alt2 (P2)? 
             olp2 += olp # area overlap to stronger alt2_, after alt blobs eval?
             '''
 
-    eval_Q(0, fork_, A)  # fork_ eval for comp_P -> _vPP_, _dPP_, vPP_, dPP_ append
-    eval_Q(1, _vPP_, A)  # _vPP_ eval for form_PP(vPP), conditional?
-    eval_Q(2, _dPP_, A)  # _dPP_ eval for form_PP(dPP)
+    fork_ = fork_eval(0, fork_, A)  # fork_ eval for comp_P, which returns _vPP_, _dPP_, vPP_, dPP_
+    _vPP_ = fork_eval(1, _vPP_, A)  # _vPP_ eval for form_PP(vPP), if len(_vPP_) > 0?
+    _dPP_ = fork_eval(2, _dPP_, A)  # _dPP_ eval for form_PP(dPP), if len(_dPP_) > 0?
+
+    P = P, fork_, _vPP_, _dPP_
+    P_.append(P)
 
     return P_, _P_, term_P_  # _P and term_P include _P, alt_?, blob_, _vPP_, _dPP_ formed in comp_P
 
 
-def eval_Q(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append, then _PP_ eval for form_PP:
+def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append, then eval for form_PP
 
-    buff_ = deque()  # generic buffer; term_ at term_PP? no ee_: Py_( P( e_?
+    select_ = [] # not value-ordered? for fork comp eval, no buff_
+    # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
+
     max = 0  # maximal val: oG for fork | PM for vPP | PD for dPP
-    rdn = 0  # number of higher-val Ps in fork_, + alt Ps in alt_?
+    rdn = 0  # number of higher-val Ps in fork_ + alt Ps in alt_?
 
-    while len(fork_) > 0: # increment weaker-forks redundancy
+    for fork in fork_: # fork_ is preserved for assignment to final max_fork
 
-        fork = fork_.pop; val = fork[0]
+        val = fork[0]  # selection criterion: oG for fork | PM for vPP | PD for dPP
+        if val > A:  # comp to _val in select_, increment weaker-fork rdn, eval for inclusion in select_
 
-        for fork in fork_:  # remaining forks are reused vs. popped
+            for select in select_:  # forks are re-evaluated at each rdn increment
 
-            _val = fork[0]  # criterion comp, redundancy assignment, max if rdn=0:
-            if val > _val: fork[1] += 1  # _rdn += 1
-            else: rdn += 1
+                _val = select[0]
+                if val > _val:  # criterion comp
 
-            if val > max:  # separate _vPP_, _dPP_ per P, appended within comp_P?
-                if max > 0: buff_.appendleft(max_fork); max_fork = fork
-            else:
-                buff_.appendleft(fork)  # val-ordered buff_, vs. C-ordered fork_? except for max_fork?
+                    select[1] += 1  # = _rdn += 1, redundancy assignment to a weaker fork
+                    if _val < A * select[1]: del (select)  # delete select from select_
 
-    if max > 0:  # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
+                else: rdn += 1
 
-        if max > A * rdn:  # max_fork is local, represents fork_)Py_?
+            if val > A * rdn:  # inclusion after full select_ rdn assignment
+                select_.append(fork)
 
-            if type == 0: comp_P(max_fork)  # updates _P and term_
-            else: form_PP(max_fork)  # same for vPP and dPP?
+    while len(select_) > 0:
+        fork = select_.pop  # no eval, already selected
 
-            while len(buff_) > 0:
-                fork = buff_.pop
+        if type == 0: comp_P(fork)  # that also changes fork in original fork_?
+        else: form_PP(type, fork)  # separate _vPP_, _dPP_ per P were appended by comp_P
 
-                if fork[0] > A * fork[1]:  # rdn = fork[1]
+        '''
+        if val > max:  # max val in select_
+            max = val; max_fork = fork  # for initial access? 
+            
+    fork_ = max_fork, fork_  # P continuity over higher line, regardless of comp_P
+    
+    or no max, access by incr rdn?
+    '''
 
-                    if type == 0: comp_P(fork)
-                    else: form_PP(fork)  # then selective fork_.append(fork)?
-
-        cont = max_fork, fork_  # P continuity over higher line, regardless of selection?
+    return fork_ 
 
 
 def comp_P(P, fork, x, vPP_, dPP_):  # -> var Ps (dxP: direction), vPP, dPP: dim. reduced axis | contour
