@@ -125,12 +125,12 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
 
 def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # 2D specific,
 
-    # merges vertically contiguous and horizontally overlapping same-type and sign Ps into blob
+    # merges vertically contiguous and horizontally overlapping same-type and same-sign Ps into blob
 
-    fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
-    # root_: lower-line matches per _P, transfer terminated _P to next _fork_, added to P_ at line end
+    fork_ = deque  # higher-line matches per P, to represent terminated P and redun for _P eval:
+    _vPP_, _dPP_ = deque, deque  # forks formed by comp_P, also roots: vPP_, dPP_? no local _root_
 
-    _vPP_, _dPP_ = deque(), deque() # forks formed by comp_P, also roots: vPP_, dPP_? no local _root_
+    # root_: lower-line matches per _P (move terminated _P to next _fork_): added at P ->_P conversion
 
     _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
     s = P[0]; e_ = P[7]  # sign and array of lower-level inputs per pattern
@@ -141,7 +141,7 @@ def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # 2D specific,
         ex = x  # coordinate of current P element
 
         _P = _P_.popleft()
-        _P, root_ = _P  # _Ps are updated by root_.append(P) and | or termination?
+        _P, root_ = _P  # _Ps are updated by root_.append(P), re-input unless termination?
 
         if s == _P[0]:  # = if s == _s:
 
@@ -166,8 +166,9 @@ def form_B(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # 2D specific,
             '''
 
     fork_ = fork_eval(0, fork_, A)  # fork_ eval for comp_P, which returns _vPP_, _dPP_, vPP_, dPP_
-    _vPP_ = fork_eval(1, _vPP_, A)  # _vPP_ eval for form_PP(vPP), if len(_vPP_) > 0?
-    _dPP_ = fork_eval(2, _dPP_, A)  # _dPP_ eval for form_PP(dPP), if len(_dPP_) > 0?
+    # if len(_PP_) > 0:?
+    _vPP_ = fork_eval(1, _vPP_, A)  # _vPP_ eval for form_PP(vPP): 2D value pattern, rdn alt_ dPPs
+    _dPP_ = fork_eval(2, _dPP_, A)  # _dPP_ eval for form_PP(dPP): 2D difference pattern, rdn alt_ vPPs
 
     P = P, fork_, _vPP_, _dPP_
     P_.append(P)
@@ -179,8 +180,6 @@ def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append,
 
     select_ = [] # not value-ordered? for fork comp eval, no buff_
     # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
-
-    max = 0  # maximal val: oG for fork | PM for vPP | PD for dPP
     rdn = 0  # number of higher-val Ps in fork_ + alt Ps in alt_?
 
     for fork in fork_: # fork_ is preserved for assignment to final max_fork
@@ -212,15 +211,18 @@ def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append,
             max = val; max_fork = fork  # for initial access? 
             
     fork_ = max_fork, fork_  # P continuity over higher line, regardless of comp_P
-    
-    or no max, access by incr rdn?
+    max val: oG for fork | PM for vPP | PD for dPP
+    or fork access by incr rdn (max rdn for non-select) | coord, no separate max?
     '''
 
-    return fork_ 
+    return fork_
 
 
-def comp_P(P, fork, x, vPP_, dPP_):  # -> var Ps (dxP: direction), vPP, dPP: dim. reduced axis | contour
+def comp_P(P, _P, fork, root_, _P_, vPP_, dPP_, x, y, Y):  # forms 2D derivatives of 1D P vars to define:
 
+    # vPP and dPP: dim-reduced axis if vP or contour if dP; form_PP also forms var Ps, including dxP: direction pattern
+
+    buff_ = deque
     ddx = 0 # optional
 
     s, I, D, Dy, M, My, G, e_, oG, rdn = P  # select alt_ per fork, no olp: = mx?
@@ -247,48 +249,19 @@ def comp_P(P, fork, x, vPP_, dPP_):  # -> var Ps (dxP: direction), vPP, dPP: dim
 
     # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_B?
 
-        _PM = fork_[i][2]
-        if PM > _PM: fork_[i][3] += 1
-        else: rdn_PM += 1
+    if _x <= ix:  # no horizontal overlap between _P and next P, test for downward continuation of _P:
 
-            _PD = fork_[i][4]
-            if PD > _PD: fork_[i][5] += 1
-            else: rdn_PD += 1
+        if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # no-match connections recorded per match?
 
+            # term of fork PPs: P2_, vPP_, dPP_ eval for rotation, re-scan, re-comp, recursion, rdn:
 
-    while len(fork_) > 0:  # fork eval to form_PP (pattern of patterns) per criterion: oG, PM, PD
+            for i in len(_fork_):
 
-        fork = fork_.pop(); _P, root_, _fork_ = fork  # _P: val_vars, y_ders, P; _fork: P2 (opt. vPP, dPP:
+                _fork = _fork_[i]  # no more than one vPP_ and dPP_ per P2, same set of ders inclusion:
+                vPP = _fork[4]; if vPP: term_PP(vPP)  # if vPP is not empty?
+                dPP = _fork[5]; if dPP: term_PP(dPP)
 
-        while len(_fork_) > 0:
-
-            _fork = _fork_.pop(); P2, vPP, dPP = _fork
-
-            P2 = form_PP(P2)  # g-sign blob, rdn alt_: feedback vPPs and dPPs
-            oG = P2[0]; rdn_oG = P2[1]  # or loaded by form_PP?
-
-            if oG * rdn_oG > A:  # else no negative g|v|d PP rep? form eval A > rdn eval A: more selective?
-
-                root_.append(P); buff_.appendleft(fork)  # same fork, syntax for vPP and dPP, eval per P2:
-                vPP = form_PP(vPP)  # 2D value pattern, rdn alt_: feedback dPPs and adjusted P2s
-                dPP = form_PP(dPP)  # 2D difference pattern, rdn alt_: fb adjusted alt_ P2s and vPPs?
-
-        fork_ = buff_ # selected forks?
-
-        if _x <= ix:  # no horizontal overlap between _P and next P, test for downward continuation of _P:
-
-            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # no-match connections recorded per match?
-
-                # term of fork PPs: P2_, vPP_, dPP_ eval for rotation, re-scan, re-comp, recursion, rdn:
-                # same as form_CP:
-
-                for i in len(_fork_):
-
-                    _fork = _fork_[i]  # no more than one vPP_ and dPP_ per P2, same set of ders inclusion:
-                    vPP = _fork[4]; if vPP: term_PP(vPP)  # if vPP is not empty?
-                    dPP = _fork[5]; if dPP: term_PP(dPP)
-
-            # else no term and no buff, _P is included in its root Ps
+        # else no term and no buff, _P is included in its root Ps
 
         else: # fork is buffered for next P: next call of comp_P
 

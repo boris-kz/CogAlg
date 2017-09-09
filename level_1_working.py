@@ -140,7 +140,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     Id += pri_p  # ps summed within dP
     Dd += fd     # fuzzy ds summed within dP
     Vd += fv     # fuzzy vs summed within dP
-    d_.append(fd)  # prior fds are buffered within dP, all of the same sign
+    d_.append(fd)  # prior fds of the same sign are buffered within dP
 
     return pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_
     # for next p comparison, vP and dP increment, and output
