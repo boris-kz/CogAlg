@@ -9,41 +9,41 @@ and relative match patterns vPs (spans of pixels forming same-sign predictive va
 are redundant representations of each line of pixels.
 '''
 
-def incremental_range(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivation_filter, default_fuzzy_comp_range, A, AV, AD, inc_compare_counter_range, p_):
+def incremental_range(ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, Ave_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, pixels_):
 
-    if inc_compare_counter_range > default_fuzzy_comp_range:  # A, AV, AD inc.to adjust for redundancy to patterns formed by prior compare:
-        A += vP_min_filter     # vP_min_filter: min m for inclusion into positive vP
-        AV += av_min_inc_rng_filter   # av_min_inc_rng_filter: min V for initial compare() recursion, AV: min V for higher recursions
+    if comp_range > min_comp_range:  # Ave_match, cum_min_to_inc_rng, cum_min_to_inc_der inc.to adjust for redundancy to patterns formed by prior compare:
+        Ave_match += ave_match     # ave_match: min m for inclusion into positive vP
+        cum_min_to_inc_rng += min_to_inc_range   # min_to_inc_range: min V for initial compare() recursion, cum_min_to_inc_rng: min V for higher recursions
 
-    if inc_compare_counter_range > default_fuzzy_comp_range-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
-        AD += aD_min_inc_derivation_filter     # aV: min |D| for compare() recursion over d_[w], AD: min |D| for recursion
+    if comp_range > min_comp_range-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
+        cum_min_to_inc_der += min_to_inc_derivation     # aV: min |D| for compare() recursion over d_[w], cum_min_to_inc_der: min |D| for recursion
 
-    current_pattern_width = len(p_)  
-    ip_ = p_  # to differentiate from new p_
+    current_pattern_width = len(pixels_)  
+    ip_ = pixels_  # to differentiate from new pixels_
 
-    vP_, dP_ = [],[]  # inc_compare_counter_range was incremented in higher-scope p_
-    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
+    vP_, dP_ = [],[]  # comp_range was incremented in higher-scope pixels_
+    pri_s, I, D, V, rv, olp, pixels_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
     pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
-    for index in range(inc_compare_counter_range+1, current_pattern_width):
+    for index in range(comp_range+1, current_pattern_width):
 
-        new_pixel, fuzzy_difference, fuzzy_value = ip_[index]       # compared to a pixel at index-inc_compare_counter_range-1:
-        previous_pixel, pfd, pfv = ip_[index-inc_compare_counter_range]  # previously compared p(ignored), its fuzzy_difference, fuzzy_value to next p
+        new_pixel, fuzzy_difference, fuzzy_value = ip_[index]       # compared to a pixel at index-comp_range-1:
+        previous_pixel, pfd, pfv = ip_[index-comp_range]  # previously compared p(ignored), its fuzzy_difference, fuzzy_value to next p
         fuzzy_value += pfv  # fuzzy v is summed over extended-compare range
         fuzzy_difference += pfd  # fuzzy d is summed over extended-compare range
 
-        previous_pixel, prior_pixel_comp_result_fd , prior_pixel_comp_result_fv = ip_[index-inc_compare_counter_range-1]  # for compare(p, previous_pixel), pri_fd and prior_pixel_comp_result_fv ignored
+        previous_pixel, prior_pixel_comp_result_fd , prior_pixel_comp_result_fv = ip_[index-comp_range-1]  # for compare(p, previous_pixel), pri_fd and prior_pixel_comp_result_fv ignored
         compare_inputs = {
                 'input_variable': {
                     'new_pixel':new_pixel,  
                     # ''' BK: what does this repetition do? '''
                     # KK: Basically it is encapsulating and grouping the arguments. 
                     # BK: so you can change all of their instances at once?
-                    
+
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
                     'fuzzy_value':fuzzy_value,  
-                    'width_index':width_index, 
+                    'width_index':index, 
                     'current_pattern_width':current_pattern_width,
                 },
                 'vP': {
@@ -53,7 +53,7 @@ def incremental_range(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivatio
                     'D':D, 
                     'V':V, 
                     'rv':rv, 
-                    'p_':p_, 
+                    'pixels_':pixels_, 
                     'olp':olp, 
                     'olp_':olp_,
                 },
@@ -69,39 +69,39 @@ def incremental_range(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivatio
                 },
                 'filter_variable':{  
                     # BK: initialized | feedback value if starts with a
-                    'a': a,
-                    'av_min_inc_rng_filter': av_min_inc_rng_filter,
-                    'aD_min_inc_derivation_filter': aD_min_inc_derivation_filter,
-                    'default_fuzzy_comp_range': default_fuzzy_comp_range,
-                     # BK: initialized *= number of inc_rng recursions if starts with A
-                    'A': A, 
-                    'AV': AV,
-                    'AD': AD,
-                    'inc_compare_counter_range': inc_compare_counter_range,
+                    'ave_match': ave_match,
+                    'min_to_inc_range': min_to_inc_range,
+                    'min_to_inc_derivation': min_to_inc_derivation,
+                    'min_comp_range': min_comp_range,
+                     # BK: initialized *= number of inc_rng recursions if starts with Ave_match
+                    'Ave_match': Ave_match, 
+                    'cum_min_to_inc_rng': cum_min_to_inc_rng,
+                    'cum_min_to_inc_der': cum_min_to_inc_der,
+                    'comp_range': comp_range,
                     'vP_': vP_,
                     'dP_': dP_,
                 },
             }
 
 
-        pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
+        pri_s, I, D, V, rv, pixels_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
         compare(compare_inputs)
 
-    return vP_, dP_  # local vPs and dPs to replace p_, A, AV, AD accumulated per compare recursion
+    return vP_, dP_  # local vPs and dPs to replace pixels_, Ave_match, cum_min_to_inc_rng, cum_min_to_inc_der accumulated per compare recursion
 
 
-def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivation_filter, default_fuzzy_comp_range, A, AV, AD, inc_compare_counter_range, d_):
+def incremental_derivation(ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, Ave_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, d_):
 
-    if inc_compare_counter_range > default_fuzzy_comp_range:
-        A += vP_min_filter; AV += av_min_inc_rng_filter
-    if inc_compare_counter_range > default_fuzzy_comp_range-1:
-        AD += aD_min_inc_derivation_filter
+    if comp_range > min_comp_range:
+        Ave_match += ave_match; cum_min_to_inc_rng += min_to_inc_range
+    if comp_range > min_comp_range-1:
+        cum_min_to_inc_der += min_to_inc_derivation
 
     current_pattern_width = len(d_)
     ip_ = d_  # to differentiate from new d_
 
-    fuzzy_difference, fuzzy_value, inc_compare_counter_range, vP_, dP_ = 0, 0, 0, [], []  # inc_compare_counter_range is initialized for each d_
-    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
+    fuzzy_difference, fuzzy_value, comp_range, vP_, dP_ = 0, 0, 0, [], []  # comp_range is initialized for each d_
+    pri_s, I, D, V, rv, olp, pixels_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
     pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
 
     previous_pixel = ip_[0]
@@ -116,7 +116,7 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
                     'previous_pixel':previous_pixel,
                     'fuzzy_difference':fuzzy_difference,
                     'fuzzy_value':fuzzy_value,
-                    'index':index,
+                    'width_index':index,
                     'current_pattern_width':current_pattern_width,
                 },
                 'vP': {
@@ -125,7 +125,7 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
                     'D':D, 
                     'V':V, 
                     'rv':rv, 
-                    'p_':p_, 
+                    'pixels_':pixels_, 
                     'olp':olp, 
                     'olp_':olp_,
                 },
@@ -140,20 +140,20 @@ def incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_deri
                     'dolp_':dolp_,
                 },
                 'filter_variable':{
-                    'vP_min_filter': vP_min_filter,
-                    'av_min_inc_rng_filter': av_min_inc_rng_filter,
-                    'aD_min_inc_derivation_filter': aD_min_inc_derivation_filter,
-                    'default_fuzzy_comp_range': default_fuzzy_comp_range,
-                    'A': A,
-                    'AV': AV,
-                    'AD': AD,
-                    'inc_compare_counter_range': inc_compare_counter_range,
+                    'ave_match': ave_match,
+                    'min_to_inc_range': min_to_inc_range,
+                    'min_to_inc_derivation': min_to_inc_derivation,
+                    'min_comp_range': min_comp_range,
+                    'Ave_match': Ave_match,
+                    'cum_min_to_inc_rng': cum_min_to_inc_rng,
+                    'cum_min_to_inc_der': cum_min_to_inc_der,
+                    'comp_range': comp_range,
                     'vP_': vP_,
                     'dP_': dP_,
                 },
             }
 
-        pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
+        pri_s, I, D, V, rv, pixels_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
         compare(compare_inputs)
 
         previous_pixel = new_pixel
@@ -176,7 +176,7 @@ def compare(inputs):
     D = inputs['vP']['D']
     V = inputs['vP']['V']
     rv = inputs['vP']['rv']
-    p_ = inputs['vP']['p_']
+    pixels_ = inputs['vP']['pixels_']
     olp = inputs['vP']['olp']
     olp_ = inputs['vP']['olp_']
 
@@ -191,20 +191,20 @@ def compare(inputs):
     dolp_ = inputs['dP']['dolp_']
 
     # filter variables and output patterns
-    vP_min_filter = inputs['filter_variable']['vP_min_filter']
-    av_min_inc_rng_filter = inputs['filter_variable']['av_min_inc_rng_filter']
-    aD_min_inc_derivation_filter = inputs['filter_variable']['aD_min_inc_derivation_filter']
-    default_fuzzy_comp_range = inputs['filter_variable']['default_fuzzy_comp_range']
-    A = inputs['filter_variable']['A']
-    AV = inputs['filter_variable']['AV']
-    AD = inputs['filter_variable']['AD']
-    inc_compare_counter_range = inputs['filter_variable']['inc_compare_counter_range']
+    ave_match = inputs['filter_variable']['ave_match']
+    min_to_inc_range = inputs['filter_variable']['min_to_inc_range']
+    min_to_inc_derivation = inputs['filter_variable']['min_to_inc_derivation']
+    min_comp_range = inputs['filter_variable']['min_comp_range']
+    Ave_match = inputs['filter_variable']['Ave_match']
+    cum_min_to_inc_rng = inputs['filter_variable']['cum_min_to_inc_rng']
+    cum_min_to_inc_der = inputs['filter_variable']['cum_min_to_inc_der']
+    comp_range = inputs['filter_variable']['comp_range']
     vP_ = inputs['filter_variable']['vP_']
     dP_ = inputs['filter_variable']['dP_']
 
     difference_pixel = new_pixel - previous_pixel      # difference between consecutive pixels
     match_pixel = min(new_pixel, previous_pixel)  # match between consecutive pixels
-    relative_match = match_pixel - A          # relative match (predictive value) between consecutive pixels
+    relative_match = match_pixel - Ave_match          # relative match (predictive value) between consecutive pixels
 
     fuzzy_difference += difference_pixel  # fuzzy difference_pixel includes all shorter + current- range ds between comparands
     fuzzy_value += relative_match  # fuzzy relative_match includes all shorter + current- range vs between comparands
@@ -212,43 +212,43 @@ def compare(inputs):
     # formation of value pattern vP: span of pixels forming same-sign relative_match s:
 
     s = 1 if relative_match > 0 else 0  # s: positive sign of relative_match
-    if width_index > inc_compare_counter_range+2 and (s != pri_s or width_index == current_pattern_width-1):  # if derived pri_s miss, vP is terminated
+    if width_index > comp_range+2 and (s != pri_s or width_index == current_pattern_width-1):  # if derived pri_s miss, vP is terminated
 
-        if len(p_) > inc_compare_counter_range+3 and pri_s == 1 and V > AV:  # min 3 compare over extended distance within p_:
+        if len(pixels_) > comp_range+3 and pri_s == 1 and V > cum_min_to_inc_rng:  # min 3 compare over extended distance within pixels_:
 
-            inc_compare_counter_range += 1  # inc_compare_counter_range: incremental range-of-compare counter
+            comp_range += 1  # comp_range: incremental range-of-compare counter
             rv = 1  # rv: incremental range flag:
-            p_.append(incremental_range(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivation_filter, default_fuzzy_comp_range, A, AV, AD, inc_compare_counter_range, p_))
+            pixels_.append(incremental_range(ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, Ave_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, pixels_))
 
-        p = I / len(p_); difference_pixel = D / len(p_); relative_match = V / len(p_)  # default to eval overlap, poss. div.compare?
-        vP = pri_s, p, I, difference_pixel, D, relative_match, V, rv, p_, olp_
+        p = I / len(pixels_); difference_pixel = D / len(pixels_); relative_match = V / len(pixels_)  # default to eval overlap, poss. div.compare?
+        vP = pri_s, p, I, difference_pixel, D, relative_match, V, rv, pixels_, olp_
         vP_.append(vP)  # output of vP, related to dP_ by overlap only, no discont compare till Le3?
 
         o = len(vP_), olp  # len(P_) is index of current vP
         dolp_.append(o)  # indexes of overlapping vPs and olp are buffered at current dP
 
-        I, D, V, rv, olp, dolp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
+        I, D, V, rv, olp, dolp, pixels_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # initialization of new vP and olp
 
     pri_s = s   # vP (span of pixels forming same-sign relative_match) is incremented:
     olp += 1    # overlap to current dP
     I += previous_pixel  # ps summed within vP
     D += fuzzy_difference     # fuzzy ds summed within vP
     V += fuzzy_value     # fuzzy vs summed within vP
-    # no, this is fuzzy predictive value: relative match = m - A
+    # no, this is fuzzy predictive value: relative match = m - Ave_match
     
     pri = previous_pixel, fuzzy_difference, fuzzy_value  # inputs for recursive compare are tuples vs. pixels
-    p_.append(pri)  # buffered within vP for selective extended compare
+    pixels_.append(pri)  # buffered within vP for selective extended compare
 
 
     # formation of difference pattern dP: span of pixels forming same-sign difference_pixel s:
 
     sd = 1 if difference_pixel > 0 else 0  # sd: positive sign of difference_pixel;
-    if width_index > inc_compare_counter_range+2 and (sd != pri_sd or width_index == current_pattern_width-1):  # if derived pri_sd miss, dP is terminated
+    if width_index > comp_range+2 and (sd != pri_sd or width_index == current_pattern_width-1):  # if derived pri_sd miss, dP is terminated
 
-        if len(d_) > 3 and abs(Dd) > AD:  # min 3 compare within d_:
+        if len(d_) > 3 and abs(Dd) > cum_min_to_inc_der:  # min 3 compare within d_:
 
             rd = 1  # rd: incremental derivation flag:
-            d_.append(incremental_derivation(vP_min_filter, av_min_inc_rng_filter, aD_min_inc_derivation_filter, default_fuzzy_comp_range, A, AV, AD, inc_compare_counter_range, d_))
+            d_.append(incremental_derivation(ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, Ave_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, d_))
 
         pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # so all olp Ps can be directly evaluated
         dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dolp_
@@ -267,7 +267,7 @@ def compare(inputs):
     
     d_.append(fuzzy_difference)  # prior fds are buffered within dP, all of the same sign
 
-    return pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_
+    return pri_s, I, D, V, rv, pixels_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_
     # for next p comparison, vP and dP increment, and output
 
 def level_1(frame_pixels):
@@ -277,29 +277,29 @@ def level_1(frame_pixels):
     
     frame_height, frame_width = frame_pixels.shape  # Y: frame height, frame_width: frame width
 
-    vP_min_filter = 127  # minimal filter for vP inclusion
-    av_min_inc_rng_filter = 63  # minimal filter for incremental-range compare
-    aD_min_inc_derivation_filter = 63  # minimal filter for incremental-derivation compare
-    default_fuzzy_comp_range = 0  # default range of fuzzy comparison, initially 0
+    ave_match = 127  # minimal filter for vP inclusion
+    min_to_inc_range = 63  # minimal filter for incremental-range compare
+    min_to_inc_derivation = 63  # minimal filter for incremental-derivation compare
+    min_comp_range = 0  # default range of fuzzy comparison, initially 0
 
     for height_index in range(frame_height):
 
         new_line = frame_pixels[height_index, :]  # index: new line ip_
 
-        if default_fuzzy_comp_range == 0:
-            A = vP_min_filter
-            AV = av_min_inc_rng_filter  # actual filters, incremented per compare recursion
+        if min_comp_range == 0:
+            Ave_match = ave_match
+            cum_min_to_inc_rng = min_to_inc_range  # actual filters, incremented per compare recursion
         else:
-            A = 0
-            AV = 0  # if inc_compare_counter_range > default_fuzzy_comp_range
+            Ave_match = 0
+            cum_min_to_inc_rng = 0  # if comp_range > min_comp_range
 
-        if default_fuzzy_comp_range <= 1:
-            AD = aD_min_inc_derivation_filter
+        if min_comp_range <= 1:
+            cum_min_to_inc_der = min_to_inc_derivation
         else:
-            AD = 0
+            cum_min_to_inc_der = 0
 
-        fuzzy_difference, fuzzy_value, inc_compare_counter_range, height_index, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
-        pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
+        fuzzy_difference, fuzzy_value, comp_range, height_index, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
+        pri_s, I, D, V, rv, olp, pixels_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
         pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
         previous_pixel = new_line[0]
@@ -323,7 +323,7 @@ def level_1(frame_pixels):
                     'D':D, 
                     'V':V, 
                     'rv':rv, 
-                    'p_':p_, 
+                    'pixels_':pixels_, 
                     'olp':olp, 
                     'olp_':olp_,
                 },
@@ -338,20 +338,20 @@ def level_1(frame_pixels):
                     'dolp_':dolp_,
                 },
                 'filter_variable':{
-                    'vP_min_filter': vP_min_filter,
-                    'av_min_inc_rng_filter': av_min_inc_rng_filter,
-                    'aD_min_inc_derivation_filter': aD_min_inc_derivation_filter,
-                    'default_fuzzy_comp_range': default_fuzzy_comp_range,
-                    'A': A,
-                    'AV': AV,
-                    'AD': AD,
-                    'inc_compare_counter_range': inc_compare_counter_range,
+                    'ave_match': ave_match,
+                    'min_to_inc_range': min_to_inc_range,
+                    'min_to_inc_derivation': min_to_inc_derivation,
+                    'min_comp_range': min_comp_range,
+                    'Ave_match': Ave_match,
+                    'cum_min_to_inc_rng': cum_min_to_inc_rng,
+                    'cum_min_to_inc_der': cum_min_to_inc_der,
+                    'comp_range': comp_range,
                     'vP_': vP_,
                     'dP_': dP_,
                 },
             }
 
-            pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
+            pri_s, I, D, V, rv, pixels_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
             compare(compare_inputs)
 
             previous_pixel = new_pixel  # prior pixel, pri_ values are formed by prior run of compare
@@ -363,7 +363,7 @@ def level_1(frame_pixels):
 
 
 
-# at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
+# at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'pixels_', pixels_)
 # at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
 
 if __name__ == '__main__':
