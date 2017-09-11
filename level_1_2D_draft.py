@@ -59,23 +59,23 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 
         dy = p - _p   # vertical difference between pixels, summed -> Dy
         dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> dG: variation eval?
-        fd += dg      # all shorter + current- range dg s within extended quadrant
+        fd += dg      # fuzzy d-gradient: all shorter + current- range dg s within extended quadrant
 
         my = min(p, _p)   # vertical match between pixels, summed -> My
         vg = _m + my - A  # gradient of predictive value (relative match) at prior-line _p, -> vG
-        fv += vg          # all shorter + current- range vg s within extended quadrant
+        fv += vg          # fuzzy v-gradient: all shorter + current- range vg s in extended quadrant
 
         t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
-
-        # forms 1D slice of value pattern vP: horizontal span of same-sign vg s with associated vars:
 
         sv, valt_, dalt_, vP, vP_, _vP_, term_vP_ = \
         form_P(0, t2, fv, fd, valt_, dalt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)
 
-        # forms 1D slice of difference pattern dP: horizontal span of same-sign dg s with associated vars:
+        # forms 1D slice of value pattern vP: horizontal span of same-sign vg s with associated vars
 
         sd, dalt_, valt_, dP, dP_, _dP_, term_dP_ = \
         form_P(1, t2, fd, fv, dalt_, valt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)
+
+        # forms 1D slice of difference pattern dP: horizontal span of same-sign dg s + associated vars
 
     # line ends, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient?
     # vP, dP term, no initialization:
@@ -127,11 +127,12 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
 
     # merges vertically contiguous and horizontally overlapping same-type and same-sign Ps
 
-    fork_ = deque()  # higher-line matches per P, to represent terminated P and redun for _P eval:
-    _vPP_, _dPP_ = deque(), deque()  # forks formed by comp_P, also roots: vPP_, dPP_? no local _root_
+    fork_ = deque()  # higher-line matches per P: redundancy and terminated-P -> _P transfer targets
+    buff_ = deque()
 
     _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
-    s = P[0]; e_ = P[7]  # sign and array of lower-level inputs per pattern
+    s = P[0]  # v or d sign
+    e_ = P[7]  # array of lower-level inputs per pattern
 
     while x >= _ix:  # while P and _P horizontal overlap
 
@@ -139,7 +140,7 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
         ex = x  # coordinate of current P element
 
         _P = _P_.popleft()
-        _P, root_ = _P  # return to _P_ until _x <= ix, in comp_P
+        _P, root_, blob_, _vPP_, _dPP_ = _P
 
         if s == _P[0]:  # = if s == _s:
 
@@ -147,12 +148,13 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
                 for e in e_:  # if dP, else if vP element e is a tuple
                     oG += e; ex += 1  # oG accumulation, not PM, PD: per comp_P only
 
-            fork = oG, _P, alt_  # blob_, _vPP_, _dPP_ in each _P?
+            fork = oG, _P, alt_  # blob_, _vPP_, _dPP_ in each _P, from form_PP?
             fork_.append(fork)  # _P inclusion in P
             root_.append(P)  # P inclusion in _P, to track continuing roots in form_PP
 
             '''
-            accumulation within B, to evaluate for re-oriented 1D scan and comp, at term or split:
+            also accumulation across all forks, with results assigned to last fork,
+            to evaluate blob for re-oriented 1D scan and comp at term or split?
             I2 += P  
             D2 += D; Dy2 += Dy  
             M2 += M; My2 += My  # V = M - 2a * W?
@@ -163,8 +165,30 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
             olp2 += olp  # area overlap to stronger alt2_, after alt blobs eval?
             '''
 
+        if _x <= ix:  # no horizontal overlap between _P and next P
+
+            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # _P fork or frame is terminated
+
+                for _fork in blob_:  # one current-level vPP_ and dPP_ per fork, vs. higher-level _fork_?
+
+                    vPP = _fork[4]; if vPP: term_PP(vPP)  # possibly empty: vPP = 0? or _vPP_ per mult Ps?
+                    dPP = _fork[5]; if dPP: term_PP(dPP)
+
+            # else no term and no buff, _P is included in its root Ps
+
+        else: # fork is buffered for next P comp
+
+            _P = _P, root_, blob_, _vPP_, _dPP_  #  root_: lower-line Ps, _P includes vertical derivatives,
+            # blob_ vs. fork_ because it has no Ps exposed for comparison
+
+            buff_.appendleft(_P)  # for _P_ += buff_ for next-P comp_P() at P comp end:
+
+            # also _vPP_buff_ and _dPP_buff_ per fork?   first to pop()
+
+    # no P and _P horizontal overlap:
+
     if len(fork_) > 0:  # fork_ eval for comp_P (returning _vPP_, _dPP_, vPP_, dPP_):
-       fork_ = fork_eval(0, fork_, A)
+       fork_ = fork_eval(0, fork_, A)  # buff_ is re-attached in comp_P?
 
     if len(_vPP_) > 0:  # _vPP_ eval for form_PP -> 2D value pattern, rdn alt_ dPPs:
        _vPP_ = fork_eval(1, _vPP_, A)
@@ -172,22 +196,22 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
     if len(_dPP_) > 0:  # _dPP_ eval for form_PP -> 2D difference pattern, rdn alt_ vPPs:
        _dPP_ = fork_eval(2, _dPP_, A)
 
-    P = P, alt_, fork_, _vPP_, _dPP_
-    # adding root_ at P_ -> _P_ conversion: lower-line matches per _P, to store terminated root Ps
+    P = P, alt_, fork_  # adding root_ at P_ -> _P_ conversion: lower-line matches per _P,
+    P_.append(P)        # terminated root Ps are stored in term_?
 
-    P_.append(P)
-    _P_ += buff_  # for next-P comp, returned by fork_eval(fork_) only, _vPP_ and _dPP_ per fork?
+    # _P = _P, root_, blob_, _vPP_, _dPP_  # modified return to _P_ until _x <= ix, in comp_P?
 
     return P_, _P_, term_P_  # _P and term_P include _P, alt_, blob_, _vPP_, _dPP_: formed in comp_P
 
 
 def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append, then eval for form_PP
 
-    select_ = [] # not value-ordered? for fork comp eval, no buff_
     # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
+
+    select_ = [] # for fork comp eval, not value-ordered?
     rdn = 0  # number of higher-crit Ps in fork_ + alt Ps in alt_?
 
-    for fork in fork_: # fork_ is preserved for assignment to final max_fork
+    for fork in fork_: # fork_ is preserved for assignment to last fork
 
         crit = fork[0]  # selection criterion: oG for fork | PM for vPP | PD for dPP
         if crit > A:  # comp to _crit in select_, increment weaker-fork rdn, inclusion in select_
@@ -209,16 +233,9 @@ def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append,
         fork = select_.pop  # no eval, already selected
 
         if type == 0: comp_P(fork)  # that also changes fork in original fork_?
-        else: form_PP(type, fork)  # separate _vPP_, _dPP_ per P were appended by comp_P
+        else: form_PP(type, fork)  # separate _vPP_, _dPP_ per _P were appended by comp_P
 
-        '''
-        if val > max:  # max val in select_
-            max = val; max_fork = fork  # for initial access? 
-            
-    fork_ = max_fork, fork_  # P continuity over higher line, regardless of comp_P
-    max val: oG for fork | PM for vPP | PD for dPP
-    or fork access by incr rdn (max rdn for non-select) | coord, no separate max?
-    '''
+        # fork access by increasing rdn (max rdn for non-select) or coordinate, no separate max?
 
     return fork_
 
@@ -226,10 +243,11 @@ def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append,
 def comp_P(P, _P, root_, P_, _P_, x, y, Y):  # forms 2D derivatives of 1D P vars to define vPP and dPP:
 
     buff_ = deque()
+    _vPP_, _dPP_ = deque(), deque()  # formed by comp_P? also roots: vPP_, dPP_? no local _root_
     ddx = 0  # optional;
 
     s, I, D, Dy, M, My, G, e_, oG, rdn, alt_  = P  # select alt_ per fork, no olp: = mx?
-    _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, r, _alt_, _fork_ = _P  # fork = r, _alt_, _fork_, P?
+    _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, r, _alt_, blob_ = _P  # fork = r, _alt_, blob_, P?
 
     ix = x - len(e_)  # len(e_) or w: P width, initial coordinate of P, for output only?
 
@@ -252,32 +270,16 @@ def comp_P(P, _P, root_, P_, _P_, x, y, Y):  # forms 2D derivatives of 1D P vars
 
     # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_blob?
 
-    if _x <= ix:  # no horizontal overlap between _P and next P
-
-        if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # _P fork or frame is terminated
-
-            for _fork in _fork_:  # one current-level vPP_ and dPP_ per fork, vs. higher-level _fork_?
-
-                vPP = _fork[4]; if vPP: term_PP(vPP)  # possibly empty: vPP = 0? or _vPP_ per mult Ps?
-                dPP = _fork[5]; if dPP: term_PP(dPP)
-
-        # else no term and no buff, _P is included in its root Ps
-
-    else: # fork is buffered for next P comp
-
-        fork = _P, root_, _fork_  # _P with vert.ders, _fork_: higher-line blobs, root_: lower-line Ps
-        buff_.appendleft(fork)  # for _P_ += buff_ at P comp end? first to pop() for next-P comp_P()
-
     crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,0,0,[],[]  # PP vars declaration
 
     P2  = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
     vPP = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
     dPP = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
 
-    _fork = P2, vPP, dPP  # PPs are initialized at non-matching P transfer to _P_, as generic element of _fork_
-    _fork_.append(_fork)  # not really append, only _fork type declaration, re-used per lower P?
+    blob = P2, vPP, dPP  # PPs are initialized at non-matching P transfer to _P_, as generic element of _fork_
+    blob_.append(blob)  # not really append, only _fork type declaration, re-used per lower P?
 
-    P = s, I, D, Dy, M, My, G, r, e_, alt_, _fork_  # _fork_ is empty, similar to tuple declaration?
+    P = s, I, D, Dy, M, My, G, r, e_, alt_, blob_  # _fork_ is empty, similar to tuple declaration?
     # returned Ps also include current derivatives per var?
 
     P_.append(P)  # _P_ = P_ for next-line comp, if no horizontal overlap between P and next _P
