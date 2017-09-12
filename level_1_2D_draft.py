@@ -132,15 +132,16 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
 
     _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
     s = P[0]  # v or d sign
-    e_ = P[7]  # array of lower-level inputs per pattern
+    e_ = P[7]  # array of pattern elements
+    ix = x - len(e_)
 
-    while x >= _ix:  # while P and _P horizontal overlap
+    while x >= _ix:  # while horizontal overlap between P and _P
 
         oG = 0  # overlapping gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # coordinate of current P element
 
         _P = _P_.popleft()
-        _P, root_, blob_, _vPP_, _dPP_ = _P
+        _P, root_, blob_, _vPP_, _dPP_ = _P  # blob_ vs. fork_: no exposed P vPP_ per P per _P: multiple form_PP?
 
         if s == _P[0]:  # = if s == _s:
 
@@ -165,7 +166,23 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
             olp2 += olp  # area overlap to stronger alt2_, after alt blobs eval?
             '''
 
-        if _x <= ix:  # no horizontal overlap between _P and next P
+        if _P[8] > ix:  # if _x > ix: _P is buffered for next P comp
+
+            _P = _P, root_, blob_, _vPP_, _dPP_  #  root_: lower-line Ps, _P includes vertical derivatives
+            buff_.appendleft(_P)  # first to pop(); also _vPP_buff_ and _dPP_buff_ per fork?
+
+        else: # no horizontal overlap between _P and next P, _P is evaluated for 
+
+            if len(blob_) > 0:  # blob_ eval? or no comp?
+                blob_ = fork_eval(1, blob_, A)  # blob_buff_ is recycled in form_PP?
+
+            if len(_vPP_) > 0:  # _vPP_ eval for form_PP -> 2D value pattern, rdn alt_ dPPs:
+               _vPP_ = fork_eval(1, _vPP_, A)  # _vPP_buff_ is recycled in form_PP?
+
+            if len(_dPP_) > 0:  # _dPP_ eval for form_PP -> 2D difference pattern, rdn alt_ vPPs:
+               _dPP_ = fork_eval(2, _dPP_, A)
+
+            _P = _P, root_, blob_, _vPP_, _dPP_  # no term and no buff, _P is included in its root Ps?
 
             if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # _P fork or frame is terminated
 
@@ -174,32 +191,15 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # forms 2D blob, alt_ 
                     vPP = _fork[4]; if vPP: term_PP(vPP)  # possibly empty: vPP = 0? or _vPP_ per mult Ps?
                     dPP = _fork[5]; if dPP: term_PP(dPP)
 
-            # else no term and no buff, _P is included in its root Ps
+            _P_ += buff_  # for next-P comp_P() at P comp end
 
-        else: # fork is buffered for next P comp
+    # no horizontal overlap between P and _P, evaluation for P comp to fork_, then buffered in P_:
 
-            _P = _P, root_, blob_, _vPP_, _dPP_  #  root_: lower-line Ps, _P includes vertical derivatives,
-            # blob_ vs. fork_ because it has no Ps exposed for comparison
-
-            buff_.appendleft(_P)  # for _P_ += buff_ for next-P comp_P() at P comp end:
-
-            # also _vPP_buff_ and _dPP_buff_ per fork?   first to pop()
-
-    # no P and _P horizontal overlap:
-
-    if len(fork_) > 0:  # fork_ eval for comp_P (returning _vPP_, _dPP_, vPP_, dPP_):
-       fork_ = fork_eval(0, fork_, A)  # buff_ is re-attached in comp_P?
-
-    if len(_vPP_) > 0:  # _vPP_ eval for form_PP -> 2D value pattern, rdn alt_ dPPs:
-       _vPP_ = fork_eval(1, _vPP_, A)
-
-    if len(_dPP_) > 0:  # _dPP_ eval for form_PP -> 2D difference pattern, rdn alt_ vPPs:
-       _dPP_ = fork_eval(2, _dPP_, A)
+    if len(fork_) > 0:  # fork_ eval for comp_P (returning _vPP_, _dPP_, vPP_, dPP_)
+       fork_ = fork_eval(0, fork_, A)
 
     P = P, alt_, fork_  # adding root_ at P_ -> _P_ conversion: lower-line matches per _P,
     P_.append(P)        # terminated root Ps are stored in term_?
-
-    # _P = _P, root_, blob_, _vPP_, _dPP_  # modified return to _P_ until _x <= ix, in comp_P?
 
     return P_, _P_, term_P_  # _P and term_P include _P, alt_, blob_, _vPP_, _dPP_: formed in comp_P
 
