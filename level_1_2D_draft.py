@@ -46,8 +46,8 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     x, valt_, dalt_, vP_, dP_, term_vP_, term_dP_ = 0,[],[],[],[],[],[]  # term_P_ accumulated in ycomp
     pri_s, I, D, Dy, M, My, G, olp, e_ = 0,0,0,0,0,0,0,0,[]  # also _G: interference | redundancy?
 
-    vP = pri_s, I, D, Dy, M, My, G, olp, e_  # _fork_, _fork_vPP_, _fork_dPP_ for comp_P: += in ycomp?
-    dP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ and rdn over alt_ are included in P by comp_P?
+    vP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ and rdn over alt_ are included in P by form_blob
+    dP = pri_s, I, D, Dy, M, My, G, olp, e_
 
     A = a * r
 
@@ -83,7 +83,7 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)  # olp: summed overlap by stronger alt_Ps
     volp = vP[7]; valt = len(dP_), volp; valt_.append(valt)
 
-    vP_, _vP_, term_vP_ = form_blob(valt_,vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_
+    vP_, _vP_, term_vP_ = form_blob(valt_, vP, vP_, _vP_, term_vP_, x, y, Y, r, A)  # empty _vP_
     dP_, _dP_, term_dP_ = form_blob(dalt_, dP, dP_, _dP_, term_dP_, x, y, Y, r, A)  # empty _dP_
 
     return vP_, dP_, term_vP_, term_dP_  # also alt_ return for fork_eval? for comp_P, form_PP, term_PP
@@ -97,7 +97,7 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     s = 1 if g > 0 else 0
     if s != pri_s and x > r + 2:  # P (span of same-sign gs) is terminated and merged with overlapping _Ps
 
-        P_, _P_, term_P_ = form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # P_ becomes _P_ at line end
+        P_, _P_, term_P_ = form_blob(type, alt_, P, P_, _P_, term_P_, x, y, Y, r, A)  # line end: _P_ = P_
         _alt = len(P_), olp # index len(P_) and overlap of P are buffered in _P_alt_, total olp = len(e_):
         _alt_.append(_alt)
         I, D, Dy, M, My, G, e_, alt_ = 0,0,0,0,0,0,[],[]  # P and alt_ are initialized
@@ -106,9 +106,11 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
 
     olp += 1  # P overlap to concurrent alternative-type P, accumulated till either P or _P is terminated
     I += p    # p s summed within P
-    D += d; Dy += dy  # lat D for vertical vP comp, + vert Dy for P2 orient adjust eval and gradient
-    M += m; My += my  # lateral and vertical M for P2 orient, vs V gradient eval, V = M - 2a * W?
-    G += g  # fd | fv gradient summed to define P value, with directional resolution loss
+    D += d    # lateral D for vertical P comp
+    Dy += dy  # vertical Dy, for P2 comp only
+    M += m    # lateral D for vertical P comp
+    My += my  # vertical My, for P2 comp only
+    G += g    # fd or fv gradient summed to define P value, vs. V = M - 2a * W?
 
     if type == 0:
         pri = p, g, _g  # v gradient, also d, dy, m, my for fuzzy accumulation within P-specific r?
@@ -123,50 +125,52 @@ def form_P(type, t2, g, _g, alt_, _alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  #
     # draft below:
 
 
-def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # P /_P_ scan control, + alt_ for fork_eval
+def form_blob(type, alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # P over _P_ scan, inclusion, displacement
 
     # merges vertically contiguous and horizontally overlapping same-type and same-sign Ps into blobs
+    # alt_ -> rdn for fork_eval, then alt2_ += alt_ for blob eval
 
     fork_ = deque() # higher-line matches per P, to assign redundancy and move term _P to next _P
     root_, blob_, buff_ = deque(), deque(), deque()
 
-    vPP_, dPP_, _vPP_, _dPP_ = [],[],[],[]  # P = P, alt_ fork_, vPP_, dPP_ before P_.append(P)
-    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
+    vPP_, dPP_, _vPP_, _dPP_ = [],[],[],[]
+    s, I, D, Dy, M, My, G, olp, e_ = P[0] # P = P, alt_ fork_, vPP_, dPP_ before P_.append(P)
 
-    s = P[0] # v or d sign
-    e_= P[7] # array of pattern elements
-    ix = x - len(e_)
+    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
+    ix = x - len(e_)  # initial coordinate of P
 
     while x >= _ix:  # P /_P connection eval, while horizontal overlap between P and _P:
 
         oG = 0  # overlapping gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # coordinate of current P element
 
-        _P = _P_.popleft() # _P = _P, _alt_, blob_, _vPP_, _dPP_, root_, no exposed Ps in y-3
-        if s == _P[0][0]:  # if s == _s:
+        _P = _P_.popleft()  # _P = _P, _alt_, blob _fork_, _vPP_, _dPP_, root_, no exposed Ps in y-3
 
-            while ex > _P[1]:  # ex > _ix
-                for e in e_:  # if dP, else if vP element e is a tuple
-                    oG += e; ex += 1  # oG accumulation, not PM, PD: per comp_P only
+        _ix = P[0][1]  # sub- _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, r
+        I2, D2, Dy2, M2, My2, G2, e2_, alt2_, olp2 = _P[2]  # summed blob
+
+        if P[0] == _P[0][0]:  # if s == _s: v or d sign match
+
+            while ex > _ix:
+
+                for e in e_:  # oG accumulation  # PM, PD from comp_P only
+                    if type == 0: oG += e[1]  # if vP: e = p, g, _g
+                    else: oG += e  # if dP: e = g
+                    ex += 1
 
             fork = oG, _P
             fork_.append(fork)  # _P inclusion in P
             _P[5].append(P)  # root_.append(P), to track continuing roots in form_PP
 
-            '''
-            also accumulation across all forks, with results assigned to last fork,
-            to evaluate blob for re-oriented 1D scan and comp at term or split?
-            regardless of fork_eval?
-            
-            I2 += P  
+            I2 += I
             D2 += D; Dy2 += Dy  
-            M2 += M; My2 += My  # V = M - 2a * W?
+            M2 += M; My2 += My
             G2 += G  # possibly fuzzy
-            e2_+= e_ # blob area = len(e2_), or no e2_: Py_( P( e_?
-            
+            e2_ += e_ # blob area = len(e2_), or no e2_: Py_( P( e_?
             alt2_ += alt_ # or replaced by alt_blob_, with olp2 per alt2 (P2)? 
-            olp2 += olp  # area overlap to stronger alt2_, after alt blobs eval?
-            '''
+            olp2 += olp   # area overlap to stronger alt2_, after alt blobs eval?
+
+            # sum of all roots per blob, to evaluate it, assigned to last fork at partial term?
 
         if _P[0][8] > ix:  # if _x > ix:
 
@@ -174,7 +178,8 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # P /_P_ scan control,
 
         else: # no horizontal overlap between _P and next P, _fork_s are evaluated for term_PP?
 
-            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # _P or frame is terminated, or split?
+            if (len(root_) == 0 and y > r + 3) or y == Y - 1:  # _P or frame is terminated
+                # trunk term if split: len(root_) > 1, part blob?
 
                 for blob in blob_:
                     blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob:
@@ -183,9 +188,15 @@ def form_blob(alt_, P, P_, _P_, term_P_, x, y, Y, r, A):  # P /_P_ scan control,
                     if _vPP > 0: term_PP(_vPP)  # not for _vPP in _vPP_: only to eval for rdn?
                     if _dPP > 0: term_PP(_dPP)
 
-            buff_ += _P_  # for form_blob (next_P)
+            buff_ += _P_  # for form_blob (next P)
 
     # no horizontal overlap between P and _P, evaluation for P comp to fork_, then buffered:
+
+    for alt in alt_:  # rdn = P[9]: number of greater-criterion alt Ps in alt_, =0 in ycomp?
+
+        if alt[6] > P[6]: # comp of criterion: vG for vP | dG for dP
+            P[9] += 1  # increment weaker-alt rdn
+        else: alt[9] += 1
 
     if len(fork_) > 0:  # fork_ eval for comp_P, returning _vPP_, _dPP_, vPP_, dPP_
        fork_ = fork_eval(0, fork_, A)
@@ -210,25 +221,24 @@ def fork_eval(type, fork_, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append,
 
     # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
 
-    select_ = [] # for fork comp eval, not value-ordered?
-    rdn = 0  # number of higher-crit Ps in fork_ + alt Ps in alt_?
+    select_ = [] # for fork comp eval, or for _PP form eval
 
     for fork in fork_: # fork_ is preserved for assignment to last fork
 
         crit = fork[0]  # selection criterion: oG for fork | PM for vPP | PD for dPP
-        if crit > A:  # comp to _crit in select_, increment weaker-fork rdn, inclusion in select_
+        if crit > A:  # comp to _crit in select_,  inclusion in select_
 
             for select in select_:  # forks are re-evaluated at each rdn increment
 
                 _crit = select[0]
                 if crit > _crit:  # criterion comp
 
-                    select[1] += 1  # = _rdn += 1, redundancy assignment to a weaker fork
-                    if _crit < A * select[1]: del (select)  # delete select from select_
+                    select[0][9] += 1  # increment weaker-fork rdn
+                    if _crit < A * select[0][9]: del (select)  # delete select from select_
 
-                else: rdn += 1
+                else: fork[0][9] += 1
 
-            if crit > A * rdn:  # inclusion after full select_ rdn assignment
+            if crit > A * fork[0][9]:  # inclusion after full select_ rdn assignment
                 select_.append(fork)
 
     while len(select_) > 0:
