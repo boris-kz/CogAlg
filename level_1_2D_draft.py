@@ -1,5 +1,6 @@
 from scipy import misc
 from collections import deque
+import numpy as np
 
 '''
     Level 1 with patterns defined by the sign of vertex gradient: modified core algorithm of levels 1 + 2.
@@ -8,7 +9,7 @@ from collections import deque
     They are formed on the same level because average lateral match ~ average vertical match.
     
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
-    equally representative samples of continuous 90-degree gradient: minimal unique unit of 2D gradient. 
+    equally representative samples of continuous 0-90 degree gradient: minimal unique unit of 2D gradient 
     Hence, such vertex gradient is computed as average of these two orthogonally diverging derivatives.
    
     2D patterns are blobs of same-sign vertex gradient, of value for vP or difference for dP.
@@ -44,11 +45,16 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     # vertical comparison between pixels, forms vertex tuples t2: p, d, dy, m, my, separate fd, fv
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
-    x, valt_, dalt_, vP_, dP_, _vP2_, _dP2_ = 0,[],[],[],[],[],[]  # 2D _P2_ is accumulated in ycomp
-    pri_s, I, D, Dy, M, My, G, olp, e_ = 0,0,0,0,0,0,0,0,[]  # also _G: interference | redundancy?
+    x, valt_, dalt_, vP_, dP_, _vP2_, _dP2_ = 0,[],[],[],[],[],[]
+    # or _P2_s are accumulated in form_blob?  alt_ is included in P by form_blob?
 
-    vP = pri_s, I, D, Dy, M, My, G, olp, e_  # tuple initialization
-    dP = pri_s, I, D, Dy, M, My, G, olp, e_  # alt_ and rdn over alt_ are included in P by form_blob
+    pri_s, I, D, Dy, M, My, G, e_ = 0,0,0,0,0,0,0,[]
+    vP = pri_s, I, D, Dy, M, My, G, e_
+    dP = pri_s, I, D, Dy, M, My, G, e_
+
+    olp, oG, alt_oG = 0,0,0
+    volp = olp, oG, alt_oG
+    dolp = olp, oG, alt_oG
 
     A = a * r
 
@@ -68,13 +74,13 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 
         t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
 
-        sv, valt_, dalt_, vP, vP_, _vP_, _vP2_ = \
-        form_P(0, t2, fv, fd, valt_, dalt_, vP, vP_, _vP_, _vP2_, x, y, Y, r, A)
+        sv, volp, valt_, dalt_, vP, vP_, _vP_, _vP2_ = \
+        form_P(0, t2, fv, fd, volp, valt_, dalt_, vP, vP_, _vP_, _vP2_, x, y, Y, r, A)
 
         # forms 1D slice of value pattern vP: horizontal span of same-sign vg s with associated vars
 
-        sd, dalt_, valt_, dP, dP_, _dP_, _dP2_ = \
-        form_P(1, t2, fd, fv, dalt_, valt_, dP, dP_, _dP_, _dP2_, x, y, Y, r, A)
+        sd, dolp, dalt_, valt_, dP, dP_, _dP_, _dP2_ = \
+        form_P(1, t2, fd, fv, dolp, dalt_, valt_, dP, dP_, _dP_, _dP2_, x, y, Y, r, A)
 
         # forms 1D slice of difference pattern dP: horizontal span of same-sign dg s + associated vars
 
@@ -90,23 +96,28 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     return vP_, dP_, _vP2_, _dP2_  # also alt_ return for fork_eval? for comp_P, form_blob, term_blob
 
 
-def form_P(type, t2, g, alt_g, alt_, _alt_, P, P_, _P_, _P2_, x, y, Y, r, A):  # forms 1D blob slices
+def form_P(type, t2, g, alt_g, olp, alt_, _alt_, P, P_, _P_, _P2_, x, y, Y, r, A):  # forms 1D Ps: slices
 
     p, d, dy, m, my = t2  # 2D tuple represents vertex per pixel
-    pri_s, I, D, Dy, M, My, G, olp, e_ = P  # to increment or initialize vars, also _G to eval alt_P rdn?
+    pri_s, I, D, Dy, M, My, G, e_ = P
+    olp, oG, alt_oG = olp  # P overlap to concurrent alternative-type P, accumulated in ycomp
 
     s = 1 if g > 0 else 0
-    if s != pri_s and x > r + 2:  # P(span of same-sign gs) is terminated and merged with overlapping _Ps
+    if s != pri_s and x > r + 2:  # P(span of same-sign gs) is terminated and evaluated to form blob
 
-        P_, _P_, _P2_ = form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A)  # line end: _P_ = P_
-        _alt = len(P_), olp # index len(P_) or P? and overlap of P are stored in alt Ps
-        _alt_.append(_alt)  # for P eval in form_blob
+        P_, _P_, _P2_ = form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A)  # _P_ = P_ at line end
+
+        _alt = P, olp, oG, alt_oG  # or P index len(P_): faster than P?
+        _alt_.append(_alt) # -> alt Ps for eval in form_blob;
+        # also alt_.append? whichever forms first?
 
         I, D, Dy, M, My, G, e_, alt_ = 0,0,0,0,0,0,[],[]  # P and alt_ are initialized
 
     # continued or initialized P vars are accumulated:
 
-    olp += 1  # P overlap to concurrent alternative-type P, accumulated till either P or _P is terminated
+    olp += 1  # alt P overlap: olp, oG, alt_oG are accumulated till either P or _P is terminated
+    oG += g; alt_oG += alt_g
+
     I += p    # p s summed within P
     D += d    # lateral D for vertical P comp
     Dy += dy  # vertical D, for blob normalization
@@ -122,9 +133,9 @@ def form_P(type, t2, g, alt_g, alt_, _alt_, P, P_, _P_, _P2_, x, y, Y, r, A):  #
 
     P = s, I, D, Dy, M, My, G, e_
 
-    return s, alt_, _alt_, P, P_, _P_, _P2_
+    return s, olp, alt_, _alt_, P, P_, _P_, _P2_
 
-    # alt_ and _alt_ are accumulated in ycomp between Ps?  or P-specific?  for fork_eval -> comp_P
+    # alt_ and _alt_ are accumulated in ycomp over full line, eval in form_blob for fork_eval -> comp_P
     # draft below:
 
 
@@ -139,7 +150,7 @@ def form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A):  # P over _P_ scan, 
     vPP_, dPP_, _vPP_, _dPP_ = [],[],[],[]
     s, I, D, Dy, M, My, G, e_ = P[0] # P = P, alt_ fork_, vPP_, dPP_ before P_.append(P)
 
-    rdn_olp = 0 # redundant overlap to alt_ # fork P redundancy counter init in fork_eval?
+    rdn_olp = 0 # redundant overlap to alt_ # also fork P redundancy counter init in fork_eval?
     area = 0 # blob area
 
     _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
@@ -212,6 +223,7 @@ def form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A):  # P over _P_ scan, 
         else: alt_P[8] += olp  # alt rdn_olp? or P-specific and unilateral access?
 
     rolp = rdn_olp / len(e_)  # relative rdn_olp
+
 
     if len(fork_) > 0:  # fork_ eval for comp_P -> _vPP_, _dPP_, vPP_, dPP_
         fork_= fork_eval(0, fork_, rolp, A)
@@ -295,14 +307,18 @@ def comp_P(P, P_, _P, _P_, _P2_, x):  # forms 2D derivatives of 1D P vars to def
 
     # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_blob?
 
-    crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,0,0,[],[]  # PP vars declaration
+    crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = 0,0,0,0,0,0,0,0,0,0,[],[]  # PP vars
 
     blob= crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
     vPP = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
     dPP = crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
 
-    P2 = blob, vPP, dPP  # PPs are initialized at non-matching P transfer to _P_, as generic element of _fork_
-    P2_= np.array(P2)  # element type declaration?
+    # PPs are initialized at non-matching P transfer to _P_?
+    # np.array for direct accumulation, or simply iterator of initialization?
+
+    P2_ = np.array([blob, vPP, dPP],
+        dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
+        ('M2', 'i4'), ('My2', 'i4'), ('G2', 'i4'), ('rdn2', 'i4'), ('alt2_', list), ('Py_', list)])
 
     P = s, I, D, Dy, M, My, G, r, e_, alt_, blob_  # _fork_ is empty, similar to tuple declaration?
     # returned Ps also include current derivatives per var?
