@@ -1,5 +1,5 @@
 from scipy import misc
-
+import numpy as np
 '''
 Level 1:
 
@@ -146,53 +146,52 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     # for next p comparison, vP and dP increment, and output
 
 
-def Le1(Fp_): # last '_' distinguishes array name from element name
+def level_1(input_frame_pixels): # last '_' distinguishes array name from element name
 
-    FP_ = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
-    Y, X = Fp_.shape  # Y: frame height, X: frame width
+    output_frame = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
+    frame_height, frame_width = input_frame_pixels.shape  # Y: frame height, X: frame width
 
-    a = 127  # minimal filter for vP inclusion
-    aV = 63  # minimal filter for incremental-range comp
-    aD = 63  # minimal filter for incremental-derivation comp
-    min_r=0  # default range of fuzzy comparison, initially 0
+    ave_match = 127  # minimal filter for vP inclusion
+    min_to_inc_range = 63  # minimal filter for incremental-range comp
+    min_to_inc_derivation = 63  # minimal filter for incremental-derivation comp
+    min_comp_range=0  # default range of fuzzy comparison, initially 0
 
-    for y in range(Y):
+    for frame_height_index in range(frame_height):
 
-        ip_ = Fp_[y, :]  # y is index of new line ip_
+        current_pixels_row = input_frame_pixels[frame_height_index, :]  # frame_height_index is index of new line current_pixels_row
 
-        if min_r == 0: A = a; AV = aV  # actual filters, incremented per comp recursion
-        else: A = 0; AV = 0  # if r > min_r
+        if min_comp_range == 0: cum_min_match = ave_match; cum_min_to_inc_rng = min_to_inc_range  # actual filters, incremented per comp recursion
+        else: cum_min_match = 0; cum_min_to_inc_rng = 0  # if comp_range > min_comp_range
 
-        if min_r <= 1: AD = aD
-        else: AD = 0
+        if min_comp_range <= 1: cum_min_to_inc_der = min_to_inc_derivation
+        else: cum_min_to_inc_der = 0
 
-        fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
-        pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
+        fuzzy_difference, fuzzy_value, comp_range, vP_, dP_ = 0, 0, 0, [], []  # i/o tuple
+        pri_s, I, D, V, rv, olp, pixels_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
         pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
-        pri_p = ip_[0]
+        previous_pixel = current_pixels_row[0]
 
-        for x in range(1, X):  # cross-compares consecutive pixels
+        for frame_width_index in range(1, frame_width):  # cross-compares consecutive pixels
 
-            p = ip_[x]  # new pixel for comp to prior pixel, could use pop()?
+            current_pixel = current_pixels_row[frame_width_index]  # new pixel for comp to prior pixel, could use pop()?
 
-            pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
-            comp(p, pri_p, fd, fv, x, X,
-                 pri_s, I, D, V, rv, p_, olp, olp_,
+            pri_s, I, D, V, rv, pixels_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
+            comp(current_pixel, previous_pixel, fuzzy_difference, fuzzy_value, frame_width_index, frame_width,
+                 pri_s, I, D, V, rv, pixels_, olp, olp_,
                  pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
-                 a, aV, aD, min_r, A, AV, AD, r, vP_, dP_)
+                 ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, cum_min_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, vP_, dP_)
 
-            pri_p = p  # prior pixel, pri_ values are always derived before use
+            previous_pixel = current_pixel  # prior pixel, pri_ values are always derived before use
 
-        LP_ = vP_, dP_
-        FP_.append(LP_)  # line of patterns is added to frame of patterns, y = len(FP_)
+        current_pattern_line = vP_, dP_
+        output_frame.append(current_pattern_line)  # line of patterns is added to frame of patterns, y = len(output_frame)
+    return output_frame  # output to level 2
 
-    return FP_  # output to level 2
-
-f = misc.face(gray=True)  # input frame of pixels
-f = f.astype(int)
-Le1(f)
+if __name__ == '__main__':
+    input_frame_pixels = misc.face(gray=True)  # input frame of pixels
+    input_frame_pixels = input_frame_pixels.astype(int)
+    level_1(input_frame_pixels)
 
 # at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
 # at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
-
