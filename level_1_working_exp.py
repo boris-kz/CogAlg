@@ -167,8 +167,8 @@ def level_1(input_frame_pixels): # last '_' distinguishes array name from elemen
         else: cum_min_to_inc_der = 0
 
         fuzzy_difference, fuzzy_value, comp_range, vP_, dP_ = 0, 0, 0, [], []  # i/o tuple
-        pri_s, I, D, V, rv, olp, pixels_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
-        pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
+        pri_s, I, D, V, rv, current_overlapping_value_pattern, pixels_, overlapping_value_pattern = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
+        pri_sd, Id, Dd, Vd, rd, current_overlapping_difference_pattern, d_, overlapping_difference_pattern = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
         previous_pixel = current_pixels_row[0]
 
@@ -176,10 +176,10 @@ def level_1(input_frame_pixels): # last '_' distinguishes array name from elemen
 
             current_pixel = current_pixels_row[frame_width_index]  # new pixel for comp to prior pixel, could use pop()?
 
-            pri_s, I, D, V, rv, pixels_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP_, dP_ = \
+            pri_s, I, D, V, rv, pixels_, current_overlapping_value_pattern, overlapping_value_pattern, pri_sd, Id, Dd, Vd, rd, d_, current_overlapping_difference_pattern, overlapping_difference_pattern, vP_, dP_ = \
             comp(current_pixel, previous_pixel, fuzzy_difference, fuzzy_value, frame_width_index, frame_width,
-                 pri_s, I, D, V, rv, pixels_, olp, olp_,
-                 pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_,
+                 pri_s, I, D, V, rv, pixels_, current_overlapping_value_pattern, overlapping_value_pattern,
+                 pri_sd, Id, Dd, Vd, rd, d_, current_overlapping_difference_pattern, overlapping_difference_pattern,
                  ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, cum_min_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, vP_, dP_)
 
             previous_pixel = current_pixel  # prior pixel, pri_ values are always derived before use
