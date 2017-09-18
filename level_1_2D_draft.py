@@ -15,11 +15,11 @@ import numpy as np
     2D patterns are blobs of same-sign vertex gradient, of value for vP or difference for dP.
     Level 1 has 5 steps of encoding, incremental per line defined by vertical coordinate y:
 
-    y:   comp()   input array: p_ (pixels), lateral comp -> tuple t,
-    y-1: ycomp()  input array: t_ (tuples), vertical comp -> vertex t2,
-    y-2: form_P() input array: t2_, lateral combination -> 1D pattern P,
-    y-3: form_B() input array: P_, vertical comb | comp -> 2D pattern P2,
-    y-4: term_B() input array: P2_, terminated and evaluated for recursion
+    y:   comp(p_): lateral comp -> tuple t,
+    y-1: ycomp (t_): vertical comp -> vertex t2,
+    y-2: form_P(t2_): lateral combination -> 1D pattern P,
+    y-3: form_P2 (P_): vertical comb | comp -> 2D pattern P2,
+    y-4: term_P2 (P2_): P2s are terminated and evaluated for recursion
 '''
 
 def comp(p_):  # comparison of consecutive pixels in a scan line forms tuples: pixel, match, difference
@@ -46,16 +46,13 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
     x, valt_, dalt_, vP_, dP_, _vP2_, _dP2_ = 0,[],[],[],[],[],[]
-    # or _P2_s are accumulated in form_blob?  alt_ is included in P by form_blob?
+    # return is to a calling or distant-calling function?  alt_ is included in P by form_blob?
 
-    pri_s, I, D, Dy, M, My, G, e_ = 0,0,0,0,0,0,0,[]
-    vP = pri_s, I, D, Dy, M, My, G, e_
-    dP = pri_s, I, D, Dy, M, My, G, e_
+    pri_s, I, D, Dy, M, My, G, e_, rdn_olp = 0,0,0,0,0,0,0,[],0
+    vP = pri_s, I, D, Dy, M, My, G, e_, rdn_olp
+    dP = pri_s, I, D, Dy, M, My, G, e_, rdn_olp  # or P list, to be converted to tuple?
 
-    olp, oG, alt_oG = 0,0,0
-    volp = olp, oG, alt_oG
-    dolp = olp, oG, alt_oG
-
+    olp = [0,0,0]  # olp list, to be converted to tuple: olp_len, ovG, odG: common for vP and dP?
     A = a * r
 
     for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels, forms vertex gradients
@@ -74,21 +71,30 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
 
         t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
 
-        sv, volp, valt_, dalt_, vP, vP_, _vP_, _vP2_ = \
-        form_P(0, t2, fv, fd, volp, valt_, dalt_, vP, vP_, _vP_, _vP2_, x, y, Y, r, A)
+        sv, olp, valt_, dalt_, vP, dP, vP_, _vP_, _vP2_ = \
+        form_P(0, t2, fv, fd, olp, valt_, dalt_, vP, dP, vP_, _vP_, _vP2_, x, y, Y, r, A)
 
-        # forms 1D slice of value pattern vP: horizontal span of same-sign vg s with associated vars
+        # forms 1D value pattern vP: horizontal span of same-sign vg s with associated vars
 
-        sd, dolp, dalt_, valt_, dP, dP_, _dP_, _dP2_ = \
-        form_P(1, t2, fd, fv, dolp, dalt_, valt_, dP, dP_, _dP_, _dP2_, x, y, Y, r, A)
+        sd, olp, dalt_, valt_, dP, vP, dP_, _dP_, _dP2_ = \
+        form_P(1, t2, fd, fv, olp, dalt_, valt_, dP, vP, dP_, _dP_, _dP2_, x, y, Y, r, A)
 
-        # forms 1D slice of difference pattern dP: horizontal span of same-sign dg s + associated vars
+        # forms 1D difference pattern dP: horizontal span of same-sign dg s + associated vars
 
     # line ends, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient,
-    # vP term, dP term, no initialization:
 
-    dolp = dP[7]; dalt = len(vP_), dolp; dalt_.append(dalt)  # olp: summed overlap by stronger alt_Ps
-    volp = vP[7]; valt = len(dP_), volp; valt_.append(valt)
+    dalt_.append(olp)  # olp term, or olp eval -> rdn_olp: summed overlap by stronger alt_Ps?
+    valt_.append(olp)  # vP term, dP term, no initialization:
+
+    olp_len, ovG, odG = olp
+
+    if ovG > odG:  # comp of ovG to odG, 0 is biased toward alt_P or toward vP: consistent?
+        vP[8] += olp_len  # accumulate redundant overlap in current vP or dP with weaker oG
+    else:
+        dP[8] += olp_len
+
+    vP[8] /= vP[7]  # rolp = rdn_olp / len(e_):
+    dP[8] /= dP[7]  # relative rdn_olp: redundancy ratio of P to overlapping alt_Ps
 
     vP_, _vP_, _vP2_ = form_blob(0, vP, vP_, _vP_, _vP2_, valt_, x, y, Y, r, A)  # empty _vP_
     dP_, _dP_, _dP2_ = form_blob(1, dP, dP_, _dP_, _dP2_, dalt_, x, y, Y, r, A)  # empty _dP_
@@ -96,26 +102,39 @@ def ycomp(t_, _t_, fd, fv, y, Y, r, a, _vP_, _dP_):
     return vP_, dP_, _vP2_, _dP2_  # also alt_ return for fork_eval? for comp_P, form_blob, term_blob
 
 
-def form_P(type, t2, g, alt_g, olp, alt_, _alt_, P, P_, _P_, _P2_, x, y, Y, r, A):  # forms 1D Ps: slices
+def form_P(type, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, _P2_, x, y, Y, r, A):  # forms 1D Ps
 
-    p, d, dy, m, my = t2  # 2D tuple represents vertex per pixel
-    pri_s, I, D, Dy, M, My, G, e_ = P
-    olp, oG, alt_oG = olp  # P overlap to concurrent alternative-type P, accumulated in ycomp
+    p, d, dy, m, my = t2  # 2D tuple of vertex per pixel
+    pri_s, I, D, Dy, M, My, G, e_, rdn_olp = P
+
+    if type == 0:
+        olp_len, oG, alt_oG = olp  # overlap between current vP and dP, accumulated in ycomp
+    else:
+        olp_len, alt_oG, oG = olp  # no oG, alt_oG div: same olp_len, oG comp -> rdn_olp at term
 
     s = 1 if g > 0 else 0
     if s != pri_s and x > r + 2:  # P(span of same-sign gs) is terminated and evaluated to form blob
 
+        if alt_oG > oG:  # comp of ovG to odG, 0 is biased toward alt_P or toward vP: consistent?
+            rdn_olp += olp_len  # accumulate redundant overlap in current vP or dP with weaker oG
+        else:
+            alt_P[8] += olp_len
+
+        rolp = rdn_olp / len(e_)  # relative rdn_olp: redundancy ratio of P to overlapping alt_Ps
+
+        P = pri_s, I, D, Dy, M, My, G, e_, rolp
         P_, _P_, _P2_ = form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A)  # _P_ = P_ at line end
 
-        _alt = P, olp, oG, alt_oG  # or P index len(P_): faster than P?
-        _alt_.append(_alt) # -> alt Ps for eval in form_blob;
-        # also alt_.append? whichever forms first?
+        alt = alt_P, olp_len, oG, alt_oG  # or P index len(P_): faster than P?  for P eval in form_blob
+        alt_.append(alt)
+        _alt = P, olp_len, alt_oG, oG  # redundant olp repr in concurrent alt_P, formed by terminated P
+        _alt_.append(_alt)
 
-        I, D, Dy, M, My, G, e_, alt_ = 0,0,0,0,0,0,[],[]  # P and alt_ are initialized
+        I, D, Dy, M, My, G, e_, alt_, olp = 0,0,0,0,0,0,[],[],[0,0,0]  # P, alt_, olp are initialized
 
     # continued or initialized P vars are accumulated:
 
-    olp += 1  # alt P overlap: olp, oG, alt_oG are accumulated till either P or _P is terminated
+    olp_len += 1  # alt P overlap: olp_len, oG, alt_oG are accumulated till either P or _P is terminated
     oG += g; alt_oG += alt_g
 
     I += p    # p s summed within P
@@ -132,8 +151,9 @@ def form_P(type, t2, g, alt_g, olp, alt_, _alt_, P, P_, _P_, _P2_, x, y, Y, r, A
         e_.append(g)  # pattern element: prior same-line d gradient, buffered for selective inc_der comp
 
     P = s, I, D, Dy, M, My, G, e_
+    olp = olp, oG, alt_oG
 
-    return s, olp, alt_, _alt_, P, P_, _P_, _P2_
+    return s, olp, alt_, _alt_, P, alt_P, P_, _P_, _P2_
 
     # alt_ and _alt_ are accumulated in ycomp over full line, eval in form_blob for fork_eval -> comp_P
     # draft below:
@@ -148,9 +168,8 @@ def form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A):  # P over _P_ scan, 
     root_, blob_, buff_ = deque(), deque(), deque()
 
     vPP_, dPP_, _vPP_, _dPP_ = [],[],[],[]
-    s, I, D, Dy, M, My, G, e_ = P[0] # P = P, alt_ fork_, vPP_, dPP_ before P_.append(P)
+    s, I, D, Dy, M, My, G, e_, rolp = P[0] # P = P, alt_ fork_, vPP_, dPP_ before P_.append(P)
 
-    rdn_olp = 0 # redundant overlap to alt_ # also fork P redundancy counter init in fork_eval?
     area = 0 # blob area
 
     _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
@@ -165,7 +184,7 @@ def form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A):  # P over _P_ scan, 
         # line y-3 arrays consist of blobs, with one lower-line-exposed blob, but no exposed P
 
         _ix = P[0][1]  # sub- _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, r
-        I2, D2, Dy2, M2, My2, G2, e2_, alt2_, Py_ = _P[2]  # summed sub-blob vars
+        I2, D2, Dy2, M2, My2, G2, e2_, rolp2, alt2_, Py_ = _P[2]  # summed sub-blob vars
 
         if P[0] == _P[0][0]:  # if s == _s: v or d sign match
 
@@ -214,17 +233,6 @@ def form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A):  # P over _P_ scan, 
 
     # no horizontal overlap between P and _P, evaluation for P comp to fork_, then buffered:
 
-    for alt in alt_:  # after full P_ is formed within ycomp
-        alt_P, olp = alt
-
-        if alt_P[6] > G: # comp of vG for vP | dG for dP
-            rdn_olp += olp  # accumulate weaker-alt redundant overlap by greater-G alt Ps in alt_
-
-        else: alt_P[8] += olp  # alt rdn_olp? or P-specific and unilateral access?
-
-    rolp = rdn_olp / len(e_)  # relative rdn_olp
-
-
     if len(fork_) > 0:  # fork_ eval for comp_P -> _vPP_, _dPP_, vPP_, dPP_
         fork_= fork_eval(0, fork_, rolp, A)
 
@@ -241,7 +249,7 @@ def form_blob(type, P, P_, _P_, _P2_, alt_, x, y, Y, r, A):  # P over _P_ scan, 
 
     # no term and no buff: _P is already included in its root Ps
 
-    return P_, buff_, _P2_  # buff: _P = _P, alt_, blob_, _vPP_, _dPP_; output _B_: terminated blobs
+    return P_, buff_, _P2_  # buff: _P = _P, alt_, blob_, _vPP_, _dPP_; output _P2_: terminated P2s
 
 
 def fork_eval(type, fork_, rolp, A):  # fork_ eval for comp_P and _vPP_, _dPP_ append, then eval for form_PP
@@ -252,7 +260,7 @@ def fork_eval(type, fork_, rolp, A):  # fork_ eval for comp_P and _vPP_, _dPP_ a
 
     for fork in fork_: # fork_ is preserved for assignment to last fork
 
-        crit = fork[0]  # selection criterion: oG for fork | PM for vPP | PD for dPP
+        crit = fork[0] * rolp  # selection criterion: oG for fork | PM for vPP | PD for dPP
         if crit > A:  # comp to _crit in select_,  inclusion in select_
 
             for select in select_:  # forks are re-evaluated at each rdn increment
@@ -260,10 +268,10 @@ def fork_eval(type, fork_, rolp, A):  # fork_ eval for comp_P and _vPP_, _dPP_ a
                 _crit = select[0]
                 if crit > _crit:  # criterion comp
 
-                    select[0][9] += 1  # increment weaker-fork rdn
+                    select[0][9] += 1  # increment weaker-fork rdn, initialized per fork?
                     if _crit < A * select[0][9]: del (select)  # delete select from select_
 
-                else: fork[0][9] += 1
+                else: fork[0][9] += 1  # increment weaker-fork rdn
 
             if crit > A * fork[0][9]:  # inclusion after full select_ rdn assignment
                 select_.append(fork)
