@@ -166,9 +166,9 @@ def level_1(input_frame_pixels): # last '_' distinguishes array name from elemen
         if min_comp_range <= 1: cum_min_to_inc_der = min_to_inc_derivation
         else: cum_min_to_inc_der = 0
 
-        fuzzy_difference, fuzzy_value, comp_range, vP_, dP_ = 0, 0, 0, [], []  # i/o tuple
-        pri_s, I, D, V, rv, current_overlapping_value_pattern, pixels_, overlapping_value_pattern = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
-        pri_sd, Id, Dd, Vd, rd, current_overlapping_difference_pattern, d_, overlapping_difference_pattern = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
+        fuzzy_difference, fuzzy_value, comp_range, relative_match_patterns, difference_patterns = 0, 0, 0, [], []  # i/o tuple
+        previous_relative_match_pattern_span, I, fuzzy_diff_span_sum_over_value_pattern, fuzzy_value_span_sum_over_value_pattern, value_pattern_comp_range, current_overlapping_value_pattern, pixels_, overlapping_value_pattern = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
+        previous_difference_pattern_span, Id, fuzzy_diff_span_sum_over_difference_pattern, fuzzy_value_span_sum_over_difference_pattern, difference_pattern_comp_range, current_overlapping_difference_pattern, d_, overlapping_difference_pattern = 0, 0, 0, 0, 0, 0, [], []  # dP tuple
 
         previous_pixel = current_pixels_row[0]
 
@@ -176,15 +176,15 @@ def level_1(input_frame_pixels): # last '_' distinguishes array name from elemen
 
             current_pixel = current_pixels_row[frame_width_index]  # new pixel for comp to prior pixel, could use pop()?
 
-            pri_s, I, D, V, rv, pixels_, current_overlapping_value_pattern, overlapping_value_pattern, pri_sd, Id, Dd, Vd, rd, d_, current_overlapping_difference_pattern, overlapping_difference_pattern, vP_, dP_ = \
+            previous_relative_match_pattern_span, I, fuzzy_diff_span_sum_over_value_pattern, fuzzy_value_span_sum_over_value_pattern, value_pattern_comp_range, pixels_, current_overlapping_value_pattern, overlapping_value_pattern, previous_difference_pattern_span, Id, fuzzy_diff_span_sum_over_difference_pattern, fuzzy_value_span_sum_over_difference_pattern, difference_pattern_comp_range, d_, current_overlapping_difference_pattern, overlapping_difference_pattern, vP_, dP_ = \
             comp(current_pixel, previous_pixel, fuzzy_difference, fuzzy_value, frame_width_index, frame_width,
-                 pri_s, I, D, V, rv, pixels_, current_overlapping_value_pattern, overlapping_value_pattern,
-                 pri_sd, Id, Dd, Vd, rd, d_, current_overlapping_difference_pattern, overlapping_difference_pattern,
-                 ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, cum_min_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, vP_, dP_)
+                 previous_relative_match_pattern_span, I, fuzzy_diff_span_sum_over_value_pattern, fuzzy_value_span_sum_over_value_pattern, value_pattern_comp_range, pixels_, current_overlapping_value_pattern, overlapping_value_pattern,
+                 previous_difference_pattern_span, Id, fuzzy_diff_span_sum_over_difference_pattern, fuzzy_value_span_sum_over_difference_pattern, difference_pattern_comp_range, d_, current_overlapping_difference_pattern, overlapping_difference_pattern,
+                 ave_match, min_to_inc_range, min_to_inc_derivation, min_comp_range, cum_min_match, cum_min_to_inc_rng, cum_min_to_inc_der, comp_range, relative_match_patterns, difference_patterns)
 
             previous_pixel = current_pixel  # prior pixel, pri_ values are always derived before use
 
-        current_pattern_line = vP_, dP_
+        current_pattern_line = relative_match_patterns, difference_patterns
         output_frame.append(current_pattern_line)  # line of patterns is added to frame of patterns, y = len(output_frame)
     return output_frame  # output to level 2
 
