@@ -25,7 +25,7 @@ import numpy as np
 def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixel, match, difference
 
     t_ = []  # complete fuzzy tuples: summation range = rng
-    it_ = deque()  # incomplete fuzzy tuples: summation range < rng
+    it_ = []  # incomplete fuzzy tuples: summation range < rng
     d, m = 0, 0  # no d, m at x = 0
 
     for p in p_:
@@ -46,7 +46,7 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
                 del it  # completed tuple is transferred from it_ to t_
 
         it = p, d, m
-        it_.appendleft(it)  # new prior tuple
+        it_.append(it)  # new prior tuple
 
     t_ += it_  # last number = rng of tuples remain incomplete
     return t_

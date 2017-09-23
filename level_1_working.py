@@ -83,8 +83,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     m = min(p, pri_p)  # match between consecutive pixels
     v = m - A          # relative match (predictive value) between consecutive pixels
 
-    fd += d  # fuzzy d includes all shorter + current- range ds between comparands
-    fv += v  # fuzzy v includes all shorter + current- range vs between comparands
+    fd += d  # fuzzy d includes all shorter + current- range ds between comparands, accumulated in inc_rng
+    fv += v  # fuzzy v includes all shorter + current- range vs between comparands, accumulated in inc_rng
 
 
     # formation of value pattern vP: span of pixels forming same-sign v s:
