@@ -57,7 +57,7 @@ def ycomp(t_, _t_):  # vertical comparison between pixels, forms vertex tuples t
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
     global _vP_; global _dP_  # converted from vP_ and dP_ here, then used by form_blob
-    global  vP_; global  dP_  # appended by form_P
+    global vP_;  global dP_  # appended by form_P
 
     global valt_; valt_ = []  # appended by form_P, included in P by form_blob, to form alt2_?
     global dalt_; dalt_ = []
@@ -74,31 +74,29 @@ def ycomp(t_, _t_):  # vertical comparison between pixels, forms vertex tuples t
         p, d, m = t
         _p, _d, _m = _t
 
-        dy = p - _p   # vertical difference between pixels, summed -> Dy
-        dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> dG: variation eval?
+        # non-fuzzy pixel comparison:
 
-        fd += dg  # to be revised!  fuzzy d-gradient: all shorter + current- range dg s within extended quadrant
+        dy = p - _p  # vertical difference between pixels, summed -> Dy
+        dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> dG: variation eval?
 
         my = min(p, _p)   # vertical match between pixels, summed -> My
         vg = _m + my - ave  # gradient of predictive value (relative match) at prior-line _p, -> vG
 
-        fv += vg  # to be revised!  fuzzy v-gradient: all shorter + current- range vg s in extended quadrant
-
         t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
 
         sv, olp, valt_, dalt_, vP, dP, vP_ = \
-        form_P(0, t2, fv, fd, olp, valt_, dalt_, vP, dP, vP_, x)
+        form_P(0, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, x)
 
         # forms 1D value pattern vP: horizontal span of same-sign vg s with associated vars
 
         sd, olp, dalt_, valt_, dP, vP, dP_ = \
-        form_P(1, t2, fd, fv, olp, dalt_, valt_, dP, vP, dP_, x)
+        form_P(1, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, x)
 
         # forms 1D difference pattern dP: horizontal span of same-sign dg s + associated vars
 
-    _vP_ = vP_; _dP_ = dP_ # appended by form_P
+    _vP_ = vP_; _dP_ = dP_  # P_ is appended and returned by form_P within a line
 
-    # line ends, last ycomp t: lateral d = 0, m = 0, inclusion per incomplete gradient,
+    # line ends, t2s have incomplete lateral fd and fm, inclusion per vg - ave / (rng / X-x)?
     # olp term, vP term, dP term, no initialization:
 
     dalt_.append(olp); valt_.append(olp)  # if any?
@@ -112,7 +110,7 @@ def ycomp(t_, _t_):  # vertical comparison between pixels, forms vertex tuples t
     vP[8] /= vP[7]  # rolp = rdn_olp / len(e_): redundancy ratio of P to overlapping alt_Ps
     dP[8] /= dP[7]  # or A = ave * dP[8] /= dP[7]?
 
-    if y > rng:
+    if y+1 > rng:
 
         vP_, _vP_ = scan_high(0, vP, vP_, valt_, x)  # empty _vP_
         dP_, _dP_ = scan_high(1, dP, dP_, dalt_, x)  # empty _dP_
@@ -128,7 +126,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, x):  # forms 1D Ps
     if typ == 0:
         olp_len, oG, alt_oG = olp  # overlap between current vP and dP, accumulated in ycomp
     else:
-        olp_len, alt_oG, oG = olp  # no oG, alt_oG div: same olp_len, oG comp -> rdn_olp at term
+        olp_len, alt_oG, oG = olp
 
     s = 1 if g > 0 else 0
     if s != pri_s and x > rng + 2:  # P (span of same-sign gs) is terminated
@@ -158,66 +156,64 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, x):  # forms 1D Ps
     oG += g; alt_oG += alt_g
 
     I += p    # p s summed within P
-    D += d    # lateral D for vertical P comp
-    Dy += dy  # vertical D, for blob normalization
-    M += m    # lateral D for vertical P comp
-    My += my  # vertical M, for blob normalization
-    G += g    # fd or fv gradient summed to define P value, vs. V = M - 2a * W?
+    D += d    # lateral D, for P comp and P2 normalization
+    Dy += dy  # vertical D, for P2 normalization
+    M += m    # lateral D for P comp and P2 normalization
+    My += my  # vertical M, for P2 normalization
+    G += g    # d or v gradient summed to define P value, or V = M - 2a * W?
 
     if typ == 0:
         pri = p, g, alt_g  # v gradient, also d, dy, m, my for fuzzy accumulation within P-specific r?
         e_.append(pri)  # pattern element: prior same-line vertex, buffered for selective inc_rng comp
     else:
-        e_.append(g)  # pattern element: prior same-line d gradient, buffered for selective inc_der comp
+        e_.append(g)  # pattern element: prior same-line d gradient, for selective inc_der comp
 
-    P = s, I, D, Dy, M, My, G, e_
+    P = s, I, D, Dy, M, My, G, e_  # incomplete P
     olp = olp, oG, alt_oG
 
-    return s, olp, alt_, _alt_, P, alt_P, P_  # ? alt_ and _alt_ are accumulated in ycomp over full line
+    return s, olp, alt_, _alt_, P, alt_P, P_  # alt_ and _alt_ are accumulated in ycomp over full line
 
 
-def scan_high(typ, P, P_, alt_, x):  # P scan over higher-line _P_ for inclusion, eval for displacement
+def scan_high(typ, P, P_, alt_, x):  # P scans over higher-line _P_ for inclusion, _P displacement
 
     fork_ = deque()  # higher-line matches per P, to assign redundancy and move term _P to next _P
     root_, blob_, buff_ = deque(), deque(), deque()
 
     vPP_, dPP_, _vPP_, _dPP_ = [],[],[],[]
+    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
+
+    s, I, D, Dy, M, My, G, e_, A = P
+    ix = x - len(e_)  # initial coordinate of P
 
     if typ == 0: _P_ = _vP_
     else: _P_ = _dP_
-
-    s, I, D, Dy, M, My, G, e_, A = P[0]  # P_.append(P) = P, alt_ fork_, vPP_, dPP_
-
-    _ix = 0  # initial coordinate of _P displaced from _P_ by last comp_P
-    ix = x - len(e_)  # initial coordinate of P
-    area = 0  # blob area
 
     while x >= _ix:  # P to _P connection eval, while horizontal overlap between P and _P:
 
         fork_oG = 0  # fork overlap gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # coordinate of current P element
 
-        _P = _P_.popleft()  # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
+        _P = _P_.popleft()   # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
         _ix = _P[0][1]  # sub- _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn
 
         if P[0] == _P[0][0]:  # if s == _s: v or d sign match
 
             while ex > _ix:
+                for e in e_:  # oG accumulation (PM, PD from comp_P only)
 
-                for e in e_:  # oG accumulation  # PM, PD from comp_P only
                     if typ == 0: fork_oG += e[1]  # if vP: e = p, g, alt_g
                     else: fork_oG += e  # if dP: e = g
                     ex += 1
 
             fork = fork_oG, _P
             fork_.append(fork)  # _P inclusion in P
-            _P[5].append(P)  # root_.append(P), to track continuing roots in form_PP
+            _P[2].append(P)  # root_.append(P), to track continuing roots in form_PP
 
         if _P[0][2] > ix:  # if _x > ix:
 
             buff_.append(_P)  # _P with updated root_ is buffered for next-P comp
 
-        else:  # no horizontal overlap between _P and next P, _fork_s are evaluated for term_blob
+        else:  # no horizontal overlap between _P and next P, _P is evaluated for termination
 
             if (len(root_) == 0 and y > rng + 3) or y == Y - 1:  # _P or frame is terminated
 
@@ -228,42 +224,39 @@ def scan_high(typ, P, P_, alt_, x):  # P scan over higher-line _P_ for inclusion
                     if _vPP > 0: term_P2(_vPP, A)  # not for _vPP in _vPP_: only to eval for rdn?
                     if _dPP > 0: term_P2(_dPP, A)
 
-            # if len(root_) > 1: split, sub-blob buff, root blobs inclusion after their term?
+            buff_ += _P_  # for scan_high(next P)
 
-            buff_ += _P_  # for form_blob (next P)
+    # no more horizontal overlap between P and _P:
 
-    # no horizontal overlap between P and _P, evaluation for P comp to fork_, then buffered:
-
-    if len(fork_) > 0:  # fork_ eval for comp_P -> _vPP_, _dPP_, vPP_, dPP_
+    if len(fork_) > 0:  # fork_ evaluation for P inclusion and comparison
         bA = A
         fork_, bA = fork_eval(0, P, fork_, bA)  # bA *= blob rdn
 
-        if len(vPP_) > 0:
-            vA = bA  # vPP_ eval for form_PP -> 2D value pattern, rdn alt_ blobs:
-            vPP_, vA = fork_eval(1, P, vPP_, vA)  # simultaneous dPP form:
+        if len(vPP_) > 0:  # = lateral len(dPP_): formed by comp_P over same forks
 
-            dA = vA  # dPP_ eval for form_PP -> 2D difference pattern, rdn alt_ vPPs:
+            vA = bA  # eval for inclusion in vPPs (2D value patterns), rdn alt_ = blobs:
+            vPP_, vA = fork_eval(1, P, vPP_, vA)
+
+            dA = vA  # eval for inclusion in dPPs (2D difference patterns), rdn alt_ = vPPs:
             dPP_, dA = fork_eval(2, P, dPP_, dA)
 
-            # individual vPPs and dPPs are also modified in their forks
+            # individual vPPs and dPPs are also modified in their fork
 
     P = P, alt_, fork_, vPP_, dPP_  # adding root_ (lower-line matches) at P_ -> _P_ conversion
-    P_.append(P)  # P buffered in P_, terminated root Ps are stored in term_?
-
-    # no term and no buff: _P is already included in its root Ps
+    P_.append(P)  # P is buffered in P_, terminated root Ps are stored in term_?
 
     if typ == 0: _vP_ = buff_  # modifying global _vP_
     else: _dP_ = buff_ # _P = _P, alt_, blob_, _vPP_, _dPP_
 
-    return P_  # with added fork_..?
+    return P_  # with added fork_... per P
 
 
-def fork_eval(typ, P, fork_, A):  # fork_ eval for incr_blob, form_blob, comp_P, form_PP, incr_PP
+def fork_eval(typ, P, fork_, A):  # _Ps eval for init_blob, incr_blob, comp_P, init_PP, incr_PP
 
-    # fork eval per P slice or at blob term | split: variation accumulated in 1D or 2D?
-    select_ = [] # for fork comp eval, or for _PP form eval
+    # per P term or P2 term | split: variation accumulated?
+    select_ = []  # for fork comp eval, or for _PP form eval
 
-    for fork in fork_: # fork_ is preserved for assignment to last fork
+    for fork in fork_:  # fork_ is preserved for assignment to last fork
 
         crit = fork[0]  # selection criterion: oG for fork | PM for vPP | PD for dPP
         rdn = fork[0][9]
@@ -289,20 +282,20 @@ def fork_eval(typ, P, fork_, A):  # fork_ eval for incr_blob, form_blob, comp_P,
         # merges vertically contiguous and horizontally overlapping same-type and sign Ps into P2s
         # P2 or 2D P: blob | vPP | dPP, alt_ -> rdn for fork_eval, then alt2_ += alt_ for P2 eval?
 
-        if typ == 0:  # select fork = blob, of either vPs or dPs
+        if typ == 0:  # select fork = blob
 
-            if select[0][9] == 0:
-                fork = incr_blob(P, select)  # if rdn = 0 (max fork): trunk accumulation
+            if select[0][9] == 0:  # if rdn = 0: max-fork blob accumulation
+                fork = incr_blob(P, select)
             else:
                 fork = init_blob(P, select)  # new blob initiation per fork _P
 
-            vPP, dPP = comp_P(P, select)  # same eval for form() and comp_P?
+            vPP, dPP = comp_P(P, select)  # same min oG for blob inclusion and comp_P?
             fork = fork, vPP, dPP
 
-        else:  # select fork = vPP or dPP, of either vPs or dPs
+        else:  # select fork = vPP or dPP
 
-            if select[0][9] == 0:
-                fork = incr_PP(typ, P, select)  # if rdn = 0 (max fork): trunk PP accumulation
+            if select[0][9] == 0:  # if rdn = 0: max-fork PP accumulation
+                fork = incr_PP(typ, P, select)
             else:
                 fork = init_PP(typ, P, select)  # new _vPP_ | _dPP_ initiation per fork _P
 
@@ -312,16 +305,13 @@ def fork_eval(typ, P, fork_, A):  # fork_ eval for incr_blob, form_blob, comp_P,
 
     return fork_, A  # or includes A?
 
-'''
-    sum of all root Ps per fork -> horizontally defined sub-blob,
-    if fork term: sub-blob is assigned to next continuing sub-blob in blob_
-    and summed in wider sub-blob till its term: no continuing connected sub-blob?
-'''
+    # terminated root Ps are converted to blobs, then summed into fork's blob at its term
+    # new blob init if multiple new roots;     non-selected forks may be terminated?
 
 
-def init_blob(P, fork):  # selective fork inclusion, excluding continuing trunk?
+def init_blob(P, fork):  # selective fork inclusion, except into continuing trunk (max fork)
 
-    s, I, D, Dy, M, My, G, e_, G, rdn, alt_ = P
+    s, I, D, Dy, M, My, G, e_, rdn, alt_ = P
     _s, _I, _D, _Dy, _M, _My, _G, _e_, _oG, _rdn, _alt_ = fork[0]  # current-fork blob vars
 
     I2 = _I
@@ -330,7 +320,7 @@ def init_blob(P, fork):  # selective fork inclusion, excluding continuing trunk?
     G2 = _G
     area = len(e_)  # initialized with new fork?
     e2_ = e_  # or no separate e2_: Py_( P( e_?
-    alt2_ = alt_  # or replaced by alt_blob_?
+    alt2_ = alt_ # or replaced by alt_blob_?
     Py_ = fork[0]  # vertical array of patterns within a blob
 
     # also A: a * ave rolp * summed fork rolp?
@@ -355,6 +345,8 @@ def incr_blob(P, fork):  # increments blob of max fork, all terminated forks are
     Py_.append(fork[0])  # vertical array of patterns within a blob
 
     # also A: a * ave rolp * summed fork rolp?
+
+    fork[3] = I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_
 
     return fork
 
@@ -462,26 +454,17 @@ def incr_PP(PP, fork, root_, blob_, _P_):
 
 def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, recursion, accumulation
 
-    term_ = []  # terminated root Ps per next fork P in Py_, last fork (CP) is stored in P2_?
-                # accumulated per P2 within root?  incomplete inclusion: no-match Ps -> _P' cont_?
-
-    WC, IC, DC, DyC, MC, MyC, GC, rdnC, altC_, PP_ = 0,0,0,0,0,0,0,0,[],[]  # CP vars (connected PPs) at first Fork
-    WC += W; IC += I2; DC += D2; DyC += Dy2; MC += M2; MyC += My2; GC += G2; altC_ += alt2_; PP_.append(PP)
-
-    # orientation (D reduction -> axis | outline), consolidation, P2 rdn fb?
-    # conversion of root to term, summation into wider fork, if any?
-    # eval for rotation, re-scan, cross-comp of P2_? also sum per frame?
-
-''' 
+    P2_ = []
+    ''' 
+    conversion of root to term, sum into wider fork, also sum per frame?
+    
     mean_dx = 1  # fractional?
     dx = Dx / H
     if dx > a: comp(abs(dx))  # or if dxP Dx: fixed ddx cost?  comp of same-sign dx only
 
     vx = mean_dx - dx  # normalized compression of distance: min. cost decrease, not min. benefit?
     
-    :param P2: 
-    :return: 
-    ''''''
+    
     eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
 
         if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
@@ -497,6 +480,7 @@ def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, rec
         comp Dy and My, /=cos at PP term?  default div and overlap eval per PP? not per CP: sparse coverage?
         
     rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
+    
     S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I?
     '''
 
