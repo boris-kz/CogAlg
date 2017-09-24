@@ -39,11 +39,11 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
             fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
             fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-            if len(it_) == rng:
+        if len(it_) == rng:
 
-                t = pri_p, fd, fm
-                t_.append(t)
-                del it  # completed tuple is transferred from it_ to t_
+            t = pri_p, fd, fm
+            t_.append(t)
+            del it_[0]  # completed tuple is transferred from it_ to t_
 
         it = p, d, m
         it_.append(it)  # new prior tuple
@@ -274,12 +274,12 @@ def fork_eval(typ, P, fork_, A):  # _Ps eval for init_blob, incr_blob, comp_P, i
     for select in select_:  # no re-eval for select forks, rdn = max for non-select forks
 
         # merges vertically contiguous and horizontally overlapping same- type and sign Ps into P2s
-        # P2 or 2D P: blob | vPP | dPP, alt_ -> rdn for fork_eval, then alt2_ += alt_ for P2 eval?
+        # P2: blob | vPP | dPP, alt_ -> rolp and alt2_, -> rolp2: area overlap?
 
         if typ == 0:  # select fork = blob
 
-            fork = form_blob(P, select)
-            vPP, dPP = comp_P(P, select)  # same min oG for blob inclusion and comp_P?
+            fork = form_blob(P, select)  # same min oG for blob inclusion and comp_P?:
+            vPP, dPP = comp_P(P, select)
             fork = fork, vPP, dPP
 
         else:  # select fork = vPP or dPP
@@ -291,10 +291,11 @@ def fork_eval(typ, P, fork_, A):  # _Ps eval for init_blob, incr_blob, comp_P, i
 
     return fork_, A  # or includes A?
 
-    # terminated root Ps are converted to blobs, then summed into fork's blob at its term
-    # new blob init if multiple new roots;     non-selected forks may be terminated?
+    # terminated root Ps contain 1 blob_, each blob is transferred to corresponding fork?
+    # and are summed into fork's blob at its term
+    # blob init if multiple forks, non-selected forks may be terminated?
 
-    # fork = crit, rdn, _P
+    # fork = crit, rdn, _P;  # formed by scan_high, A formed per eval: a * rolp * rdn..?
     # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
     # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
 
@@ -303,7 +304,7 @@ def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or
 
     s, I, D, Dy, M, My, G, e_, rdn, alt_ = P
 
-    if fork[1] > 0:  # rdn > 0: new blob initialization:
+    if fork[1] > 0:  # rdn > 0: new blob initialization, then terminated if not of max fork?
 
         I2 = I
         D2 = D; Dy2 = Dy
@@ -314,13 +315,10 @@ def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or
         alt2_ = alt_ # or replaced by alt_blob_?
         Py_ = P  # vertical array of patterns within a blob
 
-        # also A: a * ave rolp * summed fork rolp?
-
         blob = I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_
-        fork[2][3].append(blob)
+        fork[2][3].append(blob) # blob_.append
 
-    else:  # increments specific max blob in blob_?
-        # also sums all terminated forks?
+    else:  # increments axis: max _fork's blob in blob_ of max fork: first or separate?
 
         I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_ = fork[3]
 
@@ -332,8 +330,6 @@ def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or
         e2_.append(e_)  # or no separate e2_: Py_( P( e_?
         alt2_ += alt_  # or replaced by alt_blob_?
         Py_.append(fork[0])  # vertical array of patterns within a blob
-
-        # also A: a * ave rolp * summed fork rolp?
 
         blob = I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_
 
