@@ -7,6 +7,8 @@ Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
+
+This code is optimized for visibility rather than speed, so I don't pack arguments into tuples
 '''
 
 def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
@@ -32,7 +34,7 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
         fv += pfv  # fuzzy v is summed over extended-comp range
         fd += pfd  # fuzzy d is summed over extended-comp range
 
-        pri_p, pri_fd, pri_fv = ip_[x-r-1]  # for comp(p, pri_p), pri_fd and pri_fv ignored
+        pri_p, pri_fd, pri_fv = ip_[x-r-1]  # for comp(p, pri_p), pri_fd and pri_fv are ignored
 
         pri_s, I, D, V, rv, p_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
         comp(p, pri_p, fd, fv, x, X,
@@ -83,8 +85,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     m = min(p, pri_p)  # match between consecutive pixels
     v = m - A          # relative match (predictive value) between consecutive pixels
 
-    fd += d  # fuzzy d includes all shorter + current- range ds between comparands, accumulated in inc_rng
-    fv += v  # fuzzy v includes all shorter + current- range vs between comparands, accumulated in inc_rng
+    fd += d  # fuzzy d accumulates ds between p and all prior ps within min_r, via inc_rng()
+    fv += v  # fuzzy v accumulates vs between p and all prior ps within min_r, via inc_rng()
 
 
     # formation of value pattern vP: span of pixels forming same-sign v s:
