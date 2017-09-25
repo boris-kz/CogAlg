@@ -82,7 +82,7 @@ def ycomp(t_, _t_):  # vertical comparison between pixels, forms vertex tuples t
         my = min(p, _p)   # vertical match between pixels, summed -> My
         vg = _m + my - ave  # gradient of predictive value (relative match) at prior-line _p, -> vG
 
-        t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
+        t2 = p, d, dy, m, my  # 2D tuple, + fd, fv -> type-specific g, _g; all accumulated within P:
 
         sv, olp, valt_, dalt_, vP, dP, vP_ = \
         form_P(0, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, x)
@@ -144,6 +144,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, x):  # forms 1D Ps
 
         alt = alt_P, olp_len, oG, alt_oG  # or P index len(P_): faster than P?  for P eval in form_blob
         alt_.append(alt)
+
         _alt = P, olp_len, alt_oG, oG  # redundant olp repr in concurrent alt_P, formed by terminated P
         _alt_.append(_alt)
 
@@ -205,8 +206,9 @@ def scan_high(typ, P, P_, alt_, x):  # P scans over higher-line _P_ for inclusio
                     else: fork_oG += e  # if dP: e = g
                     ex += 1
 
-            fork = fork_oG, 0, _P  # rdn is initialized at 0
+            fork = fork_oG, _P  # rdn is initialized at 0
             fork_.append(fork)  # _P inclusion in P
+
             _P[2].append(P)  # root_.append(P), to track continuing roots in form_PP
 
         if _P[0][2] > ix:  # if _x > ix:
@@ -216,6 +218,9 @@ def scan_high(typ, P, P_, alt_, x):  # P scans over higher-line _P_ for inclusio
         else:  # no horizontal overlap between _P and next P, _P is evaluated for termination
 
             if (len(root_) == 0 and y > rng + 3) or y == Y - 1:  # _P or frame is terminated
+
+                # terminated root Ps contain 1 blob_, each blob is transferred to corresponding fork?
+                # and are summed into fork's blob at its term
 
                 for blob in blob_:
                     blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob:
@@ -251,87 +256,69 @@ def scan_high(typ, P, P_, alt_, x):  # P scans over higher-line _P_ for inclusio
     return P_  # with added fork_... per P
 
 
-def fork_eval(typ, P, fork_, A):  # _Ps eval for init_blob, incr_blob, comp_P, init_PP, incr_PP
+def fork_eval(typ, P, fork_, A):  # _Ps eval for form_blob, comp_P, form_PP
 
-    select_ = []  # for fork comp eval, or for _PP form eval
+    # fork = crit, _P: from scan_high, A formed per eval: a * rolp * rdn..?
+    # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
+    # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
 
-    for fork in fork_:  # fork | select = crit, rdn, _P
+    max_fork_ = sorted(fork_, key = lambda fork: fork[0])  # init fork[0] = A?
 
-        if fork[0] > A:  # comp to _crit (oG for fork | PM for vPP | PD for dPP) in select_
+    while max_fork_ and fork[0] > A:  # excluded forks don't increment their root_
 
-            for select in select_:  # forks are re-evaluated at each rdn increment
-
-                if fork[0] > select[0]:  # criterion comp
-
-                    select[1] += 1  # increment weaker-fork rdn, initialized per fork?
-                    if select[0] < A * select[1]: del select  # delete from select_ if _rdn = max
-
-                else: fork[1] += 1  # increment weaker-fork rdn
-
-            if fork[0] > A * fork[1]:  # inclusion after full select_ comp, also A *= rdn?
-                select_.append(fork)
-
-    for select in select_:  # no re-eval for select forks, rdn = max for non-select forks
-
-        # merges vertically contiguous and horizontally overlapping same- type and sign Ps into P2s
-        # P2: blob | vPP | dPP, alt_ -> rolp and alt2_, -> rolp2: area overlap?
+        fork = max_fork_.pop()
+        A += A  # or a * rolp is deferred to rdn eval: too minor to justify adjustment?
 
         if typ == 0:  # select fork = blob
 
-            fork = form_blob(P, select)  # same min oG for blob inclusion and comp_P?:
-            vPP, dPP = comp_P(P, select)
+            fork = form_blob(P, fork)  # same min oG for blob inclusion and comp_P?:
+            vPP, dPP = comp_P(P, fork)
             fork = fork, vPP, dPP
 
         else:  # select fork = vPP or dPP
 
-            fork = form_PP(typ, P, select)
+            fork = form_PP(typ, P, fork)
 
         fork_.append(fork)
-        del select  # from select_, preserved in fork_
+        del fork  # from select_, preserved in fork_
 
     return fork_, A  # or includes A?
 
-    # terminated root Ps contain 1 blob_, each blob is transferred to corresponding fork?
-    # and are summed into fork's blob at its term
-    # blob init if multiple forks, non-selected forks may be terminated?
-
-    # fork = crit, rdn, _P;  # formed by scan_high, A formed per eval: a * rolp * rdn..?
-    # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
-    # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
+    # merges vertically contiguous and horizontally overlapping same- type and sign Ps into P2s
+    # P2: blob | vPP | dPP, alt_ -> rolp and alt2_, -> rolp2: area overlap?
+    # fork[0] criterion: oG if fork | PM if vPP | PD if dPP
 
 
 def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or continuing
 
-    s, I, D, Dy, M, My, G, e_, rdn, alt_ = P
+    s, I, D, Dy, M, My, G, e_, alt_, rdn = P
 
-    if fork[1] > 0:  # rdn > 0: new blob initialization, then terminated if not of max fork?
+    if fork[1] > 0:  # rdn > 0: new blob initialization, then terminated unless max fork?
 
         I2 = I
         D2 = D; Dy2 = Dy
         M2 = M; My2 = My
         G2 = G
-        area = len(e_)  # initialized with new fork?
-        e2_ = e_  # or no separate e2_: Py_( P( e_?
+        area = len(e_)  # no separate e2_: Py_( P( e_?
         alt2_ = alt_ # or replaced by alt_blob_?
         Py_ = P  # vertical array of patterns within a blob
 
-        blob = I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_
+        blob = I2, D2, Dy2, M2, My2, G2, area, alt2_, Py_
         fork[2][3].append(blob) # blob_.append
 
     else:  # increments axis: max _fork's blob in blob_ of max fork: first or separate?
 
-        I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_ = fork[3]
+        I2, D2, Dy2, M2, My2, G2, area, alt2_, Py_ = fork[3]
 
         I2 += I
         D2 += D; Dy2 += Dy
         M2 += M; My2 += My
         G2 += G
-        area += len(e_)  # initialized with new fork?
-        e2_.append(e_)  # or no separate e2_: Py_( P( e_?
+        area += len(e_)  # no separate e2_: Py_( P( e_?
         alt2_ += alt_  # or replaced by alt_blob_?
         Py_.append(fork[0])  # vertical array of patterns within a blob
 
-        blob = I2, D2, Dy2, M2, My2, G2, area, e2_, alt2_, Py_
+        blob = I2, D2, Dy2, M2, My2, G2, area, alt2_, Py_
 
     return fork
 
