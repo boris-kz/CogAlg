@@ -126,7 +126,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, x):  # forms 1D Ps
     if typ == 0:
         olp_len, oG, alt_oG = olp  # overlap between current vP and dP, accumulated in ycomp
     else:
-        olp_len, alt_oG, oG = olp
+        olp_len, alt_oG, oG = olp  # generic ave *= 2, specific alt_rdn for P2 only?
 
     s = 1 if g > 0 else 0
     if s != pri_s and x > rng + 2:  # P (span of same-sign gs) is terminated
@@ -192,7 +192,7 @@ def scan_high(typ, P, P_, alt_, x):  # P scans over higher-line _P_ for inclusio
     while x >= _ix:  # P to _P connection eval, while horizontal overlap between P and _P:
 
         fork_oG = 0  # fork overlap gradient: oG += g, approx: oG = G * mw / len(e_)
-        ex = x  # coordinate of current P element
+        ex = x  # x coordinate of current P element
 
         _P = _P_.popleft()   # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
         _ix = _P[0][1]  # sub- _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
@@ -217,76 +217,82 @@ def scan_high(typ, P, P_, alt_, x):  # P scans over higher-line _P_ for inclusio
 
         else:  # no horizontal overlap between _P and next P, _P is evaluated for termination
 
-            if (len(root_) == 0 and y > rng + 3) or y == Y - 1:  # _P or frame is terminated
+            if (root_ == 0 and y > rng + 3) or y == Y - 1:  # _P or frame is terminated
 
-                # terminated root Ps contain 1 blob_, each blob is transferred to corresponding fork?
-                # and are summed into fork's blob at its term
+                # terminated _P contains blob_, each blob is transferred to its fork?
+                # and is summed into fork's blob at its term?
 
                 for blob in blob_:
                     blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob:
 
                     term_P2(blob, A)  # possible 2D P re-orient and re-scan, but no direct recursion
-                    if _vPP > 0: term_P2(_vPP, A)  # not for _vPP in _vPP_: only to eval for rdn?
-                    if _dPP > 0: term_P2(_dPP, A)
+                    if _vPP > 0:
+                        term_P2(_vPP, A)  # not for _vPP in _vPP_: only to eval for rdn?
+                    if _dPP > 0:
+                        term_P2(_dPP, A)
 
-            buff_ += _P_  # for scan_high(next P)
+            _P_ += buff_  # but on wrong end?  for scan_high(next P)
 
     # no more horizontal overlap between P and _P:
 
-    if len(fork_) > 0:  # fork_ evaluation for P inclusion and comparison
+    if fork_:  # if len(fork_) > 0: P is evaluated for inclusion in and comparison to its forks:
         bA = A
-        fork_, bA = fork_eval(0, P, fork_, bA)  # bA *= blob rdn
+        fork_, bA = fork_eval(2, P, fork_, bA)  # bA *= blob rdn
 
-        if len(vPP_) > 0:  # = lateral len(dPP_): formed by comp_P over same forks
+        if vPP_:  # = lateral len(dPP_): from comp_P over same forks, during fork_eval of blob_
 
             vA = bA  # eval for inclusion in vPPs (2D value patterns), rdn alt_ = blobs:
-            vPP_, vA = fork_eval(1, P, vPP_, vA)
+            vPP_, vA = fork_eval(0, P, vPP_, vA)
 
             dA = vA  # eval for inclusion in dPPs (2D difference patterns), rdn alt_ = vPPs:
-            dPP_, dA = fork_eval(2, P, dPP_, dA)
+            dPP_, dA = fork_eval(1, P, dPP_, dA)
 
             # individual vPPs and dPPs are also modified in their fork
 
     P = P, alt_, fork_, vPP_, dPP_  # adding root_ (lower-line matches) at P_ -> _P_ conversion
     P_.append(P)  # P is buffered in P_, terminated root Ps are stored in term_?
 
-    if typ == 0: _vP_ = buff_  # modifying global _vP_
-    else: _dP_ = buff_ # _P = _P, alt_, blob_, _vPP_, _dPP_
+    '''
+    if typ == 0: 
+        _vP_ = buff_  # modifying global _vP_?
+    else: 
+        _dP_ = buff_  # _P = _P, alt_, blob_, _vPP_, _dPP_
+    '''
 
-    return P_  # with added fork_... per P
+    return P_  # for conversion into next-line _P_
 
 
 def fork_eval(typ, P, fork_, A):  # _Ps eval for form_blob, comp_P, form_PP
 
-    # fork = crit, _P: from scan_high, A formed per eval: a * rolp * rdn..?
+    # from scan_high(): fork = crit, _P:
     # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
     # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
 
-    max_fork_ = sorted(fork_, key = lambda fork: fork[0])  # init fork[0] = A?
+    ini = 1; select_ = []
+    fork_.sort(key = lambda fork: fork[0])  # or sort and select at once?
 
-    while max_fork_ and fork[0] > A:  # excluded forks don't increment their root_
+    while fork_ and (fork[0] > A or ini == 1):  # fork[0]: oG if fork | PM if vPP | PD if dPP
 
-        fork = max_fork_.pop()
-        A += A  # or a * rolp is deferred to rdn eval: too minor to justify adjustment?
+        fork = fork_.pop()
 
-        if typ == 0:  # select fork = blob
+        if typ == 2:  # fork = blob, same min oG for blob inclusion and comp_P?
 
-            fork = form_blob(P, fork)  # same min oG for blob inclusion and comp_P?:
+            fork = form_blob(P, fork)
             vPP, dPP = comp_P(P, fork)
-            fork = fork, vPP, dPP
+            fork = fork, vPP, dPP  # deeper P
 
-        else:  # select fork = vPP or dPP
+        else:
+            fork = form_PP(typ, P, fork)  # fork = vPP or dPP
 
-            fork = form_PP(typ, P, fork)
+        # merges vertically contiguous and horizontally overlapping same-type and sign Ps in P2s
+        # P2: blob | vPP | dPP, alt_ -> rolp and alt2_, -> rolp2: area overlap?
 
-        fork_.append(fork)
-        del fork  # from select_, preserved in fork_
+        A += A  # rdn ++, formed per eval: a * rolp * rdn.?  no rolp alone: adjustment < cost?
+
+        select_.append(fork)  # not-selected forks are lost and don't increment their root_
+        ini = 0
 
     return fork_, A  # or includes A?
-
-    # merges vertically contiguous and horizontally overlapping same- type and sign Ps into P2s
-    # P2: blob | vPP | dPP, alt_ -> rolp and alt2_, -> rolp2: area overlap?
-    # fork[0] criterion: oG if fork | PM if vPP | PD if dPP
 
 
 def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or continuing
