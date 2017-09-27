@@ -11,7 +11,7 @@ are redundant representations of each line of pixels.
 This code is optimized for visibility rather than speed, so I don't pack arguments into tuples
 '''
 
-def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
+def range_increment(a, aV, aD, min_r, A, AV, AD, r, p_):
 
     if r > min_r:  # A, AV, AD inc.to adjust for redundancy to patterns formed by prior comp:
         A += a     # a: min m for inclusion into positive vP
@@ -24,8 +24,8 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
     ip_ = p_  # to differentiate from new p_
 
     vP_, dP_ = [],[]  # r was incremented in higher-scope p_
-    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0
-    pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
+    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP = 0
+    pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP = 0
 
     for x in range(r+1, X):
 
@@ -45,7 +45,7 @@ def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
     return vP_, dP_  # local vPs and dPs to replace p_, A, AV, AD accumulated per comp recursion
 
 
-def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
+def derivation_increment(a, aV, aD, min_r, A, AV, AD, r, d_):
 
     if r > min_r:
         A += a; AV += aV
@@ -56,8 +56,8 @@ def inc_der(a, aV, aD, min_r, A, AV, AD, r, d_):
     ip_ = d_  # to differentiate from new d_
 
     fd, fv, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
-    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP=0,
-    pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP=0
+    pri_s, I, D, V, rv, olp, p_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP = 0,
+    pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP = 0
 
     pri_p = ip_[0]
 
@@ -85,8 +85,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     m = min(p, pri_p)  # match between consecutive pixels
     v = m - A          # relative match (predictive value) between consecutive pixels
 
-    fd += d  # fuzzy d accumulates ds between p and all prior ps within min_r, via inc_rng()
-    fv += v  # fuzzy v accumulates vs between p and all prior ps within min_r, via inc_rng()
+    fd += d  # fuzzy d accumulates ds between p and all prior ps within min_r, via range_increment()
+    fv += v  # fuzzy v accumulates vs between p and all prior ps within min_r, via range_increment()
 
 
     # formation of value pattern vP: span of pixels forming same-sign v s:
@@ -98,7 +98,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
 
             r += 1  # r: incremental range-of-comp counter
             rv = 1  # rv: incremental range flag:
-            p_.append(inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_))
+            p_.append(range_increment(a, aV, aD, min_r, A, AV, AD, r, p_))
 
         p = I / len(p_); d = D / len(p_); v = V / len(p_)  # default to eval overlap, poss. div.comp?
         vP = pri_s, p, I, d, D, v, V, rv, p_, olp_
@@ -126,7 +126,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
         if len(d_) > 3 and abs(Dd) > AD:  # min 3 comp within d_:
 
             rd = 1  # rd: incremental derivation flag:
-            d_.append(inc_der(a, aV, aD, min_r, A, AV, AD, r, d_))
+            d_.append(derivation_increment(a, aV, aD, min_r, A, AV, AD, r, d_))
 
         pd = Id / len(d_); dd = Dd / len(d_); vd = Vd / len(d_)  # so all olp Ps can be directly evaluated
         dP = pri_sd, pd, Id, dd, Dd, vd, Vd, rd, d_, dolp_
@@ -148,7 +148,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     # for next p comparison, vP and dP increment, and output
 
 
-def Le1(Fp_): # last '_' distinguishes array name from element name
+def level_1(Fp_):  # last '_' distinguishes array name from element name
 
     FP_ = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
@@ -193,7 +193,7 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
-Le1(f)
+level_1(f)
 
 # at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
 # at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
