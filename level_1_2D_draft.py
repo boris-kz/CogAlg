@@ -56,64 +56,96 @@ def ycomp(t_, _t_):  # vertical comparison between pixels, forms vertex tuples t
 
     # last "_" denotes array vs. element, first "_" denotes higher-line array, pattern, or variable
 
-    global _vP_; global _dP_  # converted from vP_ and dP_ here, then used by form_blob
-    global vP_;  global dP_  # appended by form_P
+    global _vP_
+    global _dP_  # converted from vP_ and dP_ here, then used by form_blob
+    global vP_
+    global dP_  # appended by form_P
 
     global valt_; valt_ = []  # appended by form_P, included in P by form_blob, to form alt2_?
     global dalt_; dalt_ = []
-
+    vP_ = []
     vP = 0,0,0,0,0,0,0,[],0  # pri_s, I, D, Dy, M, My, G, e_, rdn_olp
     dP = 0,0,0,0,0,0,0,[],0  # pri_s, I, D, Dy, M, My, G, e_, rdn_olp
 
     olp = 0,0,0  # olp_len, olp_vG, olp_dG: common for current vP and dP
     x = 0
 
+    t2_ = []  # complete fuzzy tuples: summation range = rng
+    it2_ = []  # incomplete fuzzy tuples: summation range < rng
+    dy, my = 0, 0  # no d, m at x = 0
     for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels, forms vertex gradients
-
         x += 1
         p, d, m = t
         _p, _d, _m = _t
+        fdy,fmy = 0,0
+        for it2 in it2_:  # incomplete tuples with summation range from 0 to rng
+            pri_p, d, fdy, m, fmy = it2
+
+
+            dy = p - pri_p  # difference between pixels
+            my = min(p, pri_p)  # match between pixels
+            fdy += dy  # fuzzy d: sum of ds between p and all prior ps within it_
+            fmy += my  # fuzzy m: sum of ms between p and all prior ps within it_
+
+
+        if len(it2_) == rng:
+
+            t2 = pri_p, d, fdy, m, fmy
+            dg = _d + fdy
+            vg = _m + fmy - ave
+            sv, olp, valt_, dalt_, vP, dP, vP_ = \
+                form_P(0, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, x)
+            t2_.append(t2)
+            del it2_[0]  # completed tuple is transferred from it_ to t_
+
+        it2 = p,d, fdy, m, fmy
+        it2_.append(it2)  # new prior tuple
+
+    t2_ += it2_
+
+
+
 
         # non-fuzzy pixel comparison:
 
-        dy = p - _p  # vertical difference between pixels, summed -> Dy
-        dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> dG: variation eval?
-
-        my = min(p, _p)   # vertical match between pixels, summed -> My
-        vg = _m + my - ave  # gradient of predictive value (relative match) at prior-line _p, -> vG
-
-        t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
-
-        sv, olp, valt_, dalt_, vP, dP, vP_ = \
-        form_P(0, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, x)
-
-        # forms 1D value pattern vP: horizontal span of same-sign vg s with associated vars
-
-        sd, olp, dalt_, valt_, dP, vP, dP_ = \
-        form_P(1, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, x)
-
-        # forms 1D difference pattern dP: horizontal span of same-sign dg s + associated vars
-
-    _vP_ = vP_; _dP_ = dP_  # P_ is appended and returned by form_P within a line
-
-    # line ends, t2s have incomplete lateral fd and fm, inclusion per vg - ave / (rng / X-x)?
-    # olp term, vP term, dP term, no initialization:
-
-    dalt_.append(olp); valt_.append(olp)  # if any?
-    olp_len, olp_vG, olp_dG = olp
-
-    if olp_vG > olp_dG:  # comp of olp_vG to olp_dG, == goes to alt_P or to vP: primary?
-        vP[8] += olp_len  # accumulate redundant overlap in current vP or dP with weaker oG
-    else:
-        dP[8] += olp_len
-
-    vP[8] /= vP[7]  # rolp = rdn_olp / len(e_): redundancy ratio of P to overlapping alt_Ps
-    dP[8] /= dP[7]  # or A = ave * dP[8] /= dP[7]?
-
-    if y+1 > rng:
-
-        vP_, _vP_ = scan_high(0, vP, vP_, valt_, x)  # empty _vP_
-        dP_, _dP_ = scan_high(1, dP, dP_, dalt_, x)  # empty _dP_
+    #     dy = p - _p  # vertical difference between pixels, summed -> Dy
+    #     dg = _d + dy  # gradient of difference, formed at prior-line pixel _p, -> dG: variation eval?
+    #
+    #     my = min(p, _p)   # vertical match between pixels, summed -> My
+    #     vg = _m + my - ave  # gradient of predictive value (relative match) at prior-line _p, -> vG
+    #
+    #     t2 = p, d, dy, m, my  # 2D tuple, fd, fv -> type-specific g, _g; all accumulated within P:
+    #
+    #     sv, olp, valt_, dalt_, vP, dP, vP_ = \
+    #     form_P(0, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, x)
+    #
+    #     # forms 1D value pattern vP: horizontal span of same-sign vg s with associated vars
+    #
+    #     sd, olp, dalt_, valt_, dP, vP, dP_ = \
+    #     form_P(1, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, x)
+    #
+    #     # forms 1D difference pattern dP: horizontal span of same-sign dg s + associated vars
+    #
+    # _vP_ = vP_; _dP_ = dP_  # P_ is appended and returned by form_P within a line
+    #
+    # # line ends, t2s have incomplete lateral fd and fm, inclusion per vg - ave / (rng / X-x)?
+    # # olp term, vP term, dP term, no initialization:
+    #
+    # dalt_.append(olp); valt_.append(olp)  # if any?
+    # olp_len, olp_vG, olp_dG = olp
+    #
+    # if olp_vG > olp_dG:  # comp of olp_vG to olp_dG, == goes to alt_P or to vP: primary?
+    #     vP[8] += olp_len  # accumulate redundant overlap in current vP or dP with weaker oG
+    # else:
+    #     dP[8] += olp_len
+    #
+    # vP[8] /= vP[7]  # rolp = rdn_olp / len(e_): redundancy ratio of P to overlapping alt_Ps
+    # dP[8] /= dP[7]  # or A = ave * dP[8] /= dP[7]?
+    #
+    # if y+1 > rng:
+    #
+    #     vP_, _vP_ = scan_high(0, vP, vP_, valt_, x)  # empty _vP_
+    #     dP_, _dP_ = scan_high(1, dP, dP_, dalt_, x)  # empty _dP_
 
     # no return of vP_, dP_: converted to global _vP_, _dP_ at line end
 
@@ -383,45 +415,45 @@ def comp_P(P, P_, _P, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
     return P_, _P_
 
 
-def form_PP(PP, fork, root_, blob_, _P_, _P2_, _x, A):  # forms vPPs, dPPs, and their var Ps
-
-    if fork[1] > 0:  # rdn > 0: new PP initialization?
-
-    else:  # increments PP of max fork, cached by fork_eval(), also sums all terminated PPs?
-
-        crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = PP  # initialized at P re-input in comp_P
-
-        W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
-        Py_.append(P)
-
-    # fork = crit, rdn, _P
-    # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
-    # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
-
-    # dimensionally reduced axis: vP'PP or contour: dP'PP; dxP is direction pattern
-
-    a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
-    # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
-
-
-    mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork  # current derivatives, to be included if match
-    s, ix, x, I, D, Dy, M, My, G, r, e_, alt_ = P  # input P or _P: no inclusion of last input?
-
-    # criterion eval, P inclusion in PP, then all connected PPs in CP, unique tracing of max_crit PPs:
-
-    if crit > A * 5 * rdn:  # PP vars increment, else empty fork ref?
-
-        W += len(alt_); I2 = I; D2 = D; Dy2 = Dy; M2 = M; My2 = My; G2 = G; alt2_ = alt_; Py_ = P
-        # also var_P form: LIDV per dx, w, I, D, M? select per term?
-
-        PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
-
-        fork = len(_P_), PP
-        blob_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
-
-        root_.append(P)  # connected Ps in future blob_ and _P2_
-
-    return PP
+# def form_PP(PP, fork, root_, blob_, _P_, _P2_, _x, A):  # forms vPPs, dPPs, and their var Ps
+#
+#     if fork[1] > 0:  # rdn > 0: new PP initialization?
+#
+#     else:  # increments PP of max fork, cached by fork_eval(), also sums all terminated PPs?
+#
+#         crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = PP  # initialized at P re-input in comp_P
+#
+#         W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
+#         Py_.append(P)
+#
+#     # fork = crit, rdn, _P
+#     # _P = _P, _alt_, root_, blob_, _vPP_, _dPP_
+#     # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_
+#
+#     # dimensionally reduced axis: vP'PP or contour: dP'PP; dxP is direction pattern
+#
+#     a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128  # feedback to define var_vPs (variable value patterns)
+#     # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
+#
+#
+#     mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork  # current derivatives, to be included if match
+#     s, ix, x, I, D, Dy, M, My, G, r, e_, alt_ = P  # input P or _P: no inclusion of last input?
+#
+#     # criterion eval, P inclusion in PP, then all connected PPs in CP, unique tracing of max_crit PPs:
+#
+#     if crit > A * 5 * rdn:  # PP vars increment, else empty fork ref?
+#
+#         W += len(alt_); I2 = I; D2 = D; Dy2 = Dy; M2 = M; My2 = My; G2 = G; alt2_ = alt_; Py_ = P
+#         # also var_P form: LIDV per dx, w, I, D, M? select per term?
+#
+#         PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
+#
+#         fork = len(_P_), PP
+#         blob_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
+#
+#         root_.append(P)  # connected Ps in future blob_ and _P2_
+#
+#     return PP
 
 
 def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, recursion, accumulation
