@@ -51,7 +51,7 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
     t_ += it_  # last number = rng of tuples remain incomplete
     return t_
 
-# my conventions: last '_' denotes array vs. element, first '_' denotes higher-line pattern or variable
+# my conventions: postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
 
 
 def ycomp(t_, _t_):  # vertical comparison between pixels,
@@ -209,7 +209,7 @@ def scan_higher(typ, P, P_, alt_, x):  # P scans overlapping higher-line _Ps for
 
                     ex += 1
 
-            fork = fork_oG, _P  # rdn = sort order
+            fork = fork_oG, _P  # vs. re-packing _P, rdn = sort order
             fork_.append(fork)  # _P inclusion in P
 
             _P[3].append(P)  # root_.append(P), to track continuing roots in form_PP
@@ -222,24 +222,21 @@ def scan_higher(typ, P, P_, alt_, x):  # P scans overlapping higher-line _Ps for
 
             if (root_ == 0 and y > rng + 3) or y == Y - 1:  # _P or frame is terminated
 
-                # terminated Ps are moved from root_ to blob_ of each of their forks, and
-                # summed in fork's blob,  else default P sum in cont max fork?
+                for blob in blob_:  # terminated P: root -> blob_ per fork, blob = sum(lower_blob_)
 
-                for blob in blob_:  # previously terminated roots
+                    # or sum(root_) per inclusion, not term, single root is a special case?
 
-                    blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob:
+                    blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob, if comp_P
+                    term_P2(blob, A)  # eval for 2D P re-orient and re-scan, no direct recursion
 
-                    term_P2(blob, A)  # possible 2D P re-orient and re-scan, no direct recursion
-                    if _vPP > 0:
-                        term_P2(_vPP, A)  # not for _vPP in _vPP_: only to eval for rdn?
-                    if _dPP > 0:
-                        term_P2(_dPP, A)
+                    if _vPP: term_P2(_vPP, A)  # not for _vPP in _vPP_: only to eval for rdn?
+                    if _dPP: term_P2(_dPP, A)
 
             buff_ += _P_  # for scan_higher(next P)
 
     # no more horizontal overlap between P and _P:
 
-    if fork_:  # if len(fork_) > 0: P is evaluated for inclusion in and comparison to its forks:
+    if fork_:  # if len(fork_) > 0: P is evaluated for inclusion in and comparison to its fork _Ps:
         bA = A
         fork_, bA = fork_eval(2, P, fork_, bA)  # bA *= blob rdn
 
@@ -273,15 +270,16 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
     ini = 1; select_ = []
     fork_.sort(key = lambda fork: fork[0])  # or sort and select at once?
 
-    while fork_ and (fork[0] > A or ini == 1):  # fork[0]: oG if fork | PM if vPP | PD if dPP
+    while fork_ and (crit > A or ini == 1):  # fork[0]: oG if fork | PM if vPP | PD if dPP
 
         fork = fork_.pop()
+        crit, fork = fork  # then criterion is packed in _G, rdn_alt is packed in rdn?
 
         if typ == 2:  # fork = blob, same min oG for blob inclusion and comp_P?
 
             fork = form_blob(P, fork)
-            vPP, dPP = comp_P(P, fork)
-            fork = fork, vPP, dPP  # deep P
+            vPP, dPP = comp_P(P, fork)  # adding PM | PD to fork
+            fork = fork, vPP, dPP
 
         else:
             fork = form_PP(typ, P, fork)  # fork = vPP or dPP
@@ -290,19 +288,17 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
         # P2: blob | vPP | dPP, alt_ -> rolp and alt2_, -> rolp2: area overlap?
 
         A += A  # rdn++, formed per eval: a * rolp * rdn.?  no rolp alone: adjustment < cost?
-
-        select_.append(fork)  # not-selected forks are lost and don't increment their root_
         ini = 0
 
-    return fork_, A  # A is local to fork
+        select_.append(fork)  # not-selected forks are out of fork_, don't increment their root_
+
+    return select_, A  # A is specific to fork
 
 
 def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or continuing
 
     # _P = _P, blob, _alt_, root_, blob_, _vPP_, _dPP_
     # _P = s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn, _e_
-
-    # criterion is packed in _G, rdn_alt is packed in rdn?
 
     s, I, D, Dy, M, My, G, e_, alt_, rdn = P  # rdn includes rdn_alt?
 
@@ -459,7 +455,9 @@ def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, rec
     '''
 
 
-def level_1(f):  # last "_" denotes array vs. element, first "_" denotes higher-line variable or pattern
+def level_1(f):
+
+    # my conventions: postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
 
     global rng; rng = 1
     global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= rng
