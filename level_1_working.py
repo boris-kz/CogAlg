@@ -8,7 +8,7 @@ Resulting difference patterns dPs (spans of pixels forming same-sign differences
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
 
-This code is optimized for visibility rather than speed, so I don't pack arguments into tuples
+I don't pack arguments because this code is optimized for visibility rather than speed 
 '''
 
 def range_increment(a, aV, aD, min_r, A, AV, AD, r, p_):
