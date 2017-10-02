@@ -80,7 +80,7 @@ def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2:
         my = min(p, _p)   # vertical match between pixels, summed -> My
         vg = _m + my - ave  # gradient of predictive value (relative match) at prior-line _p, -> vG
 
-        t2 = p, d, dy, m, my  # 2D tuple, + fd, fv -> type-specific g, _g; all accumulated in P:
+        t2 = p, d, dy, m, my  # 2D tuple, -> type-specific g, _g, all accumulated in P:
 
         # form 1D value pattern vP: horizontal span of same-sign vg s with associated vars:
 
@@ -104,8 +104,8 @@ def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2:
 
     if y+1 > rng:
 
-        vP_, _vP_ = scan_higher(0, vP, valt_, vP_, _vP_, x)  # empty _vP_?
-        dP_, _dP_ = scan_higher(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_?
+        vP_, _vP_ = scan_higher(0, vP, valt_, vP_, _vP_, x)  # empty _vP_ []
+        dP_, _dP_ = scan_higher(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_ []
 
     return vP_, dP_  # extended for P_ append in scan_higher, renamed as arguments _vP_, _dP_
 
@@ -167,11 +167,9 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion, _P termination
 
     A = ave  # initialization before accumulation
-    buff_ = []  # _P_ buffer
+    buff_ = []  # _P_ buffer; alt_ -> rolp, alt2_ -> rolp2
 
-    fork_, vPP_, dPP_ = deque(),[],[]  # _Ps per P, to assign rdn, move terminated _P to next fork
-    root_, blob_, _vPP_, _dPP_ = deque(),deque(),[],[]  # Ps per _P, also old _forks per _P
-
+    fork_, vPP_, dPP_ = deque(),[],[]  # forks per P: for rdn and term_P transfer, roots are per _P
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
 
     ix = x - len(e_)  # initial x of P
@@ -182,9 +180,8 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
         fork_oG = 0  # fork overlap gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # x coordinate of current P element
 
-        _P = _P_.popleft()
-        # _P = _P, high_pack: _alt_, fork_, vPP_, dPP_, low_pack;  packed or init at P_ append
-        # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _rdn_alt, _e_;  alt_-> rolp, alt2_-> rolp2
+        _P = _P_.popleft() # _P = _P, _alt_, roots, forks
+        # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _rdn_alt, _e_
 
         if P[0] == _P[0][0]:  # if s == _s: vg or dg sign match
 
@@ -199,7 +196,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
             fork = fork_oG, _P  # or PM, PD in comp_P, vs. re-packing _P, rdn = sort order
             fork_.append(fork)  # _P inclusion in P
 
-            _P[3].append(P)  # root_.append(P), to track continuing roots in form_PP
+            _P[2][0].append(P)  # root_.append(P), to track continuing roots in form_PP
 
         if _P[0][2] > ix:  # if _x > ix:
 
@@ -207,12 +204,13 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
         else:  # no horizontal overlap between _P and next P, _P is evaluated for termination:
 
-            if (root_ == 0 and y > rng + 3) or y == Y - 1:  # _P or frame is terminated
+            if (_P[2][0] == 0 and y > rng + 3) or y == Y - 1:  # if root_= 0: _P is terminated
+                blob_ = _P[2][2]
 
-                for blob in blob_:  # terminated P conv per fork: blob += root blob, root_-> blob_
+                for blob in blob_:  # terminated P is folded: blob += root blob, root_-> blob_
 
                     blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob
-                    term_P2(blob, A)  # eval for 2D P re-orient and re-scan, no direct recursion
+                    term_P2(blob, A)  # eval for 2D P re-orient and re-scan, then recursion
 
                     if _vPP: term_P2(_vPP, A)  # if comp_P in fork_eval(blob)
                     if _dPP: term_P2(_dPP, A)  # not for _dPP in _dPP_: only to eval for rdn?
@@ -236,22 +234,28 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
             # individual vPPs and dPPs are also modified in their fork
 
-    P = P, alt_, fork_, vPP_, dPP_  # also bA, vA, dA, or included?  also low_pack init?
-    P_.append(P) # for P_ to _P_ conversion in next-line ycomp arguments
+    blob = 0,0,0,0,0,0,0,[],0,[]  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_,
+    # or structured array P_: one template?
 
-    _P_ = buff_  # new _P = _P, _alt_, root_, blob, blob_, _vPP_, _dPP_, _forks
+    roots = [], blob,[],[],[]  # initialization of root_, blob, blob_, vPP_, dPP_
+    forks = fork_, vPP_, dPP_  # current values
+
+    P = P, alt_, roots, forks  # bA, vA, dA per fork rdn, not per root: single inclusion
+    # also part-blob P2 per vPP and dPP: contig only?
+
+    P_.append(P)  # for conversion to _P_ in next-line ycomp
+    _P_ = buff_  # minus displaced _Ps
 
     return P_, _P_
 
 
 def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, comp_P, form_PP
 
-    # from scan_higher(): fork = crit, _P:
-    # _P = _P, _alt_ + lower-line root_, blob, blob_, _vPP_, _dPP_
+    # from scan_higher(): fork = crit, _P; _P = _P, _alt_, roots, forks
     # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn_alt, _e_
 
     ini = 1; select_ = []
-    fork_.sort(key = lambda fork: fork[0])  # or sort and select at once?
+    fork_.sort(key = lambda fork: fork[0])  # or sort and select at once:
 
     while fork_ and (crit > A or ini == 1):  # links contiguous same- type and sign Ps in P2s
 
@@ -277,7 +281,7 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
 
 def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or continuing
 
-    # _P = _P, _alt_, root_, blob, blob_, _vPP_, _dPP_
+    # _P = _P, _alt_, roots, forks
     # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn, _e_
 
     s, I, D, Dy, M, My, G, e_, alt_, rdn = P  # rdn includes rdn_alt?
@@ -288,28 +292,28 @@ def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or
         D2 = D; Dy2 = Dy
         M2 = M; My2 = My
         G2 = G
-        area = len(e_)  # no separate e2_: Py_( P( e_?
+        L2 = len(e_)  # no separate e2_: Py_( P( e_?
         alt2_ = alt_  # or replaced by alt_blob_?
         rdn2 = rdn
         Py_ = P  # vertical array of patterns within a blob
 
-        blob = I2, D2, Dy2, M2, My2, G2, area, alt2_, rdn2, Py_
+        blob = L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_
         fork[4].append(blob) # blob_.append?
 
     else:  # increments axis: max _fork's blob in blob_ of max fork: first or separate?
 
-        I2, D2, Dy2, M2, My2, G2, area, alt2_, Py_ = fork[1]  # blob @ axis or first fork?
+        L2, G2, I2, D2, Dy2, M2, My2, alt2_, Py_ = fork[1]  # blob @ axis or first fork?
 
         I2 += I
         D2 += D; Dy2 += Dy
         M2 += M; My2 += My
         G2 += G
-        area += len(e_)  # no separate e2_: Py_( P( e_?
+        L2 += len(e_)  # no separate e2_: Py_( P( e_?
         alt2_ += alt_  # or replaced by alt_blob_?
         rdn2 =+ rdn
         Py_.append(fork[0])  # vertical array of patterns within a blob
 
-        fork[1] = I2, D2, Dy2, M2, My2, G2, area, alt2_, rdn2, Py_
+        fork[1] = L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_
 
     return fork
 
@@ -323,12 +327,14 @@ def comp_P(P, P_, _P, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
 
     ix = x - len(e_)  # len(e_) or w: P width, initial coordinate of P, for output only?
 
+    # distant or not: primary comp of length by div, sum comp if low ratio, then comp(ratio, diff)?
+
     dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
     mx = x - _ix
     if ix > _ix: mx -= ix - _ix  # x overlap, mx - a_mx, form_P(vxP), vs. discont: mx = -(a_dx - dx)?
 
-    dw = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + Dw triggers adjustment of derivatives or _vars?
-    mw = min(len(e_), len(_e_))  # w: P width = len(e_), relative overlap: mx / w, similarity: mw?
+    dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + Dw triggers adjustment of derivatives or _vars?
+    mL = min(len(e_), len(_e_))  # L: P width = len(e_), relative overlap: mx / L, similarity: mL?
 
     # ddx and dw signs correlate, dx (position) and dw (dimension) signs don't correlate?
     # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mw, more predictive than eD?
@@ -337,8 +343,8 @@ def comp_P(P, P_, _P, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
     dD = D - _D; mD = min(D, _D)
     dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete. also len(alt_) comp?
 
-    PD = ddx + dw + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
-    PM = mx + mw + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?
+    PD = ddx + dL + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
+    PM = mx + mL + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?
 
     # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_blob?
 
@@ -367,9 +373,9 @@ def form_PP(PP, fork, root_, blob_, _P_, _P2_, _x, A):  # forms vPPs, dPPs, and 
 
     else:  # increments PP of max fork, cached by fork_eval(), also sums all terminated PPs?
 
-        crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = PP  # initialized at P re-input in comp_P
+        crit, rdn, L2, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_ = PP  # initialized at P re-input in comp_P
 
-        W += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
+        L2 += len(alt_); I2 += I; D2 += D; Dy2 += Dy; M2 += M; My2 += My; G2 += G; alt2_ += alt_
         Py_.append(P)
 
     # _P = _P, blob, _alt_, root_, blob_, _vPP_, _dPP_
@@ -381,17 +387,17 @@ def form_PP(PP, fork, root_, blob_, _P_, _P2_, _x, A):  # forms vPPs, dPPs, and 
     # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per var_P, alt eval per vertical overlap?
 
 
-    mx, dx, mw, dw, mI, dI, mD, dD, mM, dM, P, _P = fork  # current derivatives, to be included if match
+    mx, dx, mL, dL, mI, dI, mD, dD, mM, dM, P, _P = fork  # current derivatives, to be included if match
     s, ix, x, I, D, Dy, M, My, G, r, e_, alt_ = P  # input P or _P: no inclusion of last input?
 
     # criterion eval, P inclusion in PP, then all connected PPs in CP, unique tracing of max_crit PPs:
 
     if crit > A * 5 * rdn:  # PP vars increment, else empty fork ref?
 
-        W += len(alt_); I2 = I; D2 = D; Dy2 = Dy; M2 = M; My2 = My; G2 = G; alt2_ = alt_; Py_ = P
+        L2 += len(alt_); I2 = I; D2 = D; Dy2 = Dy; M2 = M; My2 = My; G2 = G; alt2_ = alt_; Py_ = P
         # also var_P form: LIDV per dx, w, I, D, M? select per term?
 
-        PP = W, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
+        PP = L2, I2, D2, Dy2, M2, My2, G2, alt2_, Py_  # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
 
         fork = len(_P_), PP
         blob_.append(fork)  # _P index and PP per fork, possibly multiple forks per P
