@@ -175,13 +175,13 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last comp_P
 
-    while x >= _ix:  # P to _P connection eval, while horizontal overlap between P and _P:
+    while x >= _ix:  # P to _P connection eval, while horizontal overlap between P and _P_:
 
         fork_oG = 0  # fork overlap gradient: oG += g, approx: oG = G * mw / len(e_)
         ex = x  # x coordinate of current P element
 
         _P = _P_.popleft() # _P = _P, _alt_, roots, forks
-        # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _rdn_alt, _e_
+        # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _rdn_alt, _e_ # or rdn_alt is folded in rdn?
 
         if P[0] == _P[0][0]:  # if s == _s: vg or dg sign match
 
@@ -217,7 +217,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
             buff_ += _P_  # for scan_higher(next P)
 
-    # no more horizontal overlap between P and _P:
+    P = s, ix, x, I, D, Dy, M, My, G, rdn_alt, e_  # no horizontal overlap between P and _P_ left
 
     if fork_: # if len(fork_) > 0: P is evaluated for inclusion into its fork _Ps:
 
@@ -235,17 +235,19 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
             # individual vPPs and dPPs are also modified in their fork
 
     blob = 0,0,0,0,0,0,0,[],0,[]  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_,
-    # or structured array P_: one template?
+    # or structured numpy array P_ at return: one tuple template vs. many?
 
     roots = [], blob,[],[],[]  # initialization of root_, blob, blob_, vPP_, dPP_
+
+    # or root_, blob, blob_, vPP, vPP_, dPP, dPP_:
+    # root x fork inclusion by comp and sign match at form_PP, summation at _P displace and root_= 0
+
     forks = fork_, vPP_, dPP_  # current values
 
     P = P, alt_, roots, forks  # bA, vA, dA per fork rdn, not per root: single inclusion
-    # also part-blob P2 per vPP and dPP: contig only?
-
     P_.append(P)  # for conversion to _P_ in next-line ycomp
-    _P_ = buff_  # minus displaced _Ps
 
+    _P_ = buff_   # minus displaced _Ps
     return P_, _P_
 
 
@@ -281,7 +283,7 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
 
 def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or continuing
 
-    # _P = _P, _alt_, roots, forks
+    # _P = _P, _alt_, roots, forks  # also oG for total contiguity?
     # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn, _e_
 
     s, I, D, Dy, M, My, G, e_, alt_, rdn = P  # rdn includes rdn_alt?
@@ -327,17 +329,18 @@ def comp_P(P, P_, _P, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
 
     ix = x - len(e_)  # len(e_) or w: P width, initial coordinate of P, for output only?
 
-    # distant or not: primary comp of length by div, sum comp if low ratio, then comp(ratio, diff)?
+    # primary comp of length by div, summed vars comp by sub if low ratio, then incr div if sign match?
+    # distant or not?
 
     dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
     mx = x - _ix
     if ix > _ix: mx -= ix - _ix  # x overlap, mx - a_mx, form_P(vxP), vs. discont: mx = -(a_dx - dx)?
 
-    dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + Dw triggers adjustment of derivatives or _vars?
+    dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + DL triggers adjustment of derivatives or _vars?
     mL = min(len(e_), len(_e_))  # L: P width = len(e_), relative overlap: mx / L, similarity: mL?
 
     # ddx and dw signs correlate, dx (position) and dw (dimension) signs don't correlate?
-    # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mw, more predictive than eD?
+    # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mL, more predictive than eD?
 
     dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
     dD = D - _D; mD = min(D, _D)

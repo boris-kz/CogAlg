@@ -88,7 +88,6 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     fd += d  # fuzzy d accumulates ds between p and all prior ps within min_r, via range_increment()
     fv += v  # fuzzy v accumulates vs between p and all prior ps within min_r, via range_increment()
 
-
     # formation of value pattern vP: span of pixels forming same-sign v s:
 
     s = 1 if v > 0 else 0  # s: positive sign of v
@@ -116,7 +115,6 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     V += fv     # fuzzy vs summed within vP
     pri = pri_p, fd, fv  # inputs for recursive comp are tuples vs. pixels
     p_.append(pri)  # buffered within vP for selective extended comp
-
 
     # formation of difference pattern dP: span of pixels forming same-sign d s:
 
