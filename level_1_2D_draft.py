@@ -3,20 +3,20 @@ from collections import deque
 import numpy as np
 
 '''
-    Level 1 with patterns defined by the sign of vertex gradient: modified core algorithm of levels 1 + 2.
+    Level 1 with patterns defined by the sign of quadrant gradient: modified core algorithm of levels 1 + 2.
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
     
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of continuous 0-90 degree gradient: minimal unique unit of 2D gradient 
-    Hence, such quarter-gradient is computed as average of these two orthogonally diverging derivatives.
+    Hence, such quadrant gradient is computed as average of these two orthogonally diverging derivatives.
    
-    2D patterns are blobs of same-sign quarter-gradient, of value for vP or difference for dP.
+    2D patterns are blobs of same-sign quadrant gradient, of value for vP or difference for dP.
     Level 1 has 5 steps of encoding, incremental per line defined by vertical coordinate y:
 
     y:   comp(p_):  lateral comp -> tuple t,
-    y-1: ycomp (t_): vertical comp -> vertex t2,
+    y-1: ycomp (t_): vertical comp -> quadrant t2,
     y-1: form_P(t2_): lateral combination -> 1D pattern P,
     y-2: form_P2 (P_): vertical comb | comp -> 2D pattern P2,
     y-2: term_P2 (P2_): P2s are terminated and evaluated for recursion
@@ -66,7 +66,7 @@ def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2:
     olp = 0,0,0  # olp_len, olp_vG, olp_dG: common for current vP and dP
     x = 0
 
-    for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels, forms quarter-gradients
+    for t, _t in zip(t_, _t_):  # compares vertically consecutive pixels, forms quadrant gradients
 
         x += 1
         p, d, m = t
@@ -112,7 +112,7 @@ def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2:
 
 def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 1D Ps
 
-    p, d, dy, m, my = t2  # 2D tuple of quarter per pixel
+    p, d, dy, m, my = t2  # 2D tuple of quadrant per pixel
     pri_s, I, D, Dy, M, My, G, rdn_olp, e_ = P
 
     if typ == 0:
@@ -154,7 +154,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 
     if typ == 0:
         pri = p, g, alt_g  # g = v gradient
-        e_.append(pri)  # pattern element: prior same-line vertex, for selective incremental range
+        e_.append(pri)  # pattern element: prior same-line quadrant, for selective incremental range
     else:
         e_.append(g)  # g = d gradient and pattern element, for selective incremental derivation
 
@@ -167,9 +167,21 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion, _P termination
 
     A = ave  # initialization before accumulation
-    buff_ = []  # _P_ buffer; alt_ -> rolp, alt2_ -> rolp2
+    buff_ = [] # _P_ buffer; alt_ -> rolp, alt2_ -> rolp2
 
-    fork_, vPP_, dPP_ = deque(),[],[]  # forks per P: for rdn and term_P transfer, roots are per _P
+    fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P for fork rdn compute, term transfer
+
+    # push-down: _P forks are summed into trunk P2 till roots split, forming a network of trunks
+    # push-up: trunk P2s are summed into higher-fork trunk at their term?
+
+    # each _P mediates network of fork_ Pys, fully summed at the top?
+
+    # blob, blob_, vPP, vPP_, dPP, dPP_ per _P fork, new or old:
+    # blob = 0, 0, 0, 0, 0, 0, 0, [], 0, []  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_,
+
+    # or structured numpy array P_ at return: one tuple template vs. many?
+    # P2 root-fork inclusion by comp and sign match at form_PP, summed at _P displace & root_= 0
+
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
 
     ix = x - len(e_)  # initial x of P
@@ -205,15 +217,18 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
         else:  # no horizontal overlap between _P and next P, _P is evaluated for termination:
 
             if (_P[2][0] == 0 and y > rng + 3) or y == Y - 1:  # if root_= 0: _P is terminated
-                blob_ = _P[2][2]
 
-                for blob in blob_:  # terminated P is folded: blob += root blob, root_-> blob_
+                blob_ = _P[2][2]
+                for blob in blob_:
 
                     blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob
                     term_P2(blob, A)  # eval for 2D P re-orient and re-scan, then recursion
 
                     if _vPP: term_P2(_vPP, A)  # if comp_P in fork_eval(blob)
                     if _dPP: term_P2(_dPP, A)  # not for _dPP in _dPP_: only to eval for rdn?
+
+                # sum till split: new blob_, or term: sum per fork
+                # terminated _P is folded: blob += root blob, root_-> blob_?
 
             buff_ += _P_  # for scan_higher(next P)
 
@@ -224,25 +239,18 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
         bA = A  # base-case P eval for _P blob inclusion and comp_P
         fork_, bA = fork_eval(2, P, fork_, bA)  # bA *= blob rdn
 
-        if vPP_:  # = lateral len(dPP_): from comp_P over same forks, during fork_eval of blob_
+        if f_vP_:  # = lateral len(dPP_): from comp_P over same forks, during fork_eval of blob_
 
             vA = bA  # eval for inclusion in vPPs (2D value patterns), rdn alt_ = blobs:
-            vPP_, vA = fork_eval(0, P, vPP_, vA)
+            f_vP_, vA = fork_eval(0, P, f_vP_, vA)
 
             dA = vA  # eval for inclusion in dPPs (2D difference patterns), rdn alt_ = vPPs:
-            dPP_, dA = fork_eval(1, P, dPP_, dA)
+            f_dP_, dA = fork_eval(1, P, f_dP_, dA)
 
             # individual vPPs and dPPs are also modified in their fork
 
-    blob = 0,0,0,0,0,0,0,[],0,[]  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_,
-    # or structured numpy array P_ at return: one tuple template vs. many?
-
-    roots = [], blob,[],[],[]  # initialization of root_, blob, blob_, vPP_, dPP_
-
-    # or root_, blob, blob_, vPP, vPP_, dPP, dPP_:
-    # root x fork inclusion by comp and sign match at form_PP, summation at _P displace and root_= 0
-
-    forks = fork_, vPP_, dPP_  # current values
+    roots = [],[],[]  # ini root_, r_vP_, r_dP_: for term eval and P2 ini for displaced _Ps
+    forks = fork_, f_vP_, f_dP_  # current values
 
     P = P, alt_, roots, forks  # bA, vA, dA per fork rdn, not per root: single inclusion
     P_.append(P)  # for conversion to _P_ in next-line ycomp
