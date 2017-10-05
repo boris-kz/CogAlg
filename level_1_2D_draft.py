@@ -167,20 +167,15 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion, _P termination
 
     A = ave  # initialization before accumulation
-    buff_ = [] # _P_ buffer; alt_ -> rolp, alt2_ -> rolp2
+    buff_ = [] # _P_ buffer; alt_-> rolp, alt2_-> rolp2
 
     fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P for fork rdn compute, term transfer
 
-    # push-down: _P forks are summed into trunk P2 till roots split, forming a network of trunks
-    # push-up: trunk P2s are summed into higher-fork trunk at their term?
+    # pass-dn: _P forks are summed into trunk P2, displaced into forked trunk network at root split
+    # pass-up: P2 trunks are summed into higher-fork trunk at _P term, full blob at last cont._P
 
-    # each _P mediates network of fork_ Pys, fully summed at the top?
-
-    # blob, blob_, vPP, vPP_, dPP, dPP_ per _P fork, new or old:
-    # blob = 0, 0, 0, 0, 0, 0, 0, [], 0, []  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_,
-
+    # blob = 0, 0, 0, 0, 0, 0, 0, [], 0, []  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_
     # or structured numpy array P_ at return: one tuple template vs. many?
-    # P2 root-fork inclusion by comp and sign match at form_PP, summed at _P displace & root_= 0
 
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
 
@@ -236,7 +231,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
     if fork_: # if len(fork_) > 0: P is evaluated for inclusion into its fork _Ps:
 
-        bA = A  # base-case P eval for _P blob inclusion and comp_P
+        bA = A  # P eval for _P blob inclusion and comp_P
         fork_, bA = fork_eval(2, P, fork_, bA)  # bA *= blob rdn
 
         if f_vP_:  # = lateral len(dPP_): from comp_P over same forks, during fork_eval of blob_
@@ -249,13 +244,13 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
             # individual vPPs and dPPs are also modified in their fork
 
-    roots = [],[],[]  # ini root_, r_vP_, r_dP_: for term eval and P2 ini for displaced _Ps
-    forks = fork_, f_vP_, f_dP_  # current values
+    roots = [],[],[]  # init root_, r_vP_, r_dP_: for term eval and P2 init for displaced _Ps
+    forks = fork_, f_vP_, f_dP_  # current values, + trunk_s from fork'_Ps summed forks?
 
     P = P, alt_, roots, forks  # bA, vA, dA per fork rdn, not per root: single inclusion
     P_.append(P)  # for conversion to _P_ in next-line ycomp
 
-    _P_ = buff_   # minus displaced _Ps
+    _P_ = buff_  # minus displaced _Ps, summed and buffered in blob_ of y-3?
     return P_, _P_
 
 
@@ -273,6 +268,7 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
         crit, fork = fork  # criterion: oG if fork, PM if vPP, PD if dPP
 
         if typ == 2:  # fork = blob, same min oG for blob inclusion and comp_P?
+                      # P2 inclusion if comp and sign match at form_PP
 
             fork = form_blob(P, fork)  # crit is packed in _G, rdn_alt is packed in rdn?
             vPP, dPP = comp_P(P, fork)  # adding PM | PD to fork
