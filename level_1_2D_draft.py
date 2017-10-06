@@ -9,8 +9,8 @@ import numpy as np
     They are formed on the same level because average lateral match ~ average vertical match.
     
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
-    equally representative samples of continuous 0-90 degree gradient: minimal unique unit of 2D gradient 
-    Hence, such quadrant gradient is computed as average of these two orthogonally diverging derivatives.
+    equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
+    Such gradient is computed as average of these two orthogonally diverging derivatives.
    
     2D patterns are blobs of same-sign quadrant gradient, of value for vP or difference for dP.
     Level 1 has 5 steps of encoding, incremental per line defined by vertical coordinate y:
@@ -171,11 +171,10 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
     fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P for fork rdn compute, term transfer
 
-    # pass-dn: _P forks are summed into trunk P2, displaced into forked trunk network at root split
-    # pass-up: P2 trunks are summed into higher-fork trunk at _P term, full blob at last cont._P
+    # _P pass-dn at form_P2: blobs (blob_, b_vP_, b_dP_) include _P forks,  blobs init at P -> P_?
+    # P2 pass-up at term | split: _P sum, then blobs are summed into their (next | each?) fork blob
 
-    # blob = 0, 0, 0, 0, 0, 0, 0, [], 0, []  # L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_
-    # or structured numpy array P_ at return: one tuple template vs. many?
+    # _P term: P2 also displaced into forked blob network, part or full blob at last cont._P
 
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
 
@@ -207,7 +206,9 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
         if _P[0][2] > ix:  # if _x > ix:
 
-            buff_.append(_P)  # _P with updated root_ is buffered for next-P comp
+            buff_.append(_P)  # _P is buffered for next-P comp,
+
+            # split-root _P_P2 is also displaced?
 
         else:  # no horizontal overlap between _P and next P, _P is evaluated for termination:
 
@@ -222,14 +223,16 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
                     if _vPP: term_P2(_vPP, A)  # if comp_P in fork_eval(blob)
                     if _dPP: term_P2(_dPP, A)  # not for _dPP in _dPP_: only to eval for rdn?
 
-                # sum till split: new blob_, or term: sum per fork
-                # terminated _P is folded: blob += root blob, root_-> blob_?
+            # term | split folds last exposed fork _Ps into blobs (blob_, b_vP_, b_dP_)
 
             buff_ += _P_  # for scan_higher(next P)
 
     P = s, ix, x, I, D, Dy, M, My, G, rdn_alt, e_  # no horizontal overlap between P and _P_ left
 
     if fork_: # if len(fork_) > 0: P is evaluated for inclusion into its fork _Ps:
+
+        # _P_P2 ini: blob = 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
+        # or structured numpy array P_ at return: one tuple template vs. many?
 
         bA = A  # P eval for _P blob inclusion and comp_P
         fork_, bA = fork_eval(2, P, fork_, bA)  # bA *= blob rdn
@@ -245,7 +248,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
             # individual vPPs and dPPs are also modified in their fork
 
     roots = [],[],[]  # init root_, r_vP_, r_dP_: for term eval and P2 init for displaced _Ps
-    forks = fork_, f_vP_, f_dP_  # current values, + trunk_s from fork'_Ps summed forks?
+    forks = fork_, f_vP_, f_dP_  # current values, each has corr blob, init unless passed down?
 
     P = P, alt_, roots, forks  # bA, vA, dA per fork rdn, not per root: single inclusion
     P_.append(P)  # for conversion to _P_ in next-line ycomp

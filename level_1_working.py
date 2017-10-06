@@ -17,8 +17,10 @@ def range_increment(a, aV, aD, min_r, A, AV, AD, r, t_):
         A += a     # a: min m for inclusion into positive vP
         AV += aV   # aV: min V for initial comp() recursion, AV: min V for higher recursions
 
-    if r > min_r-1:  # default range is shorter for d_[w]: redundant ds are smaller than ps
+    if r > min_r-1:  # default range is shorter for d_: redundant ds are smaller than ps
         AD += aD     # aV: min |D| for comp() recursion over d_[w], AD: min |D| for recursion
+
+    # or by default: initial r = min_r?
 
     X = len(t_)
     it_ = t_  # to differentiate from initialized t_:
@@ -52,10 +54,14 @@ def derivation_increment(a, aV, aD, min_r, A, AV, AD, r, d_):
     if r > min_r-1:
         AD += aD
 
+    # or by default: initial r = min_r?
+
     X = len(d_)
     id_ = d_  # to differentiate from initialized d_:
 
-    fd, fv, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_
+    # or input tuples if derivation_increment() is called from range_increment()?
+
+    fd, fv, r, vP_, dP_ = 0, 0, 0, [], []  # r is initialized for each d_; or passed from comp()?
     pri_s, I, D, V, rv, olp, t_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple vP = 0,
     pri_sd, Id, Dd, Vd, rd, dolp, d_, dolp_ = 0, 0, 0, 0, 0, 0, [], []  # tuple dP = 0
 
@@ -63,7 +69,7 @@ def derivation_increment(a, aV, aD, min_r, A, AV, AD, r, d_):
 
     for x in range(1, X):
 
-        p = id_[x]  # better than pop()?
+        p = id_[x]  # or pop()
 
         pri_s, I, D, V, rv, t_, olp, olp_, pri_sd, Id, Dd, Vd, rd, d_, dolp, dolp_, vP, dP_ = \
         comp(p, pri_p, fd, fv, x, X,
@@ -87,6 +93,8 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
 
     fd += d  # fuzzy d accumulates ds between p and all prior ps within min_r, via range_increment()
     fv += v  # fuzzy v accumulates vs between p and all prior ps within min_r, via range_increment()
+
+    # or it_= min_r comp before form, then separate 1-incr recursive comp? or min_r incr?
 
     # formation of value pattern vP: span of pixels forming same-sign v s:
 
@@ -113,12 +121,13 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     I += pri_p  # ps summed within vP
     D += fd     # fuzzy ds summed within vP
     V += fv     # fuzzy vs summed within vP
-    t = pri_p, fd, fv  # inputs for recursive comp are tuples vs. pixels
-    t_.append(t)  # tuples (pri_p, fd, fv), buffered within vP for selective extended comp
+    t = pri_p, fd, fv  # inputs for inc_rng comp are tuples, vs. pixels for initial comp
+    t_.append(t)  # tuples (pri_p, fd, fv) are buffered within each vP
 
     # formation of difference pattern dP: span of pixels forming same-sign d s:
+    # but these ds are not fuzzy, summation and sign check should start when r = min_r?
 
-    sd = 1 if d > 0 else 0  # sd: positive sign of d;
+    sd = 1 if d > 0 else 0  # sd: positive sign of d;  it should be fd?
     if x > r+2 and (sd != pri_sd or x == X-1):  # if derived pri_sd miss, dP is terminated
 
         if len(d_) > 3 and abs(Dd) > AD:  # min 3 comp within d_:
@@ -165,6 +174,9 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
 
         if min_r <= 1: AD = aD
         else: AD = 0
+
+        # or separate fuzzy comp while r < min_r: level_1_2D (for it in it_),
+        # before eval, vPs and dPs form;  min_r not used elsewhere
 
         fd, fv, r, x, vP_, dP_ = 0, 0, 0, 0, [], []  # i/o tuple
         pri_s, I, D, V, rv, olp, t_, olp_ = 0, 0, 0, 0, 0, 0, [], []  # vP tuple
