@@ -20,7 +20,7 @@ def range_incr(a, aV, aD, min_r, A, AV, AD, r, t_):
     X = len(t_)
     it_ = t_  # to differentiate from initialized t_:
 
-    olp, vP_, dP_ = 0, [], []  # olp is common for both:
+    olp, vP_, dP_ = 0, [], []   # olp is common for both:
     vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
     dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 
@@ -161,7 +161,7 @@ def ini_comp(
         fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
         fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-    if len(it_) == min_r:
+    if len(it_) == min_r + 1:
 
         del it_[0]  # completed tuple is transferred from it_ to form_P
         fv = fm - A
@@ -182,7 +182,7 @@ def ini_comp(
             o = len(vP_), olp  # len(P_) is index of current vP
             dolp_.append(o)  # indexes of overlapping vPs and olp are buffered at current dP
 
-            olp, I, D, V, rv, t_, olp_ = 0, 0, 0, 0, 0, [], []  # initialized vP and olp_
+            olp, I, D, V, rv, t_, olp_ = 0, 0, 0, 0, 0, [], []  # initialized olp and vP
 
         pri_s = s  # vP (span of pixels forming same-sign v) is incremented:
         I += pri_p  # ps summed within vP
@@ -206,9 +206,9 @@ def ini_comp(
             dP_.append(dP)  # output of dP
 
             o = len(dP_), olp  # len(P_) is index of current dP
-            olp_.append(o)  # indexes of overlapping dPs and dolps are buffered at current vP
+            olp_.append(o)  # indexes of overlapping dPs and olps are buffered at current vP
 
-            olp, Id, Dd, Vd, rd, d_, dolp_ = 0, 0, 0, 0, 0, [], []  # initialized dP and dolp_
+            olp, Id, Dd, Vd, rd, d_, dolp_ = 0, 0, 0, 0, 0, [], []  # initialized olp and dP
 
         pri_sd = sd  # dP (span of pixels forming same-sign d) is incremented:
         Id += pri_p  # ps summed within dP
@@ -216,7 +216,7 @@ def ini_comp(
         Vd += fv  # fuzzy vs summed within dP
         d_.append(fd)  # prior fds of the same sign are buffered within dP
 
-        olp += 1  # overlap between concurrent vP and dP
+        olp += 1  # shared overlap between concurrent vP and dP
 
     it = p, d, m
     it_.append(it)  # new prior tuple
@@ -247,9 +247,6 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
         if min_r <= 1: AD = aD
         else: AD = 0
 
-        # or separate fuzzy comp while r < min_r: level_1_2D (for it in it_),
-        # before eval, vPs and dPs form;  min_r not used elsewhere
-
         fd, fv, r, x, olp, vP_, dP_ = 0, 0, 0, 0, 0, [], []  # i/o tuple
         pri_s, I, D, V, rv, t_, olp_ = 0, 0, 0, 0, 0, [], []  # vP tuple
         pri_sd, Id, Dd, Vd, rd, d_, dolp_ = 0, 0, 0, 0, 0, [], []  # dP tuple
@@ -261,7 +258,8 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
             p = p_[x]  # new pixel for comp to prior pixel, could use pop()?
 
             olp, vP, dP, vP_, dP_ = \
-            ini_comp(
+            ini_comp(  # initial fuzzy comp for r <= min_r (not used elsewhere)
+
                 p, pri_p, fd, olp, x,  # input variables
                 pri_s, I, D, V, rv, t_, olp_,  # vP variables
                 pri_sd, Id, Dd, Vd, rd, d_, dolp_,  # dP variables

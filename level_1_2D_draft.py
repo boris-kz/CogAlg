@@ -58,7 +58,7 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
 
 def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2: p, d, dy, m, my
 
-    vP_, dP_, valt_, dalt_ = [],[],[],[]  # append by form_P, alt_-> alt2_, packed in scan_higher
+    vP_, dP_, valt_, dalt_ = [],[],[],[]  # append by form_P, alt_-> alt2_, packed in scan_P_
 
     vP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, rdn_olp, e_
     dP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, rdn_olp, e_
@@ -85,12 +85,12 @@ def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2:
         # form 1D value pattern vP: horizontal span of same-sign vg s with associated vars:
 
         sv, olp, valt_, dalt_, vP, dP, vP_, _vP_ = \
-        form_P(0, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, _vP_, x)
+        form_P(1, t2, vg, dg, olp, valt_, dalt_, vP, dP, vP_, _vP_, x)
 
         # form 1D difference pattern dP: horizontal span of same-sign dg s + associated vars:
 
         sd, olp, dalt_, valt_, dP, vP, dP_, _dP_ = \
-        form_P(1, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, _dP_, x)
+        form_P(0, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, _dP_, x)
 
     # line ends, olp term, vP term, dP term, no init, inclusion per incomplete lateral fd and fm:
 
@@ -104,10 +104,10 @@ def ycomp(t_, _t_, _vP_, _dP_):  # vertical comparison between pixels, forms t2:
 
     if y+1 > rng:
 
-        vP_, _vP_ = scan_higher(0, vP, valt_, vP_, _vP_, x)  # empty _vP_ []
-        dP_, _dP_ = scan_higher(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_ []
+        vP_, _vP_ = scan_P_(0, vP, valt_, vP_, _vP_, x)  # empty _vP_ []
+        dP_, _dP_ = scan_P_(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_ []
 
-    return vP_, dP_  # extended for P_ append in scan_higher, renamed as arguments _vP_, _dP_
+    return vP_, dP_  # extended for P_ append in scan_P_, renamed as arguments _vP_, _dP_
 
 
 def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 1D Ps
@@ -115,7 +115,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
     p, d, dy, m, my = t2  # 2D tuple of quadrant per pixel
     pri_s, I, D, Dy, M, My, G, rdn_olp, e_ = P
 
-    if typ == 0:
+    if typ:
         olp_len, oG, alt_oG = olp  # overlap between current vP and dP, accumulated in ycomp,
     else:
         olp_len, alt_oG, oG = olp  # -> P2 rdn_olp2, generic 1D ave *= 2: low variation?
@@ -129,7 +129,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
             alt_P[7] += olp_len  # redundant overlap in weaker-oG- vP or dP, at either-P term
 
         P = pri_s, I, D, Dy, M, My, G, rdn_olp, e_ # -> rdn_olp2, no A = ave * rdn_olp / e_: dA < cost?
-        P_, _P_ = scan_higher(typ, P, alt_, P_, _P_, x)  # continuity scan over higher-line _Ps
+        P_, _P_ = scan_P_(typ, P, alt_, P_, _P_, x)  # continuity scan over higher-line _Ps
 
         alt = alt_P, olp_len, oG, alt_oG  # or P index len(P_): faster than P?  for P eval in form_blob
         alt_.append(alt)
@@ -152,7 +152,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
     My += my  # vertical M, for P2 normalization
     G += g    # d or v gradient summed to define P value, or V = M - 2a * W?
 
-    if typ == 0:
+    if typ:
         pri = p, g, alt_g  # g = v gradient
         e_.append(pri)  # pattern element: prior same-line quadrant, for selective incremental range
     else:
@@ -164,7 +164,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
     return s, olp, alt_, _alt_, P, alt_P, P_, _P_  # alt_ and _alt_ accumulated in ycomp per line
 
 
-def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion, _P termination
+def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion, _P termination
 
     A = ave  # initialization before accumulation
     buff_ = [] # _P_ buffer; alt_-> rolp, alt2_-> rolp2
@@ -177,7 +177,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
     while x >= _ix:  # P to _P connection eval, while horizontal overlap between P and _P_:
 
-        fork_oG = 0  # fork overlap gradient: oG += g, approx: oG = G * mw / len(e_)
+        fork_oG = 0  # fork overlap gradient: oG += g
         ex = x  # x coordinate of current P element
 
         _P = _P_.popleft() # _P = _P, _alt_, roots, forks
@@ -189,7 +189,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
         
                 for e in e_:  # oG accumulation per P (PM, PD from comp_P only)
 
-                    if typ == 0: fork_oG += e[1]  # if vP: e = p, g, alt_g
+                    if typ: fork_oG += e[1]  # if vP: e = p, g, alt_g
                     else: fork_oG += e  # if dP: e = g
                     ex += 1
 
@@ -200,17 +200,13 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
         if _P[0][2] > ix:  # if _x > ix:
 
-            buff_.append(_P)  # _P is buffered for next-P comp,
+            buff_.append(_P)  # _P is buffered for next-P comp
 
-            # split-root _P_P2 is also displaced?
+        else:  # no horizontal overlap between _P and next P, _P -> fork P2s after fork_eval
 
-        else:  # no horizontal overlap between _P and next P,
+            if (_P[2][0] != 1 and y > rng + 3) or y == Y - 1:  # if root_ != 1 (term | split)
 
-            # _P is merged in fork P2s, regardless of quant? but after current fork_eval?
-
-            if (_P[2][0] != 1 and y > rng + 3) or y == Y - 1:  # if root_ != 1: P2 is quantized
-
-                blob_ = _P[2][2] # or term | split: quant_P2 is called from form_P2?
+                blob_ = _P[2][2]
                 for blob in blob_:
 
                     blob, _vPP, _dPP = blob  # <= one _vPP and _dPP per higher-line blob
@@ -222,7 +218,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
             # P2 = 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
             # or structured numpy array P_ at return: one tuple template vs. many?
 
-            buff_ += _P_  # for scan_higher(next P)
+            buff_ += _P_  # for scan_P_(next P)
 
     P = s, ix, x, I, D, Dy, M, My, G, rdn_alt, e_  # no horizontal overlap between P and _P_ left
 
@@ -258,7 +254,7 @@ def scan_higher(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclus
 
 def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, comp_P, form_PP
 
-    # from scan_higher(): fork = crit, _P; _P = _P, _alt_, roots, forks
+    # from scan_P_(): fork = crit, _P; _P = _P, _alt_, roots, forks
     # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn_alt, _e_
 
     ini = 1; select_ = []
