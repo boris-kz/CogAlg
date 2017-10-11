@@ -204,7 +204,7 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 
         else:  # no horizontal overlap between _P and next P, _P -> fork P2s after fork_eval
 
-            if (_P[2][0] != 1 and y > rng + 3) or y == Y - 1:  # if root_ != 1 (term | split)
+            if (_P[2][0] != 1 and y > rng + 3) or y == Y - 1:  # if root_ != 1: term | split
 
                 blob_ = _P[2][2]
                 for blob in blob_:
@@ -214,9 +214,6 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 
                     if _vPP: term_P2(_vPP, A)  # if comp_P in fork_eval(blob)
                     if _dPP: term_P2(_dPP, A)  # not for _dPP in _dPP_: only to eval for rdn?
-
-            # P2 = 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
-            # or structured numpy array P_ at return: one tuple template vs. many?
 
             buff_ += _P_  # for scan_P_(next P)
 
@@ -248,8 +245,12 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 
     # y-1: P, fork_Ps, ->_P at _P_ scan end
     # y-2: _P, roots, fork_P2s, -> P2 at P_ scan end
-    # y-3: _P2, roots, fork_quant_P2s, -> qP2 at roots scan end
-    # y-4 and higher: _P2 -> fork_qP2s at term | split, full P2 net at last cont_P
+    # y-3: _P2, roots, fork_term_P2s, -> tP2 at roots scan end
+    # y-4 or >: _tP2, formed by term | split, P2 network term at last cont_P
+
+    # P2 +=_P at _P displacement, but no fixed P2 or full_P2 displacement?
+    # P2 = 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
+    # or structured numpy array P_ at return: one tuple template vs. many?
 
 
 def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, comp_P, form_PP
@@ -260,13 +261,12 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
     ini = 1; select_ = []
     fork_.sort(key = lambda fork: fork[0])  # or sort and select at once:
 
-    while fork_ and (crit > A or ini == 1):  # links contiguous same- type and sign Ps in P2s
+    while fork_ and (crit > A or ini == 1):  # _P -> P2 inclusion if contiguous sign match
 
         fork = fork_.pop()
         crit, fork = fork  # criterion: oG if fork, PM if vPP, PD if dPP
 
         if typ == 2:  # fork = blob, same min oG for blob inclusion and comp_P?
-                      # P2 inclusion if comp and sign match at form_PP
 
             fork = form_blob(P, fork)  # crit is packed in _G, rdn_alt is packed in rdn?
             vPP, dPP = comp_P(P, fork)  # adding PM | PD to fork
@@ -275,7 +275,7 @@ def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, c
         else:
             fork = form_PP(typ, P, fork)  # fork = vPP or dPP
 
-        A += A  # rdn++, formed per eval: a * rolp * rdn.?  no rolp alone: adjustment < cost?
+        A += A  # rdn incr, formed per eval: a * rolp * rdn., no rolp alone: adjust < cost?
         ini = 0
 
         select_.append(fork)  # not-selected forks are out of fork_, don't increment their root_
