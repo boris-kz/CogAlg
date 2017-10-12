@@ -35,7 +35,7 @@ Subsequent cycles would compare 4D input patterns over increasing distance in ea
 However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D, or at least over 2D for images.
 This is a universe-specific extension of core algorithm.
 
-I am currently working on implementation of core algorithm to process images: level_1_working.py and level_2_old.py here, and also on its natively-2D adaptation: level_1_2D_draft.py here.
+I am currently working on implementation of core algorithm to process images: level_1.py and level_2_old.py here, and also on its natively-2D adaptation: level_1_2D_draft.py here.
 Initial testing will be recognition and automatic labeling of manually labeled images, from something like ImageNet.
 
 This algorithm will be organically extended to process colors, then video, then stereo video (from multiple confocal cameras).

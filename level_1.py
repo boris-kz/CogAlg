@@ -3,10 +3,10 @@ from scipy import misc
 '''
 Level 1:
 
-Cross-comparison between consecutive pixels within horizontal scan line (row).
+Cross-comparison between consecutive pixels within horizontal scan level (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
-are redundant representations of each line of pixels.
+are redundant representations of each level of pixels.
 
 I don't like to pack arguments, this code is optimized for visibility rather than speed 
 '''
@@ -25,16 +25,8 @@ def range_incr(a, aV, aD, A, AV, AD, r, t_):
 
     for x in range(r+1, X):
 
-        p, fd, fv = t_[x]       # compared to a pixel at x-r-1:
-        pp, pfd, pfv = t_[x-r]  # previously compared p, its fd, fv to next p
-
-        fv += pfv  # fuzzy v is summed over extended-comp range
-        fd += pfd  # fuzzy d is summed over extended-comp range
-
-        pfv += fv  # x-r is complete, while current fv and fd are not?
-        pfd += fd  # bilateral accum, then form() of two completes:
-
-        pri_p, pri_fd, pri_fv = t_[x-r-1]  # for comp(p, pri_p):
+        p, ifd, ifv = t_[x]  # ifd, ifv are not used: directional, accum for pri_p only:
+        pri_p, fd, fv = t_[x-r-1]  # for comparison of r-pixel-distant pixels:
 
         olp, fd, fv, vP, dP, vP_, dP = \
         re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_, X, a, aV, aD, A, AV, AD, r)
@@ -74,7 +66,7 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X,  # input variabl
     else:
         s = 1 if fd >= 0 else 0  # sign of fv, 0 is positive?
 
-    pri_s, I, D, V, rf, e_, olp_ = P
+    pri_s, I, D, V, rf, e_, olp_ = P  # debug: 0 values in P?
 
     if x > r + 2 and (s != pri_s or x == X - 1):  # if derived pri_s miss, P is terminated
 
@@ -111,7 +103,7 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X,  # input variabl
 
     P = pri_s, I, D, V, rf, e_, olp_
 
-    return olp, P, alt_P, P_, alt_P_  # alt_ and _alt_ accumulated per line
+    return olp, P, alt_P, P_, alt_P_  # alt_ and _alt_ accumulated per level
 
 
 def re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_,  # inputs and output patterns
@@ -121,10 +113,10 @@ def re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_,  # inputs and output pat
     m = min(p, pri_p)  # match between consecutive pixels
     v = m - A          # relative match (predictive value) between consecutive pixels
 
-    fd += d  # fuzzy d accumulates ds between p and all prior ps within min_r, via range_incr()
-    fv += v  # fuzzy v accumulates vs between p and all prior ps within min_r, via range_incr()
+    fd += d  # fuzzy d accumulates ds between p and all prior ps in r via range_incr()
+    fv += v  # fuzzy v accumulates vs between p and all prior ps in r via range_incr()
 
-    # fv and fd at r < min_r are lost, full fv and fd are different for p and pri_p
+    # fv and fd at lower r are in lower Ps, different for p and pri_p
     # formation of value pattern vP: span of pixels forming same-sign fv s:
 
     olp, vP, dP, vP_, dP_ = \
@@ -143,7 +135,7 @@ def re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_,  # inputs and output pat
 def comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
          X, a, aV, aD, min_r, A, AV, AD, r):  # filters
 
-    # comparison of consecutive pixels within line forms tuples: pixel, match, difference
+    # comparison of consecutive pixels within level forms tuples: pixel, match, difference
 
     for it in it_:  # incomplete tuples with summation range from 0 to rng
         pri_p, fd, fm = it
@@ -156,7 +148,7 @@ def comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
 
     if len(it_) == min_r:
 
-        fv = fm - A; del it_[0]  # completed tuple is removed from it_
+        fv = fm - A
         # formation of value pattern vP: span of pixels forming same-sign fv s:
 
         olp, vP, dP, vP_, dP_ = \
@@ -169,8 +161,9 @@ def comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
 
         olp += 1  # overlap between concurrent vP and dP, to be represented in both?
 
+    del it_[0]  # complete min_r tuple is removed
     it = p, fd, fm
-    it_.append(it)  # new prior tuple
+    it_.append(it)  # new tuple is added
 
     return it_, olp, vP, dP, vP_, dP  # for next p comparison, vP and dP increment, and output
 
@@ -187,12 +180,12 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
 
     for y in range(Y):
 
-        p_ = Fp_[y, :]   # y is index of new line ip_
+        p_ = Fp_[y, :]   # y is index of new level ip_
         A = a * min_r    # initial filters, incremented with r
         AV = aV * min_r  # min V for initial comp(t_)
         AD = aD * min_r  # min |D| for initial comp(d_)
 
-        r, x, olp, vP_, dP_ = 0, 0, 0, [], []  # initialized at each line
+        r, x, olp, vP_, dP_ = 0, 0, 0, [], []  # initialized at each level
         vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
         dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 
@@ -208,7 +201,7 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
                  X, a, aV, aD, min_r, A, AV, AD, r)  # filters
 
         LP_ = vP_, dP_
-        FP_.append(LP_)  # line of patterns is added to frame of patterns, y = len(FP_)
+        FP_.append(LP_)  # level of patterns is added to frame of patterns, y = len(FP_)
 
     return FP_  # output to level 2
 
