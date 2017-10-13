@@ -40,8 +40,8 @@ def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp,  # inputs and output pat
 def range_incr(a, aV, aD, A, AV, AD, r, t_):
 
     A += a  # A, AV, AD incr. to adjust for redundancy to patterns formed by prior comp:
-    AV += aV  # aV: min V for initial comp(t_), AV: min V for higher recursions
-    AD += aD  # aD: min |D| for initial comp(d_), AD: min |D| for higher recursions
+    AV += a + aV  # aV: min V for initial comp(t_), AV: min V for higher recursions
+    AD += a + aD  # aD: min |D| for initial comp(d_), AD: min |D| for higher recursions
 
     X = len(t_)  # initialized t_ is inside new vP only
 
@@ -52,7 +52,7 @@ def range_incr(a, aV, aD, A, AV, AD, r, t_):
     for x in range(r+1, X):
 
         p, ifd, ifv = t_[x]  # ifd, ifv are not used: directional, accum for pri_p only:
-        pri_p, fd, fv = t_[x-r-1]  # for comparison of r-pixel-distant pixels:
+        pri_p, fd, fv = t_[x-r]  # for comparison of r-pixel-distant pixels:
 
         fd, fv, vP, dP, vP_, dP_, olp = \
         re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, a, aV, aD, A, AV, AD, r)
@@ -62,7 +62,7 @@ def range_incr(a, aV, aD, A, AV, AD, r, t_):
 
 def deriv_incr(a, aV, aD, A, AV, AD, r, d_):
 
-    A += a; AV += aV; AD += aD  # no deriv_incr while r < min_r, only more fuzzy?
+    A += a; AV += a + aV; AD += a + aD  # no deriv_incr while r < min_r, only more fuzzy?
 
     X = len(d_)  # not tuples even within range_incr()?
     id_ = d_  # to differentiate from initialized d_:
@@ -87,10 +87,8 @@ def deriv_incr(a, aV, aD, A, AV, AD, r, d_):
 def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X,  # input variables
          a, aV, aD, A, AV, AD, r):  # filter variables
 
-    if typ:
-        s = 1 if fv >= 0 else 0  # sign of fd, 0 is positive?
-    else:
-        s = 1 if fd >= 0 else 0  # sign of fv, 0 is positive?
+    if typ: s = 1 if fv >= 0 else 0  # sign of fd, 0 is positive?
+    else:   s = 1 if fd >= 0 else 0  # sign of fv, 0 is positive?
 
     pri_s, I, D, V, rf, e_, olp_ = P  # debug: 0 values in P?
 
@@ -135,7 +133,7 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X,  # input variabl
 def comp(x, p, it_, vP, dP, vP_, dP_, olp,  # inputs and output patterns
          X, a, aV, aD, min_r, A, AV, AD, r):  # filters
 
-    # comparison of consecutive pixels within level forms tuples: pixel, match, difference
+    # comparison of consecutive pixels within level forms tuples: pixel, difference, match
 
     for it in it_:  # incomplete tuples with summation range from 0 to rng
         pri_p, fd, fm = it
@@ -146,10 +144,10 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp,  # inputs and output patterns
         fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
         fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-    if len(it_) == min_r:
-
+    if len(it_) == min_r:  # current tuple fd and fm are accumulated over min_r
         fv = fm - A
-        # formation of value pattern vP: span of pixels forming same-sign fv s:
+
+        #  formation of value pattern vP: span of pixels forming same-sign fv s:
 
         vP, dP, vP_, dP_, olp = \
         form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
@@ -159,13 +157,13 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp,  # inputs and output patterns
         dP, vP, dP_, vP_, olp = \
         form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
 
-        olp += 1  # overlap between concurrent vP and dP, to be represented in both?
+        olp += 1  # overlap between vP and dP, represented in both and terminated with either
+        del it_[0]  # complete min_r tuple is removed
 
-    del it_[0]  # complete min_r tuple is removed
-    it = p, fd, fm
+    it = p, 0, 0  # fd and fm are directional: initialized at 0 for a new tuple
     it_.append(it)  # new tuple is added
 
-    return it_, vP, dP, vP_, dP_, olp  # for next p comparison, vP and dP increment, and output
+    return it_, vP, dP, vP_, dP_, olp  # for next p comparison, vP and dP increment and output
 
 
 def root_1D(Fp_):  # last '_' distinguishes array name from element name
@@ -185,7 +183,7 @@ def root_1D(Fp_):  # last '_' distinguishes array name from element name
         AV = aV * min_r  # min V for initial comp(t_)
         AD = aD * min_r  # min |D| for initial comp(d_)
 
-        r, x, olp, vP_, dP_ = 0, 0, 0, [], []  # initialized at each level
+        r, x, olp, vP_, dP_ = min_r, 0, 0, [], []  # initialized at each level
         vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
         dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 

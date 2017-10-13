@@ -29,12 +29,12 @@ import numpy as np
 
 def comp(p_):  # comparison of consecutive pixels within level forms tuples: pixel, match, difference
 
-    t_ = []  # complete fuzzy tuples: summation range = rng
-    it_ = []  # incomplete fuzzy tuples: summation range < rng
+    t_ = []  # complete fuzzy tuples: summation range = min_rng
+    it_ = []  # incomplete fuzzy tuples: summation range < min_rng
 
     for p in p_:
 
-        for it in it_:  # incomplete tuples with summation range from 0 to rng
+        for it in it_:  # incomplete tuples with summation range from 0 to min_rng
             pri_p, fd, fm = it
 
             d = p - pri_p  # difference between pixels
@@ -43,16 +43,16 @@ def comp(p_):  # comparison of consecutive pixels within level forms tuples: pix
             fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
             fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-        if len(it_) == rng:
+        if len(it_) == min_rng:
 
             t = pri_p, fd, fm
             t_.append(t)
             del it_[0]  # completed tuple is transferred from it_ to t_
 
-        it = p, 0, 0  # fd and fm are initialized at 0: unique and directional
+        it = p, 0, 0  # fd and fm are directional, initialized each p
         it_.append(it)  # new prior tuple
 
-    t_ += it_  # last number = rng of tuples remain incomplete
+    t_ += it_  # last number = min_rng of tuples remain incomplete
     return t_
 
 
@@ -81,7 +81,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
             fdy += dy  # fuzzy dy: sum of dys between p and all prior ps within t2_
             fmy += my  # fuzzy my: sum of mys between p and all prior ps within t2_
 
-        if len(t2_) == rng:
+        if len(t2_) == min_rng:
 
             dg = _d + fdy
             vg = _m + fmy - ave
@@ -108,14 +108,14 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
     if olp: # or if vP, dP?
 
         dalt_.append(olp); valt_.append(olp)
-        olp_len, olp_vG, olp_dG = olp  # same for vP and dP, incomplete vg - ave / (rng / X-x)?
+        olp_len, olp_vG, olp_dG = olp  # same for vP and dP, incomplete vg - ave / (min_rng / X-x)?
 
         if olp_vG > olp_dG:  # comp of olp_vG to olp_dG, == goes to alt_P or to vP: primary?
             vP[7] += olp_len  # olp_len is added to redundant overlap of lesser-oG-  vP or dP
         else:
             dP[7] += olp_len  # no P[8] /= P[7]: rolp = rdn_olp / len(e_): P to alt_Ps rdn ratio
 
-    if y + 1 > rng:
+    if y + 1 > min_rng:
         vP_, _vP_ = scan_P_(0, vP, valt_, vP_, _vP_, x)  # empty _vP_ []
         dP_, _dP_ = scan_P_(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_ []
 
@@ -133,7 +133,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
         olp_len, alt_oG, oG = olp  # -> P2 rdn_olp2, generic 1D ave *= 2: low variation?
 
     s = 1 if g > 0 else 0
-    if s != pri_s and x > rng + 2:  # P (span of same-sign gs) is terminated
+    if s != pri_s and x > min_rng + 2:  # P (span of same-sign gs) is terminated
 
         if alt_oG > oG:  # comp of olp_vG to olp_dG, == goes to alt_P or to vP: primary pattern?
             rdn_olp += olp_len  
@@ -216,7 +216,7 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 
         else:  # no horizontal overlap between _P and next P, _P -> fork P2s after fork_eval
 
-            if (_P[2][0] != 1 and y > rng + 3) or y == Y - 1:  # if root_ != 1: term | split
+            if (_P[2][0] != 1 and y > min_rng + 3) or y == Y - 1:  # if root_ != 1: term | split
 
                 blob_ = _P[2][2]
                 for blob in blob_:
@@ -461,8 +461,8 @@ def root_2D(f):
 
     # my conventions: postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
 
-    global rng; rng = 1
-    global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= rng
+    global min_rng; min_rng = 1  # rng is local?
+    global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= min_rng
 
     global Y; global X
     Y, X = f.shape  # Y: frame height, X: frame width
