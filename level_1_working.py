@@ -145,7 +145,7 @@ def comp(p, pri_p, fd, fv, x, X,  # input variables
     # for next p comparison, vP and dP increment, and output
 
 
-def Le1(Fp_): # last '_' distinguishes array name from element name
+def root_1D(Fp_): # last '_' distinguishes array name from element name
 
     FP_ = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
@@ -190,7 +190,7 @@ def Le1(Fp_): # last '_' distinguishes array name from element name
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
-Le1(f)
+root_1D(f)
 
 # at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
 # at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)

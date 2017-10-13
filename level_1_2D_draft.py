@@ -457,7 +457,7 @@ def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, rec
     '''
 
 
-def level_1(f):
+def root_2D(f):
 
     # my conventions: postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
 
@@ -499,5 +499,5 @@ def level_1(f):
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
-level_1(f)
+root_2D(f)
 

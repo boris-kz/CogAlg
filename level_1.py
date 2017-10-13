@@ -11,6 +11,32 @@ are redundant representations of each level of pixels.
 I don't like to pack arguments, this code is optimized for visibility rather than speed 
 '''
 
+def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp,  # inputs and output patterns
+            X, a, aV, aD, A, AV, AD, r):  # filters      # recursive comp
+
+    d = p - pri_p      # difference between consecutive pixels
+    m = min(p, pri_p)  # match between consecutive pixels
+    v = m - A          # relative match (predictive value) between consecutive pixels
+
+    fd += d  # fuzzy d accumulates ds between p and all prior ps in r via range_incr()
+    fv += v  # fuzzy v accumulates vs between p and all prior ps in r via range_incr()
+
+    # fv and fd at lower r are in lower Ps, different for p and pri_p
+    # formation of value pattern vP: span of pixels forming same-sign fv s:
+
+    vP, dP, vP_, dP_, olp = \
+    form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
+
+    # formation of difference pattern dP: span of pixels forming same-sign fd s:
+
+    dP, vP, dP_, vP_, olp = \
+    form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
+
+    olp += 1  # overlap between concurrent vP and dP, to be buffered in olp_
+
+    return fd, fv, vP, dP, vP_, dP_, olp   # for next p comparison, vP and dP increment, and output
+
+
 def range_incr(a, aV, aD, A, AV, AD, r, t_):
 
     A += a  # A, AV, AD incr. to adjust for redundancy to patterns formed by prior comp:
@@ -28,8 +54,8 @@ def range_incr(a, aV, aD, A, AV, AD, r, t_):
         p, ifd, ifv = t_[x]  # ifd, ifv are not used: directional, accum for pri_p only:
         pri_p, fd, fv = t_[x-r-1]  # for comparison of r-pixel-distant pixels:
 
-        olp, fd, fv, vP, dP, vP_, dP = \
-        re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_, X, a, aV, aD, A, AV, AD, r)
+        fd, fv, vP, dP, vP_, dP_, olp = \
+        re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, a, aV, aD, A, AV, AD, r)
 
     return vP_, dP_  # local vPs and dPs replace t_
 
@@ -50,8 +76,8 @@ def deriv_incr(a, aV, aD, A, AV, AD, r, d_):
     for x in range(1, X):
         p = id_[x]
 
-        olp, fd, fv, vP, dP, vP_, dP = \
-        re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_, X, a, aV, aD, A, AV, AD, r)
+        fd, fv, vP, dP, vP_, dP_, olp = \
+        re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, a, aV, aD, A, AV, AD, r)
 
         pri_p = p
 
@@ -103,36 +129,10 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X,  # input variabl
 
     P = pri_s, I, D, V, rf, e_, olp_
 
-    return olp, P, alt_P, P_, alt_P_  # alt_ and _alt_ accumulated per level
+    return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ accumulated per level
 
 
-def re_comp(x, p, pri_p, fd, fv, olp, vP, dP, vP_, dP_,  # inputs and output patterns
-            X, a, aV, aD, A, AV, AD, r):  # filters      # recursive comp
-
-    d = p - pri_p      # difference between consecutive pixels
-    m = min(p, pri_p)  # match between consecutive pixels
-    v = m - A          # relative match (predictive value) between consecutive pixels
-
-    fd += d  # fuzzy d accumulates ds between p and all prior ps in r via range_incr()
-    fv += v  # fuzzy v accumulates vs between p and all prior ps in r via range_incr()
-
-    # fv and fd at lower r are in lower Ps, different for p and pri_p
-    # formation of value pattern vP: span of pixels forming same-sign fv s:
-
-    olp, vP, dP, vP_, dP_ = \
-    form_P(1, vP, vP_, dP, dP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
-
-    # formation of difference pattern dP: span of pixels forming same-sign fd s:
-
-    olp, dP, vP, dP_, vP_ = \
-    form_P(0, dP, dP_, vP, vP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
-
-    olp += 1  # overlap between concurrent vP and dP, to be buffered in olp_
-
-    return olp, fd, fv, vP, dP, vP_, dP  # for next p comparison, vP and dP increment, and output
-
-
-def comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
+def comp(x, p, it_, vP, dP, vP_, dP_, olp,  # inputs and output patterns
          X, a, aV, aD, min_r, A, AV, AD, r):  # filters
 
     # comparison of consecutive pixels within level forms tuples: pixel, match, difference
@@ -151,13 +151,13 @@ def comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
         fv = fm - A
         # formation of value pattern vP: span of pixels forming same-sign fv s:
 
-        olp, vP, dP, vP_, dP_ = \
-        form_P(1, vP, vP_, dP, dP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
+        vP, dP, vP_, dP_, olp = \
+        form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
 
         # formation of difference pattern dP: span of pixels forming same-sign fd s:
 
-        olp, dP, vP, dP_, vP_ = \
-        form_P(0, dP, dP_, vP, vP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
+        dP, vP, dP_, vP_, olp = \
+        form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, a, aV, aD, A, AV, AD, r)
 
         olp += 1  # overlap between concurrent vP and dP, to be represented in both?
 
@@ -165,10 +165,10 @@ def comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
     it = p, fd, fm
     it_.append(it)  # new tuple is added
 
-    return it_, olp, vP, dP, vP_, dP  # for next p comparison, vP and dP increment, and output
+    return it_, vP, dP, vP_, dP_, olp  # for next p comparison, vP and dP increment, and output
 
 
-def level_1(Fp_):  # last '_' distinguishes array name from element name
+def root_1D(Fp_):  # last '_' distinguishes array name from element name
 
     FP_ = []  # output frame of vPs: relative match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
@@ -196,8 +196,8 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
         for x in range(1, X):  # cross-compares consecutive pixels
             p = p_[x]  # new pixel, fuzzy comp to it_ for r <= min_r:
 
-            it_, olp, vP, dP, vP_, dP_ = \
-            comp(x, p, it_, olp, vP, dP, vP_, dP_,  # inputs and output patterns
+            it_, vP, dP, vP_, dP_, olp = \
+            comp(x, p, it_, vP, dP, vP_, dP_, olp,  # inputs and output patterns
                  X, a, aV, aD, min_r, A, AV, AD, r)  # filters
 
         LP_ = vP_, dP_
@@ -207,7 +207,7 @@ def level_1(Fp_):  # last '_' distinguishes array name from element name
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
-level_1(f)
+root_1D(f)
 
 # at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
 # at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
