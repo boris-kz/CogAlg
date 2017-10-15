@@ -1,4 +1,5 @@
 from scipy import misc
+from collections import deque
 
 '''
 Level 1:
@@ -12,10 +13,10 @@ I don't like to pack arguments, this code is optimized for visibility rather tha
 '''
 
 
-def pre_comp(typ, e_, A, r):  # prepares for comp recursion
+def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
 
-    A += a * 2  # to compensate for redundancy + fv accumulation?
-    X = len(e_)  # initialized t_ is inside new vP only
+    A += a  # compensates for fv overlap redundancy
+    X = len(e_)
 
     olp, vP_, dP_ = 0, [], []   # olp is common for both:
     vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
@@ -23,16 +24,16 @@ def pre_comp(typ, e_, A, r):  # prepares for comp recursion
 
     if typ:  # comparison range incr within e_ = t_
 
-        r += 1  # comp range counter, recorded within new Ps
+        r += 1  # comp range counter, recorded within Ps formed by re_comp
         for x in range(r+1, X):
 
-            p, ifd, ifv = e_[x]  # ifd, ifv not used: directional accum for pri_p only
+            p, ifd, ifv = e_[x]  # ifd, ifv not used, directional pri_p accum only
             pri_p, fd, fv = e_[x-r]  # for comparison of r-pixel-distant pixels:
 
             fd, fv, vP, dP, vP_, dP_, olp = \
             re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
 
-    else:  # comparison derivation incr within e_ = d_: not tuples within range incr?
+    else:  # comparison derivation incr within e_ = d_ (not tuples within range incr?)
 
         pri_d = e_[0]  # no deriv_incr while r < min_r, only more fuzzy?
         fd, fv = 0, 0
@@ -58,17 +59,17 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
     if x > r + 2 and (s != pri_s or x == X - 1):  # P is terminated and evaluated
 
         if typ:
-            if len(e_) > r + 3 and pri_s == 1 and V > A + aV:  # minimum of 3 tuples:
+            if len(e_) > r + 3 and pri_s == 1 and V > A + aV:  # minimum of 3 tuples
                 rf = 1  # incr range flag
                 e_.append(pre_comp(1, e_, A, r))  # comparison range incr within e_ = t_
 
         else:
-            if len(e_) > 3 and abs(D) > A + aD:  # minimum of 3 ds:
-                rf = 1  # incr derivation flag
+            if len(e_) > 3 and abs(D) > A + aD:  # minimum of 3 ds
+                rf = 1  # incr deriv flag
                 e_.append(pre_comp(0, e_, A, r))  # comp derivation incr within e_ = d_
 
         P = pri_s, I, D, V, rf, e_, olp_
-        P_.append(P)  # output
+        P_.append(P)  # output to level_2
 
         o = len(P_), olp  # index of current P and terminated olp are buffered in alt_olp_
         alt_P[6].append(o)
@@ -121,7 +122,10 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
 
     # comparison of consecutive pixels within line forms tuples: pixel, difference, match
 
-    for it in it_:  # incomplete tuples with summation range from 0 to r
+    new_ = deque()
+    while it_:
+
+        it = it_.pop()
         pri_p, fd, fm = it
 
         d = p - pri_p  # difference between pixels
@@ -129,6 +133,11 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
 
         fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
         fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
+
+        new = pri_p, fd, fm
+        new_.appendleft(new)
+
+    it_ = new_
 
     if len(it_) == r:  # current tuple fd and fm are accumulated over range = r
         fv = fm - A
@@ -143,8 +152,8 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
         dP, vP, dP_, vP_, olp = \
         form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, A, r)
 
-        olp += 1  # overlap between vP and dP, represented in both and terminated with either
-        del it_[0]  # complete-r tuple is removed
+        olp += 1  # overlap between vP and dP, stored in both and terminated with either
+        del it_[0]  # full-range (r) tuple is removed
 
     it = p, 0, 0  # fd and fm are directional: initialized at 0 for a new tuple
     it_.append(it)  # new tuple is added
@@ -156,7 +165,7 @@ def root_1D(Fp_):  # last '_' distinguishes array name from element name
 
     FP_ = []  # output frame of vPs: relative-match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
-    min_r = 2  # min fuzzy comparison range
+    min_r = 3  # fuzzy comp range
 
     global a; a = 63
     global aV; aV = 63 * min_r  # min V for initial incremental-range comp(t_)
@@ -176,13 +185,13 @@ def root_1D(Fp_):  # last '_' distinguishes array name from element name
         it_.append(pri_t)
 
         for x in range(1, X):  # cross-compares consecutive pixels
-            p = p_[x]  # new pixel, fuzzy comp to it_ for r <= min_r:
+            p = p_[x]  # new pixel, fuzzy comp to it_:
 
             it_, vP, dP, vP_, dP_, olp = \
             comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r)
 
-        LP_ = vP_, dP_
-        FP_.append(LP_)  # level of patterns is added to frame of patterns, y = len(FP_)
+        LP_ = vP_, dP_   # line of patterns formed from a line of pixels
+        FP_.append(LP_)  # line of patterns is added to frame of patterns, y = len(FP_)
 
     return FP_  # output to level 2
 
