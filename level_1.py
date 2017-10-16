@@ -118,14 +118,11 @@ def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):  # recursive c
     return fd, fv, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
 
 
-def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
+def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # comparison of pixel to next r-pixels
 
-    # comparison of consecutive pixels within line forms tuples: pixel, difference, match
+    index = 0  # iterator is left-first?
 
-    new_ = deque()
-    while it_:
-
-        it = it_.pop()
+    for it in it_:  # incomplete tuples with summation range from 0 to rng
         pri_p, fd, fm = it
 
         d = p - pri_p  # difference between pixels
@@ -134,12 +131,15 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
         fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
         fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-        new = pri_p, fd, fm
-        new_.appendleft(new)
+        it = pri_p, fd, fm
+        it_[index] = it  # accumulates the 1st t, removes the 2nd, or replaces it with the 1st?
 
-    it_ = new_
+        index += 1
 
     if len(it_) == r:  # current tuple fd and fm are accumulated over range = r
+
+        it = it_.popleft()
+        pri_p, fd, fm = it
         fv = fm - A
 
         #  formation of value pattern vP: span of pixels forming same-sign fv s:
@@ -153,10 +153,10 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
         form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, A, r)
 
         olp += 1  # overlap between vP and dP, stored in both and terminated with either
-        del it_[0]  # full-range (r) tuple is removed
+        del it_[0]
 
     it = p, 0, 0  # fd and fm are directional: initialized at 0 for a new tuple
-    it_.append(it)  # new tuple is added
+    it_.append(it)  # new tuple is added;
 
     return it_, vP, dP, vP_, dP_, olp  # for next-p comparison, vP and dP increment, output
 
@@ -180,7 +180,7 @@ def root_1D(Fp_):  # last '_' distinguishes array name from element name
         vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
         dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 
-        it_ = []  # incomplete fuzzy tuples: summation range < rng
+        it_ = deque(maxlen=r)  # incomplete fuzzy tuples: summation range < r
         pri_t = p_[0], 0, 0  # no d, m at x = 0
         it_.append(pri_t)
 

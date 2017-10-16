@@ -15,26 +15,26 @@ import numpy as np
     2D patterns are blobs of same-sign quadrant gradient, of value for vP or difference for dP.
     Level 1 has 5 steps of encoding, incremental per level defined by vertical coordinate y:
 
-    y:   comp(p_):  lateral comp -> tuple t,
-    y-1: ycomp (t_): vertical comp -> quadrant t2,
+    y:   comp(p_): lateral comp -> tuple t,
+    y-1: ycomp(t_): vertical comp -> quadrant t2,
     y-1: form_P(t2_): lateral combination -> 1D pattern P,
     y-2: form_P2 (P_): vertical comb | comp -> 2D pattern P2,
     y-3: term_P2 (P2_): P2s are terminated and evaluated for recursion
-    
-    I prefer unpacked arguments for visibility, will optimize for speed latter
 '''
 
-# my conventions: postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
+# postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
 
 
 def comp(p_):  # comparison of consecutive pixels within level forms tuples: pixel, match, difference
 
-    t_ = []  # complete fuzzy tuples: summation range = min_rng
-    it_ = []  # incomplete fuzzy tuples: summation range < min_rng
+    t_ = []  # complete fuzzy tuples: summation range = rng
+    it_ = []  # incomplete fuzzy tuples: summation range < rng
 
     for p in p_:
 
-        for it in it_:  # incomplete tuples with summation range from 0 to min_rng
+        index = len(it_) - 1
+
+        for it in it_:  # incomplete tuples with summation range from 0 to rng
             pri_p, fd, fm = it
 
             d = p - pri_p  # difference between pixels
@@ -43,7 +43,11 @@ def comp(p_):  # comparison of consecutive pixels within level forms tuples: pix
             fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
             fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-        if len(it_) == min_rng:
+            it_[index][1] = fd
+            it_[index][2] = fm
+            index -= 1
+
+        if len(it_) == rng:
 
             t = pri_p, fd, fm
             t_.append(t)
@@ -52,7 +56,7 @@ def comp(p_):  # comparison of consecutive pixels within level forms tuples: pix
         it = p, 0, 0  # fd and fm are directional, initialized each p
         it_.append(it)  # new prior tuple
 
-    t_ += it_  # last number = min_rng of tuples remain incomplete
+    t_ += it_  # last number = rng of tuples remain incomplete
     return t_
 
 
@@ -81,7 +85,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
             fdy += dy  # fuzzy dy: sum of dys between p and all prior ps within t2_
             fmy += my  # fuzzy my: sum of mys between p and all prior ps within t2_
 
-        if len(t2_) == min_rng:
+        if len(t2_) == rng:
 
             dg = _d + fdy
             vg = _m + fmy - ave
@@ -108,14 +112,14 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
     if olp: # or if vP, dP?
 
         dalt_.append(olp); valt_.append(olp)
-        olp_len, olp_vG, olp_dG = olp  # same for vP and dP, incomplete vg - ave / (min_rng / X-x)?
+        olp_len, olp_vG, olp_dG = olp  # same for vP and dP, incomplete vg - ave / (rng / X-x)?
 
         if olp_vG > olp_dG:  # comp of olp_vG to olp_dG, == goes to alt_P or to vP: primary?
             vP[7] += olp_len  # olp_len is added to redundant overlap of lesser-oG-  vP or dP
         else:
             dP[7] += olp_len  # no P[8] /= P[7]: rolp = rdn_olp / len(e_): P to alt_Ps rdn ratio
 
-    if y + 1 > min_rng:
+    if y + 1 > rng:
         vP_, _vP_ = scan_P_(0, vP, valt_, vP_, _vP_, x)  # empty _vP_ []
         dP_, _dP_ = scan_P_(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_ []
 
@@ -133,7 +137,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
         olp_len, alt_oG, oG = olp  # -> P2 rdn_olp2, generic 1D ave *= 2: low variation?
 
     s = 1 if g > 0 else 0
-    if s != pri_s and x > min_rng + 2:  # P (span of same-sign gs) is terminated
+    if s != pri_s and x > rng + 2:  # P (span of same-sign gs) is terminated
 
         if alt_oG > oG:  # comp of olp_vG to olp_dG, == goes to alt_P or to vP: primary pattern?
             rdn_olp += olp_len  
@@ -141,7 +145,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
             alt_P[7] += olp_len  # redundant overlap in weaker-oG- vP or dP, at either-P term
 
         P = pri_s, I, D, Dy, M, My, G, rdn_olp, e_ # -> rdn_olp2, no A = ave * rdn_olp / e_: dA < cost?
-        P_, _P_ = scan_P_(typ, P, alt_, P_, _P_, x)  # continuity scan over higher-level _Ps
+        P_, _P_ = scan_P_(typ, P, alt_, P_, _P_, x)  # scan over contiguous higher-level _Ps
 
         alt = alt_P, olp_len, oG, alt_oG  # or P index len(P_): faster than P?  for P eval in form_blob
         alt_.append(alt)
@@ -181,7 +185,7 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
     A = ave  # initialization before accumulation
     buff_ = [] # _P_ buffer; alt_-> rolp, alt2_-> rolp2
 
-    fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P for fork rdn compute, term transfer
+    fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P to compute rdn and transfer forks
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
 
     ix = x - len(e_)  # initial x of P
@@ -216,7 +220,7 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 
         else:  # no horizontal overlap between _P and next P, _P -> fork P2s after fork_eval
 
-            if (_P[2][0] != 1 and y > min_rng + 3) or y == Y - 1:  # if root_ != 1: term | split
+            if (_P[2][0] != 1 and y > rng + 3) or y == Y - 1:  # if root_ != 1: term | split
 
                 blob_ = _P[2][2]
                 for blob in blob_:
@@ -257,10 +261,10 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 
     # y-1: P, fork_Ps, ->_P at _P_ scan end
     # y-2: _P, roots, fork_P2s, -> P2 at P_ scan end
-    # y-3: _P2, roots, fork_term_P2s, -> tP2 at roots scan end
-    # y-4 or >: _tP2, formed by term | split, P2 network term at last cont_P
+    # y-3: _P2, roots, fork_term_P2s, -> trunk_P2 at roots scan end
+    # y-4 or higher: _trunk_P2 per term | split, P2 network term at last cont_P
 
-    # P2 +=_P at _P displacement, but no fixed P2 or full_P2 displacement?
+    # P2 += displaced_P, no fixed trunk_P2 or full_P2
     # P2 = 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
     # or structured numpy array P_ at return: one tuple template vs. many?
 
@@ -459,10 +463,10 @@ def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, rec
 
 def root_2D(f):
 
-    # my conventions: postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
+    # postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
 
-    global min_rng; min_rng = 1  # rng is local?
-    global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= min_rng
+    global rng; rng = 1
+    global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= rng
 
     global Y; global X
     Y, X = f.shape  # Y: frame height, X: frame width
@@ -475,7 +479,7 @@ def root_2D(f):
     global y; y = 0
 
     t2_ = []  # vertical buffer of incomplete pixel tuples, for fuzzy ycomp
-    t2__= []  # 2D (vertical buffer + horizontal line) array of tuples
+    t2__ = []  # 2D (vertical buffer + horizontal line) array of tuples
     p_ = f[0, :]  # first line of pixels
     t_ = comp(p_)
 
