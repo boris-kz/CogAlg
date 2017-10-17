@@ -28,11 +28,10 @@ import numpy as np
 def comp(p_):  # comparison of consecutive pixels within level forms tuples: pixel, match, difference
 
     t_ = []  # complete fuzzy tuples: summation range = rng
-    it_ = []  # incomplete fuzzy tuples: summation range < rng
+    it_ = deque(maxlen=rng)  # incomplete fuzzy tuples: summation range < rng
 
     for p in p_:
-
-        index = len(it_) - 1
+        index = 0
 
         for it in it_:  # incomplete tuples with summation range from 0 to rng
             pri_p, fd, fm = it
@@ -43,18 +42,17 @@ def comp(p_):  # comparison of consecutive pixels within level forms tuples: pix
             fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
             fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
 
-            it_[index][1] = fd
-            it_[index][2] = fm
-            index -= 1
+            it = pri_p, fd, fm
+            it_[index] = it
+            index += 1
 
         if len(it_) == rng:
 
             t = pri_p, fd, fm
-            t_.append(t)
-            del it_[0]  # completed tuple is transferred from it_ to t_
+            t_.append(t)  # completed tuple is transferred from it_ to t_
 
         it = p, 0, 0  # fd and fm are directional, initialized each p
-        it_.append(it)  # new prior tuple
+        it_.appendleft(it)  # new prior tuple
 
     t_ += it_  # last number = rng of tuples remain incomplete
     return t_
@@ -67,14 +65,14 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
     vP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, rdn_olp, e_
     dP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, rdn_olp, e_
 
-    olp = 0,0,0  # olp_len, olp_vG, olp_dG: common for current vP and dP
-    x = 0
+    x = 0; olp = 0,0,0  # olp_len, olp_vG, olp_dG: common for current vP and dP
     new_t2__ = []
     
     for t, t2_ in zip(t_, t2__):  # compares vertically consecutive pixels, forms quadrant gradients
-        
-        x += 1
+
         p, d, m = t
+        index = 0
+        x += 1
 
         for t2 in t2_:
             pri_p, _d, fdy, _m, fmy = t2
@@ -85,11 +83,15 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
             fdy += dy  # fuzzy dy: sum of dys between p and all prior ps within t2_
             fmy += my  # fuzzy my: sum of mys between p and all prior ps within t2_
 
+            t2 = pri_p, _d, fdy, _m, fmy
+            t2_[index] = t2
+            index += 1
+
         if len(t2_) == rng:
 
             dg = _d + fdy
             vg = _m + fmy - ave
-            t2 = pri_p, _d, fdy, _m, fmy
+            t2 = pri_p, _d, fdy, _m, fmy  # completed tuple is moved from t2_ to form_P:
 
             # form 1D value pattern vP: horizontal span of same-sign vg s with associated vars:
 
@@ -101,10 +103,8 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
             sd, olp, dalt_, valt_, dP, vP, dP_, _dP_ = \
             form_P(0, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, _dP_, x)
 
-            del t2_[0]  # completed tuple is removed from t2_
-
         t2 = p, d, 0, m, 0  # fdy and fmy initialized at 0
-        t2_.append(t2)  # new prior tuple
+        t2_.appendleft(t2)  # new prior tuple, displaces completed one
         new_t2__.append(t2_)
         
     # line ends, olp term, vP term, dP term, no init, inclusion per incomplete lateral fd and fm:
@@ -143,6 +143,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
             rdn_olp += olp_len  
         else:
             alt_P[7] += olp_len  # redundant overlap in weaker-oG- vP or dP, at either-P term
+            # or no assign to tuple?
 
         P = pri_s, I, D, Dy, M, My, G, rdn_olp, e_ # -> rdn_olp2, no A = ave * rdn_olp / e_: dA < cost?
         P_, _P_ = scan_P_(typ, P, alt_, P_, _P_, x)  # scan over contiguous higher-level _Ps
@@ -478,8 +479,8 @@ def root_2D(f):
 
     global y; y = 0
 
-    t2_ = []  # vertical buffer of incomplete pixel tuples, for fuzzy ycomp
-    t2__ = []  # 2D (vertical buffer + horizontal line) array of tuples
+    t2_ = deque(maxlen=rng)  # vertical buffer of incomplete pixel tuples, for fuzzy ycomp
+    t2__ = []  # 2D (vertical buffer + horizontal line) array of tuples, also deque for speed?
     p_ = f[0, :]  # first line of pixels
     t_ = comp(p_)
 
