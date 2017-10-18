@@ -6,6 +6,8 @@ Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs: spans of pixels forming same-sign differences,
 and relative match patterns vPs: spans of pixels forming same-sign predictive value,
 overlap within each line of pixels.
+
+this version is buggy
 '''
 
 def inc_rng(a, aV, aD, min_r, A, AV, AD, r, p_):
