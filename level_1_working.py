@@ -15,7 +15,7 @@ I don't like to pack arguments, this code is optimized for visibility rather tha
 
 def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
 
-    A += a  # compensates for fv overlap redundancy
+    A += a  # filter accumulation compensates for fv overlap redundancy
     X = len(e_)
 
     olp, vP_, dP_ = 0, [], []   # olp is common for both:
@@ -50,6 +50,8 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
 
 
 def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
+
+    # accumulation, termination, and recursion within patterns (vPs and dPs)
 
     if typ: s = 1 if fv >= 0 else 0  # sign of fd, 0 is positive?
     else:   s = 1 if fd >= 0 else 0  # sign of fv, 0 is positive?
@@ -95,7 +97,9 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
     return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ accumulated per level
 
 
-def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):  # recursive comp
+def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):
+
+    # recursive comp within vPs | dPs, called from pre_comp(), which is called from form_P
 
     d = p - pri_p      # difference between consecutive pixels
     m = min(p, pri_p)  # match between consecutive pixels
@@ -119,22 +123,10 @@ def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):  # recursive c
     return fd, fv, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
 
 
-def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # comparison of pixel to prior r-pixels
+def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
 
-    '''
-    for index in range(0, len(it_)-1):  # accumulation here is not quite right
-        pri_p, fd, fm = it_[index]
-
-        d = p - pri_p  # difference between pixels
-        m = min(p, pri_p)  # match between pixels
-
-        fd += d  # fuzzy d: sum of ds between p and all prior ps within it_
-        fm += m  # fuzzy m: sum of ms between p and all prior ps within it_
-
-        it = pri_p, fd, fm
-        it_[index] = it '''
-
-    index = 0
+    # comparison of each pixel to r-number of prior pixels within a line
+    index = 0  # alternative: for index in range(0, len(it_)-1): doesn't work quite right
 
     for it in it_:  # incomplete tuples with fd, fm summation range from 0 to r
         pri_p, fd, fm = it
@@ -164,7 +156,7 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # comparison of pixel to p
 
         olp += 1  # overlap between vP and dP, stored in both and terminated with either
 
-    it = p, 0, 0  # fd and fm are directional: initialized at 0 for a new tuple
+    it = p, 0, 0  # or left_fd and left_fm, for bilateral accumulation?
     it_.appendleft(it)  # new tuple is added, displacing completed tuple
 
     return it_, vP, dP, vP_, dP_, olp  # for next-p comparison, vP and dP increment, output
