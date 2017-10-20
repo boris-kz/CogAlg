@@ -18,8 +18,8 @@ import numpy as np
     y:   comp(p_): lateral comp -> tuple t,
     y-1: ycomp(t_): vertical comp -> quadrant t2,
     y-1: form_P(t2_): lateral combination -> 1D pattern P,
-    y-2: form_P2 (P_): vertical comb | comp -> 2D pattern P2,
-    y-3: term_P2 (P2_): P2s are terminated and evaluated for recursion
+    y-2: form_P2(P_): vertical comb and comp -> 2D pattern P2,
+    y-3: term_P2(P2_): P2s are evaluated for termination and consolidation
 '''
 
 # postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
@@ -66,7 +66,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
     dP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, rdn_olp, e_
 
     x = 0; olp = 0,0,0  # olp_len, olp_vG, olp_dG: common for current vP and dP
-    new_t2__ = []
+    new_t2__ = []  # buffer 2D template array
     
     for t, t2_ in zip(t_, t2__):  # compares vertically consecutive pixels, forms quadrant gradients
 
@@ -143,7 +143,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
             rdn_olp += olp_len  
         else:
             alt_P[7] += olp_len  # redundant overlap in weaker-oG- vP or dP, at either-P term
-            # or no assign to tuple?
+            # or unpack / repack: no assign to tuple?
 
         P = pri_s, I, D, Dy, M, My, G, rdn_olp, e_ # -> rdn_olp2, no A = ave * rdn_olp / e_: dA < cost?
         P_, _P_ = scan_P_(typ, P, alt_, P_, _P_, x)  # scan over contiguous higher-level _Ps
@@ -181,10 +181,10 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
     return s, olp, alt_, _alt_, P, alt_P, P_, _P_  # alt_ and _alt_ accumulated in ycomp per level
 
 
-def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion, _P termination
+def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inclusion, _P termination
 
-    A = ave  # initialization before accumulation
-    buff_ = [] # _P_ buffer; alt_-> rolp, alt2_-> rolp2
+    A = ave  # initialization before accumulation per rdn fork
+    buff_ = [] # _P_ buffer for next P; alt_-> rolp, alt2_-> rolp2
 
     fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P to compute rdn and transfer forks
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
@@ -192,10 +192,10 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last comp_P
 
-    while x >= _ix:  # P to _P connection eval, while horizontal overlap between P and _P_:
+    while x >= _ix:  # P to _P match eval, while horizontal overlap between P and _P_:
 
         fork_oG = 0  # fork overlap gradient: oG += g
-        ex = x  # x coordinate of current P element
+        ex = x  # ex is coordinate of current P element
 
         _P = _P_.popleft() # _P = _P, _alt_, roots, forks
         # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _rdn_alt, _e_ # or rdn_alt is folded in rdn?
@@ -273,41 +273,48 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps for inclusion,
 def fork_eval(typ, P, fork_, A):  # A was accumulated, _Ps eval for form_blob, comp_P, form_PP
 
     # from scan_P_(): fork = crit, _P; _P = _P, _alt_, roots, forks
-    # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn_alt, _e_
+    # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn_alt, _e_; same as P?
 
-    ini = 1; select_ = []
-    fork_.sort(key = lambda fork: fork[0])  # or sort and select at once:
+    crit = 0; ini = 1; select_ = deque()
+    fork_.sort(key = lambda fork: fork[0])  # max-to-min crit, or sort and select at once:
 
     while fork_ and (crit > A or ini == 1):  # _P -> P2 inclusion if contiguous sign match
 
+        ini = 0
         fork = fork_.pop()
         crit, fork = fork  # criterion: oG if fork, PM if vPP, PD if dPP
 
+        fA = A * (1 + P[9] / P[10])  # rolp: 1 + rdn_alt / len(e_), not alone: adjust < cost?
+        fork = fA, fork
+
+        select_.appendleft(fork)
+        A += A  # base filter accum per selected fork
+
+    init = 0 if select_ == 1 else 0  # new P2 init if select_ != 1: fork_P2s -> fork_trunk_P2s
+    for fork in select_:
+
         if typ == 2:  # fork = blob, same min oG for blob inclusion and comp_P?
 
-            fork = form_blob(P, fork)  # crit is packed in _G, rdn_alt is packed in rdn?
-            vPP, dPP = comp_P(P, fork)  # adding PM | PD to fork
+            fork = form_blob(P, fork, init)  # crit is packed in _G, rdn_alt is packed in rdn?
+            vPP, dPP = comp_P(P, fork, init)  # adding crit PM | PD
             fork = fork, vPP, dPP
 
         else:
-            fork = form_PP(typ, P, fork)  # fork = vPP or dPP
+            fork = form_PP(typ, P, fork, init)  # fork = vPP or dPP
 
-        A += A  # rdn incr, formed per eval: a * rolp * rdn., no rolp alone: adjust < cost?
-        ini = 0
+        fork_.appendleft(fork)  # not-selected forks are out of fork_, don't increment root_
 
-        select_.append(fork)  # not-selected forks are out of fork_, don't increment their root_
-
-    return select_, A  # A is specific to fork
+    return fork_, A  # A is accumulated for higher P2 types?
 
 
-def form_blob(P, fork):  # P inclusion into selected fork's blob, initialized or continuing
+def form_blob(P, fork, init):  # P inclusion into blob (initialized or continuing) of selected fork
 
     # _P = _P, _alt_, roots, forks  # also oG for total contiguity?
     # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, rdn, _e_
 
     s, I, D, Dy, M, My, G, e_, alt_, rdn = P  # rdn includes rdn_alt?
 
-    if fork[1][9] > 0:  # rdn > 0: new blob initialization, then terminated unless max fork?
+    if init:  # _blobs termination:
 
         I2 = I
         D2 = D; Dy2 = Dy
