@@ -4,12 +4,12 @@ from collections import deque
 '''
 Level 1:
 
-Cross-comparison between consecutive pixels within horizontal scan level (row).
+Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
-are redundant representations of each level of pixels.
+are redundant representations of each line of pixels.
 
-I don't like to pack arguments, this code is optimized for visibility rather than speed 
+This code is optimized for visibility rather than speed 
 '''
 
 
@@ -22,7 +22,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
     vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
     dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 
-    if typ:  # comparison range incr within e_ = t_
+    if typ:  # comparison range incr within e_ = t_ of vP
 
         r += 1  # comp range counter, recorded within Ps formed by re_comp
         for x in range(r+1, X):
@@ -33,7 +33,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
             fd, fv, vP, dP, vP_, dP_, olp = \
             re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
 
-    else:  # comparison derivation incr within e_ = d_ (not tuples within range incr?)
+    else:  # comparison derivation incr within e_ = d_ of dP (not tuples within range incr?)
 
         pri_d = e_[0]  # no deriv_incr while r < min_r, only more fuzzy?
         fd, fv = 0, 0
@@ -71,8 +71,9 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
                 r = 1  # consecutive-d comp
                 e_.append(pre_comp(0, e_, A, r))  # comp derivation incr within e_ = d_
 
-        P = pri_s, I, D, V, rf, e_, olp_
+        P = type, pri_s, I, D, V, rf, e_, olp_
         P_.append(P)  # output to level_2
+        # print ("type:", type, "pri_s:", pri_s, "I:", I, "D:", D, "V:", V, "rf:", rf, "e_:", e_, "olp_:", olp_)
 
         o = len(P_), olp  # index of current P and terminated olp are buffered in alt_olp_
         alt_P[6].append(o)
@@ -94,7 +95,7 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
 
     P = pri_s, I, D, V, rf, e_, olp_
 
-    return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ accumulated per level
+    return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ are accumulated per line
 
 
 def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):
@@ -123,9 +124,8 @@ def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):
     return fd, fv, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
 
 
-def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):
+def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # pixel is compared to r prior pixels
 
-    # comparison of each pixel to r-number of prior pixels within a line
     index = 0  # alternative: for index in range(0, len(it_)-1): doesn't work quite right
 
     for it in it_:  # incomplete tuples with fd, fm summation range from 0 to r
@@ -200,6 +200,4 @@ f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
 root_1D(f)
 
-# at vP term: print ('type', 0, 'pri_s', pri_s, 'I', I, 'D', D, 'V', V, 'rv', rv, 'p_', p_)
-# at dP term: print ('type', 1, 'pri_sd', pri_sd, 'Id', Id, 'Dd', Dd, 'Vd', Vd, 'rd', rd, 'd_', d_)
 

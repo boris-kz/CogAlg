@@ -352,7 +352,7 @@ def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
     s, I, D, Dy, M, My, G, e_, rdn, alt_ = P  # select alt_ per fork, no olp: = mx?
     _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, _alt_, blob_ = _P  # no oG: fork sel only?
 
-    ix = x - len(e_)  # len(e_) or w: P width, initial coordinate of P, for output only?
+    ix = x - len(e_)  # len(e_) or L: P length, initial coordinate of P, for output only?
 
     dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
     mx = x - _ix
@@ -361,8 +361,9 @@ def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
     dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + DL triggers adjustment of derivatives or _vars?
     mL = min(len(e_), len(_e_))  # L: P width = len(e_), relative overlap: mx / L, similarity: mL?
 
-    # or G > aG? rL = len(e_) / len(_e_), distant-P or not?
-    # summed vars comp by sub if low ratio, or incr div while sign match?
+    # or G > aG? rL = len(e_) / len(_e_), S_vars comp by sub if low ratio,
+    # or SUB iter per var, while diff sign match across vars?
+    # distant-P or not?
 
     # ddx and dL signs correlate, dx (position) and dL (dimension) signs don't correlate?
     # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mL, more predictive than eD?
@@ -377,7 +378,7 @@ def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
     # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_blob?
 
     blob= 0,0,0,0,0,0,0,0,0,0,[],[]  # crit, rdn, W, I2, D2, Dy2, M2, My2, G2, rdn2, alt2_, Py_
-    vPP = 0,0,0,0,0,0,0,0,0,0,[],[] 
+    vPP = 0,0,0,0,0,0,0,0,0,0,[],[]
     dPP = 0,0,0,0,0,0,0,0,0,0,[],[]  # P2s are initialized at non-matching P transfer to _P_?
 
     ''' np.array for direct accumulation, or simply iterator of initialization?
