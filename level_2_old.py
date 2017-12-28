@@ -12,6 +12,41 @@ cross-compared separately, forming 2D patterns (blobs).
 
 '''
 
+
+def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vPP and dPP:
+
+    ddx = 0  # optional spec
+
+    s, I, D, M, e_, rdn, alt_ = P  # select alt_ per fork, no olp: = mx?
+    _s, _ix, _x, _I, _D, _M, _e_, _rdn, _alt_, P2_ = _P  # no oG: fork sel only?
+
+    ix = x - len(e_)  # len(e_) or L: P length, initial coordinate of P, for output only?
+
+    dx = x - len(e_) / 2 - _x - len(_e_) / 2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
+    mx = x - _ix
+    if ix > _ix: mx -= ix - _ix  # x overlap, mx - a_mx, form_P(vxP), vs. distant Ps: mx = -(a_dx - dx)?
+
+    dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + DL triggers adjustment of derivatives or _vars?
+    mL = min(len(e_), len(_e_))  # L: P width = len(e_), relative overlap: mx / L, similarity: mL?
+
+    # ddx and dL signs correlate, dx (position) and dL (dimension) signs don't correlate?
+    # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mL, more predictive than eD?
+
+    dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
+    dD = D - _D; mD = min(D, _D)
+    dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete, no alt_ comp: rdn only?
+
+    PD = ddx + dL + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
+    PM = mx + mL + mI + mD + mM  # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?
+
+    '''
+    or rL = len(e_) / len(_e_), if rL > arL: div_comp(S_var), else sub_comp?
+    or incr precision: diff-_S_var while all diffs sign match? and G > aG?
+
+    not if PD: cross-compensated, + PM: projected div_M;: 
+    higher op is primarily internal: S / L, distant-P or not?
+    '''
+
 def cont_ycomp(t_, _t_, _vP_, _dP_):  # non-fuzzy vertical comparison between pixels
 
     vP_, dP_, valt_, dalt_ = [],[],[],[]  # append by form_P, alt_-> alt2_, packed in scan_P_

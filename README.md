@@ -4,21 +4,38 @@ CogAlg
 Full introduction: www.cognitivealgorithm.info
 
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
-It’s a hierarchical search for patterns, similar to hierarchical clustering. But conventional clustering defines match as inverted difference between inputs, which is wrong. Match is a subset common for both comparands, distinct from and complementary to their difference. Also, I don’t know of any clustering that implements incremental syntax: number of variables per input, and incremental spatio-temporal dimensionality (part 2).
-
-I define pattern as a span of matching inputs, and match as partial overlap between them. Search should be strictly incremental, in distance between inputs and their derivation within a level of search (part 4, level 1), and then in compositional scope and derivation of patterns formed on lower levels. “Strictly incremental” means that there must be a unique set of operations per level, hence a singular in “cognitive algorithm“.
-
-Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including natural languages, is encoded by some cognitive process. Thus, it should be decoded before being cross- compared in search for meaningful patterns. And the difficulty of decoding is exponential with the level of encoding, so search that starts with raw sensory input is by far the easiest to implement (part i).
-Hence, my initial inputs are pixels, and higher-level inputs are patterns formed by lower-level search.
+It’s a hierarchical search for patterns, similar to hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of CNN, which computes match but no difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed because each has independent predictive value.
 
 I quantify match and miss by cross-comparing inputs over selectively extended range of search. Basic comparison is inverse arithmetic operation between two single-variable inputs, starting with adjacent pixels.
 Specific match and miss is determined by power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
 comparison by division increases match to a multiple and reduces miss to a fraction, and so on (part 1).
 
-To discover anything complex at “polynomial” cost, both search and resulting patterns must be hierarchical:
-comparisons group inputs into patterns, which are compared on the next level. Comparison is also selective per level of differentiation (prior miss) within these hierarchically composed patterns. Such compression and selection reduces search time, relative to comparing original inputs. Higher levels form increasingly long-range spatio-temporal and then conceptual patterns. They also send feedback: filters and then motor action, to select lower-level inputs and locations with above-average additive predictive value (part 3).
+My pattern is a span of matching input patterns, and match between patterns is a combined match between their variables. Search expansion should be strictly incremental, to enable fine-grain selection of comparands. Within each level, search is incremental in distance between inputs and in their derivation (part 4, level 1). Between levels, it is incremental in compositional scope and number of derived variables per pattern. “Strictly incremental” means there is a unique set of operations per level, hence a singular in “cognitive algorithm“.
 
-Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition. But none that I know of implement strictly incremental growth in scope and complexity of discoverable patterns. This is critical for scalability: each increment allows for predictive input selection, to avoid combinatorial explosion in search space. However, this selection is more expensive upfront and won’t pay in simple problems, which are the usual test cases. Thus, my approach is not suitable for immediate experimentation, which is probably why no one else seems to be working on anything sufficiently similar.
+First-level inputs are single variables, such as pixels, higher-level inputs are multivariate patterns. Variables per pattern selectively multiply: every level forms match and miss (derivatives) per each compared variable of an input pattern. Summed derivatives are evaluated to extend search among inputs within a pattern, then fed back to filter lower level. Terminated pattern is outputed to higher level and is replaced by initialized pattern.
+I don’t know of any clustering that implements such incremental syntax: number of variables per pattern.
+
+Actually, recently introduced “capsules” also output multivariate vectors, similar to my patterns. But their core input is a probability estimate from unrelated method: CNN, while all variables in my patterns are derived by incrementally complex comparison. In a truly general method, the same principles must apply on all stages of processing. And additional variables in capsules are only positional, while my patterns also add differences between input variables. That can’t be done in capsules because differences are not computed by CNN.
+
+Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including natural languages, is encoded by some cognitive process. Thus, it should be decoded before being cross- compared to search for meaningful patterns. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part i).
+Hence, my initial inputs are pixels, and higher-level inputs are patterns formed by lower-level search.
+
+To discover anything complex at “polynomial” cost, resulting patterns should also be hierarchical: each level of search adds a level of composition and a sub-level of differentiaton to its input patterns. Higher-level search should be selective per level of resulting pattern. Such composition and selection speeds up search, to form long-range spatio-temporal and then conceptual patterns. Which also send feedback: filters and then motor action, to select lower-level inputs and locations with above-average additive predictive value (part 3).
+
+Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition.
+But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Incremental  selection is necessary for scalability, to avoid combinatorial explosion in search space. But it’s more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation, which is probably why no one else seems to be working on anything sufficiently similar to my algorithm.
+
+
+Let me recapitulate by contrasting my method with autoencoders, current mainstay in UL:
+
+- very different and conceptually consistent similarity measure
+- level doesn’t just compress inputs, it also forms and sums their derivatives
+- no need for decoding: comparison is done on each level, for indefinite input stream
+- summed derivatives are evaluated to extend intra-pattern search and also for feedback
+- dynamic receptive field: feedforward and feedback at pattern termination, vs. continuous
+- higher levels receive multi-variate patterns, vs. single-variable activations
+- dynamic hierarchy vs. fixed stack: new level is formed when top-level pattern is terminated,
+  which continues until inputs are predictable: there is a good match of top layer to the one below
 
 This content is published under the Creative Commons Attribution 4.0 International License. You are encouraged to republish and rewrite it in any way you see fit, as long as you provide attribution and a link.
 

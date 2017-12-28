@@ -3,7 +3,7 @@ from collections import deque
 import numpy as np
 
 '''
-    Level 1 with patterns defined by the sign of quadrant gradient: modified core algorithm of levels 1 + 2.
+    Level 1 with patterns defined by the sign of quadrant gradient: modified core algorithm of levels 1+2.
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
@@ -22,7 +22,7 @@ import numpy as np
     y-3: term_P2(P2_): P2s are evaluated for termination and consolidation
 '''
 
-# postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
+# postfix '_' denotes array name (vs. same-name element), prefix '_' denotes higher-level variable
 
 
 def comp(p_):  # comparison of consecutive pixels within level forms tuples: pixel, match, difference
@@ -51,7 +51,7 @@ def comp(p_):  # comparison of consecutive pixels within level forms tuples: pix
             t = pri_p, fd, fm
             t_.append(t)  # completed tuple is transferred from it_ to t_
 
-        it = p, 0, 0  # fd and fm are directional, initialized each p
+        it = p, 0, 0, 0  # fd and fm are directional, initialized each p
         it_.appendleft(it)  # new prior tuple
 
     t_ += it_  # last number = rng of tuples remain incomplete
@@ -347,12 +347,12 @@ def form_blob(P, fork, init):  # P inclusion into blob (initialized or continuin
 
 def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vPP and dPP:
 
-    ddx = 0  # optional spec
+    ddx = 0  # optional spec;  no norm by D: temp dir is 3rd D?
 
-    s, I, D, Dy, M, My, G, e_, rdn, alt_ = P  # select alt_ per fork, no olp: = mx?
-    _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _e_, _rdn, _alt_, blob_ = _P  # no oG: fork sel only?
+    s, I, D, Dy, M, My, G, e_, rdn, alt_ = P  # select alt_ per fork, no olp: = mx? no oG: fork sel
+    _s, _ix, _x, _I, _aI, _D, _aD, _Dy, _M, _aM, _My, _G, _e_, _rdn, _alt_, blob_ = _P
 
-    ix = x - len(e_)  # len(e_) or L: P length, initial coordinate of P, for output only?
+    ix = x - len(e_)  # initial coordinate of P, for output only?
 
     dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
     mx = x - _ix
@@ -361,16 +361,19 @@ def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vP
     dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + DL triggers adjustment of derivatives or _vars?
     mL = min(len(e_), len(_e_))  # L: P width = len(e_), relative overlap: mx / L, similarity: mL?
 
-    # or G > aG? rL = len(e_) / len(_e_), S_vars comp by sub if low ratio,
-    # or SUB iter per var, while diff sign match across vars?
-    # distant-P or not?
-
     # ddx and dL signs correlate, dx (position) and dL (dimension) signs don't correlate?
-    # full input CLIDV comp, or comp(S| aS(L rdn norm) in positive eM = mx+mL, more predictive than eD?
+    # full input CLIDV comp, or comp(aS) in positive eM = mx+mL, more predictive than eD?
 
-    dI = I - _I; mI = min(I, _I)  # eval of MI vs. Mh rdn at term PP | var_P, not per slice?
-    dD = D - _D; mD = min(D, _D)
-    dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete, no alt_ comp: rdn only?
+    # norm S / L, div_comp L, sub_comp aS * rL, | S *= rL, norm mS = mS / L?
+    # d_aS comp if D_aS: sign? mag? _aS computed as aS, stored in _P, S -> hP SS?
+
+    aI = I / len(e_); dI = aI - _aI; mI = min(aI, _aI)  # vs. dS = S - _S; mS = min(S, _S)
+    aD = D / len(e_); dD = aD - _aD; mD = min(aD, _aD)  # eval of MS vs. Mh rdn at term PP | var_P, not per slice?
+    aM = M / len(e_); dM = aM - _aM; mM = min(aM, _aM)  # no G comp: y-derivatives are incomplete, no alt_ comp: rdn only?
+
+    rL = len(e_) / len(_e_)  # incremental div?
+    nL = len(e_) // len(_e_)  # match?
+    fL = rL - nL
 
     PD = ddx + dL + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
     PM = mx + mL + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?

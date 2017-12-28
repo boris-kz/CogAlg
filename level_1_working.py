@@ -9,11 +9,11 @@ Resulting difference patterns dPs (spans of pixels forming same-sign differences
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
 
-This code is optimized for visibility rather than speed 
+This code is optimized for variable visibility rather than speed 
 '''
 
 
-def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
+def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion within pattern
 
     A += a  # filter accumulation compensates for fv overlap redundancy
     X = len(e_)
@@ -22,7 +22,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
     vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
     dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 
-    if typ:  # comparison range incr within e_ = t_ of vP
+    if typ:  # comparison range increment within e_ = t_ of vP
 
         r += 1  # comp range counter, recorded within Ps formed by re_comp
         for x in range(r+1, X):
@@ -33,9 +33,9 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
             fd, fv, vP, dP, vP_, dP_, olp = \
             re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
 
-    else:  # comparison derivation incr within e_ = d_ of dP (not tuples within range incr?)
+    else:  # comparison derivation incr within e_ = d_ of dP (not tuples per range incr?)
 
-        pri_d = e_[0]  # no deriv_incr while r < min_r, only more fuzzy?
+        pri_d = e_[0]  # no deriv_incr while r < min_r, only more fuzzy
         fd, fv = 0, 0
 
         for x in range(1, X):
@@ -51,7 +51,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion
 
 def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
 
-    # accumulation, termination, and recursion within patterns (vPs and dPs)
+    # accumulation, termination, recursion within patterns (vPs and dPs)
 
     if typ: s = 1 if fv >= 0 else 0  # sign of fd, 0 is positive?
     else:   s = 1 if fd >= 0 else 0  # sign of fv, 0 is positive?
