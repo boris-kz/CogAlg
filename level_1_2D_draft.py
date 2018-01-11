@@ -22,7 +22,7 @@ import numpy as np
     y-3: term_P2(P2_): P2s are evaluated for termination and consolidation
 '''
 
-# postfix '_' denotes array name (vs. same-name element), prefix '_' denotes higher-level variable
+# postfix '_' denotes array name (vs. same-name element), prefix '_' denotes prior-input variable
 
 
 def comp(p_):  # comparison of consecutive pixels within level forms tuples: pixel, match, difference
@@ -51,14 +51,14 @@ def comp(p_):  # comparison of consecutive pixels within level forms tuples: pix
             t = pri_p, fd, fm
             t_.append(t)  # completed tuple is transferred from it_ to t_
 
-        it = p, 0, 0, 0  # fd and fm are directional, initialized each p
+        it = p, 0, 0  # fd and fm are directional, initialized per new p
         it_.appendleft(it)  # new prior tuple
 
-    t_ += it_  # last number = rng of tuples remain incomplete
+    t_ += it_  # last number = rng of tuples that remain incomplete
     return t_
 
 
-def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2: p, d, dy, m, my
+def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D t2: p, d, dy, m, my
 
     vP_, dP_, valt_, dalt_ = [],[],[],[]  # append by form_P, alt_-> alt2_, packed in scan_P_
 
@@ -87,11 +87,11 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
             t2_[index] = t2
             index += 1
 
-        if len(t2_) == rng:
+        if len(t2_) == rng: # 2D tuple is completed and moved from t2_ to form_P:
 
             dg = _d + fdy
             vg = _m + fmy - ave
-            t2 = pri_p, _d, fdy, _m, fmy  # completed tuple is moved from t2_ to form_P:
+            t2 = pri_p, _d, fdy, _m, fmy
 
             # form 1D value pattern vP: horizontal span of same-sign vg s with associated vars:
 
@@ -103,8 +103,8 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms t2
             sd, olp, dalt_, valt_, dP, vP, dP_, _dP_ = \
             form_P(0, t2, dg, vg, olp, dalt_, valt_, dP, vP, dP_, _dP_, x)
 
-        t2 = p, d, 0, m, 0  # fdy and fmy initialized at 0
-        t2_.appendleft(t2)  # new prior tuple, displaces completed one
+        t2 = p, d, 0, m, 0  # fdy and fmy are initialized at 0
+        t2_.appendleft(t2)  # new prior tuple is added to t2_, replaces completed one
         new_t2__.append(t2_)
         
     # line ends, olp term, vP term, dP term, no init, inclusion per incomplete lateral fd and fm:
@@ -162,7 +162,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 
     # continued or initialized P vars are accumulated:
 
-    olp_len += 1  # alt P overlap: olp_len, oG, alt_oG are accumulated till either P or _P is terminated
+    olp_len += 1  # alt P overlap: olp_len, oG, alt_oG are accumulated until either P or _P terminates
     oG += g; alt_oG += alt_g
 
     I += p    # p s summed within P
@@ -187,7 +187,7 @@ def form_P(typ, t2, g, alt_g, olp, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inclusion, _P termination
 
     A = ave  # initialization before accumulation per rdn fork
-    buff_ = [] # _P_ buffer for next P; alt_-> rolp, alt2_-> rolp2
+    buff_ = [] # _P_ buffer for next P; alt_ -> rolp, alt2_ -> rolp2
 
     fork_, f_vP_, f_dP_ = deque(),deque(),deque()  # refs per P to compute rdn and transfer forks
     s, I, D, Dy, M, My, G, rdn_alt, e_ = P
@@ -345,38 +345,51 @@ def form_blob(P, fork, init):  # P inclusion into blob (initialized or continuin
     return fork
 
 
-def comp_P(P, _P, P_, _P_, x):  # forms 2D derivatives of 1D P vars to define vPP and dPP:
+def comp_P(P, _P, P_, _P_, x, adI):  # forms 2D derivatives of 1D P vars to define vPP and dPP:
 
-    ddx = 0  # optional spec;  no norm by D: temp dir is 3rd D?
+    ddx = 0  # optional spec;  no norm by D till 2Le: in temp direction?
 
     s, I, D, Dy, M, My, G, e_, rdn, alt_ = P  # select alt_ per fork, no olp: = mx? no oG: fork sel
     _s, _ix, _x, _I, _aI, _D, _aD, _Dy, _M, _aM, _My, _G, _e_, _rdn, _alt_, blob_ = _P
 
-    ix = x - len(e_)  # initial coordinate of P, for output only?
+    ix = x - len(e_)  # initial coordinate of P, for output only? L = len(e_)
+    # ddx and rL & dL signs correlate, dx (position) and dL (dimension) signs don't correlate?
 
     dx = x - len(e_)/2 - _x - len(_e_)/2  # Dx? comp(dx), ddx = Ddx / h? dS *= cos(ddx), mS /= cos(ddx)?
-    mx = x - _ix
-    if ix > _ix: mx -= ix - _ix  # x overlap, mx - a_mx, form_P(vxP), vs. distant Ps: mx = -(a_dx - dx)?
+    mx = x - _ix; if ix > _ix: mx -= ix - _ix  # mx = x overlap, - a_mx -> vxP, distant Ps mx = -(a_dx - dx)?
 
-    dL = len(e_) - len(_e_)  # -> dwP: higher dim? Ddx + DL triggers adjustment of derivatives or _vars?
-    mL = min(len(e_), len(_e_))  # L: P width = len(e_), relative overlap: mx / L, similarity: mL?
+    dL = len(e_) - len(_e_) # Ddx + DL? derivs | _vars adjust?
+    mL = min(len(e_), len(_e_)) # relative olp = mx / L?
 
-    # ddx and dL signs correlate, dx (position) and dL (dimension) signs don't correlate?
-    # full input CLIDV comp, or comp(aS) in positive eM = mx+mL, more predictive than eD?
+    dI = I - _I; mI = min(I, _I)  # comp I,D,V: summed vars, sometimes denoted by S below
+    dD = D - _D; mD = min(D, _D)  # eval at term PP | var_P, not per slice?
+    dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete, no alt_ comp: rdn only?
 
-    # norm S / L, div_comp L, sub_comp aS * rL, | S *= rL, norm mS = mS / L?
-    # d_aS comp if D_aS: sign? mag? _aS computed as aS, stored in _P, S -> hP SS?
+    if dI > adI:  # alt comp of cS: S converted by *rL:
 
-    aI = I / len(e_); dI = aI - _aI; mI = min(aI, _aI)  # vs. dS = S - _S; mS = min(S, _S)
-    aD = D / len(e_); dD = aD - _aD; mD = min(aD, _aD)  # eval of MS vs. Mh rdn at term PP | var_P, not per slice?
-    aM = M / len(e_); dM = aM - _aM; mM = min(aM, _aM)  # no G comp: y-derivatives are incomplete, no alt_ comp: rdn only?
+        crL = dL / len(_e_); rL = crL + 1  # no mS /= L: minor nL, no aS = S / L: mS *= rL?
+        nL = len(e_) // len(_e_) # match = integer multiple of min L
+        dL = rL - nL  # miss = remainder
 
-    rL = len(e_) / len(_e_)  # incremental div?
-    nL = len(e_) // len(_e_)  # match?
-    fL = rL - nL
+        cI = I * rL  # nI = I // rL; fI = rI - nI? # or converted I = dI * crL?
+        cD = D * rL  # nD = D // rD; fD = rD - nD?
+        cM = M * rL  # nM = M // rM; fM = rM - nM?
+
+        dI = cI - _I; mI = min(cI, _I)  # comp by SUB, assumed rS = rL, dS?
+        dD = cD - _D; mD = min(cD, _D)
+        dM = cM - _M; mM = min(cM, _M)
 
     PD = ddx + dL + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
     PM = mx + mL + mI + mD + mM   # defines vPP; comb rep value = PM * 2 + PD?  group by y_ders?
+
+    ''' iter dS - S -> (n, M, diff): var precision or modulus + remainder?
+    aI = I / len(e_); dI = aI - _aI; mI = min(aI, _aI)  
+    aD = D / len(e_); dD = aD - _aD; mD = min(aD, _aD)  
+    aM = M / len(e_); dM = aM - _aM; mM = min(aM, _aM)
+
+    d_aS comp if cs D_aS, _aS is aS stored in _P, S preserved to form hP SS?
+    full input CLIDV comp, or comp(aS) in positive eM = mx+mL, more predictive than eD?
+    '''
 
     # vPP and dPP included in selected forks, rdn assign and form_PP eval after fork_ term in form_blob?
 
@@ -474,7 +487,7 @@ def term_P2(P2, A):  # blob | vPP | dPP eval for rotation, re-scan, re-comp, rec
 
 def root_2D(f):
 
-    # postfix '_' denotes array vs. element, prefix '_' denotes higher-level variable
+    # postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
 
     global rng; rng = 1
     global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= rng
@@ -483,14 +496,14 @@ def root_2D(f):
     Y, X = f.shape  # Y: frame height, X: frame width
 
     global _vP2_; _vP2_ = []
-    global _dP2_; _dP2_ = []  # 2D Ps terminated on level y-3
+    global _dP2_; _dP2_ = []  # 2D Ps terminated on line y-3
 
     _vP_, _dP_, frame_ = [], [], []
 
     global y; y = 0
 
     t2_ = deque(maxlen=rng)  # vertical buffer of incomplete pixel tuples, for fuzzy ycomp
-    t2__ = []  # 2D (vertical buffer + horizontal line) array of tuples, also deque for speed?
+    t2__ = []  # 2D (vertical buffer + horizontal line) array of 2D tuples, also deque for speed?
     p_ = f[0, :]  # first line of pixels
     t_ = comp(p_)
 
@@ -500,17 +513,17 @@ def root_2D(f):
         t2_.append(t2)  # only one tuple per first-line t2_
         t2__.append(t2_)  # in same order as t_
 
-    for y in range(1, Y):  # vertical coordinate y is index of new level p_
+    for y in range(1, Y):  # vertical coordinate y is index of new line p_
 
         p_ = f[y, :]
         t_ = comp(p_)  # lateral pixel comparison
         t2__, _vP_, _dP_ = ycomp(t_, t2__, _vP_, _dP_) # vertical pixel comp, P and P2 form
 
-        P2_ = _vP2_, _dP2_  # arrays of blobs terminated per level, adjusted by term_P2
-        frame_.append(P2_)  # level of patterns is added to frame of patterns
+        P2_ = _vP2_, _dP2_  # arrays of blobs terminated per line, adjusted by term_P2
+        frame_.append(P2_)  # line of patterns is added to frame of patterns
         _vP2_, _dP2_ = [],[]
 
-    return frame_  # frame of 2D patterns is output to level 2
+    return frame_  # frame of 2D patterns is outputted to level 2
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
