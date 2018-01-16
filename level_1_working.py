@@ -1,8 +1,7 @@
 from scipy import misc
 from collections import deque
 
-'''
-Level 1:
+''' Level 1:
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
@@ -10,12 +9,12 @@ and relative match patterns vPs (spans of pixels forming same-sign predictive va
 are redundant representations of each line of pixels.
 
 This code is optimized for variable visibility rather than speed 
-'''
+postfix '_' distinguishes array name from identical element name '''
 
 
 def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion within pattern
 
-    A += a  # filter accumulation compensates for fv overlap redundancy
+    A += a  # filter accumulation compensates for redundancy of fv overlap
     X = len(e_)
 
     olp, vP_, dP_ = 0, [], []   # olp is common for both:
