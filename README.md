@@ -16,22 +16,21 @@ OUTLINE OF MY APPROACH
 
 .
 
-
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
-It implements hierarchical search for patterns, formed by cross-comparing inputs over incremental distance. First-level inputs are single variables, such as pixels, higher-level inputs are multi-parameter patterns formed on lower level. Their parameters (variables) are match and miss per input variable compared on lower levels. Hence, higher levels are more complex: number of variables per pattern selectively multiply on each level.
+It implements hierarchical search for patterns, formed by cross-comparing inputs over incremental distance. First-level inputs are single variables, such as pixels, higher-level inputs are multi-parameter patterns formed on lower levels. Their parameters (variables) are match and miss per input variable compared on lower levels. Hence, higher levels are more complex: variables per pattern selectively multiply on each level.
 
 I define pattern as contiguous span of inputs forming the same sign of difference between input and feedback (part 2). There can be multiple orders of feedback, forming corresponding orders of overlapping patterns.
 First-order feedback is prior input, and patterns are spans of inputs with increasing or decreasing magnitude.
-Second-order feedback is average higher-level match, and second-order patterns are spans of inputs with above- or below- average match to prior inputs. And so on, with increasingly long-range feedback (if any) compared to higher order of input’s match to shorter-range feedback.
+Second-order feedback is average higher-level match, and second-order patterns are spans of inputs with above- or below- average match to prior inputs. And so on, with increasingly long-range feedback (if any) compared to higher order of match between input and shorter-range feedback.
 
 Match and miss are formed by cross-comparing inputs, over selectively extended range of search. Basic comparison is inverse arithmetic operation between two single-variable inputs, starting with adjacent pixels.
 Specific match and miss is determined by power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
 comparison by division increases match to a multiple and reduces miss to a fraction, and so on (part 1).
 
-To generalize, match is lossless compression per comparison, and match between patterns is combined match between their variables. To enable fine-grain selection of comparands, search expansion is strictly incremental. Thus, there is a unique set of operations per level, hence a singular in “cognitive algorithm“ (CogAlg below). Within each level, search is incremental in distance between inputs and in their derivation order (part 4, level 1). Between levels, search is incremental in compositional scope and number of derived variables per pattern.
+To generalize, match is lossless compression per comparison, and match between patterns is combined match between their variables. To enable fine-grain selection of comparands, search expansion is strictly incremental. Thus, there is a unique set of operations per level, hence a singular in “cognitive algorithm“ (CogAlg below). Within level, search is incremental in distance between inputs and in their derivation order (part 4, level 1). Between levels, search is incremental in compositional scope and number of derived variables per pattern.
 
-My hierarchy is a dynamically extended pipeline: when pattern terminates, it is outputted for comparison on the next level, and is replaced by initialized pattern. Thus, a new level must be formed for a pattern terminated by current top level. This continues as long as system is fed presumably indefinite input stream.
-As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, and its output patterns are also fed back to filter lower levels.
+My hierarchy is a dynamically extended pipeline: when pattern terminates, it is outputted for comparison on the next level, and is replaced by initialized pattern on current level. Thus, a new level must be formed for a pattern terminated by current top level. This continues indefinitely, as long as system recieves new inputs.
+As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, and level’s output patterns are also fed back to filter lower levels.
 
 Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including natural languages, is encoded by some cognitive process. To search for meaningful patterns, these symbols must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part i).
 
@@ -70,19 +69,18 @@ COMPARISON TO CAPSULE NETWORKS AND CLUSTERING
 
 .
 
-The most similar experimentally successful method is recently introduced CapsNet. Here are similarities:
-- they also output multi-variate vectors, “encapsulating” multiple properties, similar to my patterns
+The nearest experimentally successful method is recently introduced “capsules”. Some similarities to CogAlg:
+- capsules also output multi-variate vectors, “encapsulating” multiple properties, similar to my patterns
 - these properties also include coordinates and dimensions, compared to compute differences and ratios
 - these distances and proportions are also compared to find “equivariance” or affine transformations
-- they also use direct level-to-level feedback (dynamic routing), vs. trans-hidden-level backprop in ANN
+- capsules also send direct feedback to lower layer (dynamic routing), vs. trans-hidden-layer backprop in ANN
 
-But measure of similarity (or "agreement" in dynamic routing) in CapsNet is still an unprincipled dot product, vs. conceptually consistent compression in CogAlg. This is important, selection criterion is a core of algorithm.
-Also, CapsNet use CNN layers to recognize basic features, which are then fed to capsule layers. But in a truly general method, the same principles must apply on all stages of processing, any differention should be learned rather than built-in. All variables in my patterns are derived by incrementally complex comparison.
+But measure of similarity in CapsNet (“agreement” in dynamic routing) is still an unprincipled dot product, vs. conceptually consistent compression in CogAlg. This is critical, selection criterion is a core of my  algorithm. And CapsNet use CNN layers to recognize basic features, which are then fed to capsule layers. But in a truly general method, the same principles must apply on all stages of processing, any differention should be learned rather than built-in. All variables in my patterns are derived by incrementally complex comparison.
 
-In current implementation, capsules contain only probability and pose variables. My patterns have match instead of probability, and also encapsulate differences among lower-level properties, as well as their pose. In my terms, Hinton’s equivariance is a match between variables representing differences and distances. After being summed within pattern, these derivatives are evaluated to extend intra-pattern search and for feedback.
+In current implementation, capsules contain only probability and pose variables. My patterns have match instead of probability, and include lower-level properties, with their matches and differences, as well as pose. In my terms, Hinton’s equivariance is a match between variables representing differences and distances. After being summed within pattern, these derivatives are evaluated to extend intra-pattern search and for feedback.
 These are direct consequences of having comparison as a common atomic operation for all stages of CogAlg.
 
-Also, my hierarchy is a dynamic pipeline: pattern is displaced from its level by a miss to new input, then forwarded to existing or newly formed higher level. Which means that higher-level patterns include lower-level variables, in addition to newly derived ones. Such pattern hierarchy and variable sub-hierarchy are dynamic, they expand with experience. This is fundamentally superior to fixed design of CapsNet.
+Also, my hierarchy is a dynamic pipeline: pattern is displaced from its level by a miss to new input, then forwarded to existing or newly formed higher level. Which means that higher-level patterns include lower-level variables, in addition to newly derived ones. So, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience. This is fundamentally superior to static design of CapsNet.
 
 Another method similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of ANN, which computes match but no difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed because each has independent predictive value.
 

@@ -193,7 +193,7 @@ def root_1D(Fp_):  # last '_' distinguishes array name from element name
         LP_ = vP_, dP_   # line of patterns formed from a line of pixels
         FP_.append(LP_)  # line of patterns is added to frame of patterns, y = len(FP_)
 
-    return FP_  # output to level 2
+    return FP_  # frame of patterns is output to level 2
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
