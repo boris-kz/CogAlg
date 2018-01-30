@@ -123,7 +123,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
 
     return new_t2__, vP_, dP_  # extended in scan_P_, renamed as arguments _vP_, _dP_
 
-    # P_ redefined as np.array ([P, alt_, roots, fork_P2s]): for incrementing without init?
+    # P_ redefined as np.array ([P, alt_, roots, fork_P2s]): to increment without init?
     # P2: 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
 
 
@@ -184,7 +184,7 @@ def form_P(typ, t2, g, alt_g, alt, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 
 
 def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inclusion into attached 2D P2s
 
-    A = ave  # initialization before accumulation per rdn fork, cached in P, no component adjust?
+    A = ave  # initialization before accumulation per rdn fork, cached | in P, no component adjust?
     buff_ = [] # _P_ buffer for next P; alt_ -> rolp, alt2_ -> rolp2
 
     fork_, fork_vP_, fork_dP_ = deque(),deque(),deque()  # refs per P to compute and transfer forks
@@ -286,7 +286,7 @@ def fork_eval(typ, P, fork_, A, x):  # _Ps eval for form_blob, comp_P, form_PP
         select_.appendleft(fork)
         A += A  # or olp_rdn += 1, then A * comb rdn: local and adjustable by hLe selection?
 
-    init = 0 if select_ == 1 else 0
+    init = 0 if len(select_) == 1 else 1
     for fork in select_:
 
         if typ == 2:  # fork = blob, always comp_P if form_blob?
