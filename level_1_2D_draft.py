@@ -285,8 +285,9 @@ def fork_eval(typ, P, fork_, A, x):  # _Ps eval for form_blob, comp_P, form_PP
 
         select_.appendleft(fork)
         A += A  # or olp_rdn += 1, then A * comb rdn: local and adjustable by hLe selection?
-
-    init = 0 if select_ == 1 else 0
+        
+     init = 1 if select_ == 1 else 0    #was: init = 0 if select_ == 1 else 0  #mistake? - always = 0
+        
     for fork in select_:
 
         if typ == 2:  # fork = blob, always comp_P if form_blob?
