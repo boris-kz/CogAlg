@@ -1,11 +1,32 @@
-#Python logic comparison tests
-#To help developers when in doubt.
-#
-#Author: Todor Arnaudov 31.1.2018
+# Python logic comparison tests
+# To help developers when in doubt.
+# For level_1_2D_draft.py
+# Author: Todor Arnaudov 31.1.2018
+'''
+0 typ=0, a shold be 0
+1 typ=1, a shold be 1
+(0, 0, 0) alt is evaluated as not 0
+(1, 0, 0) alt is evaluated as not 0
+(0, 1, 0) alt is evaluated as not 0
+(0, 0, 1) alt is evaluated as not 0
+(0, 0, 1) alt is evaluated as not 0
+[0, 0, 0] alt is evaluated as False (0)
+[1, 0, 0] alt is evaluated as True (not 0)
+[0, 1, 0] alt is evaluated as True (not 0)
+[0, 0, 1] alt is evaluated as True (not 0)
+[-1, 0, 0] alt is evaluated as True (not 0)
+[0, -1, 0] alt is evaluated as True (not 0)
+[0, 0, -1] alt is evaluated as True (not 0)
+'tuple' object does not support item assignment
+Successful reassignment vP =  (0, 0, 0, 0, 0, 0, 0, 1, [])
+Successful reassignment dP =  (0, 0, 0, 0, 0, 0, 0, 0, [])
+Successful reassignment vP =  (0, 0, 0, 0, 0, 0, 0, 1, [])
+Successful reassignment dP =  (0, 0, 0, 0, 0, 0, 0, 99, [])
+'''
 
-#Shows the comparison logic of non-zero element in a tuple
-#if alt: ... shouldn't be used, it's always True (including 0,0,0)
-#I assume that in the draft it was meant to mean: if any of alt components is !=0
+# Shows the comparison logic of non-zero element in a tuple
+# if alt: ... shouldn't be used, it's always True (including 0,0,0)
+# I assume that in the draft it was meant to mean: if any of alt components is !=0
 def f2():
  alt = 0,0,0
  if (alt): print(alt, "alt is evaluated as not 0")
