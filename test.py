@@ -1,3 +1,7 @@
+#Python logic comparison tests
+#To help developers when in doubt.
+#
+#Author: Todor Arnaudov 31.1.2018
 # Python logic comparison tests
 # To help developers when in doubt.
 # For level_1_2D_draft.py
@@ -23,10 +27,9 @@ Successful reassignment dP =  (0, 0, 0, 0, 0, 0, 0, 0, [])
 Successful reassignment vP =  (0, 0, 0, 0, 0, 0, 0, 1, [])
 Successful reassignment dP =  (0, 0, 0, 0, 0, 0, 0, 99, [])
 '''
-
-# Shows the comparison logic of non-zero element in a tuple
-# if alt: ... shouldn't be used, it's always True (including 0,0,0)
-# I assume that in the draft it was meant to mean: if any of alt components is !=0
+#Shows the comparison logic of non-zero element in a tuple
+#if alt: ... shouldn't be used, it's always True (including 0,0,0)
+#I assume that in the draft it was meant to mean: if any of alt components is !=0
 def f2():
  alt = 0,0,0
  if (alt): print(alt, "alt is evaluated as not 0")
@@ -40,7 +43,7 @@ def f2():
  if (alt): print(alt, "alt is evaluated as not 0")
  alt = 1,0,0
 
- alts = ([0,0,0], [1,0,0], [0,1,0], [0,0,1], [-1,0,0], [0,-1,0], [0,0,-1])
+ alts = ((0,0,0), (1,0,0), (0,1,0), (0,0,1), (-1,0,0), (0,-1,0), (0,0,-1))
  for alt in alts: 
    if (alt[0] or alt[1] or alt[2]): print(alt, "alt is evaluated as True (not 0)")
    else: print(alt, "alt is evaluated as False (0)")
