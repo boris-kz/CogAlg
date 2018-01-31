@@ -20,7 +20,7 @@ def f2():
  alt = 1,0,0
 
  alts = ([0,0,0], [1,0,0], [0,1,0], [0,0,1], [-1,0,0], [0,-1,0], [0,0,-1])
- for alt in alts:
+ for alt in alts: 
    if (alt[0] or alt[1] or alt[2]): print(alt, "alt is evaluated as True (not 0)")
    else: print(alt, "alt is evaluated as False (0)")
 
@@ -77,4 +77,3 @@ def f1():
 f1()
 f2()
 f3()
-
