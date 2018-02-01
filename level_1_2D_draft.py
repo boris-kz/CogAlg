@@ -16,9 +16,9 @@ import numpy as np
 
     y:   comp(p_): lateral comp -> tuple t,
     y-1: ycomp(t_): vertical comp -> quadrant t2,
-    y-1: form_P(t2_): lateral combination -> 1D pattern P,
-    y-2: form_P2(P_): vertical comb and comp -> 2D pattern P2,
-    y-3: term_P2(P2_): P2s are evaluated for termination and consolidation 
+    y-1: form_P(t2_): lateral combination -> 1D pattern P,  
+    y-2: form_P2(P_): vertical scan_P_, fork_eval, form_blob, comp_P, form_PP -> 2D P2, 
+    y-3: term_P2(P2_): P2s are evaluated for termination, re-orientation, and consolidation 
 
     postfix '_' denotes array name (vs. same-name element), prefix '_' denotes prior-input variable '''
 
@@ -63,8 +63,8 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
     vP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, alt_rdn, e_
     dP = 0,0,0,0,0,0,0,0,[]  # pri_s, I, D, Dy, M, My, G, alt_rdn, e_
 
-    x = 0; alt = 0,0,0  # alt_len, alt_vG, alt_dG: common for current vP and dP
-    new_t2__ = []  # buffer 2D template array
+    x = 0; alt = 0,0,0  # alt_len, alt_vG, alt_dG: overlap between current vP and dP
+    new_t2__ = []  # t2 buffer: 2D template array
     
     for t, t2_ in zip(t_, t2__):  # compares vertically consecutive pixels, forms quadrant gradients
 
@@ -107,17 +107,18 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
         
     # line ends, alt term, vP term, dP term, no init, inclusion per incomplete lateral fd and fm:
 
-    if alt: # or if and (vP, dP): vP x dP overlap?
+    if alt[0]: # or if and (vP, dP): vP x dP overlap?
 
         dalt_.append(alt); valt_.append(alt)
         alt_len, alt_vG, alt_dG = alt  # same for vP and dP, incomplete vg - ave / (rng / X-x)?
 
         if alt_vG > alt_dG:  # comp of alt_vG to alt_dG, == goes to alt_P or to vP: primary?
-            vP[7] += alt_len  # alt_len is added to redundant overlap of lesser-oG-  vP or dP
+            vP[7] += alt_len  # alt_len is added to redundant overlap of lesser-oG- vP or dP
         else:
             dP[7] += alt_len  # no P[8] /= P[7]: rolp = alt_rdn / len(e_): P to alt_Ps rdn ratio
 
-    if y + 1 > rng:
+    if y + 1 > rng:  # starting with the first line of complete t2s
+
         vP_, _vP_ = scan_P_(0, vP, valt_, vP_, _vP_, x)  # empty _vP_ []
         dP_, _dP_ = scan_P_(1, dP, dalt_, dP_, _dP_, x)  # empty _dP_ []
 
@@ -127,7 +128,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
     # P2: 0,0,0,0,0,0,0,[],0,[]: L2, G2, I2, D2, Dy2, M2, My2, alt2_, rdn2, Py_?
 
 
-def form_P(typ, t2, g, alt_g, alt, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 1D dPs or vPs
+def form_P(typ, t2, g, alt_g, alt, alt_, _alt_, P, alt_P, P_, _P_, x):  # forms 1D dP or vP
 
     p, d, dy, m, my = t2  # 2D tuple of quadrant variables per pixel
     pri_s, I, D, Dy, M, My, G, alt_rdn, e_ = P
@@ -188,7 +189,7 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inc
     buff_ = [] # _P_ buffer for next P; alt_ -> rolp, alt2_ -> rolp2
 
     fork_, fork_vP_, fork_dP_ = deque(),deque(),deque()  # refs per P to compute and transfer forks
-    s, I, D, Dy, M, My, G, alt_rdn, e_ = P  # alt_rdn = rdn_olp, new olp is vertical?
+    s, I, D, Dy, M, My, G, alt_rdn, e_ = P  # alt_rdn = ratio of 1D overlap by stronger alt Ps
 
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last scan_P_
@@ -200,7 +201,7 @@ def scan_P_(typ, P, alt_, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inc
 
         _P = _P_.popleft()
         # _P = _P, _alt_, roots, forks
-        # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _alt_rdn, _e_ # or tot_rdn?
+        # _P = _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _alt_rdn, _e_ # or tuple rdn?
 
         if P[0] == _P[0][0]:  # if s == _s: vg or dg sign match
 
@@ -289,10 +290,10 @@ def fork_eval(typ, P, fork_, A, x):  # _Ps eval for form_blob, comp_P, form_PP
     init = 0 if len(select_) == 1 else 1
     for fork in select_:
 
-        if typ == 2:  # fork = blob, always comp_P if form_blob?
+        if typ == 2:  # fork = blob
 
             fork = form_blob(P, fork, init)  # crit is summed in _G, alt_rdn in fA?
-            P_ders = comp_P(P, fork, x)
+            P_ders = comp_P(P, fork, x)  # comp_P if form_blob?
             fork = P, P_ders
 
         else:
