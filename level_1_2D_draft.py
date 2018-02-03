@@ -23,8 +23,8 @@ import numpy as np
     Any given 2D function always accesses two lines: relatively higher and lower.
     
     postfix '_' denotes array name (vs. same-name element),
-    prefix '_' as _P denotes prior-input: a higher-line pattern or variable. Notice that the
-               contents depend on the line pattern belongs to: y, y-1, y-2, y-3, thus for example
+    prefix '_' as _P denotes prior-input: a higher-line pattern or variable.
+               The contents depend on the line pattern belongs to: y, y-1, y-2, y-3, thus for example
                the variables of the _P patterns are different than the ones in P in scan_P_.
                   
  '''
