@@ -19,8 +19,15 @@ import numpy as np
     y-1: form_P(t2_): lateral combination -> 1D pattern P,  
     y-2: form_P2(P_): vertical scan_P_, fork_eval, form_blob, comp_P, form_PP -> 2D P2, 
     y-3: term_P2(P2_): P2s are evaluated for termination, re-orientation, and consolidation 
-
-    postfix '_' denotes array name (vs. same-name element), prefix '_' denotes prior-input variable '''
+    
+    Any given 2D function always accesses two lines: relatively higher and lower.
+    
+    postfix '_' denotes array name (vs. same-name element),
+    prefix '_' as _P denotes prior-input: a higher-line pattern or variable. Notice that the
+               contents depend on the line pattern belongs to: y, y-1, y-2, y-3, thus for example
+               the variables of the _P patterns are different than the ones in P in scan_P_.
+                  
+ '''
 
 
 def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixel, match, difference
