@@ -194,7 +194,7 @@ def scan_P_(typ, P, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inclusion
             if (_P[1] == 0 and _P[2] == 0 and y > rng) or y == Y - 1:
             # if root_== 0: local term, and fork_== 0: global term, if root_> 1: segment comp_P?
 
-                term_blob(typ, _P)
+                blob = term_blob(typ, _P)  # same for segment term if common root?
 
     # no overlap between P and next _P, P eval for inclusion into fork _Ps:
 
@@ -203,15 +203,15 @@ def scan_P_(typ, P, P_, _P_, x):  # P scans overlapping _Ps in _P_ for inclusion
     select_ = deque(); rdn = 1  # number of select forks per P, or no rdn?
     fork = fork_.pop()
 
-    while fork_ and (fork[0] > ave * rdn):  # oG = fork[0], summed in form, | - ref cost only?
+    while fork_ and (fork[0] > ave * 12):  # oG = fork[0], no oG rdn, fixed ref and 11 var cost?
 
         select_.appendleft(fork); rdn += 1  # inclusion if match, no neg forks?
         fork = fork_.pop()  # no: fork = rdn + alt_rdn / len(e_), _P: float cost?
 
-    init = 0 if select_ == 1 else 1
+    init = 0 if select_ == 1 else 1  # new blob if select_== 0, new segment if select_> 1?
     for fork in select_:
 
-        fork = form_blob(P, fork, rdn, init)  # P is added to fork blob
+        fork = form_blob(P, fork, rdn, init)  # P added to fork segment, in root-connected blob
         fork_.appendleft(fork)  # not-selected forks are out of fork_
 
     P = s, ix, x, I, D, Dy, M, My, G, Olp, rdn, e_  # P becomes _P
@@ -232,7 +232,7 @@ def form_blob(P, fork, rdn, init):  # P inclusion into blob (selected fork), _P 
     blob, root_, fork_ = _P  # _fork_ in y-3, not changed
     s, ix, x, I, D, Dy, M, My, G, Olp, e_ = P  # or rdn = e_ / Olp + blob_rdn
 
-    if init:  # forming new _P
+    if init:  # forming new blob or segment _P
 
         L2 = len(e_)  # no separate e2_: Py_( P( e_? overlap / comp_P only?
         I2 = I
@@ -244,7 +244,7 @@ def form_blob(P, fork, rdn, init):  # P inclusion into blob (selected fork), _P 
         Olp2 = Olp
         Py_ = [P, rdn]  # vertical array of patterns within a blob
 
-    else:  # extending matching _P, in fork_: same target fork from different roots?
+    else:  # extending matching _P
 
         L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, rdn2, Py_ = blob
 
@@ -280,13 +280,13 @@ def term_blob(typ, _P):  # blob eval for comp_P, only if complete term: root_ an
             P = Py_.popleft()  # or fork_ = yfork_.popleft(): root_ merge in form_blob?
 
             P, Pm, Pd = comp_P(typ, P, _P)  # per select term blob, before orient?
+
             vPP = form_PP(typ, P, vPP)
             dPP = form_PP(typ, P, dPP)
 
             _P = P
 
-    '''
-    eval for reorient, rescan, recursion: per blob or segment?
+    ''' eval for reorient, rescan, recursion: per blob or segment?
 
     v_rdn = b_rdn  # eval for inclusion in vPPs (2D value patterns):
     fork_vP_, v_rdn = fork_eval(0, P, fork_vP_, v_rdn, x)
@@ -368,7 +368,7 @@ def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also from condi
     return P, Pm, Pd  # for inclusion in vPP_, dPP_ by form_PP in fork_eval, P -> P_ in scan_P_
 
 
-def form_PP(typ, P, PP):  # similar to form_P, forms vPPs, dPPs, and pPs within each
+def form_PP(typ, P, PP):  # analogous to form_P, forms vPPs, dPPs, and pPs within each
 
     if typ:
         crit = Pm  # total match per pattern, also typ for P' e_ comp?
