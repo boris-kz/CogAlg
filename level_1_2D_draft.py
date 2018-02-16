@@ -47,7 +47,7 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
             it_[index] = pri_p, fd, fm
             index += 1
 
-        if len(it_) == rng:
+        if len(it_) == rng:  # or while x < rng: icomp(){ p = pop(p_).., no t_.append?
             t_.append((pri_p, fd, fm))  # completed tuple is transferred from it_ to t_
 
         it_.appendleft((p, 0, 0))  # new prior tuple, fd and fm are initialized at 0
@@ -82,7 +82,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
             t2_[index] = pri_p, _d, fdy, _m, fmy
             index += 1
 
-        if len(t2_) == rng:  # or while y < rng: _t2_ = pop(t2__), _t = pop(t_), ycomp without form_P?
+        if len(t2_) == rng:  # or while y < rng: i_ycomp(){ t2_ = pop(t2__), t = pop(t_)., no form_P?
 
             dg = _d + fdy  # d gradient
             vg = _m + fmy - ave  # v gradient
@@ -169,7 +169,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_ for inclusion in blobs
 
     buff_ = [] # _P_ buffer for scan_P_(next_P)
-    fork_ = deque()  # forks: _P_ references to P, _P = _P, fork_
+    root_ = deque()  # forks: _P_ references to P, _P = _P, fork_
 
     s, I, D, Dy, M, My, G, Olp, e_ = P  # Olp: 1D overlap by stronger alt Ps; or no unpack?
     ix = x - len(e_)  # initial x of P
@@ -191,40 +191,48 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_ for in
                     else: oG += e  # if dP: e = g
                     ex += 1
 
-            fork_.append((oG, _P))  # or if oG: form_blob?
+            root_.append((oG, _P))  # buff for eval, no immediate inclusion to preserve input order?
 
         if _P[0][2] > ix:  # if _x > ix:
             buff_.append(_P)  # _P is buffered for next-P comp
 
         else:  # no overlap between _P and next P, _P is out of _P_ and evaluated for blob term:
 
-            if (_P[1] != 1 and y > rng) or y == Y - 1:  # if fork_== 0 |>1: local | segment term
-               # root_== 0: global term, but only total Py_ matters, no oG rdn?
+            if (_P[1] != 1 and y > rng) or y == Y - 1:  # if root_== 0 |>1: local | segment term
+               # global term if root_== 0, but only OG is evaluated, no rdn?
 
-                blob = term_blob(typ, _P, blob_)  # term blob, or segment if common root?
+                blob = term_blob(typ, _P, blob_)  # term blob, or segment if common fork?
                 blob_.append(blob)
 
-    # no overlap between P and next _P, inclusion into root _Ps, or immediate at fork_.append?
+    # no overlap between P and next _P, inclusion into root _Ps
 
-    fork_.sort(key=lambda fork: fork[0], reverse=True)  # max-to-min oG, or both sort & select?
+    root_.sort(key=lambda fork: fork[0], reverse=True) # max-to-min oG,
+
+    ''' or fixed cost per max and !max:
+    
+    root = pop(max(root_)), if oG > ave*3 (cost of form_blob): form_blob(root),
+    root = pop(root_), if oG > ave*9 (cost of new blob): term_blob(_P), form_blob(root)?
+
+    or all root = pop(root_), if oG > ave*9? 
+    converted into fork_ in input order: deque cycling? '''
 
     select_ = deque(); rdn = 1  # number of select forks per P, or no rdn?
-    fork = fork_.pop()
+    root = root_.pop()
 
-    while fork_ and (fork[0] > ave * 12):  # oG = fork[0], no oG rdn, fixed ref and 11 var cost?
+    while root_ and (root[0] > ave * 12):  # oG = fork[0], no oG rdn, fixed ref and 11 var cost?
 
-        select_.appendleft(fork); rdn += 1  # inclusion if match, no neg forks?
-        fork = fork_.pop()  # no: fork = rdn + alt_rdn / len(e_), _P: float cost?
+        select_.appendleft(root); rdn += 1  # inclusion if match, no neg forks?
+        root = root_.pop()  # no: fork = rdn + alt_rdn / len(e_), _P: float cost?
 
     init = 0 if select_ == 1 else 1  # new blob if select_== 0, new segment if select_> 1?
-    for fork in select_:
+    for root in select_:
 
-        fork = form_blob(P, fork, rdn, init)  # P added to fork segment, in root-connected blob
-        fork_.appendleft(fork)  # not-selected forks are out of fork_
+        root = form_blob(P, root, rdn, init)  # P added to fork segment, in root-connected blob
+        root_.appendleft(root)  # not-selected roots are out of root_
 
     P = s, ix, x, I, D, Dy, M, My, G, Olp, rdn, e_  # P becomes _P
 
-    P_.append((P, [], fork_))  # root_ initialized as [], _P_ = P_ for next-line scan_P_()
+    P_.append((P, []))  # fork_ initialized as [], _P_ = P_ for next-line scan_P_()
     buff_ += _P_  # excluding displaced _Ps
 
     return P_, buff_, blob_  # _P_ = buff_ for scan_P_(next P)
@@ -234,10 +242,10 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_ for in
     # y-n: segment blobs + root_seg_b_, fork_seg_b_, term if root_-> term_, full term at last P
 
 
-def form_blob(P, fork, rdn, init):  # P inclusion into blob (selected fork), _P is not preserved
+def form_blob(P, root, rdn, init):  # P inclusion into blob (selected root), _P is not preserved
 
-    oG, _P = fork  # or oG arg, no rdn, _P vs. fork?
-    blob, root_, fork_ = _P  # _fork_ in y-3, not changed
+    oG, _P = root  # or oG arg, no rdn, _P vs. fork?
+    blob, fork_ = _P  # _fork_ in y-3, not changed
     s, ix, x, I, D, Dy, M, My, G, Olp, e_ = P  # or rdn = e_ / Olp + blob_rdn
 
     if init:  # new blob or segment _P
@@ -282,12 +290,12 @@ def term_blob(typ, _P, blob_):  # blob eval for comp_P, only if complete term: r
         vPP, dPP = [], []  # 2D value P and difference P
         _P = Py_.popleft()  # initial comparand, top-down order
 
-        while Py_: # comp_P is delayed by one P
+        while Py_: # comp_P starts from 2nd P
 
             P = Py_.popleft()
-            P, _vs, _ds = comp_P(typ, P, _P)  # per blob, before orient
+            _P, _vs, _ds = comp_P(typ, P, _P)  # per blob, before orient
 
-            while Py_:  # form_PP is delayed by two Ps
+            while Py_:  # form_PP starts from 3rd P
 
                 P = Py_.popleft()
                 P, vs, ds = comp_P(typ, P, _P)
@@ -295,8 +303,7 @@ def term_blob(typ, _P, blob_):  # blob eval for comp_P, only if complete term: r
                 vPP = form_PP(typ, P, vs, _vs, vPP); blob_.append(vPP)
                 dPP = form_PP(typ, P, ds, _ds, dPP); blob_.append(dPP)
 
-                _vs = vs; _ds = ds
-            _P = P
+                _P = P; _vs = vs; _ds = ds
 
     return blob_  # blob or PP_?  fork_ if segment: multiple selective comp_P?
 
@@ -520,15 +527,15 @@ def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes highe
     t2_ = deque(maxlen=rng)  # vertical buffer of incomplete pixel tuples, for fuzzy ycomp
     t2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
     p_ = f[0, :]  # first line of pixels
-    t_ = comp(p_)
+    t_ = comp(p_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for t in t_:
         p, d, m = t
         t2 = p, d, 0, m, 0  # fdy and fmy initialized at 0
         t2_.append(t2)  # only one tuple per first-line t2_
-
-        # then part_ycomp (no form_P) while y<rng?
         t2__.append(t2_)  # in same order as t_
+
+    # part_ycomp (pop, no form_P) while y < rng?
 
     for y in range(1, Y):  # vertical coordinate y is index of new line p_
 
