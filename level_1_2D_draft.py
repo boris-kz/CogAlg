@@ -168,10 +168,9 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_ for inclusion in blobs
 
-    buff_ = [] # _P_ buffer for scan_P_(next_P)
-    root_ = deque()  # forks: _P_ references to P, _P = _P, fork_
-
+    buff_, root_, selmax_ = [],[],[]
     s, I, D, Dy, M, My, G, Olp, e_ = P  # Olp: 1D overlap by stronger alt Ps; or no unpack?
+
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last scan_P_
 
@@ -191,30 +190,52 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_ for in
                     else: oG += e  # if dP: e = g
                     ex += 1
 
-            root_.append((oG, _P))  # buff for eval, no immediate inclusion to preserve input order?
+            if oG > ave * 9:  # guess new blob cost for !max _P, not P?
+                _P[1].append((oG, P))  # _fork_.append(P)
+
+            elif oG > ave * 3: # guess form_blob cost for max _P?
+                selmax_.append((oG, P))  # select and _fork_.append at the end of scan_P_
 
         if _P[0][2] > ix:  # if _x > ix:
-            buff_.append(_P)  # _P is buffered for next-P comp
+            buff_.append(_P)  # _P is buffered for scan_P_(next P)
 
-        else:  # no overlap between _P and next P, _P is out of _P_ and evaluated for blob term:
+        else:  # no overlap between _P and next P, _P term_blob eval, form_blob:
 
-            if (_P[1] != 1 and y > rng) or y == Y - 1:  # if root_== 0 |>1: local | segment term
-               # global term if root_== 0, but only OG is evaluated, no rdn?
+            if (_P[1] != 1 and y > rng) or y == Y - 1:  # if fork_==0 | >1: segment term
+               # global term if root_== 0, but same blob OG eval?
+
+                blob = _P[2]  # attached blob, if any?
 
                 blob = term_blob(typ, _P, blob_)  # term blob, or segment if common fork?
-                blob_.append(blob)
+                blob_.append(blob)  # y-3
+                blob = []  # new blob is initiated for _P
 
-    # no overlap between P and next _P, inclusion into root _Ps
+            form_blob(_P, blob, 1)  # default
 
+    # no overlap between P and next _P, wrapup:
+
+    if not root_ and selmax_:  # selection of root _P, not of fork P?
+
+        root = selmax_.max(key=lambda selmax: selmax[1])  # selection of root with max oG
+        root[1].append(root)  # P is added to fork_ of root _P
+
+    P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P
+
+    P_.append((P, []))  # initialized fork_, _P_ = P_ for next-line scan_P_()
+    buff_ += _P_  # excluding displaced _Ps
+
+    return P_, buff_, blob_  # _P_ = buff_ for scan_P_(next P)
+
+
+''' sequential displacement and higher-line inclusion at line end:
+
+    y-1: P
+    y-2: _P + fork_
+    y-3: blob + fork_
+    y-n: segment + fork_, if term, not default 
+
+    no rdn select:
     root_.sort(key=lambda fork: fork[0], reverse=True) # max-to-min oG,
-
-    ''' or fixed cost per max and !max:
-    
-    root = pop(max(root_)), if oG > ave*3 (cost of form_blob): form_blob(root),
-    root = pop(root_), if oG > ave*9 (cost of new blob): term_blob(_P), form_blob(root)?
-
-    or all root = pop(root_), if oG > ave*9? 
-    converted into fork_ in input order: deque cycling? '''
 
     select_ = deque(); rdn = 1  # number of select forks per P, or no rdn?
     root = root_.pop()
@@ -229,24 +250,13 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_ for in
 
         root = form_blob(P, root, rdn, init)  # P added to fork segment, in root-connected blob
         root_.appendleft(root)  # not-selected roots are out of root_
+'''
 
-    P = s, ix, x, I, D, Dy, M, My, G, Olp, rdn, e_  # P becomes _P
+def form_blob(_P, blob, init):  # _P inclusion into blob, term if fork_ != 1
 
-    P_.append((P, []))  # fork_ initialized as [], _P_ = P_ for next-line scan_P_()
-    buff_ += _P_  # excluding displaced _Ps
-
-    return P_, buff_, blob_  # _P_ = buff_ for scan_P_(next P)
-
-    # y-2: P + root_, fork_blob_ <- form_blob
-    # y-3: P2 + root_b_, fork_seg_b_ <- segment if root_>1 or term if root_=0
-    # y-n: segment blobs + root_seg_b_, fork_seg_b_, term if root_-> term_, full term at last P
-
-
-def form_blob(P, root, rdn, init):  # P inclusion into blob (selected root), _P is not preserved
-
-    oG, _P = root  # or oG arg, no rdn, _P vs. fork?
-    blob, fork_ = _P  # _fork_ in y-3, not changed
-    s, ix, x, I, D, Dy, M, My, G, Olp, e_ = P  # or rdn = e_ / Olp + blob_rdn
+    oG, _P = _P  # or oG arg
+    _P, fork_ = _P  # fork_ in y-2, not changed here
+    s, ix, x, I, D, Dy, M, My, G, Olp, e_ = _P  # no rdn = e_ / Olp + blob_rdn
 
     if init:  # new blob or segment _P
 
@@ -256,9 +266,8 @@ def form_blob(P, root, rdn, init):  # P inclusion into blob (selected root), _P 
         M2 = M; My2 = My
         G2 = G
         OG = oG  # vertical contiguity for comp_P eval
-        rdn2 = rdn
         Olp2 = Olp
-        Py_ = [P, rdn]  # vertical array of patterns within a blob
+        Py_ = [_P]  # vertical array of patterns within a blob
 
     else:  # extend matching _P
 
@@ -269,15 +278,12 @@ def form_blob(P, root, rdn, init):  # P inclusion into blob (selected root), _P 
         M2 += M; My2 += My
         G2 += G
         OG += oG
-        rdn2 += rdn
         Olp2 += Olp
-        Py_.append((P, rdn))
+        Py_.append((_P))
 
-    blob = s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, rdn2, Py_
-    fork_.appendleft(P)  # adds P@ in input order, same-type roots only
+    blob = s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_, fork_
 
-    _P = blob, fork_  # P is replacing _P, which was summed into blob
-    return _P
+    return blob # _P was summed into blob
 
 
 def term_blob(typ, _P, blob_):  # blob eval for comp_P, only if complete term: root_ and fork_ == 0?
