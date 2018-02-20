@@ -116,7 +116,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
         vP_, _vP_, vg_blob_ = scan_P_(0, vP, vP_, _vP_, vg_blob_, x)  # returns empty _vP_
         dP_, _dP_, dg_blob_ = scan_P_(1, dP, dP_, _dP_, dg_blob_, x)  # returns empty _dP_
 
-    return new_t2__, _vP_, _dP_, vg_blob_, dg_blob_  # blob_s are extended in scan_P_
+    return new_t2__, _vP_, _dP_, vg_blob_, dg_blob_  # extended in scan_P_
 
     # poss alt_: top P alt = Olp, oG, alt_oG: to remove if hLe demotion and alt_oG < oG?
     # P_ can be redefined as np.array ([P, alt_, roots, forks) to increment without init?
@@ -140,7 +140,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
         else:
             alt_P[7] += olp
 
-        P = pri_s, I, D, Dy, M, My, G, Olp, e_  # no ave * alt_rdn / e_: adj < cost
+        P = (pri_s, I, D, Dy, M, My, G, Olp, e_), []  # init root_, no ave * alt_rdn / e_: < cost?
         P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # scan over contiguous higher-level _Ps
 
         I, D, Dy, M, My, G, Olp, e_ = 0,0,0,0,0,0,0,[]  # P and olp initialization
@@ -169,8 +169,8 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms overlapping Gs
 
-    buff_, root_, selmax_ = [],[],[]
-    s, I, D, Dy, M, My, G, Olp, e_ = P  # unused Olp: 1D overlap by stronger alt Ps, no unpack?
+    buff_, selmax_ = [],[]
+    (s, I, D, Dy, M, My, G, Olp, e_), root_ = P  # init before scan_P_, unused Olp?
 
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last scan_P_
@@ -178,12 +178,12 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
     while x >= _ix:  # P to _P match eval, while horizontal overlap between P and _P_:
 
         ex = x  # ex is lateral coordinate of loaded P element
-        _P = _P_.popleft()  # _P = _P in y-2, blob in y-3, fork_ in y-1
+        _P, blob, fork_ = _P_.popleft()  # _P = _P in y-2, blob in y-3, fork_ in y-1
 
-        if s == _P[0][0]:  # if s == _s: vg or dg sign match, fork_.append eval
+        if s == _P[0]:  # if s == _s: vg or dg sign match, fork_.append eval
 
             oG = 0  # fork gradient overlap: oG += g (distinct from alt_P oG)
-            while ex > _P[0][1]: # ex > _ix
+            while ex > _P[1]: # ex > _ix
         
                 for e in e_:  # accumulation of oG between P and _P:
 
@@ -192,40 +192,43 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
                     ex += 1
 
             if oG > ave * 16: # !max _P: likely termination, new blob and fork cost?
-                _P[2].append((oG, P))  # fork_.append(P)
+
+                root_.append((oG, _P))  # _Ps connected to P, if unique blob assign?
+                fork_.append((oG, P))  # Ps connected to _P, no selall_: term anyway?
 
             elif oG > ave * 4: # max _P: summation only, form_blob ops cost?
-                selmax_.append((oG, P))  # for select and _fork_.append after full scan
+                selmax_.append((oG, _P))  # select and _fork_.append at P displace?
 
-        if _P[0][2] > ix:  # if _x > ix:
+        if _P[2] > ix:  # if _x > ix:
             buff_.append(_P)  # _P is buffered for scan_P_(next P)
 
         else: # no overlap between _P and next P, default form_blob, term_blob eval:
+              # or at P displace only: assign to sole root, else P forms new blob?
 
-            if _P[2] == 1:  # if fork_== 1: _P blob segment is continued
-                blob = form_blob(_P, 0)  # init = 0
+            if fork_ == 1:  # & fork root_==1: _P blob is continued
+                blob = form_blob(_P, 0)  # separate cont|init / pri term at _P displace?
 
-            elif y > rng or y == Y - 1:  # if fork_==0 | >1: segment term
+            else: # fork_==0 |>1, also if y == Y - 1 in frame()? no scan_P_ till y = rng
 
-                blob = form_blob(_P, 1)  # _P inclusion at displacement only
-                blob = term_blob(typ, blob, _P[2], blob_)  # for potential comp_P
+                blob = form_blob(_P, 1)
+                blob = term_blob(typ, blob, fork_, blob_)  # for potential comp_P
 
                 blob_.append(blob)  # terminated blob_ is line y - >3
                 blob = []  # P[1] = _P_blob fork_?
 
-                # or per root_ != 1: attach to 1 cont blob?
-                # else?
+                # _P blob: cont if fork_==1 & fork root_==1, else term: split | merge?
 
-    # no overlap between P and next _P
+    # no overlap between P and next _P, blob assign from P root_, which is not preserved?
 
-    if root_== 0 and selmax_:  # selection of root _P by max oG, for symmetric fork_
+    if root_ == 0 and selmax_:  # selection of root blob, if any
+        # no change by next scan_P_
 
         root = max(selmax_) # same as root = max(selmax_, key=lambda selmax: selmax[0])?
         root[1].append((root[0], P))  # (oG, P) added to fork_ of max root _P
 
     P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P
 
-    P_.append((P, blob, []))  # initial fork_, _P_ = P_ for next-line scan_P_()
+    P_.append((P, blob, []))  # blob assign, fork_ init, _P_ = P_ for next-line scan_P_()
     buff_ += _P_  # excluding displaced _Ps
 
     return P_, buff_, blob_  # _P_ = buff_ for scan_P_(next P)
@@ -256,10 +259,9 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
         root_.appendleft(root)  # not-selected roots are out of root_
 '''
 
-def form_blob(_P, init):  # _P inclusion into blob, init if fork_ != 1
+def form_blob(_P, init):  # _P inclusion into blob, init if fork_!=1, vs. init_blob and cont_blob?
 
-    oG, _P = _P  # or oG arg?
-    _P, blob, fork_ = _P  # fork_ is unused
+    oG, (_P, blob, fork_) = _P  # or oG arg? fork_ is not used
     s, ix, x, I, D, Dy, M, My, G, Olp, e_ = _P  # no rdn = e_ / Olp + blob_rdn
 
     if init:  # new blob or segment, separate + fork_ and term_blob?
@@ -315,7 +317,7 @@ def term_blob(typ, blob, fork_, blob_):  # blob eval for comp_P, after _P inclus
 
                 _P = P; _vs = vs; _ds = ds
 
-            blob_.append((vPP_, dPP_, fork_))
+            blob_.append((vPP_, dPP_, fork_))  # each segment has fork_
 
     return blob_  # blob | PP_, comp_P may continue over fork_, after comp_segment?
 
@@ -405,7 +407,7 @@ def form_PP(typ, P, Ps, _Ps, PP, PP_):  # forms vPPs | dPPs, and pPs within each
         PP = term_PP(PP)  # then eval for reorient, rescan, recursion?
 
         # form_pP: default post comp_P,
-        # comp_pP: if PP |Mp| or |Dp|?
+        # comp_pP: if PP |Mp| or |Dp|, and pP_> 4?
 
         dxP_ = []; dx2 = dx, dxP_ # or ddx_P: known x match?
         mxP_ = []; mx2 = mx, mxP_
@@ -492,7 +494,7 @@ def term_PP(PP):  # vPP | dPP eval for blob | PP rotation, re-scan, re-comp, rec
     vPP = 0,0,0,0,0,0,0,0,0,0,[],[]
     dPP = 0,0,0,0,0,0,0,0,0,0,[],[]  # P2s are initialized at non-matching P transfer to _P_?
 
-    np.array for direct accumulation, or simply iterator of initialization?
+    np.array for direct accumulation, vs. iterator of initialization?:
 
     P2_ = np.array([blob, vPP, dPP],
         dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
@@ -531,7 +533,7 @@ def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes highe
     global rng; rng = 1
 
     global div_a; div_a = 127  # not justified
-    global ave_k; ave_k = 0.25  # average V / I
+    global ave_k; ave_k = 0.25  # average V / I initialization
 
     global Y; global X; Y, X = f.shape  # Y: frame height, X: frame width
     global y; y = 0
@@ -551,9 +553,9 @@ def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes highe
 
     # part_ycomp (pop, no form_P) while y < rng?
 
-    for y in range(1, Y):  # vertical coordinate y is index of new line p_
+    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
-        p_ = f[y, :]
+        p_ = f[y, :]  # vertical coordinate y is index of new line p_
         t_ = comp(p_)  # lateral pixel comparison
         t2__, _vP_, _dP_, vg_blob_, dg_blob_ = ycomp(t_, t2__, _vP_, _dP_) # vertical pixel comp
 
