@@ -16,9 +16,9 @@ import numpy as np
     y: comp(p_): lateral comp -> tuple t,
     y- 1: ycomp(t_): vertical comp -> quadrant t2,
     y- 1: form_P(P): lateral combination -> 1D pattern P,  
-    y- 2: scan_P_(P, _P) -> fork_: vertical continuity between 1D Ps of adjacent lines 
-    y- >2: form_blob: merges y-2 P into 2D blob
-    y- >3: term_blob: terminated blobs are evaluated for comp_P and form_PP, -> 2D patterns PPs,
+    y- 2: scan_P_(P, _P) -> fork_, root_: vertical continuity between 1D Ps of adjacent lines 
+    y- 3+: form_blob: merges y-2 P into 2D blob
+    y- 3+: term_blob: terminated blobs are evaluated for comp_P and form_PP, -> 2D patterns PPs,
            PPs are evaluated for blob re-orientation, re-scan, consolidation and comparison 
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: relatively higher and lower.
@@ -83,7 +83,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
             t2_[index] = pri_p, _d, fdy, _m, fmy
             index += 1
 
-        if len(t2_) == rng:  # or while y < rng: i_ycomp(){ t2_ = pop(t2__), t = pop(t_)., no form_P?
+        if len(t2_) == rng:  # or while y < rng: i_ycomp(): t2_ = pop(t2__), t = pop(t_)., no form_P?
 
             dg = _d + fdy  # d gradient
             vg = _m + fmy - ave  # v gradient
@@ -140,7 +140,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
         else:
             alt_P[7] += olp
 
-        P = (pri_s, I, D, Dy, M, My, G, Olp, e_), []  # init root_, no ave * alt_rdn / e_: < cost?
+        P = (pri_s, I, D, Dy, M, My, G, Olp, e_), [], []  # no ave * alt_rdn / e_: adj < cost?
         P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # scan over contiguous higher-level _Ps
 
         I, D, Dy, M, My, G, Olp, e_ = 0,0,0,0,0,0,0,[]  # P and olp initialization
@@ -169,8 +169,8 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms overlapping Gs
 
-    buff_, selmax_ = [],[]
-    (s, I, D, Dy, M, My, G, Olp, e_), root_ = P  # init before scan_P_, unused Olp?
+    buff_ = []
+    (s, I, D, Dy, M, My, G, Olp, e_), root_, selmax_  = P  # init for scan_P_, Olp is not used
 
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last scan_P_
@@ -191,41 +191,43 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
                     else: oG += e  # if dP: e = g
                     ex += 1
 
-            if oG > ave * 16: # !max _P: likely termination, new blob and fork cost?
+            if oG > ave * 16: # !max _P: cost of fork and blob in term_blob, unless fork_==1
 
-                root_.append((oG, _P))  # _Ps connected to P, if unique blob assign?
-                fork_.append((oG, P))  # Ps connected to _P, no selall_: term anyway?
+                root_.append((oG, _P))  # _Ps connected to P, term if root_!= 1
+                fork_.append((oG, P))  # Ps connected to _P, term if fork_!= 1
 
-            elif oG > ave * 4: # max _P: summation only, form_blob ops cost?
-                selmax_.append((oG, _P))  # select and _fork_.append at P displace?
+            elif oG > ave * 4: # max _P: > cost of summation in form_blob, unless root_!=1?
+                selmax_.append((oG, _P))  # _Ps connected to P, select fork_.append at P output
 
         if _P[2] > ix:  # if _x > ix:
             buff_.append(_P)  # _P is buffered for scan_P_(next P)
 
-        else: # no overlap between _P and next P, default form_blob, term_blob eval:
-              # or at P displace only: assign to sole root, else P forms new blob?
+        else: # no overlap between _P and next P
 
-            if fork_ == 1:  # & fork root_==1: _P blob is continued
-                blob = form_blob(_P, 0)  # separate cont|init / pri term at _P displace?
-
-            else: # fork_==0 |>1, also if y == Y - 1 in frame()? no scan_P_ till y = rng
+            if fork_== 0 and selmax_== 0: # else _P in fork Ps' root_| selmax_, waits for P output
 
                 blob = form_blob(_P, 1)
                 blob = term_blob(typ, blob, fork_, blob_)  # for potential comp_P
+                blob_.append(blob)  # terminated blob_ is line y - 3+
 
-                blob_.append(blob)  # terminated blob_ is line y - >3
-                blob = []  # P[1] = _P_blob fork_?
+    # no overlap between P and next _P, delayed blob += _P from P root_, which is not preserved
 
-                # _P blob: cont if fork_==1 & fork root_==1, else term: split | merge?
+    if root_!= 1 and selmax_:  # select root blob, not affected by next scan_P_
+        root_= [max(selmax_)]  # same as root = max(selmax_, key= lambda selmax: selmax[0])
 
-    # no overlap between P and next _P, blob assign from P root_, which is not preserved?
+    _P, blob, fork_ = root_[0]  # single root _P: delayed blob +=_P if P root_== 1
+    fork_.append((_P[0], P))  # (oG, P) is added to fork_ of max root _P
 
-    if root_ == 0 and selmax_:  # selection of root blob, if any
-        # no change by next scan_P_
+    if fork_== 1 and root_== 1:  # blob cont if fork_==1 & fork root_==1, else split | merge
+        blob = form_blob(_P, 0)  # separate cont|init / pri term at _P displace?
 
-        root = max(selmax_) # same as root = max(selmax_, key=lambda selmax: selmax[0])?
-        root[1].append((root[0], P))  # (oG, P) added to fork_ of max root _P
+    else: # fork_> 1, also if y == Y - 1 in frame()? no scan_P_ till y = rng
 
+        blob = form_blob(_P, 1)
+        blob = term_blob(typ, blob, fork_, blob_)  # for potential comp_P
+        blob_.append(blob)  # terminated blob_ is line y - >3
+
+    if root_== 0: blob = []  # _P[1] init
     P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P
 
     P_.append((P, blob, []))  # blob assign, fork_ init, _P_ = P_ for next-line scan_P_()
@@ -238,8 +240,8 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
 
     y- 1: P ->
     y- 2: _P, fork_ ->
-    y- >2: _P blob segment of variable depth ->
-    y- >3: terminated blob segment layers, global term if root_== 0: same blob OG eval?
+    y- 3+: _P blob segment of variable depth ->
+    y- 3+: terminated blob segment layers, global term if root_== 0: same blob OG eval?
     
     no rdn P rep and select:
     root_.sort(key=lambda fork: fork[0], reverse=True) # max-to-min oG,
