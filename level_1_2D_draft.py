@@ -132,8 +132,10 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
     s = 1 if g > 0 else 0  # g = 0 is negative?
     if s != pri_s and x > rng + 2:  # P is terminated
 
-        if typ: alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
-        else: oG *= ave_k; oG = oG.astype(int)               # same for h_der and h_comp eval?
+        if typ:
+            alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
+        else:
+            oG *= ave_k; oG = oG.astype(int)  # same for h_der and h_comp eval?
 
         if oG > alt_oG:  # comp between overlapping vG and dG
             Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
@@ -170,7 +172,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms overlapping Gs
 
     buff_ = []
-    (s, I, D, Dy, M, My, G, Olp, e_), root_, selmax_  = P  # init for scan_P_, Olp is not used
+    (s, I, D, Dy, M, My, G, Olp, e_), root_, alt_root_  = P  # roots are to find unique fork Ps
 
     ix = x - len(e_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last scan_P_
@@ -178,7 +180,7 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
     while x >= _ix:  # P to _P match eval, while horizontal overlap between P and _P_:
 
         ex = x  # ex is lateral coordinate of loaded P element
-        _P, blob, fork_ = _P_.popleft()  # _P = _P in y-2, blob in y-3, fork_ in y-1
+        _P, blob, fork_, alt_fork_ = _P_.popleft()  # _P in y-2, blob in y-3, forks in y-1
 
         if s == _P[0]:  # if s == _s: vg or dg sign match, fork_.append eval
 
@@ -191,46 +193,58 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
                     else: oG += e  # if dP: e = g
                     ex += 1
 
-            if oG > ave * 16: # !max _P: cost of fork and blob in term_blob, unless fork_==1
+            if oG > ave * 16: # if mult _P: cost of fork and blob in term_blob, unless fork_==1
 
-                root_.append((oG, _P))  # _Ps connected to P, term if root_!= 1
+                root_.append((oG, _P)) # _Ps connected to P, term if root_!= 1
                 fork_.append((oG, P))  # Ps connected to _P, term if fork_!= 1
 
-            elif oG > ave * 4: # max _P: > cost of summation in form_blob, unless root_!=1?
-                selmax_.append((oG, _P))  # _Ps connected to P, select fork_.append at P output
+            elif oG > ave * 4: # if one _P: > cost of summation in form_blob, unless root_!=1?
+
+                alt_root_.append((oG, _P)) # _Ps connected to P, select root_.append at P output
+                alt_fork_.append((oG, P))  # Ps connected to _P, select fork_.append at P output
 
         if _P[2] > ix:  # if _x > ix:
             buff_.append(_P)  # _P is buffered for scan_P_(next P)
 
         else: # no overlap between _P and next P
 
-            if fork_== 0 and selmax_== 0: # else _P in fork Ps' root_| selmax_, waits for P output
+            if fork_== 0 and alt_fork_== 0: # else _P in fork Ps root_| alt_root_ waits for P out
 
                 blob = form_blob(_P, 1)
                 blob = term_blob(typ, blob, fork_, blob_)  # for potential comp_P
                 blob_.append(blob)  # terminated blob_ is line y - 3+
 
-    # no overlap between P and next _P, delayed blob += _P from P root_, which is not preserved
+    # no overlap between P and next _P:  delayed blob += _P for root_ of P of fork_ != 0
 
-    if root_!= 1 and selmax_:  # select root blob, not affected by next scan_P_
-        root_= [max(selmax_)]  # same as root = max(selmax_, key= lambda selmax: selmax[0])
+    if root_== 1 and root_[0][3] > 1:  # select single alt fork for single root, else split
 
-    _P, blob, fork_ = root_[0]  # single root _P: delayed blob +=_P if P root_== 1
-    fork_.append((_P[0], P))  # (oG, P) is added to fork_ of max root _P
+        root_= [max(alt_root_)]  # same as root = max(alt_root_, key= lambda alt_root: alt_root[0])
+        root_[0][1].append((root_[0][0][0], P))  # (oG, P) is added to fork_ of max root _P
 
-    if fork_== 1 and root_== 1:  # blob cont if fork_==1 & fork root_==1, else split | merge
-        blob = form_blob(_P, 0)  # separate cont|init / pri term at _P displace?
+    for (oG, _P), blob, fork_, alt_fork_ in root_:  # final fork -> fork_ assignment
 
-    else: # fork_> 1, also if y == Y - 1 in frame()? no scan_P_ till y = rng
+        if fork_ == 1 and alt_root_ > 1:  # select single max root for single fork, else merge
 
-        blob = form_blob(_P, 1)
-        blob = term_blob(typ, blob, fork_, blob_)  # for potential comp_P
-        blob_.append(blob)  # terminated blob_ is line y - >3
+            fork_ = [max(alt_fork_)]
+            fork_[0][2].append((oG, _P))  # (oG, _P) is added to root_ of max fork P
 
-    if root_== 0: blob = []  # _P[1] init
-    P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P
+        if fork_== 1 and root_== 1:  # blob cont if fork_==1 & fork' root_==1, else split | merge
+            blob = form_blob(_P, 0)  # blob is modified in root _P?
 
-    P_.append((P, blob, []))  # blob assign, fork_ init, _P_ = P_ for next-line scan_P_()
+        else: # fork_ | root_ >1, as ==0, also if y == Y - 1 in frame()? no scan_P_ till y = rng
+
+            blob = form_blob(_P, 1)
+            blob = term_blob(typ, blob, fork_, blob_)  # for potential comp_P
+            blob_.append(blob)  # terminated blob_ is line y - 3+, for _P
+
+    if root_== 1 and root_[0][3] == 1:  # root_==1 & root' fork_==1
+        blob = root_[0][1]  # root' fork' blob
+    else:
+        blob = [] # init
+
+    P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P, oG is per new P in fork_?
+
+    P_.append((P, blob, [], []))  # blob assign, forks init, _P_ = P_ for next-line scan_P_()
     buff_ += _P_  # excluding displaced _Ps
 
     return P_, buff_, blob_  # _P_ = buff_ for scan_P_(next P)
@@ -338,13 +352,17 @@ def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also from condi
     dL = len(e_) - len(_e_); mL = min(len(e_), len(_e_))  # relative olp = mx / L? ext_miss: Ddx + DL?
     dI = I - _I; mI = min(I, _I)
     dD = D - _D; mD = min(D, _D)
-    dM = M - _M; mM = min(M, _M)  # no G comp: y-derivatives are incomplete, no alt_ comp: rdn only?
+    dM = M - _M; mM = min(M, _M)
+
+    # oG as Pm | Pd component: proxy for e_ match, cont only: ~ mx?
+    # no G comp: y-derivatives are incomplete?
 
     Pd = ddx + dL + dI + dD + dM  # defines dPP; var_P form if PP form, term if var_P or PP term;
-    Pm = mx + mL + mI + mD + mM   # defines vPP; comb rep value = Pm * 2 + Pd? group by y_ders?
+    Pm = mx + mL + mI + mD + mM  # defines vPP; comb rep value = Pm * 2 + Pd?  group by y_ders?
 
     if dI * dL > div_a: # DIV comp: cross-scale d, neg if cross-sign, nS = S * rL, ~ rS,rP: L defines P
-                        # no ndx, yes nmx: summed?
+
+        # no ndx: single, yes nmx: summed?
 
         rL = len(e_) / len(_e_)  # L defines P, SUB comp of rL-normalized nS:
         nI = I * rL; ndI = nI - _I; nmI = min(nI, _I)  # vs. nI = dI * nrL?
@@ -409,7 +427,7 @@ def form_PP(typ, P, Ps, _Ps, PP, PP_):  # forms vPPs | dPPs, and pPs within each
         PP = term_PP(PP)  # then eval for reorient, rescan, recursion?
 
         # form_pP: default post comp_P,
-        # comp_pP: if PP |Mp| or |Dp|, and pP_> 4?
+        # comp_pP: if PP |Mp| or |Dp|, and pP_> 4 | 2: contig pM / Mp | pD / Dp?
 
         dxP_ = []; dx2 = dx, dxP_ # or ddx_P: known x match?
         mxP_ = []; mx2 = mx, mxP_
