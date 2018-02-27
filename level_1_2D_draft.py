@@ -169,6 +169,16 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 
     return olp, oG, alt_oG, P, alt_P, P_, _P_, blob_  # accumulated in ycomp
 
+# Todor: it's reasonable to mention that P, the input parameter, is a partial pattern, send by form_P:
+# P = pri_s, I, D, Dy, M, My, G, alt_rdn, e_
+# While the P taken from the P_ or _P_ are complete patterns, with a different sequence:
+# P = s, ix, x, I, D, Dy, M, My, G, alt_rdn, e_, alt_ 
+# That's confusing on first read, because by default the same name suggests a list of the same type,
+# however then below scan_P_ reads P[0][1] with a comment as ix, i.e. a different type or confusing it as a mistake. 
+# Yes, it becomes clear when studying more and seeing that P_ is filled later etc., also by keeping in mind
+# that the above P in form_P is commented as "partial". However using the same name confuses and I think suggesting
+# the difference more explicitly would speed up code understanding.
+# Alternatively, mnemonically suggesting that partial patterns are such, for example pP, Pp or something.
 
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms overlapping Gs
 
