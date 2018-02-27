@@ -148,16 +148,16 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
         I, D, Dy, M, My, G, Olp, e_ = 0,0,0,0,0,0,0,[]  # P and olp initialization
         olp, oG, alt_oG = 0,0,0
 
-    # continued or initialized vars are accumulated:
+    # continued or initialized vars are accumulated: use zip S_vars?
 
     olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
     oG += g; alt_oG += alt_g  # for eval to assign olp to alt_rdn of vP or dP
 
     I += p    # pixels summed within P
-    D += d    # lateral D, for P comp and P2 orientation
+    D += d    # lateral D, for P comp and blob orientation
     Dy += dy  # vertical D, for P2 normalization
-    M += m    # lateral D, for P comp and P2 orientation
-    My += my  # vertical M, for P2 orientation
+    M += m    # lateral M, for P comp and blob orientation
+    My += my  # vertical M, for P2 normalization
     G += g    # d or v gradient summed to define P value, or V = M - 2a * W?
 
     if typ:
@@ -166,6 +166,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
         e_.append(g)  # g = d gradient and pattern element, for selective incremental derivation
 
     P = [s, I, D, Dy, M, My, G, Olp, e_]
+
     return olp, oG, alt_oG, P, alt_P, P_, _P_, blob_  # accumulated in ycomp
 
 
@@ -210,7 +211,7 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
             blob = incr_blob((oG, _P), blob)  # default _P incl, empty init at final P root_!= 1
 
             if blob[8] > ave * 9 and blob[10] > 2:  # blob value OG > cost: ave * 9 vars | ave_OG?
-               blob = scan_blob(typ, blob)
+               blob = scan_Py_(typ, blob)  # or orient(blob)?
 
             blob_.append((blob, fork_))  # terminated blobs: input line y - 3+, record layer 5+
             # no term delay unless _P is buffered in fork Ps root_| alt_root_, waiting for P output:
@@ -234,14 +235,14 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
         if fork_!= 1 or root_!= 1:  # split | merge / current count, also if y == Y - 1 in frame()?
 
             if blob[8] > ave * 9 and blob[10] > 2:  # if OG > Ave and Py_ > 2, cost: comp, PP, PP_?
-               blob = scan_blob(typ, blob)  # top-down fork_, no root_: rdn
+               blob = scan_Py_(typ, blob)  # or orient(blob)? top-down fork_, no root_: rdn
 
             blob_.append((blob, fork_))  # terminated blob_ is input line y - 3+ | record layer 5+
 
-    if root_== 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 & root' fork_==1
+    if root_ == 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 & root' fork_==1
         blob = root_[0][1]  # root' fork' blob
     else:
-        blob = (0,0,0,0,0,0,0,0,0,0,[]) # init s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_[]
+        blob = (0,0,0,0,0,0,0,0,0,0,[])  # init s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_[]
 
     P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P, oG is per new P in fork_?
 
@@ -256,10 +257,12 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
     y- 1,  2L: t_, t2_ -> P_
     y- 2,  3L: P_, _P_ -> fork_ between _Ps and Ps
     y- 3+, 4L: fork_, blob_: blob segments of variable depth 
-    y- 3+, 5+: blob_, term_: layers of terminated segments, global term if root_==0, same OG eval? '''
+    y- 3+, 5+: blob_, term_: layers of terminated segments regardless of input line  
+    
+    sum into wider forking network, global term if root_==0, same OG eval?  also sum per frame? '''
 
 
-def incr_blob(_P, blob):  # continued or initialized blob is incremented by attached _P
+def incr_blob(_P, blob):  # continued or initialized blob is incremented by attached _P, replace by zip?
 
     s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_ = blob
     oG, _P = _P  # oG was buffered in root_| fork_
@@ -274,19 +277,42 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     Olp2 += Olp
     Py_.append((s, ix, x, I, D, Dy, M, My, G, oG, Olp, e_))
 
-    blob = s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_
+    blob = s, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2), Py_
     return blob
 
 
-def scan_blob(typ, blob):  # vertical scan of Ps in Py_ for comp_P, incr_PP, form_pP_?
+def orient(type, blob):  # blob | network | PP | net_PP eval for rotation and re-scan
 
-    vPP = 0,[],[],[],[],[],[],[],[],[],[]  # s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_
-    dPP = 0,[],[],[],[],[],[],[],[],[],[]  # + formed pP_ per parameter
-    vPP_, dPP_ = [],[]  # 2D value P and difference P
-    vS_ders = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    dS_ders = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    # len(Py_) / L2: rescan at angle = x, y
+    # max_D = (D2**2 + Dy2**2) **-2: if max_D - max(D2, Dy2) > ave?
 
-    Py_ = blob[10]
+    # default comp x -> dx: fractional? but primary orient factor?
+
+    # after comp_P: also by S_ders?
+
+    return blob
+
+''' 
+    dimensionally reduced axis: vP PP or contour: dP PP; dxP is direction pattern
+    orient value: m(ddx, (dL, dS))? _S /= cos (ddx)
+
+    if dxP Dx: vx = mean_dx - dx: normalized compression of distance: min. cost decrease vs. min. benefit?
+    eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
+
+    if dL sign == ddx sign and min(dL, ddx) > a: 
+       rL  = L /_L
+    if rL > a: pn = I/L; dn = D/L; vn = V/L; '''
+
+
+def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and difference PPs
+
+    vPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
+    dPP = 0,[],[]  # PP: L2, I2, D2, Dy2, M2, My2, G2, Olp2
+
+    SvPP, SdPP, Sv_, Sd_ = [],[],[],[]
+    vPP_, dPP_ = [],[]
+
+    Py_ = blob[2]  # unless oriented?
     _P = Py_.popleft()  # initial comparand
 
     while Py_:  # comp_P starts from 2nd P, top-down
@@ -297,36 +323,35 @@ def scan_blob(typ, blob):  # vertical scan of Ps in Py_ for comp_P, incr_PP, for
         while Py_:  # form_PP starts from 3rd P
 
             P = Py_.popleft()
-            P, vs, ds = comp_P(typ, P, _P)
+            P, vs, ds = comp_P(typ, P, _P)  # P S_vars += S_ders in comp_P
 
-            if vs ==_vs:
-                vPP, vS_ders = incr_PP(typ, P, vPP, vS_ders)
+            if vs == _vs:
+                vPP = incr_PP(typ, P, vPP)
             else:
                 vPP_.append(vPP)  # or PP eval for comp_pP?
-                vPP = 0,[],[],[],[],[],[],[],[],[],[],[],[]
 
-                for (Mp, p_) in vS_ders:  # form_pP select per S_der, includes all P_ders?
-                    if Mp > ave * 9 * 5 * 2:  # Mp > ave PP * ave pP rdn * rdn to PP
-                        pP_ = []
-                        MpP, DpP, pP_ = form_pP_(typ, p_, P[1], pP_)  # P[1] = P_ders
-                        # MpP eval for scan_pP_, comp_pP, or after orient: not affected?
+                for var, S in zip(vPP[1], SvPP):  # 16 S_vars from incr_PP, converted to list?
+                    S += var; Sv_.append(S)  # blob-wide summation
+                SvPP = Sv_  # but SPP is redundant, if len(PP_) > ave?
 
-                vS_ders = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  # or part of PP init?
+                vPP = vs,[],[]  # s, PP, Py_ init
 
-            if ds ==_ds:
-                dPP, dS_ders = incr_PP(typ, P, dPP, dS_ders)
+            if ds == _ds:  # or generic form_PP?
+                dPP = incr_PP(typ, P, dPP)
             else:
                 dPP_.append(dPP)
-                dPP = 0,[],[],[],[],[],[],[],[],[],[],[],[]
-                dS_ders = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                for var, S in zip(dPP[1], SdPP):
+                    S += var; Sd_.append(S)
+                SdPP = Sd_
+                dPP = ds,[],[]
 
             _P = P; _vs = vs; _ds = ds
 
-    # Blob += PP, or conditional scan_PP_, comp_PP?
-    # S_ders eval for orient, per PP or blob only?
-    # blob = orient(blob, vPP_, dPP_)
+    # S_ders | S_vars eval for orient, per PP ) blob ) network:
+    # fork_ per blob from scan_P_, rdn comp_P / scan_fork_(_P, fork_) between blobs?
+    # rdn: alt_P, alt_PP, comp fork, alt_pP?
 
-    return (blob, vPP_, dPP_)  # blob or PP_, comp_P may continue over fork_, after comp_segment?
+    return blob, SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 
 def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
@@ -390,9 +415,8 @@ def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also conditiona
     ds = 1 if Pd > 0 else 0
 
     P_ders = Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars
-    P = P, P_ders
 
-    return P, vs, ds  # for inclusion in vPP_, dPP_ by form_PP:
+    return (P, P_ders), vs, ds  # for inclusion in vPP_, dPP_ by form_PP:
 
     # a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128: feedback to define vpPs: parameter value patterns
     # a_PM = a_mx + a_mw + a_mI + a_mD + a_mM  or A * n_vars, rdn accum per pP, alt eval per vertical overlap?
@@ -420,9 +444,9 @@ def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also conditiona
     iter dS - S -> (n, M, diff): var precision or modulo + remainder? '''
 
 
-def incr_PP(typ, P, PP, S_ders):  # increments continued vPPs or dPPs, not pPs within each
+def incr_PP(typ, P, PP):  # increments continued vPPs or dPPs, not pPs within each
 
-    P, P_ders = P
+    P, P_ders, S_ders = P
     s, ix, x, I, D, Dy, M, My, G, oG, Olp, e_ = P
     L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_ = PP
 
@@ -441,7 +465,7 @@ def incr_PP(typ, P, PP, S_ders):  # increments continued vPPs or dPPs, not pPs w
     PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy = S_ders  # div_f, nVars?
     # summed per PP, then per blob for form_pP_ or orient eval?
 
-    PM += Pm; PD += Pd
+    PM += Pm; PD += Pd  # replace by zip
     Mx += mx; Dx += dx; ML += mL; DL += dL; ML += mI; DL += dI
     MD += mD; DD += dD; MDy += mDy; DDy += dDy; MM += mM; DM += dM; MMy += mMy; DMy += dMy
 
@@ -450,78 +474,46 @@ def incr_PP(typ, P, PP, S_ders):  # increments continued vPPs or dPPs, not pPs w
 
     return PP, S_ders
 
-    # fork_ per blob, rdn comp_P(_P, P_) between blobs?
-    # rdn: alt_P, alt_PP, comp fork, alt_pP?
-
-''' 
-        if typ: alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
-        else: oG *= ave_k; oG = oG.astype(int)               # same for h_der and h_comp eval?
-
-        if oG > alt_oG:  # comp between overlapping vG and dG
-            Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
-        else:
-            alt_P[7] += olp 
-
-        olp, oG, alt_oG = 0,0,0
-        P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # no scan over hLe _Ps 
-
-        olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
-        G += g; alt_oG += alt_g  # for eval to assign olp to alt_rdn of vP or dP 
-
-        after orient:
-
-        if typ: e_.append((P, Pm, Pd))  # selective incremental-range comp_P, if min Py_? 
-        else: e_.append(P)  # selective incremental-derivation comp_P? '''
-
-
-def orient(blob, PP_, alt_PP_):  # PP | blob | Blob eval for rotation and re-scan
-
-    # before comp_P: by len(Py) / L2 and D2 + Dy2?
-    # after comp_P: also by S_ders?
-
-    return blob
-
-''' 
-    Orient = m_dx, value of re-orient = m(ddx, (dL, dS)): accumulated locally?
-    dimensionally reduced axis: vP PP or contour: dP PP; dxP is direction pattern
-
-    blob_-> term_, forming layers 5+, regardless of line, sum into wider fork, also sum per frame?
-    layer 3 is cont blobs, single ref to layer 2 _Ps
-
-    vPP or dPP rdn assign at blob eval?
-
-    PP = 0,0,0,0,0,0,0,0,0,0,[],[]  # initialized at non-matching P transfer to _P_?
+''' vPP or dPP rdn assign at blob eval?
     np.array for direct accumulation, vs. iterator of initialization?:
 
     P2_ = np.array([blob, vPP, dPP],
-        dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
-        ('M2', 'i4'), ('My2', 'i4'), ('G2', 'i4'), ('rdn2', 'i4'), ('alt2_', list), ('Py_', list)]) 
+        
+    dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
+    ('M2', 'i4'), ('My2', 'i4'), ('G2', 'i4'), ('rdn2', 'i4'), ('alt2_', list), ('Py_', list)]) 
 
-    mean_dx = 1  # fractional?
-    dx = Dx / H
-    if dx > a: comp(abs(dx))  # or if dxP Dx: fixed ddx cost?  comp of same-sign dx only
+    if typ: alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
+    else: oG *= ave_k; oG = oG.astype(int)               # same for h_der and h_comp eval?
 
-    vx = mean_dx - dx  # normalized compression of distance: min. cost decrease, not min. benefit?
+    if oG > alt_oG:  # comp between overlapping vG and dG
+        Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
+    else:
+        alt_P[7] += olp 
+
+    olp, oG, alt_oG = 0,0,0
+    P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # no scan over hLe _Ps 
+
+    olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
+    G += g; alt_oG += alt_g  # for eval to assign olp to alt_rdn of vP or dP 
+
+    after orient:
+
+    if typ: e_.append((P, Pm, Pd))  # selective incremental-range comp_P, if min Py_? 
+    else: e_.append(P)  # selective incremental-derivation comp_P? '''
 
 
-    eval of d,m adjust | _var adjust | x,y adjust if projected dS-, mS+ for min.1D Ps over max.2D
+def scan_par_(typ, blob):
 
-        if dw sign == ddx sign and min(dw, ddx) > a: _S /= cos (ddx)  # to angle-normalize S vars for comp
+    P_ = blob
+    for (P, S_ders) in P_:
 
-    if dw > a: div_comp (w): rw = w / _w, to width-normalize S vars for comp: 
+        for (S, Mp, Dp, p_) in S_ders:  # form_pP select per S_der, includes all P_ders?
+            if Mp > ave * 9 * 5 * 2:  # Mp > ave PP * ave pP rdn * rdn to PP
+                pP_ = []
+                MpP, DpP, pP_ = form_pP_(typ, p_, P[1], pP_)  # P[1] = P_ders
+                # MpP eval for scan_pP_, comp_pP, or after orient: not affected?
 
-        if rw > a: pn = I/w; dn = D/w; vn = V/w; 
-
-            comp (_n) # or default norm for redun assign, but comp (S) if low rw?
-
-            if d_n > a: div_comp (_n) -> r_n # or if d_n * rw > a: combined div_comp eval: ext, int co-variance?
-
-        comp Dy and My, /=cos at PP term?  default div and overlap eval per PP? not per CP: sparse coverage?
-
-    rrdn = 1 + rdn_w / len(e_)  # redundancy rate / w, -> P Sum value, orthogonal but predictive
-
-    S = 1 if abs(D) + V + a * len(e_) > rrdn * aS else 0  # rep M = a*w, bi v!V, rdn I? '''
-
+    return blob
 
 def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP
 
@@ -550,7 +542,7 @@ def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP
             vpP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
             MpP += abs(vpP[1])
 
-        # same for dpP_
+        # same for dpP_: generic form_pP?
 
         _p = p; _vps = vps; _dps = dps
 
@@ -560,25 +552,24 @@ def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP
     # LIDV per dx, L, I, D, M? select per term?
     # alt2_: fork_ alt_ concat, to re-compute redundancy per PP
 
+
 def incr_pP(typ, p, P_ders, pP):
-    pP_ = []
-    return pP, pP_
+    return pP
 
 def scan_pP_(typ, pP_):
-    P2 = []
-    return P2
+    return pP_
 
-def comp_pP():  # with/out orient?
-    P2 = []
-    return P2
+def comp_pP(pP, _pP):  # with/out orient?
+    return pP
 
-def comp_PP():
-    P2 = []
-    return P2
+def comp_PP(PP, _PP):
+    return PP
 
-def comp_blob():
-    P2 = []
-    return P2
+def scan_network(blob_):
+    return blob_
+
+def comp_blob(blob, _blob):
+    return blob
 
 
 def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
