@@ -84,19 +84,64 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
             t2_[index] = pri_p, _d, fdy, _m, fmy
             index += 1
 
-        if len(t2_) == rng:  # or while y < rng: i_ycomp(): t2_ = pop(t2__), t = pop(t_)., no form_P?
+        if len(t2_) == rng:  # or while y < rng: i_ycomp(): t2_ = pop(t2__), t = pop(t_)..?
 
             dg = _d + fdy  # d gradient
             vg = _m + fmy - ave  # v gradient
-            t2 = pri_p, _d, fdy, _m, fmy  # completed 2D tuple moved from t2_ to form_P:
 
-            # form 1D patterns vP and dP: horizontal spans of same-sign vg or dg, with associated vars:
+            # test and termination of 1D patterns vPs and dPs:
 
-            olp, ovG, odG, vP, dP, vP_, _vP_, vg_blob_ = \
-            form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vg_blob_, x)
+            sd = 1 if dg > 0 else 0  # 0 is negative: no selection?
+            if sd != dP[0] and x > rng + 2:  # if sd != pri_sd: dP is terminated
 
-            olp, odG, ovG, dP, vP, dP_, _dP_, dg_blob_ = \
-            form_P(0, t2, dg, vg, olp, odG, ovG, dP, vP, dP_, _dP_, dg_blob_, x)
+                ovG *= ave_k; ovG = ovG.astype(int)  # ovG per dP, same for h_der and h_comp eval?
+                if ovG > odG:  # comp between overlapping vG and dG
+                    dP[7] += olp  # increments Olp of the weaker overlapping G
+                else: vP[7] += olp
+
+                dP_, _dP_, dg_blob_ = scan_P_(1, dP, dP_, _dP_, dg_blob_, x)  # scan over higher-level _dPs
+                dP = 0, 0, 0, 0, 0, 0, 0, []  # I, D, Dy, M, My, G, Olp, e_ init
+                olp, ovG, odG = 0, 0, 0
+
+            sv = 1 if vg > 0 else 0  # 0 is negative: no selection?
+            if sv != vP[0] and x > rng + 2:  # if sv != pri_sv: vP is terminated
+
+                ovG *= ave_k; ovG = ovG.astype(int)
+                if ovG > odG:
+                    dP[7] += olp
+                else: vP[7] += olp
+
+                vP_, _vP_, vg_blob_ = scan_P_(0, vP, vP_, _vP_, vg_blob_, x)  # scan over higher-level _vPs
+                vP = 0, 0, 0, 0, 0, 0, 0, []  # I, D, Dy, M, My, G, Olp, e_ init
+                olp, ovG, odG = 0, 0, 0  # at any P termination
+
+            # increment vP and dP: horizontal spans of same-sign vg or dg, with associated vars:
+
+            olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
+            ovG += vg; odG += dg  # for eval to assign olp to alt_rdn of vP or dP
+
+            pri_s, I, D, Dy, M, My, G, Olp, e_ = dP
+
+            I += p  # inputs and derivatives are summed within P for comp_P and orientation:
+            D += d  # lateral D
+            Dy += dy  # vertical D
+            M += m  # lateral M
+            My += my  # vertical M
+            G += dg  # d or v gradient summed to define P value, or V = M - 2a * W?
+            e_.append(dg)  # g = d gradient and pattern element, for selective incremental derivation
+
+            dP = [sd, I, D, Dy, M, My, G, Olp, e_]
+            pri_s, I, D, Dy, M, My, G, Olp, e_ = vP
+
+            I += p  # inputs and derivatives are summed within P for comp_P and orientation:
+            D += d  # lateral D
+            Dy += dy  # vertical D
+            M += m  # lateral M
+            My += my  # vertical M
+            G += vg  # d or v gradient summed to define P value, or V = M - 2a * W?
+            e_.append((p, vg, dg))  # g = v gradient, for selective incremental range comp
+
+            vP = [sv, I, D, Dy, M, My, G, Olp, e_]
 
         t2_.appendleft((p, d, 0, m, 0))  # initial fdy and fmy = 0, new t2 replaces completed t2 in t2_
         new_t2__.append(t2_)
@@ -105,12 +150,11 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
 
     if olp:  # if vP x dP overlap len > 0, incomplete vg - ave / (rng / X-x)?
 
-        odG *= ave_k; odG = odG.astype(int)  # ave_k = V / I, to project V of odG
+        ovG *= ave_k; ovG = ovG.astype(int)  # ave_k = V / I, to project V of odG
 
         if ovG > odG:  # comp of olp vG and olp dG, == goes to vP: secondary pattern?
             dP[7] += olp  # overlap of lesser-oG vP or dP, or P = P, Olp?
-        else:
-            vP[7] += olp  # to form rel_rdn = alt_rdn / len(e_)
+        else: vP[7] += olp  # to form rel_rdn = alt_rdn / len(e_)
 
     if y + 1 > rng:  # starting with the first line of complete t2s
 
@@ -121,54 +165,6 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
 
     # poss alt_: top P alt = Olp, oG, alt_oG: to remove if hLe demotion and alt_oG < oG?
     # P_ can be redefined as np.array ([P, alt_, roots, forks) to increment without init?
-
-
-def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
-
-    # forms 1D dP or vP, then scan_P_ adds forks in _P fork_s and accumulates blob_
-
-    p, d, dy, m, my = t2  # 2D tuple of quadrant variables per pixel
-    pri_s, I, D, Dy, M, My, G, Olp, e_ = P  # initial pri_ vars = 0, or skip form?
-
-    s = 1 if g > 0 else 0  # g = 0 is negative: no selection?
-    if s != pri_s and x > rng + 2:  # P is terminated
-
-        if typ:
-            alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
-        else:
-            oG *= ave_k; oG = oG.astype(int)  # same for h_der and h_comp eval?
-
-        if oG > alt_oG:  # comp between overlapping vG and dG
-            Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
-        else:
-            alt_P[7] += olp
-
-        P = (pri_s, I, D, Dy, M, My, G, Olp, e_), [], []  # no ave * alt_rdn / e_: adj < cost?
-        P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # scan over contiguous higher-level _Ps
-
-        I, D, Dy, M, My, G, Olp, e_ = 0,0,0,0,0,0,0,[]  # P and olp initialization
-        olp, oG, alt_oG = 0,0,0
-
-    # continued or initialized vars are accumulated: use zip S_vars?
-
-    olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
-    oG += g; alt_oG += alt_g  # for eval to assign olp to alt_rdn of vP or dP
-
-    I += p    # inputs and derivatives are summed within P for comp_P and orientation:
-    D += d    # lateral D
-    Dy += dy  # vertical D
-    M += m    # lateral M
-    My += my  # vertical M
-    G += g    # d or v gradient summed to define P value, or V = M - 2a * W?
-
-    if typ:
-        e_.append((p, g, alt_g))  # g = v gradient, for selective incremental range comp
-    else:
-        e_.append(g)  # g = d gradient and pattern element, for selective incremental derivation
-
-    P = [s, I, D, Dy, M, My, G, Olp, e_]
-
-    return olp, oG, alt_oG, P, alt_P, P_, _P_, blob_  # accumulated in ycomp
 
 
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms overlapping Gs
@@ -297,26 +293,33 @@ def orient(typ, blob):  # blob | network | PP | net_PP eval for rotation to norm
 
     s, x, ix, lx, Dx, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
 
-    max_L = math.hypot(Dx, len(Py_))
-    inc_L = max_L / len(Py_)  # L multiplier
-    min_L = (L2 / len(Py_)) / inc_L
+    ver_L = math.hypot(Dx, len(Py_))  # adjusted vert dim
+    L_inc = ver_L / len(Py_)  # mult ver_L increment = lat_L decrement
+    ave_L = L2 / len(Py_)
+    lat_L = ave_L / L_inc  # ave secondary L, or norm mult = len(Py) * L_mul?
 
-    rL = Dx / len(Py_)  # lateral / vertical dimension ratio to orient derivatives:
+    max_L = max(ver_L, lat_L); min_L = min(ver_L, lat_L)
 
-    max_D = (D2 * rL + Dy2 / rL) / 2 / inc_L  # dispersed oriented D
-    min_D = (Dy2 * rL+ -D2 / rL) / 2 * inc_L  # concentrated oriented Ds
+    if typ: V = M2 + My2
+    else:   V = D2 + Dy2  # V (val) is D for dB, M for vB,
 
-    max_M = (M2 * rL + My2 / rL) / 2 / inc_L  # dispersed oriented Ms
-    min_M = (My2 * rL + M2 / rL) / 2 * inc_L  # concentrated oriented Ms
+    if max_L - max(ave_L, len(Py_)) * V > ave:  # projected derivative adjustment value
 
-    # vs. max_L (LL) = len(Py_) / cos(Dx/len(Py_)), min_L = aL (L2/len(Py_) * cos(Dx/len(Py_))
+        rL = Dx / len(Py_)  # lateral / vertical dimension ratio, to orient derivatives:
+
+        max_D = (D2 * rL + Dy2 / rL) / 2 / L_inc  # dispersed oriented D
+        min_D = (Dy2 * rL+ -D2 / rL) / 2 * L_inc  # concentrated oriented D
+
+        max_M = (M2 * rL + My2 / rL) / 2 / L_inc  # dispersed oriented M
+        min_M = (My2 * rL + M2 / rL) / 2 * L_inc  # concentrated oriented M
+
+    # norm Py_ for comp_P, also for comp blob?
     # comp_P -> dxP_, ddx predicts dL and dS: 2nd der orient value?
 
-    # rescan at ave dx if max_D - max(D2, Dy2) > ave: projected dS-, mS+ for min over max dim?
-    # only from analog input, buffered grid has directionally distorted distances or resolution?
-
-    # doesn't affect comp_P, only for comp blob?
     # orient value after comp_P: co-variance = m (ddx, (dL, dS))? _S /= cos(ddx)?
+    # rescan only from analog input, buffered grid rescan will distort distances or resolution?
+
+    # vs. max_L (LL) = len(Py_) / cos(Dx/len(Py_)), min_L = aL (L2/len(Py_) * cos(Dx/len(Py_))
 
     return 1, blob  # orient flag = 1
 
@@ -398,7 +401,7 @@ def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also conditiona
     Pd = ddx + dL + dI + dD + dDy + dM + dMy  # defines dPP, dx is not
     Pm = mx + mL + mI + mD + mDy + mM + mMy  # defines vPP; comb rep value = Pm * 2 + Pd?
 
-    if dI * dL > div_a:  # or ave * 21(7*3)?
+    if dI * dL > div_a:  # potential d compression, vs. ave * 21(7*3)?
 
         # DIV comp: cross-scale d, neg if cross-sign, nS = S * rL, ~ rS,rP: L defines P
         # no ndx: single, yes nmx: summed?
@@ -414,7 +417,7 @@ def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also conditiona
 
         Pnm = mx + nmI + nmD + nmDy + nmM + nmMy  # normalized m defines norm_vPP, if rL
 
-        if Pm > Pnm: nvPP_rdn = 1; vPP_rdn = 0 # added to rdn, or diff alt, olp, div rdn?
+        if Pm > Pnm: nvPP_rdn = 1; vPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
         else: vPP_rdn = 1; nvPP_rdn = 0
 
         Pnd = ddx + ndI + ndD + ndDy + ndM + ndMy  # normalized d defines norm_dPP or ndPP
