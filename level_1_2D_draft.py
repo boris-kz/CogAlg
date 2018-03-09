@@ -207,16 +207,14 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
             buff_.append(_P)  # _P is buffered for scan_P_(next P)
 
         elif fork_ == 0 and fork_sel_ == 0:  # no overlap between _P and next P, term_blob:
+            # else _P is buffered in fork Ps root_| root_sel_, term eval at P output
 
             blob = incr_blob((oG, _P), blob)  # default _P incl, empty init at final P root_!= 1
+
             if blob[8] > ave * 9 and blob[10] > 2:  # blob OG > cost: ave * 9 vars | ave_OG?
+               blob = ortho(typ, blob)   # also ave * rdn = Olp / L2, summed per P vs. blob?
 
-                if blob[4] > ave * 9:  # if Dx: combined angle for L & S normalization:
-                    orient(typ, blob)  # summed vars' max, min
-                blob = scan_Py_(typ, blob)
-
-            blob_.append((blob, fork_))  # top-down fork_, no root_: redundant
-        # else _P is buffered in fork Ps root_| root_sel_, term eval only at P output:
+            blob_.append((blob, fork_))  # top-down fork_, no root_: redundant to fork_
 
     # no overlap between P and next _P: delayed blob += _P for root_ of P if fork_ != 0
 
@@ -237,10 +235,7 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
         if fork_ != 1 or root_ != 1:  # term_blob if split | merge, also if y == Y - 1 in frame()?
 
             if blob[8] > ave * 9 and blob[10] > 2:  # if OG > Ave and Py_> 2, cost: comp, PP, PP_?
-
-                if blob[4] > ave * 9:  # if Dx: combined angle for L & S normalization:
-                    orient(typ, blob)  # summed vars' max, min
-                blob = scan_Py_(typ, blob)
+               blob = ortho(typ, blob)  # packing eval and scan_Py_
 
             blob_.append((blob, fork_))  # terminated blob_ is input line y - 3+ | record layer 5+
 
@@ -292,34 +287,47 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     return blob
 
 
-def orient(typ, blob):  # blob | network | PP | net_PP eval for rotation to normalize for POV
+def ortho(typ, blob):  # blob | net_blob | PP | net_PP eval to estimate Ps orthogonal to Max_L axis
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
+    flip, ort = 0, 0
 
-    ver_L = math.hypot(Dx, len(Py_))  # adjusted vert dim
-    L_mlt = ver_L / len(Py_)  # multiplier: ver_L increment = lat_L decrement
-    lat_L = max_L / L_mlt  # norm max_lat_L from Py_, also sort / ix: y_blob Px_ scan order?
+    if blob[4] > ave * 9:  # if Dx: combined angle for L & S normalization:
 
-    Max_L = max(ver_L, lat_L)  # max angle-normalized ortho_L, no ave_L = L2 / len(Py_)?
+        ver_L = math.hypot(Dx, len(Py_))  # slanted vert dim
+        L_mlt = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
+        lat_L = max_L / L_mlt  # orthogonal projection of max_lat_L from Py_
 
-    if typ: V = M2 + My2  # no Min_L = min(ver_L, lat_L)
-    else:  V = D2 + Dy2  # V (val) is D for dB, M for vB,
+        # also sort / ix -> scan_yP_: forking within blob?
 
-    if Max_L - max(len(Py_), max_L) * V > ave:  # projected derivative adjustment | rescan value
+        # 45% scan: p = (Sx*rL + Sy/rL) / 2, if in e_? Dx% scan: analog, else no proximate ps?
+        # max-distance scan: 
 
-        max_D = (D2 + Dy2) / 2 / L_mlt  # est D over max_L, Ders summed in Dx / len(Py_) ratio
-        min_D = (Dy2+ -D2) / 2 * L_mlt  # est D over min_L
-        max_M = (M2 + My2) / 2 / L_mlt  # est M over max_L
-        min_M = (My2 + M2) / 2 * L_mlt  # est M over min_L
+        if ver_L > lat_L:  # axis = Dx-adjusted Max_L, no ave_L = L2 / len(Py_)?
 
-        # scan_Py_ / OG, for comp blob and comp_P:
-        # norm Py_ for comp_P -> DL, DS, incr_PP -> dxP_, Ddx:
-        # PP Py_ ddx orient value = m (ddx, dL, dS) -> indiv orient per P in Py_?
+            flip = 0  # flip blob to horizontal-first
+            if typ: V = M2 + My2  # no Min_L = min(ver_L, lat_L)
+            else:  V = D2 + Dy2  # V (val) is D for dB, M for vB,
 
-    # ortho scan: comp_P( comp_e_( comp_e -> Py( ey_, for scan_Px_, comp_Py?
-    # other scan: p = (px*rL + py/rL) / 2, if both in buffer?
+            if ver_L - max_L * V > ave:  # projected derivatives adjustment value
+                ort = 1
 
-    return 1, blob  # orient flag = 1
+                max_D = (D2 + Dy2) / 2 / L_mlt  # est D over max_L, Ders summed in Dx / len(Py_) ratio
+                min_D = (Dy2+ -D2) / 2 * L_mlt  # est D over min_L
+                max_M = (M2 + My2) / 2 / L_mlt  # est M over max_L
+                min_M = (My2 + M2) / 2 * L_mlt  # est M over min_L
+
+                # for comp blob, and norm Py_ for comp_P -> DL, DS, incr_PP -> dxP_, Ddx:
+                # PP Py_ ddx ortho value = m (ddx, dL, dS) -> indiv ortho per P in Py_?
+        else:
+            flip = 1  # flip blob to horizontal-first
+            if lat_L - ver_L > ave:
+                ort = 1  # ortho: scan_Py_( comp_P( scan_e_( form_yP_, ortho, scan_yP_, comp_yP?
+
+    blob = blob, flip, ort  # + reorientation and orthogonolalization flags?
+    blob = scan_Py_(typ, blob)  # if yx: comp e_-> yP_, scan_yP_; else: scan_Py_
+
+    return blob
 
 
 def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and difference PPs
@@ -330,18 +338,20 @@ def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and 
     SvPP, SdPP, Sv_, Sd_ = [],[],[],[]
     vPP_, dPP_ = [],[]
 
+    flip = blob[0][1]  # flip: default comp e_, etc; ort is for comp_blob only, else common?
+
     Py_ = blob[2]  # unless oriented?
     _P = Py_.popleft()  # initial comparand
 
     while Py_:  # comp_P starts from 2nd P, top-down
 
         P = Py_.popleft()
-        _P, _vs, _ds = comp_P(typ, P, _P)  # per blob, before orient
+        _P, _vs, _ds = comp_P(typ, P, _P, flip)  # per blob, before orient
 
         while Py_:  # form_PP starts from 3rd P
 
             P = Py_.popleft()
-            P, vs, ds = comp_P(typ, P, _P)  # P: S_pars += S_ders in comp_P
+            P, vs, ds = comp_P(typ, P, _P, flip)  # P: S_pars += S_ders in comp_P
 
             if vs == _vs:
                 vPP = incr_PP(typ, P, vPP)
@@ -372,7 +382,7 @@ def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and 
     return blob, SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 
-def comp_P(typ, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
+def comp_P(typ, P, _P, yx):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
     s, ix, x, I, D, Dy, M, My, G, oG, Olp, e_ = P
     _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _oG, _Olp, _e_ = _P
@@ -544,7 +554,7 @@ def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP
 
     # scan_pP_ eval at PP term in scan_Py_? pP rdn per vertical overlap?
     # LIDV per dx, L, I, D, M? also alt2_: fork_ alt_ concat, for rdn per PP?
-    # fvpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
+    # fpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
 
 
 def incr_pP(typ, p, P_ders, pP):
@@ -559,7 +569,7 @@ def comp_pP(pP, _pP):  # with/out orient?
 def comp_PP(PP, _PP):
     return PP
 
-def scan_network(blob_):
+def scan_net(blob_):
     return blob_
 
 def comp_blob(blob, _blob):
