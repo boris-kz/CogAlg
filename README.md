@@ -9,7 +9,7 @@ So, I came up with my own definitions, which directly translate into algorithm i
 For excellent popular introduction to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, both of them and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and also use layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
 
-I need help in design and implementation of this algorithm, in Python. This is an open project, but I can pay per contribution, or monthly if there is some track record. See last part of my intro, top link. But this work is theory first, experimentation last. So, I need to make sure that you can design algorithm from the first principles. Unless you find a flaw in my reasoning, which would be even more valuable. Please contact me if interested, here or via G+.
+I need help in design and implementation of this algorithm, in Python. This is an open project, but I will pay per contribution, or monthly if there is some track record. See last part of my intro, top link. But this work is theory first, experimentation last. So, I need to make sure that you can design algorithm from the first principles. Unless you find a flaw in my reasoning, which would be even more valuable. Please contact me if interested, here or via G+.
 This content is published under the Creative Commons Attribution 4.0 International License.
 
 .
@@ -115,7 +115,7 @@ Subsequent cycles would compare 4D input patterns over increasing distance in ea
 However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D, or at least over 2D for images.
 This is a universe-specific extension of core algorithm.
 
-I have POC code for basic 1D core algorithm: level_1_working.py here, am currently working on its adaptation to process images: level_1_2D_draft.py here.
+I have POC code for basic 1D core algorithm: https://github.com/boris-kz/CogAlg/blob/master/level_1_working.py, am currently working on its adaptation to process images: https://github.com/boris-kz/CogAlg/blob/master/level_1_2D_draft.py.
 Initial testing could be recognition and automatic labeling of manually labeled images, from something like ImageNet.
 
 This algorithm will be organically extended to process colors, then video, then stereo video (from multiple confocal cameras).
