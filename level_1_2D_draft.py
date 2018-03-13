@@ -10,20 +10,17 @@ import numpy as np
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
     Such gradient is computed as the average of these two orthogonally diverging derivatives.
-    2D blobs are defined by same-sign quadrant gradient, of value for vP or difference for dP.
+    2D blobs are contiguous areas of same-sign quadrant value gradient or quadrant difference gradient.
 
     Level 1 performs several steps of incremental encoding, per line defined by vertical coordinate y:
 
     y: comp(p_): lateral comp -> tuple t,
-    y- 1: ycomp(t_): vertical comp -> quadrant t2,
-    y- 1: form_P(P): lateral combination -> 1D pattern P,  
-    y- 2: scan_P_(P, _P) -> fork_, root_: vertical continuity between 1D Ps of adjacent lines 
-    y- 3+: form_blob: merges y-2 P into 2D blob
-    y- 3+: term_blob: terminated blobs are evaluated for comp_P and form_PP, -> 2D patterns PPs,
-           PPs are evaluated for blob orientation, rescan, recursive comp 
+    y- 1: ycomp(t_): vertical comp -> quadrant t2, 1D pattern P,  
+    y- 2: scan_P_(P, _P) -> fork_, root_: vertical continuity between Ps of adjacent lines 
+    y- 3+: incr_blob: merges Ps into 2D blob | term_blob: orientation and scan_Py_-> 2D patterns PPs, etc.
 
-    All 2D functions (ycomp, scan_P_, etc.) input two lines: relatively higher and lower.
-    Higher-line patterns include additional variables, derived while they were lower-line patterns
+    2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, and output the higher line.
+    Higher-line elements include additional variables, derived while they were lower-line elements
     
     postfix '_' denotes array name, vs. same-name elements of that array 
     prefix '_' denotes higher-line variable or pattern '''
@@ -253,7 +250,7 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
     y- 1,  2L: t_, _t_ -> t2_ -> P_
     y- 2,  3L: P_, _P_ -> fork_ between _P and Ps
     y- 3+, 4L: fork_, blob_: continued blob segments of variable depth 
-    y- 3+, 5+: blob_, term_: layers of terminated segments, regardless of input line  
+    y- 3+, 5+: blob_, term_: layers of terminated segments, composed of inputs from lines 3+  
     
     sum into wider fork network, global term if root_ == 0, same OG eval? also sum per frame? '''
 
@@ -282,21 +279,22 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     return blob
 
 
-def term_blob(typ, blob):  # blob | net_blob | PP | net_PP eval to estimate Ps orthogonal to Max_L axis
+def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval to estimate Ps orthogonal to Max_L axis
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
     norm = 0  # diag scan: par = (Sx*rL + Sy/rL) / 2, if in e_?
 
-    if OG * Dx > ave * 9 and len(Py_) > 2:  # cost: ave * nvars | aOG, * rdn = Olp / L2: per P ! blob?
+    if OG * Dx > ave * 9 and len(Py_) > 2:  # ave * nvars | ave_fb, * rdn = Olp / L2: per P ! blob?
 
-        # eval for blob orient by Dx (summed vertical angle), ultimately for comp_P and comp_blob:
+        # blob eval for orient by Dx (summed vertical angle), ultimately for comp_P and comp_blob:
 
         ver_L = math.hypot(Dx, len(Py_))  # slanted vert dim
         L_mlt = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
         lat_L = max_L / L_mlt  # orthogonal projection of max_lat_L from Py_
 
-        if ver_L > lat_L + ave:  # ave cost of scan over yP_
-            flip = 0  # original vertical scan_Py_ only
+        if ver_L > lat_L + ave:  # ave dL per M_yP_- M_Py_ > cost of scan_e_, form_yP_, scan_yP_
+
+            flip = 0  # vertical scan_Py_ only
             if ver_L - len(Py_) * OG > ave: norm = 1
         else:
             flip = 1  # secondary horizontal scan: scan_Py_( comp_P( scan_e_( form_yP_, scan_yP_
@@ -311,14 +309,16 @@ def term_blob(typ, blob):  # blob | net_blob | PP | net_PP eval to estimate Ps o
 
             blob = s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_
 
-    blob = blob, flip, norm  # + reorientation and normalization flags
+    blob = blob, flip, norm  # blob + reorientation and normalization flags:
     blob = scan_Py_(typ, blob)  # if flip: comp e_-> yP_, scan_yP_; else: scan_Py_ only
 
-    # Dx scan: analog, else no proximate ps?
-    # or max-distance scan, regardless of 1D scan?
+    # 1D P norm by cur_Dx, or e__ align by ortho | prox angle, then e norm by Dx,
+    # or max axis rescan: e_ align per Py_ sorted by max Dx+Dy, vs. ave Dx?
 
-    # proj Pm = OG * Max_L: incr len(Py_)? comp_P -> DL, DS, incr_PP -> dxP_, Ddx:
-    # PP Py_ ddx ortho value = m (ddx, dL, dS) -> indiv ortho per P in Py_?
+    # vs analog rescan: more precise and expensive?
+
+    # proj Pm = OG * Max_L: incr len(Py_)? only for deep comp? comp_P -> DL, DS, incr_PP -> dxP_, Ddx:
+    # PP Py_ norm / ddx value = m (ddx, dL, dS) -> norm per P in Py_?
 
     return blob
 
