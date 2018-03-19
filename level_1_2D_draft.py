@@ -81,80 +81,33 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
             t2_[index] = pri_p, _d, fdy, _m, fmy
             index += 1
 
-        if len(t2_) == rng:  # t2 completion and transfer to increment vP and dP
-            # or while y < rng: i_ycomp(): t2_ = pop(t2__), t = pop(t_).., no transfer?
+        if len(t2_) == rng:  # or while y < rng: i_ycomp(): t2_ = pop(t2__), t = pop(t_)., no form_P?
 
             dg = _d + fdy  # d gradient
             vg = _m + fmy - ave  # v gradient
+            t2 = pri_p, _d, fdy, _m, fmy  # completed 2D tuple moved from t2_ to form_P:
 
-            # sign test and termination of 1D patterns vPs and dPs:
+            # form 1D patterns vP and dP: horizontal spans of same-sign vg or dg, with associated vars:
 
-            sd = 1 if dg > 0 else 0  # 0 is negative: no selection?
-            if sd != dP[0] and x > rng + 2:  # if sd != pri_sd: dP is terminated:
+            olp, ovG, odG, vP, dP, vP_, _vP_, vg_blob_ = \
+            form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vg_blob_, x)
 
-                ovG *= ave_k; ovG = ovG.astype(int)  # ovG of dP
-                if ovG > odG:  # comp values of overlapping vG and dG
-                    dP[7] += olp  # increments Olp of weaker overlapping G
-                else: vP[7] += olp
-
-                dP = dP, [], []  # initializing root_ and root_sel_
-                dP_, _dP_, dg_blob_ = scan_P_(1, dP, dP_, _dP_, dg_blob_, x)  # scan over higher-level _dPs
-                dP = 0, 0, 0, 0, 0, 0, 0, []  # I, D, Dy, M, My, G, Olp, e_ init
-                olp, ovG, odG = 0, 0, 0
-
-            sv = 1 if vg > 0 else 0  # 0 is negative: no selection?
-            if sv != vP[0] and x > rng + 2:  # if sv != pri_sv: vP is terminated:
-
-                ovG *= ave_k; ovG = ovG.astype(int)
-                if ovG > odG:  # at any P termination, same for h_der and h_comp eval
-                    dP[7] += olp
-                else: vP[7] += olp
-
-                vP = vP, [], []  # initializing root_ and root_sel_
-                vP_, _vP_, vg_blob_ = scan_P_(0, vP, vP_, _vP_, vg_blob_, x)  # scan over higher-level _vPs
-                vP = 0, 0, 0, 0, 0, 0, 0, []  # I, D, Dy, M, My, G, Olp, e_ init
-                olp, ovG, odG = 0, 0, 0  # at any P termination
-
-            # default increment of vP and dP: horizontal spans of same-sign vg or dg, with associated vars:
-
-            olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
-            ovG += vg; odG += dg  # for eval to assign olp to alt_rdn of vP or dP
-
-            pri_s, I, D, Dy, M, My, G, Olp, e_ = dP
-
-            I += p  # inputs and derivatives are summed within P for comp_P and orientation:
-            D += d  # lateral D
-            Dy += dy  # vertical D
-            M += m  # lateral M
-            My += my  # vertical M
-            G += dg  # d or v gradient summed to define P value, or V = M - 2a * W?
-            e_.append(dg)  # g = d gradient and pattern element, for selective incremental derivation
-
-            dP = [sd, I, D, Dy, M, My, G, Olp, e_]
-            pri_s, I, D, Dy, M, My, G, Olp, e_ = vP
-
-            I += p  # inputs and derivatives are summed within P for comp_P and orientation:
-            D += d  # lateral D
-            Dy += dy  # vertical D
-            M += m  # lateral M
-            My += my  # vertical M
-            G += vg  # d or v gradient summed to define P value, or V = M - 2a * W?
-            e_.append((p, vg, dg))  # g = v gradient, for selective incremental range comp
-
-            vP = [sv, I, D, Dy, M, My, G, Olp, e_]
+            olp, odG, ovG, dP, vP, dP_, _dP_, dg_blob_ = \
+            form_P(0, t2, dg, vg, olp, odG, ovG, dP, vP, dP_, _dP_, dg_blob_, x)
 
         t2_.appendleft((p, d, 0, m, 0))  # initial fdy and fmy = 0, new t2 replaces completed t2 in t2_
         new_t2__.append(t2_)
-        
+
     # line ends, vP and dP term, no init, inclusion with incomplete lateral fd and fm:
 
     if olp:  # if vP x dP overlap len > 0, incomplete vg - ave / (rng / X-x)?
 
-        ovG *= ave_k; ovG = ovG.astype(int)  # ave_k = V / I, to project V of odG
+        odG *= ave_k; odG = odG.astype(int)  # ave_k = V / I, to project V of odG
 
         if ovG > odG:  # comp of olp vG and olp dG, == goes to vP: secondary pattern?
             dP[7] += olp  # overlap of lesser-oG vP or dP, or P = P, Olp?
-        else: vP[7] += olp  # to form rel_rdn = alt_rdn / len(e_)
+        else:
+            vP[7] += olp  # to form rel_rdn = alt_rdn / len(e_)
 
     if y + 1 > rng:  # starting with the first line of complete t2s
 
@@ -164,10 +117,54 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
     return new_t2__, _vP_, _dP_, vg_blob_, dg_blob_  # extended in scan_P_
 
     # poss alt_: top P alt = Olp, oG, alt_oG: to remove if hLe demotion and alt_oG < oG?
-    # P_ can be redefined as np.array ([P, root_, fork_..]) to increment without init?
+    # P_ can be redefined as np.array ([P, alt_, roots, forks) to increment without init?
 
 
-def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms overlapping Gs
+def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
+
+    # forms 1D dP or vP, then scan_P_ adds forks in _P fork_s and accumulates blob_
+
+    p, d, dy, m, my = t2  # 2D tuple of quadrant variables per pixel
+    pri_s, I, D, Dy, M, My, G, Olp, e_ = P  # initial pri_ vars = 0, or skip form?
+
+    s = 1 if g > 0 else 0  # g = 0 is negative: no selection?
+    if s != pri_s and x > rng + 2:  # P is terminated
+
+        if typ: alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
+        else:   oG *= ave_k;     oG = oG.astype(int)  # same for h_der and h_comp eval?
+
+        if oG > alt_oG:  # comp between overlapping vG and dG
+            Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
+        else:
+            alt_P[7] += olp
+
+        P = (pri_s, I, D, Dy, M, My, G, Olp, e_), [], []  # no ave * alt_rdn / e_: adj < cost?
+        P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # P scans overlapping higher-line _Ps
+
+        I, D, Dy, M, My, G, Olp, e_ = 0, 0, 0, 0, 0, 0, 0, []  # P and olp initialization
+        olp, oG, alt_oG = 0, 0, 0
+
+    # continued or initialized vars are accumulated: use zip S_vars?
+
+    olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
+    oG += g; alt_oG += alt_g  # for eval to assign olp to alt_rdn of vP or dP
+
+    I += p    # inputs and derivatives are summed within P for comp_P and orientation:
+    D += d    # lateral D
+    Dy += dy  # vertical D
+    M += m    # lateral M
+    My += my  # vertical M
+    G += g    # d or v gradient summed to define P value, or V = M - 2a * W?
+
+    e_.append(((p, d, dy, m, my), g, alt_g))  # | p, g, alt_g for vP | g for dP?
+    # for selective oriented rescan, or incremental range | derivation comp
+
+    P = [s, I, D, Dy, M, My, G, Olp, e_]
+
+    return olp, oG, alt_oG, P, alt_P, P_, _P_, blob_  # accumulated in ycomp
+
+
+def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x _Ps in _P_, forms overlapping Gs
 
     buff_ = []
     (s, I, D, Dy, M, My, G, Olp, e_), root_, root_sel_ = P  # roots are to find unique fork Ps
@@ -228,13 +225,13 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans overlapping _Ps in _P_, forms
 
         if fork_ != 1 or root_ != 1:  # blob split | merge, also if y == Y - 1 in frame()?
 
-            blob = term_blob(typ, blob)  # packing flip, ortho eval, and scan_Py_
+            blob = term_blob(typ, blob)  # packs flip, ortho eval, and scan_Py_
             blob_.append((blob, fork_))  # terminated blob_ is input line y - 3+ | record layer 5+
 
-    if root_ == 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 & root' fork_==1
+    if root_ == 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 and root' fork_==1
         blob = root_[0][1]  # root' fork' blob
     else:
-        blob = (0,0,0,0,0,0,0,0,0,0,[])  # init s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_[]
+        blob = (0,0,0,0,0,0,0,0,0,0,[])  # init s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_
 
     P = s, ix, x, I, D, Dy, M, My, G, Olp, e_  # P becomes _P, oG is per new P in fork_?
 
@@ -263,7 +260,7 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     x = lx - len(e_)/2  # median x, becomes _x in blob, replaces ix and lx?
 
     dx = x - _x  # default comp x for orient eval, conditional comp nS: internal vars are secondary
-    Dx += dx  # -> orient eval, preval by OG vs. Mx += mx, += |dx| for curved max_L, no default dxP
+    Dx += dx  # for blob norm, preval by OG vs. Mx += mx, += |dx| for curved max_L, no default dxP
 
     L2 += len(e_)  # e_ in P is buffered in Py_, no separate e2_
     I2 += I
@@ -271,67 +268,93 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     M2 += M; My2 += My
     G2 += G  # blob orient value?
     OG += oG  # vertical contiguity for comp_P eval?
-    Olp += olp
-    Py_.append((s, ix, lx, I, D, Dy, M, My, G, oG, olp, e_))
+    Olp += olp  # adds to blob orient and comp_P cost?
+
+    Py_.append((s, ix, lx, I, D, Dy, M, My, G, oG, olp, e_, Dx))  # Dx to normalize P before comp_P
 
     blob = s, x, ix, lx, Dx, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_
     # S_par tuple in scan_Py_, incr_PP, orient?
     return blob
 
 
-def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval to estimate Ps orthogonal to Max_L axis
+def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation, P norm and scan_Py_
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
-    norm = 0  # diag scan: par = (Sx*rL + Sy/rL) / 2, if in e_?
+    norm = 0
+    rdn = Olp / L2  # rdn per blob, alt blobs may be incomplete but alt Ps are complete
 
-    if OG * Dx > ave * 9 and len(Py_) > 2:  # ave * nvars | ave_fb, * rdn = Olp / L2: per P ! blob?
-
-        # blob eval for orient by Dx (summed vertical angle), ultimately for comp_P and comp_blob:
+    if G2 * Dx > ave * 10 * rdn and len(Py_) > 2:  # ave * nvars | fb, orient for comp_P and comp_blob:
 
         ver_L = math.hypot(Dx, len(Py_))  # slanted vert dim
-        L_mlt = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
-        lat_L = max_L / L_mlt  # orthogonal projection of max_lat_L from Py_
+        rL = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
+        lat_L = max_L / rL  # orthogonal projection of max_lat_L in Py_
 
-        if ver_L > lat_L + ave:  # ave dL per M_yP_- M_Py_ > cost of scan_e_, form_yP_, scan_yP_
+        if ver_L > lat_L - ave:  # ave dL per M_yP_- M_Py_ > cost of scan_e_, form_yP_, scan_yP_?
+            if ver_L - len(Py_) * OG > ave: norm = 1  # P normalization flag
 
-            flip = 0  # vertical scan_Py_ only
-            if ver_L - len(Py_) * OG > ave: norm = 1
-        else:
-            flip = 1  # secondary horizontal scan: scan_Py_( comp_P( scan_e_( form_yP_, scan_yP_
-            if lat_L - max_L * OG > ave: norm = 1  # also sort by ix -> scan_yP_: fork_ in blob?
+            if G2 > ave * 99 * rdn and len(Py_) > 2:  # for fuzzy comp: proj Pm = G2 * Max_L?
+               blob = scan_Py_(typ, blob, norm)  # G2 += PM | PD, S_ders += norm_ders: replace for eval and comp
 
-        if norm:  # projected value of normalizing derivatives by Dx angle for comp_P, comp_blob:
+            elif norm:  # no norm blob += norm P, normalize summed derivatives by Dx for comp_blob:
 
-            D2 = (D2 * L_mlt + Dy2 / L_mlt) / 2 / L_mlt  # est D over ver_L, Ders summed in Dx / len(Py_) ratio
-            Dy2= (Dy2 / L_mlt - D2 * L_mlt) / 2 * L_mlt  # est D over lat_L
-            M2 = (M2 * L_mlt + My2 / L_mlt) / 2 / L_mlt  # est M over ver_L
-            My2= (My2 / L_mlt + M2 * L_mlt) / 2 * L_mlt  # est M over lat_L; G is combined: not adjusted
+                D2 = (D2 * rL + Dy2 / rL) / 2 / rL  # est D over ver_L, Ders summed in ver / lat ratio
+                Dy2 = (Dy2 / rL - D2 * rL) / 2 * rL  # est D over lat_L
+                M2 = (M2 * rL + My2 / rL) / 2 / rL  # est M over ver_L
+                My2 = (My2 / rL + M2 * rL) / 2 * rL  # est M over lat_L; G is combined: not adjusted
 
-            blob = s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_
+                blob = s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_
 
-    blob = blob, flip, norm  # blob + reorientation and normalization flags:
-    blob = scan_Py_(typ, blob)  # if flip: comp e_-> yP_, scan_yP_; else: scan_Py_ only
+        else:  # reorientation: yPs defined by secondary horizontal scan: comp_e_( form_yP_, scan_yP_
 
-    # 1D P norm by cur_Dx, or e__ align by ortho | prox angle, then e norm by Dx,
-    # or max axis rescan: e_ align per Py_ sorted by max Dx+Dy, vs. ave Dx?
+            if lat_L - max_L * OG > ave: norm = 1  # norm by Dx -> form_P
+            e__ = []  # 2D array of elements, extracted for reoriented blob scan?
 
-    # vs analog rescan: more precise and expensive?
+            for P in Py_:
+                e__.append((P[9], P[2]))  # e_, x, or sort by x ^ y for diagonal | prox angle scan?
 
-    # proj Pm = OG * Max_L: incr len(Py_)? only for deep comp? comp_P -> DL, DS, incr_PP -> dxP_, Ddx:
-    # PP Py_ norm / ddx value = m (ddx, dL, dS) -> norm per P in Py_?
+            e__ = e__.sort(key=lambda e_: e_[1], reverse=True)  # sort by last x, lateral forking?
+            # vs. full analog rescan along max Dx ^ Dy, vs. max x | x ^ y?
+            _e_, _x = e__.pop
+
+            for e_, x in e__:
+                dx = x - _x
+                if dx: e_.pop(dx)  # align e, _e: shift by dx pops? or popleft if iterator:
+                else: _e_.pop(dx)
+
+                for e, (d_grp, v_grp, olp) in zip(e_, _e_):  # all Ps are yPs, form_yP per typ of blob
+
+                    # dg_blob_ and vg_blob_ within blob or network: diff inclusion per P but not blob:
+                    # for comp_P?
+
+                    t2, dg, vg = e
+                    olp, ovG, odG = olp  # vertical ydP x yvP overlap
+                    dP, dP_, _dP_, dg_blob_ = d_grp  # init per blob
+                    vP, vP_, _vP_, vg_blob_ = v_grp
+
+                    ''' 
+                    olp, ovG, odG, vP, dP, vP_, _vP_, vg_blob_ = \
+                    form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vg_blob_, y)
+
+                    olp, odG, ovG, dP, vP, dP_, _dP_, dg_blob_ = \
+                    form_P(0, t2, dg, vg, olp, odG, ovG, dP, vP, dP_, _dP_, dg_blob_, y) '''
+
+                # yblob = scan_yP_(typ, blob, norm)  # or form_yP ( scan_yP_
+                _e_ = e_, x
 
     return blob
 
+def scan_yP_(typ, blob, norm):  # scan of horizontal yP_ -> comp_P -> 2D value PPs and difference PPs
 
-def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and difference PPs
+    return blob  # SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
+
+
+def scan_Py_(typ, blob, norm):  # scan of vertical Py_ -> comp_P -> 2D value PPs and difference PPs
 
     vPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
     dPP = 0,[],[]  # PP: L2, I2, D2, Dy2, M2, My2, G2, Olp2
 
     SvPP, SdPP, Sv_, Sd_ = [],[],[],[]
-    vPP_, dPP_ = [],[]
-
-    flip = blob[0][1]  # flip: default comp e_, etc; ort is for comp_blob only, else common?
+    vPP_, dPP_, yP_ = [],[],[]
 
     Py_ = blob[2]  # unless oriented?
     _P = Py_.popleft()  # initial comparand
@@ -339,12 +362,12 @@ def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and 
     while Py_:  # comp_P starts from 2nd P, top-down
 
         P = Py_.popleft()
-        _P, _vs, _ds = comp_P(typ, P, _P, flip)  # per blob, before orient
+        _P, _vs, _ds = comp_P(typ, P, _P, yP_, norm)  # per blob, before orient
 
         while Py_:  # form_PP starts from 3rd P
 
             P = Py_.popleft()
-            P, vs, ds = comp_P(typ, P, _P, flip)  # P: S_pars += S_ders in comp_P
+            P, vs, ds = comp_P(typ, P, _P, yP_, norm)  # P: S_pars += S_ders in comp_P
 
             if vs == _vs:
                 vPP = incr_PP(typ, P, vPP)
@@ -375,10 +398,10 @@ def scan_Py_(typ, blob):  # vertical scan of Ps in Py_ to form 2D value PPs and 
     return blob, SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 
-def comp_P(typ, P, _P, flip):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
+def comp_P(typ, P, _P, yP_, norm):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
-    s, ix, x, I, D, Dy, M, My, G, oG, Olp, e_ = P
-    _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _oG, _Olp, _e_ = _P
+    s, ix, x, I, D, Dy, M, My, G, oG, Olp, e_, Dx = P
+    _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _oG, _Olp, _e_, _Dx = _P
 
     ddx = 0  # optional, 2Le norm / D? s_ddx and s_dL correlate, s_dx position and s_dL dimension don't?
 
@@ -390,6 +413,14 @@ def comp_P(typ, P, _P, flip):  # forms vertical derivatives of P vars, also cond
 
     dL = len(e_) - len(_e_); mL = min(len(e_), len(_e_))  # relative olp = mx / L? ext_miss: Ddx + DL?
     dI = I - _I; mI = min(I, _I)  # L and I are dims vs. ders, not rdn | select?
+
+    if norm:  # derivatives are Dx-normalized before comp:
+        hyp = math.hypot(Dx, 1)  # len incr = hyp / 1: vert distance
+
+        D = (D * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
+        Dy= (Dy / hyp - D * hyp) / 2 * hyp  # est D over lat_L
+        M = (M * hyp + My / hyp) / 2 / hyp  # est M over ver_L
+        My= (My / hyp + M * hyp) / 2 * hyp  # est M over lat_L; G is combined: not adjusted
 
     dD = D - _D; mD = min(D, _D)
     dM = M - _M; mM = min(M, _M)
@@ -434,13 +465,20 @@ def comp_P(typ, P, _P, flip):  # forms vertical derivatives of P vars, also cond
         div_f = 0  # DIV comp flag
         nvars = 0  # DIV + norm derivatives
 
+    P_ders = Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars
+
+    if (typ and Pm) or (not typ and Pd):
+        yP_ = comp_e_(e_, _e_, yP_)
+
     vs = 1 if Pm > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
     ds = 1 if Pd > 0 else 0
 
-    P_ders = Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars
+    return (P, P_ders, yP_), vs, ds
 
-    return (P, P_ders), vs, ds  # for inclusion in vPP_, dPP_ by form_PP:
+    # for vPP_, dPP_: incr_PP -> dxP_, Ddx., value of PP Py_ norm / ddx = m (ddx, dL, dS)?
 
+def comp_e_(e_, _e_, yP_):
+    return yP_
 
 ''' comp_P is not fuzzy: x & y vars are already fuzzy?
     no DIV comp(L): match is insignificant and redundant to mS, mLPs and dLPs only?:
