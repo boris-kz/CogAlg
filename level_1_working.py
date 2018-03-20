@@ -17,7 +17,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion within pattern
     A += a  # filter accumulation compensates for redundancy of fv overlap
     X = len(e_)
 
-    olp, vP_, dP_ = 0, [], []   # olp is common for both:
+    olp, vP_, dP_ = 0, [], []   # olp: overlap between:
     vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, rv, t_, olp_
     dP = 0, 0, 0, 0, 0, [], []  # pri_sd, Id, Dd, Vd, rd, d_, dolp_
 
@@ -61,12 +61,12 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
 
         if typ:
             if len(e_) > r + 3 and pri_s == 1 and V > A + aV:  # minimum of 3 tuples
-                rf = 1  # incr range flag
+                rf = 1  # range increase flag
                 e_.append(pre_comp(1, e_, A, r))  # comparison range incr within e_ = t_
 
         else:
             if len(e_) > 3 and abs(D) > A + aD:  # minimum of 3 ds
-                rf = 1  # incr deriv flag
+                rf = 1  # derivation incr flag
                 r = 1  # consecutive-d comp
                 e_.append(pre_comp(0, e_, A, r))  # comp derivation incr within e_ = d_
 
@@ -161,7 +161,7 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # pixel is compared to r p
     return it_, vP, dP, vP_, dP_, olp  # for next-p comparison, vP and dP increment, output
 
 
-def root_1D(Fp_):  # last '_' distinguishes array name from element name
+def frame(Fp_):  # postfix '_' distinguishes array name from element name
 
     FP_ = []  # output frame of vPs: relative-match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
@@ -197,6 +197,6 @@ def root_1D(Fp_):  # last '_' distinguishes array name from element name
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
-root_1D(f)
+frame(f)
 
 
