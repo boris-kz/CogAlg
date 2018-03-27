@@ -1,7 +1,7 @@
 from scipy import misc
 from collections import deque
 
-''' Level 1:
+''' core algorithm: 1D level 1, implemented for grey-scale images
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
@@ -108,15 +108,11 @@ def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):
     fd += d  # fuzzy d accumulates ds between p and all prior ps in r via range_incr()
     fv += v  # fuzzy v; lower-r fv and fd are in lower Ps, different for p and pri_p
 
-    # formation of value pattern vP: span of pixels forming same-sign fv s:
+    vP, dP, vP_, dP_, olp = form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, A, r)
+    # forms value pattern vP: span of pixels forming same-sign fv s
 
-    vP, dP, vP_, dP_, olp = \
-    form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, A, r)
-
-    # formation of difference pattern dP: span of pixels forming same-sign fd s:
-
-    dP, vP, dP_, vP_, olp = \
-    form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, A, r)
+    dP, vP, dP_, vP_, olp = form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, A, r)
+    # forms difference pattern dP: span of pixels forming same-sign fd s
 
     olp += 1  # overlap between concurrent vP and dP, to be buffered in olp_s
 
@@ -143,15 +139,11 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # pixel is compared to r p
     if len(it_) == r:  # current tuple fd and fm are accumulated over range = r
         fv = fm - A
 
-        #  formation of value pattern vP: span of pixels forming same-sign fv s:
+        vP, dP, vP_, dP_, olp = form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, A, r)
+        #  forms value pattern vP: span of pixels forming same-sign fv s
 
-        vP, dP, vP_, dP_, olp = \
-        form_P(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, A, r)
-
-        # formation of difference pattern dP: span of pixels forming same-sign fd s:
-
-        dP, vP, dP_, vP_, olp = \
-        form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, A, r)
+        dP, vP, dP_, vP_, olp = form_P(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, A, r)
+        # forms difference pattern dP: span of pixels forming same-sign fd s
 
         olp += 1  # overlap between vP and dP, stored in both and terminated with either
 
