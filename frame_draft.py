@@ -283,6 +283,8 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
     norm = 0
     rdn = Olp / L2  # rdn per blob, alt blobs may be incomplete but alt Ps are complete?
 
+    # separate orient function, same for term_PP?:
+
     if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:  # orient for comp_P and comp_blob if > ave * nvars | fb:
 
         ver_L = math.hypot(Dx, len(Py_))  # slanted vert dim
@@ -296,18 +298,15 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
 
             if G2 > ave * 99 * rdn and len(Py_) > 2:  # comp_P cost, or if len(Py_) > n+1: for fuzzy comp
 
-               blob = scan_Py_(typ, blob, norm)  # G2 += PM | PD, S_ders += norm_ders
-               # comp_P ) PP eval for extended comp_P ) blob eval for comp_PP if corr M|D?
+               blob = scan_Py_(typ, blob, norm)  # G2 += PM | PD, norm per P, S_ders += norm_ders?
+               # comp_P ) PP eval for scan_pP and extended comp_P ) blob eval for comp_PP if corr M|D?
 
-            elif norm:  # no norm blob += norm P, normalize summed derivatives by Dx for comp_blob:
+            elif norm:  # normalize summed derivatives by Dx for comp_blob, no change in G2:
 
-                D2 = (D2 * rL + Dy2 / rL) / 2 / rL  # est D over ver_L, Ders summed in ver / lat ratio
-                Dy2 = (Dy2 / rL - D2 * rL) / 2 * rL  # est D over lat_L
-                M2 = (M2 * rL + My2 / rL) / 2 / rL  # est M over ver_L
-                My2 = (My2 / rL + M2 * rL) / 2 * rL  # est M over lat_L; G is combined: not adjusted
-
-                blob = s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_
-                # then re-eval for scan_Py_, comp_P?
+                blob[6][2] = (D2 * rL + Dy2 / rL) / 2 / rL  # est D2 over ver_L, Ders sum in ver / lat ratio
+                blob[6][3] = (Dy2 / rL - D2 * rL) / 2 * rL  # est Dy2 over lat_L,
+                blob[6][4] = (M2 * rL + My2 / rL) / 2 / rL  # est M2 over ver_L
+                blob[6][5] = (My2 / rL + M2 * rL) / 2 * rL  # est My2 over lat_L; G is combined: not adjusted
 
         else:  # blob orientation: vertical | diagonal | slanted rescan: scan_e__, form_yP ) y_blob_, comp_yP
 
@@ -318,7 +317,7 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
                 e__.append((P[9], P[2]))  # e_, last x
             e__ = e__.sort(key=lambda e_: e_[1], reverse=True)  # sort by last x
 
-            ''' or sort by diagonal x ^ y | integer nx ^ ny, if G2 * (Dx ^ Dy): deviation from nearest ortho '''
+            ''' or sort by diagonal x ^ y | integer nx ^ ny, if G2 * ((Dx - near alt dx) ^ (Dy - near alt dy))? '''
 
             e_, _x = e__.pop
             y, olp, ovG, odG = 0,0,0,0  # vertical ydP x yvP overlap
@@ -351,7 +350,7 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
 
     return blob
 
-''' blob redef by norm per quad of focus blob + adjacent blobs, then scan across max Dx ^ Dy axis?
+''' blob redef by norm per quad of blob + adjacent blobs, then scan across max Dx ^ Dy axis?
     or P redef by ortho dx scan / axis, overlap / compressed end, sparse / stretched end 
     or analog re-input for axis-aligned quads: more accurate than norm for P der comp, blob redef? '''
 
@@ -521,7 +520,7 @@ def incr_PP(typ, P, PP):  # increments continued vPPs or dPPs (not pPs): incr_bl
     _dx, Ddx, \
     PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, div_f, nVars = S_ders
 
-    ddx = dx - _dx  # no mdx: olp of dxPs?
+    ddx = dx - _dx  # no ddxP_ or mdx: olp of dxPs?
     Ddx += abs(ddx)  # PP value of P norm | orient per indiv dx: m (ddx, dL, dS)?
 
     # summed per PP, then per blob for form_pP_ or orient eval?
@@ -530,34 +529,61 @@ def incr_PP(typ, P, PP):  # increments continued vPPs or dPPs (not pPs): incr_bl
     Mx += mx; Dx += dx; ML += mL; DL += dL; ML += mI; DL += dI
     MD += mD; DD += dD; MDy += mDy; DDy += dDy; MM += mM; DM += dM; MMy += mMy; DMy += dMy
 
-    PP = s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_
+    S_inps = s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_
     S_ders = PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy
 
-    return PP, S_ders
+    return S_inps, S_ders
 
 
-def term_PP(typ, PP):  # as term_blob: eval for orient and incr_comp_P, + scan_par_: PP-only?
+def term_PP(typ, PP):  # eval for orient as term_blob, + incr_comp_P, scan_par_:
+
+    (s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_), \
+    (PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy) = PP
+
+    rdn = Olp2 / L2  # redundancy to overlapping alt-type PPs
+
+    # rescan or norm per PP: relative to and within parent blob,
+    # for comp_PP and extended comp:
+
+    if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
+       PP = incr_range_comp_P(typ, PP)  # forming incrementally fuzzy PP
+
+    if G2 + PD > ave * 99 * rdn and len(Py_) > 2:
+       PP = incr_deriv_comp_P(typ, PP)  # forming incrementally higher-derivation PP
+
+    if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
+       PP = scan_parameters(0, PP)  # forming vpP_ and S_p_ders
+
+    if G2 + PD > ave * 99 * rdn and len(Py_) > 2:
+       PP = scan_parameters(1, PP)  # forming dpP_ and S_p_ders
+
     return PP
 
-''' np.array for direct accumulation, vs. iterator of initialization:
-    P2_ = np.array([blob, vPP, dPP],
-    dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
-    ('M2', 'i4'), ('My2', 'i4'), ('G2', 'i4'), ('rdn2', 'i4'), ('alt2_', list), ('Py_', list)]) '''
 
+def incr_range_comp_P(typ, PP):
+    return PP
 
-def scan_par_(typ, blob):  # at term_network, term_blob, or term_PP: + P_ders and nvars?
+def incr_deriv_comp_P(typ, PP):
+    return PP
 
-    P_ = blob
-    for (P, S_ders) in P_:
+def scan_parameters(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders and nvars?
+
+    parameters = PP
+    for (P, S_ders) in parameters:
 
         for (S, Mp, Dp, p_) in S_ders:  # form_pP select per S_der, includes all P_ders and nvars?
 
             if Mp > ave * 9 * 5 * 2:  # Mp > ave PP * ave pP rdn * rdn to PP
-                pP_ = []
-                MpP, DpP, pP_ = form_pP_(typ, p_, P[1], pP_)  # P[1] = P_ders
+                vpP_ = []
+                M_vpP, D_vpP, vpP_ = form_pP_(0, p_, P[1], vpP_)  # P[1] = P_ders
+
                 # MpP eval for scan_pP_, comp_pP, or after orient: not affected?
 
-    return blob
+            if Dp > ave * 9 * 5 * 4:  # half rep value?
+                dpP_ = []
+                M_dpP, D_dpP, dpP_ = form_pP_(1, p_, P[1], dpP_)  # P[1] = P_ders
+
+    return PP
 
 def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP, for each parameter
 
@@ -606,9 +632,6 @@ def scan_pP_(typ, pP_):  # pP rdn per vertical overlap? simple, folded in scan_p
 def comp_pP(pP, _pP):  # with/out orient, from scan_pP_
     return pP
 
-def ext_comp_P(Py_):  # comp over incremental distance | derivation: very rare?
-    return Py_
-
 def scan_PP_(PP_):  # within a blob, also within blob_: network?
     return PP_
 
@@ -621,6 +644,11 @@ def scan_blob_(blob_):  # after full blob network termination,
 def comp_blob(blob, _blob):  # compares blob segments
     return blob
 
+''' np.array for direct accumulation, vs. iterator of initialization:
+    P2_ = np.array([blob, vPP, dPP],
+    dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
+    ('M2', 'i4'), ('My2', 'i4'), ('G2', 'i4'), ('rdn2', 'i4'), ('alt2_', list), ('Py_', list)]) 
+'''
 
 def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
 
