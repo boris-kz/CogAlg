@@ -3,13 +3,14 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Intelligence is ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This definition is well established: pattern recognition is a core of any IQ test, and prediction is the only use of recognition. But there is no general and constructive definition of either pattern or recognition. More precisely, a degree of recognition is similarity (match), which currently lacks a conceptually consistent measure. So, I came up with my own definitions, which directly translate into algorithm introduced here.
+Intelligence is ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This definition is well established: pattern recognition is a core of any IQ test. But there is no general and constructive definition of either pattern or recognition (quantifiable as similarity or partial match).
+So, I came up with my own definitions, which directly translate into algorithm introduced here.
 
-For excellent popular introduction to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, both of them and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
+For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
 
-I need help in design and implementation of this algorithm, in Python. This is an open project, I pay per contribution, or monthly if there is some track record, see last part of this post. But this work is theory-first, experimentation last: my algorithm is designed from the first principles. Unless you find flaws or omissions in my reasoning, which would be even more valuable. Please contact me if interested, here or on G+.
-This content is published under the Creative Commons Attribution 4.0 International License.
+I need help in design and implementation of this algorithm, in Python. I pay per contribution, or monthly if there is some track record. But algorithm must be designed from the first principles, experimentation is the last step. Unless you find flaws or omissions in my reasoning, which would be even more valuable. Please contact me if interested, here or on G+.
+This is an open project, published under the Creative Commons Attribution 4.0 International License.
 
 .
 

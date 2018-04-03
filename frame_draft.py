@@ -3,25 +3,27 @@ from collections import deque
 import math as math
 import numpy as np
 
-''' Core algorithm of levels 1 + 2, modified to process image (2D frame):
+''' frame() is core algorithm of levels 1 + 2, modified to process one image (2D frame).
+    It performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
 
-    Level 1 2D performs several steps of incremental encoding, per scan line defined by vertical coordinate y:
-
-    y: comp(p_): lateral comp -> tuple t,
-    y- 1: ycomp(t_): vertical comp -> quadrant t2, 1D pattern P,  
-    y- 2: scan_P_(P, _P) -> fork_, root_: vertical continuity between Ps of adjacent lines 
-    y- 3+: incr_blob: merges Ps into 2D blob | term_blob: blob orient and scan_Py_ -> 2D patterns PPs, etc.
+    y: comp(p_): lateral pixel comp -> tuple t,
+    y- 1: ycomp(t_): vertical pixel comp -> quadrant t2, 1D pattern P,  
+    y- 2: scan_P_(P, _P) -> fork_, root_: finds vertical continuity between Ps of adjacent lines 
+    y- 3+: incr_blob: merges Ps into 2D blob | term_blob: terminated blob orient and scan_Py_ -> 2D patterns PPs...
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
-    Such gradient is computed as the average of these two orthogonally diverging derivatives.
+    Thus, quadrant gradient is estimated as the average of these two orthogonally diverging derivatives.
     
-    2D blobs are contiguous areas of same-sign quadrant value gradient or quadrant difference gradient.
-    2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, and output new higher line
-    Higher-line elements include additional variables, derived while they were lower-line elements
+    2D blobs are contiguous areas of same-sign quadrant gradient: of relative match for vblob or of difference for dblob.
+    All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower. 
+    They convert lower line into new higher line and displace patterns of old higher line into higher functions.
+    Higher-line elements include additional variables, derived while they were lower-line elements.
+    frame() is layered: partial lower functions can work without higher functions.
     
+    None of this is tested, except as analogue functions in line_POC()  
     postfix '_' denotes array name, vs. same-name elements of that array 
     prefix '_' denotes higher-line variable or pattern '''
 
@@ -57,8 +59,8 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
 
 def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D tuples t2
 
-    vP_ = []; vP = [0,0,0,0,0,0,0,0,[]]  # pri_s, I, D, Dy, M, My, G, Olp, e_
-    dP_ = []; dP = [0,0,0,0,0,0,0,0,[]]  # pri_s, I, D, Dy, M, My, G, Olp, e_
+    vP_ = []; vP = [0,0,0,0,0,0,0,0,[]]  # value pattern = pri_s, I, D, Dy, M, My, G, Olp, e_
+    dP_ = []; dP = [0,0,0,0,0,0,0,0,[]]  # difference pattern = pri_s, I, D, Dy, M, My, G, Olp, e_
 
     vblob_, dblob_ = [],[]  # output line of vg- and dg- sign blobs, vertical concat -> frame in frame()
 
@@ -129,7 +131,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
     if s != pri_s and x > rng + 2:  # P is terminated
 
         if typ: alt_oG *= ave_k; alt_oG = alt_oG.astype(int)  # ave V / I, to project V of odG
-        else:   oG *= ave_k;     oG = oG.astype(int)  # same for h_der and h_comp eval?
+        else:   oG *= ave_k; oG = oG.astype(int)  # same for h_der and h_comp eval?
 
         if oG > alt_oG:  # comp between overlapping vG and dG
             Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
@@ -196,7 +198,8 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x _Ps in _P_, forms ov
                 fork_sel_.append((oG, P))  # Ps connected to _P, select fork_.append at P output
 
         ''' eval for incremental orders of redundancy, added if frequently valuable:
-            mono blob: max filter, fork eval: + n_max filter, n_fork eval: + nn_max filter: fork_ssel..'''
+            mono blob / max_filter, fork_ eval / n_filter, fork__ eval / nn_filter -> fork_ssel_..
+        '''
 
         if _P[2] > ix:  # if _x > ix:
             buff_.append(_P)  # _P is buffered for scan_P_(next P)
@@ -294,7 +297,7 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
         if ver_L > lat_L - ave * 99:  # ave dL per M_yP_- M_Py_ > cost of scan_e_, form_yP_, scan_yP_?
 
             if ver_L - len(Py_) * G2 > ave * 99:  # cost of norm
-               norm = 1  # flag for P derivatives normalization by Dx angle
+               norm = 1  # flag for normalization of P derivatives by Dx angle
 
             if G2 > ave * 99 * rdn and len(Py_) > 2:  # comp_P cost, or if len(Py_) > n+1: for fuzzy comp
 
@@ -351,9 +354,9 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
     return blob
 
 ''' blob redef by norm per quad of blob + adjacent blobs, then scan across max Dx ^ Dy axis?
-    or P redef by ortho dx scan / axis, overlap / compressed end, sparse / stretched end 
-    or analog re-input for axis-aligned quads: more accurate than norm for P der comp, blob redef? '''
-
+    or P redef by ortho_dx / ave_x scan line: overlap | stretch at alt ends? 
+    or analog re-input for axis-aligned quads: more accurate than norm for P der comp, blob redef? 
+'''
 
 def scan_Py_(typ, blob, norm):  # scan of vertical Py_ -> comp_P -> 2D value PPs and difference PPs
 
@@ -543,7 +546,7 @@ def term_PP(typ, PP):  # eval for orient as term_blob, + incr_comp_P, scan_par_:
     rdn = Olp2 / L2  # redundancy to overlapping alt-type PPs
 
     # rescan or norm per PP: relative to and within parent blob,
-    # for comp_PP and extended comp:
+    # for comp_PP and extended comp_P:
 
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
        PP = incr_range_comp_P(typ, PP)  # forming incrementally fuzzy PP
@@ -643,6 +646,7 @@ def scan_blob_(blob_):  # after full blob network termination,
 
 def comp_blob(blob, _blob):  # compares blob segments
     return blob
+
 
 ''' np.array for direct accumulation, vs. iterator of initialization:
     P2_ = np.array([blob, vPP, dPP],
