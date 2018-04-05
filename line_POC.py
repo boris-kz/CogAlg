@@ -1,7 +1,8 @@
 from scipy import misc
 from collections import deque
 
-''' core algorithm: 1D level 1, implemented for grey-scale images
+''' core algorithm level 1, only a proof of concept, applied to grey-scale image but 
+not useful for recognition because processing is restricted to 1D. 
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
@@ -9,7 +10,7 @@ and relative match patterns vPs (spans of pixels forming same-sign predictive va
 are redundant representations of each line of pixels.
 
 This code is optimized for variable visibility rather than speed 
-postfix '_' distinguishes array name from identical element name '''
+postfix '_' denotes array name, vs. identical name of its elements '''
 
 
 def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion within pattern
@@ -30,7 +31,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion within pattern
             pri_p, fd, fv = e_[x-r]  # for comparison of r-pixel-distant pixels:
 
             fd, fv, vP, dP, vP_, dP_, olp = \
-            re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
+            recursive_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
 
     else:  # comparison derivation incr within e_ = d_ of dP (not tuples per range incr?)
 
@@ -41,7 +42,7 @@ def pre_comp(typ, e_, A, r):  # pre-processing for comp recursion within pattern
             d = e_[x]
 
             fd, fv, vP, dP, vP_, dP_, olp = \
-            re_comp(x, d, pri_d, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
+            recursive_comp(x, d, pri_d, fd, fv, vP, dP, vP_, dP_, olp, X, A, r)
 
             pri_d = d
 
@@ -97,9 +98,10 @@ def form_P(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, A, r):
     return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ are accumulated per line
 
 
-def re_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):
+def recursive_comp(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, A, r):
 
-    # recursive comp within vPs | dPs, called from pre_comp(), which is called from form_P
+    # incremental-range comp within vPs or incremental-derivation comp within dPs,
+    # called from pre_comp(), which is called from form_P
 
     d = p - pri_p      # difference between consecutive pixels
     m = min(p, pri_p)  # match between consecutive pixels
@@ -153,7 +155,7 @@ def comp(x, p, it_, vP, dP, vP_, dP_, olp, X, A, r):  # pixel is compared to r p
     return it_, vP, dP, vP_, dP_, olp  # for next-p comparison, vP and dP increment, output
 
 
-def frame(Fp_):  # postfix '_' distinguishes array name from element name
+def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its elements
 
     FP_ = []  # output frame of vPs: relative-match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
