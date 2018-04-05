@@ -16,14 +16,14 @@ import numpy as np
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
     Thus, quadrant gradient is estimated as the average of these two orthogonally diverging derivatives.
-    
-    2D blobs are contiguous areas of same-sign quadrant gradient: of relative match for vblob or of difference for dblob.
-    All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower. 
-    They convert lower line into new higher line and displace patterns of old higher line into higher functions.
+    Blob is contiguous area of same-sign quadrant gradient, of relative match for vblob or difference for dblob.
+
+    All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
+    into elements of new higher line, and displace elements of old higher line into higher functions.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     frame() is layered: partial lower functions can work without higher functions.
-    
     None of this is tested, except as analogue functions in line_POC()  
+    
     postfix '_' denotes array name, vs. same-name elements of that array 
     prefix '_' denotes higher-line variable or pattern '''
 
@@ -98,7 +98,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D
         t2_.appendleft((p, d, 0, m, 0))  # initial fdy and fmy = 0, new t2 replaces completed t2 in t2_
         new_t2__.append(t2_)
 
-    # line ends, vP and dP term, no init, inclusion with incomplete lateral fd and fm:
+    # line ends, vP and dP are terminated, not initialized, inclusion with incomplete lateral fd and fm:
 
     if olp:  # if vP x dP overlap len > 0, incomplete vg - ave / (rng / X-x)?
 
@@ -144,7 +144,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
         I, D, Dy, M, My, G, Olp, e_ = 0, 0, 0, 0, 0, 0, 0, []  # P and olp initialization
         olp, oG, alt_oG = 0, 0, 0
 
-    # continued or initialized vars are accumulated: use zip S_vars?
+    # continued or initialized vars are accumulated (use zip S_vars?):
 
     olp += 1  # len of overlap to stronger alt-type P, accumulated until P or _P terminates
     oG += g; alt_oG += alt_g  # for eval to assign olp to alt_rdn of vP or dP
@@ -157,7 +157,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
     G += g    # d or v gradient summed to define P value, or V = M - 2a * W?
 
     e_.append(((p, d, dy, m, my), g, alt_g))  # | p, g, alt_g for vP | g for dP?
-    # for selective oriented rescan, or incremental range | derivation comp
+    # for incremental range | derivation comp, or selective oriented rescan
 
     P = [s, I, D, Dy, M, My, G, Olp, e_]
 
@@ -208,10 +208,10 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x _Ps in _P_, forms ov
             # else _P is buffered in fork Ps root_| root_sel_, term eval at P output
 
             blob = incr_blob((oG, _P), blob)  # default _P incl, empty init at final P root_!= 1:
-            blob = term_blob(typ, blob)  # or term_segment: mult-eval root function
+            blob = term_blob(typ, blob)  # may call incr_comp(), orient() scan_Py_()
             blob_.append((blob, fork_))  # top-down fork_, no root_: redundant to fork_
 
-    # no overlap between P and next _P: delayed blob += _P for root_ of P if fork_ != 0
+    # no overlap between P and next _P, at next-line input: blob +=_P for root_ of P if fork_ != 0
 
     if root_ == 1 and root_[0][3] > 1:  # select single alt fork for single root, else split
 
@@ -229,7 +229,7 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x _Ps in _P_, forms ov
 
         if fork_ != 1 or root_ != 1:  # blob split | merge, also if y == Y - 1 in frame()?
 
-            blob = term_blob(typ, blob)  # packs flip, ortho eval, and scan_Py_
+            blob = term_blob(typ, blob)  # may call incr_comp(), orient() scan_Py_()
             blob_.append((blob, fork_))  # terminated blob_ is input line y - 3+ | record layer 5+
 
     if root_ == 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 and root' fork_==1
@@ -280,17 +280,36 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     return blob
 
 
-def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation, P norm and scan_Py_
+def term_blob(typ, blob):  # eval for incr_comp(), orient() scan_Py_(), before full loading?
+
+    s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
+    rdn = Olp / L2  # alt Ps (if not alt blobs) are complete?
+
+    if G2 > ave * 99 * rdn and len(Py_) > 2:
+        e_, e__ = [],[]  # 2D array, extracted for incr_comp in frame():
+
+        for P in Py_:
+            for e in P[11]:  # e:  (p, d, dy, m, my), g, alt_g
+                if typ:
+                    e_.append(e[0]); r = rng+1  # e = p
+                else:
+                    e_.append(e[1]); r = rng  # e = d
+
+            e__.append((e_, P[3]))  # last x = P[3]: local vs. global X?
+
+        blob = frame(e__, r)  # possibly signed e?
+
+    return blob, rdn
+
+def orient(typ, blob):  # orientation: P norm or quad norm and rescan, per blob | blob_net | PP | PP_net
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
     norm = 0
     rdn = Olp / L2  # rdn per blob, alt blobs may be incomplete but alt Ps are complete?
 
-    # separate orient function, same for term_PP?:
-
     if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:  # orient for comp_P and comp_blob if > ave * nvars | fb:
 
-        ver_L = math.hypot(Dx, len(Py_))  # slanted vert dim
+        ver_L = math.hypot(Dx, len(Py_))  # slanted ver dimension
         rL = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
         lat_L = max_L / rL  # orthogonal projection of max_lat_L in Py_
 
@@ -351,7 +370,7 @@ def term_blob(typ, blob):  # blob | blob_net | PP | PP_net eval for orientation,
 
                 yP_ = new_yP_, x  # Ps are yPs, form_P calls underloaded yblob = scan_P_ or scan_yP_: less fork eval?
 
-    return blob
+    return blob, rdn
 
 ''' blob redef by norm per quad of blob + adjacent blobs, then scan across max Dx ^ Dy axis?
     or P redef by ortho_dx / ave_x scan line: overlap | stretch at alt ends? 
@@ -543,10 +562,10 @@ def term_PP(typ, PP):  # eval for orient as term_blob, + incr_comp_P, scan_par_:
     (s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_), \
     (PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy) = PP
 
-    rdn = Olp2 / L2  # redundancy to overlapping alt-type PPs
+    PP, rdn = orient(typ, PP) # PP norm or rescan: relative to and within parent blob
 
-    # rescan or norm per PP: relative to and within parent blob,
-    # for comp_PP and extended comp_P:
+    # also incr frame(PP)?
+    # eval for comp_PP and extended comp_P:
 
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
        PP = incr_range_comp_P(typ, PP)  # forming incrementally fuzzy PP
@@ -562,6 +581,8 @@ def term_PP(typ, PP):  # eval for orient as term_blob, + incr_comp_P, scan_par_:
 
     return PP
 
+''' incr_comp() ~ recursive_comp() in line_POC(), with Ps instead of pixels?
+    with rescan: recursion per p | d (signed): frame(meta_blob | blob | PP)? '''
 
 def incr_range_comp_P(typ, PP):
     return PP
@@ -650,14 +671,14 @@ def comp_blob(blob, _blob):  # compares blob segments
 
 ''' np.array for direct accumulation, vs. iterator of initialization:
     P2_ = np.array([blob, vPP, dPP],
-    dtype=[('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
+    dtype = [('crit', 'i4'), ('rdn', 'i4'), ('W', 'i4'), ('I2', 'i4'), ('D2', 'i4'), ('Dy2', 'i4'),
     ('M2', 'i4'), ('My2', 'i4'), ('G2', 'i4'), ('rdn2', 'i4'), ('alt2_', list), ('Py_', list)]) 
 '''
 
-def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
+def frame(f, r):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line variable
 
-    global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= rng
-    global rng; rng = 1
+    global ave; ave = 127  # filters, ultimately set by separate feedback, then ave *= rng?
+    global rng; rng = r  # r is passed as feedback or incremented in term_blob
 
     global div_a; div_a = 127  # not justified
     global ave_k; ave_k = 0.25  # average V / I initialization
@@ -692,5 +713,5 @@ def frame(f):  # postfix '_' denotes array vs. element, prefix '_' denotes highe
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
-frame(f)
+frame(f, 1)
 
