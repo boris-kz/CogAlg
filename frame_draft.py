@@ -3,7 +3,7 @@ from collections import deque
 import math as math
 import numpy as np
 
-''' frame() is my core algorithm of levels 1 + 2, modified to process one image (2D frame).
+''' core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
     It performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
 
     y: comp(p_): lateral pixel comp -> tuple t,
@@ -16,7 +16,7 @@ import numpy as np
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
     Thus, quadrant gradient is estimated as the average of these two orthogonally diverging derivatives.
-    Blob is contiguous area of same-sign quadrant gradient, of relative match for vblob or difference for dblob.
+    Blob is contiguous area of same-sign quadrant gradient, of difference for dblob or match deviation for vblob.
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into higher functions.
@@ -28,7 +28,7 @@ import numpy as np
     prefix '_' denotes higher-line variable or pattern '''
 
 
-def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixel, match, difference
+def comp(p_):  # comparison of consecutive pixels within a line forms tuples: pixel, match, difference
 
     t_ = []  # complete fuzzy tuples: summation range = rng
     it_ = deque(maxlen=rng)  # incomplete fuzzy tuples: summation range < rng
@@ -57,7 +57,7 @@ def comp(p_):  # comparison of consecutive pixels within line forms tuples: pixe
     return t_
 
 
-def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels, forms 2D tuples t2
+def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels of consecutive lines forms 2D tuples t2
 
     vP_ = []; vP = [0,0,0,0,0,0,0,0,[]]  # value pattern = pri_s, I, D, Dy, M, My, G, Olp, e_
     dP_ = []; dP = [0,0,0,0,0,0,0,0,[]]  # difference pattern = pri_s, I, D, Dy, M, My, G, Olp, e_
@@ -261,8 +261,7 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     oG, (s, ix, lx, I, D, Dy, M, My, G, olp, e_) = _P  # s is re-assigned, ix and lx from scan_P_
 
     x = lx - len(e_)/2  # median x, becomes _x in blob, replaces ix and lx?
-
-    dx = x - _x  # no full comp(x) -> dxP: conditional with comp nS: internal vars are secondary
+    dx = x - _x  # full comp(x) and comp(S) are conditional, internal vars are secondary
     Dx += dx  # for blob norm, orient eval, by OG vs. Mx += mx, += |dx| for curved max_L
 
     L2 += len(e_)  # e_ in P is buffered in Py_, no separate e2_
@@ -283,16 +282,22 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
 def term_blob(typ, blob):  # eval for orient(), incr_comp(), scan_Py_(), before full loading?
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
-    rdn = Olp / L2  #  rdn per blob, alt Ps (if not alt blobs) are complete?
+    rdn = Olp / L2  # rdn per blob, alt Ps (if not alt blobs) are complete?
+    norm = 0
 
-    if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:  # orient for comp_P and comp_blob if > ave * nvars?
-        blob = orient(typ, rdn, blob)
+    if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:  # if > ave * nvars: eval for hypot compute?
+       blob, norm = orient(blob)  # orient for comp_P and comp_blob
 
-    if G2 > ave * 99 * rdn and len(Py_) > 2:  # ? oriented blob eval for incr_comp:
-        e_, e__ = [],[]  # 2D array of ps | ds is extracted from Py_, + adjacent Py_s?:
+    if G2 > ave * 99 * rdn and len(Py_) > 2:  # comp_P cost, or if len(Py_) > n+1: for fuzzy comp
+
+       blob = scan_Py_(typ, blob, norm)  # blob norm -> P norm, no eval per P
+       # S_ders += norm_ders, PM,PD, incr_comp -> deeper P if G2 += PM | PD?:
+
+    if G2 > ave * 99 * rdn and len(Py_) > 2:  # original | oriented blob eval for internal incr_comp:
+        e_, e__ = [],[]  # 2D array of ps | ds is extracted from Py_, also adjacent Py_s?
 
         for P in Py_:
-            for e in P[11]:  # e:  (p, d, dy, m, my), g, alt_g
+            for e in P[11]:  # e: (p, d, dy, m, my), g, alt_g
                 if typ:
                     e_.append(e[0]); r = rng+1  # e = p
                 else:
@@ -304,52 +309,34 @@ def term_blob(typ, blob):  # eval for orient(), incr_comp(), scan_Py_(), before 
 
     return blob, rdn
 
-def orient(typ, rdn, blob):  # orientation: P norm or quad norm and rescan, per blob | blob_net | PP | PP_net
+def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | PP_net
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
-    norm = 0
+    # no typ, norm, rdn?
 
     ver_L = math.hypot(Dx, len(Py_))  # slanted vertical dimension
-    mul_L = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
-    lat_L = max_L / mul_L  # orthogonal projection of max_lat_L in Py_
-    rL = ver_L / lat_L
+    mlt = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
+    lat_L = max_L / mlt  # orthogonal projection of max_lat_L in Py_
 
-    if ver_L > lat_L - ave * 99:  # ave dL per M_yP_- M_Py_ > cost of scan_e_, form_yP_, scan_yP_?
+    if lat_L - ave * 99 > ver_L:  # ave dL per M_yP_- M_Py_ > cost of scan_e__, form_yP_) y_blob_, scan_yP_:
 
-        if ver_L - len(Py_) * G2 > ave * 99:  # cost of norm
-           norm = 1  # flag for normalization of P derivatives by Dx angle
-
-        if G2 > ave * 99 * rdn and len(Py_) > 2:  # comp_P cost, or if len(Py_) > n+1: for fuzzy comp
-
-           blob = scan_Py_(typ, blob, norm)  # G2 += PM | PD, norm per P, S_ders += norm_ders?
-           # comp_P ) PP eval for scan_pP and extended comp_P ) blob eval for comp_PP if corr M|D?
-
-        elif norm:  # normalize summed derivatives by Dx for comp_blob, no change in G2:
-
-            blob[6][2] = (D2 * rL + Dy2 / rL) / 2 / mul_L  # est D2 over ver_L, Ders sum in ver / lat ratio
-            blob[6][3] = (Dy2 / rL - D2 * rL) / 2 * mul_L  # est Dy2 over lat_L,
-            blob[6][4] = (M2 * rL + My2 / rL) / 2 / mul_L  # est M2 over ver_L
-            blob[6][5] = (My2 / rL + M2 * rL) / 2 * mul_L  # est My2 over lat_L; G is combined: not adjusted
-
-    else:  # blob orientation: vertical | diagonal | slanted rescan: scan_e__, form_yP ) y_blob_, comp_yP
-
-        if lat_L - max_L * OG > ave: norm = 1  # e norm by Dx -> form_P, or norm eval per rescanned yblob?
-        e__ = []  # 2D array, extracted for reoriented scan
-
+        e__ = []
         for P in Py_:
             e__.append((P[9], P[2]))  # e_, last x
         e__ = e__.sort(key=lambda e_: e_[1], reverse=True)  # sort by last x
 
-        ''' or sort by diagonal x ^ y | integer nx ^ ny, if G2 * ((Dx - near alt dx) ^ (Dy - near alt dy))? '''
+        ''' e__: 2D array of tuples per pixel, extracted for blob sort and rescan:
+        vertical-first, possibly by diagonal x ^ y, or by n-pixels angle nx ^ ny, 
+        if G2 * ((Dx - near alt dx) ^ (Dy - near alt dy))? '''
 
         e_, _x = e__.pop
         y, olp, ovG, odG = 0,0,0,0  # vertical ydP x yvP overlap
-        yP_, dP, dP_, _dP_, dblob_, vP, vP_, _vP_, vblob_ = [],[],[],[],[],[],[],[],[]  # deeper def latter
+        yP_, dP, dP_, _dP_, dblob_, vP, vP_, _vP_, vblob_ = [],[],[],[],[],[],[],[],[]  # deeper def later
 
         for e in e_:  # _e_ initialization per blob by form_Ps with empty d_grp, v_grp, olp, no scan_P_:
 
             y += 1; (p, d, dy, m, my), dg, vg = e  # no t2 norm by axis-scan deviation: cost > accuracy gain?
-            t2 = p, dy, d, my, m  # orthogonal, for form_P:
+            t2 = p, dy, d, my, m  # orthogonal reorder for form_P:
 
             olp, ovG, odG, vP, dP, vP_, _vP_, vblob_ = form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vblob_, y)
             olp, odG, ovG, dP, vP, dP_, _dP_, dblob_ = form_P(0, t2, dg, vg, olp, odG, ovG, dP, vP, dP_, _dP_, dblob_, y)
@@ -366,7 +353,7 @@ def orient(typ, rdn, blob):  # orientation: P norm or quad norm and rescan, per 
             for e, (dP, dP_, _dP_, dblob_, vP, vP_, _vP_, vblob_, olp, ovG, odG) in zip(e_, yP_):
 
                 y += 1; (p, d, dy, m, my), dg, vg = e
-                t2 = p, dy, d, my, m
+                t2 = p, dy, d, my, m  # vertical dimension first
 
                 olp, ovG, odG, vP, dP, vP_, _vP_, vblob_ = form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vblob_, y)
                 olp, odG, ovG, dP, vP, dP_, _dP_, dblob_ = form_P(0, t2, dg, vg, olp, odG, ovG, dP, vP, dP_, _dP_, dblob_, y)
@@ -374,17 +361,29 @@ def orient(typ, rdn, blob):  # orientation: P norm or quad norm and rescan, per 
                 new_yP_.append((dP, dP_, _dP_, dblob_, vP, vP_, _vP_, vblob_, olp, ovG, odG))
 
             yP_ = new_yP_, x  # Ps are yPs, form_P calls underloaded yblob = scan_P_ or scan_yP_: less fork eval?
+            # no change in G, only ind ders and future M_ders?
 
-    return blob
+    if mlt * G2 > ave * 99:  # gain - cost of normalizing P ders by Dx angle, for original or rescanned blob
 
-''' blob redef by norm per quad of blob + adjacent blobs, if diagonal:
+       norm = 1  # G2 + M|D after comp_P
+       rL = ver_L / lat_L  # both scaled by rotation per Dx, ders adjusted for comp_P and comp_blob:
 
-    d = (d + dy) / 2 / 1.4  # est d over ver_L, ders sum in 1/1 ver / lat ratio, if diagonal:
+       blob[6][2] = (D2 * rL + Dy2 / rL) / 2 / mlt  # est D2 over ver_L, Ders sum in ver / lat ratio
+       blob[6][3] = (Dy2 / rL - D2 * rL) / 2 * mlt  # est Dy2 over lat_L,
+       blob[6][4] = (M2 * rL + My2 / rL) / 2 / mlt  # est M2 over ver_L
+       blob[6][5] = (My2 / rL + M2 * rL) / 2 * mlt  # est My2 over lat_L; G is combined: not adjusted
+
+    else: norm = 0
+    return blob, norm
+
+''' diagonal blob (+ adjacent blobs) rescan and redef by normalized quad, if gain > cost?:
+
+    d = (d + dy) / 2 / 1.4  # est d over ver_L, ders sum in 1/1 ver / lat ratio
     dy = (dy - d) / 2 * 1.4  # est dy over lat_L,
     m = (m + my) / 2 / 1.4  # est m over ver_L
-    my = (my + m) / 2 * 1.4  # est my over lat_L; g is combined: not adjusted?
+    my = (my + m) / 2 * 1.4  # est my over lat_L
              
-    then scan across max Dx ^ Dy axis?
+    then blob scan across max Dx ^ Dy axis?  g is combined, orient-neutral?
     or P redef by ortho_dx / ave_x scan line: overlap | stretch at alt ends? 
     or analog re-input for axis-aligned quads: more accurate than norm for P der comp, blob redef? 
 '''
