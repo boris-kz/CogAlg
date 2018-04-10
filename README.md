@@ -8,7 +8,7 @@ Intelligence is ability to predict and plan (self-predict), which can only be do
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
 
-I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay per contribution, or monthly if there is some track record. Please contact me if interested, here or on G+.
+I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay for contributions, or monthly if there is some track record. Please contact me if interested, here or on G+.
 
 .
 

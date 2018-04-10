@@ -602,7 +602,7 @@ def scan_parameter_(typ, PP):  # at term_network, term_blob, or term_PP: + P_der
     P_ = PP[11]
     Pars_ = [(0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0),[]]
 
-    for (P) in P_:  # repack ders into par_s by parameter type:
+    for P in P_:  # repack ders into par_s by parameter type:
 
         s, ix, x, I, D, Dy, M, My, G, oG, Olp, q_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars = P
         pars_ = [(x, mx, dx), (len(q_), mL, dL), (I, mI, dI), (D, mD, dD), (Dy, mDy, dDy), (M, mM, dM), (My, mMy, dMy)]  # nvars?
