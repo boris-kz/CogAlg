@@ -8,8 +8,7 @@ Intelligence is ability to predict and plan (self-predict), which can only be do
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
 
-I need help with design and implementation of this algorithm, in Python. But my code is derived conceptually, experimentation is a last step. Unless you find flaws or omissions in my reasoning, which would be even more valuable. I pay per contribution, or monthly if there is some track record. Please contact me if interested, here or on G+.
-This is an open project, published under Creative Commons Attribution 4.0 International License.
+I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay per contribution, or monthly if there is some track record. Please contact me if interested, here or on G+.
 
 .
 
@@ -18,7 +17,7 @@ OUTLINE OF MY APPROACH
 .
 
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
-It’s a hierarchical search for patterns, by cross-comparing inputs over incremental distance and composition. First-level inputs are single variables, such as pixels, and higher-level inputs are multi-parameter patterns formed on lower levels. Parameters (variables) include match and miss per variable compared on lower levels. Hence, higher-level patterns are more complex: variables per pattern selectively multiply on each level.
+It’s a hierarchical search for patterns, by cross-comparing inputs over incremental distance and composition. First-level inputs are single variables, such as pixels, and higher-level inputs are multivariate patterns formed on lower levels. variables (parameters) include match and miss per variable compared on lower levels. Hence, higher-level patterns are more complex: variables per pattern selectively multiply on each level.
 
 I define pattern as contiguous span of inputs forming the same sign of difference between input and feedback (part 2). There can be multiple orders of feedback, forming corresponding orders of overlapping patterns.
 First-order feedback is prior input (pixel), and patterns are spans of inputs with increasing or decreasing magnitude. Second-order feedback is average higher-level match, and second-order patterns are spans of inputs with above- or below- average match to prior inputs. And so on, with relatively longer-range feedback compared to higher order of match between input and shorter-range feedback.
