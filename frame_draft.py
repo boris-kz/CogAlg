@@ -583,7 +583,7 @@ def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:  # PM includes results of incr_comp_P
        PP = scan_parameter_(0, PP)  # forming vpP_ and S_p_ders
 
-    if G2 + PD > ave * 99 * rdn and len(Py_) > 2:
+    if G2 + PD > ave * 99 * rdn and len(Py_) > 2:  # PD includes results of incr_comp_P
        PP = scan_parameter_(1, PP)  # forming dpP_ and S_p_ders
 
     return PP
@@ -607,29 +607,37 @@ def scan_parameter_(typ, PP):  # at term_network, term_blob, or term_PP: + P_der
         s, ix, x, I, D, Dy, M, My, G, oG, Olp, q_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars = P
         pars_ = [(x, mx, dx), (len(q_), mL, dL), (I, mI, dI), (D, mD, dD), (Dy, mDy, dDy), (M, mM, dM), (My, mMy, dMy)]  # nvars?
 
-        for par, Par in zip(pars_, Pars_): # -> PP Par: (S, Mp, Dp, p_) in S_ders:
+        for par, Par in zip(pars_, Pars_): # PP Par (S, Mp, Dp, p_) += par (p, pm, dm):
 
             p, mp, dp = par
-            S, Mp, Dp, p_ = Par
-            S+=p; Mp+=mp; Dp+=dp; p_.append()
+            S, Mp, Dp, par_ = Par
 
-            '''
-            for (S, Mp, Dp, p_) in S_ders:
-            
+            S += p; Mp += mp; Dp += dp; par_.append((p, mp, dp))
+            Par = S, Mp, Dp, par_  # how to replace Par in Pars_?
+
+        for Par in Pars_:  # select form_pP per Par:
+            S, Mp, Dp, par_ = Par
+
             if Mp > ave * 9 * 5 * 2:  # Mp > ave PP * ave pP rdn * rdn to PP
                 vpP_ = []  # or tuple
-                M_vpP, D_vpP, vpP_ = form_pP_(0, p_, P[1], vpP_)  # P[1] = P_ders
-
-                # MpP eval for scan_pP_, comp_pP, or after orient: not affected?
-                # form_pP select per S_der, includes all P_ders and nvars?
+                M_vpP, D_vpP = form_pP_(0, par_)
+                vpP_flag = 1
+            else:
+                M_vpP, D_vpP, vpP_flag = 0, 0, 0
 
             if Dp > ave * 9 * 5 * 4:  # half rep value
                 dpP_ = []
-                M_dpP, D_dpP, dpP_ = form_pP_(1, p_, P[1], dpP_)  # P[1] = P_ders
-            '''
+                M_dpP, D_dpP = form_pP_(1, par_)
+                dpP_flag = 1
+            else:
+                M_dpP, D_dpP, dpP_flag = 0, 0, 0
+
+            Par = S, Mp, Dp, vpP_flag, M_vpP, D_vpP, dpP_flag, M_dpP, D_dpP  # also par_?
+            # how to replace Par in Pars_?
+
     return PP
 
-def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP, for each parameter
+def form_pP_(typ, par_):  # forming parameter patterns within PP, for each parameter
 
     # form_pP eval by PP' |Vp| or |Dp|: + ave rdn = 5 (2.5 * 2), or summed rdn for !max ps?
 
@@ -667,15 +675,15 @@ def form_pP_(typ, par_, P_ders, pP_):  # forming parameter patterns within PP, f
 
         _p = p; _vps = vps; _dps = dps
 
-    return MpP, DpP, pP_
+    return MpP, DpP
 
     # LIDV per dx, L, I, D, M? also alt2_: fork_ alt_ concat, for rdn per PP?
     # fpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
 
-def term_pP(typ, pP):  # from form_pP, eval for re_comp? or folded?
+def term_pP(typ, pP):  # from form_pP: eval for orient, re_comp? or folded?
     return pP
 
-def scan_comp_pP_(typ, pP_):  # pP rdn per vertical overlap? simple, folded in scan_par_?
+def scan_comp_pP_(typ, pP_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
     return pP_
 
 def comp_pP(pP, _pP):  # with/out orient, from scan_pP_
