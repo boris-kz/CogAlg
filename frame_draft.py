@@ -6,10 +6,10 @@ import numpy as np
 ''' core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
     It performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
 
-    y:    comp(p_): lateral pixel comp -> tuple t,
-    y-1:  ycomp(t_): vertical pixel comp -> quadrant t2, 1D pattern P,  
-    y-2:  scan_P_(P, _P) -> fork_, root_: finds vertical continuity between Ps of adjacent lines 
-    y-3+: incr_blob: merges Ps into 2D blob | term_blob: terminated blob orient and scan_Py_ -> 2D patterns PPs..
+    input y:    comp(p_): lateral pixel comp -> tuple t,
+    input y-1:  ycomp(t_): vertical pixel comp -> quadrant t2, 1D pattern P,  
+    input y-2:  scan_P_(P, _P) -> fork_, root_: finds vertical continuity between Ps of adjacent lines 
+    input y-3+: incr_blob: merges Ps into 2D blob | term_blob: blob orient and scan_Py_ -> 2D patterns PPs..
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
@@ -19,7 +19,7 @@ import numpy as np
     Blob is contiguous area of same-sign quadrant gradient, of difference for dblob or match deviation for vblob.
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
-    into elements of new higher line, and displace elements of old higher line into higher functions.
+    into elements of new higher line, and displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     frame() is layered: partial lower functions can work without higher functions.
     None of this is tested, except as analogue functions in line_POC()  
@@ -297,15 +297,15 @@ def term_blob(typ, blob):  # eval for orient_t_scan, norm_P_der, incr_comp_t_sca
         e_, e__ = [],[]  # 2D array of elements: ps | ds, extracted from Py_, also adjacent Py_s?
 
         for P in Py_:
-            for q in P[11]:  # quadrant per pixel: p, d, dy, m, my, g, alt_g
+            for t2 in P[11]:  # t2_ = P[11], t2 = quadrant per pixel: p, d, dy, m, my, g, alt_g
                 if typ:
-                    e_.append(q[0]); r = rng+1  # e = p
+                    e_.append(t2[0]); r = rng+1  # e = p
                 else:
-                    e_.append(q[1]); r = rng  # e = d
+                    e_.append(t2[1]); r = rng  # e = d
 
             e__.append((e_, P[3]))  # last x = P[3]: local vs. global X?
 
-        blob = frame(e__, r)  # with separate X and Y, or lighter incr_comp_t_scan(blob)?
+        blob = frame(e__, r)  # with separate X and Y, or lighter scan_incr_comp_t2_(blob)?
 
     return blob, rdn
 
@@ -316,7 +316,8 @@ def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | 
 
     ver_L = math.hypot(Dx, len(Py_))  # slanted vertical dimension
     rL = ver_L / len(Py_)  # ver_L multiplier = lat_L divider
-    lat_L = max_L / rL  # orthogonal projection of max_lat_L in Py_, rather: max(lx) - min(ix)?
+    lat_L = max_L / rL  # orthogonal projection of max_lat_L in Py_,
+    # rather: lat_L = max(lx) - min(ix)?
 
     if lat_L - ave * 99 > ver_L:  # ave dL per M_yP_- M_Py_ > cost of scan_t2__, form_yP_) y_blob_, scan_yP_:
 
@@ -333,8 +334,8 @@ def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | 
         yP_, dP, dP_, _dP_, dblob_, vP, vP_, _vP_, vblob_ = [],[],[],[],[],[],[],[],[]  # deeper def later
 
         for t2 in t2_:  # _e_ initialization per blob by form_Ps with empty d_grp, v_grp, olp, no scan_P_:
-
-            y += 1; p, d, dy, m, my, dg, vg = t2  # no q norm by axis-scan deviation: cost > accuracy gain?
+            y += 1
+            p, d, dy, m, my, dg, vg = t2  # no t2 norm by axis-scan deviation: cost > accuracy gain?
             t2 = p, dy, d, my, m  # orthogonal reordering for form_P:
 
             olp, ovG, odG, vP, dP, vP_, _vP_, vblob_ = form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vblob_, y)
@@ -345,13 +346,14 @@ def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | 
         for t2_, x in t2__:
 
             new_yP_ = []  # init per y-line of an input blob
-            y = 0; dx = x - _x
+            y = 0
+            dx = x - _x
             if dx: t2_.pop(dx)  # align e, _e: shift or rotate by dx pops? or popleft if iterator:
             else: yP_.pop(dx)
 
             for t2, (dP, dP_, _dP_, dblob_, vP, vP_, _vP_, vblob_, olp, ovG, odG) in zip(t2_, yP_):
-
-                y += 1; p, d, dy, m, my, dg, vg = t2
+                y += 1
+                p, d, dy, m, my, dg, vg = t2
                 t2 = p, dy, d, my, m  # vertical derivatives first
 
                 olp, ovG, odG, vP, dP, vP_, _vP_, vblob_ = form_P(1, t2, vg, dg, olp, ovG, odG, vP, dP, vP_, _vP_, vblob_, y)
@@ -551,7 +553,7 @@ def incr_PP(typ, P, PP):  # increments continued vPPs or dPPs (not pPs): incr_bl
     _dx, Ddx, \
     PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, div_f, nVars = S_ders
 
-    Py_.appendleft((s, ix, x, I, D, Dy, M, My, G, oG, Olp, q_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars))
+    Py_.appendleft((s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars))
 
     ddx = dx - _dx  # no ddxP_ or mdx: olp of dxPs?
     Ddx += abs(ddx)  # PP value of P norm | orient per indiv dx: m (ddx, dL, dS)?
@@ -607,76 +609,72 @@ def scan_parameters_(typ, PP):  # at term_network, term_blob, or term_PP: + P_de
         s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars = P
         pars_ = [(x, mx, dx), (len(t2_), mL, dL), (I, mI, dI), (D, mD, dD), (Dy, mDy, dDy), (M, mM, dM), (My, mMy, dMy)]  # no nvars?
 
-        for par, Par in zip(pars_, Pars_): # PP Par (S, Mp, Dp, p_) += par (p, pm, dm):
+        for par, Par in zip(pars_, Pars_): # PP Par (Ip, Mp, Dp, par_) += par (p, mp, dp):
 
             p, mp, dp = par
-            S, Mp, Dp, par_ = Par
+            Ip, Mp, Dp, par_ = Par
 
-            S += p; Mp += mp; Dp += dp; par_.append((p, mp, dp))
-            Par = S, Mp, Dp, par_  # how to replace Par in Pars_?
+            Ip += p; Mp += mp; Dp += dp; par_.append((p, mp, dp))
+            Par = Ip, Mp, Dp, par_  # how to replace Par in Pars_?
 
-        for Par in Pars_:  # select form_pP per Par:
-            S, Mp, Dp, par_ = Par
+    for Par in Pars_:  # select form_par_P -> Par_vP, Par_dP: combined vs. separate: shared access and overlap eval?
+        Ip, Mp, Dp, par_ = Par
 
-            if Mp > ave * 9 * 5 * 2:  # Mp > ave PP * ave pP rdn * rdn to PP
-                vpar_VP, vpar_DP = form_par_P_(0, par_)
-                vpar_P_flag = 1
-            else:
-                vpar_VP, vpar_DP, vpar_P_flag = 0, 0, 0
+        if Mp + Dp > ave * 9 * 7 * 2 * 2:  # ave PP * ave par_P rdn * rdn to PP * par_P typ rdn?
+            Par_vP, Par_dP = form_par_P_(0, par_)
+            Par_Pf = 1  # flag
+        else:
+            Par_Pf, Par_vP, Par_dP = 0, 0, 0
 
-            if Dp > ave * 9 * 5 * 4:  # half rep value
-                dpar_VP, dpar_DP = form_par_P_(1, par_)
-                dpar_P_flag = 1
-            else:
-                dpar_VP, dpar_DP, dpar_P_flag = 0, 0, 0
-
-            Par = S, Mp, Dp, vpar_P_flag, vpar_VP, vpar_DP, dpar_P_flag, dpar_VP, dpar_DP  # also par_?
-            # how to replace Par in Pars_?
+        Par = Ip, Mp, Dp, Par_Pf, Par_vP, Par_dP  # also par_?
+        # how to replace Par in Pars_?
 
     return PP
 
-def form_par_P_(typ, par_):  # forming parameter patterns within PP, for each parameter
-
-    # form_par_P eval by PP' |Vp| or |Dp|: + ave rdn = 5 (2.5 * 2), or summed rdn for !max ps?
+def form_par_P_(typ, par_):  # forming parameter patterns within par_:
 
     par_vP_, par_dP_ = [],[]
-    par_VP, par_DP = 0, 0  # actually tuples, include par_vP_| par_dP_
+    Par_vP, Par_dP = 0, 0  # actually tuples, include par_vP_| par_dP_
     par_vP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
     par_dP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
 
-    (p, mp, dp) = par_.pop()  # no tSp, tMp, tDp
-    S = p, Mp = mp, Dp = dp, p_ = []  # core par_P init, or full par_P: = PP?
+    (p, mp, dp) = par_.pop()
+    Ip = p, Mp = mp, Dp = dp, p_ = []  # core par_P init, or full par_P: = PP?
 
-    _vps = 1 if mp > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
+    _vps = 1 if mp > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per par_P?
     _dps = 1 if dp > 0 else 0
 
-    for (p, mp, dp) in par_:  # all vars are summed in incr_pP
+    for (p, mp, dp) in par_:  # all vars are summed in incr_par_P
 
-        vps = 1 if mp > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
+        vps = 1 if mp > ave * 7 > 0 else 0
         dps = 1 if dp > 0 else 0
 
-        if vps == _vps:  # or generic form()?
-            par_vP += p  # must be unfolded: incr_pP(typ, p, P_ders, vpP)?
+        if vps == _vps:  # or generic form()? par_vP += p:
+            par_vP = incr_par_P(0, par_vP)
         else:
-            term_par_P(typ, par_vP)
+            par_vP = term_par_P(0, par_vP)
             par_vP_.append(par_vP)  # comp_pP eval in scan_par_?
+            Par_vP += abs(par_vP[0])  # unfold: Ip, Mp, Dp, par_P?
             par_vP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
-            par_VP += abs(par_vP[1])
 
         if dps == _dps:  # or generic form()?
-            par_dP += p  # must be unfolded incr_pP(typ, p, P_ders, vpP)?
+            par_dP = incr_par_P(1, par_dP)
         else:
-            term_par_P(typ, par_dP)
+            par_dP = term_par_P(1, par_dP)
             par_dP_.append(par_dP)  # comp_pP eval in scan_par_?
+            Par_dP += abs(par_dP[1])  # unfold?
             par_dP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
-            par_DP += abs(par_dP[0])
 
-        _p = p; _vps = vps; _dps = dps
+        _vps = vps; _dps = dps
 
-    return par_VP, par_DP
+    return Par_vP, Par_dP  # tuples: Ip, Mp, Dp, par_P, added to Par
 
     # LIDV per dx, L, I, D, M? also alt2_: fork_ alt_ concat, for rdn per PP?
     # fpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
+
+def incr_par_P(typ, par_vP):  #
+
+    return par_vP
 
 def term_par_P(typ, par_P):  # from form_par_P: eval for orient, re_comp? or folded?
     return par_P
