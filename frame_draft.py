@@ -621,60 +621,63 @@ def scan_parameters_(typ, PP):  # at term_network, term_blob, or term_PP: + P_de
         Ip, Mp, Dp, par_ = Par
 
         if Mp + Dp > ave * 9 * 7 * 2 * 2:  # ave PP * ave par_P rdn * rdn to PP * par_P typ rdn?
-            Par_vP, Par_dP = form_par_P_(0, par_)
-            Par_Pf = 1  # flag
+            par_vPP, par_dPP = form_par_P_(0, par_)
+            par_Pf = 1  # flag
         else:
-            Par_Pf, Par_vP, Par_dP = 0, 0, 0
+            par_Pf, par_vPP, par_dPP = 0, 0, 0
 
-        Par = Ip, Mp, Dp, Par_Pf, Par_vP, Par_dP  # also par_?
+        Par = Ip, Mp, Dp, par_Pf, par_vPP, par_dPP  # also par_?
         # how to replace Par in Pars_?
 
     return PP
 
 def form_par_P_(typ, par_):  # forming parameter patterns within par_:
 
-    par_vP_, par_dP_ = [],[]
-    Par_vP, Par_dP = 0, 0  # actually tuples, include par_vP_| par_dP_
-    par_vP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
-    par_dP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
-
-    (p, mp, dp) = par_.pop()
-    Ip = p, Mp = mp, Dp = dp, p_ = []  # core par_P init, or full par_P: = PP?
+    (p, mp, dp) = par_.pop()  # initial parameter
+    Ip = p, Mp = mp, Dp = dp, p_ = []  # Par init
 
     _vps = 1 if mp > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per par_P?
     _dps = 1 if dp > 0 else 0
 
-    for (p, mp, dp) in par_:  # all vars are summed in incr_par_P
+    par_vP = 0, 0, 0, []  # Ip, Mp, Dp, p_
+    par_dP = 0, 0, 0, []  # Ip, Mp, Dp, p_
+    par_vP_, par_dP_ = [], []  # initialized where?
+    par_vPP = 0, 0, 0, []  # SIp, SMp, SDp, par_vP_
+    par_dPP = 0, 0, 0, []  # SIp, SMp, SDp, par_dP_
 
+    for par in par_:  # all vars are summed in incr_par_P
+        p, mp, dp = par
         vps = 1 if mp > ave * 7 > 0 else 0
         dps = 1 if dp > 0 else 0
 
-        if vps == _vps:  # or generic form()? par_vP += p:
-            par_vP = incr_par_P(0, par_vP)
+        if vps == _vps:
+            Ip, Mp, Dp, par_ = par_vP
+            Ip += p; Mp += mp; Dp += dp; par_.append(par)
+            par_vP = Ip, Mp, Dp, par_
         else:
             par_vP = term_par_P(0, par_vP)
-            par_vP_.append(par_vP)  # comp_pP eval in scan_par_?
-            Par_vP += abs(par_vP[0])  # unfold: Ip, Mp, Dp, par_P?
-            par_vP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
+            SIp, SMp, SDp, par_vP_ = par_vPP
+            SIp += Ip; SMp += Mp; SDp += Dp; par_vP_.append(par_vP)
+            par_vPP = SIp, SMp, SDp, par_vP_
+            par_vP = 0, 0, 0, []
 
-        if dps == _dps:  # or generic form()?
-            par_dP = incr_par_P(1, par_dP)
+        if dps == _dps:
+            Ip, Mp, Dp, par_ = par_dP
+            Ip += p; Mp += mp; Dp += dp; par_.append(par)
+            par_dP = Ip, Mp, Dp, par_
         else:
             par_dP = term_par_P(1, par_dP)
-            par_dP_.append(par_dP)  # comp_pP eval in scan_par_?
-            Par_dP += abs(par_dP[1])  # unfold?
-            par_dP = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []
+            SIp, SMp, SDp, par_dP_ = par_dPP
+            SIp += Ip; SMp += Mp; SDp += Dp; par_dP_.append(par_dP)
+            par_vPP = SIp, SMp, SDp, par_dP_
+            par_dP = 0, 0, 0, []
 
         _vps = vps; _dps = dps
 
-    return Par_vP, Par_dP  # tuples: Ip, Mp, Dp, par_P, added to Par
+    return par_vPP, par_dPP  # tuples: Ip, Mp, Dp, par_P_, added to Par
 
     # LIDV per dx, L, I, D, M? also alt2_: fork_ alt_ concat, for rdn per PP?
     # fpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
-
-def incr_par_P(typ, par_vP):  #
-
-    return par_vP
 
 def term_par_P(typ, par_P):  # from form_par_P: eval for orient, re_comp? or folded?
     return par_P
