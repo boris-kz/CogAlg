@@ -73,7 +73,7 @@ The nearest experimentally successful method is recently introduced “capsules�
 - these distances and proportions are also compared to find “equivariance” or affine transformations
 - capsules also send direct feedback to lower layer (dynamic routing), vs. trans-hidden-layer backprop in ANN
 
-But measure of similarity in CapsNet (“agreement” in dynamic routing) is still an unprincipled dot product, vs. first-principles compression in CogAlg. This is not specific to CapsNet, most current recognition algorithms, and seemingly the brain too,  select for dot product. To repeat, multiplication vastly exaggerates similarity. Which adds noise resistance, crucial for our noisy brain, but it should be a separate noise-specific function.
+But measure of similarity in CapsNet (“agreement” in dynamic routing) is still an unprincipled dot product, vs. incremental compression in CogAlg. This is not specific to CapsNet, most current recognition algorithms, and seemingly the brain too,  select for dot product. To repeat, multiplication vastly exaggerates similarity. Which adds noise resistance, crucial for our noisy brain, but it should be a separate noise-specific function.
 
 Pure similarity is a common subset: the smaller of comparands. Which is also a compression of represented magnitude by replacing larger comparand with the difference between the two. It’s the most basic implication of information-theoretical compression-uber-alles principle, but I don’t know of anyone else using minimum as a measure of similarity. It’s not sufficient per se, working measure would be minimum minus average minimum, then minus projected co-derived differences, etc, but minimum is unavoidable as a starting point.
 
