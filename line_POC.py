@@ -42,8 +42,8 @@ def pre_recursive_comp(typ, e_, Ave, rng):  # pre-processing for comp recursion 
     X = len(e_)
 
     olp, vP_, dP_ = 0, [], []  # olp: overlap between vP and dP:
-    vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recur, t_, olp_
-    dP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recur, d_, olp_
+    vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, t_, olp_
+    dP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, d_, olp_
 
     if typ:  # comparison range increment within e_ = t_ of vP
 
@@ -77,32 +77,32 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, Ave, rng):
     if typ: s = 1 if fv >= 0 else 0  # sign of fd, 0 is positive?
     else:   s = 1 if fd >= 0 else 0  # sign of fv, 0 is positive?
 
-    pri_s, I, D, V, recur, e_, olp_ = P  # debug: 0 values in P?
+    pri_s, I, D, V, recomp, e_, olp_ = P  # debug: 0 values in P?
 
     if x > rng + 2 and (s != pri_s or x == X - 1):  # P is terminated and evaluated
 
         if typ:
             if len(e_) > rng + 3 and pri_s == 1 and V > Ave + ave_V:  # minimum of 3 tuples
-                recur = 1  # recursive range increase flag
+                recomp = 1  # recursive comp range increase flag
                 e_.append(pre_recursive_comp(1, e_, Ave, rng))
                 # comparison range increase within e_ = t_
         else:
             if len(e_) > 3 and abs(D) > Ave + ave_D:  # minimum of 3 ds
-                recur = 1  # recursive derivation increase flag
+                recomp = 1  # recursive derivation increase flag
                 rng = 1  # comp between consecutive ds:
                 e_.append(pre_recursive_comp(0, e_, Ave, rng))
                 # comparison derivation increase within e_ = d_
 
-        P = typ, pri_s, I, D, V, recur, e_, olp_
+        P = typ, pri_s, I, D, V, recomp, e_, olp_
         P_.append(P)  # output to level_2
-        # print ("typ:", typ, "pri_s:", pri_s, "I:", I, "D:", D, "V:", V, "recur:", recur, "e_:", e_, "olp_:", olp_)
+        # print ("typ:", typ, "pri_s:", pri_s, "I:", I, "D:", D, "V:", V, "recomp:", recomp, "e_:", e_, "olp_:", olp_)
 
         o = len(P_), olp  # index of current P and terminated olp are buffered in alt_olp_
         alt_P[6].append(o)
         o = len(alt_P_), olp  # index of current alt_P and terminated olp buffered in olp_
         olp_.append(o)
 
-        olp, I, D, V, recur, e_, olp_ = 0, 0, 0, 0, 0, [], []  # initialized P and olp
+        olp, I, D, V, recomp, e_, olp_ = 0, 0, 0, 0, 0, [], []  # initialized P and olp
 
     pri_s = s   # current sign is stored as prior sign; P (span of pixels forming same-sign v|d) is incremented:
     I += pri_p  # ps summed within vP
@@ -114,7 +114,7 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, Ave, rng):
     else:
         e_.append(fd)  # prior fds of the same sign are buffered within dP
 
-    P = pri_s, I, D, V, recur, e_, olp_
+    P = pri_s, I, D, V, recomp, e_, olp_
 
     return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ are accumulated per line
 
@@ -163,7 +163,7 @@ def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its ele
 
     # pattern filters: eventually a higher-level feedback, initialized here as constants:
 
-    global ave; ave = 63 * rng  # min=average match between pixels, for inclusion into positive vP
+    global ave; ave = 63 * rng  # average match between pixels, minimal for inclusion into positive vP
     global ave_V; ave_V = 63 * rng  # min V for initial incremental-range comparison(t_)
     global ave_D; ave_D = 63 * rng  # min |D| for initial incremental-derivation comparison(d_)
 
@@ -171,8 +171,8 @@ def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its ele
         p_ = Fp_[y, :]   # y is index of new line p_
 
         olp, vP_, dP_ = 0, [], []  # initialized at each level
-        vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recur, t_, olp_
-        dP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recur, d_, olp_
+        vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, t_, olp_
+        dP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, d_, olp_
 
         it_ = deque(maxlen=rng)  # incomplete fuzzy tuples: summation range < rng
         it_.append((p_[0], 0, 0))  # prior tuple, no d, m at x = 0
