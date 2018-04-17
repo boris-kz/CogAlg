@@ -6,7 +6,7 @@ from collections import deque
 
 
 def recursive_comparison(x,
-                         pattern,
+                         pixel,
                          previous_pixel,
                          fuzzy_difference,
                          fuzzy_value,
@@ -15,12 +15,12 @@ def recursive_comparison(x,
                          value_pattern_array,
                          difference_pattern_array,
                          overlap,
-                         elements_array_lenth,
+                         elements_array_length,
                          average_match,
                          comparison_range):
 
-    difference = pattern - previous_pixel
-    match = min(pattern, previous_pixel)
+    difference = pixel - previous_pixel
+    match = min(pixel, previous_pixel)
     value = match - average_match
 
     fuzzy_difference += difference
@@ -40,7 +40,7 @@ def recursive_comparison(x,
                            fuzzy_difference,
                            fuzzy_value,
                            x,
-                           elements_array_lenth,
+                           elements_array_length,
                            average_match,
                            comparison_range)
 
@@ -58,7 +58,7 @@ def recursive_comparison(x,
                            fuzzy_difference,
                            fuzzy_value,
                            x,
-                           elements_array_lenth,
+                           elements_array_length,
                            average_match,
                            comparison_range)
 
@@ -73,9 +73,9 @@ def recursive_comparison(x,
            overlap
 
 
-def recursive_comparison_control(pattern_type, elements_array, average_match, comparison_range):
-    average_match += average
-    elements_array_lenth = len(elements_array)
+def recursive_comparison_control(pattern_type, elements_array, accumulated_average_match, comparison_range):
+    accumulated_average_match += average_match
+    elements_array_length = len(elements_array)
 
     overlap, value_pattern_array, difference_pattern_array = 0, [], []
     value_pattern = 0, 0, 0, 0, 0, [], []
@@ -83,7 +83,7 @@ def recursive_comparison_control(pattern_type, elements_array, average_match, co
 
     if pattern_type:
         comparison_range += 1
-        for x in range(comparison_range + 1, elements_array_lenth):
+        for x in range(comparison_range + 1, elements_array_length):
 
             pattern, internal_fuzzy_difference, internal_fuzzy_value = elements_array[x]
             previous_pixel, fuzzy_difference, fuzzy_value = elements_array[x - comparison_range]
@@ -104,7 +104,7 @@ def recursive_comparison_control(pattern_type, elements_array, average_match, co
                                            value_pattern_array,
                                            difference_pattern_array,
                                            overlap,
-                                           elements_array_lenth,
+                                           elements_array_length,
                                            average_match,
                                            comparison_range)
 
@@ -112,7 +112,7 @@ def recursive_comparison_control(pattern_type, elements_array, average_match, co
         previous_difference = elements_array[0]
         fuzzy_difference, fuzzy_value = 0, 0
 
-        for x in range(1, elements_array_lenth):
+        for x in range(1, elements_array_length):
             difference = elements_array[x]
             fuzzy_difference,\
             fuzzy_value,\
@@ -130,7 +130,7 @@ def recursive_comparison_control(pattern_type, elements_array, average_match, co
                                            value_pattern_array,
                                            difference_pattern_array,
                                            overlap,
-                                           elements_array_lenth,
+                                           elements_array_length,
                                            average_match,
                                            comparison_range)
 
@@ -140,16 +140,16 @@ def recursive_comparison_control(pattern_type, elements_array, average_match, co
 
 
 def form_pattern(pattern_type,
-                 value_pattern,
-                 difference_pattern,
-                 value_pattern_array,
-                 difference_pattern_array,
+                 pattern,
+                 alternative_type_pattern,
+                 pattern_array,
+                 alternative_type_pattern_array,
                  overlap,
                  previous_pixel,
                  fuzzy_difference,
                  fuzzy_value,
                  pixel_index,
-                 width,
+                 image_width,
                  average_match,
                  comparison_range):
 
@@ -159,73 +159,73 @@ def form_pattern(pattern_type,
         sign = 1 if fuzzy_difference >= 0 else 0
 
     prior_sign,\
-    prior_signs,\
-    fuzzy_differences,\
-    fuzzy_values,\
+    summed_pixels,\
+    summed_differences,\
+    summed_values,\
     recursion_flag,\
     elements_array,\
-    overlap_array = value_pattern
+    overlap_array = pattern
 
-    if pixel_index > comparison_range + 2 and (sign != prior_sign or pixel_index == width - 1):
+    if pixel_index > comparison_range + 2 and (sign != prior_sign or pixel_index == image_width - 1):
         if pattern_type:
             if len(elements_array) > comparison_range + 3\
                     and prior_sign == 1\
-                    and fuzzy_values > average_match + average_value:
+                    and summed_values > average_match + average_summed_values:
                 recursion_flag = 1
                 elements_array.append(recursive_comparison_control(1, elements_array, average_match, comparison_range))
 
         else:
-            if len(elements_array) > 3 and abs(fuzzy_differences) > average_match + average_difference:
+            if len(elements_array) > 3 and abs(summed_differences) > average_match + average_summed_difference:
                 recursion_flag = 1
                 comparison_range = 1
                 elements_array.append(recursive_comparison_control(0, elements_array, average_match, comparison_range))
 
-        value_pattern = prior_sign,\
-                        prior_signs,\
-                        fuzzy_differences,\
-                        fuzzy_values,\
-                        recursion_flag,\
-                        elements_array,\
-                        overlap_array
+        pattern = prior_sign, \
+                summed_pixels, \
+                summed_differences, \
+                summed_values,\
+                recursion_flag,\
+                elements_array,\
+                overlap_array
 
-        value_pattern_array.append(value_pattern)
+        pattern_array.append(pattern)
 
-        o = len(value_pattern_array), overlap
-        difference_pattern[6].append(o)
+        o = len(pattern_array), overlap
+        alternative_type_pattern[6].append(o)
 
-        o = len(difference_pattern_array), overlap
+        o = len(alternative_type_pattern_array), overlap
         overlap_array.append(o)
 
-        prior_sign,\
-        prior_signs,\
-        fuzzy_differences,\
-        fuzzy_values,\
+        prior_sign, \
+        summed_pixels, \
+        summed_differences, \
+        summed_values,\
         recursion_flag,\
         elements_array,\
         overlap_array = 0, 0, 0, 0, 0, [], []
 
     prior_sign = sign
-    prior_signs += prior_sign
-    fuzzy_differences += fuzzy_difference
-    fuzzy_values += fuzzy_value
+    summed_pixels += prior_sign
+    summed_differences += fuzzy_difference
+    summed_values += fuzzy_value
 
     if pattern_type:
         elements_array.append((previous_pixel, fuzzy_difference, fuzzy_value))
     else:
         elements_array.append(fuzzy_difference)
 
-    value_pattern = prior_sign,\
-                    prior_signs,\
-                    fuzzy_differences,\
-                    fuzzy_values,\
-                    recursion_flag,\
-                    elements_array,\
-                    overlap_array
+    pattern = prior_sign, \
+            summed_pixels, \
+            summed_differences, \
+            summed_values,\
+            recursion_flag,\
+            elements_array,\
+            overlap_array
 
-    return value_pattern, \
-           difference_pattern, \
-           value_pattern_array, \
-           difference_pattern_array, \
+    return pattern, \
+           alternative_type_pattern, \
+           pattern_array, \
+           alternative_type_pattern_array, \
            overlap
 
 
@@ -237,7 +237,7 @@ def pixel_comparison(pixel_index,
                      value_pattern_array,
                      difference_pattern_array,
                      overlap,
-                     width,
+                     image_width,
                      average_match,
                      comparison_range):
     index = 0
@@ -271,7 +271,7 @@ def pixel_comparison(pixel_index,
                                fuzzy_difference,
                                fuzzy_value,
                                pixel_index,
-                               width,
+                               image_width,
                                average_match,
                                comparison_range)
 
@@ -289,7 +289,7 @@ def pixel_comparison(pixel_index,
                                fuzzy_difference,
                                fuzzy_value,
                                pixel_index,
-                               width,
+                               image_width,
                                average_match,
                                comparison_range)
 
@@ -300,10 +300,10 @@ def pixel_comparison(pixel_index,
     return incomplete_tuples_array, value_pattern, difference_pattern, value_pattern_array, difference_pattern_array, overlap
 
 
-def image_to_pattern(image):
+def pixels_to_patterns(image):
     height, width = image.shape
 
-    pattern = []
+    frame_of_patterns = []
 
     for line_index in range(height):
         line = image[line_index]
@@ -338,9 +338,9 @@ def image_to_pattern(image):
                                        comparison_range)
 
         line_of_patterns = value_pattern_array, difference_pattern_array
-        pattern.append(line_of_patterns)
+        frame_of_patterns.append(line_of_patterns)
 
-    return pattern
+    return frame_of_patterns
 
 
 # add argument parser
@@ -349,18 +349,20 @@ argument_parser.add_argument('-i', '--image', help='path to image file', default
 arguments = vars(argument_parser.parse_args())
 
 # initialize constants
-average = 63
+average_match = 63
+average_summed_values = 63
+average_summed_differences = 63
 comparison_range = 3
-average_value = average * comparison_range
-average_difference = average * comparison_range
-average_match = average * comparison_range
+average_summed_value = average_summed_values * comparison_range
+average_summed_difference = average_summed_differences * comparison_range
+average_match = average_match * comparison_range
 
 # start time tracking
 start_time = time()
 
-# read image and get pattern
+# read image and form patterns
 image = cv2.imread(arguments['image'], 0).astype(int)
-pattern = image_to_pattern(image)
+frame_of_patterns = pixels_to_patterns(image)
 
 # end time tracking
 end_time = time() - start_time

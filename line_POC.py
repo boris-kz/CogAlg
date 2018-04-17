@@ -139,12 +139,11 @@ def comparison(x, p, it_, vP, dP, vP_, dP_, olp, X, ave, rng):  # pixel is compa
 
         fv = fm - ave  # fuzzy value: deviation of fuzzy match between consecutive pixels
         # fv sign determines completed tuple's inclusion into positive or negative vP
-        Ave = ave  # initialization for form_pattern(), accumulated per recursion:
 
-        vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, Ave, rng)
+        vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, fd, fv, x, X, ave, rng)
         #  forms value pattern vP: span of pixels forming same-sign fv s
 
-        dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, Ave, rng)
+        dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, fd, fv, x, X, ave, rng)
         # forms difference pattern dP: span of pixels forming same-sign fd s
 
         olp += 1  # overlap between vP and dP, stored in both and terminated with either
