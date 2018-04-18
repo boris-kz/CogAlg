@@ -1,4 +1,6 @@
 from scipy import misc
+import argparse
+from time import time
 from collections import deque
 
 ''' core algorithm level 1: 1D-only proof of concept, 
@@ -36,7 +38,7 @@ def recursive_comparison(x, p, pri_p, fd, fv, vP, dP, vP_, dP_, olp, X, Ave, rng
     return fd, fv, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
 
 
-def pre_recursive_comp(typ, e_, Ave, rng):  # pre-processing for comp recursion within pattern
+def pre_recursive_comp(typ, e_, Ave, rng):  # pre-processing for comp recursion within selected pattern
 
     Ave += ave  # filter accumulation compensates for redundancy of derivatives formed by recursive_comparison
     X = len(e_)
@@ -50,7 +52,7 @@ def pre_recursive_comp(typ, e_, Ave, rng):  # pre-processing for comp recursion 
         rng += 1  # comp range counter, recorded within Ps formed by recursive_comp
         for x in range(rng+1, X):
 
-            p, ifd, ifv = e_[x]  # ifd, ifv not used, directional pri_p accum only
+            p = e_[x][0]  # input fd and fv are not used, directional pri_p accum only
             pri_p, fd, fv = e_[x-rng]  # for comparison of rng-pixel-distant pixels:
 
             fd, fv, vP, dP, vP_, dP_, olp = \
@@ -70,7 +72,7 @@ def pre_recursive_comp(typ, e_, Ave, rng):  # pre-processing for comp recursion 
     return vP_, dP_  # local vP_ + dP_ replaces t_ or d_
 
 
-def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, Ave, rng):
+def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, ave, rng):
 
     # accumulation, termination, recursion within patterns (vPs and dPs)
 
@@ -82,15 +84,15 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, Ave, rng):
     if x > rng + 2 and (s != pri_s or x == X - 1):  # P is terminated and evaluated
 
         if typ:
-            if len(e_) > rng + 3 and pri_s == 1 and V > Ave + ave_V:  # minimum of 3 tuples
+            if len(e_) > rng + 3 and pri_s == 1 and V > ave + ave_V:  # minimum of 3 tuples
                 recomp = 1  # recursive comp range increase flag
-                e_.append(pre_recursive_comp(1, e_, Ave, rng))
+                e_.append(pre_recursive_comp(1, e_, ave, rng))
                 # comparison range increase within e_ = t_
         else:
-            if len(e_) > 3 and abs(D) > Ave + ave_D:  # minimum of 3 ds
+            if len(e_) > 3 and abs(D) > ave + ave_D:  # minimum of 3 ds
                 recomp = 1  # recursive derivation increase flag
                 rng = 1  # comp between consecutive ds:
-                e_.append(pre_recursive_comp(0, e_, Ave, rng))
+                e_.append(pre_recursive_comp(0, e_, ave, rng))
                 # comparison derivation increase within e_ = d_
 
         P = typ, pri_s, I, D, V, recomp, e_, olp_
@@ -119,7 +121,7 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, fd, fv, x, X, Ave, rng):
     return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ are accumulated per line
 
 
-def comparison(x, p, it_, vP, dP, vP_, dP_, olp, X, ave, rng):  # pixel is compared to rng prior pixels
+def comparison(x, p, it_, vP, dP, vP_, dP_, olp, X, rng):  # pixel is compared to rng prior pixels
 
     index = 0  # alternative: for index in range(0, len(it_)-1): doesn't work quite right?
 
@@ -158,13 +160,6 @@ def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its ele
 
     FP_ = []  # output frame of vPs: relative-match patterns, and dPs: difference patterns
     Y, X = Fp_.shape  # Y: frame height, X: frame width
-    rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
-
-    # pattern filters: eventually a higher-level feedback, initialized here as constants:
-
-    global ave; ave = 63 * rng  # average match between pixels, minimal for inclusion into positive vP
-    global ave_V; ave_V = 63 * rng  # min V for initial incremental-range comparison(t_)
-    global ave_D; ave_D = 63 * rng  # min |D| for initial incremental-derivation comparison(d_)
 
     for y in range(Y):
         p_ = Fp_[y, :]   # y is index of new line p_
@@ -180,15 +175,31 @@ def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its ele
             p = p_[x]  # new pixel, for fuzzy comparison to it_:
 
             it_, vP, dP, vP_, dP_, olp = \
-            comparison(x, p, it_, vP, dP, vP_, dP_, olp, X, ave, rng)
+            comparison(x, p, it_, vP, dP, vP_, dP_, olp, X, rng)
 
         LP_ = vP_, dP_   # line of patterns is formed from a line of pixels
         FP_.append(LP_)  # line of patterns is added to frame of patterns at y = len(FP_)
 
     return FP_  # frame of patterns is output to level 2
 
+argument_parser = argparse.ArgumentParser()
+arguments = vars(argument_parser.parse_args())
+
+# pattern filters: eventually a higher-level feedback, initialized here as constants:
+
+rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
+ave = 63 * rng  # average match between pixels, minimal for inclusion into positive vP
+ave_V = 63  # min V for initial incremental-range comparison(t_)
+ave_D = 63  # min |D| for initial incremental-derivation comparison(d_)
+
+# start time tracking
+start_time = time()
+
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
 frame(f)
 
+# end time tracking
+end_time = time() - start_time
+print(end_time)
 
