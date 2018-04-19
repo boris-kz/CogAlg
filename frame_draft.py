@@ -86,7 +86,7 @@ def ycomp(t_, t2__, _vP_, _dP_):  # vertical comparison between pixels of consec
 
         if len(t2_) == rng:  # or while y < rng: i_ycomp(): quad_ = pop(quad__), t = pop(t_)., no form_P?
 
-            dg = _d + fdy  # d gradient
+            dg = _d + fdy  # d gradient, partial cancellation?
             vg = _m + fmy - ave  # v gradient
             t2 = pri_p, _d, fdy, _m, fmy  # completed quadrants are moved from quad_ to form_P:
 
@@ -206,7 +206,7 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x_coord _Ps in _P_, fo
             t3 -> form_P -> form_blob -> form_durable | object, time-fuzzy because noise fluctuates
             persistence is combined: equally important and not oriented,
             
-            but d / time is separate from G2, project / dim, |d| sum: any change per pixel?
+            but d / time is separate from G2, project / dim, |d| sum: any change, orthogonal ds don't cancel,
             |d| sum x dim for vP interference, but dP per dim for d recomp eval?
         '''
 
