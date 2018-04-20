@@ -1,4 +1,4 @@
-from scipy import misc
+import cv2
 import argparse
 from time import time
 from collections import deque
@@ -11,7 +11,6 @@ Resulting difference patterns dPs (spans of pixels forming same-sign differences
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
 
-This code is optimized for variable visibility rather than speed 
 postfix '_' denotes array name, vs. identical name of its elements '''
 
 
@@ -182,24 +181,24 @@ def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its ele
 
     return FP_  # frame of patterns is output to level 2
 
-argument_parser = argparse.ArgumentParser()
-arguments = vars(argument_parser.parse_args())
+# from scipy import misc
+# f = misc.face(gray=True)  # input frame of pixels
+# f = f.astype(int)
 
-# pattern filters: eventually a higher-level feedback, initialized here as constants:
+argument_parser = argparse.ArgumentParser()
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
+arguments = vars(argument_parser.parse_args())
+image = cv2.imread(arguments['image'], 0).astype(int)
+
+# pattern filters: eventually from higher-level feedback, initialized here as constants:
 
 rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
 ave = 63 * rng  # average match between pixels, minimal for inclusion into positive vP
 ave_V = 63  # min V for initial incremental-range comparison(t_)
 ave_D = 63  # min |D| for initial incremental-derivation comparison(d_)
 
-# start time tracking
 start_time = time()
-
-f = misc.face(gray=True)  # input frame of pixels
-f = f.astype(int)
-frame(f)
-
-# end time tracking
+FP_ = frame(image)
 end_time = time() - start_time
 print(end_time)
 

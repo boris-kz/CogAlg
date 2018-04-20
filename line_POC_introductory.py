@@ -1,6 +1,5 @@
 import cv2
 import argparse
-
 from time import time
 from collections import deque
 
@@ -345,6 +344,7 @@ def pixels_to_patterns(image):
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
 arguments = vars(argument_parser.parse_args())
+image = cv2.imread(arguments['image'], 0).astype(int)
 
 # initialize constants
 comparison_range = 3
@@ -352,13 +352,7 @@ average_match = 63 * comparison_range
 average_summed_value = 63
 average_summed_difference = 63
 
-# start time tracking
 start_time = time()
-
-# read image and form patterns
-image = cv2.imread(arguments['image'], 0).astype(int)
 frame_of_patterns = pixels_to_patterns(image)
-
-# end time tracking
 end_time = time() - start_time
 print(end_time)
