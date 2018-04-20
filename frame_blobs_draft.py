@@ -1,17 +1,17 @@
-from scipy import misc
-from collections import deque
+import cv2
+import argparse
 from time import time
+from collections import deque
 
-''' core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
-    It performs several steps of encoding, incremental per scan line defined by vertical coordinate y,
-    defined relative to y of current input line:
+''' core algorithm of levels 1 + 2, modified to segment image into blobs. It performs several steps of encoding, 
+    incremental per scan line defined by vertical coordinate y, relative to y of current input line:
 
-    y:    1st level encoding by comp(p_):  lateral pixel comp -> tuple t ) t_
-    y- 1: 2nd level encoding by ycomp(t_): vertical pixel comp -> quadrant t2 ) t2, 
-    y- 1+ rng: 3rd level encoding by form_P(t2) -> 1D pattern P ) P_  
-    y- 2+ rng: 4th level encoding by scan_P_(P, _P) -> fork_, root_: vertical connections between Ps of adjacent lines 
-    y- 3+ rng+ blob depth: 5th level encoding by incr_blob(fork_, blob) -> blob: merge connected Ps into blob segments
-    y- 4+ rng+ netw depth: 6th level encoding by incr_netw(blob, blob) -> blob_: merge connected segments into network
+    y:    1st-level encoding by comp(p_): lateral pixel comp -> tuple t ) t_
+    y- 1: 2nd-level encoding by ycomp(t_): vertical pixel comp -> quadrant t2 ) t2, 
+    y- 1+ rng: 3rd-level encoding by form_P(t2) -> 1D pattern P ) P_  
+    y- 2+ rng: 4th-level encoding by scan_P_(P, _P) -> fork_, root_: vertical connections between Ps of adjacent lines 
+    y- 3+ rng+ blob depth: 5th-level encoding by incr_blob(fork_, blob) -> blob: merge connected Ps into blob segments
+    y- 4+ rng+ netw depth: 6th-level encoding by incr_netw(blob, blob) -> blob_: merge connected segments into network
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into some higher function.
@@ -25,6 +25,12 @@ from time import time
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
     Thus, quadrant gradient is estimated as the average of these two orthogonally diverging derivatives.
     Blob is contiguous area of same-sign quadrant gradient, of difference for dblob or match deviation for vblob.
+
+    speculative:
+
+    orthogonal derivatives should form separate redundant blobs, 
+    because they don't add, except to estimate diagonal or hypot derivatives: 
+    blob or frame re-orientation to max | min derivatives or dimensions?
 
     postfix '_' denotes array name, vs. same-name elements of that array 
     prefix '_' denotes higher-line variable or pattern '''
@@ -140,7 +146,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
         P = (pri_s, I, D, Dy, M, My, G, Olp, t2_), [], []  # no ave * alt_rdn / e_: adj < cost?
         P_, _P_, blob_ = scan_P_(typ, P, P_, _P_, blob_, x)  # P scans overlapping higher-line _Ps
 
-        I, D, Dy, M, My, G, Olp, q_ = 0, 0, 0, 0, 0, 0, 0, []  # P initialization
+        I, D, Dy, M, My, G, Olp, t2_ = 0, 0, 0, 0, 0, 0, 0, []  # P initialization
         olp, oG, alt_oG = 0, 0, 0  # olp initialization
 
     # continued or initialized vars are accumulated (use zip S_vars?):
@@ -166,7 +172,7 @@ def form_P(typ, t2, g, alt_g, olp, oG, alt_oG, P, alt_P, P_, _P_, blob_, x):
 def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x_coord _Ps in _P_, forms overlapping Gs
 
     buff_ = []
-    (s, I, D, Dy, M, My, G, Olp, t2_), root_, = P  # roots are to find unique fork Ps
+    (s, I, D, Dy, M, My, G, Olp, t2_), root_, = P  # roots are recorded to find unique fork Ps
 
     ix = x - len(t2_)  # initial x of P
     _ix = 0  # initialized ix of _P displaced from _P_ by last scan_P_
@@ -194,28 +200,29 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x_coord _Ps in _P_, fo
         if _P[2] > ix:  # if _x > ix:
             buff_.append(_P)  # _P is buffered for scan_P_(next P)
 
-        elif fork_ == 0: # no overlap between _P and next P, blob termination,
-            # else _P is buffered in fork Ps root_, term eval at P output
+        elif fork_ == 0: # no overlap between _P and next P, blob termination:
 
             blob = incr_blob((oG, _P), blob)  # default _P incl, empty init at final P root_!= 1:
             blob_.append((blob, fork_))  # fork_ is top-down, no root_: redundant to fork_
 
+            # else _P is buffered in fork Ps root_, term eval at P output
+
     # no overlap between P and next _P, at next-line input: blob +=_P for root_ of P if fork_ != 0
 
-    if root_== 0 and fork_== 0: # network term eval? also sum per frame?
+    for _P, blob, fork_ in root_:  # final fork assignment and blob increment per _P
 
+        blob = incr_blob(_P, blob)  # default per root, blob is modified in root _P?
+
+        if fork_ != 1 or root_ != 1:  # blob split | merge, also if y == Y - 1 in frame()?
+            blob_.append((blob, fork_))  # terminated blob_ is input line y - 3+ | record layer 5+
+
+    if root_ == 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 and root' fork_==1
+        blob = root_[0][1]  # root' fork' blob
     else:
-        for _P, blob, fork_ in root_:  # final fork assignment and blob increment per _P
+        if root_ == 0 and P[2] == 0:  # fork_== 0: # network term? also sum per frame?
+           network = incr_network(blob, network)
 
-            blob = incr_blob(_P, blob)  # default per root, blob is modified in root _P?
-
-            if fork_ != 1 or root_ != 1:  # blob split | merge, also if y == Y - 1 in frame()?
-                blob_.append((blob, fork_))  # terminated blob_ is input line y - 3+ | record layer 5+
-
-        if root_ == 1 and root_[0][3] == 1:  # blob assign if final P' root_==1 and root' fork_==1
-            blob = root_[0][1]  # root' fork' blob
-        else:
-            blob = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [])  # init s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_
+        blob = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, [])  # init s, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_
 
     P = s, ix, x, I, D, Dy, M, My, G, Olp, t2_  # P becomes _P, oG is per new P in fork_?
 
@@ -249,7 +256,29 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
 
     return blob
 
-def incr_network(fork_, network):  # continued or initialized network is incremented by attached fork_
+def incr_network(blob, network):  # continued or initialized network is incremented by attached fork_
+    # stub only, to be replaced:
+
+    s, _x, _ix, _lx, Dx, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp, blob_ = network  # or S_par tuple?
+    s, _x, _ix, _lx, Dx, L2, I2, D2, Dy2, M2, My2, G2, OG, Olp, Py_ = blob  # s is re-assigned, ix and lx from scan_P_
+
+    x = lx - len(t2_) / 2  # median x, becomes _x in blob, replaces ix and lx?
+    dx = x - _x  # full comp(x) and comp(S) are conditional, internal vars are secondary
+    Dx += dx  # for blob norm, orient eval, by OG vs. Mx += mx, += |dx| for curved max_L
+
+    L2 += len(t2_)  # t2_ in P buffered in Py_
+    I2 += I
+    D2 += D
+    Dy2 += Dy
+    M2 += M
+    My2 += My
+    G2 += G  # blob value
+    OG += oG  # vertical contiguity, for comp_P eval?
+    Olp += olp  # adds to blob orient and comp_P cost?
+
+    Py_.append((s, ix, lx, I, D, Dy, M, My, G, oG, olp, t2_, Dx))  # Dx to normalize P before comp_P
+    network = s, x, ix, lx, Dx, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_  # separate S_par tuple?
+
     return network
 
 
@@ -290,10 +319,12 @@ ave = 127 * rng  # filter, ultimately set by separate feedback, then ave *= rng?
 div_a = 127  # not justified
 ave_k = 0.25  # average V / I initialization
 
-f = misc.face(gray=True)  # input frame of pixels
-f = f.astype(int)
+argument_parser = argparse.ArgumentParser()
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
+arguments = vars(argument_parser.parse_args())
+image = cv2.imread(arguments['image'], 0).astype(int)
 
 start_time = time()
-frame(f)
+blobs = frame(image)
 end_time = time() - start_time
 print(end_time)
