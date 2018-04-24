@@ -10,11 +10,9 @@ Less coarse (more selective) are Capsule Networks, recently introduced by Geoffr
 
 I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay for contributions, or monthly if there is some track record. Please contact me if interested, here or on G+.
 
-.
 
-OUTLINE OF MY APPROACH
+## outline of my approach
 
-.
 
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
 It’s a hierarchical search for patterns, by cross-comparing inputs over incremental distance and composition. First-level inputs are single variables, such as pixels, and higher-level inputs are multivariate patterns formed on lower levels. variables (parameters) include match and miss per variable compared on lower levels. Hence, higher-level patterns are more complex: variables per pattern selectively multiply on each level.
@@ -37,11 +35,9 @@ To discover anything complex at “polynomial” cost, resulting patterns should
 Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition.
 But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for scalability, vs. combinatorial explosion in search space. But incremental selection is is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation, which is probably why no one else seems to be working on anything sufficiently similar to my algorithm.
 
-.
 
-COMPARISON TO ARTIFICIAL AND BIOLOGICAL NEURAL NETWORKS
+## Comparison to Artificial and Biological Neural Networks
 
-.
 
 ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at synapses, then summed and thresholded into output. Final output also back- propagates to synapses and is combined with their last input to adjust the weights. This weight adjustment is learning. But prior summation degrades resolution of inputs, precluding any comparison between them (the inputs are recoverable, but why degrade and then spend a ton of computation restoring them).
 
@@ -61,11 +57,9 @@ neural memory requires dedicated connections (synapses), which makes individual 
 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Another constraint is noise: neurons often fire at random, so their spikes are summed to reduce noise. Which is not a good reason to degrade far more precise electronic signals.
 
-.
 
-COMPARISON TO CAPSULE NETWORKS AND CLUSTERING
+## Comparison to Capsule Networks and Clustering
 
-.
 
 The nearest experimentally successful method is recently introduced “capsules”. Some similarities to CogAlg:
 - capsules also output multi-variate vectors, “encapsulating” several properties, similar to my patterns
@@ -84,11 +78,9 @@ All these variables are derived by incrementally complex comparison: core operat
 
 Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of ANN, which computes match but not coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed because each has independent predictive value.
 
-.
 
-IMPLEMENTATION
+## Implementation
 
-.
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than the inputs themselves. Hence, precision of where (spans of and distances between patterns) is severely degraded, and so is predictive value of combined representations. There is no default degradation of positional information in my method.
 
