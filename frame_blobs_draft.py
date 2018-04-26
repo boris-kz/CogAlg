@@ -3,7 +3,8 @@ import argparse
 from time import time
 from collections import deque
 
-''' Core algorithm of levels 1 + 2, modified to segment image into blobs. It performs several steps of encoding, 
+''' Version of of frame_draft() limited to defining blobs, but extended to blob per derivative, vs. per gradient type
+    Core algorithm of levels 1 + 2, modified to segment image into blobs. It performs several steps of encoding, 
     incremental per scan line defined by vertical coordinate y, computed relative to y of current input line:
 
     y:    1st-level encoding by comp(p_): lateral pixel comparison -> tuple t ) array t_
@@ -72,19 +73,18 @@ def vertical_comp(t_, t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, 
     vyP = [0,0,0,0,0,0,0,[]]  # vertical value pattern = pri_s, I, D, Dy, M, My, Olp, t2_
     dyP = [0,0,0,0,0,0,0,[]]  # vertical difference pattern = pri_s, I, D, Dy, M, My, Olp, t2_
 
-    o_v_d  = (0,0,0)  # alt. type overlap between vP and dP = (len, V, D): summed over overlap, within line?
-    o_vy_dy = (0,0,0)  # alt. type overlap between vyP and dyP = (len, Vy, Dy)
-    o_v_vy = (0,0,0)  # alt. direction overlap between vP and vyP = (len, V, Vy)
-    o_d_dy = (0,0,0)  # alt. direction overlap between dP and dyP = (len, D, Dy)
-    o_v_dy = (0,0,0)  # alt. type and direction overlap between vP and dyP = (len, V, Dy)
-    o_d_vy = (0,0,0)  # alt. type and direction overlap between dP and vyP = (len, D, Vy)
+    o_v_d  = (0,0,0)  # alt_type overlap between vP and dP = (len, V, D): summed over overlap, within line?
+    o_vy_dy = (0,0,0)  # alt_type overlap between vyP and dyP = (len, Vy, Dy)
+    o_v_vy = (0,0,0)  # alt_direction overlap between vP and vyP = (len, V, Vy)
+    o_d_dy = (0,0,0)  # alt_direction overlap between dP and dyP = (len, D, Dy)
+    o_v_dy = (0,0,0)  # alt_type, alt_direction overlap between vP and dyP = (len, V, Dy)
+    o_d_vy = (0,0,0)  # alt_type, alt_direction overlap between dP and vyP = (len, D, Vy)
 
     vP_, dP_, vyP_, dyP_ = [],[],[],[]
     x = 0; new_t2__ = []  # t2_ buffer: 2D array
 
-    for t, t2_ in zip(t_, t2__):  # compares vertically consecutive pixels within rng, right-to-left?
+    for index, t, t2_ in enumerate(zip(t_, t2__)):  # compares pixels within vertical rng
         p, d, m = t
-        index = 0
         x += 1
 
         for t2 in t2_:
@@ -97,7 +97,6 @@ def vertical_comp(t_, t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, 
             fmy += my  # fuzzy my: sum of my between p and all prior ps within t2_
 
             t2_[index] = pri_p, _d, fdy, _m, fmy
-            index += 1
 
         if len(t2_) == rng:  # or while y < rng: i_ycomp(): t2_ = pop(t2__), t = pop(t_)., no form_P?
 
@@ -145,35 +144,43 @@ def form_P(typ, t2, x, P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd
     p, d, dy, v, vy = t2  # 2D tuple of quadrant variables per pixel
     pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_ = P  # initial pri_ vars = 0, or skip form?
 
-    # 1: len_typ_olp, core, alt_core; 2: len_dir_olp, core, alt_core; 3: len_txd_olp, core, alt_core
-    # core: derivative the sign of which defines current type of pattern:
-
-    if typ == 0: core = v
+    if typ == 0: core = v  # core: derivative that defines corresponding type of pattern
     elif typ == 1: core = d
     elif typ == 2: core = vy
     else: core = dy
 
+    len1, core0, core1 = typ_olp  # each summed within len of corresponding overlap
+    len2, core2, core3 = dir_olp  # two core types have two instances each, with different olp length
+    len3, core4, core5 = txd_olp
+
     s = 1 if core > 0 else 0  # core = 0 is negative: no selection?
-    if s != pri_s and x > rng + 2:  # P is terminated
+    if s != pri_s and x > rng + 2:  # P is terminated, overlaps are evaluated for assignment to P types:
 
-        if typ == 0 or typ == 3:  # ave V / I, to project V of alt_Ps
-            alt_c *= ave_k; alt_oG = alt_oG.astype(int)
-        else:  oG *= ave_k; oG = oG.astype(int)  # same for h_der and h_comp eval? # relative value adjustment
+        if typ == 0 or typ ==2:  # core = v | vy, alt cores d and dy are adjusted for reduced projected match of difference:
+            core1 *= ave_k; core1 = core1.astype(int)
+            core3 *= ave_k; core3 = core3.astype(int)
 
-        if oG > alt_oG:  # comp between overlapping vG and dG; olp: len, core, alt_core
-            Olp += olp  # olp is assigned to the weaker of P | alt_P, == -> P: local access
+        else:  # core = d | dy, both adjusted for reduced projected match of difference:
+            core *= ave_k; core = core.astype(int)
+            core2 *= ave_k; core2 = core2.astype(int)
+
+        if core < core1:
+            olp1 += len1  # len olp is assigned to the weaker of P | alt_type_P
         else:
-            alt_P[7] += olp
+            alt_typ_P[6] += len1
 
         P = pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_  # no ave * alt_rdn / e_: adj < cost?
         P_, _P_, blob_, net_ = scan_P_(typ, x, P, P_, _P_, network, frame)  # scans higher-line _Ps
 
         I, D, Dy, M, My, olp1, olp2, olp3, t2_ = 0, 0, 0, 0, 0, 0, 0, 0, []  # P initialization
-        typ_olp = 0, 0, 0; dir_olp = 0, 0, 0; txd_olp = 0, 0, 0  # olp initialization
+        typ_olp = [0, 0, 0]; dir_olp = [0, 0, 0]; txd_olp = [0, 0, 0]  # olp initialization
 
     # continued or initialized vars are accumulated (use zip S_vars?):
+    # len of overlap to stronger alt-type P is accumulated until P or alt P terminates for eval to assign olp to alt_Ps
 
-    olp += 1; oG += g; alt_oG += alt_g  # # len of overlap to stronger alt-type P, accumulated until P or alt P terminates for eval to assign olp to alt_rdn of vP or dP
+    typ_olp[0] += 1  # (len1 + 1, core0, core1)  # olp += 1; oG += g; alt_oG += alt_g?
+    dir_olp[0] += 1  # (len2 + 1, core2, core3)
+    txd_olp[0] += 1  # (len3 + 1, core4, core5)
 
     I += p    # inputs and derivatives are summed as P parameters:
     D += d    # lateral D
@@ -324,7 +331,7 @@ def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_
     t2_ = deque(maxlen=rng)  # vertical buffer of incomplete quadrant tuples, for fuzzy ycomp
     t2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
     p_ = f[0, :]  # first line of pixels
-    t_ = comp(p_)  # after part_comp (pop, no t_.append) while x < rng?
+    t_ = horizontal_comp(p_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for t in t_:
         p, d, m = t
