@@ -3,16 +3,17 @@ import argparse
 from time import time
 from collections import deque
 
-''' Version of of frame_draft() limited to defining blobs, but extended to blob per derivative, vs. per gradient type
+''' Version of of frame_draft() restricted to defining blobs, but extended to blob per derivative, vs. per gradient type
+
     Core algorithm of levels 1 + 2, modified to segment image into blobs. It performs several steps of encoding, 
     incremental per scan line defined by vertical coordinate y, computed relative to y of current input line:
 
     y:    1st-level encoding by comp(p_): lateral pixel comparison -> tuple t ) array t_
     y- 1: 2nd-level encoding by ycomp(t_): vertical pixel comp -> quadrant t2 ) array t2_ 
     y- 1+ rng: 3Lev encoding by form_P(t2) -> 1D pattern P ) P_  
-    y- 2+ rng: 4Lev encoding by scan_P_(P, _P) -> fork_, root_: vertical connections between Ps of adjacent lines 
-    y- 3+ rng+ blob depth: 5Lev encoding by incr_blob(_P, blob) -> blob: merge connected Ps into blob segments
-    y- 4+ rng+ netw depth: 6Lev encoding by incr_net(_blob, net) -> net: merge connected segments into network
+    y- 2+ rng: 4Lev encoding by scan_P_(P, _P) -> fork_, root_: downward and upward connections between Ps of adjacent lines 
+    y- 3+ rng+ blob depth: 5Lev encoding by incr_blob(_P, blob) -> blob: merge connected Ps into non-forking blob segments
+    y- 4+ rng+ netw depth: 6Lev encoding by incr_net(_blob, net) -> net: merge connected segments into network of forks
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into some higher function.
@@ -21,11 +22,11 @@ from collections import deque
     
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
-    Vertical and horizontal derivatives form separate blobs, suppressing overlapping orthogonal representations
-    They can be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives
+    Vertical and horizontal derivatives form separate blobs, each suppressing overlapping orthogonal representations.
+    They can also be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives.
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
 
-    Not implemented here, alternative segmentation by quadrant gradient (less predictive due to directional info loss): 
+    Not implemented here: alternative segmentation by quadrant gradient (less predictive due to directional info loss): 
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
     Thus, quadrant gradient is estimated as the average of these two orthogonally diverging derivatives.
@@ -115,19 +116,21 @@ def vertical_comp(t_, t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, 
         new_t2__.appendleft(t2_)     # vertically-incomplete tuple array is transferred to next t2__, for next-line ycomp
 
     # line ends, current patterns are sent to scan_P_, t2s with incomplete lateral fd and fm are discarded?
-    # last t2__ (at y = Y-1) is also discarded?
 
-    if y + 1 > rng:  # starting with the first line of complete t2s:
+    if y + 1 > rng:  # starting with the first line of complete t2s: vertical interconnection of laterally incomplete patterns:
 
         vP_, _vP_, vnet, vframe = scan_P_(0, x, vP, vP_, _vP_, vnet, vframe)  # returns empty _vP_
         dP_, _dP_, dnet, dframe = scan_P_(1, x, dP, dP_, _dP_, dnet, dframe)  # returns empty _dP_
         vyP_, _vyP_, vynet, vyframe = scan_P_(0, x, vyP, vyP_, _vyP_, vynet, vyframe)  # returns empty _vyP_
         dyP_, _dyP_, dynet, dyframe = scan_P_(1, x, dyP, dyP_, _dyP_, dynet, dyframe)  # returns empty _dyP_
 
+    # last vertical rng of lines: vertically incomplete t2__ is discarded, but vertically incomplete patterns inputted to scan_P_?
+    # this will be added to image_to_blobs() at y = Y-1
+
     return new_t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, vframe, dframe, vyframe, dyframe  # extended in scan_P_
 
 
-def form_P(typ, t2, x, P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd_olp, P_, _P_, network, frame):
+def form_P(typ, t2, x, P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd_olp, P_, _P_, net, frame):
 
     # forms 1D dP or vP, then scan_P_ adds forks in _P fork_s and accumulates blob_
 
@@ -135,72 +138,69 @@ def form_P(typ, t2, x, P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd
     pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_ = P  # olp1: summed typ_olp, olp2: summed dir_olp, olp3: summed txd_olp
 
     len1, core1, core1a = typ_olp  # V, D | D, V | Vy,Dy | Dy,Vy  # each summed within length of corresponding overlap
-    len2, core2, core2a = dir_olp  # V,Vy | Vy,V | D, Dy | Dy, D  # last "a" is for alternative
-    len3, core3, core3a = txd_olp  # V,Dy | Dy,V | D, Vy | Vy, D
+    len2, core2, core2a = dir_olp  # V,Vy | D,Dy | Vy, V | Dy, D  # last "a" is for alternative
+    len3, core3, core3a = txd_olp  # V,Dy | D,Vy | Vy, D | Dy, V  # cores are re-ordered when form_P is called
 
-    if   typ == 0: core = v; Core = V  # core: derivative that defines corresponding type of pattern
-    elif typ == 1: core = d; Core = D
-    elif typ == 2: core = vy; Core = Vy
-    else: core = dy; Core = Dy
+    if   typ == 0: core = v  # core: derivative that defines corresponding type of pattern
+    elif typ == 1: core = d
+    elif typ == 2: core = vy
+    else:          core = dy
 
     s = 1 if core > 0 else 0  # core = 0 is negative: no selection?
-    if s != pri_s and x > rng + 2:  # P is terminated, overlaps are evaluated for assignment to P types:
+    if s != pri_s and x > rng + 2:  # P is terminated, overlaps are evaluated for assignment to alt Ps:
 
         if typ == 0 or typ ==2:  # core = v | vy, alt cores d and dy are adjusted for reduced projected match of difference:
-            core1 *= ave_k; core1 = core1.astype(int)
-            core2a *= ave_k; core2a = core2a.astype(int)
+            core1a *= ave_k; core1a = core1a.astype(int)
+            core3a *= ave_k; core3a = core3a.astype(int)
 
         else:  # core = d | dy, both adjusted for reduced projected match of difference:
             core1 *= ave_k; core1 = core1.astype(int)
-            core1a *= ave_k; core1a = core1a.astype(int)
+            core3 *= ave_k; core3 = core3.astype(int)  # core2 and core2a are same-type: never adjusted
 
-        core3a *= ave_k; core3a = core3a.astype(int)  # d | dy: always adjusted, core3 = v | vy: never adjusted
+        if core1 < core1a: olp1 += len1  # length of olp is accumulated in the weaker alt P until P or alt P terminates
+        else: alt_typ_P[6] += len1
 
-        if core1 < core1a: olp1 += len1  # length of olp is assigned to the weaker alt P
-        else: alt_typ_P[6] += len1     # no alt Core sum for retro P eval: cost > gain?
-
-        if core2 < core2a: olp2 += len2  # no, alt core can be either of the two cores, depending on type?
+        if core2 < core2a: olp2 += len2
         else: alt_dir_P[6] += len2
 
         if core3 < core3a: olp3 += len3
-        else: alt_txd_P[6] += len3
+        else: alt_txd_P[6] += len3       # no alt Core sum for retro P eval: cost > gain?
 
         P = pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_  # no ave * alt_rdn / e_: adj < cost?
-        P_, _P_, blob_, net_ = scan_P_(typ, x, P, P_, _P_, network, frame)  # scans higher-line _Ps
+        P_, _P_, blob_, net_ = scan_P_(typ, x, P, P_, _P_, net, frame)  # scans higher-line _Ps
 
         I, D, Dy, M, My, olp1, olp2, olp3, t2_ = 0, 0, 0, 0, 0, 0, 0, 0, []  # P initialization
-        len1, core0, core1, len2, core2, core3, len3, core4, core5 = 0,0,0,0,0,0,0,0,0
-        # olp initialization: typ_olp = [0, 0, 0]; dir_olp = [0, 0, 0]; txd_olp = [0, 0, 0]
+        len1, core1, core1a, len2, core2, core2a, len3, core3, core3a = 0,0,0,0,0,0,0,0,0  # olp init
 
-    # continued or initialized vars are accumulated (use zip S_vars?):
-    # len of overlap to stronger alt-type P is accumulated until P or alt P terminates for eval to assign olp to alt_Ps
-
-    len1 += 1; len2 += 1; len3 += 1
-
-    if typ == 0:   core1 += v; core1a += d; core2 += v; core2a += vy; core3 += v; core3a += dy
-    elif typ == 1: core1 += v; core1a += d; core2 += v; core2a += vy; core3 += v; core3a += dy
-    elif typ == 2: core = vy; Core = Vy
-    else: core = dy; Core = Dy
+    # continued or initialized P and olp vars are accumulated:
 
     I += p    # inputs and derivatives are summed as P parameters:
     D += d    # lateral D
     Dy += dy  # vertical D
     V += v    # lateral V
     Vy += vy  # vertical V
-
-    t2_.append((p, d, dy, v, vy))  # vs. p, g, alt_g in vP and g in dP:
-    # full quadrants are buffered for oriented rescan, as well as incremental range | derivation comp
+    t2_.append((p, d, dy, v, vy))  # buffered for oriented rescan and incremental range | derivation comp
 
     P = [s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_]
 
-    return P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd_olp, P_, _P_, network, frame  # accumulated in ycomp
+    if typ == 0:   core1 += v; core1a += d; core2 += v; core2a += vy; core3 += v; core3a += dy
+    elif typ == 1: core1 += d; core1a += v; core2 += d; core2a += dy; core3 += d; core3a += vy
+    elif typ == 2: core1 += vy; core1a += dy; core2 += vy; core2a += v; core3 += vy; core3a += d
+    else:          core1 += dy; core1a += vy; core2 += dy; core2a += d; core3 += dy; core3a += v
+    len1 += 1; len2 += 1; len3 += 1
+
+    typ_olp = len1, core1, core1a
+    dir_olp = len2, core2, core2a
+    txd_olp = len3, core3, core3a
+
+    return P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd_olp, P_, _P_, net, frame  # accumulated in ycomp
 
 
 def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps in _P_, forms overlaps
 
     buff_ = []  # for displaced _Ps buffered for scan_P_(next P)
     root_ = []  # for _Ps connected to current P
-    s, I, D, Dy, M, My, G, Olp, t2_ = P
+    s, I, D, Dy, M, My, olp1, olp2, olp3, t2_ = P
     ix = x - len(t2_)  # initial x of P
     _ix = 0  # ix of _P, displaced from _P_ by last scan_P_?
 
@@ -215,7 +215,7 @@ def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps i
                 for t2 in t2_:  # all vars are summed within overlap between P and _P for blob eval:
 
                     if typ: olp += t2[0]  # t2 = p, d, dy, m, my
-                    else:   olp += t2[1]
+                    else:   olp += t2[1]  # olp between P and _P, distinct from olp1, olp2, olp3 between alt Ps
                     t2_x += 1
 
             root_.append((olp, _P))  # _Ps connected to P, for terminated segment transfer to network
@@ -229,12 +229,12 @@ def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps i
 
                 for blob, fork_, __root_ in _root_:  # root_' blobs termination test:
                     if fork_ == 1:
-                        network = incr_net(blob, network)  # or net and frame are accessed from blob?
+                        network = incr_network(blob, network)  # or net and frame are accessed from blob?
                     else:
                         frame = incr_frame(network, frame)
                         # if _blob' fork_ == 0 and _root_ == 0: net term and sum per frame
 
-            if _root_ == 1:  # after while()
+            if _root_ == 1:  # after while(); rdn eval per blob | network?
                 blob = incr_blob((olp, _P), _root_[0])
 
             else:  # blob but not network is terminated:
@@ -245,7 +245,7 @@ def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps i
 
     # no overlap between P and next _P, at next-line input: blob +=_P for root_ of P if fork_ != 0
 
-    P = s, ix, x, I, D, Dy, M, My, G, Olp, t2_  # P becomes _P, oG is per new P in fork_?
+    P = s, ix, x, I, D, Dy, M, My, olp1, olp2, olp3, t2_  # P becomes _P, oG is per new P in fork_?
 
     P_.append((P, [], root_))  # blob assign, forks init, _P_ = P_ for next-line scan_P_()
     buff_ += _P_  # excluding displaced _Ps
@@ -290,7 +290,7 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
 
     return blob
 
-def incr_net(blob, network):  # continued or initialized network is incremented by attached fork_
+def incr_network(blob, network):  # continued or initialized network is incremented by attached fork_
     # stub only, to be replaced:
 
     s, _x, _ix, _lx, Dx_net, L_net, I_net, D_net, Dy_net, M_net, My_net, yOlp_net, Olp_net, blob_ = network  # or S_par tuple?
@@ -345,8 +345,12 @@ def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_
 
         p_ = f[y, :]  # vertical coordinate y is index of new line p_
         t_ = horizontal_comp(p_)  # lateral pixel comparison, then vertical pixel comparison:
+
         t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, vframe, dframe, vyframe, dyframe = \
         vertical_comp(t_, t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, vframe, dframe, vyframe, dyframe)
+
+    # frame ends, last vertical rng of incomplete t2__ is discarded,
+    # but vertically incomplete P_ patterns are still inputted in scan_P_?
 
     return vframe, dframe, vyframe, dyframe  # frame of 2D patterns is outputted to level 2
 
