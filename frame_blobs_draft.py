@@ -54,12 +54,12 @@ def horizontal_comp(p_):  # comparison between rng consecutive pixels within hor
 
             it_[index] = (pri_p, fd, fm)
 
-        if len(it_) == rng:  # or while x < rng: icomp(){ p = pop(p_).., no t_.append?
+        if len(it_) == rng:  # or separate while x < rng: icomp(){ p = pop(p_).., no t_.append?
             t_.append((pri_p, fd, fm))  # completed tuple is transferred from it_ to t_
 
-        it_.append((p, 0, 0))  # new prior tuple, fd and fm are initialized at 0
+        it_.appendleft((p, 0, 0))  # new prior tuple, fd and fm are initialized at 0
 
-    t_ += it_  # tuples of last rng remain incomplete
+    t_ += reversed(it_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
     return t_
 
 
@@ -73,17 +73,17 @@ def vertical_comp(t_, t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, 
     vyP = [0,0,0,0,0,0,0,[]]  # vertical value pattern = pri_s, I, D, Dy, M, My, Olp, t2_
     dyP = [0,0,0,0,0,0,0,[]]  # vertical difference pattern = pri_s, I, D, Dy, M, My, Olp, t2_
 
-    o_v_d  = (0,0,0)  # alt_type overlap between vP and dP = (len, V, D): summed over overlap, within line?
-    o_vy_dy = (0,0,0)  # alt_type overlap between vyP and dyP = (len, Vy, Dy)
-    o_v_vy = (0,0,0)  # alt_direction overlap between vP and vyP = (len, V, Vy)
-    o_d_dy = (0,0,0)  # alt_direction overlap between dP and dyP = (len, D, Dy)
-    o_v_dy = (0,0,0)  # alt_type, alt_direction overlap between vP and dyP = (len, V, Dy)
-    o_d_vy = (0,0,0)  # alt_type, alt_direction overlap between dP and vyP = (len, D, Vy)
+    o_v_d  = (0,0,0)  # alt type overlap between vP and dP = (len, V, D): summed over overlap, within line?
+    o_vy_dy= (0,0,0)  # alt type overlap between vyP and dyP = (len, Vy, Dy)
+    o_v_vy = (0,0,0)  # alt direction overlap between vP and vyP = (len, V, Vy)
+    o_d_dy = (0,0,0)  # alt direction overlap between dP and dyP = (len, D, Dy)
+    o_v_dy = (0,0,0)  # alt type, alt direction overlap between vP and dyP = (len, V, Dy)
+    o_d_vy = (0,0,0)  # alt type, alt direction overlap between dP and vyP = (len, D, Vy)
 
     vP_, dP_, vyP_, dyP_ = [],[],[],[]
-    x = 0; new_t2__ = []  # t2_ buffer: 2D array
+    x = 0; new_t2__ = deque()  # t2_ buffer: 2D array
 
-    for index, t, t2_ in enumerate(zip(t_, t2__)):  # compares pixels within vertical rng
+    for index, t, t2_ in enumerate(zip(t_, t2__)):  # compares pixels within vertical rng, all t2s are incomplete
         p, d, m = t
         x += 1
 
@@ -111,23 +111,13 @@ def vertical_comp(t_, t2__, _vP_, _dP_, _vyP_, _dyP_, vnet, dnet, vynet, dynet, 
             vyP, dyP, vP, dP, o_vy_dy, o_v_vy, o_d_vy, vyP_, _vyP_, vynet, vyframe = form_P(2, t2, x, vyP, dyP, vP, dP, o_vy_dy, o_v_vy, o_d_vy, vyP_, _vyP_, vynet, vyframe)
             dyP, vyP, dP, vP, o_vy_dy, o_d_dy, o_v_dy, dyP_, _dyP_, dynet, dyframe = form_P(3, t2, x, dyP, vyP, dP, vP, o_vy_dy, o_d_dy, o_v_dy, dyP_, _dyP_, dynet, dyframe)
 
-        t2_.appendleft((p, d, 0, m, 0))  # initial fdy and fmy = 0, new t2 replaces completed t2 in t2_
-        new_t2__.append(t2_)
+        t2_.append((p, d, 0, m, 0))  # initial fdy and fmy = 0, new t2 replaces completed t2 in t2_
+        new_t2__.appendleft(t2_)     # vertically-incomplete tuple array is transferred to next t2__, for next-line ycomp
 
-    # line ends, patterns are terminated after inclusion of t2 with incomplete lateral fd and fm:
+    # line ends, current patterns are sent to scan_P_, t2s with incomplete lateral fd and fm are discarded?
+    # last t2__ (at y = Y-1) is also discarded?
 
-    ''' if olp:  # if vP x dP overlap len > 0, incomplete vg - ave / (rng / X-x)?
-        olp assign to vP | vPy | dP | dPy: copied from form_P
-
-        odG *= ave_k; odG = odG.astype(int)  # ave_k = V / I, to project V of odG
-
-        if ovG > odG:  # comp of olp vG and olp dG, == goes to vP: secondary pattern?
-            dP[7] += olp  # overlap of lesser-oG vP or dP, or P = P, Olp?
-        else:
-            vP[7] += olp  # to form rel_rdn = alt_rdn / len(e_)
-    '''
-
-    if y + 1 > rng:  # starting with the first line of complete t2s, not finished:
+    if y + 1 > rng:  # starting with the first line of complete t2s:
 
         vP_, _vP_, vnet, vframe = scan_P_(0, x, vP, vP_, _vP_, vnet, vframe)  # returns empty _vP_
         dP_, _dP_, dnet, dframe = scan_P_(1, x, dP, dP_, _dP_, dnet, dframe)  # returns empty _dP_
@@ -142,45 +132,55 @@ def form_P(typ, t2, x, P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd
     # forms 1D dP or vP, then scan_P_ adds forks in _P fork_s and accumulates blob_
 
     p, d, dy, v, vy = t2  # 2D tuple of quadrant variables per pixel
-    pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_ = P  # initial pri_ vars = 0, or skip form?
+    pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_ = P  # olp1: summed typ_olp, olp2: summed dir_olp, olp3: summed txd_olp
 
-    if typ == 0: core = v  # core: derivative that defines corresponding type of pattern
-    elif typ == 1: core = d
-    elif typ == 2: core = vy
-    else: core = dy
+    len1, core1, core1a = typ_olp  # V, D | D, V | Vy,Dy | Dy,Vy  # each summed within length of corresponding overlap
+    len2, core2, core2a = dir_olp  # V,Vy | Vy,V | D, Dy | Dy, D  # last "a" is for alternative
+    len3, core3, core3a = txd_olp  # V,Dy | Dy,V | D, Vy | Vy, D
 
-    len1, core0, core1 = typ_olp  # each summed within len of corresponding overlap
-    len2, core2, core3 = dir_olp  # two core types have two instances each, with different olp length
-    len3, core4, core5 = txd_olp
+    if   typ == 0: core = v; Core = V  # core: derivative that defines corresponding type of pattern
+    elif typ == 1: core = d; Core = D
+    elif typ == 2: core = vy; Core = Vy
+    else: core = dy; Core = Dy
 
     s = 1 if core > 0 else 0  # core = 0 is negative: no selection?
     if s != pri_s and x > rng + 2:  # P is terminated, overlaps are evaluated for assignment to P types:
 
         if typ == 0 or typ ==2:  # core = v | vy, alt cores d and dy are adjusted for reduced projected match of difference:
             core1 *= ave_k; core1 = core1.astype(int)
-            core3 *= ave_k; core3 = core3.astype(int)
+            core2a *= ave_k; core2a = core2a.astype(int)
 
         else:  # core = d | dy, both adjusted for reduced projected match of difference:
-            core *= ave_k; core = core.astype(int)
-            core2 *= ave_k; core2 = core2.astype(int)
+            core1 *= ave_k; core1 = core1.astype(int)
+            core1a *= ave_k; core1a = core1a.astype(int)
 
-        if core < core1:
-            olp1 += len1  # len olp is assigned to the weaker of P | alt_type_P
-        else:
-            alt_typ_P[6] += len1
+        core3a *= ave_k; core3a = core3a.astype(int)  # d | dy: always adjusted, core3 = v | vy: never adjusted
+
+        if core1 < core1a: olp1 += len1  # length of olp is assigned to the weaker alt P
+        else: alt_typ_P[6] += len1     # no alt Core sum for retro P eval: cost > gain?
+
+        if core2 < core2a: olp2 += len2  # no, alt core can be either of the two cores, depending on type?
+        else: alt_dir_P[6] += len2
+
+        if core3 < core3a: olp3 += len3
+        else: alt_txd_P[6] += len3
 
         P = pri_s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_  # no ave * alt_rdn / e_: adj < cost?
         P_, _P_, blob_, net_ = scan_P_(typ, x, P, P_, _P_, network, frame)  # scans higher-line _Ps
 
         I, D, Dy, M, My, olp1, olp2, olp3, t2_ = 0, 0, 0, 0, 0, 0, 0, 0, []  # P initialization
-        typ_olp = [0, 0, 0]; dir_olp = [0, 0, 0]; txd_olp = [0, 0, 0]  # olp initialization
+        len1, core0, core1, len2, core2, core3, len3, core4, core5 = 0,0,0,0,0,0,0,0,0
+        # olp initialization: typ_olp = [0, 0, 0]; dir_olp = [0, 0, 0]; txd_olp = [0, 0, 0]
 
     # continued or initialized vars are accumulated (use zip S_vars?):
     # len of overlap to stronger alt-type P is accumulated until P or alt P terminates for eval to assign olp to alt_Ps
 
-    typ_olp[0] += 1  # (len1 + 1, core0, core1)  # olp += 1; oG += g; alt_oG += alt_g?
-    dir_olp[0] += 1  # (len2 + 1, core2, core3)
-    txd_olp[0] += 1  # (len3 + 1, core4, core5)
+    len1 += 1; len2 += 1; len3 += 1
+
+    if typ == 0:   core1 += v; core1a += d; core2 += v; core2a += vy; core3 += v; core3a += dy
+    elif typ == 1: core1 += v; core1a += d; core2 += v; core2a += vy; core3 += v; core3a += dy
+    elif typ == 2: core = vy; Core = Vy
+    else: core = dy; Core = Dy
 
     I += p    # inputs and derivatives are summed as P parameters:
     D += d    # lateral D
