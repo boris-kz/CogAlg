@@ -3,6 +3,10 @@ import argparse
 from time import time
 from collections import deque
 
+''' line_POC() in conventional notation: easier to understand variable names, but harder to follow operations. 
+    This format is meant to ease transition to abbreviated variable names and more-2D format of line_POC() code.
+    Incremental abbreviation and more in-line code and comments is the only escape from drowning in a sea of names 
+'''
 
 def recursive_comparison(x,
                          pixel,

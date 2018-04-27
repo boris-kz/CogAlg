@@ -4,7 +4,7 @@ from time import time
 from collections import deque
 
 ''' core algorithm level 1: 1D-only proof of concept, 
-applied to process lines of grey-scale pixels but not useful for recognition of 2D images. 
+applied here to process lines of grey-scale pixels but not effective in recognition of 2D images. 
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
@@ -175,6 +175,8 @@ def frame(Fp_):  # postfix '_' denotes array name, vs. identical name of its ele
 
             it_, vP, dP, vP_, dP_, olp = \
             comparison(x, p, it_, vP, dP, vP_, dP_, olp, X, rng)
+
+        # line ends, last rng of incomplete tuples is discarded
 
         LP_ = vP_, dP_   # line of patterns is formed from a line of pixels
         FP_.append(LP_)  # line of patterns is added to frame of patterns at y = len(FP_)
