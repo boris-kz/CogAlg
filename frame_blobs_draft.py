@@ -201,6 +201,7 @@ def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps i
 
     buff_ = []  # for displaced _Ps buffered for scan_P_(next P)
     root_ = []  # for _Ps connected to current P
+    fork_ = []  # for Ps connected to current _P
     s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_ = P
     ix = x - len(t2_)  # initial x of P
     _ix = 0  # ix of _P, displaced from _P_ by last scan_P_?
@@ -209,36 +210,38 @@ def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps i
 
         t2_x = x  # lateral coordinate of loaded quadrant
         olen, core = 0, 0  # vertical overlap between P and _P: [] of summed vars?
-        _P, fork_, _root_ = _P_.popleft()  # fork_: y-1, root_ and _P: y-2, blob y-3, _root_: y- 4+ blob
+        _P, _root_ = _P_.popleft()  # _P: y-2, _root_: y-3, contains blobs
 
         if s == _P[0]:  # if s == _s (der sign match):
             while t2_x > _P[1]:  # t2_x > _ix:
                 for t2 in t2_:
 
                     if   typ == 0: core += t2[1]  # t2 = p, d, v, dy, vy
-                    elif typ == 1: core += t2[2]  # olp between P and _P is distinct from olp1, olp2, olp3 between alt Ps
-                    elif typ == 2: core += t2[3]  # core is summed within overlap between P and _P for blob eval
-                    else:          core += t2[4]  # or all t2 vars are summed?
+                    elif typ == 1: core += t2[2]  # core is summed within overlap between P and _P for blob eval,
+                    elif typ == 2: core += t2[3]  # or all t2 vars are summed?
+                    else:          core += t2[4]
                     olen += 1  # length of overlap, no o_t2_?
                     t2_x += 1
 
-            olp = olen, core
-            root_.append((olp, _P))  # _Ps connected to P, for terminated segment transfer to network
+            olp = olen, core  # olp between P and _P is distinct from olp1, olp2, olp3 between alt Ps
+            root_.append((olp, _P, _root_))  # _Ps connected to P, for terminated segment transfer to network
             fork_.append((olp, P))  # Ps connected to _P, for terminated _P transfer to segment
 
         if _P[2] > ix:  # if _x > ix:
             buff_.append(_P)  # buffered for scan_P_(next P)
-        else: # no overlap between _P and next P, _P (y-2) is packed into blob (y-3):
+        else: # no overlap between _P and next P, current _P (y-2) is packed into blob (y-3):
 
-            if len(_root_) == 1:  # and _fork_ == 1: tested at prior incr_blob?
+            if len(_root_) == 1:
                 blob = incr_blob((olp, _P), _root_[0])
             else:
-                blob = (_P, 0, olp, [_P]), _root_  # new blob is attached to P via root_
+                blob = _P, 0, olp, [_P]  # new blob is attached to P as root
+                term_ = []
 
-                while len(fork_) == 0 and len(_root_):  # higher layers of network are recursively tested for blob term:
-                    for index, (_blob, term_, _fork_, _root_) in enumerate(_root_):  # replacing terminated lower vars
+                while len(fork_) == 0 and len(_root_):  # recursive higher-layer blob termination test:
+                    for index, (_blob, _term_, _fork_, _root_) in enumerate(_root_):  # replacing terminated lower vars
 
-                        term_.append(_fork_[index])  # packed, not affected by the following:
+                        _term_.append(blob, term_)  # also packed in root_ of P?
+
                         del(_fork_[index])  # terminated forks of higher-layer blob move from _fork_ to term_
 
                         if len(_fork_) == 1:  # -= 1 at lower blob termination? network contains term blobs?
@@ -247,15 +250,13 @@ def scan_P_(typ, x, P, P_, _P_, network, frame):  # P scans shared-x_coord _Ps i
                         elif len(_fork_) == 0 and len(_root_) == 0:
                             frame = incr_frame(network, frame)  # network termination, sum -> frame
 
-                        fork_ = _fork_  # fork_ per _P or current blob?
-
-                # root_ = [(blob, [], _root_)]  # blob attached to P' root, empty fork_?
+                        fork_ = _fork_; term_ = _term_  # each per _P or current blob?
 
     # no overlap between P and next _P, at next-line input: blob +=_P for root_ of P if fork_ != 0
 
     P = s, ix, x, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_  # P will become _P
 
-    P_.append((P, blob, root_))  # blob assign, forks init, _P_ = P_ for next-line scan_P_()
+    P_.append((P, root_))  # blob is packed in root; buffer, _P_ = P_ for next-line scan_P_()
     buff_ += _P_  # excluding displaced _Ps
 
     return P_, buff_, network, frame  # _P_ = buff_ for scan_P_(next P)
