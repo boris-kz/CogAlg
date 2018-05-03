@@ -6,6 +6,14 @@ from collections import deque
 ''' line_POC() in conventional notation: easier to understand variable names, but harder to follow operations. 
     This format is meant to ease transition to abbreviated variable names and more-2D format of line_POC() code.
     Incremental abbreviation and more in-line code and comments is the only escape from drowning in a sea of names 
+    
+    core algorithm level 1: 1D-only proof of concept, 
+    applied here to process lines of grey-scale pixels but not effective in recognition of 2D images. 
+
+    Cross-comparison between consecutive pixels within horizontal scan line (row).
+    Resulting difference patterns dPs (spans of pixels forming same-sign differences)
+    and relative match patterns vPs (spans of pixels forming same-sign predictive value)
+    are redundant representations of each line of pixels.
 '''
 
 def recursive_comparison(x,
