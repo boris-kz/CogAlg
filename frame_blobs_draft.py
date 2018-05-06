@@ -8,12 +8,12 @@ from collections import deque
     Core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs. It performs several steps of encoding, 
     incremental per scan line defined by vertical coordinate y, relative to y of current input line.  nLe: level of encoding:
 
-    1Le / line y:    comp(p_): lateral pixel comparison -> tuple t ) array t_
-    2Le / line y- 1: ycomp(t_): vertical pixel comp -> quadrant t2 ) array t2_ 
-    3Le / line y- 1+ rng: form_P(t2) -> 1D pattern P ) P_  
-    4Le / line y- 2+ rng: scan_P_(P, _P) -> _P, fork_, root_: downward and upward connections between Ps of adjacent lines 
-    5Le / line y- 3+ rng+ blob depth: incr_blob(_P, blob) -> blob: merge connected Ps into non-forking blob segments
-    6Le / line y- 4+ rng+ network depth: incr_net(blob, term_forks) -> net: merge connected segments into network of terminated forks
+    1Le, line y:    comp(p_): lateral pixel comparison -> tuple t ) array t_
+    2Le, line y- 1: ycomp(t_): vertical pixel comp -> quadrant t2 ) array t2_ 
+    3Le, line y- 1+ rng: form_P(t2) -> 1D pattern P ) P_  
+    4Le, line y- 2+ rng: scan_P_(P, _P) -> _P, fork_, root_: downward and upward connections between Ps of adjacent lines 
+    5Le, line y- 3+ rng+ blob depth: incr_blob(_P, blob) -> blob: merge connected Ps into non-forking blob segments
+    6Le, line y- 4+ rng+ network depth: incr_net(blob, term_forks) -> net: merge connected segments into network of terminated forks
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into some higher function.
@@ -82,7 +82,7 @@ def vertical_comp(t_, t2__, _dP_, _vP_, _dyP_, _vyP_, _dPi, _vPi, _dyPi, _vyPi, 
 
     dP_, vP_, dyP_, vyP_ = [],[],[],[]
     dbuff_, vbuff_, dybuff_, vybuff_ = deque(),deque(),deque(),deque()  # _Ps buffered by previous run of scan_P_
-    new_t2__ = deque()  # t2_ buffer: 2D array
+    new_t2__ = deque()  # t2_ buffer: 2D array of quadrant tuples
     x = 0  # horizontal coordinate
     # prefix '_' denotes higher-line variable or pattern
 
@@ -90,7 +90,7 @@ def vertical_comp(t_, t2__, _dP_, _vP_, _dyP_, _vyP_, _dPi, _vPi, _dyPi, _vyPi, 
         p, fd, fm = t
         x += 1
 
-        for t2 in t2_:  # all t2s are horizontally incomplete
+        for t2 in t2_:  # all t2s (quadrant tuples) are horizontally incomplete
             pri_p, _fd, _fm, fdy, fmy = t2
 
             dy = p - pri_p  # vertical difference between pixels
@@ -212,8 +212,8 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
         t2_x = x  # lateral coordinate of loaded quadrant
         olen, core = 0, 0  # horizontal overlap between P and _P: [] of summed vars?
 
-        if _buff_:  # if len(_buff_)
-            _P, _P_index, _root_ = _buff_.popleft()  # buffered in prior run of scan_P_
+        if _buff_:  # if len(_buff_) > 0
+            _P, _P_index, _root_ = _buff_.popleft()  # _Ps buffered in prior run of scan_P_
         else:
             _P, _root_ = _P_.popleft()  # _P: y-2, _root_: y-3, contains blobs that replace _Ps at the index:
             _P_index += 1  # not for buff_: already contains index?
@@ -230,8 +230,9 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
                     t2_x += 1
 
             olp = olen, core  # olp between P and _P, distinct from olp1, olp2, olp3 between alt Ps
+
             root_.append((olp, (_P, _root_)))  # _Ps connected to P, for terminated segment transfer to network
-            fork_.append((olp, P))  # Ps connected to _P, for terminated _P transfer to segment; root_ -> P at completion
+            fork_.append((olp, P))  # Ps connected to _P, for terminated _P transfer to segment
 
         if _P[2] > ix:  # if _x > ix:
             buff_.append((_P, _P_index, _root_))  # for next scan_P_
@@ -240,23 +241,23 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
             if len(_root_) == 1:
                 blob = incr_blob((olp, _P), _root_[0])  # current _P (y-2) is packed into blob (y-3)
             else:
-                blob = [(_P, 0, olp, [_P]), [], []]  # initialized blob with term_=[], term_forks =[] but should be a tuple
+                blob = [(_P, 0, olp, [_P]), [], []]  # initialized blob with term_=[], net=[] but should be a tuple
 
-                while len(fork_) == 0 and len(_root_):  # recursive higher-layer blob termination test:
-                    for index, (_blob, term_forks, term_, _fork_, __root_) in enumerate(_root_):  # replacing terminated lower vars
+            while len(fork_) == 0:  # blob termination, conditionally recursive for higher layers of blob network:
+                for index, ((_blob, net, term_), _fork_, __root_) in enumerate(_root_):
 
-                        del(_fork_[index])
-                        term_.append(blob)  # terminated fork is transferred to term_
+                    del(_fork_[(blob, ix)])  # address by ix? same for blob return?
+                    term_.append(blob)  # if _root_: terminated fork is transferred from _fork_ to term_
 
-                        if len(_fork_) == 0:  # terminated forks and _blob are packed into network (y- 4+ blob):
-                            _root_[index][1] = incr_network(blob, term_, term_forks)  # term_forks is returned to lower blob
+                    if len(_fork_) == 0:  # term_ and _blob are packed into network of terminated fork blobs, returned to _root_:
+                        _root_[index][1] = incr_network(blob, term_, net)
 
-                            if len(_root_) == 0:
-                                frame = incr_frame(term_forks, frame)  # network term -> frame, networks overlap?
+                        if len(__root_) == 0:
+                            frame = incr_frame(net, frame)  # network term -> frame, networks overlap?
 
-                blob = _blob; fork_ = _fork_; _root_ = __root_  # each per current blob
+                blob = _blob; fork_ = _fork_; _root_ = __root_  # per blob, replacing terminated lower vars for while len(fork_) == 0
 
-            _P_[_P_index] = blob  # returned to _P_ for P root_ reference, root_ s and attached _root_ doesn't change
+            _P_[_P_index] = (blob, net, term_), fork_, _root_  # net and term_ initialize with blob, returned to _P_ for P root_ ref
 
     # no overlap between P and next _P, (P, root_) is packed into next _P_:
 
@@ -266,7 +267,8 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
     return P_, _P_, buff_, _P_index, frame  # _P_ and buff_ exclude _Ps displaced into _fork_s per blob
 
 
-''' primary interaction between same-axis alt_Ps, combined for cross-axis?  ver_P ( lat_P_?
+''' final primary blob select by Core div_comp to alt typ, dir, typdir Cores -> projected combined redundancy rate?
+    primary interaction between same-axis alt_Ps, combined for cross-axis? ver_P ( lat_P_?
     
     alt_dir_P: specific redundancy for comp_P | combined for orientation eval per blob?   
     redun eval per term blob | network, for extended comp or select decoding?
