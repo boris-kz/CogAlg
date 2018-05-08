@@ -232,34 +232,34 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
 
             olp = olen, core  # vertical contiguity between P and _P? distinct from olp1, olp2, olp3 between alt Ps
 
-            root_.append((olp, (_P, _root_)))  # _Ps connected to P, for terminated segment transfer to network
-            fork_.append((olp, ix, P))  # Ps connected to _P, for terminated _P transfer to segment
+            root_.append(((_P, _root_), olp))  # _Ps connected to P, for terminated segment transfer to network
+            fork_.append((P, ix, olp))  # Ps connected to _P, for terminated _P transfer to segment
 
         if _P[2] > ix:  # if _x > ix:
             buff_.append((_P, _P_index, _root_))  # for next scan_P_
         else: # no horizontal overlap between _P and next P, _P is displaced from _P_:
 
-            if len(_root_) == 1:
-                blob = incr_blob((_P, olp), _root_[0])  # current _P (y-2) is packed into blob (y-3)
-            else:
-                blob = (_P, 0, olp, [_P]); net = (0,0,0,0,0,0,0,0,0,0,0,0,[]); term_ = []
-                blob = blob, net, term_  # blob initialization, or net is optional?
+            if len(_root_) == 1 and len(_root_[0][2]) == 1:  # _root_ == 1 and target _fork_ == 1
+                blob = incr_blob(_root_[0], (_P, olp))  # current _P (y-2) is packed in continued blob (y-3)
 
-            while len(fork_) == 0:  # blob termination, conditionally recursive for higher layers of blob network:
-                for index, ((_blob, net, term_), _fork_, __root_) in enumerate(_root_):
+            else:  # _root_ != 1 or target _fork_ != 1
+                blob = (_P, 0, olp, [_P])  # blob init with _P = s, ix, x, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_
 
-                    _fork_.remove(_P[1] == ix)  # remove element of _fork_ with the value of second sub-element == ix?
-                    term_.append(blob)  # if _root_: terminated fork is transferred from _fork_ to term_, or to net?
+            if len(fork_) == 0:
+                net = (blob, [blob])  # init at _P term, sums higher blobs at term, reduced to [blobs] in incr_frame if low:
 
-                    if len(_fork_) == 0:  # term_ and _blob are packed into network: lower layers of terminated forks:
-                        _root_[index][0] = incr_network(blob, term_, net)  # returned to _root_
+            while len(fork_) == 0:  # blob inclusion into terminated forks network, conditionally recursive for higher layers:
+                for index, (_net, _blob, _fork_, __root_) in enumerate(_root_):
 
-                        if len(__root_) == 0:  # terminated network is packed in frame, initialized in image_to_blobs
-                            frame = incr_frame(net, frame)
+                    _fork_.remove(_P[1] == ix)  # remove element of _fork_ that has value of its second element == ix?
+                    _root_[index][0] = incr_network(_net, _blob)  # _blob is packed into network of terminated forks
+
+                    if len(__root_) == 0:  # network is terminated and packed into frame, initialized in image_to_blobs
+                        frame = incr_frame(frame, net)
 
                 blob = _blob; fork_ = _fork_; _root_ = __root_  # replace lower-layer vars in while len(fork_) == 0
 
-            _P_[_P_index] = (blob, net, term_), fork_, _root_  # net and term_ are returned to _P_ for ref by P root_
+            _P_[_P_index] = net, blob, fork_, _root_  # net and term_ are returned to _P_ for reference by P root_
 
     # no overlap between P and next _P, (P, root_) is packed into next _P_:
 
@@ -276,10 +276,10 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
     redun eval per term blob | network, for extended comp or select decoding?
 '''
 
-def incr_blob(_P, blob):  # continued or initialized blob is incremented by attached _P, replace by zip?
+def incr_blob(blob, _P):  # continued or initialized blob is incremented by attached _P, replace by zip?
 
-    (s, _ix, _x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, Olpy, Py_), root_ = blob
-    (s, ix, lx, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_), olpy = _P  # s is re-assigned, ix and lx from scan_P_
+    (s, _ix, _x, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_), Dx, root_ = blob
+    (s, ix, lx, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_), yolp = _P  # s is re-assigned, ix and lx from scan_P_
 
     x = lx - len(t2_) / 2  # median x, becomes _x in blob, replaces ix and lx?
     dx = x - _x  # full comp(x) and comp(S) are conditional, internal vars are secondary
@@ -292,21 +292,21 @@ def incr_blob(_P, blob):  # continued or initialized blob is incremented by atta
     Olp1 += olp1  # alt-typ overlap per blob
     Olp2 += olp2  # alt-dir overlap per blob
     Olp3 += olp3  # alt-txd overlap per blob
-    Olpy += olpy  # vertical contiguity between Ps in Py, for what?
+    yOlp += yolp  # vertical contiguity between Ps in Py, for what?
 
-    Py_.append((s, ix, lx, dx, I, D, Dy, V, Vy, olp1, olp2, olp3, olpy, t2_))  # dx to normalize P before comp_P?
-    blob = s, ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, Olpy, Py_  # separate S_par tuple?
+    Py_.append((s, ix, lx, dx, I, D, Dy, V, Vy, olp1, olp2, olp3, yolp, t2_))  # dx to normalize P before comp_P?
+    blob = s, ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_  # separate S_par tuple?
 
     return blob, root_
 
-def incr_network(blob, term_, network):  # continued or initialized network is incremented by attached blob + term_
+def incr_network(network, blob):  # continued or initialized network is incremented by attached blob + term_
     # stub only:
 
-    s, ix_n, x_n, Dx_n, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, Olpyn, blob_ = network  # or S_par tuple?
-    s, ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, Olpy, Py_, fork_ = blob  # s is re-assigned
+    s, ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_ = network  # or S_par tuple?
+    s, ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_, fork_ = blob  # s is re-assigned
 
-    x_n = x - Ln / 2  # median x, becomes _x in blob, replaces ix and lx?
-    dx = x - x_n  # full comp(x) and comp(S) are conditional, internal vars are secondary
+    xn = x - Ln / 2  # median x, becomes _x in blob, replaces ix and lx?
+    dx = x - xn  # full comp(x) and comp(S) are conditional, internal vars are secondary
     Dx += dx  # for blob norm, orient eval, by OG vs. Mx += mx, += |dx| for curved max_L
 
     Ln += L2   # t2_ in P buffered in Py_
@@ -316,22 +316,26 @@ def incr_network(blob, term_, network):  # continued or initialized network is i
     Olp1n += Olp1  # alt-typ overlap per net
     Olp2n += Olp2  # alt-dir overlap per net
     Olp3n += Olp3  # alt-txd overlap per net
-    Olpyn += Olpy  # vertical contiguity, for comp_P eval?
+    yOlpn += yOlp  # vertical contiguity, for comp_P eval?
 
-    blob_.append((ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, Olpy, Py_), fork_)  # Dx to normalize blob before comp_P
-    network = s, ix_n, x_n, Dx_n, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, Olpy, blob_  # separate S_par tuple?
+    blob_.append((ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_), fork_)  # Dx to normalize blob before comp_P
+    network = s, ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_  # separate S_par tuple?
 
     return network
 
-def incr_frame(network, frame):
+def incr_frame(frame, net):
     return frame
 
 
 def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_' distinguishes higher-line vs. lower-line variable
 
     _vP_, _dP_, _vyP_, _dyP_ = [],[],[],[]  # same- v-, d-, vy-, dy- sign 1D patterns on a higher line
-    # contain refs to v, d, vy, dy- blob segments, vertical concat -> blob network:
-    vframe, dframe, vyframe, dyframe = [],[],[],[]  # tuples?
+    # contain refs to v, d, vy, dy- blob segments, vertical concat -> blob networks
+
+    vframe, \
+    dframe, \
+    vyframe, \
+    dyframe = [],[],[],[]  # tuples?
 
     global y; y = 0  # vertical coordinate of current input line
 
