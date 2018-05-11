@@ -199,12 +199,11 @@ def form_P(typ, t2, x, P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd
     return P, alt_typ_P, alt_dir_P, alt_txd_P, typ_olp, dir_olp, txd_olp, P_, _P_, _Pi, buff_, frame  # accumulated within line
 
 
-def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_coord _Ps in _P_, forms overlaps
+def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared-x-coordinate _Ps in _P_, forms overlaps
 
     buff_ = deque()  # displaced _Ps buffered for scan_P_(next P)
     root_ = []  # for _Ps connected to current P
     fork_ = []  # for Ps connected to current _P
-    net = []  # represents terminated _forks
 
     s, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_ = P
     ix = x - len(t2_)  # initial x coordinate of P
@@ -250,21 +249,25 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
             while len(fork_) == 0:  # blob inclusion into terminated forks network, conditionally recursive for higher layers:
                 for index, (_net, _blob, _fork_, __root_) in enumerate(_root_):
 
-                    for _P in _fork_:
-                        if _P[1] == _ix: _fork_.remove(_P)
+                    for iindex, _P in enumerate(_fork_):
+                        if _P[1] == _ix:
+                            del _fork_[iindex]; break  # blob is moved from _fork_ to _net:
 
-                    if init:  # net init at _P term (always on 1st run of while), to sum higher blobs at blob term
-                        net = (blob, [blob], [])  # root_ = []: available, fork_ is not
+                    if init:  # net init at _P term: 1st run of while, to sum into higher _net, or future lower blobs at term
+                        net = (blob, [blob], [])  # blob is packed into net with root_ = []: net up ! down: fork_ was deleted
                     else:
-                        net = incr_network(_net, blob, _root_)  # _blob is packed into network of terminated forks and returned:
-                        _root_[index][0] = net
+                        _net = incr_network(_net, net, _root_)  # net represents all terminated forks, including current blob
+                        _root_[index][0] = _net  # return
 
-                    if len(__root_) == 0 and len(_fork_) == 0:  # no root-mediated forks left
-                        frame = incr_frame(frame, net)  # terminated network is packed in frame, initialized in image_to_blobs
+                    if len(__root_) == 0 and len(_fork_) == 0:  # full term: no root-mediated forks left in _net
+                        if typ:
+                            frame = incr_frame(frame, net)  # terminated net is packed in frame, initialized in image_to_blobs
+                        else:
+                            frame = incr_dframe(frame, net)  # for dframe and dnet
 
-                blob = _blob; fork_ = _fork_; _root_ = __root_, net = _net  # replace lower-layer vars in while len(fork_) == 0
+                blob = _blob; fork_= _fork_; _root_= __root_, net = _net  # replace lower-layer vars in while len(fork_) == 0
 
-            _P_[_P_index] = net, blob, fork_, _root_  # net is returned to _P_ for reference by P root_
+            _P_[_P_index] = net, blob, fork_, _root_  # net, blob, fork_ -> _P_, addressed by P root_, then by _P _root_
 
     # no overlap between P and next _P, (P, root_) is packed into next _P_:
 
@@ -282,12 +285,12 @@ def scan_P_(typ, x, P, P_, _P_, _P_index, _buff_, frame):  # P scans shared- x_c
 
 def incr_blob(blob, _P):  # continued or initialized blob is incremented by attached _P, replace by zip?
 
-    (s, _ix, _x, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_), Dx = blob
+    s, _ix, _x, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_, Dx = blob
     (s, ix, lx, I, D, Dy, V, Vy, olp1, olp2, olp3, t2_), yolp = _P  # s is re-assigned, ix and lx from scan_P_
 
-    x = lx - len(t2_) / 2  # median x, becomes _x in blob, replaces ix and lx?
-    dx = x - _x  # full comp(x) and comp(S) are conditional, internal vars are secondary
-    Dx += dx  # for blob normalization and orient eval, += |dx| for curved max_L?
+    x = lx - len(t2_) / 2  # median x, becomes _x in blob, replaces lx?
+    dx = x - _x  # conditional full comp(x) and comp(S): internal vars are secondary?
+    Dx += dx  # for blob normalization and orientation eval, | += |dx| for curved max_L norm, orient?
 
     L2 += len(t2_)  # t2_ in P buffered in Py_
     I2 += I
@@ -299,17 +302,16 @@ def incr_blob(blob, _P):  # continued or initialized blob is incremented by atta
     yOlp += yolp  # vertical contiguity between Ps in Py, for what?
 
     Py_.append((s, ix, lx, dx, I, D, Dy, V, Vy, olp1, olp2, olp3, yolp, t2_))  # dx to normalize P before comp_P?
-    blob = s, ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_  # separate S_par tuple?
+    blob = s, ix, x, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_, Dx  # separate S_par tuple?
 
     return blob
 
-def incr_network(network, blob, _root_):  # continued or initialized network is incremented by attached blob, also root_?
+def incr_network(network, blob, _root_):  # continued or initialized network is incremented by attached blob and _root_
 
     s, ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_ = network  # or S_par tuple?
     s, ix, x, Dx, L2, I2, D2, Dy2, V2, Vy2, Olp1, Olp2, Olp3, yOlp, Py_ = blob  # s is re-assigned
 
     Dxn += Dx  # for net normalization, orient eval, += |Dx| for curved max_L?
-
     Ln += L2
     In += I2
     Dn += D2; Dyn += Dy2
@@ -324,7 +326,7 @@ def incr_network(network, blob, _root_):  # continued or initialized network is 
 
     return network
 
-def incr_frame(frame, net):
+def incr_dframe(frame, net):
 
     sf, ixf, xf, Dxf, Lf, If, Df, Dyf, Vf, Vyf, yOlpf, net_ = frame  # s of core, summed regardless of sign, no typ olp: complete overlap?
     s, ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_ = net
@@ -335,25 +337,38 @@ def incr_frame(frame, net):
 
     If += In  # to compute averages, for dframe only: redundant for same-scope alt_frames?
     Df += Dn
-    Dyn += Dyn
+    Dyf += Dyn
     Vf += Vn
-    Vyn += Vyn
+    Vyf += Vyn
 
     net_.append((ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_))  # Dxn to normalize net before comp_P
-    frame = s, ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, yOlpf, blob_  # separate S_par tuple?
+    frame = s, Dxf, Lf, If, Df, Dyf, Vf, Vyf, yOlpf, net_
+
+    return frame
+
+def incr_frame(frame, net):
+
+    sf, Dxf, Lf, yOlpf, net_ = frame  # s of core, summed regardless of sign, no typ olp: complete?
+    s, ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_ = net
+
+    Dxf += Dxn  # for frame normalization, orient eval, += |Dxn| for curved max_L?
+    Lf += Ln
+    yOlpf += yOlpn  # for average vertical contiguity, relative to ave Ln?
+
+    net_.append((ixn, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Olp1n, Olp2n, Olp3n, yOlpn, blob_))  # Dxn to normalize net before comp_P
+    frame = s, Dxf, Lf, yOlpf, net_
 
     return frame
 
 
 def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_' distinguishes higher-line vs. lower-line variable
 
-    _dP_, _vP_, _dyP_, _vyP_ = [],[],[],[]  # same- d-, v-, dy-, vy- sign 1D patterns on a higher line
-    # contain refs to d, v, dy, vy- blob segments, vertical concat -> blob networks
+    _dP_, _vP_, _dyP_, _vyP_ = [],[],[],[]  # higher-line same- d-, v-, dy-, vy- sign 1D patterns, with refs to blob networks
 
-    dframe, \
-    vframe, \
-    dyframe, \
-    vyframe = [],[],[],[]  # tuples? constituent net rep may select sum | [blobs]
+    dframe = 0,0,0,0,0,0,0,0,0,[]  # s, Dxf, Lf, If, Df, Dyf, Vf, Vyf, yOlpf, net_
+    vframe = 0,0,0,0,[]   # s, Dxf, Lf, yOlpf, net_:
+    dyframe = 0,0,0,0,[]  # no If, Df, Dyf, Vf, Vyf: redundant to dframe
+    vyframe = 0,0,0,0,[]  # constituent net rep may select sum | [nets], same for blob?
 
     global y; y = 0  # vertical coordinate of current input line
 
