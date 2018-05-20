@@ -35,6 +35,8 @@ To discover anything complex at “polynomial” cost, resulting patterns should
 Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition.
 But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for scalability, vs. combinatorial explosion in search space. But incremental selection is is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation, which is probably why no one else seems to be working on anything sufficiently similar to my algorithm.
 
+Most readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels should add incremental complexity rather than qualitatively different principles.
+
 
 ## Comparison to Artificial and Biological Neural Networks
 
@@ -99,8 +101,8 @@ Subsequent cycles would compare 4D input patterns over increasing distance in ea
 
 However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D at once, or at least over 2D at once for images. This is a universe-specific extension of my core algorithm.
 
-I have POC code for basic 1D core algorithm: https://github.com/boris-kz/CogAlg/blob/master/line_POC.py, am currently working on its adaptation to process images: https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py.
-Initial testing could be recognition and automatic labeling of manually labeled images, from something like ImageNet.
+I have POC code for basic 1D core algorithm: https://github.com/boris-kz/CogAlg/blob/master/line_POC.py, am currently working on its adaptation to process images: https://github.com/boris-kz/CogAlg/blob/master/frame_blobs_draft.py , https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py.
+Initial testing could be recognition and automatic labeling of manually labeled images.
 
 This algorithm will be organically extended to process colors, then video, then stereo video (from multiple confocal cameras).
 For video, level 2 will process consecutive frames and derive temporal patterns, and levels 3 and higher will process discontinuous 2D + time patterns. It should also extend to any type and scope of data.
