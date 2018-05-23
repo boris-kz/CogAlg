@@ -3,7 +3,9 @@ from collections import deque
 import math as math
 import numpy as np
 
-''' core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
+''' This is a prototype of complete frame(), but initial six functions are out of date relative to frame_blobs()
+
+    core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
     It performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
 
     input y:    comp(p_): lateral pixel comp -> tuple t,
@@ -22,7 +24,6 @@ import numpy as np
     into elements of new higher line, and displace elements of old higher line into some higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     frame() is layered: partial lower functions can work without higher functions.
-    None of this is tested, except as analogue functions in line_POC()  
     
     postfix '_' denotes array name, vs. same-name elements of that array 
     prefix '_' denotes higher-line variable or pattern '''
@@ -261,8 +262,20 @@ def scan_P_(typ, P, P_, _P_, blob_, x):  # P scans shared-x_coord _Ps in _P_, fo
     y-3+, 4L: fork_, blob_: continued blob segments of variable depth 
     y-3+, 5+: blob_, term_: layers of terminated segments, composed of inputs from lines 3+  
     
-    sum into fork network, global term if root_ == 0, same OG eval? also sum per frame? '''
+    sum into fork network, global term if root_ == 0, same OG eval? also sum per frame? 
+    
+    blob | network selection by value * projected combined redundancy rate, for extended comp or decoding:
+    rdn rate: (Core + alt_typ_Core + alt_dir_Core + alt_txd_Core) / Core: proj cost / rep, alt rdn assign per olp
 
+    or P value = P_comb_vars / rdn between Ps: total or to stronger olp?
+    olp rdn assign to min P_comb_vars: comb within P, same as comb match, 
+    
+    dir comb for projected oriented blob eval: (Core^2 + alt_dir_Core ^ 2): ver_P_ ( lat_P_?   
+    
+    fuzzy m: actual rep value per pixel, for more selective patterns of t, bilateral: ini fuzziness is directional? 
+    patterned within der_que if > min_len?
+
+    '''
 
 def incr_blob(_P, blob):  # continued or initialized blob is incremented by attached _P, replace by zip?
 
