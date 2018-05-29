@@ -17,8 +17,10 @@ import numpy as np
     They are formed on the same level because average lateral match ~ average vertical match.
     Pixels are discrete samples of continuous image, so rightward and downward derivatives per pixel are 
     equally representative samples of 0-90 degree quadrant gradient: minimal unique unit of 2D gradient. 
+    
     Thus, quadrant gradient is estimated as the average of these two orthogonally diverging derivatives.
     Blob is contiguous area of same-sign quadrant gradient, of difference for dblob or match deviation for vblob.
+    This is different from blob definition by each of 4 primary derivatives in frame_blobs 
 
     All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into some higher function.
