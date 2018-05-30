@@ -360,7 +360,7 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 
 # initialize constants
 comparison_range = 3
-average_match = 63 * comparison_range
+average_match = 64 * comparison_range
 average_summed_value = 63
 average_summed_difference = 63
 
