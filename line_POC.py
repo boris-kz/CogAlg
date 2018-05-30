@@ -23,11 +23,11 @@ def recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng
     v += min(p, pri_p) - ave  # fuzzy v accumulates deviation of match between p and all prior ps in extended rng
 
     vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, redun, rng)
-    # forms value pattern vP: span of pixels with same-sign vs
     dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, redun, rng)
-    # forms difference pattern dP: span of pixels with same-sign ds
 
+    # forms value pattern vP: span of pixels with same-sign vs, or difference pattern dP: span of pixels with same-sign ds
     olp += 1  # overlap between concurrent vP and dP, to be buffered in olp_s at termination
+
     return d, v, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
 
 
@@ -43,17 +43,15 @@ def pre_recursive_comp(typ, e_, redun, rng):  # pre-processing for comp recursio
     if typ: # comparison range increment within e_ = t_ of vP
 
         for x in range(rng, X):
-            p = e_[x][0]  # input d and v are not used, accumulation with pri_p' d and v only
-            pri_p, d, v = e_[x-rng]  # comp of rng-distant pixels:
-            d, v, vP, dP, vP_, dP_, olp = \
-            recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng)
+            p = e_[x][0]  # accumulation of pri_p (not p) d and v with d and v from comp of rng-distant pixels:
+            pri_p, d, v = e_[x-rng]
+            d, v, vP, dP, vP_, dP_, olp = recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng)
     else:
-        pri_d = e_[0]  # comparison derivation incr within e_ = d_ of dP
+        pri_d = e_[0]
         d, v = 0, 0
-        for x in range(1, X):
+        for x in range(1, X):  # comparison derivation incr within e_ = d_ of dP:
             d = e_[x]
-            d, v, vP, dP, vP_, dP_, olp = \
-            recursive_comparison(x, d, pri_d, d, v, vP, dP, vP_, dP_, olp, X, redun, rng)
+            d, v, vP, dP, vP_, dP_, olp = recursive_comparison(x, d, pri_d, d, v, vP, dP, vP_, dP_, olp, X, redun, rng)
             pri_d = d
 
     return vP_, dP_  # local vP_ + dP_ replaces t_ or d_
@@ -68,13 +66,13 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, d, v, x, X, redun, rng):
     if x > rng + 2 and (s != pri_s or x == X - 1):  # P is terminated and evaluated for recursion
 
         if typ:
-            if len(e_) > rng + 3 and pri_s == 1 and V > ave_V * redun:  # for minimum of 3 tuples
-                recomp = 1  # recursive comp range increase flag
-                e_.append(pre_recursive_comp(1, e_, redun+1, rng+1))  # comparison range increase within e_ = t_
+            if len(e_) > rng + 3 and pri_s == 1 and V > ave_V * redun:
+                recomp = 1  # flag for recursive comp range increase within e_ = t_:
+                e_.append(pre_recursive_comp(1, e_, redun+1, rng+1))
         else:
-            if len(e_) > 3 and abs(D) > ave_D * redun:  # for a minimum of 3 ds
-                recomp = 1  # recursive derivation increase flag
-                e_.append(pre_recursive_comp(0, e_, redun+1, 1))  # comparison derivation increase within e_ = d_
+            if len(e_) > 3 and abs(D) > ave_D * redun:
+                recomp = 1  # flag for recursive derivation increase within e_ = d_:
+                e_.append(pre_recursive_comp(0, e_, redun+1, 1))
 
         P = typ, pri_s, I, D, V, recomp, e_, olp_
         P_.append(P)  # output to second level
@@ -103,7 +101,7 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, d, v, x, X, redun, rng):
 
 def comparison(x, p, rng_t_, vP, dP, vP_, dP_, olp, X):  # pixel is compared to rng prior pixels
 
-    max_index = min_rng-1
+    max_index = min_rng - 1
     for index, (pri_p, d, m) in enumerate(rng_t_):
 
         d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within min_rng
@@ -112,14 +110,13 @@ def comparison(x, p, rng_t_, vP, dP, vP_, dP_, olp, X):  # pixel is compared to 
         if index < max_index:
             rng_t_[index] = (pri_p, d, m)
         else:
-            v = m - ave * min_rng # value or deviation of match, sign determines inclusion into positive or negative vP
+            v = m - ave * min_rng  # value | deviation of match, sign determines inclusion into positive or negative vP
             # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) is transferred to form_pattern:
 
             vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, 1, min_rng)
-            # forms value pattern vP: span of pixels with same-sign vs
             dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, 1, min_rng)
-            # forms difference pattern dP: span of pixels with same-sign ds
 
+            # forms value pattern vP: span of pixels with same-sign vs, or difference pattern dP: span of pixels with same-sign ds
             olp += 1  # overlap between vP and dP, stored in both and terminated with either
 
     rng_t_.appendleft((p, 0, 0))  # new tuple is added, maxlen parameter removes completed tuple in deque

@@ -32,7 +32,7 @@ from collections import deque
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
 '''
 
-def lateral_comp(p_):  # comparison over x coordinate: between min_rng consecutive pixels within each line
+def lateral_comp(p_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
 
     t_ = []  # complete tuples: summation range = rng
     rng_t_ = deque(maxlen=rng)  # array of tuples within rng of current pixel: summation range < rng
@@ -69,8 +69,8 @@ def vertical_comp(t_, t2__, _dP_, _vP_, _dyP_, _vyP_, dframe, vframe, dyframe, v
     dP_, vP_, dyP_, vyP_ = deque(),deque(),deque(),deque()  # line y - 1+ rng2
     dbuff_, vbuff_, dybuff_, vybuff_ = deque(),deque(),deque(),deque()  # line y- 2+ rng2: _Ps buffered by previous run of scan_P_
     dblob_, vblob_, dyblob_, vyblob_ = deque(),deque(),deque(),deque()  # line y- 3+ rng2: replaces _P_, exposed blobs include _Ps
-
     new_t2__ = deque()  # t2_s buffered for next line
+
     x = 0  # lateral coordinate of input pixel
     max_index = rng - 1  # max t2_ index
     min_coord = rng * 2 - 1  # min x | y, -1 because they start from 0
@@ -88,7 +88,7 @@ def vertical_comp(t_, t2__, _dP_, _vP_, _dyP_, _vyP_, dframe, vframe, dyframe, v
             if index < max_index:
                 t2_[index] = (_p, d, m, dy, my)
 
-            elif x > min_coord and y > min_coord:  # min y is increased by x_comp on line y=0?
+            elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
                 _v = _m - ave
                 vy = my + _my - ave
                 t2 = _p, _d, _v, dy + _dy, vy  # completed bilateral 2D tuples are inputted to form_P (pattern):
@@ -133,19 +133,18 @@ def form_P(typ, t2, x, P, P_, buff_, _P_, blob_, frame):  # terminates, initiali
     if s == P[0] or x == rng*2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
         pri_s, I, D, Dy, V, Vy, alt_Der, alt_Dir, alt_Both, t2_ = P
     else:
-        if y == rng*2:  # first line of Ps, 0y xcomp only, + rng*2 to form P_, +1 for ycomp to return P_ as _P_?
+        if y == rng*2:  # first line of Ps, _P_ is empty till vertical comp returns P_:
             P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1 for delayed P displacement
         else:
             P_, buff_, _P_, blob_, frame = scan_P_(typ, x-1, P, P_, buff_, _P_, blob_, frame)  # scans higher-line Ps for contiguity
         I, D, Dy, V, Vy, alt_Der, alt_Dir, alt_Both, t2_ = 0,0,0,0,0,0,0,0,[]  # new P initialization
 
-    # continued or initialized P and overlap vars are accumulated:
-    I += p    # inputs and derivatives are summed as P parameters:
+    I += p  # summed input and derivatives are accumulated as P and alt_P parameters, continued or initialized:
     D += d    # lateral D
     Dy += dy  # vertical D
     V += v    # lateral V
     Vy += vy  # vertical V
-    alt_Der += abs(alt_der)  # abs alt cores indicate value of alt-core Ps, redundant to current P?
+    alt_Der += abs(alt_der)  # abs alt cores indicate value of alt-core Ps, to compute core P redundancy rate
     alt_Dir += abs(alt_dir)  # vs. specific overlaps: cost > gain in precision?
     alt_Both+= abs(alt_both)
     t2_.append(t2)  # t2s are buffered for oriented rescan and incremental range | derivation comp
@@ -166,7 +165,7 @@ def scan_P_(typ, x, P, P_, _buff_, _P_, blob_, frame):  # P scans shared-x-coord
             _P, _x, _fork_, roots, oLen, oCore = _buff_.popleft()  # _Ps buffered in prior run of scan_P_
         elif _P_:
             _P, _x, _fork_ = _P_.popleft()  # _P: y-2, _root_: y-3, contains blobs that replace _Ps
-            oLen, oCore = 0,0  # length of and core summed over vertical overlap between Ps and _P
+            oLen, oCore = 0, 0  # length of and core summed over vertical overlap between Ps and _P
             roots = 0  # count of Ps connected to current _P
         else:
             break  # higher line ends
@@ -231,8 +230,8 @@ def term_blob(typ, net, fork_, frame):  # net starts as one terminated blob, the
 
 def form_blob(blob, P, last_x):  # continued or initialized blob is incremented by attached _P, replace by zip?
 
-    (s, L2, I2, D2, Dy2, V2, Vy2, Da2, Dya2, Va2, Vya2, t2_), _x, Dx, oLen2, oCore2, Py_ = blob
-    (s, I, D, Dy, V, Vy, Da, Dya, Va, Vya, t2_), oLen, oCore = P  # s is identical, t2_ is a replacement
+    (s, L2, I2, D2, Dy2, V2, Vy2, alt_Der, alt_Dir, alt_Both, t2_), _x, Dx, oLen2, oCore2, Py_ = blob
+    (s, I, D, Dy, V, Vy, alt_der, alt_dir, alt_both, t2_), oLen, oCore = P  # s is identical, t2_ is a replacement
 
     x = last_x - len(t2_)/2  # median x, becomes _x in blob, replaces lx
     dx = x - _x  # conditional full comp(x) and comp(S): internal vars are secondary?
@@ -242,46 +241,48 @@ def form_blob(blob, P, last_x):  # continued or initialized blob is incremented 
     I2 += I
     D2 += D; Dy2 += Dy
     V2 += V; Vy2 += Vy
-    Da2 += Da; Dya2 += Dya
-    Va2 += Va; Vya2 += Vya
+    alt_Der += alt_der
+    alt_Dir += alt_dir
+    alt_Both+= alt_both
     oLen2 += oLen; oCore2 += oCore  # vertical contiguity between Ps in Py, for blob eval
 
-    Py_.append((s, x, dx, I, D, Dy, V, Vy, Da, Dya, Va, Vya, oLen, oCore, t2_))  # dx to normalize P before comp_P?
-    blob = (s, L2, I2, D2, Dy2, V2, Vy2, Da2, Dya2, Va2, Vya2, t2_), _x, Dx, oLen2, oCore2, Py_  # redundant s and t2_
+    Py_.append((s, x, dx, I, D, Dy, V, Vy, alt_der, alt_dir, alt_both, oLen, oCore, t2_))  # dx to normalize P before comp_P?
+    blob = (s, L2, I2, D2, Dy2, V2, Vy2, alt_Der, alt_Dir, alt_Both, t2_), _x, Dx, oLen2, oCore2, Py_  # redundant s and t2_
 
     return blob
 
 def form_network(net, blob):  # continued or initialized network is incremented by attached blob and _root_
 
-    (s, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Dan, Dyan, Van, Vyan, oLenn, oCoren), blob_ = net  # 2D blob_: fork_ per layer?
-    ((s, L2, I2, D2, Dy2, V2, Vy2, Da2, Dya2, Va2, Vya2, t2_), x, Dx, oLen2, oCore2, Py_), fork_ = blob  # s is redundant
+    (s, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, alt_Der, alt_Dir, alt_Both, oLenn, oCoren), blob_ = net  # 2D blob_: fork_ per layer?
+    ((s, L2, I2, D2, Dy2, V2, Vy2, alt_der, alt_dir, alt_both, t2_), x, Dx, oLen2, oCore2, Py_), fork_ = blob  # s is redundant
 
     Dxn += Dx  # for net normalization, orient eval, += |Dx| for curved max_L?
     Ln += L2
     In += I2
     Dn += D2; Dyn += Dy2
     Vn += V2; Vyn += Vy2
-    Dan += Da2; Dyan += Dya2
-    Van += Va2; Vyan += Vya2
+    alt_Der += alt_der
+    alt_Dir += alt_dir
+    alt_Both+= alt_both
     oLenn += oLen2; oCoren += oCore2
 
-    blob_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, Da2, Dya2, Va2, Vya2, oLen2, oCore2, Py_, fork_))  # Dx to normalize blob before comp_P
-    net = ((s, Ln, In, Dn, Dyn, Vn, Vyn, Dan, Dyan, Van, Vyan), xn, Dxn, oLenn, oCoren, Py_), blob_  # separate S_par tuple?
+    blob_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, alt_der, alt_dir, alt_both, oLen2, oCore2, Py_, fork_))  # Dx to normalize blob before comp_P
+    net = ((s, Ln, In, Dn, Dyn, Vn, Vyn, alt_Der, alt_Dir, alt_Both), xn, Dxn, oLenn, oCoren, Py_), blob_  # separate S_par tuple?
 
     return net
 
 def form_frame(typ, net, frame):
-    ((s, Ln, In, Dn, Dyn, Vn, Vyn, Dan, Dyan, Van, Vyan), xn, Dxn, oLenn, oCoren, Py_), blob_ = net
+    ((s, Ln, In, Dn, Dyn, Vn, Vyn, alt_der, alt_dir, alt_both), xn, Dxn, oLenn, oCoren, Py_), blob_ = net
 
     if typ:
         Dxf, Lf, oLenf, oCoref, net_ = frame  # summed per typ regardless of sign, no typ olp: complete overlap?
     else:
-        Dxf, Lf, oLenf, oCoref, net_, If, Df, Dyf, Vf, Vyf, Daf, Dyaf, Vaf, Vyaf = frame
+        Dxf, Lf, oLenf, oCoref, net_, If, Df, Dyf, Vf, Vyf, alt_Der, alt_Dir, alt_Both = frame
 
     Dxf += Dxn  # for frame normalization, orient eval, += |Dxn| for curved max_L?
     Lf += Ln
     oLenf += oLenn; oCoref += oCoren  # for average vertical contiguity, relative to ave Ln?
-    net_.append((xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, Dan, Dyan, Van, Vyan, oLenn, oCoren, blob_))  # Dxn to normalize net before comp_P
+    net_.append((xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, alt_der, alt_dir, alt_both, oLenn, oCoren, blob_))  # Dxn to normalize net before comp_P
 
     if typ:
         frame = Dxf, Lf, oLenf, oCoref, net_  # no sign, summed cores are already in typ 0
@@ -289,9 +290,10 @@ def form_frame(typ, net, frame):
         If += In  # to compute averages, for dframe only: redundant for same-scope alt_frames?
         Df += Dn; Dyf += Dyn
         Vf += Vn; Vyf += Vyn
-        Daf += Dan; Dyaf += Dyan
-        Vaf += Van; Vyaf += Vyan
-        frame = Dxf, Lf, oLenf, oCoref, net_, If, Df, Dyf, Vf, Vyf, Daf, Dyaf, Vaf, Vyaf
+        alt_Der += alt_der
+        alt_Dir += alt_dir
+        alt_Both += alt_both
+        frame = Dxf, Lf, oLenf, oCoref, net_, If, Df, Dyf, Vf, Vyf, alt_Der, alt_Dir, alt_Both
 
     return frame
 
