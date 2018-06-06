@@ -11,7 +11,7 @@ Resulting difference patterns dPs (spans of pixels forming same-sign differences
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
 
-postfix '_' denotes array name, vs. identical name of its elements '''
+postfix '_' denotes array name, vs. identical name of array elements '''
 
 
 def recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng):
@@ -25,7 +25,7 @@ def recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng
     vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, redun, rng)
     dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, redun, rng)
 
-    # forms value pattern vP: span of pixels with same-sign vs, or difference pattern dP: span of pixels with same-sign ds
+    # forms value pattern vP: span of pixels with same-sign v, or difference pattern dP: span of pixels with same-sign d
     olp += 1  # overlap between concurrent vP and dP, to be buffered in olp_s at termination
 
     return d, v, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
@@ -34,7 +34,7 @@ def recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng
 def pre_recursive_comp(typ, e_, redun, rng):  # pre-processing for comp recursion over e_: elements of selected pattern
 
     redun += 1  # count of redundant sets of patterns formed by recursive_comparison
-    X = len(e_)
+    X = len(e_) - 1
 
     olp, vP_, dP_ = 0, [], []  # olp: overlap between vP and dP:
     vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, t_, olp_
@@ -77,15 +77,13 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, d, v, x, X, redun, rng):
         P = typ, pri_s, I, D, V, recomp, e_, olp_
         P_.append(P)  # output to second level
 
-        o = len(P_), olp  # index of current P and terminated olp are buffered in alt_olp_
-        alt_P[6].append(o)
-        o = len(alt_P_), olp  # index of current alt_P and terminated olp buffered in olp_
-        olp_.append(o)
+        alt_P[6].append((len(P_), olp))  # index of current P and terminated olp are buffered in alt_olp_
+        olp_.append((len(alt_P_), olp))  # index of current alt_P and terminated olp buffered in olp_
 
         olp, I, D, V, recomp, e_, olp_ = 0, 0, 0, 0, 0, [], []  # initialized P and olp
 
     pri_s = s   # current sign is stored as prior sign; P (span of pixels forming same-sign v | d) is incremented:
-    I += pri_p  # ps summed within vP | dP
+    I += pri_p  # input ps summed within vP | dP
     D += d      # fuzzy ds summed within vP | dP
     V += v      # fuzzy vs summed within vP | dP
 
@@ -116,7 +114,7 @@ def comparison(x, p, rng_t_, vP, dP, vP_, dP_, olp, X):  # pixel is compared to 
             vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, 1, min_rng)
             dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, 1, min_rng)
 
-            # forms value pattern vP: span of pixels with same-sign vs, or difference pattern dP: span of pixels with same-sign ds
+            # forms value pattern vP: span of pixels with same-sign v, or difference pattern dP: span of pixels with same-sign d
             olp += 1  # overlap between vP and dP, stored in both and terminated with either
 
     rng_t_.appendleft((p, 0, 0))  # new tuple is added, maxlen parameter removes completed tuple in deque
