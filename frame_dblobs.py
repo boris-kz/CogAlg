@@ -3,7 +3,7 @@ import argparse
 from time import time
 from collections import deque
 
-''' A version of frame_blobs with only one blob type (dblob), to ease debugging '''
+''' An updated version of frame_blobs with only one blob type: dblob, to ease debugging '''
 
 def lateral_comp(p_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
 
@@ -54,10 +54,11 @@ def vertical_comp(t_, t2__, _dP_, dblob_, dnet_, dframe):
             if index < max_index:
                 t2_[index] = (_p, d, m, dy, my)
 
-            elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
+            elif x > min_coord and y > min_coord:  # ders summed within bilateral rng per pixel, no vertical sum of lateral ders
                 _v = _m - ave
                 vy = my + _my - ave
-                t2 = _p, _d, _v, dy + _dy, vy
+                dy += _dy
+                t2 = _p, _d, _v, dy, vy
                 dP, dP_, dbuff_, _dP_, dblob_, dnet_, dframe = form_P(t2, x, dP, dP_, dbuff_, _dP_, dblob_, dnet_, dframe)
 
             index += 1
@@ -103,7 +104,7 @@ def scan_P_(x, P, P_, _buff_, _P_, blob_, net_, frame):  # P scans shared-x-coor
     while _ix <= x:  # while horizontal overlap between P and _P, then P -> P_
         if _buff_:
             _P_group = _buff_.popleft()  # _Ps buffered in prior run of scan_P_
-            [(_P, _x, _fork_, roots)] = _P_group  # made mutable to be replaced by blob in forks
+            [(_P, _x, _fork_, roots)] = _P_group  # made mutable to be replaced by blob in forks?
         elif _P_:
             _P_group = _P_.popleft()  # _P: y-2, _root_: y-3, contains blobs that replace [_P]s
             [(_P, _x, _fork_)] = _P_group
@@ -119,21 +120,24 @@ def scan_P_(x, P, P_, _buff_, _P_, blob_, net_, frame):  # P scans shared-x-coor
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob_:
             buff_.append([(_P, _x, _fork_, roots)])
         else:
-            if len(_fork_) == 1 and _fork_[0][0][5] == 1:  # _P'_fork_ == 1 and _fork blob roots == 1:
-                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 blob _fork_[0]
+            if y > rng * 2 + 1 and len(_fork_) == 1 and _fork_[0][0][5] == 1:  # blob_ and _P'_fork_ == 1 and _fork blob roots == 1:
+                blob = form_blob(_fork_[0][0], _P, _x)  # y-2 _P is packed in y-3 blob _fork_[0]
             else:
-                ax = _x - len(P[6]) / 2  # average x of P
-                blob = _P, ax, 0, [_P], _fork_, roots  # blob init, Dx = 0, no new _fork_ for continued blob
-            del _P_group[0]; _P_group.append(blob)  # replaces _P in forks?
+                _ax = _x - len(_P[6]) / 2  # average x of _P
+                blob = _P, _ax, 0, [_P], _fork_, roots  # blob init, Dx = 0, no new _fork_ for continued blob
 
+            _P_group[0] = blob  # replaces _P_group in outer-scope forks:
+            if fork_:
+                fork_[len(fork_)-1] is blob  # testing, rebinding doesn't work?
             if roots == 0:
+
                 net = blob, [blob]  # first-level net is initialized with current blob, no root_ to rebind
                 if len(_fork_) == 0:
                     frame = form_frame(net, frame)  # all root-mediated forks terminated, net is packed into frame
                 else:
                     net, net_, frame = term_blob(net, _fork_, net_, frame)  # recursive root network termination test
             else:
-                blob_.append(blob)  # new | continued blobs exposed to P_, not necessary?
+                blob_.append(blob)  # new | continued blobs exposed to P_, for debugging only
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([(P, x, fork_)])  # mutable P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
