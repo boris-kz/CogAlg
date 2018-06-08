@@ -33,7 +33,7 @@ def lateral_comp(p_):  # comparison over x coordinate: between min_rng of consec
 def vertical_comp(t_, t2__, _dP_, dblob_, dnet_, dframe):
     # comparison between rng vertically consecutive pixels, forming t2: 2D tuple of derivatives per pixel
 
-    dP = [0, 0, 0, 0, 0, 0, []]  # lateral difference pattern = pri_s, I, D, Dy, V, Vy, t2_
+    dP = 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, I, D, Dy, V, Vy, t2_
     dP_ = deque()  # line y - 1+ rng2
     dbuff_ = deque()  # line y- 2+ rng2: _Ps buffered by previous run of scan_P_
     new_t2__ = deque()  # 2D: line of t2_s buffered for next-line comp
@@ -54,11 +54,10 @@ def vertical_comp(t_, t2__, _dP_, dblob_, dnet_, dframe):
             if index < max_index:
                 t2_[index] = (_p, d, m, dy, my)
 
-            elif x > min_coord and y > min_coord:  # ders summed within bilateral rng per pixel, no vertical sum of lateral ders
+            elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
                 _v = _m - ave
                 vy = my + _my - ave
-                dy += _dy
-                t2 = _p, _d, _v, dy, vy
+                t2 = _p, _d, _v, dy + _dy, vy
                 dP, dP_, dbuff_, _dP_, dblob_, dnet_, dframe = form_P(t2, x, dP, dP_, dbuff_, _dP_, dblob_, dnet_, dframe)
 
             index += 1
@@ -78,7 +77,7 @@ def form_P(t2, x, P, P_, buff_, _P_, blob_, net_, frame):  # terminates, initial
         pri_s, I, D, Dy, V, Vy, t2_ = P
     else:
         if y == rng * 2:  # first line of Ps -> P_, _P_ is empty till vertical comp returns P_:
-            P_.append([(P, x-1, [])])  # empty _fork_ in the first line of _Ps, x-1 for delayed P displacement
+            P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1 for delayed P displacement
         else:
             P_, buff_, _P_, blob_, net_, frame = scan_P_(x - 1, P, P_, buff_, _P_, blob_, net_, frame)  # scans higher-line Ps for contiguity
         I, D, Dy, V, Vy, t2_ = 0, 0, 0, 0, 0, []  # new P initialization
@@ -103,54 +102,50 @@ def scan_P_(x, P, P_, _buff_, _P_, blob_, net_, frame):  # P scans shared-x-coor
 
     while _ix <= x:  # while horizontal overlap between P and _P, then P -> P_
         if _buff_:
-            _P_group = _buff_.popleft()  # _Ps buffered in prior run of scan_P_
-            [(_P, _x, _fork_, roots)] = _P_group  # made mutable to be replaced by blob in forks?
+            _P, _x, _fork_, root_ = _buff_.popleft()  # _Ps buffered in prior run of scan_P_
         elif _P_:
-            _P_group = _P_.popleft()  # _P: y-2, _root_: y-3, contains blobs that replace [_P]s
-            [(_P, _x, _fork_)] = _P_group
-            roots = 0  # count of Ps connected to current _P
+            _P, _x, _fork_ = _P_.popleft()  # _P: y-2, _root_: y-3, contains blobs that replace _Ps
+            root_ = []  # Ps connected to current _P
         else:
             break
         _ix = _x - len(_P[6])
 
         if P[0] == _P[0]:  # if s ==_s: core sign match
-            fork_.append(_P_group)   # _Ps connected to P
-            roots += 1  # the number of Ps connected to _P
+            fork_.append([])  # for _P blobs connected to P
+            root_.append(fork_[len(fork_)-1])  # binds to blob
 
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob_:
-            buff_.append([(_P, _x, _fork_, roots)])
+            buff_.append((_P, _x, _fork_, root_))
         else:
             if y > rng * 2 + 1 and len(_fork_) == 1 and _fork_[0][0][5] == 1:  # blob_ and _P'_fork_ == 1 and _fork blob roots == 1:
-                blob = form_blob(_fork_[0][0], _P, _x)  # y-2 _P is packed in y-3 blob _fork_[0]
+                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 blob _fork_[0]
             else:
-                _ax = _x - len(_P[6]) / 2  # average x of _P
-                blob = _P, _ax, 0, [_P], _fork_, roots  # blob init, Dx = 0, no new _fork_ for continued blob
+                ave_x = _x - len(_P[6]) / 2  # average x of P: why always integer?
+                blob = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob init, Dx = 0, no new _fork_ for continued blob
+            blob_.append(blob)  # blobs exposed to P_ replace _P_, to debug, forks-> ind blobs?
 
-            _P_group[0] = blob  # replaces _P_group in outer-scope forks:
-            if fork_:
-                fork_[len(fork_)-1] is blob  # testing, rebinding doesn't work?
-            if roots == 0:
-
+            if len(root_) == 0:
                 net = blob, [blob]  # first-level net is initialized with current blob, no root_ to rebind
                 if len(_fork_) == 0:
                     frame = form_frame(net, frame)  # all root-mediated forks terminated, net is packed into frame
                 else:
                     net, net_, frame = term_blob(net, _fork_, net_, frame)  # recursive root network termination test
             else:
-                blob_.append(blob)  # new | continued blobs exposed to P_, for debugging only
+                while root_:
+                    rfork = root_.pop()  #  no root_ in blob: no rebinding to net at roots == 0
+                    rfork.append(blob)
 
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append([(P, x, fork_)])  # mutable P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
+    P_.append((P, x, fork_))  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
 
     return P_, buff_, _P_, blob_, net_, frame  # _P_ and buff_ exclude _Ps displaced into blob_
 
 
 def term_blob(net, fork_, net_, frame):  # net starts as one terminated blob, then added to terminated forks in its fork_
 
-    for index, (_net, roots, _fork_) in enumerate(fork_):
+    for index, (_net, _fork_, roots) in enumerate(fork_):
         _net = form_network(_net, net)  # terminated network (blob) is included into its forks networks
         fork_[index][0] = _net
-        roots -= 1
 
         if roots == 0:
             if len(_fork_) == 0:  # no fork-mediated roots left, terminated net is packed in frame:
@@ -165,7 +160,7 @@ def term_blob(net, fork_, net_, frame):  # net starts as one terminated blob, th
 
 def form_blob(blob, P, last_x):  # continued or initialized blob is incremented by attached _P, replace by zip?
 
-    (s, L2, I2, D2, Dy2, V2, Vy2, t2_), _x, Dx, Py_ = blob
+    (s, L2, I2, D2, Dy2, V2, Vy2, t2_), Py_, _x, Dx, fork_, roots = blob  # fork_ at init, roots at term?
     s, I, D, Dy, V, Vy, t2_ = P  # s is identical, t2_ is a replacement
 
     x = last_x - len(t2_) / 2  # median x, becomes _x in blob, replaces lx
@@ -178,7 +173,7 @@ def form_blob(blob, P, last_x):  # continued or initialized blob is incremented 
     V2 += V
     Vy2 += Vy
     Py_.append((s, x, dx, I, D, Dy, V, Vy, t2_))  # dx to normalize P before comp_P?
-    blob = (s, L2, I2, D2, Dy2, V2, Vy2, t2_), _x, Dx, Py_  # redundant s and t2_
+    blob = (s, L2, I2, D2, Dy2, V2, Vy2, t2_), Py_, _x, Dx, fork_, roots  # redundant s and t2_
 
     return blob
 
@@ -217,9 +212,9 @@ def form_frame(net, frame):
 
 def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_' distinguishes higher-line vs. lower-line variable
 
-    _P_= deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
-    blob_ = []  # line y- 3+ rng2: replaces _P_, exposed blobs include _Ps
-    net_ = []  # line y- 4+ rng2: replaces blob_, exposed nets include blobs
+    _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
+    blob_ = deque()  # line y- 3+ rng2: replaces _P_, exposed blobs include _Ps
+    net_ = deque()  # line y- 4+ rng2: replaces blob_, exposed nets include blobs
 
     frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
     global y; y = 0  # vertical coordinate of current input line
@@ -263,3 +258,4 @@ start_time = time()
 blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
+
