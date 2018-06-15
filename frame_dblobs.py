@@ -65,7 +65,7 @@ def vertical_comp(t_, t2__, _dP_, dframe):
         t2_.appendleft((p, d, m, 0, 0))  # initial dy and my = 0, new t2 replaces completed t2 in vertical t2_ via maxlen
         new_t2__.append((t2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to t2__, for next-line ycomp
 
-    return new_t2__, dP_, dframe  # extended in scan_P_; also incomplete net_, before pack into frame?
+    return new_t2__, dP_, dframe  # extended in scan_P_; net_s are packed into frames
 
 
 def form_P(t2, x, P, P_, buff_, _P_, frame):  # terminates, initializes, accumulates 1D pattern: dP | vP | dyP | vyP
@@ -110,17 +110,19 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             break
         _ix = _x - len(_P[6])
 
-        if P[0] == _P[0]:  # if s ==_s: core sign match
-            fork_.append([])  # for blobs of _Ps connected to P
+        if P[0] == _P[0]:  # if s == _s: core sign match, also selective inclusion by cont eval?
+            fork_.append([])  # mutable placeholder for blobs connected to P, after _P inclusion with complete root_
             root_.append(fork_[len(fork_)-1])  # binds forks to blob
 
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob_:
             buff_.append((_P, _x, _fork_, root_))
         else:
-            if y > rng * 2 + 1 and len(_fork_) == 1 and _fork_[0][0][5] == 1:  # blob _fork_ == 1 and _fork roots == 1, always _fork_ > 1 & root_ > 0?
-                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 blob _fork_[0]
+            if y > rng * 2 + 1 and x < X - 99 and len(_fork_) == 1 and _fork_[0][0][5] == 1:
+                # blob _fork_ == 1 and _fork roots == 1, always > 0, run ~ 10 min
+                # no fork blob / incomplete Ps: if x < X - len(fork_P[6]), or pycharm limit?
+                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob + __fork_
             else:
-                ave_x = _x - len(_P[6]) / 2  # average x of P: why always integer?
+                ave_x = _x - len(_P[6]) / 2  # average x of P: always integer?
                 blob = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob init, Dx = 0, no new _fork_ for continued blob
 
             if len(root_) == 0:  # never?
@@ -130,14 +132,14 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                 else:
                     net, frame = term_blob(net, _fork_, frame)  # recursive root network termination test
             else:
-                while root_:
-                    root_fork = root_.pop()  #  no root_ in blob: no rebinding to net at roots == 0
-                    root_fork.append(blob)  # fork binding, then convert to tuple?
+                while root_:  # no root_ in blob: no rebinding to net at roots == 0
+                    root_fork = root_.pop()  # ref to referring fork, verify?
+                    root_fork.append(blob)  # fork binding, no convert to tuple: forms a new object?
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append((P, x, fork_))  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
 
-    return P_, buff_, _P_, frame  # _P_ and buff_ exclude _Ps displaced into blob_
+    return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
 
 def term_blob(net, fork_, frame):  # net starts as one terminated blob, then added to terminated forks in its fork_
