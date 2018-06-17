@@ -6,177 +6,192 @@ from collections import deque
 ''' Comparison over a sequence frames in a video, currently only initial pixel tuple formation: 
     
     immediate pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
-    then pattern composition out of resulting 3D t3 tuples (p, d, m, dy, my, dt, mt) per pixel,
+    resulting 3D tuples (p, d, m, dy, my, dt, mt) per pixel are combined into 
     
-    sequentially forming 1D patterns ) 2D blobs ) TD durables, which are then evaluated for:
-    orientation, re-composition, incremental-dimensionality comparison, and its recursion? 
+    incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD durables,  not oriented for inclusion? 
+    evaluated for orientation, re-composition, incremental-dimensionality comparison, and its recursion? 
     
-    2D blob synq: bottom-up and right-to-left, 
-    potential overlap by max / min coord, from form_network,
+    2D blob synq: bottom-up and right-to-left, potential overlap by max / min coord (from form_network),
+    ave coord comp -> match, evaluated before computing specific overlap by cross-comparing blob segments, 
     
-    then comp of ave coord, as in form_blob, but results are evaluated before computing 
-    specific overlap by cross-comparing constituent blobs, not oriented for inclusion? 
-    
-    2D * persistence: TP eval -> orientation, re-scan, recursion?
-    orientation in 2D only, though summed in time?
-    
+    orientation in 2D only, time is neutral unless mapped to depth?    
     '''
 
-def lateral_comp(p_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
+def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
 
-    t_ = []  # complete tuples: summation range = rng
-    rng_t_ = deque(maxlen=rng)  # array of tuples within rng of current pixel: summation range < rng
-    max_index = rng - 1  # max index of rng_t_
+    ders_ = []  # tuples of complete derivatives: summation range = rng
+    rng_ders_ = deque(maxlen=rng)  # array of tuples within rng of current pixel: summation range < rng
+    max_index = rng - 1  # max index of rng_ders_
     pri_d, pri_m = 0, 0  # fuzzy derivatives in prior completed tuple
 
-    for p in p_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel:
-        for index, (pri_p, d, m) in enumerate(rng_t_):
+    for p in pixel_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel:
+        for index, (pri_p, d, m) in enumerate(rng_ders_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
             m += min(p, pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
 
             if index < max_index:
-                rng_t_[index] = (pri_p, d, m)
+                rng_ders_[index] = (pri_p, d, m)
             else:
-                t_.append((pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_t_ to t_
-                pri_d = d; pri_m = m  # to complement derivatives of next rng_t_: derived from next rng of pixels
+                ders_.append((pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
+                pri_d = d; pri_m = m  # to complement derivatives of next rng_ders_: derived from next rng of pixels
 
-        rng_t_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+        rng_ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_ders_
 
-    t_ += reversed(rng_t_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
-    return t_
+    ders_ += reversed(rng_ders_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
+    return ders_
 
 
-def vertical_comp(t_, rng_t2__):  # comparison between rng vertically consecutive pixels forms t2: 2D tuple of derivatives per pixel
+def vertical_comp(ders_, rng_ders2__):  # comparison between rng vertically consecutive pixels forms t2: 2D tuple of derivatives per pixel
 
-    t2_ = []  # complete t2 tuples
-    new_t2__ = deque()  # 2D: line of t2_s buffered for next-line comp
-    max_index = rng - 1  # max t2_ index
+    ders2_ = []  # tuples of complete derivatives per pixel
+    new_ders2__ = deque()  # 2D: line of ders2_s buffered for next-line comp
+    max_index = rng - 1  # max ders2_ index
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (rng_t2_, _dy, _my) in zip(t_, rng_t2__):  # pixel p is compared to rng of higher pixels in t2_, summing dy and my per higher pixel:
+    for (p, d, m), (rng_ders2_, _dy, _my) in zip(ders_, rng_ders2__):  # pixel p is compared to rng higher pixels, summing dy and my per higher pixel:
         index = 0
-        for (_p, _d, _m, dy, my) in rng_t2_:  # 2D tuples are vertically incomplete; prefix '_' denotes higher-line variable
+        for (_p, _d, _m, dy, my) in rng_ders2_:  # 2D derivatives are vertically incomplete; prefix '_' denotes higher-line variable
 
             dy += p - _p  # fuzzy dy: running sum of differences between pixel and all lower pixels within rng
             my += min(p, _p)  # fuzzy my: running sum of matches between pixel and all lower pixels within rng
 
             if index < max_index:
-                rng_t2_[index] = (_p, d, m, dy, my)  # update
+                rng_ders2_[index] = (_p, d, m, dy, my)  # update
             else:
-                t2_.append((_p, _d, _m, dy, my))  # output of complete t2
+                ders2_.append((_p, _d, _m, dy, my))  # output of complete ders2
             index += 1
 
-        rng_t2_.appendleft((p, d, m, 0, 0))  # initial dy and my = 0, new t2 replaces completed t2 in vertical t2_ via maxlen
-        new_t2__.append((rng_t2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to t2__, for next-line ycomp?
+        rng_ders2_.appendleft((p, d, m, 0, 0))  # initial dy and my = 0, new ders2 replaces completed ders2 in vertical ders2_ via maxlen
+        new_ders2__.append((rng_ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp?
 
-    return new_t2__, t2_  # no laterally incomplete tuples?
+    return new_ders2__, ders2_  # no laterally incomplete tuples?
 
 
-def temporal_comp(time, t2_, rng_t3__, _dP_, sequence):
+def temporal_comp(ders2_, rng_ders3__, _dP_, sequence):
 
-    # t2_: a frame of 2D tuples, all scan lines are spliced into one array
-    # rng_t3__: an older frame of 3D tuple arrays, all scan lines are spliced into one array
-    #  comparison between rng temporally consecutive pixels, forming t3: 3D tuple of derivatives per pixel
+    # ders2_: a frame of 2D tuples, all scan lines are spliced into one array
+    # rng_ders3__: an older frame of 3D tuple arrays, all scan lines are spliced into one array
+    # comparison between rng temporally consecutive pixels, forming ders3: 3D tuple of derivatives per pixel
 
-    dP = 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, I, D, Dy, V, Vy, t2_
+    dP = 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, I, D, Dy, V, Vy, ders2_
     dP_ = deque()  # Ps with attached blobs, with attached durons? vs. blobs in a frame, line y - 1+ rng2?
     dbuff_ = deque()  # line y- 2+ rng2: blobs buffered by previous run of scan_P_
-    new_t3__ = deque()  # 3D: frame of t3_s buffered for next-frame comp
+    new_ders3__ = deque()  # 3D: frame of ders3_s buffered for next-frame comp
 
     x, y = 0, 0  # coordinates of current pixel
-    max_index = rng - 1  # max t3__ index
-    min_coord = rng * 2 - 1  # min x, y, t for form_P input
+    max_index = rng - 1  # max ders3__ index
+    min_coord = rng * 2 - 1  # min x, y, t coordinates for form_P
     dt, mt = 0, 0  # for initial rng of lines, to reload _dt, _vt = 0, 0 in higher tuple
 
-    for (p, d, m, dy, my), (t3_, _dt, _mt) in zip(t2_, rng_t3__):  # compares same-x, same-y pixels within temporal range = rng
+    for (p, d, m, dy, my), (ders3_, _dt, _mt) in zip(ders2_, rng_ders3__):  # compares same-x, same-y pixels within temporal range = rng
         index = 0
         x += 1; y += 1
-        for (_p, _d, _m, _dy, _my, dt, mt) in t3_:  # temporally incomplete tuples; prefix '_' denotes prior-frame variable
+        for (_p, _d, _m, _dy, _my, dt, mt) in ders3_:  # temporally incomplete tuples; prefix '_' denotes prior-frame variable
 
             dt += p - _p   # fuzzy dt: running sum of differences between pixel and all lower pixels within rng
             mt += min(p, _p)  # fuzzy mt: running sum of matches between pixel and all lower pixels within rng
 
             if index < max_index:
-                t3_[index] = (_p, d, m, dy, my, dt, mt)
+                ders3_[index] = (_p, d, m, dy, my, dt, mt)
 
-            elif x > min_coord and y > min_coord and time > min_coord:
+            elif x > min_coord and y > min_coord and t > min_coord:
                 _v = _m - ave
                 _vy = _my - ave
                 vt = mt +_mt - ave
-                t3 = _p, _d, _v, _dy, _vy, dt + _dt, vt
+                ders3 = _p, _d, _v, _dy, _vy, dt + _dt, vt
 
-                dP, dP_, dbuff_, _dP_, sequence = form_P(t3, x, dP, dP_, dbuff_, _dP_, sequence)  # start form 1D, but blob_buff?
+                dP, dP_, dbuff_, _dP_, sequence = form_P(0, ders3, x, y, dP, dP_, dbuff_, _dP_, sequence)
+                # start form 1D, but blob_buff? # generic form_P( dP)
             index += 1
 
-        rng_t3__.appendleft((p, d, m, dy, my, 0, 0))  # initial dt and mt = 0, new t3 replaces completed t3 in temporal t3_ via maxlen
-        new_t3__.append((t3_, dt, mt))  # temporally-incomplete 2D array of tuples, converted to t3__ for next-frame comp
+        rng_ders3__.appendleft((p, d, m, dy, my, 0, 0))  # initial dt and mt = 0, new ders3 replaces completed ders3 in temporal ders3_ via maxlen
+        new_ders3__.append((ders3_, dt, mt))  # temporally-incomplete 2D array of tuples, converted to ders3__ for next-frame comp
 
-    return new_t3__, dP_, sequence  # extended in scan_P_; net_s are packed into frames
+    return new_ders3__, dP_, sequence  # extended in scan_P_; net_s are packed into frames
 
 
-def form_P(typ, t2, x, P, P_, buff_, _P_, sequence):  # terminates, initializes, accumulates 1D pattern: dP | vP | dyP | vyP
+def form_P(typ, ders3, x, y, P, P_, buff_, _P_, sequence):  # terminates, initializes, accumulates 1D pattern: dP | vP | dyP | vyP
 
-    p, d, v, dy, vy = t2  # 2D tuple of derivatives per pixel, "y" for vertical dimension:
+    p, dx, vx, dy, vy, dt, vt = ders3  # 3D tuple of derivatives per pixel, "x" for lateral D, "y" for vertical D, "t" for temporal D:
 
-    if   typ == 0: core = d; alt_der = v; alt_dir = dy; alt_both = vy  # core: variable that defines current type of pattern,
-    elif typ == 1: core = v; alt_der = d; alt_dir = vy; alt_both = dy  # alt cores define overlapping alternative-type patterns:
-    elif typ == 2: core = dy; alt_der = vy; alt_dir = d; alt_both = v  # alt derivative, alt direction, alt derivative_and_direction
-    else:          core = vy; alt_der = dy; alt_dir = v; alt_both = d
+    if   typ == 0: core = dx;  alt1 = vx;  alt2 = dy;  alt3 = dt;  alt4 = vy;  alt5 = vt
+    elif typ == 1: core = vx;  alt1 = dx;  alt2 = vy;  alt3 = vt;  alt4 = dy;  alt5 = dt
+    elif typ == 2: core = dy;  alt1 = vy;  alt2 = dx;  alt3 = dt;  alt4 = vx;  alt5 = vt
+    elif typ == 3: core = vy;  alt1 = dy;  alt2 = vx;  alt3 = vt;  alt4 = dx;  alt5 = dt
+    elif typ == 4: core = dt;  alt1 = vt;  alt2 = dx;  alt3 = dy;  alt4 = vx;  alt5 = vy
+    else:          core = vt;  alt1 = dt;  alt2 = vx;  alt3 = vy;  alt4 = dx;  alt5 = dy
+
+    # core: variable that defines current type of pattern, alt cores define overlapping alternative-type patterns:
+    # alt derivative, alt direction, alt 2nd direction, alt derivative + direction, alt 2nd derivative + direction
 
     s = 1 if core > 0 else 0  # core = 0 is negative: no selection?
 
-    if s == P[0] or x == rng*2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
-        pri_s, I, D, Dy, V, Vy, alt_Der, alt_Dir, alt_Both, t2_ = P
+    if s == P[0] or x == rng*2 or y == rng*2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
+        pri_s, I, Dx, Dy, Dt, Vx, Vy, Vt, Alt1, Alt2, Alt3, Alt4, Alt5, ders3_ = P
     else:
-        if y == rng*2:  # first line of Ps, _P_ is empty till vertical comp returns P_:
-            P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1 for delayed P displacement
+        if t == rng*2:  # first frame of Ps, _P_ is empty till temporal comp returns P_:
+            P_.append((P, x-1, y-1, []))  # empty _fork_ in the first frame of _Ps, x-1 and y-1: delayed P displacement
         else:
-            P_, buff_, _P_, blob_, frame = scan_P_(typ, x-1, P, P_, buff_, _P_, blob_, frame)  # scans higher-line Ps for contiguity
-        I, D, Dy, V, Vy, alt_Der, alt_Dir, alt_Both, t2_ = 0,0,0,0,0,0,0,0,[]  # new P initialization
+            P_, buff_, _P_, sequence = scan_P_(typ, x-1, y-1, P, P_, buff_, _P_, sequence)
+            # scans prior-frame Ps for contiguity
+        I, Dx, Dy, Dt, Vx, Vy, Vt, Alt1, Alt2, Alt3, Alt4, Alt5, ders3_ = 0,0,0,0,0,0,0,0,0,0,0,0,[]  # P initialization
 
     I += p  # summed input and derivatives are accumulated as P and alt_P parameters, continued or initialized:
-    D += d    # lateral D
+    Dx += dx  # lateral D
     Dy += dy  # vertical D
-    V += v    # lateral V
+    Dt += dt  # temporal D
+    Vx += vx  # lateral V
     Vy += vy  # vertical V
-    alt_Der += abs(alt_der)  # abs alt cores indicate value of alt-core Ps, to compute P redundancy rate
-    alt_Dir += abs(alt_dir)  # vs. specific overlaps: cost > gain in precision?
-    alt_Both+= abs(alt_both)
-    t2_.append(t2)  # t2s are buffered for oriented rescan and incremental range | derivation comp
+    vt += vt  # temporal V
+    Alt1 += abs(alt1)  # abs Alt cores indicate value of redundant alt-core Ps, to compute P redundancy rate
+    Alt2 += abs(alt2)  # vs. specific overlaps: cost >> gain in precision?
+    Alt3 += abs(alt3)
+    Alt4 += abs(alt4)
+    Alt5 += abs(alt5)
+    ders3_.append(ders3)  # ders3 is buffered for oriented rescan and incremental range | derivation comp
 
-    P = s, I, D, Dy, V, Vy, alt_Der, alt_Dir, alt_Both, t2_
-    return P, P_, buff_, _P_, sequence  # accumulated within line
+    P = s, I, Dx, Dy, Dt, Vx, Vy, Vt, Alt1, Alt2, Alt3, Alt4, Alt5, ders3_
+    return P, P_, buff_, _P_, sequence  # accumulated within a frame
 
 
-''' Color: primarily white, internal sub-patterns per relative color, not cross-compared because already complementary? 
+''' color: primarily white, internal sub-patterns per relative color, not cross-compared because already complementary? 
 
     recursive access of compositionally-lower levels of pattern: normalized for comp if min d(dim) -> r(dim)? 
+    scope hierarchy: ...multiple ( integer ( binary, unrolled if hLe match * lLe total, 
+    power = depth of content, norm if hLe diff * hLe match * lLe total
 '''
-
 
 def sequence_to_durables(f):  # postfix '_' distinguishes array vs. element, prefix '_' distinguishes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
-    global y
-    y = 0  # vertical coordinate of current input line
+    global t; t = 0  # temporal coordinate of current frame
 
-    t2_ = deque(maxlen=rng)  # vertical buffer of incomplete quadrant tuples, for fuzzy ycomp
-    rng_t2__= []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
-    p_ = f[0, :]  # first line of pixels
-    t_ = lateral_comp(p_)  # after part_comp (pop, no t_.append) while x < rng?
+    ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete quadrant tuples, for fuzzy ycomp
+    rng_ders2__= []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
+    rng_ders3__= []  # temporal buffer per pixel of a frame: 3D tuples in 3D -> 2D array
 
-    for (p, d, m) in t_:
-        t2 = p, d, m, 0, 0  # dy, my initialized at 0
-        t2_.append(t2)  # only one tuple per first-line t2_
-        rng_t2__.append((t2_, 0, 0))  # _dy, _my initialized at 0
+    pixel_ = f[0, :]  # first line of pixels
+    ders_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
+
+    for (p, d, m) in ders_:
+        ders2 = p, d, m, 0, 0  # dy, my initialized at 0
+        ders2_.append(ders2)  # only one tuple per first-line t2_
+        rng_ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
 
     for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
-        p_ = f[y, :]  # vertical coordinate y is index of new line p_
-        t_ = lateral_comp(p_)  # lateral pixel comparison
-        t2__, rng_t2__ = vertical_comp(t_, rng_t2__)  # vertical pixel comparison
+        pixel_ = f[y, :]  # vertical coordinate y is index of new line p_
+        ders_ = lateral_comp(pixel_)  # lateral pixel comparison
+        ders2__, rng_ders2__ = vertical_comp(ders_, rng_ders2__)  # vertical pixel comparison
+
+    for t in range(1, T):
+
+        pixel_ = f[t, :]  # vertical coordinate y is index of new line p_
+        ders_ = lateral_comp(pixel_)  # lateral pixel comparison
+        ders2__, rng_ders2__ = vertical_comp(ders_, rng_ders2__)  # vertical pixel comparison
+        new_ders3__, dP_, sequence = temporal_comp(ders2_, rng_ders3__, _dP_, sequence)  # temporal pixel comparison
 
     # frame ends, last vertical rng of incomplete t2__ is discarded,
     # but vertically incomplete P_ patterns are still inputted in scan_P_?
