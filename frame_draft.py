@@ -473,7 +473,6 @@ def comp_P(typ, norm, P, _P):  # forms vertical derivatives of P vars, also cond
 
     ix = x - len(t2_)  # initial and last coordinates of P
     dx = x - len(t2_)/2 - _x - len(_t2_)/2  # Dx? comp(dx), ddx = Ddx / h?
-
     mx = x - _ix  # vx = ave_dx - dx: distance (cost) decrease vs. benefit incr? or:
     if ix > _ix: mx -= ix - _ix  # mx = x olp, - a_mx -> vxP, distant P mx = -(a_dx - dx)?
 
