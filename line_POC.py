@@ -20,7 +20,7 @@ def recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng
     # called from pre_recursive_comp(), which is called from form_P
 
     d += p - pri_p  # fuzzy d accumulates differences between p and all prior ps in extended rng
-    v += min(p, pri_p) - ave  # fuzzy v accumulates deviation of match between p and all prior ps in extended rng
+    v += min(p, pri_p) - abs(d)/4 - ave  # fuzzy v accumulates deviation of match between p and all prior ps in extended rng
 
     vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, redun, rng)
     dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, redun, rng)
@@ -108,7 +108,7 @@ def comparison(x, p, rng_ders_, vP, dP, vP_, dP_, olp, X):  # pixel is compared 
         if index < max_index:
             rng_ders_[index] = (pri_p, d, m)
         else:
-            v = m - ave * min_rng  # value | deviation of match, sign determines inclusion into positive or negative vP
+            v = m - abs(d)/4 - ave * min_rng  # predictive value of match, sign determines inclusion into positive | negative vP
             # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) is transferred to form_pattern:
 
             vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, 1, min_rng)
