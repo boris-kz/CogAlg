@@ -11,45 +11,49 @@ Less coarse (more selective) are Capsule Networks, recently introduced by Geoffr
 I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay for contributions, or monthly if there is some track record. Please contact me if interested, here or on G+.
 
 
+
 ## Outline of my approach
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
-It’s a hierarchical search for patterns, by cross-comparing inputs over incremental distance and composition. First-level inputs are single variables, such as pixels, and higher-level inputs are multivariate patterns formed on lower levels. Variables (parameters) include match and miss per variable compared on lower levels. Hence, higher-level patterns are more complex: variables per pattern selectively multiply on each level.
 
-I define pattern as contiguous span of inputs forming the same sign of difference between input and feedback. Comparison of inputs to multiple orders of feedback forms multiple orders of overlapping patterns. 
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a search for hierarchical patterns, by cross-comparing inputs over incremental distance and composition. First-level inputs are single variables, such as pixels, and higher-level inputs are multivariate patterns formed on lower levels. Additional variables (parameters) are match and miss per variable compared on lower levels. Hence, higher-level patterns are more complex: variables per pattern selectively multiply on each level.
+
+I define pattern as contiguous span of inputs forming same-sign differences between input and feedback. Comparison of inputs to multiple orders of feedback forms multiple orders of overlapping patterns:
 First-order feedback is prior input, and patterns are spans of inputs with increasing or decreasing magnitude. Second-order feedback is average higher-level match, and second-order patterns are spans of inputs with above- or below- average match to prior inputs. And so on: to justify the costs of redundant comparisons, longer-range feedback is selective to higher order of match between input and shorter-range feedback.
 
-First-order match and miss are formed by cross-comparing inputs, over selectively extended range of search. Basic comparison is inverse arithmetic operation between two single-variable inputs, starting with adjacent pixels. Specific match and miss are determined by power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
-comparison by division increases match to a multiple and reduces miss to a fraction, and so on (part 1).
+I define match as lossless compression per comparison, adjusted for redundancy in representation per input. First-order match and miss are formed by cross-comparing inputs, over selectively extended range of search. Basic comparison is inverse arithmetic operation between two single-variable inputs, starting with adjacent pixels. Specific match and miss are determined by power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to a multiple and reduces miss to a fraction, and so on (part 1).
 
-To generalize, match is lossless compression per comparison. Match between patterns is a combined match between their variables. Search expansion is strictly incremental, to enable fine-grain selection of comparands. Thus, there is a unique set of operations per level, hence a singular in “cognitive algorithm“ (CogAlg below). Within a level, search is incremental in distance between inputs and in their derivation order (part 4, level 1). Between levels, search is incremental in compositional scope and number of derived variables per pattern.
+Projected match is partly cancelled by co-derived miss: predictive value of match = match - |difference/4|.
+Match between patterns is a combined match between their variables. To enable selection of comparands, search expansion must be strictly incremental. Which implies a unique set of operations per level, hence a singular in “cognitive algorithm“ (CogAlg below). Within a level, search is incremental in distance between inputs and in their derivation order (part 4, level 1). Between levels, search is incremental in compositional scope and number of derived variables per pattern, as well as in the number of feedback orders per input.
 
-My hierarchy is a dynamically extended pipeline: when pattern terminates, it is outputted for comparison on the next level, and is replaced by initialized pattern on current level. Thus, a new level must be formed for a pattern terminated by current top level. This continues indefinitely, as long as system receives new inputs.
-As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, and level’s output patterns are also fed back to filter lower levels.
+This hierarchy is a dynamically extended pipeline: terminated patterns are outputted for comparison on the next level, which means that new level must be formed for a pattern terminated by current top level.
+So, hierarchy adds incrementally higher levels with experience, as long as it recieves significantly novel inputs. As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, and outputted patterns are also fed back to filter lower levels.
 
 Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part i).
 
 To discover anything complex at “polynomial” cost, resulting patterns should also be hierarchical. In my model, each level of search adds a level of composition and a sub-level of differentiation to each input pattern. Higher-level search is selective per level of resulting pattern. Such composition and selection speeds-up search, to form longer range spatio-temporal and then conceptual patterns. Which also send feedback: filters and then motor action, to select lower-level inputs and locations with above-average additive predictive value (part 3).
 
 Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition.
-But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for scalability, vs. combinatorial explosion in search space. But incremental selection is is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation, which is probably why no one else seems to be working on anything sufficiently similar to my algorithm.
+But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for scalability, vs. combinatorial explosion in search space. But incremental selection is is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation. That’s probably why no one else seems to be working on anything sufficiently similar to my algorithm.
 
-Some readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about a lack of math, but CogAlg must be selectively incremental, and complex math is not. Some ask for pseudo code or some high-level scheme. Again, incremental means starting from the lowest level, and I don’t know of any code blocks designed to maximize compression in a strictly incremental fashion.
+Some readers dismiss this outline as generalities, which lack a direct connection to my code.  But I don’t see a disconnect, beyond simple adaptation to 2D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not.  Some ask for pseudocode or some high-level scheme. Again, incremental means starting from the lowest level, and I don’t know of any low-level code designed to maximize compression in a strictly incremental fashion. Any high-level architecture must be emergent: learned and forgettable depending on the input.
+
 
 
 ## Comparison to Artificial and Biological Neural Networks
 
 
+
 ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at synapses, then summed and thresholded into output. Final output also back- propagates to synapses and is combined with their last input to adjust the weights. This weight adjustment is learning. But prior summation degrades resolution of inputs, precluding any comparison between them (the inputs are recoverable, but why degrade and then spend a ton of computation restoring them).
 
-This is an inherently coarse statistical method: inputs are summed within samples defined by initially random weights. These weights are trained into meaningful values by Stochastic Gradient Descent backpropagation, but this process is too expensive to scale without supervision or task-specific reinforcement. CogAlg is comparison-first and resulting patterns are immediately meaningful. In other words, my initial feedback per pixel is simply a prior or adjacent pixel, which is infinitely finer-grained than backpropagation.
+This is an inherently coarse statistical method: inputs are summed within samples defined by initially random weights. These weights are trained into meaningful values by Stochastic Gradient Descent backpropagation, but this process is too expensive to scale without supervision or task-specific reinforcement.
+CogAlg is comparison-first and resulting patterns are immediately meaningful. In other words, my initial feedback per pixel is simply a prior or adjacent pixel, which is infinitely finer-grained than backpropagation.
 
-Currently the most successful method is CNN, which computes similarity as a product: input * kernel (weights), adjusted by some activation function. Again, kernels start with useless random weights and their adjustment is delayed (coarsified) by hidden layers. Human brain is born with a final number of neurons. Before birth, they have to develop and connect by processing random noise, and then learn by adjusting their connections. But in software, generating and deleting nodes that locally represent specific content should be far more efficient.
+Currently the most successful method is CNN, which computes similarity as a product: input * kernel (weights), adjusted by some activation function. Again, kernels start with useless random weights and their adjustment is delayed (coarsified) by hidden layers. Human brain is born with a final number of neurons. Before birth, they have to develop and connect by processing random noise, and then learn by adjusting their connections. But in software, generating and deleting nodes that represent specific content should be far more efficient.
 
 Conceptually, similarity is a common subset of comparands, but multiplication forms a superset, which exaggerates similarity. This is compensated by some activation function, but that’s another unprincipled and grossly inaccurate hack, which causes vanishing or exploding gradients. In the brain, multiplication is analog (cheap) and exaggeration adds resistance to noise. But noise cancellation should be separate from recognition, specific to local properties of noise, which should be learned and updated along with those of input itself.
 
-ANN compute difference  (error) on their output layer, but not between hidden layers. This distinction is only justified in supervised learning, where we have some specific expectation. In unsupervised learning, all layers are equally unknown before the input. So, each layer should compute both similarity and difference: feedback to a lower layer. In a temporal input flow, such difference should update expectations. I think it’s this delayed update that causes initialization bias in ANN, and much of similar confirmation bias in humans.
+ANN compute difference  (error) on their output layer, but not between hidden layers. This distinction is only justified in supervised learning, where we have some specific expectation. In unsupervised learning, all layers are equally unknown before the input. So, each layer should compute both similarity and difference: feedback to a lower layer. In a temporal input flow, such difference should update expectations. I think it is this delayed update that causes initialization bias in ANN, and much of similar confirmation bias in humans.
 
 Also, both input and kernel in ANN are arrays, often 2D or higher. This is far more coarse, thus less potentially selective and efficient, than one-to-one comparison of laterally adjacent inputs in my algorithm. I use “level” vs. “layer” because my levels are not identical. Complexity of inputs and operations is incremental with elevation: initial inputs are pixels, higher-level inputs are patterns formed on lower levels. My inference is comparison that forms separate match and difference, and the difference is fed back to update level-wide filters.
 
@@ -59,10 +63,12 @@ neural memory requires dedicated connections (synapses), which makes individual 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Another constraint is noise: neurons often fire at random, so their spikes are summed to reduce noise. Which is not a good reason to degrade far more precise electronic signals.
 
 
+
 ## Comparison to Capsule Networks and Clustering
 
 
-The nearest experimentally successful method is recently introduced Capsule Networks. Some similarities to CogAlg:
+
+The nearest experimentally successful method is recently introduced “capsules”. Some similarities to CogAlg:
 - capsules also output multi-variate vectors, “encapsulating” several properties, similar to my patterns
 - these properties also include coordinates and dimensions, compared to compute differences and ratios
 - these distances and proportions are also compared to find “equivariance” or affine transformations
@@ -70,7 +76,7 @@ The nearest experimentally successful method is recently introduced Capsule Netw
 
 But measure of similarity in CapsNet (“agreement” in dynamic routing) is still an unprincipled dot product, vs. additive compression in CogAlg. This is not specific to CapsNet, most current recognition algorithms, and seemingly the brain too,  select for dot product. To repeat, multiplication vastly exaggerates similarity. Which adds noise resistance, crucial for our horribly noisy brain, but that should be a separate noise-specific function.
 
-Pure similarity is a common subset: the smaller of comparands. Which would be a compression of represented magnitude if a larger comparand is replaced with its difference to a smaller comparand. This is the most basic implication of information-theoretical compression-uber-alles principle, but no one else is using minimum as a measure of similarity. It’s not sufficient per se, working measure would be a deviation: minimum - average minimum, then minus projected co-derived differences, etc. But minimum is unavoidable as a starting point.
+Pure similarity is a common subset: the smaller of comparands. Which would be a compression of represented magnitude if a larger comparand is replaced with its difference to a smaller comparand. It’s a direct implication of information-theoretical compression-uber-alles, but no one else uses minimum as a measure of similarity. It’s not sufficient per se, the most basic working measure would probably be a deviation of relative match: minimum / miss - average minimum / miss, but minimum is unavoidable as a starting point.
 
 CapsNets also use CNN layers to recognize basic features, which are then fed to capsule layers. But a truly general method must apply the same principles on all levels of processing, any differentiation should be learned rather than built-in. In current implementation, capsules contain only probability and pose variables.
 My patterns have match instead of probability, a miss that includes pose variables, and selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances.
@@ -80,7 +86,9 @@ All these variables are derived by incrementally complex comparison: a core oper
 Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of ANN, which computes match but not coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed, because each has independent predictive value.
 
 
+
 ## Implementation
+
 
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than the inputs themselves. Hence, precision of where (spans of and distances between patterns) is severely degraded, and so is predictive value of combined representations. There is no default degradation of positional information in my method.
