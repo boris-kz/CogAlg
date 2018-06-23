@@ -4,7 +4,7 @@ from time import time
 from collections import deque
 
 ''' core algorithm level 1: 1D-only proof of concept, 
-applied here to process lines of grey-scale pixels but not effective in recognition of 2D images. 
+applied here to process lines of grey-scale pixels but not effective for recognition of 2D images. 
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
@@ -14,55 +14,52 @@ are redundant representations of each line of pixels.
 postfix '_' denotes array name, vs. identical name of array elements '''
 
 
-def recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng):
+def recursive_comparison(x, p, pri_p, d, v, dP, vP, dP_, vP_, X, redun, rng):
 
     # incremental-range comp within vPs or incremental-derivation comp within dPs,
     # called from pre_recursive_comp(), which is called from form_P
 
     d += p - pri_p  # fuzzy d accumulates differences between p and all prior ps in extended rng
-    v += min(p, pri_p) - abs(d)/4 - ave  # fuzzy v accumulates deviation of match between p and all prior ps in extended rng
+    v += min(p, pri_p) - abs(d)/8 - ave  # fuzzy v accumulates deviation of match between p and all prior ps in extended rng
 
-    vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, redun, rng)
-    dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, redun, rng)
+    dP, dP_ = form_pattern(0, dP, dP_, pri_p, d, v, x, X, redun, rng)
+    vP, vP_ = form_pattern(1, vP, vP_, pri_p, d, v, x, X, redun, rng)
 
-    # forms value pattern vP: span of pixels with same-sign v, or difference pattern dP: span of pixels with same-sign d
-    olp += 1  # overlap between concurrent vP and dP, to be buffered in olp_s at termination
-
-    return d, v, vP, dP, vP_, dP_, olp  # for next-p comp, vP and dP increment, output
+    # forms difference pattern dP: span of pixels with same-sign d, or value pattern vP: span of pixels with same-sign v
+    return d, v, dP, vP, dP_, vP_  # for next-p comp, dP and vP increment, output
 
 
 def pre_recursive_comp(typ, element_, redun, rng):  # pre-processing for comp recursion over elements of selected pattern
 
-    redun += 1  # count of redundant sets of patterns formed by recursive_comparison
     X = len(element_) - 1
-
-    olp, vP_, dP_ = 0, [], []  # olp: overlap between vP and dP:
-    vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, ders_, olp_
-    dP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, d_, olp_
+    dP_, vP_ = [], []
+    dP = 0, 0, 0, 0, 0, 0, []  # pri_s, I, D, V, Alt, recomp, d_
+    vP = 0, 0, 0, 0, 0, 0, []  # pri_s, I, D, V, Alt, recomp, ders_
 
     if typ: # comparison range increment within element_ = ders_ of vP
 
         for x in range(rng, X):
-            p = element_[x][0]  # accumulation of pri_p (not p) d and v with d and v from comp of rng-distant pixels:
+            p = element_[x][0]  # accumulation of pri_p, d, v with d and v from comp of rng-distant pixels:
             pri_p, d, v = element_[x-rng]
-            d, v, vP, dP, vP_, dP_, olp = recursive_comparison(x, p, pri_p, d, v, vP, dP, vP_, dP_, olp, X, redun, rng)
-    else:
+            d, v, dP, vP, dP_, vP_ = recursive_comparison(x, p, pri_p, d, v, dP, vP, dP_, vP_, X, redun, rng)
+
+    else:  # comparison derivation increment within element_ = d_ of dP:
         pri_d = element_[0]
         d, v = 0, 0
-        for x in range(1, X):  # comparison derivation incr within element_ = d_ of dP:
+        for x in range(1, X):
             d = element_[x]
-            d, v, vP, dP, vP_, dP_, olp = recursive_comparison(x, d, pri_d, d, v, vP, dP, vP_, dP_, olp, X, redun, rng)
+            d, v, dP, vP, dP_, vP_ = recursive_comparison(x, d, pri_d, d, v, dP, vP, dP_, vP_, X, redun, rng)
             pri_d = d
 
-    return vP_, dP_  # local vP_ + dP_ replaces t_ or d_
+    return dP_, vP_  # tuple of local (dP_, vP_), indicated by recomp == 1, replaces ders_ or d_
 
 
-def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, d, v, x, X, redun, rng):  # accumulation, termination, recursive comp in P: vP | dP
+def form_pattern(typ, P, P_, pri_p, d, v, x, X, redun, rng):  # accumulation, termination, recursive comp in P: vP | dP
 
     if typ: s = 1 if v >= 0 else 0  # sign of d, 0 is positive?
     else:   s = 1 if d >= 0 else 0  # sign of v, 0 is positive?
 
-    pri_s, I, D, V, recomp, element_, olp_ = P  # e_: type of elements in P depends on the level of comp recursion
+    pri_s, I, D, V, Alt, recomp, element_ = P  # e_: type of elements in P depends on the level of comp recursion
     if x > rng + 2 and (s != pri_s or x == X - 1):  # P is terminated and evaluated for recursion
 
         if typ:
@@ -74,13 +71,10 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, d, v, x, X, redun, rng):
                 recomp = 1  # flag for recursive derivation increase within e_ = d_:
                 element_.append(pre_recursive_comp(0, element_, redun+1, 1))
 
-        P = typ, pri_s, I, D, V, recomp, element_, olp_
+        P = typ, pri_s, I, D, V, Alt, recomp, element_
         P_.append(P)  # output to second level
 
-        alt_P[6].append((len(P_), olp))  # index of current P and terminated olp are buffered in alt_olp_
-        olp_.append((len(alt_P_), olp))  # index of current alt_P and terminated olp buffered in olp_
-
-        olp, I, D, V, recomp, e_, olp_ = 0, 0, 0, 0, 0, [], []  # initialized P and olp
+        I, D, V, Alt, recomp, element_ = 0, 0, 0, 0, 0, []  # initialized P
 
     pri_s = s   # current sign is stored as prior sign; P (span of pixels forming same-sign v | d) is incremented:
     I += pri_p  # input ps summed within vP | dP
@@ -88,16 +82,17 @@ def form_pattern(typ, P, alt_P, P_, alt_P_, olp, pri_p, d, v, x, X, redun, rng):
     V += v      # fuzzy vs summed within vP | dP
 
     if typ:
+        Alt += abs(d)  # estimated value of alternative-type Ps, to compute redundancy on the next level
         element_.append((pri_p, d, v))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
     else:
+        Alt += abs(v)
         element_.append(d)  # prior ds of the same sign are buffered within dP
 
-    P = pri_s, I, D, V, recomp, element_, olp_
+    P = pri_s, I, D, V, Alt, recomp, element_
+    return P, P_
 
-    return P, alt_P, P_, alt_P_, olp  # alt_ and _alt_ are accumulated per line
 
-
-def comparison(x, p, rng_ders_, vP, dP, vP_, dP_, olp, X):  # pixel is compared to rng prior pixels
+def comparison(x, p, pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_, X):  # pixel is compared to rng prior pixels
 
     max_index = min_rng - 1
     for index, (pri_p, d, m) in enumerate(rng_ders_):
@@ -107,19 +102,22 @@ def comparison(x, p, rng_ders_, vP, dP, vP_, dP_, olp, X):  # pixel is compared 
 
         if index < max_index:
             rng_ders_[index] = (pri_p, d, m)
-        else:
-            v = m - abs(d)/4 - ave * min_rng  # predictive value of match, sign determines inclusion into positive | negative vP
-            # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) is transferred to form_pattern:
 
-            vP, dP, vP_, dP_, olp = form_pattern(1, vP, dP, vP_, dP_, olp, pri_p, d, v, x, X, 1, min_rng)
-            dP, vP, dP_, vP_, olp = form_pattern(0, dP, vP, dP_, vP_, olp, pri_p, d, v, x, X, 1, min_rng)
+        elif x > min_rng * 2 - 1:  # ders are accumulated over full bilateral rng: before and rng after displaced pixel
 
-            # forms value pattern vP: span of pixels with same-sign v, or difference pattern dP: span of pixels with same-sign d
-            olp += 1  # overlap between vP and dP, stored in both and terminated with either
+            v = (m + pri_m) - abs(d + pri_d)/8 - ave * min_rng * 2  # m - abs(d)/8: projected match reduced by neg d/4, both bilateral
+            # predictive value of match, sign for inclusion into positive | negative vP
 
+            # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) transferred to form_pattern,
+            # to form difference pattern dP: span of pixels with same-sign d, or value pattern vP: span of pixels with same-sign v:
+
+            dP, dP_ = form_pattern(0, dP, dP_, pri_p, d, v, x, X, 1, min_rng)
+            vP, vP_ = form_pattern(1, vP, vP_, pri_p, d, v, x, X, 1, min_rng)
+
+    next_d = d; next_m = m  # full-rng fuzzy d and m, to become pri_d, pri_m for pixel displaced by next comparison()
     rng_ders_.appendleft((p, 0, 0))  # new tuple is added, maxlen parameter removes completed tuple in deque
 
-    return rng_ders_, vP, dP, vP_, dP_, olp  # for next-p comparison, vP and dP increment, output
+    return next_d, next_m, rng_ders_, dP, vP, dP_, vP_  # for next-p comparison, vP and dP increment, output
 
 
 def frame(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
@@ -130,20 +128,21 @@ def frame(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical na
     for y in range(Y):
         pixel_ = frame_of_pixels_[y, :]   # y is index of new line p_
 
-        olp, vP_, dP_ = 0, [], []  # initialized at each level
-        vP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, ders_, olp_
-        dP = 0, 0, 0, 0, 0, [], []  # pri_s, I, D, V, recomp, d_, olp_
+        dP_, vP_ = [], []  # initialized at each level
+        dP = 0, 0, 0, 0, 0, 0, []  # pri_s, I, D, V, Alt, recomp, d_
+        vP = 0, 0, 0, 0, 0, 0, []  # pri_s, I, D, V, Alt, recomp, ders_
 
         rng_ders_ = deque(maxlen=min_rng)  # tuple of incomplete fuzzy derivatives: summation range < rng
         rng_ders_.append((pixel_[0], 0, 0))  # prior tuple, no d, m at x = 0
+        pri_d, pri_m = 0, 0  # fuzzy d and m over rng before prior p
 
         for x in range(1, X):  # cross-compares consecutive pixels within each line
 
-            p = pixel_[x]  # new pixel, for fuzzy comparison to it_:
-            rng_ders_, vP, dP, vP_, dP_, olp = comparison(x, p, rng_ders_, vP, dP, vP_, dP_, olp, X)
+            p = pixel_[x]  # new pixel, for fuzzy comparison to rng_ders_:
+            pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_ = comparison(x, p, pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_, X)
 
         # line ends, last rng of incomplete ders is discarded
-        frame_of_patterns_.append((vP_, dP_))  # line of patterns is added to frame of patterns
+        frame_of_patterns_.append((dP_, vP_))  # line of patterns is added to frame of patterns
 
     return frame_of_patterns_  # frame of patterns is output to level 2
 
@@ -160,8 +159,8 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 
 min_rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
 ave = 63  # average match between pixels, minimal for inclusion into positive vP
-ave_V = 63  # min V for initial incremental-range comparison(t_)
-ave_D = 63  # min |D| for initial incremental-derivation comparison(d_)
+ave_V = 127  # min V for initial incremental-range comparison(t_)
+ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
 
 start_time = time()
 frame_of_patterns_ = frame(image)
