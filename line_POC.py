@@ -14,19 +14,22 @@ are redundant representations of each line of pixels.
 postfix '_' denotes array name, vs. identical name of array elements '''
 
 
-def recursive_comparison(x, p, pri_p, d, v, dP, vP, dP_, vP_, X, redun, rng):
+def recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, redun, rng):
 
     # incremental-range comp within vPs or incremental-derivation comp within dPs,
     # called from pre_recursive_comp(), which is called from form_P
 
-    d += p - pri_p  # fuzzy d accumulates differences between p and all prior ps in extended rng
-    v += min(p, pri_p) - abs(d)/8 - ave  # fuzzy v accumulates deviation of match between p and all prior ps in extended rng
+    d += p - pri_p  # fuzzy d accumulates differences between p and all prior and subsequent ps in extended rng
+    m = min(p, pri_p)
+    v += m + pri_m - abs(d + pri_d)/4 - ave*2  # fuzzy v accumulates deviation of match within bilateral extended rng
 
     dP, dP_ = form_pattern(0, dP, dP_, pri_p, d, v, x, X, redun, rng)
     vP, vP_ = form_pattern(1, vP, vP_, pri_p, d, v, x, X, redun, rng)
 
     # forms difference pattern dP: span of pixels with same-sign d, or value pattern vP: span of pixels with same-sign v
-    return d, v, dP, vP, dP_, vP_  # for next-p comp, dP and vP increment, output
+    pri_d = d; pri_m = m  # for next recursive_comp
+
+    return pri_d, pri_m, d, v, dP, vP, dP_, vP_  # for next-p comp, dP and vP increment, output
 
 
 def pre_recursive_comp(typ, element_, redun, rng):  # pre-processing for comp recursion over elements of selected pattern
@@ -35,21 +38,22 @@ def pre_recursive_comp(typ, element_, redun, rng):  # pre-processing for comp re
     dP_, vP_ = [], []
     dP = 0, 0, 0, 0, 0, 0, []  # pri_s, I, D, V, Alt, recomp, d_
     vP = 0, 0, 0, 0, 0, 0, []  # pri_s, I, D, V, Alt, recomp, ders_
+    pri_d, pri_m = 0, 0
 
     if typ: # comparison range increment within element_ = ders_ of vP
 
         for x in range(rng, X):
             p = element_[x][0]  # accumulation of pri_p, d, v with d and v from comp of rng-distant pixels:
             pri_p, d, v = element_[x-rng]
-            d, v, dP, vP, dP_, vP_ = recursive_comparison(x, p, pri_p, d, v, dP, vP, dP_, vP_, X, redun, rng)
+            pri_d, pri_m, d, v, dP, vP, dP_, vP_ = recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, redun, rng)
 
     else:  # comparison derivation increment within element_ = d_ of dP:
-        pri_d = element_[0]
+        pri_p = element_[0]
         d, v = 0, 0
         for x in range(1, X):
-            d = element_[x]
-            d, v, dP, vP, dP_, vP_ = recursive_comparison(x, d, pri_d, d, v, dP, vP, dP_, vP_, X, redun, rng)
-            pri_d = d
+            p = element_[x]
+            pri_d, pri_m, d, v, dP, vP, dP_, vP_ = recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, redun, rng)
+            pri_p = p
 
     return dP_, vP_  # tuple of local (dP_, vP_), indicated by recomp == 1, replaces ders_ or d_
 
@@ -105,7 +109,7 @@ def comparison(x, p, pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_, X):  # pixel is 
 
         elif x > min_rng * 2 - 1:  # ders are accumulated over full bilateral rng: before and rng after displaced pixel
 
-            v = (m + pri_m) - abs(d + pri_d)/8 - ave * min_rng * 2  # m - abs(d)/8: projected match reduced by neg d/4, both bilateral
+            v = (m + pri_m) - abs(d + pri_d) /4 - ave * min_rng *2  # m - abs(d)/4: bilateral projected match reduced by neg d/2
             # predictive value of match, sign for inclusion into positive | negative vP
 
             # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) transferred to form_pattern,
@@ -158,7 +162,7 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 # pattern filters: eventually from higher-level feedback, initialized here as constants:
 
 min_rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
-ave = 63  # average match between pixels, minimal for inclusion into positive vP
+ave = 95  # average match between pixels, minimal for inclusion into positive vP
 ave_V = 127  # min V for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
 
