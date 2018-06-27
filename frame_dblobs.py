@@ -3,7 +3,36 @@ import argparse
 from time import time
 from collections import deque
 
-''' An updated version of frame_blobs with only one blob type: dblob, to ease debugging '''
+''' An updated version of frame_blobs with only one blob type: dblob, to ease debugging 
+    
+    frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
+    frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in current frame().
+
+    In my code, Le denotes level of encoding, 
+    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
+    postfix '_' denotes array name, vs. same-name elements of that array,
+    y per line below is shown as relative to y of current line, which is incremented with top-down input within a frame
+    
+    frame_blobs() performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
+
+    1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple t ) array t_
+    2Le, line y- 1: y_comp(t_): vertical pixel comp -> 2D tuple t2 ) array t2_ 
+    3Le, line y- 1+ rng*2: form_P(t2) -> 1D pattern P ) P_  
+    4Le, line y- 2+ rng*2: scan_P_(P, _P) -> _P, fork_, root_: downward and upward connections between Ps of adjacent lines 
+    5Le, line y- 3+ rng*2: form_blob(_P, blob) -> blob: merge connected Ps into non-forking blob segments
+    6Le, line y- 4+ rng*2+ + blob depth: term_blob, form_net -> net: merge connected segments into network of terminated forks
+    
+    These functions are tested through form_P, I am currently debugging scan_P_. 
+    All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
+    into elements of new higher line, and displace elements of old higher line into some higher function.
+    Higher-line elements include additional variables, derived while they were lower-line elements.
+    
+    Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
+    They are formed on the same level because average lateral match ~ average vertical match.
+    Each vertical and horizontal derivative forms separate blobs, suppressing overlapping orthogonal representations.
+    They can also be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives.
+    Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
+'''
 
 def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
 
@@ -55,11 +84,12 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
                 ders2_[index] = (_p, d, m, dy, my)
 
             elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
-                _v = _m - ave
-                vy = my + _my - ave
-                ders2 = _p, _d, _v, dy + _dy, vy
 
+                _v = _m - abs(d)/4 - ave  # _m - abs(d)/8: projected match is cancelled by negative d/4
+                vy = my + _my - abs(dy)/4 - ave
+                ders2 = _p, _d, _v, dy + _dy, vy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
+
             index += 1
 
         ders2_.appendleft((p, d, m, 0, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
@@ -68,7 +98,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     return new_ders2__, dP_, dframe  # extended in scan_P_; net_s are packed into frames
 
 
-def form_P(ders2, x, P, P_, buff_, _P_, frame):  # terminates, initializes, accumulates 1D pattern: dP | vP | dyP | vyP
+def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
 
     p, d, v, dy, vy = ders2  # 2D tuple of derivatives per pixel, "y" for vertical dimension:
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
@@ -76,7 +106,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # terminates, initializes, accu
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
         pri_s, I, D, Dy, V, Vy, ders2_ = P
     else:
-        if y == rng * 2:  # first line of Ps -> P_, _P_ is empty till vertical comp returns P_:
+        if y == rng * 2:  # first line of Ps -> P_, _P_ is empty till vertical_comp returns P_:
             P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
         else:
             P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
@@ -117,8 +147,8 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob_:
             buff_.append((_P, _x, _fork_, root_))
         else:
-            if y > rng * 2 + 1 and x < X - 99 and len(_fork_) == 1 and _fork_[0][0][5] == 1:  # no fork blob if x < X - len(fork_P[6])?
-                # if blob _fork_ == 1 and _fork roots == 1, always > 0?
+            if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 and x < X - 99:  # no fork blob if x < X - len(fork_P[6])?
+                # if blob _fork_ == 1 and _fork roots == 1, always > 0, must be improperly incremented outside of scan_P_
                 blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob + __fork_
             else:
                 ave_x = _x - len(_P[6]) / 2  # average x of P: always integer?

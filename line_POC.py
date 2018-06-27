@@ -17,11 +17,11 @@ postfix '_' denotes array name, vs. identical name of array elements '''
 def recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, redun, rng):
 
     # incremental-range comp within vPs or incremental-derivation comp within dPs,
-    # called from pre_recursive_comp(), which is called from form_P
+    # called from pre_recursive_comp(), which is called from form_pattern
 
     d += p - pri_p  # fuzzy d accumulates differences between p and all prior and subsequent ps in extended rng
     m = min(p, pri_p)
-    v += m + pri_m - abs(d + pri_d)/4 - ave*2  # fuzzy v accumulates deviation of match within bilateral extended rng
+    v += m + pri_m - abs(d + pri_d) /4 - ave *2  # fuzzy v accumulates deviation of match within bilateral extended rng
 
     dP, dP_ = form_pattern(0, dP, dP_, pri_p, d, v, x, X, redun, rng)
     vP, vP_ = form_pattern(1, vP, vP_, pri_p, d, v, x, X, redun, rng)
@@ -47,7 +47,7 @@ def pre_recursive_comp(typ, element_, redun, rng):  # pre-processing for comp re
             pri_p, d, v = element_[x-rng]
             pri_d, pri_m, d, v, dP, vP, dP_, vP_ = recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, redun, rng)
 
-    else:  # comparison derivation increment within element_ = d_ of dP:
+    else: # comparison derivation increment within element_ = d_ of dP:
         pri_p = element_[0]
         d, v = 0, 0
         for x in range(1, X):
@@ -109,8 +109,8 @@ def comparison(x, p, pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_, X):  # pixel is 
 
         elif x > min_rng * 2 - 1:  # ders are accumulated over full bilateral rng: before and rng after displaced pixel
 
-            v = (m + pri_m) - abs(d + pri_d) /4 - ave * min_rng *2  # m - abs(d)/4: bilateral projected match reduced by neg d/2
-            # predictive value of match, sign for inclusion into positive | negative vP
+            v = (m + pri_m) - abs(d + pri_d) /4 - ave * min_rng *2  # m - abs(d)/4: bilateral projected match is reduced by neg d/2
+            # predictive value of match, sign determines inclusion into positive | negative vP
 
             # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) transferred to form_pattern,
             # to form difference pattern dP: span of pixels with same-sign d, or value pattern vP: span of pixels with same-sign v:
