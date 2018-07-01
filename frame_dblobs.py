@@ -3,27 +3,25 @@ import argparse
 from time import time
 from collections import deque
 
-''' An updated version of frame_blobs with only one blob type: dblob, to ease debugging 
-    
+'''   
     frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
     frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in current frame().
-
-    In my code, Le denotes level of encoding, 
-    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
-    postfix '_' denotes array name, vs. same-name elements of that array,
-    y per line below is shown as relative to y of current line, which is incremented with top-down input within a frame
+    frame_dblobs() is an updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
     
-    frame_blobs() performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
+    It performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
+    y per Le line is relative to y of current input line, incremented by top-down scan of input image,
+    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
+    postfix '_' denotes array name, vs. same-name elements of that array:
 
-    1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple t ) array t_
-    2Le, line y- 1: y_comp(t_): vertical pixel comp -> 2D tuple t2 ) array t2_ 
-    3Le, line y- 1+ rng*2: form_P(t2) -> 1D pattern P ) P_  
+    1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives ders ) array ders_
+    2Le, line y- 1: y_comp(ders_): vertical pixel comp -> 2D tuple ders2 ) array ders2_ 
+    3Le, line y- 1+ rng*2: form_P(ders2) -> 1D pattern P ) P_  
     4Le, line y- 2+ rng*2: scan_P_(P, _P) -> _P, fork_, root_: downward and upward connections between Ps of adjacent lines 
-    5Le, line y- 3+ rng*2: form_blob(_P, blob) -> blob: merge connected Ps into non-forking blob segments
-    6Le, line y- 4+ rng*2+ + blob depth: term_blob, form_net -> net: merge connected segments into network of terminated forks
+    5Le, line y- 3+ rng*2: form_blob(_P, blob) -> blob: merge vertically-connected Ps into non-forking blob segments
+    6Le, line y- 4+ rng*2+ blob depth: term_blob, form_net -> net: merge connected segments into network of terminated forks
     
     These functions are tested through form_P, I am currently debugging scan_P_. 
-    All 2D functions (ycomp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
+    All 2D functions (y_comp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into some higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     
@@ -85,7 +83,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
 
             elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
 
-                _v = _m - abs(d)/4 - ave  # _m - abs(d)/8: projected match is cancelled by negative d/4
+                _v = _m - abs(d)/4 - ave  # _m - abs(d)/4: projected match is cancelled by negative d/2
                 vy = my + _my - abs(dy)/4 - ave
                 ders2 = _p, _d, _v, dy + _dy, vy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
@@ -130,31 +128,31 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     ix = x - len(P[6])  # initial x coordinate of P( pri_s, I, D, Dy, V, Vy, ders2_)
     _ix = 0  # initial x coordinate of _P
 
-    while _ix <= x:  # while horizontal overlap between P and _P, then P -> P_
+    while _ix <= x:  # while horizontal overlap between P and _P, after that: P -> P_
         if _buff_:
-            _P, _x, _fork_, root_ = _buff_.popleft()  # _Ps buffered in prior run of scan_P_
+            _P, _x, _fork_, root_ = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
         elif _P_:
-            _P, _x, _fork_ = _P_.popleft()  # _P: y-2, _root_: y-3, starts empty, then contains blobs that replace _Ps
+            _P, _x, _fork_ = _P_.popleft()  # load _P: y-2, _root_: y-3, starts empty, then contains blobs that replace _Ps
             root_ = []  # Ps connected to current _P
         else:
             break
         _ix = _x - len(_P[6])
 
         if P[0] == _P[0]:  # if s == _s: core sign match, also selective inclusion by cont eval?
-            fork_.append([])  # mutable placeholder for blobs connected to P, after _P inclusion with complete root_
+            fork_.append([])  # mutable placeholder for blobs connected to P, filled after _P inclusion with complete root_
             root_.append(fork_[len(fork_)-1])  # binds forks to blob
 
-        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob_:
+        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob:
             buff_.append((_P, _x, _fork_, root_))
         else:
             if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 and x < X - 99:  # no fork blob if x < X - len(fork_P[6])?
-                # if blob _fork_ == 1 and _fork roots == 1, always > 0, must be improperly incremented outside of scan_P_
-                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob + __fork_
+                # if blob _fork_ == 1 and _fork roots == 1, always > 0: a bug probably appends fork_ outside scan_P_?
+                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob +__fork_
             else:
                 ave_x = _x - len(_P[6]) / 2  # average x of P: always integer?
                 blob = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob init, Dx = 0, no new _fork_ for continued blob
 
-            if len(root_) == 0:  # never?
+            if len(root_) == 0:  # never happens, probably due to the same bug
                 net = blob, [blob]  # first-level net is initialized with terminated blob, no root_ to rebind
                 if len(_fork_) == 0:
                     frame = term_network(net, frame)  # all root-mediated forks terminated, net is packed into frame
