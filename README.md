@@ -16,27 +16,27 @@ I need help with design and implementation of this algorithm, in Python. But thi
 
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a search for hierarchical patterns, by cross-comparing inputs over incremental distance and composition. First-level inputs are single variables, such as pixels, and higher-level inputs are multivariate patterns formed on lower levels. Additional variables (parameters) are match and miss per variable compared on lower levels. Hence, higher-level patterns are more complex: variables per pattern selectively multiply on each level.
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s supposed to search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Although sounds generic, this description has very specific implications.
 
-I define pattern as contiguous span of inputs forming same-sign miss between input and feedback. Hierarchical search must generate two orders of feedback: lateral and vertical, forming two types of overlapping patterns:
-Lateral feedback is prior input, and patterns are spans of inputs with increasing or decreasing magnitude. Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match (this feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
+Incremental means that first-level comparands must be unprocessed integer values with binary (before|after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
+Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. Lossless means that resulting match and miss are preserved, as alternative representation of original inputs.
 
-Match and miss are formed by cross-comparing inputs, over selectively extended range of search. Basic comparison is inverse arithmetic operation between two single-variable inputs, starting with adjacent pixels. Specific match and miss are determined by power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to a multiple and reduces miss to a fraction, and so on (part 1).
+Specific match and miss are determined by the power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to multiple and reduces miss to fraction, and so on (more in part 1). Generalizing the above, match is lossless compression per comparison, /= redundancy in input representation.
 
-In general, match is lossless compression per comparison, adjusted for redundancy in input representation.
-Predictive value of match is reduced by conflicting projection of co-derived negative miss, = |difference|/4.
-Match between patterns is combined match of their variables. Such comparison is increasingly expensive and must be selective. To enable selection, search is strictly incremental in distance, derivation, and composition. Which implies a unique set of operations per level, hence a singular in “cognitive algorithm“ (CogAlg below).
+Resulting patterns represent spans of inputs that form same-sign difference. Hierarchical feedback provides two types of comparands: within level (lateral) and between levels (vertical), forming two types of patterns:
+Lateral feedback is prior inputs, and patterns are spans of inputs with increasing or decreasing magnitude. Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match (this feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
+
+Higher-level inputs are patterns formed by lower-level comparisons, and their parameters represent results: match and miss (derivatives) per compared parameter. Hence, number of variables per pattern is selectively multiplied on each level. Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental: in distance, derivation, and composition over both. Which implies a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
 
 Resulting hierarchy is a dynamically extended pipeline: terminated patterns are outputted for comparison on the next level, which means that new level must be formed for a pattern terminated by current top level.
 So, hierarchy adds incrementally higher levels with experience, as long as it receives significantly novel inputs. As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, and outputted patterns are also fed back to filter lower levels.
 
-Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part i).
+Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part 0).
 
 To discover anything complex at “polynomial” cost, resulting patterns should also be hierarchical. In my model, each level of search adds a level of composition and a sub-level of differentiation to each input pattern. Higher-level search is selective per level of resulting pattern. Both composition and selection speeds-up search, to form longer range spatio-temporal and then conceptual patterns. Which also send feedback: filters and then motor action, to select lower-level inputs and locations with above-average additive predictive value (part 3).
 
 Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition.
-But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for scalability, vs. combinatorial explosion in search space. But incremental selection is is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation. That’s probably why no one else seems to be working on anything sufficiently similar to my algorithm.
-
+But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for selection, thus scalability, vs. combinatorial explosion in search space. But selection is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation. That’s probably why no one else seems to be working on anything sufficiently similar to my algorithm.
 
 
 
