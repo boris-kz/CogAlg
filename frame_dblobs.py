@@ -6,10 +6,10 @@ from collections import deque
 '''   
     frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
     frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in current frame().
-    frame_dblobs() is an updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
+    frame_dblobs() is updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
     
-    It performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
-    y per Le line is relative to y of current input line, incremented by top-down scan of input image,
+    Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
+    y per Le line is shown relative to y of current input line, incremented by top-down scan of input image,
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array:
 
