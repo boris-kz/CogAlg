@@ -3,12 +3,12 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Intelligence is ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This definition is well established: pattern recognition is a core of any IQ test. But there is no general constructive definition of either pattern or recognition. So, I came up with my own definitions, which directly translate into algorithm introduced here.
+Intelligence is the ability to predict and plan, which can only be shown by discovering and projecting patterns. This definition is well established: pattern recognition is core for any IQ test. But there is no general constructive definition of neither pattern nor recognition. So I came up with my own definitions, which directly translates into the algorithm introduced here.
 
-For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
-Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
+For excellent and popular introductions to the cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they operate in a very statiscally coarse fashion because most current researchers implement pattern discovery via artificial neural networks.
+Capsule Networks, recently introduced by Geoffrey Hinton et al, are less coarse and more selective in comparison. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
 
-I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay for contributions, or monthly if there is some track record. Please contact me if interested, here or on G+.
+I need help with design and implementation of this algorithm, in Python. But this work is theory first. If you find flaws or omissions in my reasoning, that would be immensely valuable. This is an open project, but I will pay for contributions, or monthly if there are some track record. Please contact me if interested, here or on G+.
 
 
 
@@ -19,7 +19,8 @@ I need help with design and implementation of this algorithm, in Python. But thi
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Patterns are defined by a sign of deviation of match between inputs, where match is compression of represented magnitude by replacing inputs with their derivatives. These definitions are unfolded below.
 
 “Incremental” means that first-level comparands must be sub-symbolic integers with binary (before | after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
-Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. “Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
+Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. 
+“Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
 
 Specific match and miss are determined by the power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to multiple and reduces miss to fraction, and so on (more in part 1). Generalizing the above, match is lossless compression per comparison, /= redundancy in input representation.
 
