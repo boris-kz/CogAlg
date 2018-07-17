@@ -16,10 +16,10 @@ I need help with design and implementation of this algorithm, in Python. But thi
 
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s supposed to search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Although sounds generic, this description has very specific implications.
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Patterns are defined by a sign of deviation of match between inputs, where match is compression of represented magnitude by replacing inputs with their derivatives. These definitions are unfolded below.
 
-Incremental means that first-level comparands must be unprocessed integer values with binary (before|after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
-Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. Lossless means that resulting match and miss are preserved, as alternative representation of original inputs.
+“Incremental” means that first-level comparands must be sub-symbolic integers with binary (before | after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
+Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. “Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
 
 Specific match and miss are determined by the power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to multiple and reduces miss to fraction, and so on (more in part 1). Generalizing the above, match is lossless compression per comparison, /= redundancy in input representation.
 

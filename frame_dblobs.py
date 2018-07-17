@@ -9,7 +9,7 @@ from collections import deque
     frame_dblobs() is updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
     
     Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
-    y per Le line is shown relative to y of current input line, incremented by top-down scan of input image,
+    value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image,
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array:
 
