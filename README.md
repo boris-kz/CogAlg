@@ -3,12 +3,14 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Intelligence is ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This definition is well established: pattern recognition is a core of any IQ test. But there is no general constructive definition of either pattern or recognition. So, I came up with my own definitions, which directly translate into algorithm introduced here.
+Intelligence is the ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
+But there is no general, consistent, and constructive definition of either pattern or recognition (quantified similarity). So, I came up with my own definitions, which directly translate into algorithm proposed below.
 
-For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
-Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below and then compare it to ANN, biological NN, CapsNet, and clustering.
+For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in very coarse statistical fashion.
+Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code and implementation plans.
 
-I need help with design and implementation of this algorithm, in Python. But this work is theory first, experimentation last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay for contributions, or monthly if there is some track record. Please contact me if interested, here or on G+.
+I need help with design and implementation of this algorithm: open project CogAlg on GitHub, in Python. But this work is theory first, experimentation last. The "theory" part is refining, extending, and implementing principles introduced below. I pay per contribution, or monthly if there is some track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+*This content is published under Creative Commons Attribution 4.0 International License.*
 
 
 
@@ -16,16 +18,22 @@ I need help with design and implementation of this algorithm, in Python. But thi
 
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Patterns are defined by a sign of deviation of match between inputs, where match is compression of represented magnitude by replacing inputs with their derivatives. These definitions are unfolded below.
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
+It’s a search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Patterns are defined by a sign of deviation of match between inputs, where match is compression of represented magnitude by replacing inputs with their derivatives. These definitions are unfolded below.
 
 “Incremental” means that first-level comparands must be sub-symbolic integers with binary (before | after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
 Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. “Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
 
-Specific match and miss are determined by the power of comparison: Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to multiple and reduces miss to fraction, and so on (more in part 1). Generalizing the above, match is lossless compression per comparison, /= redundancy in input representation.
+Specific match and miss are determined by the power of comparison:
+Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to multiple and reduces miss to fraction, and so on (more in part 1). Generalizing the above, match is lossless compression per comparison, /= redundancy in input representation.
 
-Resulting patterns represent spans of inputs that form same-sign miss. Hierarchy should generate two orders of feedback: within and between levels. Compared to inputs, these orders form lateral and vertical patterns: Lateral feedback is prior inputs, and patterns are spans of inputs with increasing or decreasing magnitude. Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match (this feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
+Resulting patterns represent spans of inputs that form same-sign miss. Hierarchy should generate two orders of feedback: within and between levels. Compared to inputs, these orders form lateral and vertical patterns:
+Lateral feedback is prior inputs, and patterns are spans of inputs with increasing or decreasing magnitude.
+Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match
+(this feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
 
-Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level. Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
+Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level.  
+ Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
 
 Resulting hierarchy is a dynamically extended pipeline: terminated patterns are outputted for comparison on the next level, and new level is formed for pattern terminated by current top level. Which continues as long as system receives novel inputs. As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, whose output is also fed back to filter lower levels.
 
@@ -74,16 +82,17 @@ The nearest experimentally successful method is recently introduced “capsules�
 
 But measure of similarity in CapsNet (“agreement” in dynamic routing) is still an unprincipled dot product, vs. additive compression in CogAlg. This is not specific to CapsNet, most current recognition algorithms, and seemingly the brain too,  select for dot product. To repeat, multiplication vastly exaggerates similarity. Which adds noise resistance, crucial for our horribly noisy brain, but that should be a separate noise-specific function.
 
-Pure similarity is a common subset: the smaller of comparands. Which would be a compression of represented magnitude if a larger comparand is replaced with its difference to a smaller comparand. It’s a direct implication of information-theoretical compression-uber-alles, but no one else uses minimum as a measure of similarity. It’s not sufficient per se, the most basic working measure would probably be a deviation of relative match: minimum / miss - average minimum / miss, but minimum is unavoidable as a starting point.
+Pure similarity is a common subset: the smaller of comparands. Which is a compression of represented magnitude if a larger comparand is replaced with its difference to a smaller comparand. This is a direct implication of information-theoretical compression-uber-alles principle, but no one else uses minimum as a measure of similarity. It’s not sufficient, basic working measure is probably a deviation of adjusted match: minimum - difference / 4 - (average minimum - difference / 4). But minimum is unavoidable as a starting point in defining similarity.
 
 CapsNets also use CNN layers to recognize basic features, which are then fed to capsule layers. But a truly general method must apply the same principles on all levels of processing, any differentiation should be learned rather than built-in. In current implementation, capsules contain only probability and pose variables.
 My patterns have match instead of probability, a miss that includes pose variables, and selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances.
 
-All these variables are derived by incrementally complex comparison: a core operation on all levels of CogAlg. My hierarchy is a dynamic pipeline: pattern is displaced from its level by a miss to new input, then forwarded to existing or newly formed higher level. Which means that higher-level patterns include lower-level variables, as well as their derivatives. These derivatives are summed within a pattern, then evaluated for intra-pattern search and feedback. Thus, both a hierarchy of patterns per system, and a sub-hierarchy of variables per pattern, expand with experience. I think this is fundamentally superior to static design of CapsNet.
+All these variables are derived by incrementally complex comparison: a core operation on all levels of CogAlg. My hierarchy is a dynamic pipeline: pattern is displaced from its level by a miss to new input, then forwarded to existing or newly formed higher level. Which means that higher-level patterns include lower-level variables, as well as their derivatives. These derivatives are summed within a pattern, then evaluated for intra-pattern search and feedback.
+ Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience. I think this is fundamentally superior to static design of CapsNet.
 
 Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of ANN, which computes match but not coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed, because each has independent predictive value.
 
-Some readers dismiss this outline as generalities, which lack a direct connection to my code.  But I don’t see a disconnect, beyond simple adaptation to 2D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not.  There is no pseudocode or some high-level scheme. Again, incremental means starting from the lowest level, and I don’t know of any low-level code designed to maximize compression in a strictly incremental fashion. Any high-level architecture must be emergent: learned and forgettable depending on the input.
+*Some readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not. For the same reason, there is no pseudocode: incremental means that low-level code must generate "architecture" from the input.*
 
 
 
@@ -93,8 +102,7 @@ Some readers dismiss this outline as generalities, which lack a direct connectio
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than the inputs themselves. Hence, precision of where (spans of and distances between patterns) is severely degraded, and so is predictive value of combined representations. There is no default degradation of positional information in my method.
 
-My core algorithm is 1D: time only (part 4). Our space-time is 4D, but each of these dimensions can be mapped on one level of search. This way, levels can select input patterns that are strong enough to justify the cost of representing additional dimension, as well as derivatives (matches and differences) in that dimension.
-Initial 4D cycle of search would compare contiguous inputs, analogously to connected-component analysis:
+My core algorithm is 1D: time only. Our space-time is 4D, but each of these dimensions can be mapped on one level of search. This way, levels can select input patterns that are strong enough to justify the cost of representing additional dimension, as well as derivatives (matches and differences) in that dimension. Initial 4D cycle of search would compare contiguous inputs, analogously to connected-component analysis:
 
 level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments.
 
@@ -106,14 +114,16 @@ level 4 compares contiguous 3D patterns in temporal sequence, forming 4D pattern
 
 Subsequent cycles would compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions.
 
-However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D at once, or at least over 2D at once for images. This is a universe-specific extension of my core algorithm.
+However, average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and inclusion into patterns should also be over 4D at once, or at least over 2D at once for still images. This is a universe-specific extension of my core algorithm.
 
-I have POC code for basic 1D core algorithm: https://github.com/boris-kz/CogAlg/blob/master/line_POC.py, am currently working on its adaptation to process images: https://github.com/boris-kz/CogAlg/blob/master/frame_blobs_draft.py , https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py.
-Initial testing could be recognition and automatic labeling of manually labeled images.
+Accordingly, my code here consists of three levels:
 
-This algorithm will be organically extended to process colors, then video, then stereo video (from multiple confocal cameras).
-For video, level 2 will process consecutive frames and derive temporal patterns, and levels 3 and higher will process discontinuous 2D + time patterns. It should also extend to any type and scope of data.
+- 1D: [line_introductory.py](https://github.com/boris-kz/CogAlg/blob/master/line_introductory.py), which uses full variable names but is too long and dense to trace operations, and very similar but compressed and updated [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
+- 2D: [frame_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), which is meant as a stand-alone 2D algorithm but is not complete, [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py), which will be a model for corresponding components of 3D video algorithm, and [frame_dblobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_dblobs.py), which is simplified version for debugging, currently in progress.
+- 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This algoruithm will hopefully be effective and scalable, but is currently less than 5% done.
 
-Suggestions and collaboration are most welcome, see last part of my intro on prizes.
+This algorithm will be organically extended to process color images, audio, text, etc. Initial testing could be recognition and automatic labeling of manually labeled images, but it might better to start directly with video: still images are very poor representation of our 4D world.
+
+Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
 
