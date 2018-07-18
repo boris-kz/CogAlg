@@ -1,6 +1,6 @@
-I need help with design and implementation of this algorithm, in Python. But this work is theory-first, experimentation-last. Unless you find flaws or omissions in my reasoning, which would be even more valuable. This is an open project, but I will pay per contribution, or monthly if there is some track record.
+I need help with design and implementation of this algorithm, in Python. But this work is theory-first, experimentation-last. The "theory" part is refining, extending, and implementing principles introduced in README. This is an open project, but I will pay per contribution, or monthly if there is some track record. I have ~1M in liquid assets and fully expect to spend it on this project, long-term.
 
-Past contributions:
+Contributions:
 
 2010: Todor Arnaudov, $600 for suggestion to buffer old inputs after search. This occurred to me more than once before, but I rejected it as redundant to potential elevation of these inputs. Now that he made me think about it again, I realized that partial redundancy can preserve the detail at much lower cost than elevation.
 The buffer is accessed if coordinates of contents get relatively close to projected inputs (that and justification is mine). It didn’t feel right because brain has no substrate for passive memory, but we do now.
