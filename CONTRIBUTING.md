@@ -1,4 +1,4 @@
-I need help with design and implementation of this algorithm, in Python. But this work is theory-first, experimentation-last. The "theory" part is refining, extending, and implementing principles introduced in README. This is an open project, but I will pay per contribution, or monthly if there is some track record.
+I need help with design and implementation of this algorithm, in Python. But this work is theory-first, experimentation-last. The "theory" part is refining, extending, and implementing principles introduced in README. This is an open project, but I will pay per contribution, or monthly if there is some track record. I have ~1M in liquid assets and fully expect to spend it on this project, long-term.
 
 Contributions:
 
