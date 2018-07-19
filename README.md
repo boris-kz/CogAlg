@@ -4,13 +4,12 @@ CogAlg
 Full introduction: www.cognitivealgorithm.info
 
 Intelligence is the ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
-But there is no general, consistent, and constructive definition of either pattern or recognition (quantified similarity). So, I came up with my own definitions, which directly translate into algorithm proposed below.
+But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity). So, I came up with my own definitions, which directly translate into algorithm proposed below.
 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in very coarse statistical fashion.
-Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code and implementation plans.
+Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
-I need help with design and implementation of this algorithm: open project CogAlg on GitHub, in Python. But this work is theory first, experimentation last. The "theory" part is refining, extending, and implementing principles introduced below. I pay per contribution, or monthly if there is some track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
-*This content is published under Creative Commons Attribution 4.0 International License.*
+I need help with design and implementation of this algorithm. All contributions must be consistent with the principles introduced here. Unless you find some conceptual flaws or omissions, which would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
 
 
@@ -22,17 +21,19 @@ Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-st
 It’s a search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Patterns are defined by a sign of deviation of match between inputs, where match is compression of represented magnitude by replacing inputs with their derivatives. These definitions are unfolded below.
 
 “Incremental” means that first-level comparands must be sub-symbolic integers with binary (before | after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
-Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. “Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
+Their comparison should also be minimal in complexity: lossless transform by inverse arithmetic operations. “Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
 
-Specific match and miss are determined by the power of comparison:
-Boolean match is AND and miss is XOR, comparison by subtraction increases match to a smaller comparand and reduces miss to a difference, comparison by division increases match to multiple and reduces miss to fraction, and so on (more in part 1). Generalizing the above, match is lossless compression per comparison, /= redundancy in input representation.
+Specific match (compression of magnitude) and miss (complementary of match) are determined by the power of comparison:
+- Boolean match is AND and miss is XOR,
+- comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
+- comparison by division increases match to a multiple and reduces miss to a fraction, and so on (more in part 1).
 
 Resulting patterns represent spans of inputs that form same-sign miss. Hierarchy should generate two orders of feedback: within and between levels. Compared to inputs, these orders form lateral and vertical patterns:
 Lateral feedback is prior inputs, and patterns are spans of inputs with increasing or decreasing magnitude.
 Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match
-(this feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
+(deep feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
 
-Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level.  
+Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level.
  Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
 
 Resulting hierarchy is a dynamically extended pipeline: terminated patterns are outputted for comparison on the next level, and new level is formed for pattern terminated by current top level. Which continues as long as system receives novel inputs. As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, whose output is also fed back to filter lower levels.
@@ -52,7 +53,7 @@ But none that I know of is strictly incremental in scope and complexity of disco
 
 ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at synapses, then summed and thresholded into output. Final output also back- propagates to synapses and is combined with their last input to adjust the weights. This weight adjustment is learning. But prior summation degrades resolution of inputs, precluding any comparison between them (the inputs are recoverable, but why degrade and then spend a ton of computation restoring them).
 
-This is an inherently coarse statistical method: inputs are summed within samples defined by initially random weights. These weights are trained into meaningful values by Stochastic Gradient Descent backpropagation, but this process is too expensive to scale without supervision or task-specific reinforcement.
+This is an inherently coarse statistical method: inputs are summed within samples defined by initially random weights. These weights are trained into meaningful values by backpropagation of Stochastic Gradient Descent, but this process is too expensive to scale without supervision or task-specific reinforcement.
 CogAlg is comparison-first and resulting patterns are immediately meaningful. In other words, my initial feedback per pixel is simply a prior or adjacent pixel, which is infinitely finer-grained than backpropagation.
 
 Currently the most successful method is CNN, which computes similarity as a product: input * kernel (weights), adjusted by some activation function. Again, kernels start with useless random weights and their adjustment is delayed (coarsified) by hidden layers. Human brain is born with a final number of neurons. Before birth, they have to develop and connect by processing random noise, and then learn by adjusting their connections. But in software, generating and deleting nodes that represent specific content should be far more efficient.
@@ -92,7 +93,7 @@ All these variables are derived by incrementally complex comparison: a core oper
 
 Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of ANN, which computes match but not coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed, because each has independent predictive value.
 
-*Some readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not. For the same reason, there is no pseudocode: incremental means that low-level code must generate "architecture" from the input.*
+*Some readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not. For the same reason, I have no pseudo code: incremental means that low-level code must generate and reform "architecture" from the input.*
 
 
 
@@ -100,7 +101,7 @@ Another technique similar to mine is hierarchical clustering. But conventional c
 
 
 
-Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than the inputs themselves. Hence, precision of where (spans of and distances between patterns) is severely degraded, and so is predictive value of combined representations. There is no default degradation of positional information in my method.
+Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than inputs themselves. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. There is no default degradation of positional information in my method.
 
 My core algorithm is 1D: time only. Our space-time is 4D, but each of these dimensions can be mapped on one level of search. This way, levels can select input patterns that are strong enough to justify the cost of representing additional dimension, as well as derivatives (matches and differences) in that dimension. Initial 4D cycle of search would compare contiguous inputs, analogously to connected-component analysis:
 
@@ -118,7 +119,7 @@ However, average match in our space-time is presumably equal over all four dimen
 
 Accordingly, my code here consists of three levels:
 
-- 1D: [line_introductory.py](https://github.com/boris-kz/CogAlg/blob/master/line_introductory.py), which uses full variable names but is too long and dense to trace operations, and very similar but compressed and updated [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
+- 1D: [line_introductory.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC_introductory.py), which uses full variable names but is too long and dense to trace operations, and very similar but compressed and updated [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
 - 2D: [frame_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), which is meant as a stand-alone 2D algorithm but is not complete, [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py), which will be a model for corresponding components of 3D video algorithm, and [frame_dblobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_dblobs.py), which is simplified version for debugging, currently in progress.
 - 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This algoruithm will hopefully be effective and scalable, but is currently less than 5% done.
 
