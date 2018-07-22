@@ -3,13 +3,25 @@ import argparse
 from time import time
 from collections import deque
 
-''' core algorithm level 1: 1D-only proof of concept, 
-applied here to process lines of grey-scale pixels but not effective for recognition of 2D images. 
+''' 
+Core algorithm level 1, 1D-only, applied here to process lines of grey-scale pixels but not effective for recognition of 2D images. 
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
+
+I am in the process of redefining input to normalize it for illumination. This is based on on a very general principle: 
+entropic equalization is proportional to proximity, which means that long-range variation is higher than short-range variation. 
+Thus, most of what we perceive is diffuse impact of long-range variation: reflected light is far more common than emitted light. 
+Such combined-range impact should be disentangled, to insulate local information from variation in longer-range illumination.
+
+Tentative ways to adjust for variation in illumination: 
+
+- albedo: brightness / maximal brightness, is more predictive than absolute brightness, but can't be learned from illuminated image.
+- lateral ratio of brightness between pixels is invariant to illumination (will match between images with different illumination),
+- but it's not compressive and won't match within an image, selectively adjusted on the next level?
+- relative match: match / difference, is more predictive than absolute match, same ratio to replace difference?
 
 postfix '_' denotes array name, vs. identical name of array elements '''
 
@@ -151,7 +163,7 @@ def frame(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical na
     return frame_of_patterns_  # frame of patterns is output to level 2
 
 # from scipy import misc
-# f = misc.face(gray=True)  # input frame of pixels
+# f = misc.face(gray=True)  # input pix-mapped image
 # f = f.astype(int)
 
 argument_parser = argparse.ArgumentParser()
