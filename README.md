@@ -3,10 +3,10 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Intelligence is the ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
-But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity)So, I came up with my own definitions, which directly translate into algorithm proposed below.
+Intelligence is the ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.  
+But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity)So, I came up with my own definitions, which directly translate into algorithm proposed below.  
 
-For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in very coarse statistical fashion.
+For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in very coarse statistical fashion.  
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
 I need help with design and implementation of this algorithm. All contributions must be consistent with the principles introduced here. Unless you find some conceptual flaws, that would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
@@ -17,11 +17,11 @@ I need help with design and implementation of this algorithm. All contributions 
 
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first.  
 It’s a search for hierarchical patterns, by cross-comparing inputs over selectively incremental distance and composition. Patterns are defined by a sign of deviation of match between inputs, where match is compression of represented magnitude by replacing inputs with their derivatives. These definitions are unfolded below.
 
 “Incremental” means that first-level comparands must be sub-symbolic integers with binary (before | after) coordinate.
-Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
+Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.  
 Their comparison should also be minimal in complexity: lossless transform by inverse arithmetic operations.
 “Lossless” means that resulting match and miss are preserved as alternative representation of original inputs.
 
@@ -30,13 +30,13 @@ Specific match (compression of magnitude) and miss (complementary of match) are 
 - comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
 - comparison by division increases match to a multiple and reduces miss to a fraction, and so on (more in the next section).
 
-Resulting patterns represent spans of inputs that form same-sign miss. Hierarchy should generate two orders of feedback: within and between levels. Compared to inputs, these orders form lateral and vertical patterns:
-Lateral feedback is prior inputs, and patterns are spans of inputs with increasing or decreasing magnitude.
-Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match
+Resulting patterns represent spans of inputs that form same-sign miss. Hierarchy should generate two orders of feedback: within and between levels. Compared to inputs, these orders form lateral and vertical patterns:  
+Lateral feedback is prior inputs, and patterns are spans of inputs with increasing or decreasing magnitude.  
+Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match  
 (deep feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
 
-Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level.
- Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
+Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level.  
+Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
 
 Resulting hierarchy is a dynamically extended pipeline: terminated patterns are outputted for comparison on the next level, and new level is formed for pattern terminated by current top level. Which continues as long as system receives novel inputs. As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, whose output is also fed back to filter lower levels.
 
@@ -69,7 +69,8 @@ Comparison by division forms ratio, which is a magnitude-compressed difference. 
 
 Ratio can be further compressed by converting to radix | logarithm, and so on. But computational costs may grow even faster. Thus, power of comparison should increase only for inputs sufficiently compressed by lower power: AND for bit inputs, SUB for integer inputs, DIV for pattern inputs, etc. Actual compression depends on input and on resolution of its coordinate: input | derivative summation span. We can’t control the input, so average match is adjusted via resolution of coordinate.
 
-To filter future inputs, this absolute match is projected: recombined with co-derived miss at a distance: projected match = match + (miss * distance) / 2. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative pattern.
+To filter future inputs, this absolute match is projected: recombined with co-derived miss at a distance:  
+projected match = match + (miss * distance) / 2. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative pattern.
 
 
 
@@ -134,12 +135,9 @@ Any prediction has two components: what and where. We must have both: value of p
 
 My core algorithm is 1D: time only. Our space-time is 4D, but each of these dimensions can be mapped on one level of search. This way, levels can select input patterns that are strong enough to justify the cost of representing additional dimension, as well as derivatives (matches and differences) in that dimension. Initial 4D cycle of search would compare contiguous inputs, analogously to connected-component analysis:
 
-level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments.
-
-level 2 compares contiguous 1D patterns between consecutive lines in a frame, forming 2D patterns: blobs.
-
-level 3 compares contiguous 2D patterns between incremental-depth frames, forming 3D patterns: objects.
-
+level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments.  
+level 2 compares contiguous 1D patterns between consecutive lines in a frame, forming 2D patterns: blobs.  
+level 3 compares contiguous 2D patterns between incremental-depth frames, forming 3D patterns: objects.  
 level 4 compares contiguous 3D patterns in temporal sequence, forming 4D patterns: processes.
 
 Subsequent cycles would compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions.
