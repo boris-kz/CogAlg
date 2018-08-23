@@ -11,17 +11,15 @@ Resulting difference patterns dPs (spans of pixels forming same-sign differences
 and relative match patterns vPs (spans of pixels forming same-sign predictive value)
 are redundant representations of each line of pixels.
 
-I am in the process of redefining input to normalize it for illumination. This is based on on a very general principle: 
-entropic equalization is proportional to proximity, which means that long-range variation is higher than short-range variation. 
-Thus, most of what we perceive is diffuse impact of long-range variation: reflected light is far more common than emitted light. 
-Such combined-range impact should be disentangled, to insulate local information from variation in longer-range illumination.
+In initial pixel comparison, vPs are basically brightness patterns, and brightness may not correlate with predictive value,
+especially because almost all perceived light is reflected rather than emitted.
+In which case, filter "ave" will increase, reducing total span and cost of positive vPs, potentially down to 0.
+But naive algorithm only knows the impact on a sensor, so initial assumption must be predictive value = intensity of stimuli.
 
-Tentative ways to adjust for variation in illumination: 
-
-- albedo: brightness / maximal brightness, is more predictive than absolute brightness, but can't be learned from illuminated image.
-- lateral ratio of brightness between pixels is invariant to illumination (will match between images with different illumination),
-- but it's not compressive and won't match within an image, selectively adjusted on the next level?
-- relative match: match / difference, is more predictive than absolute match, same ratio to replace difference?
+The same comp() will cross-compare derived variables that maybe confirmed as predictive latter.
+For example, if differences between pixels turn out to be more predictive than value of these pixels, 
+then differences will be cross-compared within dPs by secondary comp(d), forming d_vPs and d_dPs.
+These secondary patterns will be evaluated for further internal recursion and cross-compared on the next level.
 
 postfix '_' denotes array name, vs. identical name of array elements '''
 
@@ -33,7 +31,7 @@ def recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, r
 
     d += p - pri_p  # fuzzy d accumulates differences between p and all prior and subsequent ps in extended rng
     m = min(p, pri_p)
-    v += m + pri_m - abs(d + pri_d) /4 - ave *2  # fuzzy v accumulates deviation of match within bilateral extended rng
+    v += m + pri_m - abs(d + pri_d) - ave *2  # fuzzy v accumulates deviation of match within bilateral extended rng
 
     dP, dP_ = form_pattern(0, dP, dP_, pri_p, d, v, x, X, redun, rng)
     vP, vP_ = form_pattern(1, vP, vP_, pri_p, d, v, x, X, redun, rng)
@@ -121,7 +119,7 @@ def comparison(x, p, pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_, X):  # pixel is 
 
         elif x > min_rng * 2 - 1:  # ders are accumulated over full bilateral rng: before and rng after displaced pixel
 
-            v = (m + pri_m) - abs(d + pri_d) /4 - ave * min_rng *2  # m - abs(d)/4: bilateral projected match is reduced by neg d/2
+            v = (m + pri_m) - abs(d + pri_d) - ave * min_rng *2  # m - abs(d)/4: bilateral projected match is reduced by neg d/2
             # predictive value of match, sign determines inclusion into positive | negative vP
 
             # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) transferred to form_pattern,
@@ -174,7 +172,7 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 # pattern filters: eventually from higher-level feedback, initialized here as constants:
 
 min_rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
-ave = 95  # average match between pixels, minimal for inclusion into positive vP
+ave = 63  # average match between pixels, minimal for inclusion into positive vP
 ave_V = 127  # min V for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
 

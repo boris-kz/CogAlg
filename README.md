@@ -4,12 +4,12 @@ CogAlg
 Full introduction: www.cognitivealgorithm.info
 
 Intelligence is the ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
-But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity)So, I came up with my own definitions, which directly translate into algorithm proposed below.
+But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity) So, I came up with my own definitions, which directly translate into algorithm proposed below.
 
-For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in very coarse statistical fashion.
+For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
-I need help with design and implementation of this algorithm. All contributions must be consistent with the principles introduced here. Unless you find some conceptual flaws, that would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for patterns, as defined here. Unless you have a better definition, which would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
 
 
@@ -35,8 +35,7 @@ Lateral feedback is prior inputs, and patterns are spans of inputs with increasi
 Vertical feedback is average prior match, and patterns are spans of inputs with above- or below- average match
 (deep feedback is restricted to match: higher order of representation, to justify redundancy to lateral patterns).
 
-Higher-level inputs are patterns formed by lower-level comparisons. They represent results or derivatives: match and miss per compared input parameter. So, number of parameters (variables) per pattern is selectively multiplied on each level.
- Match and miss between patterns is combined match | miss between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
+Higher-level inputs are patterns formed by lower-level comparisons, and they represent results or derivatives: match and miss per compared input parameter. So, the number of parameters (variables) per pattern is selectively multiplied on each level. Match and miss between patterns are combined matches or misses between their parameters. To maximize selection, search must be strictly incremental in distance, derivation, and composition over both. Which means that there is a unique set of operations per level of search, hence a singular in “cognitive algorithm“.
 
 Resulting hierarchy is a dynamically extended pipeline: terminated patterns are outputted for comparison on the next level, and new level is formed for pattern terminated by current top level. Which continues as long as system receives novel inputs. As distinct from autoencoders (current mainstay in unsupervised learning), there is no need for decoding: comparison is done on each level, whose output is also fed back to filter lower levels.
 
@@ -71,6 +70,8 @@ Ratio can be further compressed by converting to radix | logarithm, and so on. B
 
 To filter future inputs, this absolute match is projected: recombined with co-derived miss at a distance: projected match = match + (miss * distance) / 2. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative pattern.
 
+Separate filters are formed for each type of compared variable. For example, brightness of original input pixels may not be very predictive, partly because almost all perceived light is reflected rather than emitted. Then its filter will increase, reducing total span and cost of positive vPs, potentially down to 0. On the other hand, differences or ratios between pixels are more predictive, so the filter for forming d_vPs or r_vPs will be lower.
+
 
 
 ## Comparison to Artificial and Biological Neural Networks
@@ -90,8 +91,7 @@ ANN compute difference  (error) on their output layer, but not between hidden la
 
 Also, both input and kernel in ANN are arrays, often 2D or higher. This is far more coarse, thus less potentially selective and efficient, than one-to-one comparison of laterally adjacent inputs in my algorithm. I use “level” vs. “layer” because my levels are not identical. Complexity of inputs and operations is incremental with elevation: initial inputs are pixels, higher-level inputs are patterns formed on lower levels. My inference is comparison that forms separate match and difference, and the difference is fed back to update level-wide filters.
 
-Inspiration by the brain kept ANN research going for decades before they became useful. But their “neurons” are mere stick figures for real ones. Of course, most of complexity in a neuron is due to constraints of biology. Ironically, weighted summation in ANN may also be a no-longer needed compensation for such constraint:
-neural memory requires dedicated connections (synapses), which makes individual input representation and comparison prohibitively expensive. But not anymore, we now have dirt-cheap random access memory.
+Inspiration by the brain kept ANN research going for decades before they became useful. But their “neurons” are mere stick figures for real ones. Of course, most of complexity in a neuron is due to constraints of biology. Ironically, weighted summation in ANN may also be a no-longer needed compensation for such constraint: neural memory requires dedicated connections (synapses), which makes individual input representation and comparison prohibitively expensive. This is no longer relevant, we now have dirt-cheap random access memory.
 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Another constraint is noise: neurons often fire at random, so their spikes are summed to reduce noise. Which is not a good reason to degrade far more precise electronic signals.
 
@@ -114,15 +114,15 @@ Pure similarity is a common subset: the smaller of comparands, = compression of 
 
 Some other problems I have with current implementation of CapsNets:
 - they use CNN layers to recognize basic features, but a truly general method would apply the same principles on all levels of processing, any differentiation should be learned rather than built-in.
-- capsules contain the same probability and pose parameters on all layers, while I think the number of parameters should be incremental with elevation.
-- the number of layers is pre-determined, while I think it should be incremental with experience: indefinite input flow.
+- capsules of all layers contain the same parameters: probability and pose variables, while I think the number of parameters should be incremental with elevation.
+- the number of layers is pre-determined by design, while I think it should be indefinitely incremental with experience.
 
-My patterns have match instead of probability, a miss that includes pose variables, and selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances. All these variables are derived by incrementally complex comparison: a core operation on all levels of CogAlg.
-My hierarchy is also dynamic: a pattern is displaced from a level by miss to new input, then forwarded to existing or newly formed higher level. Which means that higher-level patterns include lower-level variables, as well as their derivatives. Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience.
+My patterns have match instead of probability, a miss that includes pose variables, and selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances. All these variables are derived by incrementally complex comparison: core operation on all levels of CogAlg.
+My hierarchy is also dynamic: pattern is displaced from level by a miss to new input, then forwarded to existing or newly formed higher level. Which means that higher-level patterns include lower-level variables, as well as their derivatives. Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience.
 
 Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of ANN, which computes match but not coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed, because each has independent predictive value.
 
-*Some readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not. For the same reason, I have no pseudo code: incremental means that low-level code must form and reform "architecture" from the input.*
+*Some readers dismiss this outline as generalities, which lack a direct connection to my code. But I don’t see a disconnect, beyond simple adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not. And I have no fixed high-level architecture: "incremental" means that low-level code must form and reform it from the input.*
 
 
 

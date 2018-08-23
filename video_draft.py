@@ -9,7 +9,7 @@ from collections import deque
     immediate pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
     then resulting 3D tuples (p, dx, mx, dy, my, dt, mt) per pixel are combined into 
     
-    incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD durables,  not oriented for inclusion? 
+    incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD persistents,  not oriented for inclusion? 
     evaluated for orientation, re-composition, incremental-dimensionality comparison, and its recursion? 
     
     recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 
@@ -175,7 +175,7 @@ def form_P(typ, ders3, x, y, P, P_, buff_, _P_, sequence):  # terminates, initia
     but orient eval after persistence term: for comp over sequence?    
 '''
 
-def sequence_to_durables(f):  # currently only a draft
+def sequence_to_persistents(f):  # currently only a draft
     # postfix '_' denotes array vs. element, prefix '_' denotes prior- pixel, line, or frame variable
 
     _P_ = deque()  # higher line of same- d- | v- | dy- | vy- sign 1D patterns
@@ -234,6 +234,6 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 Y, X = image.shape  # image height and width
 
 start_time = time()
-durables = sequence_to_durables(image)
+persistents = sequence_to_persistents(image)
 end_time = time() - start_time
 print(end_time)
