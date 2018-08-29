@@ -70,7 +70,8 @@ Ratio can be further compressed by converting to radix | logarithm, and so on. B
 
 To filter future inputs, this absolute match is projected: recombined with co-derived miss at a distance: projected match = match + (miss * distance) / 2. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative pattern.
 
-Separate filters are formed for each type of compared variable. For example, brightness of original input pixels may not be very predictive, partly because almost all perceived light is reflected rather than emitted. Then its filter will increase, reducing total span and cost of positive vPs, potentially down to 0. On the other hand, differences or ratios between pixels are more predictive, so the filter for forming d_vPs or r_vPs will be lower.
+Separate filters are formed for each type of compared variable. For example, brightness of original input pixels may not be very predictive, partly because almost all perceived light is reflected rather than emitted. Then its filter will increase, reducing total span and cost of positive value patterns (vPs), potentially down to 0.
+On the other hand, if differences or ratios between pixels are more predictive than pixels themselves, then the filter for forming positive difference- or ratio- value patterns (d_vPs or r_vPs) will be reduced.
 
 
 
@@ -80,8 +81,10 @@ Separate filters are formed for each type of compared variable. For example, bri
 
 ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at synapses, then summed and thresholded into output. Final output also back- propagates to synapses and is combined with their last input to adjust the weights. This weight adjustment is learning. But prior summation degrades resolution of inputs, precluding any comparison between them (the inputs are recoverable, but why degrade and then spend a ton of computation restoring them).
 
-This is an inherently coarse statistical method: inputs are summed within samples defined by initially random weights. These weights are trained into meaningful values by backpropagation of Stochastic Gradient Descent, but this process is too expensive to scale without supervision or task-specific reinforcement.
-CogAlg is comparison-first and resulting patterns are immediately meaningful. In other words, my initial feedback per pixel is simply a prior or adjacent pixel, which is infinitely finer-grained than backpropagation.
+It is an inherently statistical method: inputs are summed within samples defined by initially random weights. These weights are trained into meaningful values by Stochastic Gradient Descent, but only after weighed inputs propagate through the whole network, then are compared to top-layer template to form an error, which then backpropagates through the network again. This cycle is too coarse to scale without supervision or task-specific reinforcement, especially since it must be repeated thousands of times during training.
+
+So, ANN is a comparison-last algorithm. CogAlg is comparison-first: my initial feedback per pixel is simply a prior or adjacent pixel. This is infinitely finer-grained than backpropagation, and resulting patterns are immediately meaningful, if tentative. I also have a higher-order feedback: filters, but they are optional and there is only one filter per pattern’s variable type. ANN has specific weight for each input: a combination of template and filter. I think these are different orders of feedback, with different scope.
+More broadly, SGD minimizes error (my miss), which doesn’t fully correlate with maximizing match.
 
 Currently the most successful method is CNN, which computes similarity as a product: input * kernel (weights), adjusted by some activation function. Again, kernels start with useless random weights and their adjustment is delayed (coarsified) by hidden layers. Human brain is born with a final number of neurons. Before birth, they have to develop and connect by processing random noise, and then learn by adjusting their connections. But in software, generating and deleting nodes that represent specific content should be far more efficient.
 
