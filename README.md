@@ -9,7 +9,7 @@ But there is no general and at the same time constructive definition of either p
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
-I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which forms hierarchical patterns. These terms are defined here, unless you have better definitions, that would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which forms hierarchical patterns. These terms are defined below, unless you have better definitions, which would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
 
 
@@ -17,7 +17,8 @@ I need help with design and implementation of this algorithm. Contributions shou
 
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. “Incremental” means that first-level inputs must be sub-symbolic integers with binary (before | after) coordinate. Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
+Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. “Incremental” means that first-level inputs must be sub-symbolic integers with binary (before | after) coordinate.
+Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
 
 Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. This is similar to edge detection kernel in CNN, except that it forms partial match along with miss, and groups both into multivariate patterns: spans of same-sign miss. General definition of match is a compression of represented magnitude by replacing inputs with misses (differences, ratios, etc.) between consecutive inputs.
 
@@ -25,6 +26,7 @@ Specific match (compression) and miss (complementary of match) are determined by
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss),
 - comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
 - comparison by division increases match to a multiple and reduces miss to fraction, and so on (more in part 1).
+
 These comparisons form patterns: representations of input spans with constant sign of input-to-feedback miss.
 
 Search hierarchy has two orders of feedback: within and between levels, forming lateral and vertical patterns. Lateral feedback is prior inputs, and their comparison forms difference patterns: spans of inputs with increasing or decreasing magnitude. Vertical feedback is average higher-level match, and comparison forms predictive value patterns: spans of inputs with above- or below- average match. Deep feedback is restricted to match: higher order of representation, to justify redundancy of value patterns to lateral difference patterns.
@@ -40,9 +42,9 @@ Higher-level search is selective per level of resulting pattern. Both compositio
 Hierarchical approaches are common in unsupervised learning, and all do some sort of pattern recognition.
 But none that I know of is strictly incremental in scope and complexity of discoverable patterns. Which is necessary for selection, thus scalability, vs. combinatorial explosion in search space. But selection is more expensive upfront and won’t pay in simple test problems. So, it’s not suitable for immediate experimentation. That’s probably why no one else seems to be working on anything sufficiently similar to my algorithm.
 
-Again, autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part 0). Complexity of my inputs and operations is incremental with elevation.
+Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part 0). Hence, complexity of my inputs and operations is incremental per level, as opposed to uniform layers in ANN.
 
-*Some readers dismiss this outline as generalities, which lack a direct connection to my code.  But I don’t see a disconnect, beyond adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math, but CogAlg must be selectively incremental, and complex math is not.*
+*Some readers dismiss this outline as generalities, which lack a direct connection to my code.  But I don’t see a disconnect, beyond adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math and pseudo code, but CogAlg must be selectively incremental in complexity, while higher math and any fixed pseudo code are not.*
 
 
 
@@ -89,6 +91,8 @@ neural memory requires dedicated connections (synapses), which makes individual 
 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Another constraint is noise: neurons often fire at random, so their spikes are summed to reduce noise. Which is not a good reason to degrade far more precise electronic signals.
 
+In general, there is a presumption of some fixed nodes and architecture in neural networks. It stems from fundamentally limited brain, born with a fixed number of neurons. Which initially connect by sending and receiving pure noise because there is nothing else in the womb. None of that is relevant for designing software: we need to work from the function rather than tools, and forming localized patterns of inputs must be primary to parallelizing their cross-comparison.
+
 
 
 ## Comparison to Capsule Networks and Clustering
@@ -115,7 +119,7 @@ All these variables are derived by incrementally complex comparison: core operat
 
 My hierarchy is also dynamic: pattern is displaced from level by a miss to new input, then forwarded to existing or newly formed higher level. So, higher-level patterns include lower-level variables, as well as their derivatives. The derivatives are summed within pattern, then evaluated for extending intra-pattern search and feedback. Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience.
 
-Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of matrix multiplication, which computes match, but there is no representation of coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed, because each has independent predictive value.
+Another technique similar to mine is hierarchical clustering. But conventional clustering defines match as inverted difference between inputs. This is the opposite of matrix multiplication, which computes match but not coincident difference. And it’s also wrong: match is a common subset of comparands, distinct from and complementary to the difference between them. Both should be computed, because each has independent predictive value.
 
 
 
@@ -137,7 +141,7 @@ level 4 compares contiguous 3D patterns in temporal sequence, forming 4D pattern
 
 Subsequent cycles would compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions.
 
-Average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be biased by the angle of scanning, introducing artifacts. Hence, initial pixel comparison and patterns should also be over 4D at once, or at least over 2D at once for still images. This is a universe-specific extension of my core algorithm.
+Average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be fundamentally limited and biased by the angle of scanning. Hence, initial pixel comparison and patterns should also be over 4D at once, or at least over 2D at once for still images. This is a universe-specific extension of my core algorithm.
 
 Accordingly, my code here consists of three levels:
 
@@ -146,6 +150,10 @@ Accordingly, my code here consists of three levels:
 - 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This algorithm will hopefully be effective and scalable, but is currently less than 5% done.
 
 This algorithm will be organically extended to process color images, audio, other modalities. Symbolic data will be assigned as labels on patterns derived from analogue inputs. Initial testing could be recognition and automatic labeling of manually labeled images, but it might better to start directly with video: still images are very poor representation of our 4D world.
+
+Higher levels will process discontinuous extended-range cross-comparison between full-D-cycle patterns. Complete hierarchical algorithm will have two-level code:
+- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus basic bit-filter feedback
+- recursive increment in complexity of both cross-comparison and feedback, to generate next-level algorithm.
 
 Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
