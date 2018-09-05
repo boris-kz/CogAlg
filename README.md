@@ -25,6 +25,7 @@ Specific match (compression) and miss (complementary of match) are determined by
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss),
 - comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
 - comparison by division increases match to a multiple and reduces miss to fraction, and so on (more in part 1).
+
 These comparisons form patterns: representations of input spans with constant sign of input-to-feedback miss.
 
 Search hierarchy has two orders of feedback: within and between levels, forming lateral and vertical patterns. Lateral feedback is prior inputs, and their comparison forms difference patterns: spans of inputs with increasing or decreasing magnitude. Vertical feedback is average higher-level match, and comparison forms predictive value patterns: spans of inputs with above- or below- average match. Deep feedback is restricted to match: higher order of representation, to justify redundancy of value patterns to lateral difference patterns.
