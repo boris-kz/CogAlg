@@ -273,9 +273,25 @@ argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
 arguments = vars(argument_parser.parse_args())
 
-# read image as 2d-array of pixels (gray scale):
+'''
+# read image as 2d-array of pixels (gray scale): 
+# Todor: It's not guaranteed that it's gray scale, it's better to be more general. astype is superfluous.
+# Todor: astype(float) is needed when doing summation and transparency operations over images, when there would be overflow or underflow otherwise;
+#        when this kind of operations are over, it's converted back to 8-bit per channel.
+#
 image = cv2.imread(arguments['image'], 0).astype(int)
 Y, X = image.shape  # image height and width
+'''
+
+cv2.imshow("raw", image)
+Y, X, Channels = image.shape  # image height, width and channels
+
+# or Y, X, _ = image.shape
+
+if Channels > 1:
+  image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
+
+cv2.imshow("BW", image)
 
 start_time = time()
 blobs = image_to_blobs(image)
