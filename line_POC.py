@@ -13,15 +13,15 @@ are redundant representations of each line of pixels.
 
 In initial pixel comparison, vPs are basically brightness patterns, and brightness may not correlate with predictive value,
 especially because almost all perceived light is reflected rather than emitted.
-In which case, filter "ave" will increase, reducing total span and cost of positive vPs, potentially down to 0.
-But naive algorithm only knows the impact on a sensor, so initial assumption must be predictive value = intensity of stimuli.
+In which case, feedback will increase filter "ave", reducing total span and cost of positive vPs, potentially down to 0.
+But naive algorithm only knows impact on a sensor, so initial assumption is predictive value = intensity of stimulus.
 
-The same comp() will cross-compare derived variables that maybe confirmed as predictive latter.
+The same comp() will cross-compare derived variables, to the extent that they are predictive.
 For example, if differences between pixels turn out to be more predictive than value of these pixels, 
-then differences will be cross-compared within dPs by secondary comp(d), forming d_vPs and d_dPs.
+then all differences will be cross-compared by secondary comp(d), forming d_vPs and d_dPs.
 These secondary patterns will be evaluated for further internal recursion and cross-compared on the next level.
 
-postfix '_' denotes array name, vs. identical name of array elements '''
+In my code below, postfix '_' denotes array name, vs. identical name of array elements '''
 
 
 def recursive_comparison(x, p, pri_p, d, v, pri_d, pri_m, dP, vP, dP_, vP_, X, redun, rng):
@@ -96,7 +96,7 @@ def form_pattern(typ, P, P_, pri_p, d, v, x, X, redun, rng):  # accumulation, te
     V += v      # fuzzy vs summed within vP | dP
 
     if typ:
-        Alt += abs(d)  # estimated value of alternative-type Ps, to compute redundancy on the next level
+        Alt += abs(d)  # estimated value of alternative-type Ps, to compute redundancy for next_level eval(P)
         element_.append((pri_p, d, v))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
     else:
         Alt += abs(v)
@@ -119,7 +119,7 @@ def comparison(x, p, pri_d, pri_m, rng_ders_, dP, vP, dP_, vP_, X):  # pixel is 
 
         elif x > min_rng * 2 - 1:  # ders are accumulated over full bilateral rng: before and rng after displaced pixel
 
-            v = (m + pri_m) - abs(d + pri_d) - ave * min_rng *2  # m - abs(d)/4: bilateral projected match is reduced by neg d/2
+            v = (m + pri_m) - abs(d + pri_d) - ave * min_rng *2  # m - abs(d): projected match is reduced by rdn to dP
             # predictive value of match, sign determines inclusion into positive | negative vP
 
             # completed tuple (pri_p, d, v) of summation range = rng (maxlen in rng_t_) transferred to form_pattern,
@@ -160,14 +160,16 @@ def frame(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical na
 
     return frame_of_patterns_  # frame of patterns is output to level 2
 
-# from scipy import misc
-# f = misc.face(gray=True)  # input pix-mapped image
-# f = f.astype(int)
 
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
+
+# the same image online, without cv2:
+# from scipy import misc
+# f = misc.face(gray=True)  # input pix-mapped image
+# f = f.astype(int)
 
 # pattern filters: eventually from higher-level feedback, initialized here as constants:
 

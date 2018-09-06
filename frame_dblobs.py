@@ -39,7 +39,7 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
     max_index = rng - 1  # max index of rng_ders_
     pri_d, pri_m = 0, 0  # fuzzy derivatives in prior completed tuple
 
-    for p in pixel_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel:
+    for p in pixel_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
         for index, (pri_p, d, m) in enumerate(rng_ders_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
@@ -70,7 +70,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     min_coord = rng * 2 - 1  # min x and y for form_P input
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel is compared to rng higher pixels in ders2_, summing dy and my per higher pixel:
+    for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel is compared to rng higher pixels in ders2_, summing dy and my per higher pixel
         x += 1
         index = 0
         for (_p, _d, _m, dy, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
@@ -83,8 +83,8 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
 
             elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
 
-                _v = _m - abs(d)/4 - ave  # _m - abs(d)/4: projected match is cancelled by negative d/2
-                vy = my + _my - abs(dy)/4 - ave
+                _v = _m - abs(d) - ave  # _m - abs(d): projected m cancelled by negative d: d/2, + projected rdn value of overlapping dP: d/2
+                vy = my + _my - abs(dy) - ave
                 ders2 = _p, _d, _v, dy + _dy, vy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
 
@@ -104,7 +104,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
         pri_s, I, D, Dy, V, Vy, ders2_ = P
     else:
-        if y == rng * 2:  # first line of Ps -> P_, _P_ is empty till vertical_comp returns P_:
+        if y == rng * 2:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
             P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
         else:
             P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
@@ -142,9 +142,9 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             fork_.append([])  # mutable placeholder for blobs connected to P, filled after _P inclusion with complete root_
             root_.append(fork_[len(fork_)-1])  # binds forks to blob
 
-        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else included in blob:
+        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_
             buff_.append((_P, _x, _fork_, root_))
-        else:
+        else:     # no x overlap between _P and next P: _P is included in its blob
             if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 and x < X - 99:  # no fork blob if x < X - len(fork_P[6])?
                 # if blob _fork_ == 1 and _fork roots == 1, always > 0: a bug probably appends fork_ outside scan_P_?
                 blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob +__fork_
@@ -235,7 +235,7 @@ def term_network(net, frame):
     return frame
 
 
-def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_' distinguishes higher-line vs. lower-line variable
+def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
@@ -244,7 +244,7 @@ def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_
 
     ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
     ders2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
-    pixel_ = f[0, :]  # first line of pixels
+    pixel_ = image[0, :]  # first line of pixels
     ders_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for (p, d, m) in ders_:
@@ -254,13 +254,13 @@ def image_to_blobs(f):  # postfix '_' distinguishes array vs. element, prefix '_
 
     for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
-        pixel_ = f[y, :]  # vertical coordinate y is index of new line p_
+        pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
         ders_ = lateral_comp(pixel_)  # lateral pixel comparison
         ders2__, _P_, frame = vertical_comp(ders_, ders2__, _P_, frame)  # vertical pixel comparison
 
     # frame ends, last vertical rng of incomplete ders2__ is discarded,
-    # but vertically incomplete P_ patterns are still inputted in scan_P_?
-    return frame  # frame of 2D patterns is outputted to level 2
+    # vertically incomplete P_ patterns are still inputted in scan_P_?
+    return frame  # frame of 2D patterns to be outputted to level 2
 
 
 # pattern filters: eventually updated by higher-level feedback, initialized here as constants:
@@ -275,6 +275,12 @@ arguments = vars(argument_parser.parse_args())
 
 # read image as 2d-array of pixels (gray scale):
 image = cv2.imread(arguments['image'], 0).astype(int)
+
+# or load the same image online, without cv2:
+# from scipy import misc
+# image = misc.face(gray=True)  # load pix-mapped image
+# image = image.astype(int)
+
 Y, X = image.shape  # image height and width
 
 start_time = time()
