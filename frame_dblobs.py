@@ -145,6 +145,7 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_
             buff_.append((_P, _x, _fork_, root_))
         else:     # no x overlap between _P and next P: _P is included in its blob
+
             if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 and x < X - 99:  # no fork blob if x < X - len(fork_P[6])?
                 # if blob _fork_ == 1 and _fork roots == 1, always > 0: a bug probably appends fork_ outside scan_P_?
                 blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob +__fork_
@@ -270,34 +271,18 @@ ave = 127 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 
-'''
-# read image as 2d-array of pixels (gray scale): 
-# Todor: It's not guaranteed that it's gray scale, it's better to be more general. astype is superfluous.
-# Todor: astype(float) is needed when doing summation and transparency operations over images, when there would be overflow or underflow otherwise;
-#        when this kind of operations are over, it's converted back to 8-bit per channel.
-#
+# read image as 2d-array of pixels (gray scale):
 image = cv2.imread(arguments['image'], 0).astype(int)
 
-# or load the same image online, without cv2:
+# or read the same image online, without cv2:
 # from scipy import misc
-# image = misc.face(gray=True)  # load pix-mapped image
+# image = misc.face(gray=True)  # road pix-mapped image
 # image = image.astype(int)
 
 Y, X = image.shape  # image height and width
-'''
-
-cv2.imshow("raw", image)
-Y, X, Channels = image.shape  # image height, width and channels
-
-# or Y, X, _ = image.shape
-
-if Channels > 1:
-  image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-
-cv2.imshow("BW", image)
 
 start_time = time()
 blobs = image_to_blobs(image)

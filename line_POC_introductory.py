@@ -354,7 +354,7 @@ def pixels_to_patterns(image):
 
 # add argument parser
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
 

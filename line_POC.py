@@ -162,13 +162,13 @@ def frame(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical na
 
 
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
 
-# the same image online, without cv2:
+# the same image can be loaded online, without cv2:
 # from scipy import misc
-# f = misc.face(gray=True)  # input pix-mapped image
+# f = misc.face(gray=True)  # load pix-mapped image
 # f = f.astype(int)
 
 # pattern filters: eventually from higher-level feedback, initialized here as constants:

@@ -224,7 +224,7 @@ ave = 127 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/racoon.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 
 # read image as 2d-array of pixels (gray scale):
