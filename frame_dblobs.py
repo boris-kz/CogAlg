@@ -30,6 +30,10 @@ from collections import deque
     Each vertical and horizontal derivative forms separate blobs, suppressing overlapping orthogonal representations.
     They can also be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives.
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
+    
+    Subsequent union of lateral and vertical patterns: by strength only, orthogonal sign is not commeasurable?
+    
+    Initial input line is set at 400 for debugging, that area in test image seems to be the most diverse  
 '''
 
 def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
@@ -98,7 +102,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
 
 def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
 
-    p, d, v, dy, vy = ders2  # 2D tuple of derivatives per pixel, "y" for vertical dimension:
+    p, d, v, dy, vy = ders2  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
@@ -139,30 +143,31 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
         _ix = _x - len(_P[6])
 
         if P[0] == _P[0]:  # if s == _s: core sign match, also selective inclusion by cont eval?
-            fork_.append([])  # mutable placeholder for blobs connected to P, filled after _P inclusion with complete root_
+            fork_.append([])  # mutable placeholder for blobs connected to P, filled with Ps after _P inclusion with complete root_
             root_.append(fork_[len(fork_)-1])  # binds forks to blob
 
-        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_
+        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_:
             buff_.append((_P, _x, _fork_, root_))
-        else:     # no x overlap between _P and next P: _P is included in its blob
+        else:     # no x overlap between _P and next P: _P is included in unique blob segment:
 
-            if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 and x < X - 99:  # no fork blob if x < X - len(fork_P[6])?
-                # if blob _fork_ == 1 and _fork roots == 1, always > 0: a bug probably appends fork_ outside scan_P_?
-                blob = form_blob(_fork_[0], _P, _x)  # y-2 _P is packed in y-3 _fork_[0] blob +__fork_
+            if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 + 400 and x < X - 300:  # margin set at 300: >len(fork_P[6])?
+                # _fork_[0][0][5]: blob segment _fork roots counter, see line 159, never==1?
+                # always > 0: fork_ appended outside scan_P_?
+                bseg = form_bseg(_fork_[0], _P, _x)  # _P (y-2) is packed in _fork_[0] blob segment + __fork_ (y-3)
             else:
                 ave_x = _x - len(_P[6]) / 2  # average x of P: always integer?
-                blob = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob init, Dx = 0, no new _fork_ for continued blob
+                bseg = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob initialization: Dx = 0, no new _fork_ for continued blob, roots=len(root_)
 
-            if len(root_) == 0:  # never happens, probably due to the same bug
-                net = blob, [blob]  # first-level net is initialized with terminated blob, no root_ to rebind
+            if len(root_) == 0:  # never happens?
+                blob = bseg, [bseg]  # first-level blob is initialized with terminated bseg, no root_ to rebind
                 if len(_fork_) == 0:
-                    frame = term_network(net, frame)  # all root-mediated forks terminated, net is packed into frame
+                    frame = term_blob(blob, frame)  # all root-mediated forks terminated, blob is packed into frame
                 else:
-                    net, frame = term_blob(net, _fork_, frame)  # recursive root network termination test
+                    blob, frame = term_bseg(blob, _fork_, frame)  # recursive root blob termination test
             else:
                 while root_:  # no root_ in blob: no rebinding to net at roots == 0
                     root_fork = root_.pop()  # ref to referring fork, verify?
-                    root_fork.append(blob)  # fork binding, no convert to tuple: forms a new object?
+                    root_fork.append(bseg)  # fork binding, no convert to tuple: forms a new object?
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append((P, x, fork_))  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
@@ -170,23 +175,23 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
 
-def term_blob(net, fork_, frame):  # net starts as one terminated blob, then added to terminated forks in its fork_
+def term_bseg(blob, fork_, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
 
-    for index, (_net, _fork_, roots) in enumerate(fork_):
-        _net = form_network(_net, net)  # terminated network is included into its forks networks
+    for index, (_blob, _fork_, roots) in enumerate(fork_):
+        _blob = form_blob(_blob, blob)  # terminated blob is included into its forks blobs
 
         if roots == 0:
-            if len(_fork_) == 0:  # no fork-mediated roots left, terminated net is packed in frame:
-                frame = term_network(net, frame)
+            if len(_fork_) == 0:  # no fork-mediated roots left, terminated blob is packed in frame:
+                frame = term_blob(blob, frame)
             else:
-                _net, frame = term_blob(_net, _fork_, frame)  # recursive root network termination test
+                _blob, frame = term_bseg(_blob, _fork_, frame)  # recursive root blob termination test
 
-    return net, frame  # fork_ contains incremented nets
+    return blob, frame  # fork_ contains incremented blobs
 
 
-def form_blob(blob, P, last_x):  # continued or initialized blob is incremented by attached _P, replace by zip?
+def form_bseg(bseg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
 
-    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots = blob  # fork_ at init, roots at term?
+    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots = bseg  # fork_ at init, roots at term?
     s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
 
     x = last_x - len(ders2_) / 2  # median x, becomes _x in blob, replaces lx
@@ -199,40 +204,40 @@ def form_blob(blob, P, last_x):  # continued or initialized blob is incremented 
     V2 += V
     Vy2 += Vy
     Py_.append((s, x, dx, I, D, Dy, V, Vy, ders2_))  # dx to normalize P before comp_P?
-    blob = (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots  # redundant s and ders2_
+    bseg = (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots  # redundant s and ders2_
+
+    return bseg
+
+
+def form_blob(blob, bseg):  # continued or initialized network is incremented by attached blob and _root_
+
+    (s, xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb), bseg_ = blob  # 2D blob_: fork_ per layer?
+    ((s, L2, I2, D2, Dy2, V2, Vy2, ders2_), x, Dx, Py_), fork_ = bseg  # s is redundant, ders2_ ignored
+    Dxb += Dx  # for net normalization, orient eval, += |Dx| for curved max_L?
+    Lb += L2
+    Ib += I2
+    Db += D2
+    Dyb += Dy2
+    Vb += V2
+    Vyb += Vy2
+    bseg_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, Py_, fork_))  # Dx is to normalize blob before comp_P
+    blob = ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), bseg_  # separate S_par tuple?
 
     return blob
 
 
-def form_network(net, blob):  # continued or initialized network is incremented by attached blob and _root_
-
-    (s, xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn), blob_ = net  # 2D blob_: fork_ per layer?
-    ((s, L2, I2, D2, Dy2, V2, Vy2, ders2_), x, Dx, Py_), fork_ = blob  # s is redundant, ders2_ ignored
-    Dxn += Dx  # for net normalization, orient eval, += |Dx| for curved max_L?
-    Ln += L2
-    In += I2
-    Dn += D2
-    Dyn += Dy2
-    Vn += V2
-    Vyn += Vy2
-    blob_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, Py_, fork_))  # Dx to normalize blob before comp_P
-    net = ((s, Ln, In, Dn, Dyn, Vn, Vyn), xn, Dxn, Py_), blob_  # separate S_par tuple?
-
-    return net
-
-
-def term_network(net, frame):
-    ((s, Ln, In, Dn, Dyn, Vn, Vyn), xn, Dxn, Py_), blob_ = net
-    Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_ = frame
-    Dxf += Dxn  # for frame normalization, orient eval, += |Dxn| for curved max_L?
-    Lf += Ln
-    If += In  # to compute averages, for dframe only: redundant for same-scope alt_frames?
-    Df += Dn
-    Dyf += Dyn
-    Vf += Vn
-    Vyf += Vyn
-    net_.append((xn, Dxn, Ln, In, Dn, Dyn, Vn, Vyn, blob_))  # Dxn to normalize net before comp_P
-    frame = Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
+def term_blob(blob, frame):
+    ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), bseg_ = blob
+    Dxf, Lf, If, Df, Dyf, Vf, Vyf, blob_ = frame
+    Dxf += Dxb  # for frame normalization, orient eval, += |Dxb| for curved max_L?
+    Lf += Lb
+    If += Ib  # to compute averages, for dframe only: redundant for same-scope alt_frames?
+    Df += Db
+    Dyf += Dyb
+    Vf += Vb
+    Vyf += Vyb
+    blob_.append((xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb, bseg_))  # Dxb to normalize blob before comp_P
+    frame = Dxf, Lf, If, Df, Dyf, Vf, Vyf, blob_
     return frame
 
 
@@ -241,7 +246,8 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
     global y
-    y = 0  # vertical coordinate of current input line
+    y = 400  # vertical coordinate of current input line
+    # initial input line is set at 400 for debugging, that area in test image seems to be the most diverse
 
     ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
     ders2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
@@ -253,7 +259,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
         ders2_.append(ders2)  # only one tuple per first-line ders2_
         ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
 
-    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
+    for y in range(401, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
         pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
         ders_ = lateral_comp(pixel_)  # lateral pixel comparison
@@ -279,7 +285,7 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 
 # or read the same image online, without cv2:
 # from scipy import misc
-# image = misc.face(gray=True)  # road pix-mapped image
+# image = misc.face(gray=True)  # read pix-mapped image
 # image = image.astype(int)
 
 Y, X = image.shape  # image height and width
