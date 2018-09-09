@@ -32,8 +32,7 @@ from collections import deque
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
     
     Subsequent union of lateral and vertical patterns: by strength only, orthogonal sign is not commeasurable?
-    
-    Initial input line is set at 400 for debugging, that area in test image seems to be the most diverse  
+    Initial input line could be 400 for debugging, that area in test image seems to be the most diverse  
 '''
 
 def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
@@ -149,25 +148,28 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_:
             buff_.append((_P, _x, _fork_, root_))
         else:     # no x overlap between _P and next P: _P is included in unique blob segment:
+            if x < X - 200:  # right error margin: >len(fork_P[6])?
+                ini = 1
+                if y > rng * 2 + 1:  # beyond the first line of _Ps
+                    if len(_fork_) == 1:  # always > 0: fork_ appended outside scan_P_?
+                        if _fork_[0][0][5] == 1:  # _fork roots, see ln161, never == 1?
+                            blob_seg = form_blob_seg(_fork_[0], _P, _x)  # _P (y-2) is packed in _fork_[0] blob segment + __fork_ (y-3)
+                            ini = 0  # no seg initialization
+                            return ini, blob_seg
+                if ini == 1:
+                    ave_x = _x - len(_P[6]) / 2  # average x of P: why always integer?
+                    blob_seg = _P, [_P], ave_x, 0, _fork_, len(root_)  # seg initialization: Dx = 0, same _fork_ for continued seg, roots=len(root_)
 
-            if len(_fork_) == 1 and _fork_[0][0][5] == 1 and y > rng * 2 + 1 + 400 and x < X - 300:  # margin set at 300: >len(fork_P[6])?
-                # _fork_[0][0][5]: blob segment _fork roots counter, see line 159, never==1?
-                # always > 0: fork_ appended outside scan_P_?
-                bseg = form_bseg(_fork_[0], _P, _x)  # _P (y-2) is packed in _fork_[0] blob segment + __fork_ (y-3)
-            else:
-                ave_x = _x - len(_P[6]) / 2  # average x of P: always integer?
-                bseg = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob initialization: Dx = 0, no new _fork_ for continued blob, roots=len(root_)
-
-            if len(root_) == 0:  # never happens?
-                blob = bseg, [bseg]  # first-level blob is initialized with terminated bseg, no root_ to rebind
-                if len(_fork_) == 0:
-                    frame = term_blob(blob, frame)  # all root-mediated forks terminated, blob is packed into frame
+                if len(root_) == 0:  # never happens?
+                    blob = blob_seg, [blob_seg]  # first-level blob is initialized with terminated blob_seg, no root_ to rebind
+                    if len(_fork_) == 0:
+                        frame = term_blob(blob, frame)  # all root-mediated forks terminated, blob is packed into frame
+                    else:
+                        blob, frame = term_blob_seg(blob, _fork_, frame)  # recursive root blob termination test
                 else:
-                    blob, frame = term_bseg(blob, _fork_, frame)  # recursive root blob termination test
-            else:
-                while root_:  # no root_ in blob: no rebinding to net at roots == 0
-                    root_fork = root_.pop()  # ref to referring fork, verify?
-                    root_fork.append(bseg)  # fork binding, no convert to tuple: forms a new object?
+                    while root_:  # no root_ in blob: no rebinding to net at roots == 0
+                        root_fork = root_.pop()  # ref to referring fork, verify?
+                        root_fork.append(blob_seg)  # fork binding, no convert to tuple: forms a new object?
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append((P, x, fork_))  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
@@ -175,7 +177,7 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
 
-def term_bseg(blob, fork_, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
+def term_blob_seg(blob, fork_, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
 
     for index, (_blob, _fork_, roots) in enumerate(fork_):
         _blob = form_blob(_blob, blob)  # terminated blob is included into its forks blobs
@@ -184,14 +186,14 @@ def term_bseg(blob, fork_, frame):  # blob initiated as a terminated blob segmen
             if len(_fork_) == 0:  # no fork-mediated roots left, terminated blob is packed in frame:
                 frame = term_blob(blob, frame)
             else:
-                _blob, frame = term_bseg(_blob, _fork_, frame)  # recursive root blob termination test
+                _blob, frame = term_blob_seg(_blob, _fork_, frame)  # recursive root blob termination test
 
     return blob, frame  # fork_ contains incremented blobs
 
 
-def form_bseg(bseg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
+def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
 
-    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots = bseg  # fork_ at init, roots at term?
+    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots = blob_seg  # fork_ at init, roots at term?
     s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
 
     x = last_x - len(ders2_) / 2  # median x, becomes _x in blob, replaces lx
@@ -204,15 +206,15 @@ def form_bseg(bseg, P, last_x):  # continued or initialized blob segment is incr
     V2 += V
     Vy2 += Vy
     Py_.append((s, x, dx, I, D, Dy, V, Vy, ders2_))  # dx to normalize P before comp_P?
-    bseg = (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots  # redundant s and ders2_
+    blob_seg = (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots  # redundant s and ders2_
 
-    return bseg
+    return blob_seg
 
 
-def form_blob(blob, bseg):  # continued or initialized network is incremented by attached blob and _root_
+def form_blob(blob, blob_seg):  # continued or initialized network is incremented by attached blob and _root_
 
-    (s, xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb), bseg_ = blob  # 2D blob_: fork_ per layer?
-    ((s, L2, I2, D2, Dy2, V2, Vy2, ders2_), x, Dx, Py_), fork_ = bseg  # s is redundant, ders2_ ignored
+    (s, xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb), blob_seg_ = blob  # 2D blob_: fork_ per layer?
+    ((s, L2, I2, D2, Dy2, V2, Vy2, ders2_), x, Dx, Py_), fork_ = blob_seg  # s is redundant, ders2_ ignored
     Dxb += Dx  # for net normalization, orient eval, += |Dx| for curved max_L?
     Lb += L2
     Ib += I2
@@ -220,14 +222,14 @@ def form_blob(blob, bseg):  # continued or initialized network is incremented by
     Dyb += Dy2
     Vb += V2
     Vyb += Vy2
-    bseg_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, Py_, fork_))  # Dx is to normalize blob before comp_P
-    blob = ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), bseg_  # separate S_par tuple?
+    blob_seg_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, Py_, fork_))  # Dx is to normalize blob before comp_P
+    blob = ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), blob_seg_  # separate S_par tuple?
 
     return blob
 
 
 def term_blob(blob, frame):
-    ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), bseg_ = blob
+    ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), blob_seg_ = blob
     Dxf, Lf, If, Df, Dyf, Vf, Vyf, blob_ = frame
     Dxf += Dxb  # for frame normalization, orient eval, += |Dxb| for curved max_L?
     Lf += Lb
@@ -236,7 +238,7 @@ def term_blob(blob, frame):
     Dyf += Dyb
     Vf += Vb
     Vyf += Vyb
-    blob_.append((xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb, bseg_))  # Dxb to normalize blob before comp_P
+    blob_.append((xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb, blob_seg_))  # Dxb to normalize blob before comp_P
     frame = Dxf, Lf, If, Df, Dyf, Vf, Vyf, blob_
     return frame
 
@@ -246,8 +248,8 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
     global y
-    y = 400  # vertical coordinate of current input line
-    # initial input line is set at 400 for debugging, that area in test image seems to be the most diverse
+    y = 0  # vertical coordinate of current input line
+    # initial input line may be set at 400, that area in test image seems to be the most diverse
 
     ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
     ders2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
@@ -259,7 +261,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
         ders2_.append(ders2)  # only one tuple per first-line ders2_
         ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
 
-    for y in range(401, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
+    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
         pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
         ders_ = lateral_comp(pixel_)  # lateral pixel comparison
