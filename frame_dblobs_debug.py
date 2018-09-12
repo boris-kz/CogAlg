@@ -1,11 +1,13 @@
-mport cv2
+import cv2
 import argparse
+from scipy import misc
 from time import time
 from collections import deque
 
 #@ Todor's additions, 11-12th Sep 2018, see scan_P : capturing an exception and recording the local variables (locals) in several points in the function.
 #@ I used copy.copy(...), simple = creates a pointer and all are printed as the same.
 #@ Separate files are used in order to ease comparison, e.g. with WinMerge
+
 import copy #@
 global errors #@
 global sequence #@
@@ -62,13 +64,11 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
             if index < max_index:
                 rng_ders_[index] = (pri_p, d, m)
             else:
-                ders_.append(
-                    (pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
-                pri_d = d;
+                ders_.append((pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
+                pri_d = d
                 pri_m = m  # to complement derivatives of next rng_t_: derived from next rng of pixels
 
-        rng_ders_.appendleft(
-            (p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+        rng_ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
 
     ders_ += reversed(rng_ders_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
     return ders_
@@ -87,12 +87,10 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     min_coord = rng * 2 - 1  # min x and y for form_P input
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (ders2_, _dy, _my) in zip(ders_,
-                                             ders2__):  # pixel is compared to rng higher pixels in ders2_, summing dy and my per higher pixel
+    for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel is compared to rng higher pixels in ders2_, summing dy and my per higher pixel
         x += 1
         index = 0
-        for (
-        _p, _d, _m, dy, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+        for (_p, _d, _m, dy, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
 
             dy += p - _p  # fuzzy dy: running sum of differences between pixel and all lower pixels within rng
             my += min(p, _p)  # fuzzy my: running sum of matches between pixel and all lower pixels within rng
@@ -102,24 +100,20 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
 
             elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
 
-                _v = _m - abs(
-                    d) - ave  # _m - abs(d): projected m cancelled by negative d: d/2, + projected rdn value of overlapping dP: d/2
+                _v = _m - abs(d) - ave  # _m - abs(d): projected m cancelled by negative d: d/2, + projected rdn value of overlapping dP: d/2
                 vy = my + _my - abs(dy) - ave
                 ders2 = _p, _d, _v, dy + _dy, vy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
 
             index += 1
 
-        ders2_.appendleft(
-            (p, d, m, 0, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
-        new_ders2__.append(
-            (ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
+        ders2_.appendleft((p, d, m, 0, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
+        new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
 
     return new_ders2__, dP_, dframe  # extended in scan_P_; net_s are packed into frames
 
 
-def form_P(ders2, x, P, P_, buff_, _P_,
-           frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
+def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
 
     p, d, v, dy, vy = ders2  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
@@ -153,6 +147,7 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     _ix = 0  # initial x coordinate of _P
 
     localVars["preLoop"] = copy.copy(locals()) #@
+
     while _ix <= x:  # while horizontal overlap between P and _P, after that: P -> P_
         if _buff_:
             _P, _x, _fork_, root_ = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
@@ -176,19 +171,16 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                     ini = 1
                     if y > rng * 2 + 1:  # beyond the first line of _Ps
                         if len(_fork_) == 1:  # always > 0: fork_ appended outside scan_P_?
-                            if _fork_[0][0][5] == 1:  # _fork roots, see ln161, never == 1?
-                                blob_seg = form_blob_seg(_fork_[0], _P,
-                                                         _x)  # _P (y-2) is packed in _fork_[0] blob segment + __fork_ (y-3)
+                            if _fork_[0][0][5] == 1:  # _fork roots, see blob_seg_init, never == 1?
+                                blob_seg = form_blob_seg(_fork_[0], _P, _x)  # _P (y-2) is packed in _fork_[0] blob segment + __fork_ (y-3)
                                 ini = 0  # no seg initialization
                                 return ini, blob_seg
                     if ini == 1:
                         ave_x = _x - len(_P[6]) / 2  # average x of P: why always integer?
-                        blob_seg = _P, [_P], ave_x, 0, _fork_, len(
-                            root_)  # seg initialization: Dx = 0, same _fork_ for continued seg, roots=len(root_)
+                        blob_seg = _P, [_P], ave_x, 0, _fork_, len(root_)  # blob_seg_init: Dx = 0, same _fork_ for continued seg, roots=len(root_)
 
                     if len(root_) == 0:  # never happens?
-                        blob = blob_seg, [
-                            blob_seg]  # first-level blob is initialized with terminated blob_seg, no root_ to rebind
+                        blob = blob_seg, [blob_seg]  # blob_init: first-level blob is initialized with terminated blob_seg, no root_ to rebind
                         if len(_fork_) == 0:
                             frame = term_blob(blob, frame)  # all root-mediated forks terminated, blob is packed into frame
                         else:
@@ -196,10 +188,10 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                     else:
                         while root_:  # no root_ in blob: no rebinding to net at roots == 0
                             root_fork = root_.pop()  # ref to referring fork, verify?
-                            root_fork.append(blob_seg)  # fork binding, no convert to tuple: forms a new object?
+                            root_fork.append(blob_seg)  # fork binding?
+
             except Exception as e: #@
-                print(e); errors.append(e);
-                print(sequence)
+                print(e); errors.append(e); print(sequence)
                 import re  #Regular expressions for adding new lines, otherwise it hurts the average text editors due to endless lines
                 for label in sequence:  #Separate files for each point where the locals are sampled: allows easier comparison
                     s = str(localVars[label])
@@ -213,15 +205,13 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                 # For simple and easy comparison of the result files I suggest WinMerge:
                 # https://sourceforge.net/projects/winmerge/
 
-
     buff_ += _buff_  # _buff_ is likely empty
     P_.append((P, x, fork_))  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
 
     return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
 
-def term_blob_seg(blob, fork_,
-                  frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
+def term_blob_seg(blob, fork_, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
 
     for index, (_blob, _fork_, roots) in enumerate(fork_):
         _blob = form_blob(_blob, blob)  # terminated blob is included into its forks blobs
@@ -235,8 +225,7 @@ def term_blob_seg(blob, fork_,
     return blob, frame  # fork_ contains incremented blobs
 
 
-def form_blob_seg(blob_seg, P,
-                  last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
+def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
 
     (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots = blob_seg  # fork_ at init, roots at term?
     s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
@@ -288,8 +277,7 @@ def term_blob(blob, frame):
     return frame
 
 
-def image_to_blobs(
-        image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
+def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
@@ -324,20 +312,16 @@ rng = 2  # number of leftward and upward pixels compared to each input pixel
 ave = 127 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 
-argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
-arguments = vars(argument_parser.parse_args())
-
+# argument_parser = argparse.ArgumentParser()
+# argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
+# arguments = vars(argument_parser.parse_args())
 # read image as 2d-array of pixels (gray scale):
-image = cv2.imread(arguments['image'], 0).astype(int)
-
+# image = cv2.imread(arguments['image'], 0).astype(int)
 # or read the same image online, without cv2:
-# from scipy import misc
-# image = misc.face(gray=True)  # read pix-mapped image
-# image = image.astype(int)
 
-Y, X = image.shape  # image
-#  height and width
+image = misc.face(gray=True)  # read pix-mapped image
+image = image.astype(int)
+Y, X = image.shape  # image height and width
 
 start_time = time()
 blobs = image_to_blobs(image)
