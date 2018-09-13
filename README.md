@@ -20,7 +20,7 @@ I need help with design and implementation of this algorithm. Contributions shou
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. “Incremental” means that first-level inputs must be sub-symbolic integers with binary (before | after) coordinate.
 Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
 
-Their comparison must also be minimal in complexity: lossless transform by inverse arithmetic operations. This is similar to edge detection kernel in CNN, except that it forms partial match along with miss, and groups both into multivariate patterns: spans of same-sign miss. General definition of match is a compression of represented magnitude by replacing inputs with misses (differences, ratios, etc.) between consecutive inputs.
+Their comparison must also be minimal in complexity, by inverse arithmetic operations. For subtraction, this is similar to edge detection kernel in CNN. The difference is that my comparison forms partial match along with miss and groups both into multivariate patterns: spans of same-sign miss. My definition of match between two variables is a compression of represented magnitude by replacing inputs with misses between these inputs.
 
 Specific match (compression) and miss (complementary of match) are determined by the power of comparison:
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss),
@@ -91,7 +91,7 @@ neural memory requires dedicated connections (synapses), which makes individual 
 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Another constraint is noise: neurons often fire at random, so their spikes are summed to reduce noise. Which is not a good reason to degrade far more precise electronic signals.
 
-In general, there is a presumption of some fixed nodes and architecture in neural networks. It stems from fundamentally limited brain, born with a fixed number of neurons. Which initially connect by sending and receiving pure noise because there is nothing else in the womb. None of that is relevant for designing software: we need to work from the function rather than tools, and forming localized patterns of inputs must be primary to parallelizing their cross-comparison.
+In general, there is a presumption of some fixed identical nodes in neural networks. It stems from analogy to our limited brain, born with a fixed number of neurons. Which initially connect by sending and receiving pure noise, because there is nothing else in the womb. But in software, we need to work from the function: search for patterns. Which are initially local and should be represented locally. Parallelizing their longer-range cross-comparison is a secondary issue.
 
 
 
