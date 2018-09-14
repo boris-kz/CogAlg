@@ -143,18 +143,18 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
 
         if P[0] == _P[0]:  # if s == _s: core sign match, also selective inclusion by cont eval?
             fork_.append([])  # mutable placeholder for blobs connected to P, filled with Ps after _P inclusion with complete root_
-            root_.append(fork_[len(fork_)-1])  # binds forks to blob
+            root_.append(fork_[len(fork_)-1])  # to bind last P in fork_ to _P and then to blob?
 
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else: _P is included in unique blob segment
-            buff_.append((_P, _x, _fork_, root_))
+            buff_.append([_P, _x, _fork_, root_])
         else:
-            if x < X - 200:  # right error margin: >len(fork_P[6])?
+            if x < X - 99:  # right error margin: >len(fork_P[6])?
                 ini = 1
-                if y > rng * 2 + 1:  # beyond the first line of _Ps
+                if y > rng * 2 + 1:  # beyond the first line of _Ps, which only initialize blob_segs
                     if len(_fork_) == 1:  # always > 0: fork_ appended outside scan_P_?
                         try:
-                            if _fork_[0][0][5] == 1:  # _fork roots, see ln161, never == 1?
-                                blob_seg = form_blob_seg(_fork_[0], _P, _x)  # _P (y-2) is packed in _fork_[0] blob segment + __fork_ (y-3)
+                            if _fork_[0][0][5] == 1:  # _fork roots, see blob_init, never == 1?
+                                blob_seg = form_blob_seg(_fork_[0], _P, _x)  # blob_seg_accum: _P (y-2) is packed in blob segment at _fork_[0] (y-3)
                                 ini = 0  # no blob segment initialization
                                 return ini, blob_seg
                         except:
@@ -165,7 +165,7 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                     # P: pri_s, I, D, Dy, V, Vy, ders2_; Dx = 0, same _fork_ for continued seg, roots=len(root_)
 
                 if len(root_) == 0:  # never happens?
-                    blob = blob_seg, [blob_seg]  # first-level blob is initialized with terminated blob_seg, no root_ to rebind
+                    blob = blob_seg, [blob_seg]  # blob_init: first-level blob is initialized with terminated blob_seg, no root_ to rebind
                     if len(_fork_) == 0:
                         frame = term_blob(blob, frame)  # all root-mediated forks terminated, blob is packed into frame
                     else:
@@ -176,7 +176,7 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                         root_fork.append(blob_seg)  # fork binding?
 
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append((P, x, fork_))  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
+    P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
 
     return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
