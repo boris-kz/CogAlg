@@ -109,8 +109,9 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     else:
         if y == rng * 2:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
             P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
-        else:
+        elif x < X - 99:  # right error margin: >len(fork_P[6])?
             P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
+
         I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, []  # new P initialization
 
     I += p  # summed input and derivatives are accumulated as P and alt_P parameters, continued or initialized:
@@ -128,55 +129,49 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
 
     buff_ = deque()  # new buffer for displaced _Ps, for scan_P_(next P)
     fork_ = []  # _Ps connected to input P
-    ix = x - len(P[6])  # initial x coordinate of P( pri_s, I, D, Dy, V, Vy, ders2_)
+    ix = x - len(P[6])  # initial x coordinate of P
     _ix = 0  # initial x coordinate of _P
 
     while _ix <= x:  # while horizontal overlap between P and _P, after that: P -> P_
         if _buff_:
-            _P, _x, _fork_, root_ = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
+            _P, _x, _fork_, roots = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
         elif _P_:
-            _P, _x, _fork_ = _P_.popleft()  # load _P: y-2, _root_: y-3, starts empty, then contains blobs that replace _Ps
-            root_ = []  # Ps connected to current _P
+            _P, _x, _fork_ = _P_.popleft()  # load y-2 _P + y-3 _fork_: contains blobs that include _Ps
+            roots = 0  # number of Ps connected to current _P( pri_s, I, D, Dy, V, Vy, ders2_)
         else:
             break
         _ix = _x - len(_P[6])
 
-        if P[0] == _P[0]:  # if s == _s: core sign match, also selective inclusion by cont eval?
-            fork_.append([])  # mutable placeholder for blobs connected to P, filled with Ps after _P inclusion with complete root_
-            root_.append(fork_[len(fork_)-1])  # to bind last P in fork_ to _P and then to blob?
+        if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion by cont eval?
+            fork_.append([_P])  # P-connected _Ps, appended with roots and blob after P_ scan, no fork reassign
+            roots += 1
 
-        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_, else: _P is included in unique blob segment
-            buff_.append([_P, _x, _fork_, root_])
-        else:
-            if x < X - 99:  # right error margin: >len(fork_P[6])?
-                ini = 1
-                if y > rng * 2 + 1:  # beyond the first line of _Ps, which only initialize blob_segs
-                    if len(_fork_) == 1:  # always > 0: fork_ appended outside scan_P_?
+        if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_
+            buff_.append([_P, _x, _fork_, roots])
+        else:  # _P is included in unique blob segment:
+            ini = 1
+            if y > rng * 2 + 2:  # beyond the first line of _fork_ _Ps: initialized only
+                if y > rng * 2 + 3:  # beyond the first line of _fork_ blob segments
+                    if len(_fork_) == 1:
                         try:
-                            if _fork_[0][0][5] == 1:  # _fork roots, see blob_init, never == 1?
-                                blob_seg = form_blob_seg(_fork_[0], _P, _x)  # blob_seg_accum: _P (y-2) is packed in blob segment at _fork_[0] (y-3)
+                            if _fork_[0][4] == 1:  # _fork roots, see blob_seg init, always > 1?
+                                fork_[0] = form_blob_seg(_fork_[0], _P, _x)  # if len(_fork_) == 1 and roots == 1
                                 ini = 0  # no blob segment initialization
-                                return ini, blob_seg
+                                return ini, fork_  # blob_seg_incr: y-2 _P is packed in blob segment at y-3 _fork_[0]
                         except:
                             break
-                if ini == 1:
-                    ave_x = _x - len(_P[6]) / 2  # average x of P, always integer: type conversion?
-                    blob_seg = _P, [_P], ave_x, 0, _fork_, len(root_)  # seg initialization by all not-included _Ps at y > rng * 2:
-                    # P: pri_s, I, D, Dy, V, Vy, ders2_; Dx = 0, same _fork_ for continued seg, roots=len(root_)
+                if ini == 1:  # blob_seg initialization by all not-included _Ps at y > rng * 2, same fork id for all root Ps:
+                    fork_[0] += [[_P], _x - len(_P[6]) / 2, 0, roots, _fork_]  # Dx = 0, ave_x = _x - len(_P[6]) / 2, _fork_ per seg
 
-                if len(root_) == 0:  # never happens?
-                    blob = blob_seg, [blob_seg]  # blob_init: first-level blob is initialized with terminated blob_seg, no root_ to rebind
+                if roots == 0:  # blob_init: first-level blob is initialized with terminated blob_segment at fork_[0]:
+                    fork_[0].append([fork_[0]])
                     if len(_fork_) == 0:
-                        frame = term_blob(blob, frame)  # all root-mediated forks terminated, blob is packed into frame
+                        frame = term_blob(fork_[0], frame)  # all root-mediated forks terminated, blob is packed into frame
                     else:
-                        blob, frame = term_blob_seg(blob, _fork_, frame)  # recursive root blob termination test
-                else:
-                    while root_:  # no root_ in blob: no rebinding to net at roots == 0
-                        root_fork = root_.pop()  # ref to referring fork?
-                        root_fork.append(blob_seg)  # fork binding?
+                        fork_[0], frame = term_blob_seg(fork_[0], _fork_, frame)  # recursive root blob termination test
 
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, via y_comp
+    P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, as _P
 
     return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
