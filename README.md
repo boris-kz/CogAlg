@@ -44,15 +44,15 @@ But none that I know of is strictly incremental in scope and complexity of disco
 
 Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part 0). Hence, complexity of my inputs and operations is incremental per level, as opposed to uniform layers in ANN.
 
-*Some readers dismiss this outline as generalities, which lack a direct connection to my code.  But I don’t see a disconnect, beyond adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math and pseudo code, but CogAlg must be selectively incremental in complexity, while higher math and any fixed pseudo code are not.*
+*Some readers don't see a direct connection between this outline to my code. But I don’t see a disconnect, beyond adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math and pseudo code, but CogAlg must be selectively incremental in complexity, while higher math and any fixed pseudo code are not.*
 
 
 
-### quantifying match and miss between variables
+#### Quantifying match and miss between variables
 
 
 
-The purpose is prediction, and predictive value is usually defined as [compressibility](https://en.wikipedia.org/wiki/Algorithmic_information_theory). Which is perfectly fine, but existing methods only compute compression per sequence of inputs. To enable more incremental selection and scalable search, I quantify partial match between individual inputs, vs. binary same | different choice for inputs within sequences. This is similar to the way Bayesian inference improved on classical logic, by quantifying probability vs. binary true | false values.
+My purpose is prediction, and predictive value is usually defined as [compressibility](https://en.wikipedia.org/wiki/Algorithmic_information_theory). Which is perfectly fine, but existing methods only compute compression per sequence of inputs. To enable more incremental selection and scalable search, I quantify partial match between individual inputs, vs. binary same | different choice for inputs within sequences. This is similar to the way Bayesian inference improved on classical logic, by quantifying probability vs. binary true | false values.
 
 I define match as a complementary of miss. That means match is potential compression of larger comparand’s magnitude by replacing it with its miss (initially difference) relative to smaller comparand. Ultimate criterion is recorded magnitude, rather than bits of memory it occupies, because the former represents physical impact that we want to predict. The volume of memory used to record that magnitude depends on prior compression, which is not an objective parameter.
 

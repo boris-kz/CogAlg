@@ -108,7 +108,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
         pri_s, I, D, Dy, V, Vy, ders2_ = P
     else:
         if y == rng * 2:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
-            P_.append((P, x-1, []))  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
+            P_.append([P, x-1, [[]]])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
         elif x < X - 99:  # right error margin: >len(fork_P[6])?
             P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
 
@@ -122,58 +122,59 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     ders2_.append(ders2)  # t2s are buffered for oriented rescan and incremental range | derivation comp
 
     P = s, I, D, Dy, V, Vy, ders2_
-    return P, P_, buff_, _P_, frame  # accumulated within line
+    return P, P_, buff_, _P_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
 
 
 def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in _P_, forms overlaps
 
     buff_ = deque()  # new buffer for displaced _Ps, for scan_P_(next P)
-    fork_ = []  # _Ps connected to input P
+    fork_ = [[]]  # [_P]s connected to input P, second [] is a container with id
     ix = x - len(P[6])  # initial x coordinate of P
     _ix = 0  # initial x coordinate of _P
 
     while _ix <= x:  # while horizontal overlap between P and _P, after that: P -> P_
-        if _buff_:
+        if _buff_:   # if y > rng * 2 + 1?
             _P, _x, _fork_, roots = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
         elif _P_:
-            _P, _x, _fork_ = _P_.popleft()  # load y-2 _P + y-3 _fork_: contains blobs that include _Ps
+            _P, _x, _fork_ = _P_.popleft()  # load P_y-1 _P + P_y-2 _fork_
             roots = 0  # number of Ps connected to current _P( pri_s, I, D, Dy, V, Vy, ders2_)
         else:
             break
         _ix = _x - len(_P[6])
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion by cont eval?
-            fork_.append([_P])  # P-connected _Ps, appended with roots and blob after P_ scan, no fork reassign
+            fork_[0].append([_P])  # P-connected _Ps, appended with blob and converted to Py_ after P_ scan
             roots += 1
 
         if _x > ix:  # x overlap between _P and next P: _P is buffered for next scan_P_
             buff_.append([_P, _x, _fork_, roots])
-        else:  # _P is included in unique blob segment:
+        else:     # no x overlap between _P and next P: _P is included in unique blob segment:
             ini = 1
-            if y > rng * 2 + 2:  # beyond the first line of _fork_ _Ps: initialized only
-                if y > rng * 2 + 3:  # beyond the first line of _fork_ blob segments
-                    if len(_fork_) == 1:
-                        try:
-                            if _fork_[0][4] == 1:  # _fork roots, see blob_seg init, always > 1?
-                                fork_[0] = form_blob_seg(_fork_[0], _P, _x)  # if len(_fork_) == 1 and roots == 1
-                                ini = 0  # no blob segment initialization
-                                return ini, fork_  # blob_seg_incr: y-2 _P is packed in blob segment at y-3 _fork_[0]
-                        except:
-                            break
-                if ini == 1:  # blob_seg initialization by all not-included _Ps at y > rng * 2, same fork id for all root Ps:
-                    fork_[0] += [[_P], _x - len(_P[6]) / 2, 0, roots, _fork_]  # Dx = 0, ave_x = _x - len(_P[6]) / 2, _fork_ per seg
-
-                if roots == 0:  # blob_init: first-level blob is initialized with terminated blob_segment at fork_[0]:
-                    fork_[0].append([fork_[0]])
-                    if len(_fork_) == 0:
-                        frame = term_blob(fork_[0], frame)  # all root-mediated forks terminated, blob is packed into frame
-                    else:
-                        fork_[0], frame = term_blob_seg(fork_[0], _fork_, frame)  # recursive root blob termination test
+            if y > rng * 2 + 1:  # beyond 1st line of _fork_ _Ps, else: blob_seg ini only
+                if len(_fork_[0]) == 1:
+                    try:
+                        if _fork_[0][0][4] == 1:  # _fork roots, see blob_seg init, always > 1?
+                            fork_[0][0].append( form_blob_seg(_fork_[0][0], _P, _x) )  # second [] is a container with id
+                            ini = 0  # no blob segment initialization
+                            return ini, fork_  # blob_seg_incr: y-2 _P is packed in blob segment at y-3 _fork_[0]
+                    except:
+                        break
+            if ini == 1:  # blob_seg initialization by all not-included _Ps at y > rng * 2, same fork id for all root Ps:
+                try:
+                   fork_[0][0] += [[_P], _x - len(_P[6]) / 2, 0, roots, _fork_]  # ave_x = _x - len(_P[6]) / 2, Dx = 0, seg _fork_
+                except:   # fork_[0][0] is empty, can't be?
+                   break
+            if roots == 0:
+                fork_[0][0].append(fork_[0][0])  # 1st-level blob is initialized with terminated blob_segment at _fork_[0]
+                if len(_fork_) == 0:
+                    frame = term_blob(fork_[0], frame)  # all root-mediated forks terminated, blob is packed into frame
+                else:
+                    fork_[0], frame = term_blob_seg(fork_[0], _fork_, frame)  # recursive root blob termination test
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, as _P
 
-    return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
+    return [P_, buff_, _P_, frame]  # _P_ and buff_ contain only _Ps with _x => next x
 
 
 def term_blob_seg(blob, fork_, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
@@ -187,7 +188,7 @@ def term_blob_seg(blob, fork_, frame):  # blob initiated as a terminated blob se
             else:
                 _blob, frame = term_blob_seg(_blob, _fork_, frame)  # recursive root blob termination test
 
-    return blob, frame  # fork_ contains incremented blobs
+    return [blob, frame]  # fork_ contains incremented blobs
 
 
 def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
