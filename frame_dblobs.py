@@ -1,5 +1,6 @@
-import cv2
-import argparse
+# import cv2
+# import argparse
+from scipy import misc
 from time import time
 from collections import deque
 
@@ -76,24 +77,24 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel is compared to rng higher pixels in ders2_, summing dy and my per higher pixel
         x += 1
         index = 0
-        for (_p, _d, _m, dy, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+        for (_p, _d, dy, _m, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
 
             dy += p - _p  # fuzzy dy: running sum of differences between pixel and all lower pixels within rng
             my += min(p, _p)  # fuzzy my: running sum of matches between pixel and all lower pixels within rng
 
             if index < max_index:
-                ders2_[index] = (_p, d, m, dy, my)
+                ders2_[index] = (_p, d, dy, m, my)
 
             elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
 
                 _v = _m - abs(d) - ave  # _m - abs(d): projected m cancelled by negative d: d/2, + projected rdn value of overlapping dP: d/2
                 vy = my + _my - abs(dy) - ave
-                ders2 = _p, _d, _v, dy + _dy, vy
+                ders2 = _p, _d, dy + _dy, _v, vy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
 
             index += 1
 
-        ders2_.appendleft((p, d, m, 0, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
+        ders2_.appendleft((p, d, 0, m, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
         new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
 
     return new_ders2__, dP_, dframe  # extended in scan_P_; net_s are packed into frames
@@ -101,7 +102,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
 
 def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
 
-    p, d, v, dy, vy = ders2  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
+    p, d, dy, v, vy = ders2  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
@@ -136,7 +137,7 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
         if _buff_:
             [_P, _x, _fork_, roots] = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
         elif _P_:
-            [_P, _x, _fork_] = _P_.popleft()  #
+            [_P, _x, _fork_] = _P_.popleft()
             roots = 0  # number of Ps connected to current _P[(pri_s, I, D, Dy, V, Vy, ders2_)]
         else:
             break
@@ -150,27 +151,23 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             buff_.append([_P, _x, _fork_, roots])
         else:     # no x overlap between _P and next P: _P is included in unique blob segment:
             ini = 1
-            if y > rng * 2 + 1:  # beyond 1st line of _fork_ _Ps, else: blob_seg ini only
+            if y > rng * 2 + 1:  # beyond 1st line of _fork_ Ps, else: blob_seg ini only
                 if len(_fork_[0]) == 1:
                     try:
-                        if _fork_[0][0][4] == 1:  # _fork roots, see blob_seg init, second [] is a _P container with id
+                        if _fork_[0][0][4] == 1:  # _fork roots, see blob_seg init, second [] is a fixed-id _P container
                             _P[0] = form_blob_seg(_fork_[0][0], _P[0], _x)  # blob_seg incr: _P packed in _fork_[0]
                             ini = 0  # no initialization
                             return ini, fork_
                     except:
                         break
-            if ini == 1:  # blob_seg initialization by all not-included _Ps at y > rng * 2, same fork id for all root Ps:
-                try:
-                   _P[0] += [[_P[0]], _x - len(_P[0][6]) / 2, 0, roots, _fork_]
-                   # flat _P vars + Py_, ave_x = _x - len(_P[0][6]) / 2, Dx = 0, seg-wide _fork_
-                except:
-                   break
+            if ini == 1:  # blob_seg initialization by all not-included _Ps, at _P id:
+                _P[0] = _P[0], [_P[0]], _x - len(_P[0][6]) // 2, 0, roots, _fork_  # _P, Py_, ave_x, Dx = 0, roots, blob_seg _fork_
+
             if roots == 0:
-                _P[0] += _fork_[0][0]  # _P[0] is 1st-level blob, initialized with terminated blob_segment at _fork_[0][0]
-                if len(_fork_) == 0:
-                    frame = term_blob(_P[0], frame)  # all root-mediated forks terminated, blob is packed into frame
+                if len(_fork_):
+                    _P[0], frame = term_blob_seg(_P[0], frame)  # recursive root blob termination test
                 else:
-                    _P[0], frame = term_blob_seg(_P[0], _fork_, frame)  # recursive root blob termination test
+                    frame = term_blob(_P[0], frame)  # all root-mediated forks terminated, blob is packed into frame
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, as _P
@@ -178,8 +175,9 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     return [P_, buff_, _P_, frame]  # _P_ and buff_ contain only _Ps with _x => next x
 
 
-def term_blob_seg(blob, fork_, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
+def term_blob_seg(blob, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
 
+    blob, Py_, ave_x, Dx, roots, fork_ = blob
     for index, (_blob, _fork_, roots) in enumerate(fork_):
         _blob = form_blob(_blob, blob)  # terminated blob is included into its forks blobs
 
@@ -187,14 +185,14 @@ def term_blob_seg(blob, fork_, frame):  # blob initiated as a terminated blob se
             if len(_fork_) == 0:  # no fork-mediated roots left, terminated blob is packed in frame:
                 frame = term_blob(blob, frame)
             else:
-                _blob, frame = term_blob_seg(_blob, _fork_, frame)  # recursive root blob termination test
+                _blob, frame = term_blob_seg(_blob, frame)  # recursive root blob termination test
 
-    return [blob, frame]  # fork_ contains incremented blobs
+    return [blob, frame]
 
 
 def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
 
-    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots = blob_seg  # fork_ at init, roots at term?
+    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, roots, fork_ = blob_seg  # fork_ at init, roots at term?
     s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
 
     x = last_x - len(ders2_) / 2  # median x, becomes _x in blob, replaces lx
@@ -207,7 +205,7 @@ def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment
     V2 += V
     Vy2 += Vy
     Py_.append((s, x, dx, I, D, Dy, V, Vy, ders2_))  # dx to normalize P before comp_P?
-    blob_seg = (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, fork_, roots  # redundant s and ders2_
+    blob_seg = [(s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, roots, fork_]  # redundant s and ders2_
 
     return blob_seg
 
@@ -258,7 +256,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
     ders_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for (p, d, m) in ders_:
-        ders2 = p, d, m, 0, 0  # dy, my initialized at 0
+        ders2 = p, d, 0, m, 0  # dy, my initialized at 0
         ders2_.append(ders2)  # only one tuple per first-line ders2_
         ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
 
@@ -279,19 +277,15 @@ rng = 2  # number of leftward and upward pixels compared to each input pixel
 ave = 127 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 
-argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
-arguments = vars(argument_parser.parse_args())
-
-# read image as 2d-array of pixels (gray scale):
-image = cv2.imread(arguments['image'], 0).astype(int)
-
-# or read the same image online, without cv2:
-# from scipy import misc
-# image = misc.face(gray=True)  # read pix-mapped image
-# image = image.astype(int)
-
+image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
+image = image.astype(int)
 Y, X = image.shape  # image height and width
+
+# or:
+# argument_parser = argparse.ArgumentParser()
+# argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
+# arguments = vars(argument_parser.parse_args())
+# image = cv2.imread(arguments['image'], 0).astype(int)
 
 start_time = time()
 blobs = image_to_blobs(image)
