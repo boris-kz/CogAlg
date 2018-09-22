@@ -160,14 +160,14 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
                             return ini, fork_
                     except:
                         break
-            if ini == 1:  # blob_seg initialization by all not-included _Ps, at _P id:
-                _P[0] = _P[0], [_P[0]], _x - len(_P[0][6]) // 2, 0, roots, _fork_  # _P, Py_, ave_x, Dx = 0, roots, blob_seg _fork_
+            if ini == 1:  # blob_seg ini by not-included _Ps at _P id: [_P, Py_, ave_x, Dx, [roots, root_, blob], _fork_]:
+                _P[0] = [_P[0], [_P[0]], _x - len(_P[0][6]) // 2, 0, [roots, [], _P], _fork_]
 
             if roots == 0:
                 if len(_fork_):
-                    _P[0], frame = term_blob_seg(_P[0], frame)  # recursive root blob termination test
+                    _P[0], frame = term_blob_seg(_P[0], frame)  # blob += blob_seg, and recursive higher-level termination test
                 else:
-                    frame = term_blob(_P[0], frame)  # all root-mediated forks terminated, blob is packed into frame
+                    frame = form_frame(_P[0], frame)  # all root-mediated forks terminated, blob is packed into frame
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, as _P
@@ -175,24 +175,30 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     return [P_, buff_, _P_, frame]  # _P_ and buff_ contain only _Ps with _x => next x
 
 
-def term_blob_seg(blob, frame):  # blob initiated as a terminated blob segment, then added to terminated forks in its fork_
+def term_blob_seg(blob, frame):  # blob: _P, Py_, ave_x, Dx, roots, _fork_
 
-    blob, Py_, ave_x, Dx, roots, fork_ = blob
-    for index, (_blob, _fork_, roots) in enumerate(fork_):
-        _blob = form_blob(_blob, blob)  # terminated blob is included into its forks blobs
+    for index, _blob in enumerate(blob[5]):  # _P, Py_, ave_x, Dx, roots, _fork_ = _blob per fork
+
+        _blob = form_blob(_blob, blob)  # terminated blob is included into term_ of its fork blobs
+        roots, root_, Blob = _blob[4]  # Blob is all connected blobs (blob_segs)
+        roots -= 1; root_.append(blob); Blob = form_blob(Blob, blob)
 
         if roots == 0:
-            if len(_fork_) == 0:  # no fork-mediated roots left, terminated blob is packed in frame:
-                frame = term_blob(blob, frame)
+            if len(blob[5]):  # _fork_
+                _blob, frame = term_blob_seg(_blob, frame)  # recursive higher-level blob_seg inclusion and termination test
             else:
-                _blob, frame = term_blob_seg(_blob, frame)  # recursive root blob termination test
+                frame = form_frame(_blob, frame)  # all root-mediated forks terminated, blob is packed into frame
+
+        blob[4] = [roots, root_, Blob]
+        blob[5][index] = _blob  # return to fork: _blob_seg, terminated root_, blob?
+
 
     return [blob, frame]
 
 
-def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment is incremented by attached _P, replace by zip?
+def form_blob_seg(bseg, P, last_x):  # continued or initialized blob segment is incremented by attached _P
 
-    (s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, roots, fork_ = blob_seg  # fork_ at init, roots at term?
+    (s, L2, I2, D2, Dy2, V2, Vy2, Py_, _x, Dx, roots), fork_ = bseg  # fork_ at init, roots at term?
     s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
 
     x = last_x - len(ders2_) / 2  # median x, becomes _x in blob, replaces lx
@@ -205,12 +211,13 @@ def form_blob_seg(blob_seg, P, last_x):  # continued or initialized blob segment
     V2 += V
     Vy2 += Vy
     Py_.append((s, x, dx, I, D, Dy, V, Vy, ders2_))  # dx to normalize P before comp_P?
-    blob_seg = [(s, L2, I2, D2, Dy2, V2, Vy2, ders2_), Py_, _x, Dx, roots, fork_]  # redundant s and ders2_
+    bseg = [(s, L2, I2, D2, Dy2, V2, Vy2, Py_, _x, Dx, roots), fork_]  # redundant s
 
-    return blob_seg
+    # fork = _bseg, roots, _fork_; [blob, root_] complements roots?
+    return bseg
 
 
-def form_blob(blob, blob_seg):  # continued or initialized network is incremented by attached blob and _root_
+def form_blob(blob, blob_seg):  # continued or initialized blob is incremented by attached blob and _root_
 
     (s, xb, Dxb, Lb, Ib, Db, Dyb, Vb, Vyb), blob_seg_ = blob  # 2D blob_: fork_ per layer?
     ((s, L2, I2, D2, Dy2, V2, Vy2, ders2_), x, Dx, Py_), fork_ = blob_seg  # s is redundant, ders2_ ignored
@@ -221,13 +228,15 @@ def form_blob(blob, blob_seg):  # continued or initialized network is incremente
     Dyb += Dy2
     Vb += V2
     Vyb += Vy2
-    blob_seg_.append((x, Dx, L2, I2, D2, Dy2, V2, Vy2, Py_, fork_))  # Dx is to normalize blob before comp_P
+    blob_seg_.append([(x, Dx, L2, I2, D2, Dy2, V2, Vy2, Py_), fork_])  # Dx is to normalize blob before comp_P
     blob = ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), blob_seg_  # separate S_par tuple?
+
+    # roots -= 1; root_.append()
 
     return blob
 
 
-def term_blob(blob, frame):
+def form_frame(blob, frame):
     ((s, Lb, Ib, Db, Dyb, Vb, Vyb), xb, Dxb, Py_), blob_seg_ = blob
     Dxf, Lf, If, Df, Dyf, Vf, Vyf, blob_ = frame
     Dxf += Dxb  # for frame normalization, orient eval, += |Dxb| for curved max_L?
