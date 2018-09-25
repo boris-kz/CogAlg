@@ -9,7 +9,7 @@ But there is no general and at the same time constructive definition of either p
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
-I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which forms hierarchical patterns. These terms are defined below, unless you have better definitions, which would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which forms hierarchical patterns. These terms are defined below, but if you have better definitions, that would be even more valuable. This is an open project, but I will pay per contribution, or per hour once there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
 
 
@@ -20,9 +20,9 @@ I need help with design and implementation of this algorithm. Contributions shou
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. It’s a hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. “Incremental” means that first-level inputs must be sub-symbolic integers with binary (before | after) coordinate.
 Such as pixels of video, consecutive in each dimension, or equivalents in other modalities.
 
-Their comparison must also be minimal in complexity, by inverse arithmetic operations. For subtraction, this is similar to edge detection kernel in CNN. The difference is that my comparison forms partial match along with miss and groups both into multivariate patterns: spans of same-sign miss. My definition of match between two variables is a compression of represented magnitude by replacing inputs with misses between these inputs.
+Their comparison must also be minimal in complexity, by inverse arithmetic operations. In case of subtraction, this is similar to edge detection kernel in CNN. The difference is that my comparison forms partial match along with miss and groups both into multivariate patterns: spans of same-sign miss. My match is a compression of represented magnitude by replacing inputs with misses between these inputs.
 
-Specific match (compression) and miss (complementary of match) are determined by the power of comparison:
+Specific match and miss (complementary of match) between two variables are determined by the power of comparison:
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss),
 - comparison by subtraction increases match to a smaller comparand and reduces miss to a difference,
 - comparison by division increases match to a multiple and reduces miss to fraction, and so on (more in part 1).
@@ -44,7 +44,7 @@ But none that I know of is strictly incremental in scope and complexity of disco
 
 Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement (part 0). Hence, complexity of my inputs and operations is incremental per level, as opposed to uniform layers in ANN.
 
-*Some readers don't see a direct connection between this outline to my code. But I don’t see a disconnect, beyond adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others complain about lack of math and pseudo code, but CogAlg must be selectively incremental in complexity, while higher math and any fixed pseudo code are not.*
+*Some readers don't see direct connection between this outline and my code. But I see no disconnect, beyond adaptation to 2D or 3D format of the input. Please enlighten me, I will owe you big time. Of course, current code only covers first-level processing, but higher levels will be incremental in nature. Others note lack of higher math and pseudo code, but these can't be selectively incremental in complexity, which is my core principle*
 
 
 
