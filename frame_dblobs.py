@@ -120,7 +120,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     Dy += dy  # vertical D
     V += v  # lateral V
     Vy += vy  # vertical V
-    ders2_.append(ders2)  # t2s are buffered for oriented rescan and incremental range | derivation comp
+    ders2_.append(ders2)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
 
     P = [(s, I, D, Dy, V, Vy, ders2_)]
     return P, P_, buff_, _P_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
@@ -153,24 +153,25 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             ini = 1
             if y > rng * 2 + 1:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_[0]) == 1:
-                    try:
-                        if _fork_[0][0][4][0] == 1:  # _fork roots, see blob init, second [] is a fixed-id _P container
-                            _P[0] = form_seg(_fork_[0][0], _P[0], _x)  # _P is added to blob segment at _fork_[0]
+                    #try:
+                        if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
+                            _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
                             ini = 0  # no initialization
                             return ini, fork_
-                    except:
-                        break
-            if ini == 1:  # blob [_P, Py_, ave_x, Dx, root, _fork_] is initialized by not-included _P at its id:
-                _P[0] = [_P[0], [_P[0]], _x - len(_P[0][6]) // 2, 0, [roots, [], _P], _fork_]
+                    #except:
+                     #   break
+            if ini == 1:  # blob segment [_P, Py_, ave_x, Dx, root, _fork_] is initialized by not-included _P at its id:
+                ave_x = _x - len(_P[0][6]) // 2
+                _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]
 
             if roots == 0:
                 if len(_fork_):
                     _P[0], frame = term_seg(_P[0], frame)  # blob (all connected blob segments) += blob segment at _P[0]
                 else:
-                    frame = form_frame(_P[0][4][1], _P[0][4][2], frame)  # (root_, blob, frame): blob + root_ packed in frame
+                    frame = form_frame(_P[0][4][1], _P[0][4][2], frame)  # (root_, blob, frame): blob, root_ packed in frame
 
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, as _P
+    P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to _P
 
     return [P_, buff_, _P_, frame]  # _P_ and buff_ contain only _Ps with _x => next x
 
@@ -178,23 +179,24 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
 def term_seg(seg, frame):  # blob: _P, Py_, ave_x, Dx, root, _fork_
 
     for index, _seg in enumerate(seg[5]):  # _P, Py_, ave_x, Dx, root, _fork_ = _segment per fork
-        _seg[4] = form_blob(_seg[4], seg)  # terminated segment is included into root_ and blob of its fork segments
+        _seg[4] = form_blob(seg, _seg[4])  # terminated segment is included into root_ and blob of its fork segments
 
         if _seg[4][0] == 0:  # roots
             if len(_seg[5]):  # _fork_
-                _blob, frame = term_seg(_seg, frame)  # recursive higher-level segment inclusion and termination test
+                _blob, frame = term_seg(_seg, frame)  # recursive higher-level segment-> blob inclusion and termination test
             else:
-                frame = form_frame(_seg[4][1], _seg[4][1], frame)  # all connected forks terminate, blob is packed into frame
-                # if term of all connected roots and forks, also linked by added fork and roots: summed in continued fork?
+                frame = form_frame(_seg[4][1], _seg[4][2], frame)  # all connected forks terminate, blob is packed into frame
+
+                # if term of all connected roots and forks, + linked by added forks and roots: summed in next continued fork?
 
         seg[5][index] = _seg  # return to fork: _segment, terminated root_, segment?
     return [seg, frame]
 
 
-def form_seg(seg, P, last_x):  # continued or initialized blob segment is incremented by attached _P
+def form_seg(P, seg, last_x):  # continued or initialized blob segment is incremented by attached _P
 
     s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
-    (s, L2, I2, D2, Dy2, V2, Vy2), Py_, _x, xD, root, fork_ = seg  # fork_ at init, roots at term?
+    (s, L2, I2, D2, Dy2, V2, Vy2), Py_, _x, xD, root, fork_ = seg  # fork_ assigned at ini only, roots at term_seg only?
 
     x = last_x - len(ders2_) // 2  # median x, becomes _x in segment, replaces lx
     xd = x - _x  # conditional full comp(x) and comp(S): internal vars are secondary?
@@ -205,18 +207,18 @@ def form_seg(seg, P, last_x):  # continued or initialized blob segment is increm
     Dy2 += Dy
     V2 += V
     Vy2 += Vy
-    Py_.append((s, x, xd, I, D, Dy, V, Vy, ders2_))  # dx to normalize P before comp_P?
+    Py_.append((s, x, xd, I, D, Dy, V, Vy, ders2_))
     segment = [(s, L2, I2, D2, Dy2, V2, Vy2, Py_), _x, xD, root, fork_]  # fork: _segment, root [roots, root_, blob], _fork_
     return segment
 
 
-def form_blob(root, seg):  # continued or initialized blob is incremented by attached blob segment and its root_
-    roots, root_, blob = root
+def form_blob(seg, _root):  # continued or initialized blob is incremented by attached blob segment and its root_
+    roots, root_, blob = _root
     roots -=1   # one root segment is terminated
     root_.append(seg)  # for terminated blobs only
 
-    (s, L2, I2, D2, Dy2, V2, Vy2), Py_, xb, xd = seg  # s is redundant, ders2_ is ignored
-    s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD, root, fork_ = blob  # fork_ per segment?
+    (s, L2, I2, D2, Dy2, V2, Vy2), Py_, xb, xd, root, fork_ = seg  # s is redundant, root and fork_ ignored
+    s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD = blob  # fork_ per segment?
 
     xD += xd  # for orient eval, to normalize blob before comp_P, += |Dx| for curved max_L?
     yD += len(Py_)  # only if max Py_?
@@ -227,7 +229,7 @@ def form_blob(root, seg):  # continued or initialized blob is incremented by att
     Vb += V2
     Vyb += Vy2
     blob = s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD  # separate S_par tuple?
-    return [roots, root_, blob]
+    return [roots, root_, blob]  # seg[4]
 
 
 def form_frame(root_, blob, frame):
@@ -250,7 +252,7 @@ def form_frame(root_, blob, frame):
 def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
-    frame = 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
+    frame = 0, 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
     global y
     y = 0  # vertical coordinate of current input line
     # initial input line may be set at 400, that area in test image seems to be the most diverse
