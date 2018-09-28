@@ -105,16 +105,13 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     p, d, dy, v, vy = ders2  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
-    if s == P[0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
+    if s == P[0][0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
         pri_s, I, D, Dy, V, Vy, ders2_ = P[0]  # tuple in a list container
     else:
         if y == rng * 2:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
             P_.append([P, x-1, []])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
-        elif x < X - 99:  # right error margin: >len(fork_P[6])?
-            #try:
-                P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
-            #except:
-             #   id(buff_)
+        elif x < X - 200:  # right error margin: >len(fork_P[6])?
+            P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
 
         I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, []  # new P initialization
 
@@ -156,22 +153,25 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             ini = 1
             if y > rng * 2 + 1:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_[0]) == 1:
-                    #try:
+                    try:
                         if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
                             _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
                             ini = 0  # no initialization
-                            return ini, fork_
-                    #except:
-                     #   break
+                    except:
+                        break
             if ini == 1:  # blob segment [_P, Py_, ave_x, Dx, root, _fork_] is initialized by not-included _P at its id:
                 ave_x = _x - len(_P[0][6]) // 2
                 _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]
+                # packed in fork?
 
-            if roots == 0:
+            if roots == 0:  # never happens: -=1 in forks only, but
                 if len(_fork_):  # blob ini per seg, above
                     _P[0], frame = form_blob(_P[0], frame)  # blob (all connected blob segments) += blob segment at _P[0]
                 else:
                     frame = form_frame(_P[0][4][1], _P[0][4][2], frame)  # (root_, blob, frame): blob, root_ packed in frame
+
+            if len(_fork_) == 0:  # test only, never happens beyond y==5
+                id(_fork_)
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, x, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to _P
@@ -225,8 +225,7 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
                 # if roots term: forks copy to lat_fork_ of first continued fork?
 
         _seg[4] = [_roots, _root_, _blob]
-        seg[5][index] = _seg  # return to fork: _segment, terminated root_, segment?
-
+        seg[5][index] = _seg  # return to fork
     return [seg, frame]  # top segment includes rep of partial blob
 
 
@@ -279,7 +278,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
 # pattern filters: eventually updated by higher-level feedback, initialized here as constants:
 
 rng = 2  # number of leftward and upward pixels compared to each input pixel
-ave = 127 * rng * 2  # average match: value pattern filter
+ave = 63 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 
 image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
