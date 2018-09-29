@@ -65,13 +65,13 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     # comparison between rng vertically consecutive pixels, forming ders2: 2D tuple of derivatives per pixel
 
     dP = [(0, 0, 0, 0, 0, 0, [])]  # lateral difference pattern = pri_s, I, D, Dy, V, Vy, ders2_
-    dP_ = deque()  # line y - 1+ rng2
-    dbuff_ = deque()  # line y- 2+ rng2: _Ps buffered by previous run of scan_P_
+    dP_ = deque()  # line y - 1+ rng*2
+    dbuff_ = deque()  # line y- 2+ rng*2: _Ps buffered by previous run of scan_P_
     new_ders2__ = deque()  # 2D: line of ders2_s buffered for next-line comp
 
     x = 0  # lateral coordinate of current pixel
     max_index = rng - 1  # max ders2_ index
-    min_coord = rng * 2 - 1  # min x and y for form_P input
+    min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 vars represent full rng comp before and after pixel p
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
     for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel is compared to rng higher pixels in ders2_, summing dy and my per higher pixel
@@ -85,7 +85,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
             if index < max_index:
                 ders2_[index] = (_p, d, dy, m, my)
 
-            elif x > min_coord and y > min_coord:  # or min y is increased by x_comp on line y=0?
+            elif x > min_coord and y > min_coord + 400:  # or min y is increased by x_comp on line y=0?
 
                 _v = _m - abs(d) - ave  # _m - abs(d): projected m cancelled by negative d: d/2, + projected rdn value of overlapping dP: d/2
                 vy = my + _my - abs(dy) - ave
@@ -108,7 +108,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     if s == P[0][0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
         pri_s, I, D, Dy, V, Vy, ders2_ = P[0]  # tuple in a list container
     else:
-        if y == rng * 2:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
+        if y == rng * 2 + 400:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
             P_.append([P, x-1, []])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
         elif x < X - 200:  # right error margin: >len(fork_P[6])?
             P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
@@ -151,20 +151,17 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             buff_.append([_P, _x, _fork_, roots])
         else:     # no x overlap between _P and next P: _P is included in unique blob segment:
             ini = 1
-            if y > rng * 2 + 1:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
+            if y > rng * 2 + 1 + 400:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_[0]) == 1:
-                    try:
-                        if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
-                            _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
-                            ini = 0  # no initialization
-                    except:
-                        break
+                    if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
+                        _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
+                        ini = 0  # no initialization
+
             if ini == 1:  # blob segment [_P, Py_, ave_x, Dx, root, _fork_] is initialized by not-included _P at its id:
                 ave_x = _x - len(_P[0][6]) // 2
-                _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]
-                # packed in fork?
+                _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]  # replacing fork_[len(fork_)] = _P[0]
 
-            if roots == 0:  # never happens: -=1 in forks only, but
+            if roots == 0:  # never happens? -=1 in forks only
                 if len(_fork_):  # blob ini per seg, above
                     _P[0], frame = form_blob(_P[0], frame)  # blob (all connected blob segments) += blob segment at _P[0]
                 else:
@@ -220,9 +217,9 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
                 _seg, frame = form_blob(_seg, frame)  # recursive higher-level segment -> blob inclusion and termination test
             else:
                 frame = form_frame(_seg[4][1], _seg[4][2], frame)  # all connected forks terminate, blob is packed into frame
-
-                # if all connected roots and forks term, first continued fork refers other continued forks via its roots:
-                # if roots term: forks copy to lat_fork_ of first continued fork?
+                # if all connected roots and forks term,
+                # including fork refs in root[.lateral_] of first fork, forwarded to top fork?
+                # ref to lateral_ in other forks, for their inclusion if term?
 
         _seg[4] = [_roots, _root_, _blob]
         seg[5][index] = _seg  # return to fork
@@ -251,12 +248,11 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = 0, 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
     global y
-    y = 0  # vertical coordinate of current input line
-    # initial input line may be set at 400, that area in test image seems to be the most diverse
+    y = 400  # initial input line, set at 400 as that area in test image seems to be the most diverse
 
     ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
     ders2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
-    pixel_ = image[0, :]  # first line of pixels
+    pixel_ = image[0, :]  # first line of pixels at y == 0
     ders_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for (p, d, m) in ders_:
@@ -264,7 +260,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
         ders2_.append(ders2)  # only one tuple per first-line ders2_
         ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
 
-    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
+    for y in range(401, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
         pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
         ders_ = lateral_comp(pixel_)  # lateral pixel comparison
