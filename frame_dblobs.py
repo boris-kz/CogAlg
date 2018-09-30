@@ -64,7 +64,7 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
 def vertical_comp(ders_, ders2__, _dP_, dframe):
     # comparison between rng vertically consecutive pixels, forming ders2: 2D tuple of derivatives per pixel
 
-    dP = [(0, 0, 0, 0, 0, 0, [])]  # lateral difference pattern = pri_s, I, D, Dy, V, Vy, ders2_
+    dP = [(0, 0, 0, 0, 0, 0, 0, [])]  # lateral difference pattern = pri_s, L, I, D, Dy, V, Vy, ders2_
     dP_ = deque()  # line y - 1+ rng*2
     dbuff_ = deque()  # line y- 2+ rng*2: _Ps buffered by previous run of scan_P_
     new_ders2__ = deque()  # 2D: line of ders2_s buffered for next-line comp
@@ -106,15 +106,16 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
     if s == P[0][0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
-        pri_s, I, D, Dy, V, Vy, ders2_ = P[0]  # tuple in a list container
+        pri_s, L, I, D, Dy, V, Vy, ders2_ = P[0]  # tuple in a list container
     else:
         if y == rng * 2 + 400:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             P_.append([P, x-1, []])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
         else:
             P_, buff_, _P_, frame = scan_P_(x - 1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
 
-        I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, []  # new P initialization
+        L, I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, 0, []  # new P initialization
 
+    L = len(ders2_)
     I += p  # summed input and derivatives are accumulated as P and alt_P parameters, continued or initialized:
     D += d  # lateral D
     Dy += dy  # vertical D
@@ -122,7 +123,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     Vy += vy  # vertical V
     ders2_.append(ders2)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
 
-    P = [(s, I, D, Dy, V, Vy, ders2_)]
+    P = [(s, L, I, D, Dy, V, Vy, ders2_)]
 
     if x == X-1:  # last incomplete P instead of error margin
         if y == rng * 2 + 400:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
@@ -137,18 +138,19 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
 
     buff_ = deque()  # new buffer for displaced _Ps, for scan_P_(next P)
     fork_ = []  # _Ps connected to input P, second [] is just a container with fixed id
-    ix = x - len(P[0][6])  # initial x coordinate of P
-    _ix = 0  # initial x coordinate of _P
+    L = P[0][1]  # P length
+    ix = x - L  # initial x coordinate of P
+    _ix = 0
 
     while _ix <= x:  # while horizontal overlap between P and _P, after that: P -> P_
         if _buff_:
             _P, _x, _fork_, roots = _buff_.popleft()  # load _P buffered in prior run of scan_P_, if any
         elif _P_:
             _P, _x, _fork_ = _P_.popleft()
-            roots = 0  # number of Ps connected to current _P[(pri_s, I, D, Dy, V, Vy, ders2_)]
+            roots = 0  # number of Ps connected to current _P[(pri_s, L, I, D, Dy, V, Vy, ders2_)]
         else:
             break
-        _ix = _x - len(_P[0][6])
+        _L = _P[0][1]; _ix = _x - _L; _ave_x = _x - _L // 2  # initial and average x coordinates of _P
 
         if P[0][0] == _P[0][0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval
             fork_.append(_P)  # P-connected _Ps, appended with blob and converted to Py_ after P_ scan
@@ -160,21 +162,20 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             ini = 1
             if y > rng * 2 + 1 + 400:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_[0]) == 1:
-                    try:
+                    #try:
                         if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
-                            _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
+                            _P[0] = form_seg(_P[0], _fork_[0][0], _ave_x)  # _P is added to blob segment at _fork_[0]
                             ini = 0  # no initialization
-                    except:
-                        break
+                    #except:
+                     #   break
             if ini == 1:  # blob segment [_P, Py_, ave_x, Dx, root, _fork_] is initialized by not-included _P at its id:
-                ave_x = _x - len(_P[0][6]) // 2
-                _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]  # replaces fork_[len(fork_)]
+                _P[0] = [_P[0], [_P[0]], _ave_x, 0, [roots, [], (0,0,0,0,0,0,0,0,0)], _fork_]  # replaces fork_[len(fork_)]
 
-            if roots == 0:  # only happens at the margin
+            if roots == 0:  # only happens at the margin, and initialized _Ps: always len(_fork_) == 0?
                 if len(_fork_):  # blob ini per seg, above
                     _P[0], frame = form_blob(_P[0], frame)  # blob (all connected blob segments) += blob segment at _P[0]
                 else:
-                    frame = form_frame(_P[0][4][1], _P[0][4][2], frame)  # (root_, blob, frame): blob, root_ packed in frame
+                    frame = form_frame(_P[0][4][1], _P[0][4][2], frame, _ave_x)  # (root_, blob, frame, x): blob, root_ packed in frame
 
             if len(_fork_) == 0:  # test only, never happens beyond y==5
                 id(_fork_)
@@ -185,21 +186,20 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
     return P_, buff_, _P_, frame  # _P_ and buff_ contain only _Ps with _x => next x
 
 
-def form_seg(P, seg, last_x):  # continued or initialized blob segment is incremented by attached _P
-    s, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
-    (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, _x, xD, root, fork_ = seg  # fork_ assigned at ini only, roots at form_blob?
+def form_seg(P, seg, x):  # continued or initialized blob segment is incremented by attached _P
+    s, L, I, D, Dy, V, Vy, ders2_ = P  # s is identical, ders2_ is a replacement
+    (s, Ls, Is, Ds, Dys, Vs, Vys, ignore), Py_, _x, xD, root, fork_ = seg  # fork_ assigned at ini only, roots at form_blob?
 
-    x = last_x - len(ders2_) // 2
     xd = x - _x  # conditional full comp(x) and comp(S): internal vars are secondary?
     xD += xd  # for segment normalization and orientation eval, | += |xd| for curved max_L norm, orient?
-    Ls += len(ders2_)  # ders2_ in P buffered in Py_
+    Ls += L
     Is += I
     Ds += D
     Dys += Dy
     Vs += V
     Vys += Vy
-    Py_.append((s, x, xd, I, D, Dy, V, Vy, ders2_))
-    seg = [(s, Ls, Is, Ds, Dys, Vs, Vys), Py_, _x, xD, root, fork_]
+    Py_.append((s, L, I, D, Dy, V, Vy, ders2_, x, xd))
+    seg = [(s, Ls, Is, Ds, Dys, Vs, Vys, ignore), Py_, x, xD, root, fork_]  # initial ders2_ is ignored
     return seg
 
 
@@ -210,8 +210,8 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
         _roots, _root_, _blob = _seg[0][4]
         #except:
          #   break
-        (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, xb, xd, root, fork_ = seg  # s is redundant, root and fork_ are ignored
-        s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD = _blob
+        (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, x, xd, root, fork_ = seg  # s, root, fork_ are ignored
+        s, Lb, Ib, Db, Dyb, Vb, Vyb, xD, yD = _blob  # incomplete blob doesn't have ave_x
         xD += xd
         yD += len(Py_)  # only if max Py_?
         Lb += Ls
@@ -220,7 +220,7 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
         Dyb += Dys
         Vb += Vs
         Vyb += Vys
-        _blob = s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD
+        _blob = s, Lb, Ib, Db, Dyb, Vb, Vyb, xD, yD
         _roots -= 1  # root segment is terminated
         _root_.append(seg)
 
@@ -228,7 +228,7 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
             if len(_seg[5]):  # _fork_
                 _seg, frame = form_blob(_seg, frame)  # recursive higher-level segment -> blob inclusion and termination test
             else:
-                frame = form_frame(_seg[0][4][1], _seg[0][4][2], frame)  # all connected forks terminate, blob is packed into frame
+                frame = form_frame(_seg[0][4][1], _seg[0][4][2], frame, x)  # all connected forks terminate, blob is packed into frame
                 # if all connected roots and forks term,
                 # including fork refs in root[.lateral_] of first fork, forwarded to top fork?
                 # ref to lateral_ in other forks, for their inclusion if term?
@@ -238,9 +238,9 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
     return [seg, frame]  # top segment includes rep of partial blob
 
 
-def form_frame(root_, blob, frame):
-    s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD = blob
-    xDf, yDf, Lf, If, Df, Dyf, Vf, Vyf, blob_ = frame  # to compute averages of dframe, redundant for same-scope alt_frames?
+def form_frame(root_, blob, frame, x):
+    s, Lb, Ib, Db, Dyb, Vb, Vyb, xD, yD = blob
+    Lf, If, Df, Dyf, Vf, Vyf, blob_, xDf, yDf  = frame  # to compute averages of dframe, redundant for same-scope alt_frames?
 
     xDf += xD  # for frame normalization, orient eval, += |xd| for curved max_L?
     yDf += yD
@@ -250,15 +250,15 @@ def form_frame(root_, blob, frame):
     Dyf += Dyb
     Vf += Vb
     Vyf += Vyb
-    blob_.append((xb, xD, y, yD, Lb, Ib, Db, Dyb, Vb, Vyb, root_))  # Dxb to normalize blob before comp_P
-    frame = xDf, yDf, Lf, If, Df, Dyf, Vf, Vyf, blob_
+    blob_.append(((Lb, Ib, Db, Dyb, Vb, Vyb, root_), x - xD//2, xD, y, yD))  # xD to normalize blob before comp_P
+    frame = Lf, If, Df, Dyf, Vf, Vyf, blob_, xDf, yDf
     return frame
 
 
 def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
-    frame = 0, 0, 0, 0, 0, 0, 0, 0, []  # xDf, yDf, Lf, If, Df, Dyf, Vf, Vyf, blob_
+    frame = 0, 0, 0, 0, 0, 0, [], 0, 0  # Lf, If, Df, Dyf, Vf, Vyf, blob_, xDf, yDf
     global y
     y = 400  # initial input line, set at 400 as that area in test image seems to be the most diverse
 
