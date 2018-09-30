@@ -85,7 +85,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
             if index < max_index:
                 ders2_[index] = (_p, d, dy, m, my)
 
-            elif x > min_coord and y > min_coord + 400:  # or min y is increased by x_comp on line y=0?
+            elif x > min_coord and y > min_coord + 400:
 
                 _v = _m - abs(d) - ave  # _m - abs(d): projected m cancelled by negative d: d/2, + projected rdn value of overlapping dP: d/2
                 vy = my + _my - abs(dy) - ave
@@ -108,10 +108,10 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     if s == P[0][0] or x == rng * 2:  # s == pri_s or initialized pri_s: P is continued, else terminated:
         pri_s, I, D, Dy, V, Vy, ders2_ = P[0]  # tuple in a list container
     else:
-        if y == rng * 2 + 400:  # first line of Ps -> P_, _P_ is empty until vertical_comp returns P_:
+        if y == rng * 2 + 400:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             P_.append([P, x-1, []])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
-        elif x < X - 200:  # right error margin: >len(fork_P[6])?
-            P_, buff_, _P_, frame = scan_P_(x-1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
+        else:
+            P_, buff_, _P_, frame = scan_P_(x - 1, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
 
         I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, []  # new P initialization
 
@@ -123,6 +123,13 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
     ders2_.append(ders2)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
 
     P = [(s, I, D, Dy, V, Vy, ders2_)]
+
+    if x == X-1:  # last incomplete P instead of error margin
+        if y == rng * 2 + 400:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
+            P_.append([P, x, []])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
+        else:
+            P_, buff_, _P_, frame = scan_P_(x, P, P_, buff_, _P_, frame)  # scans higher-line Ps for contiguity
+
     return P, P_, buff_, _P_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
 
 
@@ -153,15 +160,17 @@ def scan_P_(x, P, P_, _buff_, _P_, frame):  # P scans shared-x-coordinate _Ps in
             ini = 1
             if y > rng * 2 + 1 + 400:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_[0]) == 1:
-                    if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
-                        _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
-                        ini = 0  # no initialization
-
+                    try:
+                        if _fork_[0][0][4][0] == 1:  # _fork roots, see if ini = 1, second [] is a fixed-id _P container
+                            _P[0] = form_seg(_P[0], _fork_[0][0], _x)  # _P is added to blob segment at _fork_[0]
+                            ini = 0  # no initialization
+                    except:
+                        break
             if ini == 1:  # blob segment [_P, Py_, ave_x, Dx, root, _fork_] is initialized by not-included _P at its id:
                 ave_x = _x - len(_P[0][6]) // 2
-                _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]  # replacing fork_[len(fork_)] = _P[0]
+                _P[0] = [_P[0], [_P[0]], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,ave_x,0,0)], _fork_]  # replaces fork_[len(fork_)]
 
-            if roots == 0:  # never happens? -=1 in forks only
+            if roots == 0:  # only happens at the margin
                 if len(_fork_):  # blob ini per seg, above
                     _P[0], frame = form_blob(_P[0], frame)  # blob (all connected blob segments) += blob segment at _P[0]
                 else:
@@ -197,7 +206,10 @@ def form_seg(P, seg, last_x):  # continued or initialized blob segment is increm
 def form_blob(seg, frame):  # continued or initialized blob is incremented by attached blob segment and its root_
 
     for index, _seg in enumerate(seg[5]):  # _segment per fork = _P, Py_, ave_x, Dx, root, _fork_
-        _roots, _root_, _blob = _seg[4]
+        #try:
+        _roots, _root_, _blob = _seg[0][4]
+        #except:
+         #   break
         (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, xb, xd, root, fork_ = seg  # s is redundant, root and fork_ are ignored
         s, Lb, Ib, Db, Dyb, Vb, Vyb, xb, xD, yD = _blob
         xD += xd
@@ -216,12 +228,12 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
             if len(_seg[5]):  # _fork_
                 _seg, frame = form_blob(_seg, frame)  # recursive higher-level segment -> blob inclusion and termination test
             else:
-                frame = form_frame(_seg[4][1], _seg[4][2], frame)  # all connected forks terminate, blob is packed into frame
+                frame = form_frame(_seg[0][4][1], _seg[0][4][2], frame)  # all connected forks terminate, blob is packed into frame
                 # if all connected roots and forks term,
                 # including fork refs in root[.lateral_] of first fork, forwarded to top fork?
                 # ref to lateral_ in other forks, for their inclusion if term?
 
-        _seg[4] = [_roots, _root_, _blob]
+        _seg[0][4] = [_roots, _root_, _blob]
         seg[5][index] = _seg  # return to fork
     return [seg, frame]  # top segment includes rep of partial blob
 
@@ -246,7 +258,7 @@ def form_frame(root_, blob, frame):
 def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
-    frame = 0, 0, 0, 0, 0, 0, 0, 0, []  # Dxf, Lf, If, Df, Dyf, Vf, Vyf, net_
+    frame = 0, 0, 0, 0, 0, 0, 0, 0, []  # xDf, yDf, Lf, If, Df, Dyf, Vf, Vyf, blob_
     global y
     y = 400  # initial input line, set at 400 as that area in test image seems to be the most diverse
 

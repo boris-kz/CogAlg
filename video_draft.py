@@ -9,8 +9,8 @@ from collections import deque
     immediate pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
     then resulting 3D tuples (p, dx, mx, dy, my, dt, mt) per pixel are combined into 
     
-    incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD persistents,  not oriented for inclusion? 
-    evaluated for orientation, re-composition, incremental-dimensionality comparison, and its recursion? 
+    incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD persists, not oriented for inclusion? 
+    evaluated for orientation, re-composition, incremental-dimensionality comparison, and recursion? 
     
     recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 
     comp power = depth of content: normalized by hLe pwr miss if hLe diff * hLe match * lLe total
