@@ -115,7 +115,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
 
         L, I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, 0, []  # new P initialization
 
-    L = len(ders2_)
+    L += 1
     I += p  # summed input and derivatives are accumulated as P and alt_P parameters, continued or initialized:
     D += d  # lateral D
     Dy += dy  # vertical D
@@ -125,7 +125,7 @@ def form_P(ders2, x, P, P_, buff_, _P_, frame):  # initializes, accumulates, and
 
     P = [(s, L, I, D, Dy, V, Vy, ders2_)]
 
-    if x == X-1:  # last incomplete P instead of error margin
+    if x == X-1:  # last incomplete P buffering or scan_P_, instead of error margin
         if y == rng * 2 + 400:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             P_.append([P, x, []])  # empty _fork_ in the first line of _Ps, x-1: delayed P displacement
         else:
