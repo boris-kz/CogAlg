@@ -23,3 +23,5 @@ Kapil Kashyap: $ 2000 for stimulation and effort, help with Python and level_1_2
 2018: Todor Anaudov, $1000 mostly for effort and stimulation, January-February
 
 Andrei Demchenko, $1800 for conventional refactoring and interface improvement in line_POC_introductory.py, few improvements in the code, April - May.
+
+Todor Arnaudov, $1300 for help in debugging frame_dblobs.py, October.
