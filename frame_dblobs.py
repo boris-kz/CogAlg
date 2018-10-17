@@ -150,18 +150,18 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate _Ps in
             # roots[0] = 0: number of Ps connected to current _P(pri_s, L, I, D, Dy, V, Vy, ders2_)
         else:
             break  # higher line ends, all hPs converted to seg
-        _L = _P[1]; ini_x = _x - _L; ave_x = _x - _L // 2  # initial and average x coordinates of hP
+        L = P[1]; _L = _P[1]; ini_x = _x - _L; ave_x = _x - _L // 2  # initial and average x coordinates of hP
 
-        if x <= _x and x-P[1] >= _x-_L:
-            olp_fork_ = id(fork_)  # must be 1|0, track if incremented for no good reason
-        if _x <= x and _x-_L >= x-P[1]:
-            olp_roots = id(roots)  # must be 1|0, track if incremented for no good reason
+        if x <= _x and x-L >= ini_x:  # P is fully overlapped by _P
+            olp_fork_ = id(fork_)   # must be 1|0, not incremented before or after this run of while ini_x <= x: incorrect
+        if _x <= x and ini_x >= x-L:  # _P is fully overlapped by P
+            olp_roots = id(roots)   # must be 1|0, not incremented before or after this run of while ini_x <= x: incorrect
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
             roots[0] += 1; hP[3] = roots  # nothing else is modified
             fork_.append(hP)  # P-connected hPs, appended with blob and converted to Py_ after P_ scan
 
-        if _x > x - P[1]:  # x overlap between hP and next P: hP is buffered for next scan_P_, else _P is included in unique blob segment
+        if _x > x - L:  # x overlap between hP and next P: hP is buffered for next scan_P_, else _P is included in unique blob segment
             buff_.append(hP)
         else:
             if roots[0] == 1: # test after full scan over P_, only happens at y==5, should not matter: always ini hP roots == 0?
