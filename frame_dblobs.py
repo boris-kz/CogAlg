@@ -107,30 +107,30 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     return new_ders2__, dP_, dframe  # extended in scan_P_; net_s are packed into frames
 
 
-def form_P(ders2, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
+def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
 
-    p, d, dy, v, vy = ders2  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
+    p, d, dy, v, vy = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized: P is continued, else terminated:
-        pri_s, L, I, D, Dy, V, Vy, ders2_ = P
+        pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             P_.append([P, x-1, [], [0]])  # first line of hPs: container to maintain fork refs
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
             # x-1: last P displacement
-        L, I, D, Dy, V, Vy, ders2_ = 0, 0, 0, 0, 0, 0, []  # new P initialization
+        L, I, D, Dy, V, Vy, ders_ = 0, 0, 0, 0, 0, 0, []  # new P initialization
 
-    L += 1  # length of a pattern, continued or initialized input and derivatives are accumulated :
+    L += 1  # length of a pattern, continued or initialized input and derivatives are accumulated:
     I += p  # summed input
     D += d  # lateral D
     Dy += dy  # vertical D
     V += v  # lateral V
     Vy += vy  # vertical V
-    ders2_.append(ders2)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
+    ders_.append(ders)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
 
-    P = s, L, I, D, Dy, V, Vy, ders2_
+    P = s, L, I, D, Dy, V, Vy, ders_
     return P, P_, buff_, hP_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
 
 
@@ -140,28 +140,32 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate _Ps in
     fork_ = []  # hPs connected to input P
     ini_x = 0  # only to start while loop
 
-    while ini_x <= x:  # while horizontal overlap between P and hP, after that: P -> P_
+    while ini_x <= x:  # while horizontal overlap between P and hP, then P -> P_
         if _buff_:
             hP = _buff_.popleft()  # load hP buffered in prior run of scan_P_, if any
             _P, _x, _fork_, roots = hP
         elif hP_:
             hP = hP_.popleft()
             _P, _x, _fork_, roots = hP  # higher-line P container, ref by P_ forks
-            # roots[0] = 0: number of Ps connected to current _P(pri_s, L, I, D, Dy, V, Vy, ders2_)
+            # roots[0] = 0: number of Ps connected to current _P(pri_s, L, I, D, Dy, V, Vy, ders_)
         else:
             break  # higher line ends, all hPs converted to seg
         L = P[1]; _L = _P[1]; ini_x = _x - _L; ave_x = _x - _L // 2  # initial and average x coordinates of hP
 
         if x <= _x and x-L >= ini_x:  # P is fully overlapped by _P
-            olp_fork_ = id(fork_)   # must be 1|0, not incremented before or after this run of while ini_x <= x: incorrect
+            if fork_:  # wrong: fork_ must be 0, can't be incremented before this run of while ini_x <= x:
+                olp_fork_ = id(fork_)  # breakpoint, test prior run of while
         if _x <= x and ini_x >= x-L:  # _P is fully overlapped by P
-            olp_roots = id(roots)   # must be 1|0, not incremented before or after this run of while ini_x <= x: incorrect
+            if roots[0]:  # wrong: roots must be 0, can't be incremented before this run of while ini_x <= x:
+                olp_roots = id(roots)  # breakpoint, test prior run of scan_P_
+            if _buff_:  # wrong: _buff_ must be []
+                olp_roots = id(roots)  # breakpoint, test prior run of scan_P_
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
             roots[0] += 1; hP[3] = roots  # nothing else is modified
             fork_.append(hP)  # P-connected hPs, appended with blob and converted to Py_ after P_ scan
 
-        if _x > x - L:  # x overlap between hP and next P: hP is buffered for next scan_P_, else _P is included in unique blob segment
+        if _x > x-L:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in unique blob segment
             buff_.append(hP)
         else:
             if roots[0] == 1: # test after full scan over P_, only happens at y==5, should not matter: always ini hP roots == 0?
@@ -194,7 +198,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate _Ps in
 
 
 def form_seg(P, seg, x):  # continued or initialized blob segment is incremented by attached _P
-    s, L, I, D, Dy, V, Vy, ders2_ = P  # s == s_seg
+    s, L, I, D, Dy, V, Vy, ders_ = P  # s == s_seg
     (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, _x, xD, root, fork_ = seg  # fork_ assigned at ini only, roots at form_blob?
     Ls += L
     Is += I
@@ -204,7 +208,7 @@ def form_seg(P, seg, x):  # continued or initialized blob segment is incremented
     Vys += Vy
     xd = x - _x
     xD += xd  # for segment normalization and orientation eval, | += |xd| for curved max_L norm, orient?
-    Py_.append(((s, L, I, D, Dy, V, Vy, ders2_), x, xd))
+    Py_.append(((s, L, I, D, Dy, V, Vy, ders_), x, xd))
     seg = [(s, Ls, Is, Ds, Dys, Vs, Vys), Py_, x, xD, root, fork_]
     return seg
 
