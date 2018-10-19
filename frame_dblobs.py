@@ -74,7 +74,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel compared to rng _p s in ders2_, summing dy and my per higher pixel
+    for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel compared to rng _pixels in ders2_, summing dy and my per higher pixel
         x += 1
         index = 0
         for (_p, _d, dy, _m, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
@@ -119,7 +119,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
             P_.append([P, x-1, [], [0]])  # first line of hPs: container to maintain fork refs
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
-            # x-1: last P displacement
+            # x-1: ends with prior p
         L, I, D, Dy, V, Vy, ders_ = 0, 0, 0, 0, 0, 0, []  # new P initialization
 
     L += 1  # length of a pattern, continued or initialized input and derivatives are accumulated:
@@ -143,33 +143,34 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate _Ps in
     while ini_x <= x:  # while horizontal overlap between P and hP, then P -> P_
         if _buff_:
             hP = _buff_.popleft()  # load hP buffered in prior run of scan_P_, if any
-            _P, _x, _fork_, roots = hP
+            _P, _x, _fork_, roots = hP  # stable container for ref by lower-line forks
         elif hP_:
             hP = hP_.popleft()
-            _P, _x, _fork_, roots = hP  # higher-line P container, ref by P_ forks
-            # roots[0] = 0: number of Ps connected to current _P(pri_s, L, I, D, Dy, V, Vy, ders_)
+            _P, _x, _fork_, roots = hP  # roots[0] = 0: number of Ps connected to _P(pri_s, L, I, D, Dy, V, Vy, ders_)
         else:
             break  # higher line ends, all hPs converted to seg
-        L = P[1]; _L = _P[1]; ini_x = _x - _L; ave_x = _x - _L // 2  # initial and average x coordinates of hP
+        L = P[1]; inix = x - L-1  # - 1 because x is in L
+        _L = _P[1]; ini_x = _x -_L-1; ave_x = _x - (_L-1) // 2  # initial and average x coordinates of hP
 
-        if x <= _x and x-L >= ini_x:  # P is fully overlapped by _P
+        if inix >= ini_x and x <= _x:  # P is fully overlapped by _P
             if fork_:  # wrong: fork_ must be 0, can't be incremented before this run of while ini_x <= x:
-                olp_fork_ = id(fork_)  # breakpoint, test prior run of while
-        if _x <= x and ini_x >= x-L:  # _P is fully overlapped by P
-            if roots[0]:  # wrong: roots must be 0, can't be incremented before this run of while ini_x <= x:
-                olp_roots = id(roots)  # breakpoint, test prior run of scan_P_
-            if _buff_:  # wrong: _buff_ must be []
-                olp_roots = id(roots)  # breakpoint, test prior run of scan_P_
+                olp_fork_x = ini_x-1  # breakpoint to test prior run of while
+
+        if ini_x >= inix and _x <= x:  # _P is fully overlapped by P
+            if roots[0]:  # wrong: roots must be 0, can't be incremented before this run of scan_P_
+                olp_roots_x = inix-1  # breakpoint to test prior run of scan_P_
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
             roots[0] += 1; hP[3] = roots  # nothing else is modified
             fork_.append(hP)  # P-connected hPs, appended with blob and converted to Py_ after P_ scan
 
-        if _x > x-L:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in unique blob segment
+        if _x > inix:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in unique blob segment
             buff_.append(hP)
         else:
-            if roots[0] == 1: # test after full scan over P_, only happens at y==5, should not matter: always ini hP roots == 0?
+            if roots[0] == 1: # after full scan over P_: must happen together, but don't, more len(fork_) == 1 than roots[0] == 1
                 id(roots)
+            if len(fork_) == 1:
+                id(fork_)
             ini = 1
             if y > rng * 2 + 1 + ini_y:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_) == 1:
@@ -271,8 +272,8 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
     y = ini_y  # initial input line, set at 400 as that area in test image seems to be the most diverse
 
     ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
-    ders2__ = []  # vertical buffer + horizontal line: 2D array of 2D tuples, deque for speed?
-    pixel_ = image[0, :]  # first line of pixels at y == 0
+    ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
+    pixel_ = image[ini_y, :]  # first line of pixels at y == 0
     ders_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for (p, d, m) in ders_:
@@ -293,7 +294,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
 
 # pattern filters: eventually updated by higher-level feedback, initialized here as constants:
 
-rng = 2  # number of leftward and upward pixels compared to each input pixel
+rng = 2  # number of leftward or upward pixels compared to each input pixel
 ave = 63 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 ini_y = 400
