@@ -134,64 +134,61 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     return P, P_, buff_, hP_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
 
 
-def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate _Ps in _P_, forms overlaps
+def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in hP_, forms overlaps
 
     buff_ = deque()  # new buffer for displaced hPs, for scan_P_(next P)
     fork_ = []  # hPs connected to input P
-    ini_x = 0  # only to start while loop
+    ini_x = 0  # to always start while, next ini_x = _x + 1 at the exit
 
-    while ini_x <= x:  # while horizontal overlap between P and hP, then P -> P_
+    while ini_x <= x:  # while x values overlap between P and hP, then P -> P_
         if _buff_:
             hP = _buff_.popleft()  # load hP buffered in prior run of scan_P_, if any
             _P, _x, _fork_, roots = hP  # stable container for ref by lower-line forks
         elif hP_:
             hP = hP_.popleft()
-            _P, _x, _fork_, roots = hP  # roots[0] = 0: number of Ps connected to _P(pri_s, L, I, D, Dy, V, Vy, ders_)
+            _P, _x, _fork_, roots = hP  # roots[0] = 0: number of Ps connected to _P, each: (pri_s, L, I, D, Dy, V, Vy, ders_)
         else:
             break  # higher line ends, all hPs converted to seg
-        L = P[1]; inix = x - L-1  # - 1 because x is in L
-        _L = _P[1]; ini_x = _x -_L-1; ave_x = _x - (_L-1) // 2  # initial and average x coordinates of hP
+
+        eL = P[1]-1; inix = x - eL  # extra-x L = L-1 because x is included in L
+        _eL=_P[1]-1; ini_x = _x -_eL  # initial _x,
 
         if inix >= ini_x and x <= _x:  # P is fully overlapped by _P
-            if fork_:  # wrong: fork_ must be 0, can't be incremented before this run of while ini_x <= x:
-                olp_fork_x = ini_x-1  # breakpoint to test prior run of while
-
+            if fork_:  # wrong: fork_ must be 0, test prior run of while at x == ini_x-1
+                id(x)
         if ini_x >= inix and _x <= x:  # _P is fully overlapped by P
-            if roots[0]:  # wrong: roots must be 0, can't be incremented before this run of scan_P_
-                olp_roots_x = inix-1  # breakpoint to test prior run of scan_P_
+            if roots[0]:  # wrong: roots must be 0, test prior run of scan_P_ at x == inix-1
+                id(x)  # if x == 22:  # first pre- olp_roots x; id(x)
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
-            roots[0] += 1; hP[3] = roots  # nothing else is modified
+            roots[0] += 1  # hP[3] = roots, nothing else is modified
             fork_.append(hP)  # P-connected hPs, appended with blob and converted to Py_ after P_ scan
 
-        if _x > inix:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in unique blob segment
+        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in unique blob segment
             buff_.append(hP)
         else:
-            if roots[0] == 1: # after full scan over P_: must happen together, but don't, more len(fork_) == 1 than roots[0] == 1
-                id(roots)
-            if len(fork_) == 1:
-                id(fork_)
+            ave_x = _x - (_P[1]-1) // 2  # average x coordinate of _P
             ini = 1
             if y > rng * 2 + 1 + ini_y:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_) == 1:
-                    if len(_fork_[0]) == 6:  # len seg == 6, len hP == 4
-                        if _fork_[0][4][0][0] == 1:  # _fork roots, see if ini = 1, never happens
-                            seg = form_seg(_P, _fork_[0], ave_x)  # _P is added to blob segment at _fork_[0]
-                            del(hP[:]); hP += seg
-                            ini = 0
-                    else:
-                        break
+                    if _fork_[0][4][0][0] == 1:  # _fork roots, see if ini = 1, never happens
+                        seg = form_seg(_P, _fork_[0], ave_x)  # _P is added to blob segment at _fork_[0]
+                        del(hP[:]); hP += seg
+                        ini = 0
             if ini == 1:
                 del(hP[:])  # blob segment [Vars, Py_, ave_x, Dx, root, _fork_] initialized at not-included hP, replacing its fork_ refs
                 hP += (_P[0:7]), [(_P, ave_x, 0)], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,0,0)], _fork_
 
-            if roots[0] == 0:  # never happens, except for margin error cases
+            if roots[0] == 0:  # never happens
                 if len(_fork_):  # blob ini per seg, above
-                    if len(hP) == 6:
-                        hP, frame = form_blob(hP, frame)  # blob (all connected blob segments) += blob segment at hP
+                    hP, frame = form_blob(hP, frame)  # blob (all connected blob segments) += blob segment at hP
                 else:
                     frame = form_frame(hP[4][1], hP[4][2], frame, ave_x)  # (root_, blob, frame, x): blob, root_ packed in frame
 
+        ini_x = _x + 1  # next ini_x, else while will evaluate next hP regardless
+
+    if len(fork_) == 0:  # after full scan of hP_
+        id(fork_)
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, x, fork_, [0]])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to hP
 
@@ -234,8 +231,7 @@ def form_blob(seg, frame):  # continued or initialized blob is incremented by at
 
         if _roots[0] == 0:  # recursive higher-level segment -> blob inclusion and termination test
             if len(_seg[5]):  # _fork_
-                if len(_seg) == 6:
-                    _seg, frame = form_blob(_seg, frame)
+                _seg, frame = form_blob(_seg, frame)
             else:
                 frame = form_frame(_seg[4][1], _seg[4][2], frame, x)  # all connected roots and forks terminate, blob packed in frame
 
