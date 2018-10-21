@@ -38,31 +38,31 @@ from collections import deque
 
 def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
 
-    ders_ = []  # tuples of complete derivatives: summation range = rng
-    rng_ders_ = deque(maxlen=rng)  # array of tuples within rng of current pixel: summation range < rng
-    max_index = rng - 1  # max index of rng_ders_
+    ders1_ = []  # tuples of complete 1D derivatives: summation range = rng
+    rng_ders1_ = deque(maxlen=rng)  # array of ders1 within rng from input pixel: summation range < rng
+    max_index = rng - 1  # max index of rng_ders1_
     pri_d, pri_m = 0, 0  # fuzzy derivatives in prior completed tuple
 
     for p in pixel_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
-        for index, (pri_p, d, m) in enumerate(rng_ders_):
+        for index, (pri_p, d, m) in enumerate(rng_ders1_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
             m += min(p, pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
 
             if index < max_index:
-                rng_ders_[index] = (pri_p, d, m)
+                rng_ders1_[index] = (pri_p, d, m)
             else:
-                ders_.append((pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
+                ders1_.append((pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
                 pri_d = d; pri_m = m  # to complement derivatives of next rng_t_: derived from next rng of pixels
 
-        rng_ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+        rng_ders1_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
 
-    ders_ += reversed(rng_ders_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
-    return ders_
+    ders1_ += reversed(rng_ders1_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
+    return ders1_
 
 
-def vertical_comp(ders_, ders2__, _dP_, dframe):
-    # comparison between rng vertically consecutive pixels, forming ders2: 2D tuple of derivatives per pixel
+def vertical_comp(ders1_, ders2__, _dP_, dframe):
+    # comparison between rng vertically consecutive pixels, forming ders2: tuple of 2D derivatives per pixel
 
     dP = 0, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, L, I, D, Dy, V, Vy, ders2_
     dP_ = deque()  # line y - 1+ rng*2
@@ -74,7 +74,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (ders2_, _dy, _my) in zip(ders_, ders2__):  # pixel compared to rng _pixels in ders2_, summing dy and my per higher pixel
+    for (p, d, m), (ders2_, _dy, _my) in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my per _pixel
         x += 1
         index = 0
         for (_p, _d, dy, _m, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
@@ -100,7 +100,7 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
-            dP_.append([dP, x, [], [0]])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
+            dP_.append([dP, x, [], 0])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
         else:
             dP_, dbuff_, _dP_, dframe = scan_P_(x, dP, dP_, dbuff_, _dP_, dframe)  # scans higher-line Ps for contiguity
 
@@ -109,14 +109,14 @@ def vertical_comp(ders_, ders2__, _dP_, dframe):
 
 def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and terminates 1D pattern: dP | vP | dyP | vyP
 
-    p, d, dy, v, vy = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical derivatives:
+    p, d, dy, v, vy = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized: P is continued, else terminated:
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
-            P_.append([P, x-1, [], [0]])  # first line of hPs: container to maintain fork refs
+            P_.append([P, x-1, [], 0])  # first line of hPs: container to maintain fork refs
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
             # x-1: ends with prior p
@@ -138,7 +138,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
 
     buff_ = deque()  # new buffer for displaced hPs, for scan_P_(next P)
     fork_ = []  # hPs connected to input P
-    ini_x = 0  # to always start while, next ini_x = _x + 1 at the exit
+    ini_x = 0  # always starts while, next ini_x = _x + 1
 
     while ini_x <= x:  # while x values overlap between P and hP, then P -> P_
         if _buff_:
@@ -146,133 +146,117 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
             _P, _x, _fork_, roots = hP  # stable container for ref by lower-line forks
         elif hP_:
             hP = hP_.popleft()
-            _P, _x, _fork_, roots = hP  # roots[0] = 0: number of Ps connected to _P, each: (pri_s, L, I, D, Dy, V, Vy, ders_)
+            _P, _x, _fork_, roots = hP  # roots = 0: number of Ps connected to _P, each: (pri_s, L, I, D, Dy, V, Vy, ders_)
         else:
             break  # higher line ends, all hPs converted to seg
 
-        eL = P[1]-1; inix = x - eL  # extra-x L = L-1 because x is included in L
-        _eL=_P[1]-1; ini_x = _x -_eL  # initial _x,
-
-        if inix >= ini_x and x <= _x:  # P is fully overlapped by _P
-            if fork_:  # wrong: fork_ must be 0, test prior run of while at x == ini_x-1
-                id(x)
-        if ini_x >= inix and _x <= x:  # _P is fully overlapped by P
-            if roots[0]:  # wrong: roots must be 0, test prior run of scan_P_ at x == inix-1
-                id(x)  # if x == 22:  # first pre- olp_roots x; id(x)
-
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
-            roots[0] += 1  # hP[3] = roots, nothing else is modified
-            fork_.append(hP)  # P-connected hPs, appended with blob and converted to Py_ after P_ scan
+            roots += 1; hP[3] = roots  # nothing else is modified
+            fork_.append(hP)  # P-connected hPs
 
-        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in unique blob segment
+        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in blob segment
             buff_.append(hP)
         else:
-            ave_x = _x - (_P[1]-1) // 2  # average x coordinate of _P
+            ave_x = _x - (_P[1]-1) // 2  # average x coordinate of _P, _P[1]-1: extra-x L = L-1 (1x in L)
             ini = 1
             if y > rng * 2 + 1 + ini_y:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
                 if len(_fork_) == 1:
-                    if _fork_[0][4][0][0] == 1:  # _fork roots, see if ini = 1, never happens
+                    if _fork_[0][4][2] == 1:  # _fork roots, see if ini = 1, never happens
                         seg = form_seg(_P, _fork_[0], ave_x)  # _P is added to blob segment at _fork_[0]
                         del(hP[:]); hP += seg
                         ini = 0
             if ini == 1:
-                del(hP[:])  # blob segment [Vars, Py_, ave_x, Dx, root, _fork_] initialized at not-included hP, replacing its fork_ refs
-                hP += (_P[0:7]), [(_P, ave_x, 0)], ave_x, 0, [roots, [], (0,0,0,0,0,0,0,0,0)], _fork_
+                del(hP[:])  # segment [ Vars, Py_, ave_x, Dx, blob, _fork_] is initialized at hP, replacing its fork_ refs
+                hP += [_P[0],_P[1],_P[2],_P[3],_P[4],_P[5],_P[6]], [(_P, ave_x, 0)], ave_x, 0, [[_P[0],0,0,0,0,0,0,0,0], [], roots], _fork_
 
-            if roots[0] == 0:  # never happens
-                if len(_fork_):  # blob ini per seg, above
-                    hP, frame = form_blob(hP, frame)  # blob (all connected blob segments) += blob segment at hP
+            if roots == 0:
+                if _fork_:
+                    seg, frame = form_blob(hP, frame)  # blob (connected blob segments) += segment at hP, initialized above
+                    del (hP[:]); hP += seg  # bottom segment includes incomplete blob at seg[4]
                 else:
-                    frame = form_frame(hP[4][1], hP[4][2], frame, ave_x)  # (root_, blob, frame, x): blob, root_ packed in frame
+                    frame = form_frame(hP[4][0], hP[4][1], frame, ave_x)  # blob Vars, root_, frame, x are packed in frame
 
-        ini_x = _x + 1  # next ini_x, else while will evaluate next hP regardless
+        ini_x = _x + 1  # ini_x of next hP
 
-    if len(fork_) == 0:  # after full scan of hP_
-        id(fork_)
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append([P, x, fork_, [0]])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to hP
+    P_.append([P, x, fork_, 0])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to hP
 
     return P_, buff_, hP_, frame  # hP_ and buff_ contain only remaining _Ps, with _x => next x
 
 
 def form_seg(P, seg, x):  # continued or initialized blob segment is incremented by attached _P
     s, L, I, D, Dy, V, Vy, ders_ = P  # s == s_seg
-    (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, _x, xD, root, fork_ = seg  # fork_ assigned at ini only, roots at form_blob?
-    Ls += L
-    Is += I
-    Ds += D
-    Dys += Dy
-    Vs += V
-    Vys += Vy
+    Vars, Py_, _x, xD, blob, fork_ = seg  # Vars: s, L, I, D, Dy, V, Vy; fork_ assigned at ini, blob at form_blob
+    Vars[1] += L
+    Vars[2] += I
+    Vars[3] += D
+    Vars[4] += Dy
+    Vars[5] += V
+    Vars[6] += Vy
     xd = x - _x
     xD += xd  # for segment normalization and orientation eval, | += |xd| for curved max_L norm, orient?
-    Py_.append(((s, L, I, D, Dy, V, Vy, ders_), x, xd))
-    seg = [(s, Ls, Is, Ds, Dys, Vs, Vys), Py_, x, xD, root, fork_]
-    return seg
+    Py_.append(((L, I, D, Dy, V, Vy, ders_), x, xd))
+    return [Vars, Py_, x, xD, blob, fork_]
 
 
 def form_blob(seg, frame):  # continued or initialized blob is incremented by attached blob segment
-    (s, Ls, Is, Ds, Dys, Vs, Vys), Py_, x, xd, root, fork_ = seg  # s, root are ignored
-    for index, _seg in enumerate(fork_):  # _segment per fork = _P, Py_, ave_x, Dx, root, _fork_
+    [s, L, I, D, Dy, V, Vy], Py_, x, xD, blob, fork_ = seg  # s is ignored
 
-        _roots, _root_, _blob = _seg[4]  # if len(seg[0]) == 6, or all displaced forks, if any?
-        s, Lb, Ib, Db, Dyb, Vb, Vyb, xD, yD = _blob  # incomplete blob doesn't have ave_x
-        Lb += Ls
-        Ib += Is
-        Db += Ds
-        Dyb += Dys
-        Vb += Vs
-        Vyb += Vys
-        xD += xd
-        yD += len(Py_)  # only if max Py_?
-        _blob = s, Lb, Ib, Db, Dyb, Vb, Vyb, xD, yD
-        _roots[0] -= 1  # root segment is terminated and appended:
+    for index, _seg in enumerate(fork_):  # _segment per fork = _P, Py_, ave_x, Dx, root, _fork_
+        Vars, _root_, _roots = _seg[4]  # blob, no ave_x till blob termination
+        Vars[1] += L
+        Vars[2] += I
+        Vars[3] += D
+        Vars[4] += Dy
+        Vars[5] += V
+        Vars[6] += Vy
+        Vars[7] += xD
+        Vars[8] += len(Py_)  # yD, only if max Py_: if y - len(Py_) +1 < min_y?
+        _roots -= 1  # root segment is terminated and appended to _root_:
         _root_.append(seg)
 
-        if _roots[0] == 0:  # recursive higher-level segment -> blob inclusion and termination test
-            if len(_seg[5]):  # _fork_
+        if _roots == 0:  # recursive higher-level segment -> blob inclusion and termination test
+            if _seg[5]:  # len(_seg[5]) > 0: _fork_
                 _seg, frame = form_blob(_seg, frame)
             else:
-                frame = form_frame(_seg[4][1], _seg[4][2], frame, x)  # all connected roots and forks terminate, blob packed in frame
+                frame = form_frame(_seg[4][0], _seg[4][1], frame, x)  # all connected roots and forks terminate, blob packed in frame
 
                 # also roots and forks of co-forks per seg: right_count and left_1st (for transfer at roots+forks term)
                 # right: cont roots and len(_fork_), each summed at current subb term, for blob term eval?
                 # subb inclusion is unique, in leftmost continued fork?
 
-        _seg[4] = [_roots, _root_, _blob]
-        seg[5][index] = _seg  # or updated reference?
-    return [seg, frame]  # top segment includes rep of partial blob
+        _seg[4] = [Vars, _root_, _roots]
+        seg[5][index] = _seg  # or updated by reference?
+    return seg, frame  # bottom segment includes incomplete blob at seg[4]
 
 
-def form_frame(root_, blob, frame, x):
-    s, Lb, Ib, Db, Dyb, Vb, Vyb, xD, yD = blob
-    (Lf, If, Df, Dyf, Vf, Vyf, xDf, yDf), blob_ = frame  # to compute averages of dframe, redundant for same-scope alt_frames?
-    Lf += Lb
-    If += Ib
-    Df += Db
-    Dyf += Dyb
-    Vf += Vb
-    Vyf += Vyb
-    xDf += xD  # for frame normalization, orient eval, += |xd| for curved max_L?
-    yDf += yD
-    blob_.append([(Lb, Ib, Db, Dyb, Vb, Vyb, x - xD//2, xD, y, yD), root_])  # xD to normalize blob before comp_P
-    frame = (Lf, If, Df, Dyf, Vf, Vyf, xDf, yDf), blob_
+def form_frame(blob, root_, frame, x):
+    s, L, I, D, Dy, V, Vy, xD, yD = blob
+    frame[0][0] += L  # frame [Vars, blob_]; Vars to compute averages, redundant for same-scope alt_frames
+    frame[0][1] += I
+    frame[0][2] += D
+    frame[0][3] += Dy
+    frame[0][4] += V
+    frame[0][5] += Vy
+    frame[0][6] += xD  # for frame orient eval, += |xd| for curved max_L?
+    frame[0][7] += yD
+    frame[1].append(((s, L, I, D, Dy, V, Vy, x - xD//2, xD, y, yD), root_))  # blob_; xD for blob orient eval before comp_P
     return frame
 
 
 def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
-    frame = (0, 0, 0, 0, 0, 0, 0, 0), []  # (Lf, If, Df, Dyf, Vf, Vyf, xDf, yDf), blob_
+    frame = [[0, 0, 0, 0, 0, 0, 0, 0], []]  # [L, I, D, Dy, V, Vy, xD, yD], blob_]
     global y
     y = ini_y  # initial input line, set at 400 as that area in test image seems to be the most diverse
 
     ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
     ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
     pixel_ = image[ini_y, :]  # first line of pixels at y == 0
-    ders_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
+    ders1_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
 
-    for (p, d, m) in ders_:
+    for (p, d, m) in ders1_:
         ders2 = p, d, 0, m, 0  # dy, my initialized at 0
         ders2_.append(ders2)  # only one tuple per first-line ders2_
         ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
@@ -280,8 +264,11 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
     for y in range(ini_y + 1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
         pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
-        ders_ = lateral_comp(pixel_)  # lateral pixel comparison
-        ders2__, _P_, frame = vertical_comp(ders_, ders2__, _P_, frame)  # vertical pixel comparison
+        ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
+        ders2__, _P_, frame = vertical_comp(ders1_, ders2__, _P_, frame)  # vertical pixel comparison
+
+        if y == 500:
+            id(y)
 
     # frame ends, last vertical rng of incomplete ders2__ is discarded,
     # vertically incomplete P_ patterns are still inputted in scan_P_?
