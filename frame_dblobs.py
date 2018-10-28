@@ -145,7 +145,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
             _P, _x, roots, _fork_ = hP  # stable container for ref by lower-line forks
         elif hP_:
             hP = hP_.popleft()
-            _P, _x, roots, _fork_ = hP  # roots = 0: number of Ps connected to _P, each: (pri_s, L, I, D, Dy, V, Vy, ders_)
+            _P, _x, roots, _fork_ = hP  # roots = 0: number of Ps connected to _P, each: pri_s, L, I, D, Dy, V, Vy, ders_
         else:
             break  # higher line ends, all hPs converted to seg
 
@@ -153,7 +153,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
             roots += 1; hP[2] = roots  # nothing else is modified
             fork_.append(hP)  # P-connected hPs
 
-        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP is included in blob segment
+        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP included in blob segment
             buff_.append(hP)
         else:
             ave_x = _x - (_P[1]-1) // 2  # average x of _P; _P[1]-1: extra-x L = L-1 (1x in L)
@@ -168,17 +168,22 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
                     _fork_[0][0][3] += Dy
                     _fork_[0][0][4] += V
                     _fork_[0][0][5] += Vy
-                    dx = ave_x - fork_[0][2]
+                    if y > rng * 2 + 2 + ini_y:
+                        dx = ave_x - fork_[0][2]
+                    else: dx = 0
                     _fork_[0][1].append((_P, dx))  # seg[1]: Py_
                     _fork_[0][2] = ave_x
-                    _fork_[0][3] += dx  # Dx for segment norm and orient eval, | += |xd| for curved max_L?
+                    _fork_[0][3] += dx  # Dx for seg norm and orient eval, | += |xd| for curved yL? # blob, roots, fork_ are not modified
+
+                    hP = _fork_[0]  # passed to form_blob, but not returned?
                     ini = 0
+
             if ini == 1:
-                del hP[:]; hP += list(_P[1:6]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, _fork_
+                del hP[:]; hP += list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, _fork_
                 # segment [Vars, Py_, ave_x, Dx, blob, roots, _fork_] is initialized at hP, replacing its fork_ refs
 
-            if roots == 0:  # bottom segment is terminated and added to blob at _fork_[0][4], initialized above: common form_blob?
-                frame = form_blob(hP, frame)  # no del(hP[:]); hP+=seg, update by side effect: test roots forks at blob_x?
+            if roots == 0:  # bottom segment is terminated and added to blob at _fork_[0][4], initialized above for same form_blob
+                frame = form_blob(hP, frame)  # del(hP[:]); hP += seg or update by side effect: test roots forks at blob_x?
 
         ini_x = _x + 1  # first x of next hP
 
@@ -200,7 +205,7 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
         iseg[4][5] += V
         iseg[4][6] += Vy
         iseg[4][7] += xD
-        iseg[4][8] += max(len(Py_), iseg[4][8])  # yD += max Py_: if y - len(Py_) +1 < min_y?
+        iseg[4][8] = max(len(Py_), iseg[4][8])  # blob yD += max root seg Py_:  if y - len(Py_) +1 < min_y?
         iseg[4][9].append([[L, I, D, Dy, V, Vy], Py_, x, xD], blob)  # term_seg is appended to fork[0] _root_
 
         iseg[5] -= 1  # roots -= 1, because root segment was terminated
@@ -208,12 +213,12 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
             frame = form_blob(iseg, frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
 
         for seg in fork_:
-            seg[4] = iseg[4]  # reference to unique blob, alt syntax? or separate seg[4][9] root_.append, blob represents other roots?
+            seg[4] = iseg[4]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[4][9].append?
             seg[5] -= 1
             if seg[5] == 0:  # seg roots; recursive higher-level segment -> blob inclusion and termination test
                 frame = form_blob(seg, frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
 
-    # co_roots += co_fork, sub_blob, but no blob term while binary co_root | co_fork count?
+    # co_roots += co_fork, term subb (sub_blob ! blob) while binary co_root | co_fork count?
     # right_count and left_1st (for transfer at roots+forks term)
     # right: cont roots and len(_fork_), each summed at current subb term, for blob term eval?
 
