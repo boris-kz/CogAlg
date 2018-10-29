@@ -96,7 +96,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
         ders2_.appendleft((p, d, 0, m, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
         new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
 
-    if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
+    if y > min_coord:  # + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             dP_.append([dP, x, 0, []])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
@@ -159,31 +159,29 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
             ave_x = _x - (_P[1]-1) // 2  # average x of _P; _P[1]-1: extra-x L = L-1 (1x in L)
             ini = 1
             if y > rng * 2 + 1 + ini_y:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
-                if len(_fork_) == 1 and _fork_[0][5] == 1:  # roots
-                    # _fork_[0] blob segment [Vars, Py_, x, Dx, blob, roots, fork_] is incremented with _P:
+                if len(_fork_) == 1 and _fork_[0][2] == 1:  # _fork roots
                     s, L, I, D, Dy, V, Vy, ders_ = _P
-                    _fork_[0][0][0] += L  # seg[0]: Vars
-                    _fork_[0][0][1] += I
-                    _fork_[0][0][2] += D
-                    _fork_[0][0][3] += Dy
-                    _fork_[0][0][4] += V
-                    _fork_[0][0][5] += Vy
+                    # _fork_[0][3][0]: blob segment in __fork[0], is incremented with _P:
+                    _fork_[0][3][0][0][0] += L  # seg[0]: Vars in [Vars, Py_, x, Dx, blob, roots, fork_]
+                    _fork_[0][3][0][0][1] += I
+                    _fork_[0][3][0][0][2] += D
+                    _fork_[0][3][0][0][3] += Dy
+                    _fork_[0][3][0][0][4] += V
+                    _fork_[0][3][0][0][5] += Vy
                     if y > rng * 2 + 2 + ini_y:
-                        dx = ave_x - fork_[0][2]
+                        dx = ave_x - fork_[0][3][0][2]
                     else: dx = 0
-                    _fork_[0][1].append((_P, dx))  # seg[1]: Py_
-                    _fork_[0][2] = ave_x
-                    _fork_[0][3] += dx  # Dx for seg norm and orient eval, | += |xd| for curved yL? # blob, roots, fork_ are not modified
-
-                    hP = _fork_[0]  # passed to form_blob, but not returned?
+                    _fork_[0][3][0][1].append((_P, dx))  # seg[1]: Py_
+                    _fork_[0][3][0][2] = ave_x
+                    _fork_[0][3][0][3] += dx  # Dx for seg norm and orient eval, | += |xd| for curved yL? # blob, roots, fork_ are not modified
                     ini = 0
 
             if ini == 1:
-                del hP[:]; hP += list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, _fork_
-                # segment [Vars, Py_, ave_x, Dx, blob, roots, _fork_] is initialized at hP, replacing its fork_ refs
+                _fork_.insert(0, [list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, _fork_])
+                # segment [Vars, Py_, ave_x, Dx, blob, roots, _fork_] is inserted at _fork_[0]
 
-            if roots == 0:  # bottom segment is terminated and added to blob at _fork_[0][4], initialized above for same form_blob
-                frame = form_blob(hP, frame)  # del(hP[:]); hP += seg or update by side effect: test roots forks at blob_x?
+            if roots == 0 and y > rng * 2 + 2 + ini_y:  # beyond 1st line of __fork_ seg? blob initialized above for same form_blob
+                frame = form_blob(_fork_[0][3][0], frame)  # bottom segment is terminated and added to its blob
 
         ini_x = _x + 1  # first x of next hP
 
@@ -195,28 +193,28 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
 
 def form_blob(term_seg, frame):  # continued or initialized blob (connected segments) is incremented by terminated segment
 
-    [L, I, D, Dy, V, Vy], Py_, x, xD, blob, roots, fork_ = term_seg
+    [L, I, D, Dy, V, Vy], Py_, x, xD, blob, roots, fork_ = term_seg  # _fork_[0]
     if fork_:
-        iseg = fork_.pop[0]  # blob -> fork_[0] only, ref by other forks, no return by index, seg in enumerate(fork_):
-        iseg[4][1] += L  # initial seg[4] = _blob
-        iseg[4][2] += I
-        iseg[4][3] += D
-        iseg[4][4] += Dy
-        iseg[4][5] += V
-        iseg[4][6] += Vy
-        iseg[4][7] += xD
-        iseg[4][8] = max(len(Py_), iseg[4][8])  # blob yD += max root seg Py_:  if y - len(Py_) +1 < min_y?
-        iseg[4][9].append([[L, I, D, Dy, V, Vy], Py_, x, xD], blob)  # term_seg is appended to fork[0] _root_
+        fork_[0][4][1] += L  # unique blob -> fork_[0][4], ref by other forks, no return by index, seg in enumerate(fork_):
+        fork_[0][4][2] += I
+        fork_[0][4][3] += D
+        fork_[0][4][4] += Dy
+        fork_[0][4][5] += V
+        fork_[0][4][6] += Vy
+        fork_[0][4][7] += xD
+        fork_[0][4][8] = max(len(Py_), fork_[0][4][8])  # blob yD += max root seg Py_:  if y - len(Py_) +1 < min_y?
+        fork_[0][4][9].append(([[L, I, D, Dy, V, Vy], Py_, x, xD], blob))  # term_seg is appended to fork[0] _root_
 
-        iseg[5] -= 1  # roots -= 1, because root segment was terminated
-        if iseg[5] == 0:  # recursive higher-level segment-> blob inclusion and termination test
-            frame = form_blob(iseg, frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
+        fork_[0][5] -= 1  # roots -= 1, because root segment was terminated
+        if fork_[0][5] == 0:  # recursive higher-level segment-> blob inclusion and termination test
+            frame = form_blob(fork_[0], frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
 
-        for seg in fork_:
-            seg[4] = iseg[4]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[4][9].append?
+        for index, seg in enumerate(fork_[1:len(fork_)]):
+            seg[4] = fork_[0][4]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[4][9].append?
             seg[5] -= 1
             if seg[5] == 0:  # seg roots; recursive higher-level segment -> blob inclusion and termination test
-                frame = form_blob(seg, frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
+                frame = form_blob(seg, frame)  # return for ref from lateral forks?
+            fork_[index] = seg
 
     # co_roots += co_fork, term subb (sub_blob ! blob) while binary co_root | co_fork count?
     # right_count and left_1st (for transfer at roots+forks term)
@@ -234,7 +232,7 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
         frame[7] += yD
         frame[8].append(((s, L, I, D, Dy, V, Vy, x - xD//2, xD, y, yD), root_))  # blob_; xD for blob orient eval before comp_P
 
-    return frame  # or no return needed?  no return term_seg[5] = fork_: no roots to ref
+    return frame  # or no term_seg return needed?  no return term_seg[5] = fork_: no roots to ref
 
 
 def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
