@@ -96,7 +96,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
         ders2_.appendleft((p, d, 0, m, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
         new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
 
-    if y > min_coord:  # + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
+    if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             dP_.append([dP, x, 0, []])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
@@ -115,7 +115,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
-            P_.append([P, x-1, 0, []])  # first line of hPs: container to maintain fork refs
+            P_.append([P, x-1, 0, []])
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
             # x-1: ends with prior p
@@ -141,47 +141,44 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
 
     while ini_x <= x:  # while x values overlap between P and hP
         if _buff_:
-            hP = _buff_.popleft()  # load hP buffered in prior run of scan_P_, if any
-            _P, _x, roots, _fork_ = hP  # stable container for ref by lower-line forks
+            _P, _x, roots, _fork_ = _buff_.popleft()  # hP buffered in prior scan_P_, seg id == _fork_ id for ref by root Ps
         elif hP_:
-            hP = hP_.popleft()
-            _P, _x, roots, _fork_ = hP  # roots = 0: number of Ps connected to _P, each: pri_s, L, I, D, Dy, V, Vy, ders_
+            _P, _x, roots, _fork_ = hP_.popleft()  # roots = 0: number of Ps connected to _P: pri_s, L, I, D, Dy, V, Vy, ders_
         else:
-            break  # higher line ends, all hPs converted to seg
+            break  # higher line ends, all hPs are converted to seg
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
-            roots += 1; hP[2] = roots  # nothing else is modified
-            fork_.append(hP)  # P-connected hPs
+            roots += 1
+            fork_.append(_fork_)  # P-connected hPs will be converted to segments at each _fork
 
-        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP included in blob segment
-            buff_.append(hP)
+        if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP included in a blob segment
+            buff_.append([_P, _x, roots, _fork_])
         else:
             ave_x = _x - (_P[1]-1) // 2  # average x of _P; _P[1]-1: extra-x L = L-1 (1x in L)
-            ini = 1
-            if y > rng * 2 + 1 + ini_y:  # beyond 1st line of _fork_ Ps, else: blob segment ini only
-                if len(_fork_) == 1 and _fork_[0][2] == 1:  # _fork roots
-                    s, L, I, D, Dy, V, Vy, ders_ = _P
-                    # _fork_[0][3][0]: blob segment in __fork[0], is incremented with _P:
-                    _fork_[0][3][0][0][0] += L  # seg[0]: Vars in [Vars, Py_, x, Dx, blob, roots, fork_]
-                    _fork_[0][3][0][0][1] += I
-                    _fork_[0][3][0][0][2] += D
-                    _fork_[0][3][0][0][3] += Dy
-                    _fork_[0][3][0][0][4] += V
-                    _fork_[0][3][0][0][5] += Vy
+
+            if y == rng * 2 + 1 + ini_y:  # first line of initialized blob segments:
+                hfork_ = list(_fork_[:]); _fork_[:] = list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, hfork_
+            else:
+                if len(_fork_) == 1 and _fork_[0][5] == 1:  # _P has one fork and that fork has one root
+                    s, L, I, D, Dy, V, Vy, ders_ = _P  # seg at _fork_[0] is incremented with _P:
+                    _fork_[0][0][0] += L  # seg: Vars, Py_, ave_x, Dx, blob, roots, _fork_
+                    _fork_[0][0][1] += I
+                    _fork_[0][0][2] += D
+                    _fork_[0][0][3] += Dy
+                    _fork_[0][0][4] += V
+                    _fork_[0][0][5] += Vy
                     if y > rng * 2 + 2 + ini_y:
-                        dx = ave_x - fork_[0][3][0][2]
+                        dx = ave_x - fork_[0][2]
                     else: dx = 0
-                    _fork_[0][3][0][1].append((_P, dx))  # seg[1]: Py_
-                    _fork_[0][3][0][2] = ave_x
-                    _fork_[0][3][0][3] += dx  # Dx for seg norm and orient eval, | += |xd| for curved yL? # blob, roots, fork_ are not modified
-                    ini = 0
+                    _fork_[0][1].append((_P, dx))  # seg[1]: Py_
+                    _fork_[0][2] = ave_x
+                    _fork_[0][3] += dx  # Dx for seg norm and orient eval, | += |xd| for curved yL?
+                else:
+                    hfork_ = list(_fork_[:]); _fork_[:] = list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, hfork_
+                    # _fork_ is preceded by initialized segment for __Ps: Vars, Py_, ave_x, Dx, blob, roots, _fork_
 
-            if ini == 1:
-                _fork_.insert(0, [list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, _fork_])
-                # segment [Vars, Py_, ave_x, Dx, blob, roots, _fork_] is inserted at _fork_[0]
-
-            if roots == 0 and y > rng * 2 + 2 + ini_y:  # beyond 1st line of __fork_ seg? blob initialized above for same form_blob
-                frame = form_blob(_fork_[0][3][0], frame)  # bottom segment is terminated and added to its blob
+                if roots == 0:  # immediate blob, no y > rng * 2 + 2 + ini_y: y P ) y-1 hP ) y-2 seg ) y-4 blob ) y-5 frame?
+                    frame = form_blob(_fork_, frame)  # bottom segment is terminated and added to internal blob
 
         ini_x = _x + 1  # first x of next hP
 
@@ -192,9 +189,9 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
 
 
 def form_blob(term_seg, frame):  # continued or initialized blob (connected segments) is incremented by terminated segment
+    [L, I, D, Dy, V, Vy], Py_, x, xD, blob, roots, fork_ = term_seg
+    if fork_:  # seg forks are also segs
 
-    [L, I, D, Dy, V, Vy], Py_, x, xD, blob, roots, fork_ = term_seg  # _fork_[0]
-    if fork_:
         fork_[0][4][1] += L  # unique blob -> fork_[0][4], ref by other forks, no return by index, seg in enumerate(fork_):
         fork_[0][4][2] += I
         fork_[0][4][3] += D
@@ -209,12 +206,12 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
         if fork_[0][5] == 0:  # recursive higher-level segment-> blob inclusion and termination test
             frame = form_blob(fork_[0], frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
 
-        for index, seg in enumerate(fork_[1:len(fork_)]):
-            seg[4] = fork_[0][4]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[4][9].append?
-            seg[5] -= 1
-            if seg[5] == 0:  # seg roots; recursive higher-level segment -> blob inclusion and termination test
-                frame = form_blob(seg, frame)  # return for ref from lateral forks?
-            fork_[index] = seg
+        for index, fork in enumerate(fork_[1:len(fork_)]):
+            fork[4] = fork_[0][4]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[4][9].append?
+            fork[5] -= 1
+            if fork[5] == 0:  # seg roots; recursive higher-level segment -> blob inclusion and termination test
+               frame = form_blob(fork, frame)  # return for ref from lateral forks?
+            fork_[index] = fork
 
     # co_roots += co_fork, term subb (sub_blob ! blob) while binary co_root | co_fork count?
     # right_count and left_1st (for transfer at roots+forks term)
