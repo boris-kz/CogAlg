@@ -167,15 +167,13 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
                     Ls, Is, Ds, Dys, Vs, Vys = hP[2][0][0]
                     Ls += L; Is += I; Ds += D; Dys += Dy; Vs += V; Vys += Vy
                     hP[0] = [Ls, Is, Ds, Dys, Vs, Vys]
-                    # hP[1] = roots, not modified
-                    hP[3] = ave_x
-                    if y == rng * 2 + 2 + ini_y:  # seg forks are still hPs
-                        dx = 0  # Dx for seg norm and orient eval, | += |xd| for curved yL?
-                    else: dx = ave_x - hP[2][0][3]
-                    hP[4] = hP[2][0][4] + dx  # Dx for seg norm and orient eval, | += |xd| for curved yL?  if y == rng * 2 + 2 + ini_y:?
-                    hP[5] = hP[2][0][5].append((_P, dx))  # buffer Py_
-                    hP[6] = hP[2][0][6]  # blob
-                    hP[2] = hP[2][0][2]  # seg fork_; last step?
+                    hP[3] = ave_x  # hP[1] = roots, not modified
+                    dx = ave_x - hP[2][0][3]
+                    hP.append( hP[2][0][4] + dx)  # Dx for seg norm and orient eval, | += |xd| for curved yL?  if y == rng * 2 + 2 + ini_y:?
+                    hP[2][0][5].append((_P, dx))  # buffer Py_
+                    hP.append( hP[2][0][5])
+                    hP.append( hP[2][0][6])  # blob
+                    hP[2] = hP[2][0][2]  # last step, overwrites source seg fork?
                 else:
                     hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]
                     # hP is converted into new hhP (segment): Vars, roots, _fork_, ave_x, Dx, Py_, blob
