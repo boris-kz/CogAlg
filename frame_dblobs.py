@@ -99,7 +99,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
-            dP_.append([dP, x, 0, []])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
+            dP_.append([dP, 0, [], x])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
         else:
             dP_, dbuff_, _dP_, dframe = scan_P_(x, dP, dP_, dbuff_, _dP_, dframe)  # scans higher-line Ps for contiguity
 
@@ -114,8 +114,8 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     if s == P[0] or x == rng * 2:  # s == pri_s or initialized: P is continued, else terminated:
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
-        if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
-            P_.append([P, x-1, 0, []])
+        if y == rng * 2 + ini_y:  #  1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
+            P_.append([P, 0, [], x-1])
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
             # x-1: ends with prior p
@@ -141,75 +141,78 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
 
     while ini_x <= x:  # while x values overlap between P and hP
         if _buff_:
-            _P, _x, roots, _fork_ = _buff_.popleft()  # hP buffered in prior scan_P_, seg id == _fork_ id for ref by root Ps
+            hP = _buff_.popleft()  # hP buffered in prior scan_P_, seg id == _fork_ id for ref by root Ps
+            _P, roots, _fork_, _x = hP
         elif hP_:
-            _P, _x, roots, _fork_ = hP_.popleft()  # roots = 0: number of Ps connected to _P: pri_s, L, I, D, Dy, V, Vy, ders_
+            hP = hP_.popleft()  # roots = 0: number of Ps connected to _P: pri_s, L, I, D, Dy, V, Vy, ders_
+            _P, roots, _fork_, _x = hP
         else:
             break  # higher line ends, all hPs are converted to seg
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
-            roots += 1
-            fork_.append(_fork_)  # P-connected hPs will be converted to segments at each _fork
+            roots += 1; hP[1] = roots
+            fork_.append(hP)  # P-connected hPs will be converted to segments at each _fork
 
         if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP included in a blob segment
-            buff_.append([_P, _x, roots, _fork_])
+            buff_.append(hP)
         else:
             ave_x = _x - (_P[1]-1) // 2  # average x of _P; _P[1]-1: extra-x L = L-1 (1x in L)
 
-            if y == rng * 2 + 1 + ini_y:  # first line of initialized blob segments:
-                hfork_ = list(_fork_[:]); _fork_[:] = list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, hfork_
+            if y == rng * 2 + 1 + ini_y:  # 1st line: scan_P_ converts hPs to initialized blob segments as hhP:
+                hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]  # seg: Vars, roots, _fork_, ave_x, Dx, Py_, blob
             else:
-                if len(_fork_) == 1 and _fork_[0][5] == 1:  # _P has one fork and that fork has one root
-                    s, L, I, D, Dy, V, Vy, ders_ = _P  # seg at _fork_[0] is incremented with _P:
-                    _fork_[0][0][0] += L  # seg: Vars, Py_, ave_x, Dx, blob, roots, _fork_
-                    _fork_[0][0][1] += I
-                    _fork_[0][0][2] += D
-                    _fork_[0][0][3] += Dy
-                    _fork_[0][0][4] += V
-                    _fork_[0][0][5] += Vy
-                    if y > rng * 2 + 2 + ini_y:
-                        dx = ave_x - fork_[0][2]
-                    else: dx = 0
-                    _fork_[0][1].append((_P, dx))  # seg[1]: Py_
-                    _fork_[0][2] = ave_x
-                    _fork_[0][3] += dx  # Dx for seg norm and orient eval, | += |xd| for curved yL?
+                if len(hP[2]) == 1 and hP[2][0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root
+                    # blob segment at hP[2][0] is incremented with hP, then moved into hP:
+                    s, L, I, D, Dy, V, Vy, ders_ = _P
+                    Ls, Is, Ds, Dys, Vs, Vys = hP[2][0][0]
+                    Ls += L; Is += I; Ds += D; Dys += Dy; Vs += V; Vys += Vy
+                    hP[0] = [Ls, Is, Ds, Dys, Vs, Vys]
+                    # hP[1] = roots, not modified
+                    hP[3] = ave_x
+                    if y == rng * 2 + 2 + ini_y:  # seg forks are still hPs
+                        dx = 0  # Dx for seg norm and orient eval, | += |xd| for curved yL?
+                    else: dx = ave_x - hP[2][0][3]
+                    hP[4] = hP[2][0][4] + dx  # Dx for seg norm and orient eval, | += |xd| for curved yL?  if y == rng * 2 + 2 + ini_y:?
+                    hP[5] = hP[2][0][5].append((_P, dx))  # buffer Py_
+                    hP[6] = hP[2][0][6]  # blob
+                    hP[2] = hP[2][0][2]  # seg fork_; last step?
                 else:
-                    hfork_ = list(_fork_[:]); _fork_[:] = list(_P[1:7]), [(_P, 0)], ave_x, 0, [_P[0],0,0,0,0,0,0,0,y,[]], roots, hfork_
-                    # _fork_ is preceded by initialized segment for __Ps: Vars, Py_, ave_x, Dx, blob, roots, _fork_
+                    hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]
+                    # hP is converted into new hhP (segment): Vars, roots, _fork_, ave_x, Dx, Py_, blob
 
                 if roots == 0:  # immediate blob, no y > rng * 2 + 2 + ini_y: y P ) y-1 hP ) y-2 seg ) y-4 blob ) y-5 frame?
-                    frame = form_blob(_fork_, frame)  # bottom segment is terminated and added to internal blob
+                    frame = form_blob(hP, frame)  # bottom segment is terminated and added to internal blob
 
         ini_x = _x + 1  # first x of next hP
 
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append([P, x, 0, fork_])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to hP
+    P_.append([P, 0, fork_, x])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to hP
 
     return P_, buff_, hP_, frame  # hP_ and buff_ contain only remaining _Ps, with _x => next x
 
 
 def form_blob(term_seg, frame):  # continued or initialized blob (connected segments) is incremented by terminated segment
-    [L, I, D, Dy, V, Vy], Py_, x, xD, blob, roots, fork_ = term_seg
-    if fork_:  # seg forks are also segs
+    [L, I, D, Dy, V, Vy], roots, fork_, x, xD, Py_, blob = term_seg
+    if fork_:  # seg forks are segs
 
-        fork_[0][4][1] += L  # unique blob -> fork_[0][4], ref by other forks, no return by index, seg in enumerate(fork_):
-        fork_[0][4][2] += I
-        fork_[0][4][3] += D
-        fork_[0][4][4] += Dy
-        fork_[0][4][5] += V
-        fork_[0][4][6] += Vy
-        fork_[0][4][7] += xD
-        fork_[0][4][8] = max(len(Py_), fork_[0][4][8])  # blob yD += max root seg Py_:  if y - len(Py_) +1 < min_y?
-        fork_[0][4][9].append(([[L, I, D, Dy, V, Vy], Py_, x, xD], blob))  # term_seg is appended to fork[0] _root_
+        fork_[0][6][1] += L  # unique blob -> fork_[0][4], ref by other forks, no return by index, seg in enumerate(fork_):
+        fork_[0][6][2] += I
+        fork_[0][6][3] += D
+        fork_[0][6][4] += Dy
+        fork_[0][6][5] += V
+        fork_[0][6][6] += Vy
+        fork_[0][6][7] += xD
+        fork_[0][6][8] = max(len(Py_), fork_[0][6][8])  # blob yD += max root seg Py_:  if y - len(Py_) +1 < min_y?
+        fork_[0][6][9].append(([[L, I, D, Dy, V, Vy], x, xD, Py_], blob))  # term_seg is appended to fork[0] _root_
 
-        fork_[0][5] -= 1  # roots -= 1, because root segment was terminated
-        if fork_[0][5] == 0:  # recursive higher-level segment-> blob inclusion and termination test
+        fork_[0][1] -= 1  # roots -= 1, because root segment was terminated
+        if fork_[0][1] == 0:  # recursive higher-level segment-> blob inclusion and termination test
             frame = form_blob(fork_[0], frame)  # no return: del (seg[:]); seg += iseg; fork_[index] = seg: ref from blob only?
 
         for index, fork in enumerate(fork_[1:len(fork_)]):
-            fork[4] = fork_[0][4]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[4][9].append?
-            fork[5] -= 1
-            if fork[5] == 0:  # seg roots; recursive higher-level segment -> blob inclusion and termination test
+            fork[6] = fork_[0][6]  # ref to unique blob, for each root? fork_-> root_ mapping vs. separate seg[6][9].append?
+            fork[1] -= 1
+            if fork[1] == 0:  # seg roots; recursive higher-level segment -> blob inclusion and termination test
                frame = form_blob(fork, frame)  # return for ref from lateral forks?
             fork_[index] = fork
 
@@ -219,7 +222,7 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
 
     else:  # fork_ == 0: blob is terminated and added to frame:
         s, L, I, D, Dy, V, Vy, xD, yD, root_ = blob
-        frame[0] += L  # frame [Vars, blob_]; Vars to compute averages, redundant for same-scope alt_frames
+        frame[0] += L  # frame Vars to compute averages, redundant for same-scope alt_frames
         frame[1] += I
         frame[2] += D
         frame[3] += Dy
@@ -229,7 +232,7 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
         frame[7] += yD
         frame[8].append(((s, L, I, D, Dy, V, Vy, x - xD//2, xD, y, yD), root_))  # blob_; xD for blob orient eval before comp_P
 
-    return frame  # or no term_seg return needed?  no return term_seg[5] = fork_: no roots to ref
+    return frame  # no term_seg return needed?  no return term_seg[5] = fork_: no roots to ref
 
 
 def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
