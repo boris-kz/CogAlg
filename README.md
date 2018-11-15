@@ -44,7 +44,12 @@ But none that I know of is strictly incremental in scope and complexity of disco
 
 Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement.
 
-*Many readers feel a jarring disconnect between my abstract principles and low-level code. But main principle here is selectively incremental complexity. Thus, initial code must be low, with complexity added recursively on higher levels (vs. uniform layers in ANN). Our universe is a space-time continuum, so search levels must be 4D cycles. I am currently working on initial cycle, to use as a kernel for subsequent recursion. Others note lack of higher math, but I can't use it for the same reason: it's not selectively incremental.*
+Such raw input has modality-specific properties and comparison should be adjusted accordingly. These adjustments can be learned by feedback or coded as a shortcut. For example, vision relies on reflected and low-impact light, thus brightness doesn’t represent a source of impact, or even a significant resistance to impact. Difference between pixels of brightness is more stable and predictive than generic match, defined above as a common subset. 
+
+Matching brightness does indicate some uniform underlying property. But initially, it can only be defined indirectly, as below-average absolute difference. This difference is across space, while time is a macro-dimension, with a lower rate of change. But difference | uniformity across space is predictive of change | stability over time because it is a product of past change | stability: interactions that spread locally. So, match between pixels should initially be defined as inverse |difference|.
+
+
+*Many readers feel a jarring gap between my abstract concepts and low-level code. But main principle here is selectively incremental complexity. Thus, initial code must be low, with complexity added recursively on higher levels (vs. uniform layers in ANN). Our universe is a space-time continuum, so search levels must be 4D cycles. I am currently working on initial cycle, to use as a kernel for subsequent recursion. Others note lack of higher math, but I can't use it for the same reason: it's not selectively incremental.*
 
 
 
