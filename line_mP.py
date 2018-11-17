@@ -4,7 +4,7 @@ from time import time
 from collections import deque
 
 ''' 
-1D version of core algorithm with match value = abs(d) - ave abs(d). It is secondary to difference because a stable 
+Updated 1D version of core algorithm, with match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
 visual property of objects is albedo (vs. brightness), and stability of albedo has low correlation with its value. 
 Although not a direct match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness.
@@ -22,50 +22,47 @@ These secondary patterns will be evaluated for further internal recursion after 
 In my code below, postfix '_' denotes array name, vs. identical name of array elements '''
 
 
-def recursive_comp(p, pri_p, d, m, dP, mP, dP_, mP_, redun, rng, i):  # i: index, or comp(d) is different: md = min?
+def form_pattern(typ, P, P_, pri_p, d, m, redun, rng, x):  # accumulation, termination, and recursive comp within pattern mP | dP
 
-    d += p - pri_p  # fuzzy d accumulates differences between p and all prior and subsequent ps in extended rng
-    m += ave - abs(d)  # fuzzy m accumulates match within bilateral extended rng
+    if typ: s = 1 if m >= 0 else 0  # sign of core var d, 0 is positive?
+    else:   s = 1 if d >= 0 else 0  # sign of core var m, 0 is positive?
 
-    dP, dP_ = form_pattern(0, dP, dP_, pri_p, d, m, redun, rng, i)  # forms diff. pattern dP: span of pixels with same-sign d
-    mP, mP_ = form_pattern(1, mP, mP_, pri_p, d, m, redun, rng, i)  # forms match pattern mP: span of pixels with same-sign m
-
-    return d, m, dP, mP, dP_, mP_  # for next-p comp, dP and mP increment, no pri_m, pri_d for next recursive_comp: both are cumulative?
-
-
-def form_pattern(typ, P, P_, pri_p, d, m, redun, rng, x):  # accumulation, termination, and recursive comp within pattern P: mP | dP
-
-    if typ: s = 1 if m >= 0 else 0  # sign of d, 0 is positive?
-    else:   s = 1 if d >= 0 else 0  # sign of m, 0 is positive?
-
-    pri_s, L, I, D, M, recomp, element_ = P  # depth of elements = depth of comp recursion within P
-    if x > rng + 2 and (s != pri_s or x == X - 1):  # P is terminated and evaluated for recursive comp
+    pri_s, L, I, D, M, recomp, e_ = P  # depth of elements in e_ = depth of comp recursion within P
+    if x > rng * 2 and (s != pri_s or x == X - 1):  # core var sign change, P is terminated and evaluated for recursive comp
 
         dP_, mP_ = [], []
         dP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, recomp, d_; no Alt: m is already defined through abs(d)
         mP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, recomp, ders_
 
         if typ:
-            if L > rng + 3 and pri_s == 1 and M > ave_M * redun:  # comp range increase within element_ = ders_:
+            if L > rng + 3 and pri_s == 1 and M > ave_M * redun:  # comp range increase within e_ = ders_:
                 recomp = 1
-                for i in range(rng, L-1):
-                    ip = element_[i][0]  # comp between rng-distant pixels:
-                    pri_ip, i_d, im = element_[i - rng]
-                    i_d, im, dP, mP, dP_, mP_ = recursive_comp(ip, pri_ip, i_d, im, dP, mP, dP_, mP_, redun+1, rng+1, i)
-                element_ = (dP_, mP_)
-        else:
-            if L > 3 and abs(D) > ave_D * redun:  # comp derivation increase within element_ = d_:
-                recomp = 1
-                pri_ip = element_[0]
-                i_d, im = 0, 0
-                for i in range(1, L-1):
-                    ip = element_[i]
-                    i_d, im, dP, mP, dP_, mP_ = recursive_comp(ip, pri_ip, i_d, im, dP, mP, dP_, mP_, redun+1, 1, i)
-                    pri_ip = ip
-                element_ = (dP_, mP_)
+                for i in range(rng, L-1):  # comp between rng-distant pixels, also bilateral?
+                    ip = e_[i][0]
+                    pri_ip, i_d, i_m = e_[i-rng]
+                    i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
+                    i_m += ave - abs(i_d)  # accumulates match within bilateral extended rng; comp(d) is different: md = min?
 
-        P_.append((typ, pri_s, L, I, D, M, recomp, element_))  # terminated P output to second level
-        L, I, D, M, recomp, element_ = 0, 0, 0, 0, 0, []  # new P initialization
+                    dP, dP_ = form_pattern(0, dP, dP_, pri_ip, i_d, i_m, redun+1, rng+1, i)  # forms dP: span of pixels with same-sign d
+                    mP, mP_ = form_pattern(1, mP, mP_, pri_ip, i_d, i_m, redun+1, rng+1, i)  # forms mP: span of pixels with same-sign m
+                e_= (dP_, mP_)
+        else:
+            if L > 3 and abs(D) > ave_D * redun:  # comp derivation increase within e_ = d_:
+                recomp = 1
+                pri_ip = e_[0]
+                i_d, i_m = 0, 0
+                for i in range(1, L-1):  # comp between consecutive ip = d, also bilateral?
+                    ip = e_[i]
+                    i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
+                    i_m += ave - abs(i_d)  # accumulates match within bilateral extended rng;  comp(d) is different: md = min?
+
+                    dP, dP_ = form_pattern(0, dP, dP_, pri_ip, i_d, i_m, redun+1, 1, i)  # forms dP: span of pixels with same-sign d
+                    mP, mP_ = form_pattern(1, mP, mP_, pri_ip, i_d, i_m, redun+1, 1, i)  # forms mP: span of pixels with same-sign m
+                    pri_ip = ip
+                e_= (dP_, mP_)
+
+        P_.append((typ, pri_s, L, I, D, M, recomp, e_))  # terminated P output to second level
+        L, I, D, M, recomp, e_ = 0, 0, 0, 0, 0, []  # new P initialization
 
     pri_s = s   # current sign is stored as prior sign; P (span of pixels forming same-sign m | d) is incremented:
     L += 1      # length of mP | dP
@@ -74,11 +71,10 @@ def form_pattern(typ, P, P_, pri_p, d, m, redun, rng, x):  # accumulation, termi
     M += m      # fuzzy ms summed within mP | dP
 
     if typ:
-        element_.append((pri_p, d, m))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
-    else:
-        element_.append(d)  # prior ds of the same sign are buffered within dP
+        e_.append((pri_p, d, m))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
+    else: e_.append(d)  # prior ds of the same sign are buffered within dP
 
-    P = pri_s, L, I, D, M, recomp, element_
+    P = pri_s, L, I, D, M, recomp, e_
     return P, P_
 
 
@@ -134,7 +130,7 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 # pattern filters: eventually from higher-level feedback, initialized here as constants:
 
 min_rng = 3  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
-ave = 63  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
+ave = 31  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
 
