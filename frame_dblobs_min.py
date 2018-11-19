@@ -40,19 +40,19 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
     ders1_ = []  # tuples of complete 1D derivatives: summation range = rng
     rng_ders1_ = deque(maxlen=rng)  # array of ders1 within rng from input pixel: summation range < rng
     max_index = rng - 1  # max index of rng_ders1_
-    back_d, back_m = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
+    pri_d, pri_m = 0, 0  # fuzzy derivatives in prior completed tuple
 
     for p in pixel_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
         for index, (pri_p, d, m) in enumerate(rng_ders1_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-            m += ave - abs(d)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+            m += min(p, pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
 
             if index < max_index:
                 rng_ders1_[index] = (pri_p, d, m)
             else:
-                ders1_.append((pri_p, d + back_d, m + back_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
-                back_d = d; back_m = m  # to complement derivatives from comp(p, next_rng_pixels)
+                ders1_.append((pri_p, d + pri_d, m + pri_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
+                pri_d = d; pri_m = m  # to complement derivatives of next rng_t_: derived from next rng of pixels
 
         rng_ders1_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
 
@@ -73,20 +73,22 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
     dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (ders2_, back_dy, back_my) in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
+    for (p, d, m), (ders2_, _dy, _my) in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my per _pixel
         x += 1
         index = 0
         for (_p, _d, dy, _m, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
 
             dy += p - _p  # fuzzy dy: running sum of differences between pixel and all lower pixels within rng
-            my += ave - abs(dy)  # fuzzy my: running sum of matches between pixel and all lower pixels within rng
+            my += min(p, _p)  # fuzzy my: running sum of matches between pixel and all lower pixels within rng
 
             if index < max_index:
                 ders2_[index] = (_p, d, dy, m, my)
 
             elif x > min_coord and y > min_coord + ini_y:
 
-                ders2 = _p, _d, dy + back_dy, _m, my + back_my  # back_d, back_m are summed over rng of back-comps per _p
+                _v = _m - abs(d) - ave  # projected m is cancelled by negative d: d/2, + rdn value of overlapping dP: d/2?
+                vy = my + _my - abs(dy) - ave
+                ders2 = _p, _d, dy + _dy, _v, vy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
 
             index += 1
@@ -116,7 +118,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
             P_.append([P, 0, [], x-1])
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
-            # x-1 for prior p
+            # x-1: ends with prior p
         L, I, D, Dy, V, Vy, ders_ = 0, 0, 0, 0, 0, 0, []  # new P initialization
 
     L += 1  # length of a pattern, continued or initialized input and derivatives are accumulated:
@@ -271,7 +273,7 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
 # pattern filters: eventually updated by higher-level feedback, initialized here as constants:
 
 rng = 2  # number of leftward or upward pixels compared to each input pixel
-ave = 31  # |d| value that coincides with average match: value pattern filter
+ave = 63 * rng * 2  # average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 ini_y = 400
 
