@@ -25,7 +25,7 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
     s = 1 if m >= 0 else 0  # sign, 0 is positive?   form_P-> pri mP ( sub_dP_, no type:
     pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: depth of prior comp recursion within P
 
-    if x > rng * 2 and (s != pri_s or x == X-1):  # m sign change, mP is terminated and evaluated for recursive comp
+    if (x > rng * 2 and s != pri_s) or x == X-1:  # m sign change, mP is terminated and evaluated for recursive comp
 
         if pri_s:  # forms sub_mP_ within positive mP:
             if L > rng + 3 and M > ave_M * rdn:  # comp range increase within e_:
@@ -35,7 +35,7 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
 
                 for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
                     ip = e_[i][0]
-                    pri_ip, i_d, i_m = e_[i+1 - rng]
+                    pri_ip, i_d, i_m = e_[i-rng]
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
                     i_m += ave_d - abs(i_d)  # accumulates match in extended rng
                     sub_mP, sub_mP_ = form_pattern(sub_mP, sub_mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)

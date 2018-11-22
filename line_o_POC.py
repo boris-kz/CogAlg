@@ -28,7 +28,7 @@ def form_pattern(typ, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, term
     else:   s = 1 if d >= 0 else 0  # sign of core var d, 0 is positive?
 
     pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: depth of comp recursion within P
-    if x > rng * 2 and (s != pri_s or x == X-1):  # core var sign change, P is terminated and evaluated for recursive comp
+    if (x > rng * 2 and s != pri_s) or x == X-1:  # core var sign change, P is terminated and evaluated for recursive comp
 
         dP_, mP_ = [], []
         dP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, d_;  no Alt: M in both is already defined through abs(d)
