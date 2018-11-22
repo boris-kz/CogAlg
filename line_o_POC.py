@@ -38,7 +38,7 @@ def form_pattern(typ, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, term
             if L > rng + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_:
                 r = 1                                   # rdn: redundancy, incremented per comp recursion
                 rng += 1
-                for i in range(rng, L-1):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
+                for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
                     ip = e_[i][0];  pri_ip, i_d, i_m = e_[i-rng]
 
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
@@ -53,7 +53,7 @@ def form_pattern(typ, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, term
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_:
                 r = 1
                 pri_ip = e_[0]
-                for i in range(1, L-1):  # comp between consecutive ip = d, bilateral?
+                for i in range(1, L):  # comp between consecutive ip = d, bilateral?
                     ip = e_[i]
                     i_d = ip - pri_ip  # one-to-one comp, no accumulation till recursion?
                     i_m = min(ip, pri_ip) - ave  # d is a proxy of change, thus direct match, immediate eval, separate ave?
@@ -83,7 +83,7 @@ def form_pattern(typ, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, term
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
 
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
-    for y in range(Y):
+    for y in range(ini_y +1, Y):
 
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         dP_, mP_ = [], []  # initialized at each line
@@ -132,7 +132,7 @@ min_rng = 2  # fuzzy pixel comparison range, initialized here but eventually a h
 ave = 31  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
-
+ini_y = 400
 Y, X = image.shape  # Y: frame height, X: frame width
 
 start_time = time()

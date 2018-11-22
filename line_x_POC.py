@@ -4,22 +4,18 @@ from time import time
 from collections import deque
 
 ''' 
-Version with exclusive positive mP | dP formation, vs. overlapping Ps in line_o_POC
-(or separate filter for form_dP -> partial spectrum overlap | gap between positive mPs and dPs?)
+Version with exclusive positive mP | dP formation, vs. overlapping Ps in line_o_POC.
+Also possible is additional filter for form_dP -> partial overlap | gap between positive mPs and dPs (sensitivity vs. cost * redundancy)
 
-Updated 1D version of core algorithm, with match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
+Updated 1D version of core algorithm, with initial match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
 visual property of objects is albedo (vs. brightness), and stability of albedo has low correlation with its value. 
 Although indirect measure of match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness.
 
-Cross-comparison between consecutive pixels within horizontal scan line (row),
-forming difference patterns dPs (spans of pixels forming same-sign differences)
-and match patterns mPs (spans of pixels forming same-sign match)
-
-Recursive_comp() cross-compares derived variables, within a queue of a above- minimal length and summed value.
-For example, if differences between pixels turn out to be more predictive than value of these pixels, 
-then all differences will be cross-compared by secondary comp(d), forming d_mPs and d_dPs.
-These secondary patterns will be evaluated for further internal recursion after cross-comparison on the next level.
+Cross-comparison of consecutive pixels within horizontal scan line, forming match patterns mPs (spans of pixels with same-sign match),
+and difference patterns dPs (spans of pixels with same-sign differences) within each negative mP.
+form_pattern() is conditionally recursive, cross-comparing p | d within a queue of above- minimal length and summed M | D.
+The next level will cross-compare resulting hierarchical patterns and evaluate them for deeper internal recursion and cross-comparison.
 
 In the code below, postfix '_' denotes array name, vs. identical name of array elements '''
 
@@ -37,15 +33,13 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
                 rng += 1
                 sub_mP_= []; sub_mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, d_;  no Alt: M is defined through abs(d)
 
-                for i in range(rng, L-1):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
+                for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
                     ip = e_[i][0]
-                    pri_ip, i_d, i_m = e_[i - rng]
+                    pri_ip, i_d, i_m = e_[i+1 - rng]
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
-                    i_m += ave_d - abs(i_d)  # accumulates match within extended rng, no discrete buffer?
+                    i_m += ave_d - abs(i_d)  # accumulates match in extended rng
                     sub_mP, sub_mP_ = form_pattern(sub_mP, sub_mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)
-
-                if sub_mP[5]:  # r in sub_P, else no e_ replacement: never?
-                    e_ = sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m
+                e_= sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m  # return P_: sub_P term at i=L?
 
         else:  # forms sub_dP_ within negative mP:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_:
@@ -53,15 +47,13 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
                 sub_dP_= []; sub_dP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, d_
                 pri_ip = e_[0][1]
 
-                for i in range(1, L-1):  # comp between consecutive ip = d, bilateral?
+                for i in range(1, L):  # comp between consecutive ip = d, bilateral?
                     ip = e_[i][1]   # ip = d
                     i_d = ip - pri_ip  # one-to-one comp, no accumulation till recursion?
                     i_m = min(ip, pri_ip) - ave_m  # d is a proxy of change, thus direct match, immediate eval, separate ave?
                     sub_dP, sub_dP_ = form_pattern(sub_dP, sub_dP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)
                     pri_ip = ip
-
-                if sub_dP[5]:  # r in sub_P, else no e_ replacement
-                    e_ = sub_dP_  # ders replaced with sub_dPs: spans of pixels that form same-sign d
+                e_= sub_dP_  # ders replaced with sub_dPs: spans of pixels that form same-sign d
 
         P_.append((pri_s, L, I, D, M, r, e_))  # terminated P output to second level; x == X-1 doesn't always terminate?
         L, I, D, M, r, e_ = 0, 0, 0, 0, 0, []  # new P initialization
@@ -80,7 +72,7 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
-    for y in range(Y):
+    for y in range(ini_y +1, Y):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []; P = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, ders_ # initialized at each line
 
@@ -101,7 +93,7 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
                 elif x > min_rng * 2 - 1:
                     bi_d = d + back_d; back_d = d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
                     bi_m = m + back_m; back_m = m
-                    P, P_ = form_pattern(P, P_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
+                    P, P_ = form_pattern(P, P_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mPs: spans of pixels with same-sign m
 
             ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
@@ -124,8 +116,8 @@ ave_m = 10  # min dm for positive dmP
 ave_d = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
-min_rng = 2  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
-
+ini_y = 400
+min_rng = 2  # fuzzy pixel comparison range, initialized here but eventually adjusted by higher-level feedback
 Y, X = image.shape  # Y: frame height, X: frame width
 
 start_time = time()
