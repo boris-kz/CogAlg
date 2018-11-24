@@ -30,27 +30,23 @@ def form_pattern(typ, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, term
     pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: depth of comp recursion within P
     if (x > rng * 2 and s != pri_s) or x == X-1:  # core var sign change, P is terminated and evaluated for recursive comp
 
-        dP_, mP_ = [], []
-        dP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, d_;  no Alt: M in both is already defined through abs(d)
-        mP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, ders_
-
-        if typ:
-            if L > rng + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_:
-                r = 1                                   # rdn: redundancy, incremented per comp recursion
+        if typ:  # if typ==1: P is mP, if typ==0: P is dP
+            if L > rng + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_, rdn: redundancy incr. per recursion
+                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub-pattern initialization: (pri_s, L, I, D, M, r, ders_)
+                r = 1
                 rng += 1
-                for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
-                    ip = e_[i][0];  pri_ip, i_d, i_m = e_[i-rng]
-
+                for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2 + 3?
+                    ip = e_[i][0]
+                    pri_ip, i_d, i_m = e_[i-rng]
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
                     i_m += ave - abs(i_d)  # accumulates match within extended rng, no discrete buffer?
 
-                    if i_m >= 0:
-                        mP, mP_ = form_pattern(1, mP, mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # forms mP: span of pixels with same-sign m
-                    else:
-                        dP, dP_ = form_pattern(0, dP, dP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # forms dP: span of pixels with same-sign d
+                    mP, mP_ = form_pattern(1, mP, mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # forms mP: span of pixels with same-sign m
+                    dP, dP_ = form_pattern(0, dP, dP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # forms dP: span of pixels with same-sign d
                 e_= (dP_, mP_)
         else:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_:
+                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, ders_
                 r = 1
                 pri_ip = e_[0]
                 for i in range(1, L):  # comp between consecutive ip = d, bilateral?
@@ -71,25 +67,23 @@ def form_pattern(typ, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, term
     I += pri_p  # input ps summed within mP | dP
     D += d      # fuzzy ds summed within mP | dP
     M += m      # fuzzy ms summed within mP | dP
-
     if typ:
         e_.append((pri_p, d, m))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
-    else: e_.append(d)  # prior ds of the same sign are buffered within dP
+    else:
+        e_.append(d)  # prior ds of the same sign are buffered within dP
 
     P = pri_s, L, I, D, M, r, e_
     return P, P_
 
 
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
-
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
+
     for y in range(ini_y +1, Y):
-
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
-        dP_, mP_ = [], []  # initialized at each line
-        dP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, d_
-        mP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, ders_
 
+        dP_= []; dP = 0,0,0,0,0,0,[]  # initialized at each line,
+        mP_= []; mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, ders_
         max_index = min_rng - 1  # max index of rng_ders_
         ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0

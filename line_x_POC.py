@@ -4,12 +4,13 @@ from time import time
 from collections import deque
 
 ''' 
-Version with exclusive positive mP | dP formation, vs. overlapping Ps in line_o_POC.
-Also possible is additional filter for form_dP -> partial overlap | gap between positive mPs and dPs (sensitivity vs. cost * redundancy)
+Version with exclusive positive mP | dP coverage (to minimize cost), vs. overlapping Ps in line_o_POC.
+But secondary dmPs are defined through direct match (min d, independent from dd), so it should use overlapping form_P?
+Also possible is additional filter for form_dP -> partial overlap | gap between positive mPs and dPs, but post-comp selection is better? 
 
 Updated 1D version of core algorithm, with initial match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
 visual property of objects is albedo (vs. brightness), and stability of albedo has low correlation with its value. 
-Although indirect measure of match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
+Although an indirect measure of match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness.
 
 Cross-comparison of consecutive pixels within horizontal scan line, forming match patterns mPs (spans of pixels with same-sign match),
@@ -39,7 +40,7 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
                     i_m += ave_d - abs(i_d)  # accumulates match in extended rng
                     sub_mP, sub_mP_ = form_pattern(sub_mP, sub_mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)
-                e_= sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m  # return P_: sub_P term at i=L?
+                e_= sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m
 
         else:  # forms sub_dP_ within negative mP:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_:
@@ -75,7 +76,6 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
     for y in range(ini_y +1, Y):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []; P = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, ders_ # initialized at each line
-
         max_index = min_rng - 1  # max index of rng_ders_
         ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0

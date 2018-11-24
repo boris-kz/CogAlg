@@ -147,7 +147,7 @@ Average match in our space-time is presumably equal over all four dimensions. Th
 
 Accordingly, my code here consists of three levels:
 
-- 1D: [line_POC_introductory.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC_introductory.py), which uses full variable names but is too long and dense to trace operations, and very similar but compressed and updated [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
+- 1D: [line_introductory_old.py](https://github.com/boris-kz/CogAlg/blob/master/line_introductory_old.py), which uses full variable names but is too long and dense to trace operations, and very similar but compressed and updated [line_x_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_x_POC.py), which works as intended but is not very useful in our 4D world.
 - 2D: [frame_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), which is meant as a stand-alone 2D algorithm but is not complete, [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py), which will be a model for corresponding components of 3D video algorithm, and [frame_dblobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_dblobs.py), which is simplified version for debugging, currently in progress.
 - 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This algorithm will hopefully be effective and scalable, but is currently less than 5% done.
 
