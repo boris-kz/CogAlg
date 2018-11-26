@@ -4,13 +4,14 @@ from time import time
 from collections import deque
 
 ''' 
-Updated 1D version of core algorithm, with match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
-visual property of objects is albedo (vs. brightness), and stability of albedo has low correlation with its value. 
-Although an indirect measure of match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
+line_o_POC is a principal version, with full overlap between difference patterns and match patterns, vs. exclusive dP | mP in line_x_POC. 
+Initial match is defined as average_abs(d) - abs(d). It is secondary to difference because a stable visual property of objects is albedo 
+(vs. brightness), and spatio-temporal stability of albedo itself has low correlation with its magnitude. 
+Although an indirect measure of match, low abs(d) should be predictive: uniformity across space correlates with stability over time.
 
-Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness.
-Spatial difference in albedo is a useful indicator of change in some substantial property of observed objects. 
-Magnitude of such change is more predictive of some ultimate impact on observer than magnitude of original brightness. 
+Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness. 
+Spatial difference in albedo indicates change in some substantial property of observed objects, basically an edge detector. 
+Magnitude of such change or lack thereof is more predictive of some ultimate impact on observer than magnitude of original brightness. 
 Hence, match of differences and matches is defined here as min magnitude, vs. inverse deviation of abs(d) as match of brightness.
 
 Cross-comparison between consecutive pixels within horizontal scan line (row).
@@ -33,10 +34,10 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
 
         if typ:  # if typ==1: P is mP, if typ==0: P is dP
             if L > rng + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_, rdn: redundancy incr. per recursion
-                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub-m_pattern initialization: pri_s, L, I, D, M, r, ders_
+                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
-                for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2 + 3?
+                for i in range(rng, L):  # comp between rng-distant pixels, bilateral expansion if L > rng * 2 + 3?
                     ip = e_[i][0]
                     pri_ip, i_d, i_m = e_[i-rng]
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
@@ -50,7 +51,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 e_= (dP_, mP_)
         else:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_ (or ders: p,m pres):
-                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub-d_pattern initialization: pri_s, L, I, D, M, r, ders_
+                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 pri_ip = e_[0]
                 for i in range(1, L):  # comp between consecutive ip = d, bilateral?
@@ -63,7 +64,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                     pri_ip = ip
                 e_= (dP_, mP_)
 
-        P_.append((typ, pri_s, L, I, D, M, r, e_))  # terminated P output to second level
+        P_.append((typ, pri_s, L, I, D, M, r, e_))  # terminated P is output to the next level of search
         L, I, D, M, r, e_ = 0, 0, 0, 0, 0, []  # new P initialization
 
     pri_s = s   # current sign is stored as prior sign; P (span of pixels forming same-sign m | d) is incremented:
@@ -74,7 +75,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     if typ:
         e_.append((pri_p, d, m))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
     else:
-        e_.append(d)  # prior ds of the same sign are buffered within dP
+        e_.append(d)  # prior ds of the same sign buffered within dP, p and m are not used in recursive comp?
 
     P = pri_s, L, I, D, M, r, e_
     return P, P_
@@ -124,9 +125,9 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 # f = misc.face(gray=True)  # load pix-mapped image
 # f = f.astype(int)
 
-# pattern filters: eventually from higher-level feedback, initialized here as constants:
+# pattern filters are initialized here as constants, eventually adjusted by higher-level feedback:
 
-ave_m = 10  # min dm for positive dmP
+ave_m = 10  # min d-match for inclusion in positive d_mP
 ave_d = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
