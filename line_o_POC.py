@@ -4,13 +4,13 @@ from time import time
 from collections import deque
 
 ''' 
-line_o_POC is a principal version, with full overlap between difference patterns and match patterns, vs. exclusive dP | mP in line_x_POC. 
-Initial match is defined as average_abs(d) - abs(d). It is secondary to difference because a stable visual property of objects is albedo 
+This is a principal version of line_POC, with full overlap between difference patterns and match patterns, vs. exclusive dP | mP in line_x_POC. 
+Initial match is defined as average_abs(d) - abs(d): secondary to difference because a stable visual property of objects is albedo 
 (vs. brightness), and spatio-temporal stability of albedo itself has low correlation with its magnitude. 
 Although an indirect measure of match, low abs(d) should be predictive: uniformity across space correlates with stability over time.
 
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness. 
-Spatial difference in albedo indicates change in some substantial property of observed objects, basically an edge detector. 
+Spatial difference in albedo indicates change in some property of observed objects, thus should serve as an edge | fill-in detector. 
 Magnitude of such change or lack thereof is more predictive of some ultimate impact on observer than magnitude of original brightness. 
 Hence, match of differences and matches is defined here as min magnitude, vs. inverse deviation of abs(d) as match of brightness.
 
@@ -19,7 +19,7 @@ Resulting difference patterns dPs (spans of pixels forming same-sign differences
 and relative match patterns mPs (spans of pixels forming same-sign match)
 are redundant representations of each line of pixels.
 
-form_pattern() is conditionally recursive, cross-comparing derived variables within a queue of a above-minimal summed value.
+form_pattern() is conditionally recursive, cross-comparing derived variables within a queue e_ of a above-minimal summed value.
 This recursion forms hierarchical mPs and dPs of variable depth, which will be cross-compared on the next level of search.
 In the code below, postfix '_' denotes array name, vs. identical name of array elements '''
 
@@ -29,36 +29,41 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     if typ: s = 1 if m >= 0 else 0  # sign of core var m, 0 is positive?
     else:   s = 1 if d >= 0 else 0  # sign of core var d, 0 is positive?
 
-    pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: depth of comp recursion within P
+    pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: flag of comp recursion within P
     if (x > rng * 2 and s != pri_s) or x == X-1:  # core var sign change, P is terminated and evaluated for recursive comp
 
         if typ:  # if typ==1: P is mP, if typ==0: P is dP
-            if L > rng + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_, rdn: redundancy incr. per recursion
+            if L > rng * 2 + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_, rdn: redundancy incr per recursion
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
-                for i in range(rng, L):  # comp between rng-distant pixels, bilateral expansion if L > rng * 2 + 3?
+                back_ = []
+                for i in range(rng, L):  # comp between rng-distant pixels
                     ip = e_[i][0]
                     pri_ip, i_d, i_m = e_[i-rng]
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
-                    if dderived:
-                        i_m += min(ip, pri_ip) - ave_m  # d-derived var magnitude is predictive of impact, thus direct match
+                    if  dderived:
+                        i_m += min(ip, pri_ip) - ave_m  # d-derived vars magnitude = change | stability, thus direct match
                     else:
-                        i_m += ave_d - abs(i_d)  # brightness mag is not predictive, thus indirect match; no discrete buffer?
+                        i_m += ave_d - abs(i_d)  # brightness mag != predictive value, thus indirect match
+                    if  i > rng * 2 - 1:
+                        back_d, back_m = back_.pop(0)  # back_d|m is rng-distant from i_d|m, buffered in back_ of max_len==rng:
+                        bi_d = i_d + back_d
+                        bi_m = i_m + back_m
+                        mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
+                        dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
 
-                    mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
-                    dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
+                    back_.append((i_d, i_m))
                 e_= (dP_, mP_)
         else:
-            if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_ (or ders: p,m pres):
+            if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_: no use for p, m?
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 pri_ip = e_[0]
                 for i in range(1, L):  # comp between consecutive ip = d, bilateral?
                     ip = e_[i]
-                    i_d = ip - pri_ip  # one-to-one comp, no accumulation till recursion?
-                    i_m = min(ip, pri_ip) - ave_m  # d ~ substantial change, thus direct match - separate ave?
-
+                    i_d = ip - pri_ip
+                    i_m = min(ip, pri_ip) - ave_m  # d = change, thus direct match
                     mP, mP_ = form_pattern(1, 1, mP, mP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 1, dP, dP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms dP: span of pixels with same-sign d
                     pri_ip = ip
@@ -74,6 +79,10 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     M += m      # fuzzy ms summed within mP | dP
     if typ:
         e_.append((pri_p, d, m))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
+        
+        # because extended-range comp is selective for strong patters, it should preserve resolution (comparands),
+        # probably by adding a buffer of compared ders to each extended-range ders in e_:
+        # element = (ext_ders, comp_ders_)
     else:
         e_.append(d)  # prior ds of the same sign buffered within dP, p and m are not used in recursive comp?
 
@@ -99,14 +108,12 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
 
                 d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
                 m += ave_d - abs(d)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
-
                 if index < max_index:
                     ders_[index] = (pri_p, d, m)
 
                 elif x > min_rng * 2 - 1:
                     bi_d = d + back_d; back_d = d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
                     bi_m = m + back_m; back_m = m
-
                     mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
@@ -132,7 +139,7 @@ ave_d = 20  # |difference| between pixels that coincides with average value of m
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
 ini_y = 400
-min_rng = 2  # fuzzy pixel comparison range, initialized here but eventually a higher-level feedback
+min_rng = 2  # fuzzy pixel comparison range, adjusted by higher-level feedback
 Y, X = image.shape  # Y: frame height, X: frame width
 
 start_time = time()
