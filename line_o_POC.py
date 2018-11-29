@@ -102,10 +102,9 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         max_index = min_rng - 1  # max index of rng_ders_
         ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
-        back_d, back_m = 0, 0  # fuzzy derivatives from rng of backward comps per prior pixel
+        back_ = []  # fuzzy derivatives d and m from rng of backward comps per prior pixel
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-            back_ = []
             for index, (pri_p, d, m) in enumerate(ders_):
 
                 d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
