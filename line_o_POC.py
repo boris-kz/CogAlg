@@ -21,7 +21,9 @@ are redundant representations of each line of pixels.
 
 form_pattern() is conditionally recursive, cross-comparing derived variables within a queue e_ of a above-minimal summed value.
 This recursion forms hierarchical mPs and dPs of variable depth, which will be cross-compared on the next level of search.
-In the code below, postfix '_' denotes array name, vs. identical name of array elements '''
+
+In the code below, postfix '_' denotes array name, vs. identical name of array elements 
+Capitalized variable names indicate sums of same small-case vars'''
 
 
 def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, termination, and recursive comp within pattern mP | dP
@@ -33,7 +35,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     if (x > rng * 2 and s != pri_s) or x == X-1:  # core var sign change, P is terminated and evaluated for recursive comp
 
         if typ:  # if typ==1: P is mP, if typ==0: P is dP
-            if L > rng * 2 + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range increase within e_ = ders_, rdn: redundancy incr per recursion
+            if L > rng * 2 + 3 and pri_s == 1 and M > ave_M * rdn:  # comp range incr within e_= ders_, rdn: redundancy incr per recursion
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
@@ -47,7 +49,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                     else:
                         i_m += ave_d - abs(i_d)  # brightness mag != predictive value, thus indirect match
                     if  i > rng * 2 - 1:
-                        back_d, back_m = back_.pop(0)  # back_d|m is rng-distant from i_d|m, buffered in back_ of max_len==rng:
+                        back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_ (max_len==rng):
                         bi_d = i_d + back_d
                         bi_m = i_m + back_m
                         mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
@@ -60,7 +62,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 pri_ip = e_[0]
-                for i in range(1, L):  # comp between consecutive ip = d, bilateral?
+                for i in range(1, L):  # comp between consecutive ip = d, rng=1: not bilateral?
                     ip = e_[i]
                     i_d = ip - pri_ip
                     i_m = min(ip, pri_ip) - ave_m  # d = change, thus direct match
@@ -78,10 +80,9 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     D += d      # fuzzy ds summed within mP | dP
     M += m      # fuzzy ms summed within mP | dP
     if typ:
-        e_.append((pri_p, d, m))  # inputs for greater rng comp are tuples, vs. pixels for initial comp
-        
-        # because extended-range comp is selective for strong patters, it should preserve resolution (comparands),
-        # probably by adding a buffer of compared ders to each extended-range ders in e_:
+        e_.append((pri_p, d, m))  # inputs for extended-range comp are tuples, vs. pixels for initial comp
+        # this is selective for strong patterns, so it should buffer comparands internally,
+        # probably by adding a comp_ders_ (compared ders) to each extended-range ders in e_:
         # element = (ext_ders, comp_ders_)
     else:
         e_.append(d)  # prior ds of the same sign buffered within dP, p and m are not used in recursive comp?
@@ -104,6 +105,7 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         back_d, back_m = 0, 0  # fuzzy derivatives from rng of backward comps per prior pixel
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
+            back_ = []
             for index, (pri_p, d, m) in enumerate(ders_):
 
                 d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
@@ -112,11 +114,13 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
                     ders_[index] = (pri_p, d, m)
 
                 elif x > min_rng * 2 - 1:
-                    bi_d = d + back_d; back_d = d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
-                    bi_m = m + back_m; back_m = m
+                    back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_ (max_len==rng):
+                    bi_d = d + back_d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
+                    bi_m = m + back_m
                     mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
+                back_.append((d, m))
             ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2

@@ -67,7 +67,6 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     dP_ = deque()  # line y - 1+ rng*2
     dbuff_ = deque()  # line y- 2+ rng*2: _Ps buffered by previous run of scan_P_
     new_ders2__ = deque()  # 2D: line of ders2_s buffered for next-line comp
-
     x = 0  # lateral coordinate of current pixel
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
@@ -214,7 +213,9 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
 
     else: # fork_ == 0, then test for n of extant co- forks ) yforks and subb (sub blob) inclusion in 2D yroot__:
         '''
-        forks -= 1  # extant mediated fork counter per blob, from len(fork_) per root, + fork Le per line, 
+        forks -= 1  # extant mediated fork counter per blob, 
+        initially = len(fork_) per root, + fork Le per line: 
+         
         if forks: subb is moved right: root_[0] = subb  # replacing ref to subb?
         else: 
             yforks -= 1
@@ -225,6 +226,8 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
             
         yroot_.append( root_.append( root per term seg | subb: extant root_forks?
         yroot_forks: down count ( root_forks: right count, term subb (sub_blob ! blob) while binary co_root | co_fork count?
+        
+        if yforks == 0:  # blob is terminated
         '''
         s, L, I, D, Dy, V, Vy, xD, yD, root_ = blob  # root_ is fork[6][9]
         frame[0] += L  # frame Vars to compute averages, redundant for same-scope alt_frames
