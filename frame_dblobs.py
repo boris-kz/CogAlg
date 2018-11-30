@@ -40,9 +40,9 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
     ders1_ = []  # tuples of complete 1D derivatives: summation range = rng
     rng_ders1_ = deque(maxlen=rng)  # array of ders1 within rng from input pixel: summation range < rng
     max_index = rng - 1  # max index of rng_ders1_
-    back_d, back_m = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
+    back_ = []  # buffer for fuzzy derivatives from rng of backward comps per pri_p, max_len==rng
 
-    for p in pixel_:  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
+    for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
         for index, (pri_p, d, m) in enumerate(rng_ders1_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
@@ -50,13 +50,16 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
 
             if index < max_index:
                 rng_ders1_[index] = (pri_p, d, m)
-            else:
-                ders1_.append((pri_p, d + back_d, m + back_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
-                back_d = d; back_m = m  # to complement derivatives from comp(p, next_rng_pixels)
 
+            elif x > rng * 2 - 1:
+                back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
+                ders1_.append((pri_p, d + back_d, m + back_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
+
+        if x > rng * 2 - 2:
+            back_.append((d, m))  # complete, to complement derivatives from comp(p, next_rng_pixels)
         rng_ders1_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
 
-    ders1_ += reversed(rng_ders1_)  # or tuples of last rng (incomplete, in reverse order) are discarded?
+    ders1_ += reversed(rng_ders1_)  # tuples of last rng in line (incomplete, in reverse order), or discarded?
     return ders1_
 
 
@@ -92,6 +95,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
 
         ders2_.appendleft((p, d, 0, m, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
         new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
+        #  dy and my are complete, to be re-used as back_dy and back_my
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 

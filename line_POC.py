@@ -4,7 +4,7 @@ from time import time
 from collections import deque
 
 ''' 
-This is a principal version of line_POC, with full overlap between difference patterns and match patterns, vs. exclusive dP | mP in line_x_POC. 
+This is a principal version of 1D alg, with full overlap between difference patterns and match patterns, vs. exclusive dP | mP in line_x_POC. 
 Initial match is defined as average_abs(d) - abs(d): secondary to difference because a stable visual property of objects is albedo 
 (vs. brightness), and spatio-temporal stability of albedo itself has low correlation with its magnitude. 
 Although an indirect measure of match, low abs(d) should be predictive: uniformity across space correlates with stability over time.
@@ -23,7 +23,7 @@ form_pattern() is conditionally recursive, cross-comparing derived variables wit
 This recursion forms hierarchical mPs and dPs of variable depth, which will be cross-compared on the next level of search.
 
 In the code below, postfix '_' denotes array name, vs. identical name of array elements 
-Capitalized variable names indicate sums of same small-case vars'''
+Capitalized variable names indicate sums of corresponding small-case vars'''
 
 
 def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, termination, and recursive comp within pattern mP | dP
@@ -39,7 +39,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
-                back_ = []
+                back_ = []  # max_len == rng
                 for i in range(rng, L):  # comp between rng-distant pixels
                     ip = e_[i][0]
                     pri_ip, i_d, i_m = e_[i-rng]
@@ -49,7 +49,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                     else:
                         i_m += ave_d - abs(i_d)  # brightness mag != predictive value, thus indirect match
                     if  i > rng * 2 - 1:
-                        back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_ (max_len==rng):
+                        back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
                         bi_d = i_d + back_d
                         bi_m = i_m + back_m
                         mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
@@ -59,7 +59,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 e_= (dP_, mP_)
         else:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_: no use for p, m?
-                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, ders_
+                dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, d_
                 r = 1
                 pri_ip = e_[0]
                 for i in range(1, L):  # comp between consecutive ip = d, rng=1: not bilateral?
@@ -119,7 +119,7 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
                     mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
-                back_.append((d, m))
+            back_.append((d, m))  # accumulated through ders_ comp
             ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
