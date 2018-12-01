@@ -6,7 +6,7 @@ from collections import deque
 
 '''   
     frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
-    frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in current frame().
+    frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in frame_draft().
     frame_dblobs() is updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
     
     Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
@@ -43,6 +43,8 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
     back_ = []  # buffer for fuzzy derivatives from rng of backward comps per pri_p, max_len==rng
 
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
+        if x > rng * 2 - 1:
+            back_d, back_m = back_.pop(0)  # back_d|m for bilateral sum, rng-distant from i_d|m, buffered in back_ of max_len==rng
         for index, (pri_p, d, m) in enumerate(rng_ders1_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
@@ -52,7 +54,6 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
                 rng_ders1_[index] = (pri_p, d, m)
 
             elif x > rng * 2 - 1:
-                back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
                 ders1_.append((pri_p, d + back_d, m + back_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
 
         if x > rng * 2 - 2:
@@ -64,7 +65,7 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
 
 
 def vertical_comp(ders1_, ders2__, _dP_, dframe):
-    # comparison between rng vertically consecutive pixels, forming ders2: tuple of 2D derivatives per pixel
+    # comparison between rng vertically consecutive pixels, forming ders2: tuple of pixel + its 2D derivatives
 
     dP = 0, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, L, I, D, Dy, V, Vy, ders2_
     dP_ = deque()  # line y - 1+ rng*2
@@ -95,7 +96,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
 
         ders2_.appendleft((p, d, 0, m, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
         new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
-        #  dy and my are complete, to be re-used as back_dy and back_my
+        # complete dy and my will be re-used as back_dy and back_my
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
