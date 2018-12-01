@@ -48,7 +48,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, comp_ders_, rdn, rng, x, X):
                     if  dderived:
                         i_m += min(ip, pri_ip) - ave_m  # d-derived vars magnitude = change | stability, thus direct match
                     else:
-                        i_m += ave_d - abs(i_d)  # brightness mag != predictive value, thus indirect match
+                        i_m += ave_d - abs(ip - pri_ip)  # brightness mag != predictive value, thus indirect match
                     if  i > rng * 2 - 1:
                         back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
                         bi_d = i_d + back_d
@@ -109,16 +109,15 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         back_ = []  # fuzzy derivatives d and m from rng of backward comps per prior pixel
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-            if x > min_rng * 2 - 1:
-                back_d, back_m = back_.pop(0)  # back_d|m for bilateral sum, rng-distant from i_d|m, buffered in back_ of max_len==rng
             for index, (pri_p, d, m) in enumerate(ders_):
 
                 d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += ave_d - abs(d)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+                m += ave_d - abs(p - pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
                 if index < max_index:
                     ders_[index] = (pri_p, d, m)
 
                 elif x > min_rng * 2 - 1:
+                    back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
                     bi_d = d + back_d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
                     bi_m = m + back_m
                     mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, bi_d, bi_m, [], 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
