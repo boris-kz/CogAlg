@@ -41,8 +41,14 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, comp_ders_, rdn, rng, x, X):
                 rng += 1
                 back_ = []  # max_len == rng
                 for i in range(rng, L):  # comp between rng-distant pixels
-                    ip = e_[i][0][0]
-                    (pri_ip, i_d, i_m), input_ders_ = e_[i-rng]
+                    pri_e = e_[i-rng]   # use pri_e as pointer to e_[i-rng]
+                    if len( pri_e ) == 2:   # see if e_'s element structure is ((pri_p, id, i_m), comp_ders_) or (pri_p, id, i_m)
+                        ip = e_[i][0][0]
+                        (pri_ip, i_d, i_m), input_ders_ = pri_e
+                    else:
+                        ip = e_[i][0]
+                        (pri_ip, i_d, i_m), input_ders_ = pri_e, []
+
                     input_ders_.append( (pri_ip, i_d, i_m) )
                     i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
                     if  dderived:
@@ -81,12 +87,11 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, comp_ders_, rdn, rng, x, X):
     D += d      # fuzzy ds summed within mP | dP
     M += m      # fuzzy ms summed within mP | dP
     if typ:
-        # if comp_ders_:
-        #     element = (pri_p, d, m), comp_ders_
-        # else:
-        #     element = pri_p, d, m
-        # e_.append(element)
-        e_.append( ( (pri_p, d, m), comp_ders_ ) )  # inputs for extended-range comp are tuples, vs. pixels for initial comp
+        if comp_ders_:
+            e_.append(((pri_p, d, m), comp_ders_))  # inputs for extended-range comp are tuples, vs. pixels for initial comp
+        else:
+            e_.append((pri_p, d, m))
+
         # this is selective for strong patterns, so it should buffer compared ders with each extended-range ders
     else:
         e_.append(d)  # prior ds of the same sign buffered within dP, p and m are not used in recursive comp?
@@ -98,7 +103,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, comp_ders_, rdn, rng, x, X):
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
-    for y in range(ini_y +1, Y):
+    for y in range( ini_y, Y ):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
 
         dP_= []; dP = 0,0,0,0,0,0,[]  # initialized at each line,
