@@ -43,17 +43,16 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
     back_ = []  # buffer for fuzzy derivatives from rng of backward comps per pri_p, max_len==rng
 
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
-        if x > rng * 2 - 1:
-            back_d, back_m = back_.pop(0)  # back_d|m for bilateral sum, rng-distant from i_d|m, buffered in back_ of max_len==rng
         for index, (pri_p, d, m) in enumerate(rng_ders1_):
 
             d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-            m += ave - abs(d)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+            m += ave - abs(p - pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
 
             if index < max_index:
                 rng_ders1_[index] = (pri_p, d, m)
 
             elif x > rng * 2 - 1:
+                back_d, back_m = back_.pop(0)  # back_d|m for bilateral sum, rng-distant from i_d|m, buffered in back_ of max_len==rng
                 ders1_.append((pri_p, d + back_d, m + back_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
 
         if x > rng * 2 - 2:
