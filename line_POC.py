@@ -25,6 +25,14 @@ This recursion forms hierarchical mPs and dPs of variable depth, which will be c
 In the code below, postfix '_' denotes array name, vs. identical name of array elements, 
 and capitalized variable names indicate sums of corresponding small-case vars'''
 
+def compare( p, pri_p, dderived = 0 ):
+    "Compare 2 pixels, returns d, m"
+    d = p - pri_p # accumulates difference between p and all prior and subsequent ps in rng
+    if not dderived:
+        return d, ( ave_d - abs( d ) ) # brightness mag != predictive value, thus indirect match
+    else:
+        return d, ( min( p, pri_p ) - ave_m )  # d-derived vars magnitude = change | stability, thus direct match
+
 
 def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, termination, and recursive comp within pattern mP | dP
 
@@ -39,22 +47,20 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
-                back_ = []  # max_len == rng
                 for i in range(rng, L):  # comp between rng-distant pixels
-                    ip = e_[i][0]
+                    ip, back_d, back_m = e_[i]
                     pri_ip, i_d, i_m = e_[i - rng]
-                    i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
-                    if  dderived:
-                        i_m += min(ip, pri_ip) - ave_m  # d-derived vars magnitude = change | stability, thus direct match
-                    else:
-                        i_m += ave_d - abs(ip - pri_ip)  # brightness mag != predictive value, thus indirect match
+
+                    input_d, input_m = compare( ip, pri_ip, dderived ) # dderived dependent
+
+                    i_d += input_d; back_d += input_d
+                    i_m += input_m; back_m += input_m
+
+                    e_[i] = (ip, back_d, back_m) # For bilateral sumation in e_[i]
+
                     if  i > rng * 2 - 1:
-                        back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
-                        bi_d = i_d + back_d
-                        bi_m = i_m + back_m
-                        mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
-                        dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
-                    back_.append((i_d, i_m))
+                        mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
+                        dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
                 e_= (dP_, mP_)
         else:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_: no use for p, m?
@@ -63,8 +69,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 pri_ip = e_[0]
                 for i in range(1, L):  # comp between consecutive ip = d, rng=1: not bilateral
                     ip = e_[i]
-                    i_d = ip - pri_ip
-                    i_m = min(ip, pri_ip) - ave_m  # d = change, thus direct match
+                    i_d, i_m = compare( ip, pri_ip, 1 ) # Calculate i_m as direct match
                     mP, mP_ = form_pattern(1, 1, mP, mP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 1, dP, dP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms dP: span of pixels with same-sign d
                     pri_ip = ip
@@ -90,7 +95,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
-    for y in range(ini_y, Y):
+    for y in range( ini_y, Y ):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
 
         dP_= []; dP = 0,0,0,0,0,0,[]  # initialized at each line,
@@ -98,25 +103,27 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         max_index = min_rng - 1  # max index of rng_ders_
         ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
-        back_ = []  # fuzzy derivatives d and m from rng of backward comps per prior pixel
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
+
+            back_d, back_m = 0, 0 # storage for next tuple's d, m
             for index, (pri_p, d, m) in enumerate(ders_):
 
-                d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += ave_d - abs(p - pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+                input_d, input_m = compare( p, pri_p ) # Take d and m from a comparison
+
+                d += input_d  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
+                m += input_m  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+
+                back_d += input_d; back_m += input_m # d and m should be accumulated for both compared tuples to become bilateral
+
                 if index < max_index:
                     ders_[index] = (pri_p, d, m)
 
                 elif x > min_rng * 2 - 1:
-                    back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
-                    bi_d = d + back_d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
-                    bi_m = m + back_m
-                    mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
-                    dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
-            back_.append((d, m))  # accumulated through ders_ comp
-            ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+                    mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, d, m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
+                    dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, d, m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
+            ders_.appendleft((p, back_d, back_m))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
