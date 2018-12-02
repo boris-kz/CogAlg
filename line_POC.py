@@ -8,30 +8,18 @@ This is a principal version of 1D alg, with full overlap between difference patt
 Initial match is defined as average_abs(d) - abs(d): secondary to difference because a stable visual property of objects is albedo 
 (vs. brightness), and spatio-temporal stability of albedo itself has low correlation with its magnitude. 
 Although an indirect measure of match, low abs(d) should be predictive: uniformity across space correlates with stability over time.
-
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness. 
 Spatial difference in albedo indicates change in some property of observed objects, thus should serve as an edge | fill-in detector. 
 Magnitude of such change or lack thereof is more predictive of some ultimate impact on observer than magnitude of original brightness. 
 Hence, match of differences and matches is defined here as min magnitude, vs. inverse deviation of abs(d) as match of brightness.
-
 Cross-comparison between consecutive pixels within horizontal scan line (row).
 Resulting difference patterns dPs (spans of pixels forming same-sign differences)
 and relative match patterns mPs (spans of pixels forming same-sign match)
 are redundant representations of each line of pixels.
-
 form_pattern() is conditionally recursive, cross-comparing derived variables within a queue e_ of a above-minimal summed value.
 This recursion forms hierarchical mPs and dPs of variable depth, which will be cross-compared on the next level of search.
-
 In the code below, postfix '_' denotes array name, vs. identical name of array elements, 
 and capitalized variable names indicate sums of corresponding small-case vars'''
-
-def compare( p, pri_p, dderived = 0 ):
-    "Compare 2 pixels, returns d, m"
-    d = p - pri_p # accumulates difference between p and all prior and subsequent ps in rng
-    if not dderived:
-        return d, ( ave_d - abs( d ) ) # brightness mag != predictive value, thus indirect match
-    else:
-        return d, ( min( p, pri_p ) - ave_m )  # d-derived vars magnitude = change | stability, thus direct match
 
 
 def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, termination, and recursive comp within pattern mP | dP
@@ -47,20 +35,22 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
+                back_ = []  # max_len == rng
                 for i in range(rng, L):  # comp between rng-distant pixels
-                    ip, back_d, back_m = e_[i]
+                    ip = e_[i][0]
                     pri_ip, i_d, i_m = e_[i - rng]
-
-                    input_d, input_m = compare( ip, pri_ip, dderived ) # dderived dependent
-
-                    i_d += input_d; back_d += input_d
-                    i_m += input_m; back_m += input_m
-
-                    e_[i] = (ip, back_d, back_m) # For bilateral sumation in e_[i]
-
+                    i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
+                    if  dderived:
+                        i_m += min(ip, pri_ip) - ave_m  # d-derived vars magnitude = change | stability, thus direct match
+                    else:
+                        i_m += ave_d - abs(ip - pri_ip)  # brightness mag != predictive value, thus indirect match
                     if  i > rng * 2 - 1:
-                        mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
-                        dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
+                        back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
+                        bi_d = i_d + back_d
+                        bi_m = i_m + back_m
+                        mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
+                        dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
+                    back_.append((i_d, i_m))
                 e_= (dP_, mP_)
         else:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_: no use for p, m?
@@ -69,7 +59,8 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 pri_ip = e_[0]
                 for i in range(1, L):  # comp between consecutive ip = d, rng=1: not bilateral
                     ip = e_[i]
-                    i_d, i_m = compare( ip, pri_ip, 1 ) # Calculate i_m as direct match
+                    i_d = ip - pri_ip
+                    i_m = min(ip, pri_ip) - ave_m  # d = change, thus direct match
                     mP, mP_ = form_pattern(1, 1, mP, mP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 1, dP, dP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms dP: span of pixels with same-sign d
                     pri_ip = ip
@@ -95,7 +86,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
-    for y in range( ini_y, Y ):
+    for y in range(Y):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
 
         dP_= []; dP = 0,0,0,0,0,0,[]  # initialized at each line,
@@ -105,31 +96,33 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-
-            back_d, back_m = 0, 0 # storage for next tuple's d, m
+            back_d, back_m = 0, 0
             for index, (pri_p, d, m) in enumerate(ders_):
 
-                input_d, input_m = compare( p, pri_p ) # Take d and m from a comparison
+                fd = p - pri_p
+                fm = ave_d - abs(fd)
 
-                d += input_d  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += input_m  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+                d += fd  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
+                m += fm  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
 
-                back_d += input_d; back_m += input_m # d and m should be accumulated for both compared tuples to become bilateral
+                back_d += fd; back_m += fm # for bilateral fuzzy d and m
+
 
                 if index < max_index:
                     ders_[index] = (pri_p, d, m)
 
                 elif x > min_rng * 2 - 1:
-
                     mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, d, m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, d, m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
-            ders_.appendleft((p, back_d, back_m))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+
+            # add back_d and back_m to current pixel ders, no
+            ders_.appendleft((p, back_d, back_m)) # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
 
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/test.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
 
@@ -152,4 +145,3 @@ start_time = time()
 frame_of_patterns_ = cross_comp(image)
 end_time = time() - start_time
 print(end_time)
-
