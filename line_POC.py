@@ -86,7 +86,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
-    for y in range(Y):
+    for y in range(ini_y, Y):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
 
         dP_= []; dP = 0,0,0,0,0,0,[]  # initialized at each line,
@@ -122,7 +122,7 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
 
 
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/test.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
 
