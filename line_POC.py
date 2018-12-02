@@ -21,7 +21,6 @@ are redundant representations of each line of pixels.
 
 form_pattern() is conditionally recursive, cross-comparing derived variables within a queue e_ of a above-minimal summed value.
 This recursion forms hierarchical mPs and dPs of variable depth, which will be cross-compared on the next level of search.
-
 In the code below, postfix '_' denotes array name, vs. identical name of array elements, 
 and capitalized variable names indicate sums of corresponding small-case vars'''
 
@@ -98,25 +97,26 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         max_index = min_rng - 1  # max index of rng_ders_
         ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
-        back_ = []  # fuzzy derivatives d and m from rng of backward comps per prior pixel
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-            for index, (pri_p, d, m) in enumerate(ders_):
+            back_fd, back_fm = 0, 0
+            for index, (pri_p, fd, fm) in enumerate(ders_):
 
-                d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += ave_d - abs(p - pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+                d = p - pri_p
+                m = ave_d - abs(d)
+                fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
+                fm += m  # bilateral fuzzy m: running sum of matches between pixel and all prior and subsequent pixels within rng
+                back_fd += d
+                back_fm += m  # running sum of d and m between pixel and all prior pixels within rng
+
                 if index < max_index:
-                    ders_[index] = (pri_p, d, m)
+                    ders_[index] = (pri_p, fd, fm)
 
-                elif x > min_rng * 2 - 1:
-                    back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
-                    bi_d = d + back_d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
-                    bi_m = m + back_m
-                    mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
-                    dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
+                elif x > min_rng * 2 - 1:  # after full bilateral rng
+                    mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, fd, fm, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
+                    dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, fd, fm, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
-            back_.append((d, m))  # accumulated through ders_ comp
-            ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+            ders_.appendleft((p, back_fd, back_fm)) # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
@@ -145,4 +145,3 @@ start_time = time()
 frame_of_patterns_ = cross_comp(image)
 end_time = time() - start_time
 print(end_time)
-
