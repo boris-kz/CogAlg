@@ -96,27 +96,27 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-            back_d, back_m = 0, 0
-            for index, (pri_p, d, m) in enumerate(ders_):
+            back_fd, back_fm = 0, 0
+            for index, (pri_p, fd, fm) in enumerate(ders_):
 
-                fd = p - pri_p
-                fm = ave_d - abs(fd)
+                d = p - pri_p
+                m = ave_d - abs(d)
 
-                d += fd  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += fm  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+                fd += d  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
+                fm += m  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
 
-                back_d += fd; back_m += fm # for bilateral fuzzy d and m
+                back_fd += d; back_fm += m # for bilateral fuzzy d and m
 
 
                 if index < max_index:
-                    ders_[index] = (pri_p, d, m)
+                    ders_[index] = (pri_p, fd, fm)
 
                 elif x > min_rng * 2 - 1:
-                    mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, d, m, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
-                    dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, d, m, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
+                    # fd and fm by this time should already be bilateral
+                    mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, fd, fm, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
+                    dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, fd, fm, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
-            # add back_d and back_m to current pixel ders, no
-            ders_.appendleft((p, back_d, back_m)) # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+            ders_.appendleft((p, back_fd, back_fm)) # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
