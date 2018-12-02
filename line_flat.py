@@ -1,66 +1,94 @@
 import cv2
+import numpy
 import argparse
 from time import time
-from collections import deque
 
-''' 
-line_POC without recursion 
-'''
+# *** Utilities ****************************************************************************************
 
-def form_pattern(typ, P, P_, pri_p, d, m, rng, x, X):  # accumulation, termination, and recursive comp within pattern mP | dP
+def compare( p, pri_p ):
+    "Compares 2 pixel, returns d and m"
+    d = p - pri_p
 
-    if typ: s = 1 if m >= 0 else 0  # sign of core var m, 0 is positive?
-    else:   s = 1 if d >= 0 else 0  # sign of core var d, 0 is positive?
+    return d, ( ave_d - abs( d ) )
 
-    pri_s, L, I, D, M, e_ = P  # depth of elements in e_ = r: flag of comp recursion within P
-    if (x > rng * 2 and s != pri_s) or x == X-1:  # core var sign change, P is terminated and evaluated for recursive comp
+# *** get_patterns() ***********************************************************************************
 
-        P_.append((typ, pri_s, L, I, D, M, e_))  # terminated P is output to the next level of search
-        L, I, D, M, e_ = 0, 0, 0, 0, []  # new P initialization
+def get_patterns( current_frame ):
+    "Get 1D patterns from a frame"
 
-    pri_s = s   # current sign is stored as prior sign; P (span of pixels forming same-sign m | d) is incremented:
-    L += 1      # length of mP | dP
-    I += pri_p  # input ps summed within mP | dP
-    D += d      # fuzzy ds summed within mP | dP
-    M += m      # fuzzy ms summed within mP | dP
-    e_.append((pri_p, d, m))
-    P = pri_s, L, I, D, M, e_
-    return P, P_
+    global image
+
+    for y in range( ini_y, Y ):
+        pixel_ = current_frame[y, :]
+        '''
+        # File output *********************
+        fo.write( 'pixel:\t' )
+        for x in range( X ):
+            fo.write( '%6d' % pixel_[ x ] )
+        fo.write( '\n' )
+        # *********************************
+        '''
+        d_ = [ 0 ] * X; m_ = [ 0 ] * X
+        mP_pixel_skip_ = [ False ] * X
+        dP_pixel_skip_ = [ False ] * X
+        rng = 0
+        Stop = False
+        while not Stop :
+            mP_pixel_skip_[ rng ]  = True
+            dP_pixel_skip_[ rng ] = True
+
+            rng += 1
+
+            if( rng >= min_rng ): Stop = True
+
+            mP_end_flag_ = [ False ] * X
+            dP_end_flag_ = [ False ] * X
+
+            D = 0; M = 0
+
+            for x in range ( rng, X ):
+                if not mP_pixel_skip_[ x ] or not dP_pixel_skip_:
+                    x1 = x - rng
+
+                    d, m = compare( pixel_[ x ], pixel_[ x1 ] )
+
+                    d_[ x ] += d
+                    d_[ x1 ] += d
+                    m_[ x ] += m
+                    m_[ x1 ] += m
+
+                    if not dP_pixel_skip_[ x1 ]:
+                        D += d_[ x1 ]
+
+                    if not mP_pixel_skip_[ x1 ]:
+                        M += m_[ x1 ]
+
+            dP_ends_ = numpy.where( numpy.diff( numpy.sign( d_ ) ) )[ 0 ]
+            mP_ends_ = numpy.where( numpy.diff( numpy.sign( m_ ) ) )[ 0 ]
+
+            if rng == 2:
+                for i, x in enumerate( mP_ends_):
+                    image[ y, x ] = 0
 
 
-def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
-    frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
-    for y in range(ini_y, Y):
-        pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
 
-        dP_= []; dP = 0,0,0,0,0,[]  # initialized at each line,
-        mP_= []; mP = 0,0,0,0,0,[]  # pri_s, L, I, D, M, ders_
-        max_index = min_rng - 1  # max index of rng_ders_
-        ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
-        ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
-        back_ = []  # fuzzy derivatives d and m from rng of backward comps per prior pixel
+            '''
+            # File output *********************
+            fo.write( 'rng = %d :\n' % ( rng ) )
+            fo.write( 'd_:\t\t' )
+            for x in range( X ):
+                fo.write( '%6d' % d_[ x ] )
+            fo.write( '\n' )
+            fo.write( 'm_:\t\t' )
+            for x in range( X ):
+                fo.write( '%6d' % m_[ x ] )
+            fo.write( '\n' )
+            # *********************************
+            '''
+    return ( d_, m_ )
 
-        for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-            for index, (pri_p, d, m) in enumerate(ders_):
-
-                d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += ave_d - abs(p - pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
-                if index < max_index:
-                    ders_[index] = (pri_p, d, m)
-
-                elif x > min_rng * 2 - 1:
-                    back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
-                    bi_d = d + back_d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
-                    bi_m = m + back_m
-                    mP, mP_ = form_pattern(1, mP, mP_, pri_p, bi_d, bi_m, min_rng, x, X)  # forms mP: span of pixels with same-sign m
-                    dP, dP_ = form_pattern(0, dP, dP_, pri_p, bi_d, bi_m, min_rng, x, X)  # forms dP: span of pixels with same-sign d
-
-            back_.append((d, m))  # accumulated through ders_ comp
-            ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
-        frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
-    return frame_of_patterns_  # frame of patterns is output to level 2
-
+# *** Main *********************************************************************************************
 
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
@@ -78,12 +106,16 @@ ave_m = 10  # min d-match for inclusion in positive d_mP
 ave_d = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
-ini_y = 400
+ini_y = 0
 min_rng = 2  # fuzzy pixel comparison range, adjusted by higher-level feedback
 Y, X = image.shape  # Y: frame height, X: frame width
 
+# fo = open( 'outputs/output.txt', 'w+') # File output
+
 start_time = time()
-frame_of_patterns_ = cross_comp(image)
+patterns_ = get_patterns( image )
+cv2.imwrite( './images/output.jpg', image)
 end_time = time() - start_time
 print(end_time)
 
+# fo.close() # File output
