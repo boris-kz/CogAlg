@@ -38,27 +38,26 @@ from collections import deque
 def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
 
     ders1_ = []  # tuples of complete 1D derivatives: summation range = rng
-    rng_ders1_ = deque(maxlen=rng)  # array of ders1 within rng from input pixel: summation range < rng
+    rng_ders1_ = deque(maxlen=rng)  # incomplete ders1s, within rng from input pixel: summation range < rng
     max_index = rng - 1  # max index of rng_ders1_
-    back_ = []  # buffer for fuzzy derivatives from rng of backward comps per pri_p, max_len==rng
+    back_fd, back_fm = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
 
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
-        for index, (pri_p, d, m) in enumerate(rng_ders1_):
+        for index, (pri_p, fd, fm) in enumerate(rng_ders1_):
 
-            d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-            m += ave - abs(p - pri_p)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+            d = p - pri_p
+            m = ave - abs(d)
+            fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
+            fm += m  # bilateral fuzzy m: running sum of matches between pixel and all prior and subsequent pixels within rng
+            back_fd += d
+            back_fm += m  # running sum of d and m between pixel and all prior pixels within rng
 
             if index < max_index:
-                rng_ders1_[index] = (pri_p, d, m)
+                rng_ders1_[index] = (pri_p, fd, fm)
+            elif x > rng * 2 - 1:   # after pri_p comp over full bilateral rng
+                ders1_.append((pri_p, d + back_fd, m + back_fm))  # completed bilateral tuple is transferred from rng_ders_ to ders_
 
-            elif x > rng * 2 - 1:
-                back_d, back_m = back_.pop(0)  # back_d|m for bilateral sum, rng-distant from i_d|m, buffered in back_ of max_len==rng
-                ders1_.append((pri_p, d + back_d, m + back_m))  # completed bilateral tuple is transferred from rng_ders_ to ders_
-
-        if x > rng * 2 - 2:
-            back_.append((d, m))  # complete, to complement derivatives from comp(p, next_rng_pixels)
-        rng_ders1_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
-
+        rng_ders1_.appendleft((p, back_fd, back_fm)) # new tuple with initialized d and m, maxlen displaces completed tuple
     ders1_ += reversed(rng_ders1_)  # tuples of last rng in line (incomplete, in reverse order), or discarded?
     return ders1_
 
@@ -73,29 +72,30 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     x = 0  # lateral coordinate of current pixel
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
-    dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
+    # dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
-    for (p, d, m), (ders2_, back_dy, back_my) in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
+    for (p, d, m), ders2_ in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
         x += 1
         index = 0
-        for (_p, _d, dy, _m, my) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
-
-            dy += p - _p  # fuzzy dy: running sum of differences between pixel and all lower pixels within rng
-            my += ave - abs(dy)  # fuzzy my: running sum of matches between pixel and all lower pixels within rng
+        back_dy, back_my = 0, 0
+        for (_p, _d, fdy, _m, fmy) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+            dy = p - _p
+            my = ave - abs(dy)
+            fdy += dy  # running sum of differences between pixel _p and all higher and lower pixels within rng
+            fmy += my  # running sum of matches between pixel _p and all higher and lower pixels within rng
+            back_dy += dy
+            back_my += my  # running sum of d and m between pixel _p and all higher pixels within rng
 
             if index < max_index:
-                ders2_[index] = (_p, d, dy, m, my)
+                ders2_[index] = (_p, d, fdy, m, fmy)
 
             elif x > min_coord and y > min_coord + ini_y:
-
-                ders2 = _p, _d, dy + back_dy, _m, my + back_my  # back_d, back_m are summed over rng of back-comps per _p
+                ders2 = _p, _d, fdy, _m, fmy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
 
             index += 1
-
-        ders2_.appendleft((p, d, 0, m, 0))  # initial dy and my = 0, new ders2 replaces completed t2 in vertical ders2_ via maxlen
-        new_ders2__.append((ders2_, dy, my))  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line ycomp
-        # complete dy and my will be re-used as back_dy and back_my
+        ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 replaces completed one in vertical ders2_ via maxlen
+        new_ders2__.append(ders2_)  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line vertical comp
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
