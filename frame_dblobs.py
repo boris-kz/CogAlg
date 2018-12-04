@@ -41,9 +41,9 @@ def lateral_comp(pixel_):  # comparison over x coordinate, within rng of consecu
     rng_ders1_ = deque(maxlen=rng)  # incomplete ders1s, within rng from input pixel: summation range < rng
     rng_ders1_.append((0, 0, 0))
     max_index = rng - 1  # max index of rng_ders1_
-    back_fd, back_fm = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
 
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
+        back_fd, back_fm = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
         for index, (pri_p, fd, fm) in enumerate(rng_ders1_):
 
             d = p - pri_p
@@ -79,6 +79,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
         index = 0
         back_dy, back_my = 0, 0
         for (_p, _d, fdy, _m, fmy) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+
             dy = p - _p
             my = ave - abs(dy)
             fdy += dy  # running sum of differences between pixel _p and all higher and lower pixels within rng
