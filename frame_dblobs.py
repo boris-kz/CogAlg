@@ -35,10 +35,11 @@ from collections import deque
     postfix '_' denotes array name, vs. same-name elements of that array:
 '''
 
-def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of consecutive pixels within each line
+def lateral_comp(pixel_):  # comparison over x coordinate, within rng of consecutive pixels on each line
 
     ders1_ = []  # tuples of complete 1D derivatives: summation range = rng
     rng_ders1_ = deque(maxlen=rng)  # incomplete ders1s, within rng from input pixel: summation range < rng
+    rng_ders1_.append((0, 0, 0))
     max_index = rng - 1  # max index of rng_ders1_
     back_fd, back_fm = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
 
@@ -55,7 +56,7 @@ def lateral_comp(pixel_):  # comparison over x coordinate: between min_rng of co
             if index < max_index:
                 rng_ders1_[index] = (pri_p, fd, fm)
             elif x > rng * 2 - 1:   # after pri_p comp over full bilateral rng
-                ders1_.append((pri_p, d + back_fd, m + back_fm))  # completed bilateral tuple is transferred from rng_ders_ to ders_
+                ders1_.append((pri_p, fd, fm))  # completed bilateral tuple is transferred from rng_ders_ to ders_
 
         rng_ders1_.appendleft((p, back_fd, back_fm)) # new tuple with initialized d and m, maxlen displaces completed tuple
     ders1_ += reversed(rng_ders1_)  # tuples of last rng in line (incomplete, in reverse order), or discarded?
@@ -66,13 +67,12 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     # comparison between rng vertically consecutive pixels, forming ders2: tuple of pixel + its 2D derivatives
 
     dP = 0, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, L, I, D, Dy, V, Vy, ders2_
-    dP_ = deque()  # line y - 1+ rng*2
-    dbuff_ = deque()  # line y- 2+ rng*2: _Ps buffered by previous run of scan_P_
-    new_ders2__ = deque()  # 2D: line of ders2_s buffered for next-line comp
+    dP_ = deque()  # line y - 1 + rng*2
+    dbuff_ = deque()  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
+    new_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
     x = 0  # lateral coordinate of current pixel
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
-    # dy, my = 0, 0  # for initial rng of lines, to reload _dy, _vy = 0, 0 in higher tuple
 
     for (p, d, m), ders2_ in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
         x += 1
@@ -87,15 +87,14 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
             back_my += my  # running sum of d and m between pixel _p and all higher pixels within rng
 
             if index < max_index:
-                ders2_[index] = (_p, d, fdy, m, fmy)
-
+                ders2_[index] = (_p, _d, fdy, _m, fmy)
             elif x > min_coord and y > min_coord + ini_y:
-                ders2 = _p, _d, fdy, _m, fmy
-                dP, dP_, dbuff_, _dP_, dframe = form_P(ders2, x, dP, dP_, dbuff_, _dP_, dframe)
+                ders = _p, _d, fdy, _m, fmy
+                dP, dP_, dbuff_, _dP_, dframe = form_P(ders, x, dP, dP_, dbuff_, _dP_, dframe)
 
             index += 1
-        ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 replaces completed one in vertical ders2_ via maxlen
-        new_ders2__.append(ders2_)  # vertically-incomplete 2D array of tuples, converted to ders2__, for next-line vertical comp
+        ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical ders2_ via maxlen
+        new_ders2__.append(ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
@@ -134,7 +133,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     return P, P_, buff_, hP_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
 
 
-def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in hP_, combines overlapping Ps into blobs
+def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in higher_P_, combines overlapping Ps into blobs
 
     buff_ = deque()  # new buffer for displaced hPs, for scan_P_(next P)
     fork_ = []  # hPs connected to input P
@@ -251,18 +250,16 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = [0, 0, 0, 0, 0, 0, 0, 0, []]  # L, I, D, Dy, V, Vy, xD, yD, blob_
-    global y
-    y = ini_y  # initial input line, set at 400 as that area in test image seems to be the most diverse
-
-    ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
+    global y; y = ini_y  # initial line
     ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
     pixel_ = image[ini_y, :]  # first line of pixels at y == 0
     ders1_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
 
     for (p, d, m) in ders1_:
         ders2 = p, d, 0, m, 0  # dy, my initialized at 0
-        ders2_.append(ders2)  # only one tuple per first-line ders2_
-        ders2__.append((ders2_, 0, 0))  # _dy, _my initialized at 0
+        ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
+        ders2_.append(ders2)  # only one tuple in first-line ders2_
+        ders2__.append(ders2_)
 
     for y in range(ini_y + 1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
 
@@ -277,10 +274,10 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
 
 # pattern filters: eventually updated by higher-level feedback, initialized here as constants:
 
-rng = 2  # number of leftward or upward pixels compared to each input pixel
+rng = 2  # number of pixels compared to each pixel in four directions
 ave = 31  # |d| value that coincides with average match: value pattern filter
 ave_rate = 0.25  # average match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
-ini_y = 400
+ini_y = 400  # that area in test image seems to be the most diverse
 
 image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
 image = image.astype(int)

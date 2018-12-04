@@ -112,7 +112,7 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
                 if index < max_index:
                     ders_[index] = (pri_p, fd, fm)
 
-                elif x > min_rng * 2 - 1:  # after full bilateral rng
+                elif x > min_rng * 2 - 1:   # after pri_p comp over full bilateral rng
                     mP, mP_ = form_pattern(1, 0, mP, mP_, pri_p, fd, fm, 1, min_rng, x, X)  # forms mP: span of pixels with same-sign m
                     dP, dP_ = form_pattern(0, 0, dP, dP_, pri_p, fd, fm, 1, min_rng, x, X)  # forms dP: span of pixels with same-sign d
 
