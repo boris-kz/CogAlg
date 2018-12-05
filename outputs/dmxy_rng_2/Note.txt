@@ -1,0 +1,1 @@
+ds, ms, dys, mys are displayed as pixels corresponding to their coordinate, distinguished from each other by brightness, which is determined by their magnitude.
