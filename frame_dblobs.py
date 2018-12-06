@@ -6,11 +6,11 @@ from collections import deque
 
 '''   
     frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
-    frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in frame_draft().
+    frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in frame_draft.
     frame_dblobs() is updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
     
     Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
-    value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image,
+    value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image
 
     1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives ders ) array ders_
     2Le, line y- 1: y_comp(ders_): vertical pixel comp -> 2D tuple ders2 ) array ders2_ 
@@ -18,19 +18,23 @@ from collections import deque
     4Le, line y- 2+ rng*2: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps 
     5Le, line y- 3+ rng*2: form_segment: merge vertically-connected _Ps in non-forking blob segments
     6Le, line y- 4+ rng*2+ segment depth: form_blob: merge connected segments into blobs
-    
-    These functions are tested through form_P, I am currently debugging scan_P_. 
-    All 2D functions (y_comp, scan_P_, etc.) input two lines: higher and lower, convert elements of lower line 
-    into elements of new higher line, and displace elements of old higher line into higher function.
-    Higher-line elements include additional variables, derived while they were lower-line elements.
-    
+
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
     Each vertical and horizontal derivative forms separate blobs, suppressing overlapping orthogonal representations.
+    
     They can also be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives.
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
-    
     Subsequent union of lateral and vertical patterns is by strength only, orthogonal sign is not commeasurable?
+        
+    Initial pixel comparison is not novel, I design from the scratch to make it organic part of hierarchical algorithm.
+    It would be much faster with matrix computation, but this is minor compared to higher-level processing.
+    I implement it sequentially for consistency with accumulation into blobs: irregular and very difficult to map to matrices.
+    
+    All 2D functions (y_comp, scan_P_, form_blob) input two lines: higher and lower, convert elements of lower line 
+    into elements of new higher line, and displace elements of old higher line into higher function.
+    Higher-line elements include additional variables, derived while they were lower-line elements.
+    
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array:
 '''
@@ -64,7 +68,7 @@ def lateral_comp(pixel_):  # comparison over x coordinate, within rng of consecu
 
 
 def vertical_comp(ders1_, ders2__, _dP_, dframe):
-    # comparison between rng vertically consecutive pixels, forming ders2: tuple of pixel + its 2D derivatives
+    # comparison between bilateral rng of vertically consecutive pixels, forming ders2: tuple of pixel + its 2D derivatives
 
     dP = 0, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, L, I, D, Dy, V, Vy, ders2_
     dP_ = deque()  # line y - 1 + rng*2
@@ -89,7 +93,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
 
             if index < max_index:
                 ders2_[index] = (_p, _d, fdy, _m, fmy)
-            elif x > min_coord and y > min_coord + ini_y:
+            elif y > min_coord + ini_y:
                 ders = _p, _d, fdy, _m, fmy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders, x, dP, dP_, dbuff_, _dP_, dframe)
 
@@ -116,7 +120,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
         if y == rng * 2 + ini_y:  #  1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
-            P_.append([P, 0, [], x-1])
+            P_.append([P, 0, [], x-1])  # P, roots, _fork_, x
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
             # x-1 for prior p
@@ -134,21 +138,21 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     return P, P_, buff_, hP_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
 
 
-def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in higher_P_, combines overlapping Ps into blobs
+def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in higher P_, combines overlapping Ps into blobs
 
-    buff_ = deque()  # new buffer for displaced hPs, for scan_P_(next P)
-    fork_ = []  # hPs connected to input P
-    ini_x = 0  # always starts while, next ini_x = _x + 1
+    buff_ = deque()  # new buffer for displaced hPs (higher-line P tuples), for scan_P_(next P)
+    fork_ = []  # refs to hPs connected to input P
+    ini_x = 0  # to start while loop, next ini_x = _x + 1
 
-    while ini_x <= x:  # while x values overlap between P and hP
+    while ini_x <= x:  # while x values overlap between P and _P
         if _buff_:
-            hP = _buff_.popleft()  # hP buffered in prior scan_P_, seg id == _fork_ id for ref by root Ps
+            hP = _buff_.popleft()  # higher-line P tuple buffered in prior scan_P_, seg id == _fork_ id, referenced by root Ps
             _P, roots, _fork_, _x = hP
         elif hP_:
             hP = hP_.popleft()  # roots = 0: number of Ps connected to _P: pri_s, L, I, D, Dy, V, Vy, ders_
             _P, roots, _fork_, _x = hP
         else:
-            break  # higher line ends, all hPs are converted to seg
+            break  # higher line ends, all hPs are converted to segments
 
         if P[0] == _P[0]:  # if s == _s: core sign match, + selective inclusion if contiguity eval?
             roots += 1; hP[1] = roots
