@@ -76,7 +76,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     new_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
-    x = rng-1 # lateral coordinate of pixel in input ders1
+    x = rng # lateral coordinate of pixel in input ders1
 
     for (p, d, m), ders2_ in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
         index = 0
@@ -116,7 +116,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     p, d, dy, v, vy = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
-    if s == P[0] or x == rng-1:  # s == pri_s or initialized: P is continued, else terminated:
+    if s == P[0] or x == rng:  # s == pri_s or initialized: P is continued, else terminated:
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
         if y == rng * 2 + ini_y:  #  1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
@@ -185,7 +185,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
                 if roots == 0:  # no if y > rng * 2 + 2 + ini_y: y P ) y-1 hP ) y-2 seg ) y-4 blob ) y-5 frame
                     frame = form_blob(hP, frame)  # bottom segment is terminated and added to internal blob
 
-        ini_x = _x + 1  # first x of next hP
+        ini_x = _x + 1  # first x of next _P
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, 0, fork_, x])  # P with no overlap to next _P is buffered for next-line scan_P_, converted to hP
