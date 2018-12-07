@@ -14,10 +14,10 @@ from collections import deque
 
     1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives ders ) array ders_
     2Le, line y- 1: y_comp(ders_): vertical pixel comp -> 2D tuple ders2 ) array ders2_ 
-    3Le, line y- 1+ rng*2: form_P(ders2) -> 1D pattern P) hP  
+    3Le, line y- 1+ rng*2: form_P(ders2) -> 1D pattern P
     4Le, line y- 2+ rng*2: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps 
-    5Le, line y- 3+ rng*2: form_segment: merge vertically-connected _Ps in non-forking blob segments
-    6Le, line y- 4+ rng*2+ segment depth: form_blob: merge connected segments into blobs
+    5Le, line y- 3+ rng*2: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
+    6Le, line y- 4+ rng*2+ seg depth: form_blob(seg, blob): merge connected segments in fork_' incomplete blobs, recursively  
 
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
@@ -74,12 +74,11 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
     dP_ = deque()  # line y - 1 + rng*2
     dbuff_ = deque()  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
     new_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
-    x = 0  # lateral coordinate of current pixel
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
+    x = rng-1 # lateral coordinate of pixel in input ders1
 
     for (p, d, m), ders2_ in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
-        x += 1
         index = 0
         back_dy, back_my = 0, 0
         for (_p, _d, fdy, _m, fmy) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
@@ -96,17 +95,18 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
             elif y > min_coord + ini_y:
                 ders = _p, _d, fdy, _m, fmy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders, x, dP, dP_, dbuff_, _dP_, dframe)
-
             index += 1
+            x += 1
+
         ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical ders2_ via maxlen
         new_ders2__.append(ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
         if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
-            dP_.append([dP, 0, [], x])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
+            dP_.append([dP, 0, [], x-1])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
         else:
-            dP_, dbuff_, _dP_, dframe = scan_P_(x, dP, dP_, dbuff_, _dP_, dframe)  # scans higher-line Ps for contiguity
+            dP_, dbuff_, _dP_, dframe = scan_P_(x-1, dP, dP_, dbuff_, _dP_, dframe)  # scans higher-line Ps for contiguity
 
     return new_ders2__, dP_, dframe  # extended in scan_P_; net_s are packed into frames
 
@@ -116,7 +116,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     p, d, dy, v, vy = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
 
-    if s == P[0] or x == rng * 2:  # s == pri_s or initialized: P is continued, else terminated:
+    if s == P[0] or x == rng-1:  # s == pri_s or initialized: P is continued, else terminated:
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
         if y == rng * 2 + ini_y:  #  1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
@@ -219,7 +219,7 @@ def form_blob(term_seg, frame):  # continued or initialized blob (connected segm
                frame = form_blob(fork, frame)  # return ref-> co_forks: del(seg[:]); seg += iseg; fork_[index] = seg?
             fork_[index] = fork
 
-    else: # fork_ == 0, then test for n of extant co- forks ) yforks and subb (sub blob) inclusion in 2D yroot__:
+    else:  # fork_ == 0, then test for n of extant co- forks ) yforks and subb (sub blob) inclusion in 2D yroot__:
         '''
         forks -= 1  # extant mediated fork counter per blob, 
         initially = len(fork_) per root, + fork Le per line: 
