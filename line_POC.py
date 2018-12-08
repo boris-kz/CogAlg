@@ -38,23 +38,23 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
-                back_ = []  # max_len == rng
-                for i in range(rng, L):  # comp between rng-distant pixels
-                    ip = e_[i][0]
-                    pri_ip, i_d, i_m = e_[i - rng]
-                    i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
-                    if  dderived:
-                        i_m += min(ip, pri_ip) - ave_m  # d-derived vars magnitude = change | stability, thus direct match
+                for i in range(rng, L):  # comp between extended-rng distant pixels
+                    ip, fd, fm = e_[i]
+                    _ip, _fd, _fm = e_[i-rng]
+                    i_d = ip - _ip
+                    if dderived:
+                        i_m = min(ip, _ip) - ave_m  # magnitude of d-derived vars represents change | stability, thus direct match
                     else:
-                        i_m += ave_d - abs(ip - pri_ip)  # brightness mag != predictive value, thus indirect match
-                    if  i > rng * 2 - 1:
-                        back_d, back_m = back_.pop(0)  # back_d|m is for bilateral sum, rng-distant from i_d|m, buffered in back_
-                        bi_d = i_d + back_d
-                        bi_m = i_m + back_m
-                        mP, mP_ = form_pattern(1, dderived, mP, mP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # mP: span of pixels with same-sign m
-                        dP, dP_ = form_pattern(0, dderived, dP, dP_, pri_ip, bi_d, bi_m, rdn+1, rng, i, L)  # dP: span of pixels with same-sign d
-                    back_.append((i_d, i_m))
-                e_= (dP_, mP_)
+                        i_m = ave_d - abs(ip -_ip)  # magnitude of brightness has low correlation with stability, thus indirect match
+                    fd += i_d
+                    fm += i_m  # accumulates difference and match between p and all prior ps in extended rng
+                    e_[i] = (ip, fd, fm)
+                    _fd += i_d  # accumulates difference and match between p and all prior and subsequent ps in extended rng
+                    _fm += i_m
+                    if i > rng * 2 - 1:
+                        mP, mP_ = form_pattern(1, dderived, mP, mP_, _ip, _fd, _fm, rdn + 1, rng, i, L)  # mP: span of pixels with same-sign m
+                        dP, dP_ = form_pattern(0, dderived, dP, dP_, _ip, _fd, _fm, rdn + 1, rng, i, L)  # dP: span of pixels with same-sign d
+                e_ = (dP_, mP_)
         else:
             if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_: no use for p, m?
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, d_
@@ -78,9 +78,9 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     D += d      # fuzzy ds summed within mP | dP
     M += m      # fuzzy ms summed within mP | dP
     if typ:
-        e_.append((pri_p, d, m))  # inputs for extended-range comp are tuples, vs. pixels for initial comp
+        e_.append((pri_p, abs(d), m))  # inputs for extended-range comp are tuples, vs. pixels for initial comp
     else:
-        e_.append(d)  # inputs for higher-derivation comp are ds (vs. pixels), p and m are not used?
+        e_.append(abs(d))  # inputs for higher-derivation comp are ds (vs. pixels), p and m are not used?
 
     P = pri_s, L, I, D, M, r, e_
     return P, P_

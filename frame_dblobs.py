@@ -119,7 +119,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):  # initializes, accumulates, and 
     if s == P[0] or x == rng:  # s == pri_s or initialized: P is continued, else terminated:
         pri_s, L, I, D, Dy, V, Vy, ders_ = P
     else:
-        if y == rng * 2 + ini_y:  #  1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
+        if y == rng * 2 + ini_y:  #  1st line: form_P converts P to initialized hP, forming initial P_, converted to hP_
             P_.append([P, 0, [], x-1])  # P, roots, _fork_, x
         else:
             P_, buff_, hP_, frame = scan_P_(x-1, P, P_, buff_, hP_, frame)  # scans higher-line Ps for contiguity
@@ -161,26 +161,25 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
         if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP included in a blob segment
             buff_.append(hP)
         else:
-            ave_x = _x - (_P[1]-1) // 2  # extra-x L = L-1 (1x in L)
             if y == rng * 2 + 1 + ini_y:  # 1st-line scan_P_ converts hPs to initial blob segments:
-                hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]  # Vars, roots, _fork_, ave_x, Dx, Py_, blob
+                hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]  # Pars, roots, _fork_, ave_x, Dx, Py_, blob
             else:
                 if len(hP[2]) == 1 and hP[2][0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
                     # blob segment hP[2][0] is incremented with hP, then replaces hP:
                     s, L, I, D, Dy, V, Vy, ders_ = _P
-                    Ls, Is, Ds, Dys, Vs, Vys = hP[2][0][0]  # Vars
-                    Ls += L; Is += I; Ds += D; Dys += Dy; Vs += V; Vys += Vy
-                    hP[0] = [Ls, Is, Ds, Dys, Vs, Vys]
-                    hP[3] = ave_x  # hP[1] roots are not modified
+                    Ls, Is, Ds, Dys, Vs, Vys = hP[2][0][0]  # Pars: seg parameters
+                    hP[0] = [Ls+L, Is+I, Ds+D, Dys+Dy, Vs+V, Vys+Vy]  # hP[1]: roots, is not modified
+                    ave_x = (_P[1]-1) // 2  # extra-x L = L-1 (1x in L)
+                    hP[3] = _x - ave_x
                     dx = ave_x - hP[2][0][3]
-                    hP.append( hP[2][0][4] + dx)  # Dx for seg norm and orient eval, | += |xd| for curved yL?
+                    hP.append( hP[2][0][4] + dx)  # Dx, to eval for seg normalization and orientation, | += |dx| for curved yL?
                     hP[2][0][5].append((_P, dx))
-                    hP.append( hP[2][0][5])  # Py_
+                    hP.append( hP[2][0][5])  # Py_: vertical P buffer
                     hP.append( hP[2][0][6])  # blob
-                    hP[2] = hP[2][0][2]  # last step, replaces fork to included seg with fork_ of included seg
+                    hP[2] =    hP[2][0][2]  # replaces fork to included seg with fork_ of included seg
                 else:
                     hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]
-                    # hP is converted to next hhP segment: Vars, roots, _fork_, ave_x, Dx, Py_, blob
+                    # hP is converted to initialized segment: Pars, roots, _fork_, ave_x, Dx, Py_, blob
 
                 if roots == 0:  # no if y > rng * 2 + 2 + ini_y: y P ) y-1 hP ) y-2 seg ) y-4 blob ) y-5 frame
                     frame = form_blob(hP, frame)  # bottom segment is terminated and added to internal blob
