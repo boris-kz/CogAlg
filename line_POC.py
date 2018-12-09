@@ -38,14 +38,14 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- m_pattern initialization: pri_s, L, I, D, M, r, ders_
                 r = 1
                 rng += 1
-                for i in range(rng, L):  # comp between extended-rng distant pixels
+                for i in range(rng, L):  # comp between extended-rng- distant pixels within e_
                     ip, fd, fm = e_[i]
-                    _ip, _fd, _fm = e_[i-rng]
+                    _ip, _fd, _fm = e_[i - rng]
                     i_d = ip - _ip
                     if dderived:
-                        i_m = min(ip, _ip) - ave_m  # magnitude of d-derived vars represents change | stability, thus direct match
+                        i_m = min(ip, _ip) - ave_m  # magnitude of vars derived from d corresponds to predictive value, thus direct match
                     else:
-                        i_m = ave_d - abs(ip -_ip)  # magnitude of brightness has low correlation with stability, thus indirect match
+                        i_m = ave_d - abs(i_d)  # magnitude of brightness has low correlation with stability, thus match is defined through d
                     fd += i_d
                     fm += i_m  # accumulates difference and match between p and all prior ps in extended rng
                     e_[i] = (ip, fd, fm)
@@ -56,17 +56,17 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
                         dP, dP_ = form_pattern(0, dderived, dP, dP_, _ip, _fd, _fm, rdn + 1, rng, i, L)  # dP: span of pixels with same-sign d
                 e_ = (dP_, mP_)
         else:
-            if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_: no use for p, m?
+            if L > 3 and abs(D) > ave_D * rdn:  # comp derivation increase within e_ = d_, no p, m comp or accumulation
                 dP_= []; dP = 0,0,0,0,0,0,[]; mP_= []; mP = 0,0,0,0,0,0,[]  # sub- d_pattern initialization: pri_s, L, I, D, M, r, d_
                 r = 1
-                pri_ip = e_[0]
-                for i in range(1, L):  # comp between consecutive ip = d, rng=1: not bilateral
-                    ip = e_[i]
-                    i_d = ip - pri_ip
-                    i_m = min(ip, pri_ip) - ave_m  # d = change, thus direct match
-                    mP, mP_ = form_pattern(1, 1, mP, mP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms mP: span of pixels with same-sign m
-                    dP, dP_ = form_pattern(0, 1, dP, dP_, pri_ip, i_d, i_m, rdn+1, 1, i, L)  # forms dP: span of pixels with same-sign d
-                    pri_ip = ip
+                pri_d = e_[0]
+                for i in range(1, L):  # comp between ds at rng=1, unilateral to preserve resolution, but missing back comp before rng incr?
+                    d = e_[i]
+                    dd = d - pri_d
+                    md = min(d, pri_d) - ave_m  # d magnitude (change) has negative predictive value, thus direct match calculation
+                    mP, mP_ = form_pattern(1, 1, mP, mP_, pri_d, dd, md, rdn+1, 1, i, L)  # forms mdP: span of ds with same-sign md
+                    dP, dP_ = form_pattern(0, 1, dP, dP_, pri_d, dd, md, rdn+1, 1, i, L)  # forms ddP: span of ds with same-sign dd
+                    pri_d = d
                 e_= (dP_, mP_)
 
         P_.append((typ, pri_s, L, I, D, M, r, e_))  # terminated P is output to the next level of search
@@ -78,7 +78,7 @@ def form_pattern(typ, dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumula
     D += d      # fuzzy ds summed within mP | dP
     M += m      # fuzzy ms summed within mP | dP
     if typ:
-        e_.append((pri_p, abs(d), m))  # inputs for extended-range comp are tuples, vs. pixels for initial comp
+        e_.append((pri_p, d, m))  # inputs for extended-range comp are tuples, vs. pixels for initial comp
     else:
         e_.append(abs(d))  # inputs for higher-derivation comp are ds (vs. pixels), p and m are not used?
 
