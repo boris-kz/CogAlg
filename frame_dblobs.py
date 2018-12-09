@@ -96,10 +96,10 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
                 ders = _p, _d, fdy, _m, fmy
                 dP, dP_, dbuff_, _dP_, dframe = form_P(ders, x, dP, dP_, dbuff_, _dP_, dframe)
             index += 1
-            x += 1
 
         ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical ders2_ via maxlen
         new_ders2__.append(ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
+        x += 1
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
@@ -167,18 +167,18 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):  # P scans shared-x-coordinate hPs in
                 if len(hP[2]) == 1 and hP[2][0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
                     # blob segment hP[2][0] is incremented with hP, then replaces hP:
                     s, L, I, D, Dy, V, Vy, ders_ = _P
-                    Ls, Is, Ds, Dys, Vs, Vys = hP[2][0][0]  # Pars: seg parameters
-                    hP[0] = [Ls+L, Is+I, Ds+D, Dys+Dy, Vs+V, Vys+Vy]  # hP[1]: roots, is not modified
-                    ave_x = (_P[1]-1) // 2  # extra-x L = L-1 (1x in L)
+                    Ls, Is, Ds, Dys, Vs, Vys = hP[2][0][0]  # Pars: segment parameters
+                    hP[0] = [Ls+L, Is+I, Ds+D, Dys+Dy, Vs+V, Vys+Vy]
+                    ave_x = (_P[1]-1) // 2  # extra-x L = L-1 (1x in L) # hP[1] roots is not modified, hP[2] fork_ is modified last
                     hP[3] = _x - ave_x
                     dx = ave_x - hP[2][0][3]
                     hP.append( hP[2][0][4] + dx)  # Dx, to eval for seg normalization and orientation, | += |dx| for curved yL?
                     hP[2][0][5].append((_P, dx))
-                    hP.append( hP[2][0][5])  # Py_: vertical P buffer
-                    hP.append( hP[2][0][6])  # blob
+                    hP.append( hP[2][0][5]) # Py_: vertical P buffer
+                    hP.append( hP[2][0][6]) # blob
                     hP[2] =    hP[2][0][2]  # replaces fork to included seg with fork_ of included seg
                 else:
-                    hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0],0,0,0,0,0,0,0,y,[]]
+                    hP[0] = list(_P[1:7]); hP += 0, [(_P, 0)], [_P[0], 0, 0, 0, 0, 0, 0, 0, y, []]
                     # hP is converted to initialized segment: Pars, roots, _fork_, ave_x, Dx, Py_, blob
 
                 if roots == 0:  # no if y > rng * 2 + 2 + ini_y: y P ) y-1 hP ) y-2 seg ) y-4 blob ) y-5 frame
