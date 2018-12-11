@@ -4,8 +4,8 @@ from time import time
 from collections import deque
 
 ''' 
-Version with exclusive positive mP | dP coverage (to minimize cost), vs. overlapping Ps in line_o_POC.
-But secondary dmPs are defined through direct match (min d, independent from dd), so it should use overlapping form_P?
+Simplified version with exclusive positive mP | dP coverage (to minimize cost), vs. overlapping Ps in line_POC.
+Secondary dmPs are defined through direct match (min d, independent from dd): it should use overlapping form_P in line POC?
 Also possible is additional filter for form_dP -> partial overlap | gap between positive mPs and dPs, but post-comp selection is better? 
 
 Updated 1D version of core algorithm, with initial match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
