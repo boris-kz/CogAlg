@@ -72,7 +72,7 @@ def rebuild_blobs( frame ):
 # -lateral_comp()
 # -vertical_comp()
 # -form_P()
-# -handle_hP()
+# -P_to_segment()
 # -scan_P_()
 # -form_blob()
 # -image_to_blobs
@@ -183,7 +183,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):
     # ---------- form_P() end -------------------------------------------------------------------------------------------
 
 
-def handle_hP( hP, frame ):
+def P_to_segment( hP, frame ):
     " Turn hP into new segment or add to higher-line segment, also handle blob-merging "
     _P, roots = hP[:2]
     if y == rng * 2 + 1 + ini_y:  # 1st-line scan_P_ converts each hP to blob segment: Pars, roots, _fork_, ave_x, Dx, Py_, blob
@@ -251,7 +251,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):
         if _buff_:
             hP = _buff_.popleft()  # higher-line P tuple buffered in prior scan_P_, seg id == _fork_ id, referenced by root Ps
         elif hP_:
-            hP, frame = handle_hP( hP_.popleft(), frame )  # roots = 0: number of Ps connected to _P: pri_s, x0, L, I, D, Dy, V, Vy, ders_
+            hP, frame = P_to_segment( hP_.popleft(), frame )  # roots = 0: number of Ps connected to _P: pri_s, x0, L, I, D, Dy, V, Vy, ders_
         else:
             break  # higher line ends, all hPs are converted to segments
 
@@ -335,7 +335,7 @@ def image_to_blobs(image):
     y = Y
     hP_ = _P_
     while hP_:
-        hP, frame = handle_hP( hP_.popleft(), frame )  # roots = 0: number of Ps connected to _P: pri_s, L, I, D, Dy, V, Vy, ders_
+        hP, frame = P_to_segment( hP_.popleft(), frame )  # roots = 0: number of Ps connected to _P: pri_s, L, I, D, Dy, V, Vy, ders_
         frame = form_blob(hP, frame)
     return frame  # frame of 2D patterns to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
