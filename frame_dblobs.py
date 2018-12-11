@@ -9,7 +9,7 @@ from collections import deque
     frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
     frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in frame_draft.
     frame_dblobs() is updated version of frame_blobs with only one blob type: dblob, to ease debugging, currently in progress.
-    
+
     Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
     
@@ -25,19 +25,19 @@ from collections import deque
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
     Each vertical and horizontal derivative forms separate blobs, suppressing overlapping orthogonal representations.
-    
+
     They can also be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives.
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
     Subsequent union of lateral and vertical patterns is by strength only, orthogonal sign is not commeasurable?
-        
+
     Initial pixel comparison is not novel, I design from the scratch to make it organic part of hierarchical algorithm.
     It would be much faster with matrix computation, but this is minor compared to higher-level processing.
     I implement it sequentially for consistency with accumulation into blobs: irregular and very difficult to map to matrices.
-    
+
     All 2D functions (y_comp, scan_P_, form_blob) input two lines: higher and lower, convert elements of lower line 
     into elements of new higher line, and displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
-    
+
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array:
 '''
@@ -258,7 +258,8 @@ def image_to_blobs(image):  # postfix '_' denotes array vs. element, prefix '_' 
 
     _P_ = deque()  # higher-line same- d-, v-, dy-, vy- sign 1D patterns
     frame = [0, 0, 0, 0, 0, 0, 0, 0, []]  # L, I, D, Dy, V, Vy, xD, yD, blob_
-    global y; y = ini_y  # initial line
+    global y;
+    y = ini_y  # initial line
     ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
     pixel_ = image[ini_y, :]  # first line of pixels at y == 0
     ders1_ = lateral_comp(pixel_)  # after part_comp (pop, no t_.append) while x < rng?
@@ -349,13 +350,13 @@ ini_y = 0  # that area in test image seems to be the most diverse
 
 image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
 image = image.astype(int)
-Y, X = image.shape  # image height and width
 
 # or:
 # argument_parser = argparse.ArgumentParser()
 # argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
 # arguments = vars(argument_parser.parse_args())
 # image = cv2.imread(arguments['image'], 0).astype(int)
+Y, X = image.shape  # image height and width
 
 start_time = time()
 frame_of_blobs = image_to_blobs(image)
