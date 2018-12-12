@@ -145,7 +145,7 @@ def vertical_comp(ders1_, ders2__, _dP_, dframe):
 
     if y > min_coord + ini_y:  # not-terminated P at the end of each line is buffered or scanned:
 
-        if y == rng * 2 + ini_y or y == Y - 1:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
+        if y == rng * 2 + ini_y:  # _P_ initialization by first line of Ps, empty until vertical_comp returns P_
             dP_.append([dP, 0, [], x - 1])  # empty _fork_ in the first line of hPs, x-1: delayed P displacement
         else:
             dP_, dbuff_, _dP_, dframe = scan_P_(x - 1, dP, dP_, dbuff_, _dP_, dframe)  # scans higher-line Ps for contiguity
