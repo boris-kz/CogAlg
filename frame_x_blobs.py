@@ -57,13 +57,9 @@ def rebuild_blobs(frame):
             y = seg[7] - len(seg[5]) + 1
             for (P, dx) in seg[5]:
                 x = P[1]
-                for (p, d, dy, m, my) in P[8]:
-                    if blob[0][0] == 2:
-                        blob_image[y, x, :3] = [255, 255, 255]
-                    elif blob[0][0] == 1:
-                        blob_image[y, x, :3] = [128, 0, 0]
-                    else:
-                        blob_image[y, x, :3] = [0, 0, 128]
+                for i in range(P[2]):
+                    blob_image[y, x, :3] = [255, 255, 255] if blob[0][0] else [ 0, 0, 0 ]
+
                     x += 1
                 y += 1
 
@@ -157,16 +153,32 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):
     " Initializes, accumulates, and terminates 1D pattern "
 
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
-    if m > 0 and my > 0:
-        s = 2
-    elif d > 0:
-        s = 1
-    else:
-        s = 0
+    s = 1 if m > 0 else 0
 
     if ( s == P[0] or x == rng ) and x < X - rng - 1:  # s == pri_s or initialized: P is continued, else terminated:
         pri_s, x0, L, I, D, Dy, M, My, ders_ = P
     else:
+        if not s:
+            sdP_ = [];
+            sdP = 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, d_
+            pri_ip = P[8][0][1]
+            pri_ss = -1
+            for i in range(1, P[2]):
+                ip = P[8][i][1]
+                id = ip - pri_ip
+                im = ave - abs(id)
+                ss = 1 if im > 0 else 0
+                if ( pri_ss == ss or i == 1 ) and i < P[2] - 1:
+                    ss, sL, sI, sD, sM, sders_ = sdP
+                else:
+                    sdP_.append(sdP)
+                    ss, sL, sI, sD, sM, sders_ = 0, 0, 0, 0, 0, []
+
+                sL += 1; sI += ip; sD += id; sM += im; sders_.append( ( ip, id, im ) )
+                sdP = ss, sL, sI, sD, sM, sders_
+                pri_ip = ip; pri_ss = ss
+            P = ( P[0], P[1], P[2], P[3], P[4], P[5], P[6], P[7], sdP_ )
+
         if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
             P_.append([P, 0, [], x - 1])  # P, roots, _fork_, x
         else:
@@ -371,13 +383,13 @@ ave_rate = 0.25  # not used; match rate: ave_match_between_ds / ave_match_betwee
 ini_y = 0  # not used
 
 # Load inputs --------------------------------------------------------------------
-image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
-image = image.astype(int)
+# image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
+# image = image.astype(int)
 # or:
-# argument_parser = argparse.ArgumentParser()
-# argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
-# arguments = vars(argument_parser.parse_args())
-# image = cv2.imread(arguments['image'], 0).astype(int)
+argument_parser = argparse.ArgumentParser()
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
+arguments = vars(argument_parser.parse_args())
+image = cv2.imread(arguments['image'], 0).astype(int)
 
 Y, X = image.shape  # image height and width
 
