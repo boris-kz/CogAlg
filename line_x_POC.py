@@ -35,11 +35,16 @@ def form_pattern(P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation, terminati
                 sub_mP_= []; sub_mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, d_;  no Alt: M is defined through abs(d)
 
                 for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
-                    ip = e_[i][0]
-                    pri_ip, i_d, i_m = e_[i-rng]
-                    i_d += ip - pri_ip  # accumulates difference between p and all prior and subsequent ps in extended rng
-                    i_m += ave_d - abs(i_d)  # accumulates match in extended rng
-                    sub_mP, sub_mP_ = form_pattern(sub_mP, sub_mP_, pri_ip, i_d, i_m, rdn+1, rng, i, L)
+                    ip, fd, fm = e_[i]
+                    _ip, _fd, _fm = e_[i - rng]
+                    ed = ip - _ip  # ed: element d, em: element m:
+                    em = ave_d - abs(ed)  # magnitude of brightness has low correlation with stability, thus match is defined through d
+                    fd += ed
+                    fm += em  # accumulates difference and match between ip and all prior ips in extended rng
+                    e_[i] = (ip, fd, fm)
+                    _fd += ed  # accumulates difference and match between ip and all prior and subsequent ips in extended rng
+                    _fm += em
+                    sub_mP, sub_mP_ = form_pattern(sub_mP, sub_mP_, _ip, _fd, _fm, rdn+1, rng, i, L)
                 e_= sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m
 
         else:  # forms sub_dP_ within negative mP:
@@ -82,20 +87,23 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         back_d, back_m = 0, 0  # fuzzy derivatives from rng of backward comps per prior pixel
 
         for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
-            for index, (pri_p, d, m) in enumerate(ders_):
+            back_fd, back_fm = 0, 0
+            for index, (pri_p, fd, fm) in enumerate(ders_):
 
-                d += p - pri_p  # fuzzy d: running sum of differences between pixel and all subsequent pixels within rng
-                m += ave_d - abs(d)  # fuzzy m: running sum of matches between pixel and all subsequent pixels within rng
+                d = p - pri_p
+                m = ave_d - abs(d)
+                fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
+                fm += m  # bilateral fuzzy m: running sum of matches between pixel and all prior and subsequent pixels within rng
+                back_fd += d
+                back_fm += m  # running sum of d and m between pixel and all prior pixels within rng
 
                 if index < max_index:
-                    ders_[index] = (pri_p, d, m)
+                    ders_[index] = (pri_p, fd, fm)
 
                 elif x > min_rng * 2 - 1:
-                    bi_d = d + back_d; back_d = d  # d and m are accumulated over full bilateral (before and after pri_p) min_rng
-                    bi_m = m + back_m; back_m = m
-                    P, P_ = form_pattern(P, P_, pri_p, bi_d, bi_m, 1, min_rng, x, X)  # forms mPs: spans of pixels with same-sign m
+                    P, P_ = form_pattern(P, P_, pri_p, fd, fm, 1, min_rng, x, X)  # forms mPs: spans of pixels with same-sign m
 
-            ders_.appendleft((p, 0, 0))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
+                    ders_.appendleft((p, back_fd, back_fm))  # new tuple with initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
