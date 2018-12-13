@@ -30,7 +30,7 @@ def difference( p, pri_p ):
     "Get difference"
     return p - pri_p
 
-def BFS( d_image ):
+def BFS( image ):
     "Counts the number of blobs"
     dir_x = [0, 1, 0, -1]
     dir_y = [-1, 0, 1, 0]   # Declared for neat spreading-search: go one step up, right, down or left
@@ -42,7 +42,7 @@ def BFS( d_image ):
                 # If the iterator steps on a pixel that hasn't been stepped on before, it has found a new blob
                 counter += 1;
                 # The rest of the code in this loop search through same d sign pixels that is from the same blob
-                val = d_image[y,x]          # Initialize the value used to indicate if a pixel has the same d sign with the blob
+                val = image[y,x]          # Initialize the value used to indicate if a pixel has the same d sign with the blob
                 spread_queue = [(y,x)]      # Any adjacent, same d sign pixel will be added to this queue to continue the search
                 has_been_here[y,x] = True   # Mark the current location as searched
                 while spread_queue:
@@ -53,7 +53,7 @@ def BFS( d_image ):
                         if spread_y >= 0 and spread_y < Y \
                         and spread_x >= 0 and spread_x < X \
                         and not has_been_here[spread_y, spread_x] \
-                        and d_image[spread_y, spread_x] == val :
+                        and image[spread_y, spread_x] == val :
                         # Stop if:
                         #   - Out of border
                         #   - Has been here before
@@ -64,23 +64,27 @@ def BFS( d_image ):
 
     return counter
 
-def get_d( image ):
+def get_dm( image ):
     "Converts pixels into ds"
     d_image = numpy.array([[0] * X] * Y)    # Initialize
+    m_image = numpy.array([[0] * X] * Y)  # Initialize
     for y in range(Y):
         for r in range( 1, rng + 1 ):       # Computation is made in increasing range, to rng
             for x in range (r, X):
                 d = difference(image[y, x], image[y, x-r]) # Only computes d for now
+                m = ave - abs(d)
                 d_image[y, x] += d
                 d_image[y, x-r] += d
+                m_image[y, x] += m
+                m_image[y, x - r] += m
 
-    return d_image
+    return d_image, m_image
 
 # pattern filters: eventually updated by higher-level feedback, initialized here as constants:
 
 # Init**************************************************
 
-d_mapping = numpy.vectorize(black_white)
+mapping = numpy.vectorize(black_white)
 
 rng = 2  # number of pixels compared to each pixel in four directions
 ave = 31  # |d| value that coincides with average match: value pattern filter
@@ -92,7 +96,7 @@ ini_y = 0  # that area in test image seems to be the most diverse
 
 # or:
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/test_blobs.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
 Y, X = image.shape  # image height and width
@@ -102,18 +106,27 @@ Y, X = image.shape  # image height and width
 start_time = time()
 
 # Core**************************************************
-d_image = get_d(image)          # Computes and put individual fuzzy d of each pixel into d_image
+d_image, m_image = get_dm(image)          # Computes and put individual fuzzy d of each pixel into d_image
 
-d_image = d_mapping(d_image)    # Change elements of d_image into 0s and 255s
+# TextOutput********************************************
+fo = open( 'images/test_blobs/Match.txt', 'w+')
+for y in range(Y):
+    for x in range(X):
+        fo.write('%6d' % (m_image[y,x]))
+    fo.write('\n')
+fo.close()
+# ******************************************************
 
-counted_blob =  BFS(d_image)    # Count number of blobs
+d_image, m_image = mapping(d_image), mapping(m_image)    # Change elements of d_image into 0s and 255s
+
+counted_blob =  BFS(m_image)    # Count number of blobs
 
 # Output************************************************
 end_time = time() - start_time
 print(end_time)
 
 # TextOutput********************************************
-fo = open( 'blob_count.txt', 'w+')
+fo = open( 'images/test_blobs/blob_count.txt', 'w+')
 fo.write('%d\n' %(counted_blob))
 fo.close()
 # ******************************************************
@@ -130,5 +143,6 @@ fo.close()
 '''
 
 # ImageOutput*******************************************
-cv2.imwrite( './blobs.jpg', d_image)
+cv2.imwrite( './images/test_blobs/dblobs.jpg', d_image)
+cv2.imwrite( './images/test_blobs/mblobs.jpg', m_image)
 # ******************************************************
