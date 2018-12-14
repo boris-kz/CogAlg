@@ -59,6 +59,27 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                 if ( pri_sd == sd or i == 1 ) and i < P[2] - 1:
                     sd, Ld, Id, Dd, Md, sr, se_ = dP
                 else:
+                    if L > rng + 3 and M < ave_M * rdn:  # comp range increase within e_:
+                        r = 1                    # rdn: redundancy, incremented per comp recursion
+                        rng += 1
+                        sub_mP_= []; sub_mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
+
+                        for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
+                            ip, fd, fm = se_[i]
+                            _ip, _fd, _fm = e_[i - rng]
+                            ed = ip - _ip  # ed: element d, em: element m:
+                            if dderived:
+                                em = min(ip, _ip) - ave_m  # magnitude of vars derived from d corresponds to predictive value, thus direct match
+                            else:
+                                em = ave_d - abs(ed)  # magnitude of brightness has low correlation with stability, thus match is defined through d
+                            fd += ed
+                            fm += em  # accumulates difference and match between ip and all prior ips in extended rng
+                            se_[i] = (ip, fd, fm)
+                            _fd += ed  # accumulates difference and match between ip and all prior and subsequent ips in extended rng
+                            _fm += em
+                            sub_mP, sub_mP_ = form_pattern(dderived, sub_mP, sub_mP_, _ip, _fd, _fm, rdn+1, rng, i, L)
+                        se_ = sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m
+
                     dP_.append(dP)
                     sd, Ld, Id, Dd, Md, sr, se_ = 0, 0, 0, 0, 0, 0, []
 
