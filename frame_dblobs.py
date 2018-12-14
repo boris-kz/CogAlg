@@ -90,7 +90,6 @@ def lateral_comp(pixel_):
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
         back_fd, back_fm = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
         for index, (pri_p, fd, fm) in enumerate(rng_ders1_):
-
             d = p - pri_p
             m = ave - abs(d)
             fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
@@ -104,7 +103,7 @@ def lateral_comp(pixel_):
                 ders1_.append((pri_p, fd, fm))  # completed bilateral tuple is transferred from rng_ders_ to ders_
 
         rng_ders1_.appendleft((p, back_fd, back_fm))  # new tuple with initialized d and m, maxlen displaces completed tuple
-    # ders1_ += reversed(rng_ders1_)  # tuples of last rng in line (incomplete, in reverse order), or discarded?
+    ders1_.append( rng_ders1_[ max_index ] )  # tuples of last rng in line (incomplete, in reverse order), or discarded?
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
@@ -153,10 +152,8 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):
 
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
-
-    if ( s == P[0] or x == rng ) and x < X - rng - 1:  # s == pri_s or initialized: P is continued, else terminated:
-        pri_s, x0, L, I, D, Dy, M, My, ders_ = P
-    else:
+    pri_s, x0, L, I, D, Dy, M, My, ders_ = P
+    if not ( s == P[0] or x == rng ) or x == X - rng:  # s == pri_s or initialized: P is continued, else terminated:
         if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
             P_.append([P, 0, [], x - 1])  # P, roots, _fork_, x
         else:
@@ -218,9 +215,11 @@ def form_segment(hP, frame):
     " Convert hP into new segment or add it to higher-line segment, merge blobs "
     _P, roots = hP[:2]
 
+    ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
     if y == rng * 2 + 1 + ini_y:  # scan_P_ of the 1st line converts each hP into blob segment:
         hP[0] = list(_P[2:8])
         hP += 0, [(_P, 0)], [_P[0], 0, 0, 0, 0, 0, 0, _P[1], hP[3], y - rng - 1, [hP], 1, 0]  # initialize blob, min_y = current y
+        hP[3] = ave_x
     else:
         if len(hP[2]) == 1 and hP[2][0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
             # hP is merged into higher-line blob segment (Pars, roots, _fork_, ave_x, Dx, Py_, blob) at hP[2][0]:
@@ -228,9 +227,8 @@ def form_segment(hP, frame):
             Ls, Is, Ds, Dys, Ms, Mys = hP[2][0][0]
             hP[2][0][0] = [Ls + L, Is + I, Ds + D, Dys + Dy, Ms + M, Mys + My]  # seg parameters
             hP[2][0][1] = roots
-            ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
-            hP[2][0][3] = ave_x
             dx = ave_x - hP[2][0][3]
+            hP[2][0][3] = ave_x
             hP[2][0][4] += dx  # xD for seg normalization and orientation, or += |dx| for curved yL?
             hP[2][0][5].append((_P, dx))  # Py_: vertical buffer of Ps merged into seg
             blob = hP[2][0][6]
@@ -242,14 +240,16 @@ def form_segment(hP, frame):
             hP[0] = list(_P[2:8])  # seg parameters
             hP += 0, [(_P, 0)], [_P[0], 0, 0, 0, 0, 0, 0, _P[1], hP[3], y - rng - 1, [hP], 1, 0]
             # last var is blob: s, L, I, D, Dy, M, My, min_x, max_x, min_y, root_, remaining_roots, xD
+            hP[3] = ave_x
 
         else:  # if >1 forks, or 1 fork that has >1 roots:
-            hP[0] = list(_P[2:8]);
+            hP[0] = list(_P[2:8])
             hP += 0, [(_P, 0)], hP[2][0][6]  # seg is initialized with fork's blob
             blob = hP[6]
             blob[10].append(hP)  # segment is buffered into root_
             blob[7] = min(_P[1], blob[7])  # min_x
             blob[8] = max(hP[3], blob[8])  # max_x
+            hP[3] = ave_x
 
             if len(hP[2]) > 1:  # merge blobs of all forks
                 if hP[2][0][1] == 1:
@@ -356,7 +356,7 @@ def image_to_blobs(image):
 # eventually updated by higher-level feedback, initialized here as constants:
 
 rng = 2  # number of pixels compared to each pixel in four directions
-ave = 15  # |d| value that coincides with average match: mP filter
+ave = 31  # |d| value that coincides with average match: mP filter
 ave_rate = 0.25  # not used; match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 ini_y = 0  # not used
 
