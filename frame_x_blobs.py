@@ -9,7 +9,7 @@ from collections import deque
     frame() is my core algorithm of levels 1 + 2, modified for 2D: segmentation of image into blobs, then search within and between blobs.
     frame_blobs() is frame() limited to definition of initial blobs per each of 4 derivatives, vs. per 2 gradients in frame_draft.
     frame_dblobs() is updated version of frame_blobs with only one blob type: dblob, to ease debugging.
-    frame_x_blob() forms dblobs only inside mblobs, to reduce redundancy
+    frame_x_blob() forms dblobs only inside negative mblobs, to reduce redundancy
     
     Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
@@ -21,8 +21,8 @@ from collections import deque
     5Le, line y- 3+ rng*2: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     6Le, line y- 4+ rng*2+ seg depth: form_blob(seg, blob): merge connected segments in fork_' incomplete blobs, recursively  
     
-    for y = rng *2, the outputs are: y P ) y-1 hP ) y-2 seg ) y-4 blob ) y-5 frame
-    
+    for y = rng *2: line y == P_, line y-1 == hP_, line y-2 == seg_, line y-4 == blob_
+     
     Pixel comparison in 2D forms lateral and vertical derivatives: 2 matches and 2 differences per pixel. 
     They are formed on the same level because average lateral match ~ average vertical match.
     Each vertical and horizontal derivative forms separate blobs, suppressing overlapping orthogonal representations.
@@ -35,8 +35,8 @@ from collections import deque
     It would be much faster with matrix computation, but this is minor compared to higher-level processing.
     I implement it sequentially for consistency with accumulation into blobs: irregular and very difficult to map to matrices.
     
-    All 2D functions (y_comp, scan_P_, form_blob) input two lines: higher and lower, convert elements of lower line 
-    into elements of new higher line, and displace elements of old higher line into higher function.
+    All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, 
+    convert elements of lower line into elements of new higher line, then displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
@@ -51,17 +51,23 @@ from collections import deque
 
 def rebuild_blobs(frame):
     " Rebuilt data of blobs into an image "
-    blob_image = numpy.array([[[128] * 3 + [0]] * X] * Y)
+    blob_image = numpy.array([[[0] * 4] * X] * Y)
 
     for index, blob in enumerate(frame[9]):  # Iterate through blobs
         for seg in blob[1]:  # Iterate through segments
             y = seg[7] - len(seg[5]) + 1
             for (P, dx) in seg[5]:
-                x = P[1]
-                for i in range(P[2]):
-                    blob_image[y, x, :3] = [255, 255, 255] if blob[0][0] else [ 0, 0, 0 ]
-
-                    x += 1
+                if P[0]:
+                    x = P[1]
+                    for i in range(P[2]):
+                        blob_image[y, x, : 3] = [255, 255, 255]
+                        x += 1
+                else:
+                    for dP in P[8]:
+                        x = dP[1]
+                        for i in range(dP[2]):
+                            blob_image[y, x, : 3] = [127, 127, 127] if dP[0] else [63, 63, 63]
+                            x += 1
                 y += 1
 
     return blob_image
@@ -92,7 +98,6 @@ def lateral_comp(pixel_):
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
         back_fd, back_fm = 0, 0  # fuzzy derivatives from rng of backward comps per pri_p
         for index, (pri_p, fd, fm) in enumerate(rng_ders1_):
-
             d = p - pri_p
             m = ave - abs(d)
             fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
@@ -106,17 +111,20 @@ def lateral_comp(pixel_):
                 ders1_.append((pri_p, fd, fm))  # completed bilateral tuple is transferred from rng_ders_ to ders_
 
         rng_ders1_.appendleft((p, back_fd, back_fm))  # new tuple with initialized d and m, maxlen displaces completed tuple
-    # last incomplete rng_ders1_ per line is discarded, vs. ders1_ += reversed(rng_ders1_)
+    # last incomplete rng_ders1_ in line are discarded, vs. ders1_ += reversed(rng_ders1_)
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
 
-def vertical_comp(ders1_, ders2__, _P_, frame):
-    " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives "
+def vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe ):
+    " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
 
-    P = 0, rng, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, x0, L, I, D, Dy, V, Vy, ders2_
-    P_ = deque()  # line y - 1 + rng*2
-    buff_ = deque()  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
+    xP = 0, rng, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, x0, L, I, D, Dy, V, Vy, ders2_
+    yP = 0, rng, 0, 0, 0, 0, 0, 0, []
+    xP_ = deque()  # line y - 1 + rng*2
+    yP_ = deque()
+    xbuff_ = deque()  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
+    ybuff_ = deque()
     new_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
@@ -138,41 +146,52 @@ def vertical_comp(ders1_, ders2__, _P_, frame):
                 ders2_[index] = (_p, _d, fdy, _m, fmy)
             elif y > min_coord + ini_y:
                 ders = _p, _d, fdy, _m, fmy
-                P, P_, buff_, _P_, frame = form_P(ders, x, P, P_, buff_, _P_, frame)
+                xP, xP_, xbuff_, _xP_, xframe = form_P( ders, x, xP, xP_, xbuff_, _xP_, xframe, 0 )
+                yP, yP_, ybuff_, _yP_, yframe = form_P( ders, x, yP, yP_, ybuff_, _yP_, yframe, 1 )
             index += 1
 
         ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical ders2_ via maxlen
         new_ders2__.append(ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
         x += 1
 
-    return new_ders2__, P_, frame
+    return new_ders2__, xP_, yP_, xframe, yframe
     # ---------- vertical_comp() end ------------------------------------------------------------------------------------
 
 
-def form_P(ders, x, P, P_, buff_, hP_, frame):
-    " Initializes, accumulates, and terminates 1D pattern "
+def form_P( ders, x, P, P_, buff_, hP_, frame, vert = 0 ):
+    " Initializes, accumulates, and terminates 1D pattern"
 
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
-    s = 1 if m > 0 else 0
+    if vert:
+        s = 1 if my > 0 else 0  # core = 0 is negative: no selection?
+    else:
+        s = 1 if m > 0 else 0
     pri_s, x0, L, I, D, Dy, M, My, ders_ = P
 
-    if not ( s == pri_s or x == rng ) and x < X - rng - 1:  # P is terminated
-        if not pri_s:
-            dP_ = []; dP = 0, 0, 0, 0, 0, 0, 0, 0, []  # pri_s, x0, L, I, D, Dy, M, My, ders_
-            pri_sd = -1
-            for i in range(P[2]):
-                ip, id, idy, im, imy = P[8][i]
-                sd = 1 if id > 0 else 0
-                if ( pri_sd == sd or i == 1 ) and i < P[2] - 1:
-                    sd, x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_ = dP
+    if not ( s == pri_s or x == rng ) or x == X - rng:  # P is terminated
+        if not pri_s:   # dPs formed inside of negative mP
+            dP_ = []; dP = -1, x0, 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, Dy, M, My, ders_
+            ders_.append( ( 0, 0, 0, 0, 0 ) )
+            for i in range( L + 1 ):
+                ip, id, idy, im, imy = ders_[i]
+                if vert:
+                    sd = 1 if idy > 0 else 0
                 else:
-                    dP_.append(dP)
-                    sd, Ld, Id, Dd, Dyd, Md, Myd, sders_ = 0, 0, 0, 0, 0, 0, 0, []
+                    sd = 1 if id > 0 else 0
+                pri_sd, x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_ = dP
+                if (pri_sd != sd and not i == 0) or i == L:
+                    dP_.append( dP )
+                    x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_ = x0 + i, 0, 0, 0, 0, 0, 0, []
+                Ld += 1
+                Id += ip
+                Dd += id
+                Dyd += idy
+                Md += im
+                Myd += imy
+                sders_.append( ( ip, id, idy, im, imy ) )
+                dP = sd, x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_
 
-                Ld += 1; Id += ip; Dd += id; Dyd += idy; Md += im; Myd += imy; sders_.append( ( ip, id, im ) )
-                dP = sd, i, Ld, Id, Dd, Dyd, Md, Myd, sders_
-                pri_sd = sd
-            P = ( P[0], P[1], P[2], P[3], P[4], P[5], P[6], P[7], ders_, dP_ )
+            P = pri_s, x0, L, I, D, Dy, M, My, dP_
 
         if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
             P_.append([P, 0, [], x - 1])  # P, roots, _fork_, x
@@ -203,7 +222,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):
 
     while ini_x <= x:  # while x values overlap between P and _P
         if _buff_:
-            hP = _buff_.popleft()  # hP buffered in prior scan_P_
+            hP = _buff_.popleft()  # hP was extended to segment and buffered in prior scan_P_
         elif hP_:
             hP, frame = form_segment(hP_.popleft(), frame)
         else:
@@ -233,10 +252,12 @@ def scan_P_(x, P, P_, _buff_, hP_, frame):
 def form_segment(hP, frame):
     " Convert hP into new segment or add it to higher-line segment, merge blobs "
     _P, roots = hP[:2]
+    ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
 
-    if y == rng * 2 + 1 + ini_y:  # scan_P_ of the 1st line converts each hP into blob segment:
+    if y == rng * 2 + 1 + ini_y:  # scan_P_ of the 1st line converts each hP into initialized blob segment:
         hP[0] = list(_P[2:8])
         hP += 0, [(_P, 0)], [_P[0], 0, 0, 0, 0, 0, 0, _P[1], hP[3], y - rng - 1, [hP], 1, 0]  # initialize blob, min_y = current y
+        hP[3] = ave_x
     else:
         if len(hP[2]) == 1 and hP[2][0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
             # hP is merged into higher-line blob segment (Pars, roots, _fork_, ave_x, Dx, Py_, blob) at hP[2][0]:
@@ -244,9 +265,8 @@ def form_segment(hP, frame):
             Ls, Is, Ds, Dys, Ms, Mys = hP[2][0][0]
             hP[2][0][0] = [Ls + L, Is + I, Ds + D, Dys + Dy, Ms + M, Mys + My]  # seg parameters
             hP[2][0][1] = roots
-            ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
-            hP[2][0][3] = ave_x
             dx = ave_x - hP[2][0][3]
+            hP[2][0][3] = ave_x
             hP[2][0][4] += dx  # xD for seg normalization and orientation, or += |dx| for curved yL?
             hP[2][0][5].append((_P, dx))  # Py_: vertical buffer of Ps merged into seg
             blob = hP[2][0][6]
@@ -258,13 +278,16 @@ def form_segment(hP, frame):
             hP[0] = list(_P[2:8])  # seg parameters
             hP += 0, [(_P, 0)], [_P[0], 0, 0, 0, 0, 0, 0, _P[1], hP[3], y - rng - 1, [hP], 1, 0]
             # last var is blob: s, L, I, D, Dy, M, My, min_x, max_x, min_y, root_, remaining_roots, xD
+            hP[3] = ave_x
 
         else:  # if >1 forks, or 1 fork that has >1 roots:
-            hP[0] = list(_P[2:8]); hP += 0, [(_P, 0)], hP[2][0][6]  # seg is initialized with fork's blob
+            hP[0] = list(_P[2:8])
+            hP += 0, [(_P, 0)], hP[2][0][6]  # seg is initialized with fork's blob
             blob = hP[6]
             blob[10].append(hP)  # segment is buffered into root_
             blob[7] = min(_P[1], blob[7])  # min_x
             blob[8] = max(hP[3], blob[8])  # max_x
+            hP[3] = ave_x
 
             if len(hP[2]) > 1:  # merge blobs of all forks
                 if hP[2][0][1] == 1:
@@ -319,9 +342,9 @@ def form_blob(term_seg, frame, y_carry=0):
         frame[3] += Dy
         frame[4] += M
         frame[5] += My
-        frame[6] += xD  # ave_x angle, to evaluate frame for re-orientation
-        frame[7] += max_x - min_x + 1  # blob width
-        frame[8] += term_seg[7] - min_y + 1  # blob height
+        frame[6] += xD                      # ave_x angle, to evaluate frame for re-orientation
+        frame[7] += max_x - min_x + 1       # blob width
+        frame[8] += term_seg[7] - min_y + 1 # blob height
         frame[9].append(((s, L, I, D, Dy, M, My, min_x, max_x, min_y, term_seg[7]), root_, xD))
 
     return frame  # no term_seg return: no root segs refer to it
@@ -331,8 +354,10 @@ def form_blob(term_seg, frame, y_carry=0):
 def image_to_blobs(image):
     " Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
 
-    _P_ = deque()  # higher-line same- d-, m-, dy-, my- sign 1D patterns
-    frame = [0, 0, 0, 0, 0, 0, 0, 0, 0, []]  # L, I, D, Dy, M, My, xD, b_width, b_height, blob_
+    _xP_ = deque()  # higher-line same- d-, m-, dy-, my- sign 1D patterns
+    _yP_ = deque()
+    xframe = [0, 0, 0, 0, 0, 0, 0, 0, 0, []]  # L, I, D, Dy, M, My, xD, b_width, b_height, blob_
+    yframe = [0, 0, 0, 0, 0, 0, 0, 0, 0, []]
     global y
     y = ini_y  # initial line
     ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
@@ -349,16 +374,20 @@ def image_to_blobs(image):
 
         pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
         ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
-        ders2__, _P_, frame = vertical_comp(ders1_, ders2__, _P_, frame)  # vertical pixel comparison
+        ders2__, _xP_, _yP_, xframe, yframe = vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe )  # vertical pixel comparison
 
     # frame ends, last vertical rng of incomplete ders2__ is discarded,
     # merge segs of last line into their blobs:
     y = Y
-    hP_ = _P_
+    hP_ = _xP_
     while hP_:
-        hP, frame = form_segment(hP_.popleft(), frame)
-        frame = form_blob(hP, frame)
-    return frame  # frame of 2D patterns, to be outputted to level 2
+        hP, xframe = form_segment(hP_.popleft(), xframe)
+        xframe = form_blob(hP, xframe)
+    hP_ = _yP_
+    while hP_:
+        hP, yframe = form_segment(hP_.popleft(), yframe)
+        yframe = form_blob(hP, yframe)
+    return ( xframe, yframe )  # frame of 2D patterns, to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
@@ -393,11 +422,12 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-cv2.imwrite('./images/blobs.jpg', rebuild_blobs(frame_of_blobs))
+cv2.imwrite('./images/blobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[0]))
+cv2.imwrite('./images/blobs_vertical.jpg', rebuild_blobs(frame_of_blobs[1]))
 
 # Check for redundant segments  --------------------------------------------------
-print 'Checking for redundant segments...\n'
-for blob in frame_of_blobs[9]:
+print 'Searching for redundant segments...\n'
+for blob in frame_of_blobs[0][9]:
     for i, seg in enumerate(blob):
         for j, seg2 in enumerate(blob):
             if i != j and seg is seg2: print 'Redundant segment detected!\n'
