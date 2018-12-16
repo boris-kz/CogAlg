@@ -54,14 +54,20 @@ def rebuild_blobs(frame):
     blob_image = numpy.array([[[127] * 4] * X] * Y)
 
     for index, blob in enumerate(frame[2]):  # Iterate through blobs
+        blob_img = numpy.array([[[127] * 4] * X] * Y)
         for seg in blob[2]:  # Iterate through segments
             y = seg[7]
             for (P, dx) in reversed(seg[5]):
                 x = P[1]
                 for i in range(P[2]):
                     blob_image[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
+                    blob_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
                     x += 1
                 y -= 1;
+
+        min_x, max_x, min_y, max_y = blob[1]
+        cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
+        cv2.imwrite('./images/raccoon_eye/blob%d.jpg' %(index), blob_img)
 
     return blob_image
     # ---------- rebuild_blobs() end ------------------------------------------------------------------------------------
@@ -332,8 +338,18 @@ def form_blob(term_seg, frame, typ, y_carry = 0):
         frame[1][0] += xD  # ave_x angle, to evaluate frame for re-orientation
         frame[1][1] += max_x - min_x + 1  # blob width
         frame[1][2] += term_seg[7] - min_y + 1  # blob height
+
         # Sort segments based on their bases' vertical coordinate
         root_.sort( key = segment_sort_by_height )
+
+        # For Recursion within a blob
+        if      typ == 0 or type == 3:  match = M; alt_match = My
+        else:                           match = My; alt_match = M
+        ori_val = alt_match / match             # orientation value?
+        blob_val = L + I + D + Dy + M + My
+        rdn = blob_val /( alt_Der + alt_Dir + alt_Both )
+
+
 
         frame[2].append( ( ( s, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both ), ( min_x, max_x, min_y, term_seg[7] ), root_, xD ) )
 
@@ -396,13 +412,13 @@ ave_rate = 0.25  # not used; match rate: ave_match_between_ds / ave_match_betwee
 ini_y = 0  # not used
 
 # Load inputs --------------------------------------------------------------------
-image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
-image = image.astype(int)
+# image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
+# image = image.astype(int)
 # or:
-# argument_parser = argparse.ArgumentParser()
-# argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
-# arguments = vars(argument_parser.parse_args())
-# image = cv2.imread(arguments['image'], 0).astype(int)
+argument_parser = argparse.ArgumentParser()
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
+arguments = vars(argument_parser.parse_args())
+image = cv2.imread(arguments['image'], 0).astype(int)
 
 Y, X = image.shape  # image height and width
 
@@ -414,9 +430,9 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 cv2.imwrite('./images/dblobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[0]))
-cv2.imwrite('./images/mblobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[1]))
-cv2.imwrite('./images/dblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[2]))
-cv2.imwrite('./images/mblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[3]))
+# cv2.imwrite('./images/mblobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[1]))
+# cv2.imwrite('./images/dblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[2]))
+# cv2.imwrite('./images/mblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[3]))
 
 # Check for redundant segments  --------------------------------------------------
 print 'Searching for redundant segments...\n'
