@@ -55,17 +55,10 @@ def rebuild_blobs(frame):
         for seg in blob[1]:  # Iterate through segments
             y = seg[7] - len(seg[5]) + 1
             for (P, dx) in seg[5]:
-                if P[0]:
-                    x = P[1]
-                    for i in range(P[2]):
-                        blob_image[y, x, : 3] = [255, 255, 255]
-                        x += 1
-                else:
-                    for dP in P[8]:
-                        x = dP[1]
-                        for i in range(dP[2]):
-                            blob_image[y, x, : 3] = [127, 127, 127] if dP[0] else [63, 63, 63]
-                            x += 1
+                x = P[1]
+                for i in range(P[2]):
+                    blob_image[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
+                    x += 1
 
                 y += 1
 
@@ -111,11 +104,12 @@ def lateral_comp(pixel_):
 
         rng_ders1_.appendleft((p, back_fd, back_fm))  # new tuple with initialized d and m, maxlen displaces completed tuple
     # last incomplete rng_ders1_ in line are discarded, vs. ders1_ += reversed(rng_ders1_)
+    ders1_.append( ( 0, 0, 0 ) ) # For last P forming
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
 
-def vertical_comp(ders1_, ders2__, _dP_, dframe ):
+def vertical_comp(ders1_, ders2__, _dP_, dframe):
     " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
 
     dP = 0, rng, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, x0, L, I, D, Dy, V, Vy, ders2_
@@ -160,7 +154,7 @@ def form_P(ders, x, P, P_, buff_, hP_, frame):
     s = 1 if d > 0 else 0  # core = 0 is negative: no selection?
     pri_s, x0, L, I, D, Dy, M, My, ders_ = P
 
-    if not ( s == pri_s or x == rng ) or x == X - rng:  # P is terminated
+    if not (s == pri_s or x == rng) or x == X - rng:  # P is terminated
         if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
             P_.append([P, 0, [], x - 1])  # P, roots, _fork_, x
         else:
