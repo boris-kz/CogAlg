@@ -25,3 +25,5 @@ Kapil Kashyap: $ 2000 for stimulation and effort, help with Python and level_1_2
 Andrei Demchenko, $1800 for conventional refactoring and interface improvement in line_POC_introductory.py, few improvements in the code, April - May.
 
 Todor Arnaudov, $2000 for help in debugging frame_dblobs.py, September - October.
+
+Khanh Nguyen, $1500 for many contributions in debugging and extending line_POC and frame_dblobs, December. 
