@@ -26,7 +26,7 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
     s = 1 if m >= 0 else 0  # sign, 0 is positive?   form_P-> pri mP ( sub_dP_, no type:
     pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: depth of prior comp recursion within P
 
-    if ( x > rng * 2 and s == pri_s ) or x == X-1:  # m sign change, mP is terminated and evaluated for recursive comp
+    if ( x > rng * 2 and s != pri_s ) or x == X:  # m sign change, mP is terminated and evaluated for recursive comp
         if not pri_s:  # negative mP forms dP_, is evaluated for recursion
 
             dP_ = []; dP = int(e_[0][1] > 0), 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, e_
@@ -37,19 +37,20 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                 sd = 1 if id > 0 else 0
                 pri_sd, Ld, Id, Dd, Md, rd, ed_ = dP
 
-                if ( pri_sd != sd and not i == 0 ) or i == L:
-                    if Ld > rng + 3 and Dd > ave_M * rdn:   # comp range increase within e_:
+                if ( pri_sd != sd and i > 0 ) or i == L:
+                    if Ld > rng * 2 and Dd > ave_M * rdn:   # comp range increase within e_:
                         rd = 1                              # rdn: redundancy, incremented per comp recursion
                         mdP_= []; mdP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
+                        ed_.append((0, 0, 0))
                         fdd, fmd = 0, 0
-                        for j in range(1, Ld):  # bilateral comp between consecutive dj s
+                        for j in range(1, Ld + 1):  # bilateral comp between consecutive dj s
                             dj = ed_[j][1]
                             _dj = ed_[j-1][1]
                             dd = dj - _dj
                             md = min(dj, _dj) - ave_m  # magnitude of vars derived from d corresponds to predictive value, thus direct match
                             fdd += dd  # bilateral difference and match between ds
                             fmd += md
-                            mdP, mdP_ = form_pattern(1, mdP, mdP_, _dj, fdd, fmd, rdn+1, rng, i, L)
+                            if j > 1: mdP, mdP_ = form_pattern(1, mdP, mdP_, _dj, fdd, fmd, rdn+1, rng, j, Ld)
                             fdd = dd
                             fmd = md
                         ed_ = mdP_  # ders are replaced with mdPs: spans of pixels that form same-sign md
@@ -60,12 +61,12 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                 Ld += 1; Id += ip; Dd += id; Md += im; ed_.append( ( ip, id, im ) )
                 dP = sd, Ld, Id, Dd, Md, rd, ed_
 
-            if L > rng + 3 and M * rdn < ave_M:  # comp range increase within e_:
+            rng += 1
+            if L > rng * 2 and M * rdn < ave_M:  # comp range increase within e_:
                 r = 1                    # rdn: redundancy, incremented per comp recursion
-                rng += 1
                 sub_mP_= []; sub_mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
-
-                for i in range(rng, L):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
+                e_.append( ( 0, 0, 0 ) )
+                for i in range(rng, L+1):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
                     ip, fd, fm = e_[i]
                     _ip, _fd, _fm = e_[i - rng]
                     ed = ip - _ip  # ed: element d, em: element m:
@@ -78,7 +79,7 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                     e_[i] = (ip, fd, fm)
                     _fd += ed  # accumulates difference and match between ip and all prior and subsequent ips in extended rng
                     _fm += em
-                    sub_mP, sub_mP_ = form_pattern(dderived, sub_mP, sub_mP_, _ip, _fd, _fm, rdn+1, rng, i, L)
+                    if i >= rng * 2: sub_mP, sub_mP_ = form_pattern(dderived, sub_mP, sub_mP_, _ip, _fd, _fm, rdn+1, rng, i, L)
                 e_= sub_mP_  # ders replaced with sub_mPs: spans of pixels that form same-sign m
 
             e_ = e_, dP_
