@@ -55,20 +55,21 @@ def rebuild_blobs(frame):
 
     for index, blob in enumerate(frame[9]):  # Iterate through blobs
         for seg in blob[1]:  # Iterate through segments
-            y = seg[7] - len(seg[5]) + 1
-            for (P, dx) in seg[5]:
+            y, ave_x = seg[7], seg[3]
+            for (P, dx) in reversed(seg[5]):
                 if P[0]:
                     x = P[1]
                     for i in range(P[2]):
                         blob_image[y, x, : 3] = [255, 255, 255]
                         x += 1
                 else:
-                    for dP in P[8]:
+                    for dP in P[8]: # dPs inside of negative mP
                         x = dP[1]
                         for i in range(dP[2]):
                             blob_image[y, x, : 3] = [127, 127, 127] if dP[0] else [63, 63, 63]
                             x += 1
-                y += 1
+                blob_image[y, ave_x + P[1], :3] = [0, 0, 0] if P[0] else [0, 255, 255]  # output middle line of a segment based on ave_x
+                y -= 1; ave_x -= dx # ave_x of next line
 
     return blob_image
     # ---------- rebuild_blobs() end ------------------------------------------------------------------------------------
@@ -112,11 +113,12 @@ def lateral_comp(pixel_):
 
         rng_ders1_.appendleft((p, back_fd, back_fm))  # new tuple with initialized d and m, maxlen displaces completed tuple
     # last incomplete rng_ders1_ in line are discarded, vs. ders1_ += reversed(rng_ders1_)
+    ders1_.append( ( 0, 0, 0 ) )
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
 
-def vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe ):
+def vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe):
     " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
 
     xP = 0, rng, 0, 0, 0, 0, 0, 0, []  # lateral difference pattern = pri_s, x0, L, I, D, Dy, V, Vy, ders2_
@@ -146,8 +148,8 @@ def vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe ):
                 ders2_[index] = (_p, _d, fdy, _m, fmy)
             elif y > min_coord + ini_y:
                 ders = _p, _d, fdy, _m, fmy
-                xP, xP_, xbuff_, _xP_, xframe = form_P( ders, x, xP, xP_, xbuff_, _xP_, xframe, 0 )
-                yP, yP_, ybuff_, _yP_, yframe = form_P( ders, x, yP, yP_, ybuff_, _yP_, yframe, 1 )
+                xP, xP_, xbuff_, _xP_, xframe = form_P(ders, x, xP, xP_, xbuff_, _xP_, xframe, 0)
+                yP, yP_, ybuff_, _yP_, yframe = form_P(ders, x, yP, yP_, ybuff_, _yP_, yframe, 1)
             index += 1
 
         ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical ders2_ via maxlen
@@ -158,7 +160,7 @@ def vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe ):
     # ---------- vertical_comp() end ------------------------------------------------------------------------------------
 
 
-def form_P( ders, x, P, P_, buff_, hP_, frame, vert = 0 ):
+def form_P(ders, x, P, P_, buff_, hP_, frame, vert=0):
     " Initializes, accumulates, and terminates 1D pattern"
 
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
@@ -168,11 +170,12 @@ def form_P( ders, x, P, P_, buff_, hP_, frame, vert = 0 ):
         s = 1 if m > 0 else 0
     pri_s, x0, L, I, D, Dy, M, My, ders_ = P
 
-    if not ( s == pri_s or x == rng ) or x == X - rng:  # P is terminated
-        if not pri_s:   # dPs formed inside of negative mP
-            dP_ = []; dP = -1, x0, 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, Dy, M, My, ders_
-            ders_.append( ( 0, 0, 0, 0, 0 ) )
-            for i in range( L + 1 ):
+    if not (s == pri_s or x == rng) or x == X - rng:  # P is terminated
+        if not pri_s:  # dPs formed inside of negative mP
+            dP_ = [];
+            dP = -1, x0, 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, Dy, M, My, ders_
+            ders_.append((0, 0, 0, 0, 0))
+            for i in range(L + 1):
                 ip, id, idy, im, imy = ders_[i]
                 if vert:
                     sd = 1 if idy > 0 else 0
@@ -180,7 +183,7 @@ def form_P( ders, x, P, P_, buff_, hP_, frame, vert = 0 ):
                     sd = 1 if id > 0 else 0
                 pri_sd, x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_ = dP
                 if (pri_sd != sd and not i == 0) or i == L:
-                    dP_.append( dP )
+                    dP_.append(dP)
                     x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_ = x0 + i, 0, 0, 0, 0, 0, 0, []
                 Ld += 1
                 Id += ip
@@ -188,7 +191,7 @@ def form_P( ders, x, P, P_, buff_, hP_, frame, vert = 0 ):
                 Dyd += idy
                 Md += im
                 Myd += imy
-                sders_.append( ( ip, id, idy, im, imy ) )
+                sders_.append((ip, id, idy, im, imy))
                 dP = sd, x0d, Ld, Id, Dd, Dyd, Md, Myd, sders_
 
             P = pri_s, x0, L, I, D, Dy, M, My, dP_
@@ -342,9 +345,9 @@ def form_blob(term_seg, frame, y_carry=0):
         frame[3] += Dy
         frame[4] += M
         frame[5] += My
-        frame[6] += xD                      # ave_x angle, to evaluate frame for re-orientation
-        frame[7] += max_x - min_x + 1       # blob width
-        frame[8] += term_seg[7] - min_y + 1 # blob height
+        frame[6] += xD  # ave_x angle, to evaluate frame for re-orientation
+        frame[7] += max_x - min_x + 1  # blob width
+        frame[8] += term_seg[7] - min_y + 1  # blob height
         frame[9].append(((s, L, I, D, Dy, M, My, min_x, max_x, min_y, term_seg[7]), root_, xD))
 
     return frame  # no term_seg return: no root segs refer to it
@@ -374,7 +377,7 @@ def image_to_blobs(image):
 
         pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
         ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
-        ders2__, _xP_, _yP_, xframe, yframe = vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe )  # vertical pixel comparison
+        ders2__, _xP_, _yP_, xframe, yframe = vertical_comp(ders1_, ders2__, _xP_, _yP_, xframe, yframe)  # vertical pixel comparison
 
     # frame ends, last vertical rng of incomplete ders2__ is discarded,
     # merge segs of last line into their blobs:
@@ -387,7 +390,7 @@ def image_to_blobs(image):
     while hP_:
         hP, yframe = form_segment(hP_.popleft(), yframe)
         yframe = form_blob(hP, yframe)
-    return ( xframe, yframe )  # frame of 2D patterns, to be outputted to level 2
+    return (xframe, yframe)  # frame of 2D patterns, to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
