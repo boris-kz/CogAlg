@@ -7,18 +7,18 @@ from collections import deque
 
 ''' This file is currently just a stab.
     Comparison over a sequence frames in a video, currently only initial ders-per-pixel tuple formation: 
-    
+
     immediate pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
     then resulting 3D tuples (p, dx, mx, dy, my, dt, mt) per pixel are combined into 
-    
+
     incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD persists, not oriented for inclusion? 
     evaluated for orientation, re-composition, incremental-dimensionality comparison, and recursion? 
-    
+
     recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 
     comp power = depth of content: normalized by hLe pwr miss if hLe diff * hLe match * lLe total
     3rd comp to 3rd-level ff -> filter pattern: longer-range nP forward, binary trans-level fb:
     complemented P: longer-range = higher-level ff & higher-res fb, recursion eval for positive Ps?
-         
+
     colors will be defined as color / sum-of-colors, and single-color patterns are within grey-scale patterns: 
     primary white patterns ( sub-patterns per relative color, not cross-compared: already complementary?
 '''
@@ -27,9 +27,9 @@ from collections import deque
 # ************ UTILITY FUNCTIONS ****************************************************************************************
 # Includes:
 # -rebuild_blobs()
+# -segment_sort_by_height()
 # ***********************************************************************************************************************
-
-def rebuild_blobs( frame, print_separate_blobs = 0 ):
+def rebuild_blobs(frame, print_separate_blobs=0):
     " Rebuilt data of blobs into an image "
     blob_image = np.array([[[127] * 4] * X] * Y)
 
@@ -69,9 +69,9 @@ def segment_sort_by_height(seg):
 # -scan_P_()
 # -form_segment()
 # -form_blob()
-# -image_to_blobs
+# -spatial_eval()
+# -video_to_persistents()
 # ***********************************************************************************************************************
-
 def lateral_comp(pixel_):
     " Comparison over x coordinate, within rng of consecutive pixels on each line "
 
@@ -101,28 +101,28 @@ def lateral_comp(pixel_):
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
-
-def vertical_comp(ders1_, ders2__, _P_, frame):
+def vertical_comp(ders1_, tders_, ders2__, _P_, frame):
     " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
 
     # lateral pattern = pri_s, x0, L, I, D, Dy, V, Vy, ders2_
     P = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
          [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
          [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
          [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
-    P_ = [deque(), deque(), deque(), deque()]  # line y - 1 + rng*2
-    buff_ = [deque(), deque(), deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
+    P_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # line y - 1 + rng*2
+    buff_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
     # Note: each one of P, P_, buff_ is a list of 4 corresponding to 4 types of patterns ( m, my, d, dy respectively )
     new_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
     max_index = rng - 1  # max ders2_ index
     min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
     x = rng  # lateral coordinate of pixel in input ders1
 
-    for (p, d, m), ders2_ in zip(ders1_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
+    for (p, d, m),(dt, mt), ders2_ in zip(ders1_, tders_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
         index = 0
         back_dy, back_my = 0, 0
-        for (_p, _d, fdy, _m, fmy) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
-
+        for (_p, _d, fdy, _dt, _m, fmy, _mt) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
             dy = p - _p
             my = ave - abs(dy)
             fdy += dy  # running sum of differences between pixel _p and all higher and lower pixels within rng
@@ -131,56 +131,57 @@ def vertical_comp(ders1_, ders2__, _P_, frame):
             back_my += my  # running sum of d and m between pixel _p and all higher pixels within rng
 
             if index < max_index:
-                ders2_[index] = (_p, _d, fdy, _m, fmy)
+                ders2_[index] = (_p, _d, fdy, _dt, _m, fmy, _mt)
             elif y > min_coord + ini_y:
-                ders = _p, _d, fdy, _m, fmy
-                for typ in range(2):  # vertes of P: dP | dyP | mP | myP
-                    P, P_, buff_, _P_, frame = form_P( ders, x, X - rng, P, P_, buff_, _P_, frame, typ )
+                ders = _p, _d, fdy, _dt, _m, fmy, _mt
+                for typ in range(0, 6, 2):  # vertes of P: dP | dyP | mP | myP
+                    P, P_, buff_, _P_, frame = form_P(ders, x, X - rng, P, P_, buff_, _P_, frame, typ)
             index += 1
 
-        ders2_.appendleft( ( p, d, back_dy, m, back_my ) )  # new ders2 displaces completed one in vertical ders2_ via maxlen
+        ders2_.appendleft((p, d, back_dy, dt, m, back_my, mt))  # new ders2 displaces completed one in vertical ders2_ via maxlen
         new_ders2__.append(ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
         x += 1
 
     # Unlike mPs, dPs are disjointed, and the algorithm only deal with continuous Ps
     # To deal with disjointed dPs, 2 cases must be solved: not overlapping P - hP and unfinished hPs
     # Unfinished hPs are handled here:
-    for typ in range( 2, 4 ):
+    for typ in range(1, 6, 2):
         while buff_[typ]:
             hP = buff_[typ].popleft()
             if hP[1] != 1:
-                frame = form_blob( hP, frame, typ )
+                frame = form_blob(hP, frame, typ)
         while _P_[typ]:
             hP, frame = form_segment(_P_[typ].popleft(), frame, typ)
-            frame = form_blob( hP, frame, typ )
+            frame = form_blob(hP, frame, typ)
 
     return new_ders2__, P_, frame
     # ---------- vertical_comp() end ------------------------------------------------------------------------------------
 
-
 def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ):
     " Initializes, accumulates, and terminates 1D pattern "
 
-    p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
+    p, d, dy, dt, m, my, mt = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     if typ == 0:    core = m; alt_der = d; alt_dir = my; alt_both = dy
-    elif typ == 1:  core = my; alt_der = dy; alt_dir = m; alt_both = d
-    elif typ == 2:  core = d; alt_der = m; alt_dir = dy; alt_both = my
-    else:           core = dy; alt_der = my; alt_dir = d; alt_both = m
+    elif typ == 1:  core = d; alt_der = m; alt_dir = dy; alt_both = my
+    elif typ == 2:  core = my; alt_der = dy; alt_dir = m; alt_both = d
+    elif typ == 3:  core = dy; alt_der = my; alt_dir = d; alt_both = m
+    elif typ == 4:  core = mt; alt_der = dt; alt_dir = 0; alt_both = 0  # Sorry I missed the part where you told me
+    else:            core = dt; alt_der = mt; alt_dir = 0; alt_both = 0  # how to assign alt_dir and alt_both
 
     s = 1 if core > 0 else 0
     pri_s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_ = P[typ]
 
     if not (s == pri_s or x == x0) or x == max_x:  # P is terminated
         if typ < 2 and not pri_s:  # dPs formed inside of negative mP. typ < 2: mPs. not pri_s: negative pattern
-            P[typ + 2] = [-1, x0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]
-            ders_.append( ( 0, 0, 0, 0, 0 ) )   # A trick for last dP to get last ders inside an mP
+            P[typ + 1] = [-1, x0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]
+            ders_.append((0, 0, 0, 0, 0, 0, 0))  # A trick for last dP to get last ders inside an mP
 
             for i in range(L + 1):
-                P, P_, buff_, _P_, frame = form_P( ders_[i], x0 + i, x0 + L, P, P_, buff_, hP_, frame, typ + 2 )
+                P, P_, buff_, _P_, frame = form_P(ders_[i], x0 + i, x0 + L, P, P_, buff_, hP_, frame, typ + 1)
 
-            ders_.pop() # pop the empty last ders added above
+            ders_.pop()  # pop the empty last ders added above
 
-            P[typ] = pri_s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_, P_[typ + 2]
+            P[typ] = pri_s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_, P_[typ + 1]
 
         if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
             P_[typ].append([P[typ], 0, [], x - 1])  # P, roots, _fork_, x
@@ -220,16 +221,16 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
         if _buff_:
             hP = _buff_.popleft()  # hP was extended to segment and buffered in prior scan_P_
         elif hP_:
-            hP, frame = form_segment( hP_.popleft(), frame, typ )
+            hP, frame = form_segment(hP_.popleft(), frame, typ)
         else:
             break  # higher line ends, all hPs are converted to segments
 
         roots = hP[1]
-        _x0 = hP[5][-1][0][1]           # firt_x
+        _x0 = hP[5][-1][0][1]  # firt_x
         _x = _x0 + hP[5][-1][0][2] - 1  # last_x = first_x + L - 1
 
         # 3 conditions for P and _P to overlap: s == _s, _last_x >= first_x and last_x >= _first_x
-        if P[0] == hP[6][0][0] and  not _x < x0 and not x < _x0:
+        if P[0] == hP[6][0][0] and not _x < x0 and not x < _x0:
             roots += 1;
             hP[1] = roots
             fork_.append(hP)  # P-connected hPs will be converted to segments at each _fork
@@ -331,7 +332,7 @@ def form_blob(term_seg, frame, typ, y_carry=0):
     blob[0][8] += alt1
     blob[0][9] += alt2
 
-    blob[1][3] += xD        # ave_x angle, to evaluate blob for re-orientation
+    blob[1][3] += xD  # ave_x angle, to evaluate blob for re-orientation
     blob[1][4] += len(Py_)  # Ly = number of slices in segment
 
     blob[2] += roots - 1  # reference to term_seg is already in blob[9]
@@ -340,13 +341,17 @@ def form_blob(term_seg, frame, typ, y_carry=0):
     if not blob[2]:  # if remaining_roots == 0: blob is terminated and packed in frame
         [s, L, I, D, Dy, M, My, alt0, alt1, alt2], [min_x, max_x, min_y, xD, Ly], remaining_roots, root_ = blob
         if not typ:  # frame P are to compute averages, redundant for same-scope alt_frames
-            if not s: frame[0][0] += L  # L of negative horizontal mblobs are summed
-            frame[0][2] += I
-            frame[0][3] += D
-            frame[0][4] += Dy
-            frame[0][5] += M
-            frame[0][6] += My
-        elif typ == 1 and not s: frame[0][1] += L   # L of negative vertical mblobs are summed
+            if not s: frame[0][0][0] += L  # L of negative horizontal mblobs are summed
+            frame[0][1] += I
+            frame[0][2] += D
+            frame[0][3] += Dy
+            frame[0][4] += M
+            frame[0][5] += My
+        elif not s:
+            if typ == 2:
+                frame[0][0][1] += L  # L of negative vertical mblobs are summed
+            if typ == 4:
+                frame[0][0][2] += L  # L of negative temporal mblobs are summed
 
         frame[typ + 1][0] += xD  # ave_x angle, to evaluate frame for re-orientation
         frame[typ + 1][1] += Ly  # +L
@@ -356,43 +361,122 @@ def form_blob(term_seg, frame, typ, y_carry=0):
     return frame  # no term_seg return: no root segs refer to it
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
+def spatial_eval(image, tders__, __frame, persistents):
+    ''' Handle spatial comparisons and form 2D blobs,
+    postfix '_' denotes array vs. element,
+    prefix '_' denotes higher-line vs. lower-line variable,
+    prefix '__' denotes prior-frame vs. post-frame variable '''
 
-def image_to_blobs(image):
-    " Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
-
-    _P_ = [deque(), deque(), deque(), deque()]  # higher-line same- d-, m-, dy-, my- sign 1D patterns
-    frame = [[0, 0, 0, 0, 0, 0, 0], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []]]  # [neg_mL, neg_myL, I, D, Dy, M, My], 4 x [xD, Ly, blob_]
+    _P_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # higher-line same- d-, m-, dy-, my- sign 1D patterns
+    frame = [[[0, 0, 0], 0, 0, 0, 0, 0], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []]]
+    # [[neg_mL, neg_myL, neg_mtL], I, D, Dy, M, My], 4 x [xD, Ly, blob_]
 
     global y
-    y = ini_y                       # initial line
-    ders2__ = []                    # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
-    pixel_ = image[ini_y, :]        # first line of pixels at y == 0
-    ders1_ = lateral_comp(pixel_)   # after partial comp, while x < rng?
+    y = ini_y  # initial line
+    ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
+    tders_ = tders__[ini_y][:]
+    pixel_ = image[ini_y, :]  # first line of pixels at y == 0
+    ders1_ = lateral_comp(pixel_)  # after partial comp, while x < rng?
 
-    for (p, d, m) in ders1_:
-        ders2 = p, d, 0, m, 0       # dy, my initialized at 0
+    for (p, dx, mx),( dt, mt ) in zip(ders1_, tders_):
+        ders2 = p, dx, 0, dt, mx, 0, mt # dy, my initialized at 0
         ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
-        ders2_.append(ders2)        # only one tuple in first-line ders2_
+        ders2_.append(ders2)  # only one tuple in first-line ders2_
         ders2__.append(ders2_)
 
     for y in range(ini_y + 1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
-
-        pixel_ = image[y, :]            # vertical coordinate y is index of new line p_
-        ders1_ = lateral_comp(pixel_)   # lateral pixel comparison
-        ders2__, _P_, frame = vertical_comp( ders1_, ders2__, _P_, frame )  # vertical pixel comparison
+        tders_ = tders__[ini_y][:]
+        pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
+        ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
+        ders2__, _P_, frame = vertical_comp(ders1_, tders_, ders2__, _P_, frame)  # vertical pixel comparison
 
     # frame ends, last vertical rng of incomplete ders2__ is discarded,
     # merge segs of last line into their blobs:
     y = Y
-    for typ in range(4):
+    for typ in range(6):
         hP_ = _P_[typ]
         while hP_:
-            hP, frame = form_segment( hP_.popleft(), frame, typ )
-            frame = form_blob( hP, frame, typ )
+            hP, frame = form_segment(hP_.popleft(), frame, typ)
+            frame = form_blob(hP, frame, typ)
 
-    return frame  # frame of 2D patterns, to be outputted to level 2
-    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
+    return frame, persistents
+    # ---------- spatial_eval() end -------------------------------------------------------------------------------------
 
+def video_to_persistents(vid):
+    ''' Main body of the operation,
+    postfix '_' denotes array vs. element,
+    prefix '_' denotes higher-line vs. lower-line variable,
+    prefix '__' denotes prior-frame vs. post-frame variable '''
+
+    if record:
+        mxblob_o = cv2.VideoWriter("./videos/mxblobs.avi", -1, 15, (X, Y))
+        dxblob_o = cv2.VideoWriter("./videos/dxblobs.avi", -1, 15, (X, Y))
+        myblob_o = cv2.VideoWriter("./videos/myblobs.avi", -1, 15, (X, Y))
+        dyblob_o = cv2.VideoWriter("./videos/dyblobs.avi", -1, 15, (X, Y))
+        mtblob_o = cv2.VideoWriter("./videos/mtblobs.avi", -1, 15, (X, Y))
+        dtblob_o = cv2.VideoWriter("./videos/dtblobs.avi", -1, 15, (X, Y))
+
+    # Initializations
+    frame = [[[0, 0, 0], 0, 0, 0, 0, 0], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []]]
+    persistents = deque()   # Just a list of tblobs for now
+    global t    # init t
+
+    tders___ = deque(maxlen= t_rng)
+    tders___.append((np.zeros((Y, X)), np.zeros((Y, X)), np.zeros((Y, X))))   # (p__, dt__, mt__)
+    max_index = t_rng - 1
+
+    t = 0
+    while (vid.isOpened() and t < max_t):
+        # Capture frame-by-frame ---------------------------------------------------------
+        ret, image = vid.read()
+        if not ret:
+            break
+
+        print 'Current frame: %d\n' % (t)
+
+        # Main operations ----------------------------------------------------------------
+        pixel__ = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Array of gray-scale pixels
+        back_dt__ = np.zeros((Y, X)); back_mt__ = np.zeros((Y, X))
+        for index, (p__, dt__, mt__) in enumerate(tders___):
+            idt__ = pixel__ - p__
+            imt__ = ave - np.absolute(idt__)  # pixel-wise comparison
+
+            dt__ += idt__
+            mt__ += imt__
+
+            back_dt__ += idt__
+            back_mt__ += imt__
+
+            if index < max_index:
+                tders___[index] = (p__, dt__, mt__)
+            elif t >= t_rng * 2:
+                tders__ = [ zip(dt_, mt_) for dt_, mt_ in zip(dt__[:, rng:-rng + 1], mt__[:, rng:-rng + 1]) ] # For compatible with lateral comp ders
+                frame, persistents = spatial_eval(p__, tders__, frame, persistents)  # spatial pixel comparison + partial blob comparison
+
+        tders___.append((pixel__, back_dt__, back_mt__))
+
+        # Rebuild blob -------------------------------------------------------------------
+        if record:
+            mxblob_o.write(np.uint8(rebuild_blobs(frame[1])))
+            dxblob_o.write(np.uint8(rebuild_blobs(frame[2])))
+            myblob_o.write(np.uint8(rebuild_blobs(frame[3])))
+            dyblob_o.write(np.uint8(rebuild_blobs(frame[4])))
+            mtblob_o.write(np.uint8(rebuild_blobs(frame[5])))
+            dtblob_o.write(np.uint8(rebuild_blobs(frame[6])))
+
+        t += 1
+
+    cv2.destroyAllWindows()
+    if record:
+        mxblob_o.release()
+        dxblob_o.release()
+        myblob_o.release()
+        dyblob_o.release()
+        mtblob_o.release()
+        dtblob_o.release()
+
+    return persistents
+    # ---------- video_to_persistents() end -----------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
@@ -402,59 +486,26 @@ def image_to_blobs(image):
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
 
-rng = 2  # number of pixels compared to each pixel in four directions
-ave = 15  # |d| value that coincides with average match: mP filter
+t_rng = 3   # Number of pixels compared to each pixel in time D
+rng = 2     # Number of pixels compared to each pixel in four directions
+ave = 15    # |d| value that coincides with average match: mP filter
 ave_rate = 0.25  # not used; match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
-ini_y = 0  # not used
-max_frame_count = 1
+ini_y = 0   # not used
+max_t = 20  # For testing
+record = bool(0)  # Set to True yield file outputs
 
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-v', '--video', help='path to video file', default= './videos/Test.avi')
+argument_parser.add_argument('-v', '--video', help='path to video file', default='./videos/Test01.avi')
 arguments = vars(argument_parser.parse_args())
-vid = cv2.VideoCapture(arguments['video'], 0)
+video = cv2.VideoCapture(arguments['video'], 0)
 
-ret, frame = vid.read()
-frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-Y, X = frame.shape  # image height and width
+ret, image = video.read()
+Y, X, _ = image.shape  # image height and width
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
-
-mxblob_o = cv2.VideoWriter("./videos/mxblobs.avi", -1, 15,(X,Y))
-myblob_o = cv2.VideoWriter("./videos/myblobs.avi", -1, 15,(X,Y))
-dxblob_o = cv2.VideoWriter("./videos/dxblobs.avi", -1, 15,(X,Y))
-dyblob_o = cv2.VideoWriter("./videos/dyblobs.avi", -1, 15,(X,Y))
-
-frame_count = 0
-
-while ( vid.isOpened() and frame_count < max_frame_count):
-    # Capture frame-by-frame ---------------------------------------------------------
-    ret, frame = vid.read()
-    if not ret:
-        break
-
-    print 'Current frame: %d\n' % ( frame_count )
-
-    # Our operations on the frame come here ------------------------------------------
-    frame = cv2.cvtColor( frame, cv2.COLOR_BGR2GRAY )
-
-    # Main operation -----------------------------------------------------------------
-    frame_of_blobs = image_to_blobs( frame )
-
-    # Rebuild blob -------------------------------------------------------------------
-    mxblob_o.write( np.uint8( rebuild_blobs( frame_of_blobs[1] ) ) )
-    myblob_o.write( np.uint8( rebuild_blobs( frame_of_blobs[2] ) ) )
-    dxblob_o.write( np.uint8( rebuild_blobs( frame_of_blobs[3] ) ) )
-    dyblob_o.write( np.uint8( rebuild_blobs( frame_of_blobs[4] ) ) )
-
-    frame_count += 1
-
-cv2.destroyAllWindows()
-mxblob_o.release()
-myblob_o.release()
-dxblob_o.release()
-dyblob_o.release()
+persistents = video_to_persistents( video )
 end_time = time() - start_time
 print(end_time)
 
