@@ -7,29 +7,31 @@ from collections import deque
 
 ''' This file is currently just a stab.
     Comparison over a sequence frames in a video, currently only initial ders-per-pixel tuple formation: 
-
+    
     immediate pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
     then resulting 3D tuples (p, dx, mx, dy, my, dt, mt) per pixel are combined into 
-
+    
     incremental-dimensionality patterns: 1D Ps ) 2D blobs ) TD persists, not oriented for inclusion? 
     evaluated for orientation, re-composition, incremental-dimensionality comparison, and recursion? 
-
+    
     recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 
     comp power = depth of content: normalized by hLe pwr miss if hLe diff * hLe match * lLe total
     3rd comp to 3rd-level ff -> filter pattern: longer-range nP forward, binary trans-level fb:
     complemented P: longer-range = higher-level ff & higher-res fb, recursion eval for positive Ps?
-
+         
     colors will be defined as color / sum-of-colors, and single-color patterns are within grey-scale patterns: 
     primary white patterns ( sub-patterns per relative color, not cross-compared: already complementary?
 '''
 
 
-# ************ UTILITY FUNCTIONS ****************************************************************************************
+# ************ MISCELLANEOUS FUNCTIONS **********************************************************************************
 # Includes:
 # -rebuild_blobs()
 # -segment_sort_by_height()
+# -fetch_frame()
 # ***********************************************************************************************************************
-def rebuild_blobs(frame, print_separate_blobs=0):
+
+def rebuild_blobs( frame, print_separate_blobs = 0 ):
     " Rebuilt data of blobs into an image "
     blob_image = np.array([[[127] * 4] * X] * Y)
 
@@ -52,25 +54,27 @@ def rebuild_blobs(frame, print_separate_blobs=0):
     return blob_image
     # ---------- rebuild_blobs() end ------------------------------------------------------------------------------------
 
-
 def segment_sort_by_height(seg):
     " Used in sort() function at blob termination "
     return seg[7]
     # ---------- segment_sort_by_height() end ---------------------------------------------------------------------------
 
+def fetch_frame(video):
+    _, frame = video.read()
+    return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-# ************ UTILITY FUNCTIONS END ************************************************************************************
+# ************ MISCELLANEOUS FUNCTIONS END ******************************************************************************
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # Includes:
-# -lateral_comp()
-# -vertical_comp()
+# -lateral_comp() x
+# -vertical_comp() x
+# -temporal_comp() x
 # -form_P()
 # -scan_P_()
 # -form_segment()
 # -form_blob()
-# -spatial_eval()
-# -video_to_persistents()
+# -video_to_tblobs() x
 # ***********************************************************************************************************************
 def lateral_comp(pixel_):
     " Comparison over x coordinate, within rng of consecutive pixels on each line "
@@ -97,32 +101,66 @@ def lateral_comp(pixel_):
 
         rng_ders1_.appendleft((p, back_fd, back_fm))  # new tuple with initialized d and m, maxlen displaces completed tuple
     # last incomplete rng_ders1_ in line are discarded, vs. ders1_ += reversed(rng_ders1_)
-    ders1_.append((0, 0, 0))  # A trick for last P to get last ders on a line, in form_P()
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
-def vertical_comp(ders1_, tders_, ders2__, _P_, frame):
+def vertical_comp(ders1_, rng_ders2__):
     " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
+    ders2_= []              # tuples of complete 2D derivatives: summation range = rng
+    new_rng_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
+    max_index = rng - 1     # max ders2_ index
+    min_coord = rng * 2 - 1 # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
+    x = rng                 # lateral coordinate of pixel in input ders1
 
-    # lateral pattern = pri_s, x0, L, I, D, Dy, V, Vy, ders2_
-    P = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
-    P_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # line y - 1 + rng*2
-    buff_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
-    # Note: each one of P, P_, buff_ is a list of 4 corresponding to 4 types of patterns ( m, my, d, dy respectively )
-    new_ders2__ = deque()  # 2D array: line of ders2_s buffered for next-line comp
-    max_index = rng - 1  # max ders2_ index
-    min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
-    x = rng  # lateral coordinate of pixel in input ders1
-
-    for (p, d, m),(dt, mt), ders2_ in zip(ders1_, tders_, ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
+    for (p, d, m), rng_ders2_ in zip(ders1_, rng_ders2__):  # pixel comp to rng _pixels in ders2_, summing dy and my
         index = 0
         back_dy, back_my = 0, 0
-        for (_p, _d, fdy, _dt, _m, fmy, _mt) in ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+        for (_p, _d, fdy, _m, fmy) in rng_ders2_:   # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+            dy = p - _p
+            my = ave - abs(dy)
+            fdy += dy                       # running sum of differences between pixel _p and all higher and lower pixels within rng
+            fmy += my                       # running sum of matches between pixel _p and all higher and lower pixels within rng
+            back_dy += dy; back_my += my    # running sum of d and m between pixel _p and all higher pixels within rng
+            if index < max_index:
+                rng_ders2_[index] = (_p, _d, fdy, _m, fmy)
+            elif y > min_coord:
+                ders2_.append((_p, _d, fdy, _m, fmy)) # completed bilateral tuple is transferred from rng_ders2_ to ders2_
+            index += 1
+
+        rng_ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical ders2_ via maxlen
+        new_rng_ders2__.append(rng_ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
+        x += 1
+
+    return ders2_, new_rng_ders2__
+    # ---------- vertical_comp() end ------------------------------------------------------------------------------------
+
+def temporal_comp(ders2_, rng_ders3___, _P_, _blob_, videoo):
+    ''' ders2_: an array of complete 2D ders
+        rng_ders3___: an older frame of 3D tuple arrays, sliced into an array
+        comparison between t_rng temporally consecutive pixels, forming ders3: 3D tuple of derivatives per pixel '''
+    # lateral pattern = pri_s, x0, L, I, D, Dy, Dt, M, My, Mt, Alt0:6 ders2_
+    P = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
+
+    P_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # line y - 1 + rng*2
+    buff_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
+
+    new_rng_ders3__ = deque()   # line of rng_ders3___ buffered for next-frame comp
+    max_index   = t_rng - 1     # max rng_ders3_ index
+    min_coord   = rng * 2 - 1   # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
+    t_min_coord = t_rng * 2 - 1
+    x = rng                     # lateral coordinate of pixel in input ders1
+    rng_ders3__ = rng_ders3___[y]   # rng_ders3__ is a slice of rng_ders3___
+    '''
+    for (p, d, m), rng_ders2_ in zip(ders2_, rng_ders3__):  # pixel comp to rng _pixels in rng_ders2_, summing dy and my
+        index = 0
+        back_dy, back_my = 0, 0
+        for (_p, _d, fdy, _m, fmy) in rng_ders2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+
             dy = p - _p
             my = ave - abs(dy)
             fdy += dy  # running sum of differences between pixel _p and all higher and lower pixels within rng
@@ -131,21 +169,21 @@ def vertical_comp(ders1_, tders_, ders2__, _P_, frame):
             back_my += my  # running sum of d and m between pixel _p and all higher pixels within rng
 
             if index < max_index:
-                ders2_[index] = (_p, _d, fdy, _dt, _m, fmy, _mt)
+                rng_ders2_[index] = (_p, _d, fdy, _m, fmy)
             elif y > min_coord + ini_y:
-                ders = _p, _d, fdy, _dt, _m, fmy, _mt
-                for typ in range(0, 6, 2):  # vertes of P: dP | dyP | mP | myP
-                    P, P_, buff_, _P_, frame = form_P(ders, x, X - rng, P, P_, buff_, _P_, frame, typ)
+                ders = _p, _d, fdy, _m, fmy
+                for typ in range(dim):  # vertes of P: dP | dyP | mP | myP
+                    P, P_, buff_, _P_, frame = form_P(ders, x, X - rng - 1, P, P_, buff_, _P_, frame, typ)
             index += 1
 
-        ders2_.appendleft((p, d, back_dy, dt, m, back_my, mt))  # new ders2 displaces completed one in vertical ders2_ via maxlen
-        new_ders2__.append(ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to ders2__, for next-line vertical comp
+        rng_ders2_.appendleft((p, d, back_dy, m, back_my))  # new ders2 displaces completed one in vertical rng_ders2_ via maxlen
+        new_rng_ders2__.append(rng_ders2_)  # 2D array of vertically-incomplete 2D tuples, converted to rng_ders2__, for next-line vertical comp
         x += 1
 
     # Unlike mPs, dPs are disjointed, and the algorithm only deal with continuous Ps
     # To deal with disjointed dPs, 2 cases must be solved: not overlapping P - hP and unfinished hPs
     # Unfinished hPs are handled here:
-    for typ in range(1, 6, 2):
+    for typ in range(dim, num_ders):
         while buff_[typ]:
             hP = buff_[typ].popleft()
             if hP[1] != 1:
@@ -153,42 +191,27 @@ def vertical_comp(ders1_, tders_, ders2__, _P_, frame):
         while _P_[typ]:
             hP, frame = form_segment(_P_[typ].popleft(), frame, typ)
             frame = form_blob(hP, frame, typ)
+    '''
+    return rng_ders3___, _P_, _blob_, videoo
 
-    return new_ders2__, P_, frame
-    # ---------- vertical_comp() end ------------------------------------------------------------------------------------
-
+    # ---------- temporal_comp() end ------------------------------------------------------------------------------------
+'''
 def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ):
     " Initializes, accumulates, and terminates 1D pattern "
 
-    p, d, dy, dt, m, my, mt = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
-    if typ == 0:    core = m; alt_der = d; alt_dir = my; alt_both = dy
-    elif typ == 1:  core = d; alt_der = m; alt_dir = dy; alt_both = my
-    elif typ == 2:  core = my; alt_der = dy; alt_dir = m; alt_both = d
-    elif typ == 3:  core = dy; alt_der = my; alt_dir = d; alt_both = m
-    elif typ == 4:  core = mt; alt_der = dt; alt_dir = 0; alt_both = 0  # Sorry I missed the part where you told me
-    else:            core = dt; alt_der = mt; alt_dir = 0; alt_both = 0  # how to assign alt_dir and alt_both
+    p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
+    if      typ == 0:   core = m;   alt0 = d;   alt1 = my;  alt2 = dy
+    elif    typ == 1:   core = my;  alt0 = dy;  alt1 = m;   alt2 = d
+    elif    typ == 2:   core = d;   alt0 = m;   alt1 = dy;  alt2 = my
+    else:               core = dy;  alt0 = my;  alt1 = d;   alt2 = m
 
     s = 1 if core > 0 else 0
-    pri_s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_ = P[typ]
+    pri_s, x0 = P[typ][:2]
 
-    if not (s == pri_s or x == x0) or x == max_x:  # P is terminated
-        if typ < 2 and not pri_s:  # dPs formed inside of negative mP. typ < 2: mPs. not pri_s: negative pattern
-            P[typ + 1] = [-1, x0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]
-            ders_.append((0, 0, 0, 0, 0, 0, 0))  # A trick for last dP to get last ders inside an mP
+    if not ( s == pri_s or x == x0):  # P is terminated
+        P, P_, buff_, hP_, frame = term_P(s, x, P, P_, buff_, hP_, frame, typ)
 
-            for i in range(L + 1):
-                P, P_, buff_, _P_, frame = form_P(ders_[i], x0 + i, x0 + L, P, P_, buff_, hP_, frame, typ + 1)
-
-            ders_.pop()  # pop the empty last ders added above
-
-            P[typ] = pri_s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_, P_[typ + 1]
-
-        if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
-            P_[typ].append([P[typ], 0, [], x - 1])  # P, roots, _fork_, x
-        else:
-            P_[typ], buff_[typ], hP_[typ], frame = scan_P_(x - 1, P[typ], P_[typ], buff_[typ], hP_[typ], frame, typ)  # scans higher-line Ps for contiguity
-            # x-1 for prior p
-        x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_ = x, 0, 0, 0, 0, 0, 0, 0, 0, 0, []  # new P initialization
+    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[typ]
 
     L += 1  # length of a pattern, continued or initialized input and derivatives are accumulated:
     I += p  # summed input
@@ -196,18 +219,40 @@ def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ):
     Dy += dy  # vertical D
     M += m  # lateral M
     My += my  # vertical M
-    alt_Der += abs(alt_der)  # abs alt cores indicate value of alt-core Ps, to compute P redundancy rate
-    alt_Dir += abs(alt_dir)  # vs. specific overlaps: cost > gain in precision?
-    alt_Both += abs(alt_both)
+    Alt0 += abs(alt0)  # abs alt cores indicate value of alt-core Ps, to compute P redundancy rate
+    Alt1 += abs(alt1)  # vs. specific overlaps: cost > gain in precision?
+    Alt2 += abs(alt2)
 
     # in frame_x_blobs, alt_Der and alt_Both are computed for comp_P eval, but add to rdn only within neg mPs
 
     ders_.append(ders)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
-    P[typ] = s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_
+    P[typ] = s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_
+
+    if x == max_x:  # P is terminated
+        P, P_, buff_, hP_, frame = term_P(s, x + 1, P, P_, buff_, hP_, frame, typ)
 
     return P, P_, buff_, hP_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
     # ---------- form_P() end -------------------------------------------------------------------------------------------
 
+def term_P(s, x, P, P_, buff_, hP_, frame, typ):
+    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[typ]
+    if typ < 2 and not pri_s:  # dPs formed inside of negative mP. typ < 2: mPs. not pri_s: negative pattern
+        P[typ + dim] = [-1, x0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]
+
+        for i in range(L):
+            P, P_, buff_, _P_, frame = form_P(ders_[i], x0 + i, x0 + L - 1, P, P_, buff_, hP_, frame, typ + dim)
+
+        P[typ] = pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_, P_[typ + dim]
+
+    if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
+        P_[typ].append([P[typ], 0, [], x - 1])  # P, roots, _fork_, x
+    else:
+        P_[typ], buff_[typ], hP_[typ], frame = scan_P_(x - 1, P[typ], P_[typ], buff_[typ], hP_[typ], frame, typ)  # scans higher-line Ps for contiguity
+        # x-1 for prior p
+    P[typ] = s, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, []  # new P initialization
+
+    return P, P_, buff_, hP_, frame
+    # ---------- term_P() end -------------------------------------------------------------------------------------------
 
 def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
     " P scans shared-x-coordinate hPs in higher P_, combines overlapping Ps into blobs "
@@ -221,16 +266,16 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
         if _buff_:
             hP = _buff_.popleft()  # hP was extended to segment and buffered in prior scan_P_
         elif hP_:
-            hP, frame = form_segment(hP_.popleft(), frame, typ)
+            hP, frame = form_segment( hP_.popleft(), frame, typ )
         else:
             break  # higher line ends, all hPs are converted to segments
 
         roots = hP[1]
-        _x0 = hP[5][-1][0][1]  # firt_x
+        _x0 = hP[5][-1][0][1]           # firt_x
         _x = _x0 + hP[5][-1][0][2] - 1  # last_x = first_x + L - 1
 
         # 3 conditions for P and _P to overlap: s == _s, _last_x >= first_x and last_x >= _first_x
-        if P[0] == hP[6][0][0] and not _x < x0 and not x < _x0:
+        if P[0] == hP[6][0][0] and  not _x < x0 and not x < _x0:
             roots += 1;
             hP[1] = roots
             fork_.append(hP)  # P-connected hPs will be converted to segments at each _fork
@@ -242,12 +287,11 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
 
         ini_x = _x + 1  # = first x of next _P
 
-    buff_ += _buff_  # _buff_ is likely empty
-    P_.append([P, 0, fork_, x])  # P with no overlap to next _P is extended to hP and buffered for next-line scan_P_
+    buff_ += _buff_             # _buff_ is likely empty
+    P_.append([P, 0, fork_, x]) # P with no overlap to next _P is extended to hP and buffered for next-line scan_P_
 
     return P_, buff_, hP_, frame  # hP_ and buff_ contain only remaining _Ps, with _x => next x
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
-
 
 def form_segment(hP, frame, typ):
     " Convert hP into new segment or add it to higher-line segment, merge blobs "
@@ -269,9 +313,9 @@ def form_segment(hP, frame, typ):
             fork[1] = roots
             dx = ave_x - fork[3]
             fork[3] = ave_x
-            fork[4] += dx  # xD for seg normalization and orientation, or += |dx| for curved yL?
-            fork[5].append((_P, dx))  # Py_: vertical buffer of Ps merged into seg
-            hP = fork  # replace segment with including fork's segment
+            fork[4] += dx               # xD for seg normalization and orientation, or += |dx| for curved yL?
+            fork[5].append((_P, dx))    # Py_: vertical buffer of Ps merged into seg
+            hP = fork                   # replace segment with including fork's segment
             blob = hP[6]
 
         else:  # if >1 forks, or 1 fork that has >1 roots:
@@ -306,17 +350,16 @@ def form_segment(hP, frame, typ):
                         blob[2] += remaining_roots
                         for seg in root_:
                             if not seg is fork:
-                                seg[6] = blob  # blobs in other forks are references to blob in the first fork
-                                blob[3].append(seg)  # buffer of merged root segments
+                                seg[6] = blob       # blobs in other forks are references to blob in the first fork
+                                blob[3].append(seg) # buffer of merged root segments
                         fork[6] = blob
                         blob[3].append(fork)
                     blob[2] -= 1
 
-        blob[1][0] = min(first_x, blob[1][0])  # min_x
-        blob[1][1] = max(last_x, blob[1][1])  # max_x
+        blob[1][0] = min(first_x, blob[1][0])   # min_x
+        blob[1][1] = max(last_x, blob[1][1])    # max_x
     return hP, frame
     # ---------- form_segment() end -----------------------------------------------------------------------------------------
-
 
 def form_blob(term_seg, frame, typ, y_carry=0):
     " Terminated segment is merged into continued or initialized blob (all connected segments) "
@@ -332,7 +375,7 @@ def form_blob(term_seg, frame, typ, y_carry=0):
     blob[0][8] += alt1
     blob[0][9] += alt2
 
-    blob[1][3] += xD  # ave_x angle, to evaluate blob for re-orientation
+    blob[1][3] += xD        # ave_x angle, to evaluate blob for re-orientation
     blob[1][4] += len(Py_)  # Ly = number of slices in segment
 
     blob[2] += roots - 1  # reference to term_seg is already in blob[9]
@@ -340,143 +383,84 @@ def form_blob(term_seg, frame, typ, y_carry=0):
 
     if not blob[2]:  # if remaining_roots == 0: blob is terminated and packed in frame
         [s, L, I, D, Dy, M, My, alt0, alt1, alt2], [min_x, max_x, min_y, xD, Ly], remaining_roots, root_ = blob
-        if not typ:  # frame P are to compute averages, redundant for same-scope alt_frames
-            if not s: frame[0][0][0] += L  # L of negative horizontal mblobs are summed
-            frame[0][1] += I
-            frame[0][2] += D
-            frame[0][3] += Dy
-            frame[0][4] += M
-            frame[0][5] += My
-        elif not s:
-            if typ == 2:
-                frame[0][0][1] += L  # L of negative vertical mblobs are summed
-            if typ == 4:
-                frame[0][0][2] += L  # L of negative temporal mblobs are summed
-
-        frame[typ + 1][0] += xD  # ave_x angle, to evaluate frame for re-orientation
-        frame[typ + 1][1] += Ly  # +L
+        # if not typ:  # frame P are to compute averages, redundant for same-scope alt_frames
+        #     frame[0][1] += I
+        #     frame[0][2] += D
+        #     frame[0][3] += Dy
+        #     frame[0][4] += M
+        #     frame[0][5] += My
+        # if not s:
+        #     for i in range(dim): frame[0][0][i] += L   # L of negative mblobs are summed
+        #
+        # frame[typ + 1][0] += xD  # ave_x angle, to evaluate frame for re-orientation
+        # frame[typ + 1][1] += Ly  # +L
         root_.sort(key=segment_sort_by_height)  # Sort segments by max_y
-        frame[typ + 1][2].append(((s, L, I, D, Dy, M, My, alt0, alt1, alt2), (min_x, max_x, min_y, term_seg[7], xD, Ly), root_))
+        frame[typ].append(((s, L, I, D, Dy, M, My, alt0, alt1, alt2), (min_x, max_x, min_y, term_seg[7], xD, Ly), root_))
 
     return frame  # no term_seg return: no root segs refer to it
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
+'''
+def video_to_tblobs(video):  # currently only a draft
+    ''' Main body of the operation,
+        postfix '_' denotes array vs. element,
+        prefix '_' denotes prior- pixel, line, or frame variable '''\
 
-def spatial_eval(image, tders__, __frame, persistents):
-    ''' Handle spatial comparisons and form 2D blobs,
-    postfix '_' denotes array vs. element,
-    prefix '_' denotes higher-line vs. lower-line variable,
-    prefix '__' denotes prior-frame vs. post-frame variable '''
+    _P_ = [deque(), deque(), deque(), deque(), deque(), deque()]    # higher line of same- d- | v- | dy- | vy- sign 1D patterns
+    _blob_ = [deque(), deque(), deque(), deque(), deque(), deque()] # prior frame of 2D blobs
+    videoo = [[ 0, 0, 0, 0, 0, 0, 0 ], [], [], [], [], [], []]    # [[Dxf, Lf, If, Df, Dyf, Vf, Vyf], net_]
+    global t, y
+    t = 0                                   # temporal coordinate of current frame
 
-    _P_ = [deque(), deque(), deque(), deque(), deque(), deque()]  # higher-line same- d-, m-, dy-, my- sign 1D patterns
-    frame = [[[0, 0, 0], 0, 0, 0, 0, 0], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []]]
-    # [[neg_mL, neg_myL, neg_mtL], I, D, Dy, M, My], 4 x [xD, Ly, blob_]
+    # initialization:
+    rng_ders2__     = []                    # horizontal line of vertical buffers: array of 2D tuples
+    rng_ders3___    = [[]]                  # temporal buffer per pixel of a frame: 3D tuples in 3D -> 2D array
 
-    global y
-    y = ini_y  # initial line
-    ders2__ = []  # horizontal line of vertical buffers: 2D array of 2D tuples, deque for speed?
-    tders_ = tders__[ini_y][:]
-    pixel_ = image[ini_y, :]  # first line of pixels at y == 0
-    ders1_ = lateral_comp(pixel_)  # after partial comp, while x < rng?
+    y = 0  # initial line
+    line_ = fetch_frame(video)              # first frame of lines?
+    pixel_= line_[0, :]                     # first line of pixels
+    ders1_ = lateral_comp(pixel_)           # after partial comp, while x < rng?
 
-    for (p, dx, mx),( dt, mt ) in zip(ders1_, tders_):
-        ders2 = p, dx, 0, dt, mx, 0, mt # dy, my initialized at 0
-        ders2_ = deque(maxlen=rng)  # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
-        ders2_.append(ders2)  # only one tuple in first-line ders2_
-        ders2__.append(ders2_)
+    for (p, d, m) in ders1_:
+        ders2   = p, d, 0, m, 0             # dy, my initialized at 0
+        rng_ders2_  = deque(maxlen=rng)     # vertical buffer of incomplete derivatives tuples, for fuzzy ycomp
+        rng_ders2_.append(ders2)            # only one tuple in first-line rng_ders2_
+        rng_ders2__.append(rng_ders2_)
 
-    for y in range(ini_y + 1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
-        tders_ = tders__[ini_y][:]
-        pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
-        ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
-        ders2__, _P_, frame = vertical_comp(ders1_, tders_, ders2__, _P_, frame)  # vertical pixel comparison
+    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
+        line_ = fetch_frame(video)
+        pixel_  = pixel_= line_[0, :]                               # vertical coordinate y is index of new line p_
+        ders1_  = lateral_comp(pixel_)                              # lateral pixel comparison
+        ders2_, rng_ders2__ = vertical_comp(ders1_, rng_ders2__)    # vertical pixel comparison, ders2_ is array of complete der2s on y line
+
+        rng_ders3__ = []
+        for (p, d, dy, m, my) in ders2_:
+            ders3 = p, d, dy, 0, m, my, 0   # dt, mt initialized at 0
+            rng_ders3_ = deque(maxlen=rng)  # temporal buffer of incomplete derivatives tuples, for fuzzy ycomp
+            rng_ders3_.append(ders3)        # only one tuple in first-frame rng_ders3_
+            rng_ders3__.append(rng_ders3_)
+
+        rng_ders3___.append(rng_ders3__)
 
     # frame ends, last vertical rng of incomplete ders2__ is discarded,
-    # merge segs of last line into their blobs:
-    y = Y
-    for typ in range(6):
-        hP_ = _P_[typ]
-        while hP_:
-            hP, frame = form_segment(hP_.popleft(), frame, typ)
-            frame = form_blob(hP, frame, typ)
 
-    return frame, persistents
-    # ---------- spatial_eval() end -------------------------------------------------------------------------------------
-
-def video_to_persistents(vid):
-    ''' Main body of the operation,
-    postfix '_' denotes array vs. element,
-    prefix '_' denotes higher-line vs. lower-line variable,
-    prefix '__' denotes prior-frame vs. post-frame variable '''
-
-    if record:
-        mxblob_o = cv2.VideoWriter("./videos/mxblobs.avi", -1, 15, (X, Y))
-        dxblob_o = cv2.VideoWriter("./videos/dxblobs.avi", -1, 15, (X, Y))
-        myblob_o = cv2.VideoWriter("./videos/myblobs.avi", -1, 15, (X, Y))
-        dyblob_o = cv2.VideoWriter("./videos/dyblobs.avi", -1, 15, (X, Y))
-        mtblob_o = cv2.VideoWriter("./videos/mtblobs.avi", -1, 15, (X, Y))
-        dtblob_o = cv2.VideoWriter("./videos/dtblobs.avi", -1, 15, (X, Y))
-
-    # Initializations
-    frame = [[[0, 0, 0], 0, 0, 0, 0, 0], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []]]
-    persistents = deque()   # Just a list of tblobs for now
-    global t    # init t
-
-    tders___ = deque(maxlen= t_rng)
-    tders___.append((np.zeros((Y, X)), np.zeros((Y, X)), np.zeros((Y, X))))   # (p__, dt__, mt__)
-    max_index = t_rng - 1
-
-    t = 0
-    while (vid.isOpened() and t < max_t):
-        # Capture frame-by-frame ---------------------------------------------------------
-        ret, image = vid.read()
-        if not ret:
+    for t in range(1, T):  # actual processing
+        if not video.isOpened():    # Terminate at the end of video
             break
+        # Main operations
+        _rng_ders3___ = rng_ders3___
+        line_ = fetch_frame(video)
+        for y in range(0, Y):
+            pixel_  = line_[0, :]
+            ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
+            ders2_, rng_ders2__ = vertical_comp(ders1_, rng_ders2__)  # vertical pixel comparison
+            rng_ders3___, _P_, _blob_, videoo = temporal_comp(ders2_, rng_ders3___, _P_, _blob_, videoo)  # temporal pixel comparison
 
-        print 'Current frame: %d\n' % (t)
 
-        # Main operations ----------------------------------------------------------------
-        pixel__ = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Array of gray-scale pixels
-        back_dt__ = np.zeros((Y, X)); back_mt__ = np.zeros((Y, X))
-        for index, (p__, dt__, mt__) in enumerate(tders___):
-            idt__ = pixel__ - p__
-            imt__ = ave - np.absolute(idt__)  # pixel-wise comparison
+    # sequence ends, incomplete ders3__ discarded, but vertically incomplete blobs are still inputted in scan_blob_?
 
-            dt__ += idt__
-            mt__ += imt__
-
-            back_dt__ += idt__
-            back_mt__ += imt__
-
-            if index < max_index:
-                tders___[index] = (p__, dt__, mt__)
-            elif t >= t_rng * 2:
-                tders__ = [ zip(dt_, mt_) for dt_, mt_ in zip(dt__[:, rng:-rng + 1], mt__[:, rng:-rng + 1]) ] # For compatible with lateral comp ders
-                frame, persistents = spatial_eval(p__, tders__, frame, persistents)  # spatial pixel comparison + partial blob comparison
-
-        tders___.append((pixel__, back_dt__, back_mt__))
-
-        # Rebuild blob -------------------------------------------------------------------
-        if record:
-            mxblob_o.write(np.uint8(rebuild_blobs(frame[1])))
-            dxblob_o.write(np.uint8(rebuild_blobs(frame[2])))
-            myblob_o.write(np.uint8(rebuild_blobs(frame[3])))
-            dyblob_o.write(np.uint8(rebuild_blobs(frame[4])))
-            mtblob_o.write(np.uint8(rebuild_blobs(frame[5])))
-            dtblob_o.write(np.uint8(rebuild_blobs(frame[6])))
-
-        t += 1
-
-    cv2.destroyAllWindows()
-    if record:
-        mxblob_o.release()
-        dxblob_o.release()
-        myblob_o.release()
-        dyblob_o.release()
-        mtblob_o.release()
-        dtblob_o.release()
-
-    return persistents
-    # ---------- video_to_persistents() end -----------------------------------------------------------------------------
+    cv2.destroyAllWindows() # Part of video read
+    return videoo  # frame of 2D patterns is outputted to level 2
+    # ---------- video_to_tblobs() end ----------------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
@@ -486,13 +470,13 @@ def video_to_persistents(vid):
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
 
-t_rng = 3   # Number of pixels compared to each pixel in time D
-rng = 2     # Number of pixels compared to each pixel in four directions
-ave = 15    # |d| value that coincides with average match: mP filter
-ave_rate = 0.25  # not used; match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
-ini_y = 0   # not used
-max_t = 20  # For testing
-record = bool(0)  # Set to True yield file outputs
+t_rng       = 3     # Number of pixels compared to each pixel in time D
+rng         = 2     # Number of pixels compared to each pixel in four directions
+ave         = 15    # |d| value that coincides with average match: mP filter
+ave_rate    = 0.25  # not used; match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
+dim         = 3     # Number of dimensions: x, y and t
+derived     = dim * 2   # Total number of derivatives
+record      = bool(0)   # Set to True yield file outputs
 
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
@@ -500,12 +484,13 @@ argument_parser.add_argument('-v', '--video', help='path to video file', default
 arguments = vars(argument_parser.parse_args())
 video = cv2.VideoCapture(arguments['video'], 0)
 
-ret, image = video.read()
-Y, X, _ = image.shape  # image height and width
+line_   = fetch_frame(video)
+Y, X = line_.shape   # image height and width
+T       = 20            # number of frame read limit
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
-persistents = video_to_persistents( video )
+persistents = video_to_tblobs( video )
 end_time = time() - start_time
 print(end_time)
 
