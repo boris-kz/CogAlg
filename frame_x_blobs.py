@@ -118,20 +118,21 @@ def lateral_comp(pixel_):
     return ders1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
-def vertical_comp(ders1_, rng_ders2__, _P_, frame):
+def vertical_comp(ders1_, rng_ders2__, _xP_, _yP_, frame):
     " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
 
     # lateral pattern = pri_s, x0, L, I, D, Dy, M, My, Alt0:4 ders2_
-    P = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
-         [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
-    P_ = [deque(), deque(), deque(), deque()]  # line y - 1 + rng*2
-    buff_ = [deque(), deque(), deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
+    xP = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+          [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
+    yP = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []], \
+          [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
+    xP_ = [deque(), deque()]
+    yP_ = [deque(), deque()]  # line y - 1 + rng*2
+    xbuff_ = [deque(), deque()]
+    ybuff_ = [deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
     # Note: each one of P, P_, buff_ is a list of 4 corresponding to 4 types of patterns ( m, my, d, dy respectively )
     new_rng_ders2__ = deque()  # 2D array: line of rng_ders2_s buffered for next-line comp
     max_index = rng - 1  # max rng_ders2_ index
-    min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
     x = rng  # lateral coordinate of pixel in input ders1
 
     for (p, d, m), rng_ders2_ in zip(ders1_, rng_ders2__):  # pixel comp to rng _pixels in rng_ders2_, summing dy and my
@@ -150,8 +151,8 @@ def vertical_comp(ders1_, rng_ders2__, _P_, frame):
                 rng_ders2_[index] = (_p, _d, fdy, _m, fmy)
             elif y > min_coord + ini_y:
                 ders = _p, _d, fdy, _m, fmy
-                for typ in range(dim):  # vertes of P: dP | dyP | mP | myP
-                    P, P_, buff_, _P_, frame = form_P( ders, x, X - rng - 1, P, P_, buff_, _P_, frame, typ )
+                xP, xP_, xbuff_, _xP_, frame = form_P( ders, x, X - rng - 1, xP, xP_, xbuff_, _xP_, frame, 0 )  # lateral mP, typ = 0
+                yP, yP_, ybuff_, _yP_, frame = form_P( ders, x, X - rng - 1, yP, yP_, ybuff_, _yP_, frame, 1 )  # vertical mP, typ = 1
             index += 1
 
         rng_ders2_.appendleft( ( p, d, back_dy, m, back_my ) )  # new ders2 displaces completed one in vertical rng_ders2_ via maxlen
@@ -160,22 +161,33 @@ def vertical_comp(ders1_, rng_ders2__, _P_, frame):
 
     # Unlike mPs, dPs are disjointed, and the algorithm only deal with continuous Ps
     # To deal with disjointed dPs, 2 cases must be solved: not overlapping P - hP and unfinished hPs
-    # Unfinished hPs are handled here:
-    for typ in range( dim, num_ders ):
-        while buff_[typ]:
-            hP = buff_[typ].popleft()
-            if hP[1] != 1:
-                frame = form_blob( hP, frame, typ )
-        while _P_[typ]:
-            hP, frame = form_segment(_P_[typ].popleft(), frame, typ)
+    # Unfinished lateral hPs of are handled here:
+    typ = dim     # lateral dP, typ = 2
+    while xbuff_[1]:
+        hP = xbuff_[1].popleft()
+        if hP[1] != 1:      # no roots
             frame = form_blob( hP, frame, typ )
+    while _xP_[1]:
+        hP, frame = form_segment(_xP_[1].popleft(), frame, typ)
+        frame = form_blob( hP, frame, typ )
 
-    return new_rng_ders2__, P_, frame
+    # Same for vertical hPs:
+    typ += 1    # vertical dP, typ = 3
+    while ybuff_[1]:
+        hP = ybuff_[1].popleft()
+        if hP[1] != 1:      # no roots
+            frame = form_blob( hP, frame, typ )
+    while _yP_[1]:
+        hP, frame = form_segment(_yP_[1].popleft(), frame, typ)
+        frame = form_blob( hP, frame, typ )
+
+    return new_rng_ders2__, xP_, yP_, frame
     # ---------- vertical_comp() end ------------------------------------------------------------------------------------
 
-def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ):
-    " Initializes, accumulates, and terminates 1D pattern "
-
+def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
+    " Initializes, and accumulates 1D pattern "
+    # is_dP could be calculated from typ: is_dP = bool(typ // dim)
+    # but use direct entry for speed?
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     if      typ == 0:   core = m;   alt0 = d;   alt1 = my;  alt2 = dy
     elif    typ == 1:   core = my;  alt0 = dy;  alt1 = m;   alt2 = d
@@ -183,12 +195,12 @@ def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ):
     else:               core = dy;  alt0 = my;  alt1 = d;   alt2 = m
 
     s = 1 if core > 0 else 0
-    pri_s, x0 = P[typ][:2]
+    pri_s, x0 = P[is_dP][:2]    # P[0] is mP, P[1] is dP of the same dimension
 
     if not ( s == pri_s or x == x0):  # P is terminated
-        P, P_, buff_, hP_, frame = term_P(s, x, P, P_, buff_, hP_, frame, typ)
+        P, P_, buff_, hP_, frame = term_P(s, x, P, P_, buff_, hP_, frame, typ, is_dP)
 
-    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[typ]
+    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[is_dP]
 
     L += 1  # length of a pattern, continued or initialized input and derivatives are accumulated:
     I += p  # summed input
@@ -203,30 +215,34 @@ def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ):
     # in frame_x_blobs, alt_Der and alt_Both are computed for comp_P eval, but add to rdn only within neg mPs
 
     ders_.append(ders)  # ders2s are buffered for oriented rescan and incremental range | derivation comp
-    P[typ] = s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_
+    P[is_dP] = s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_
 
     if x == max_x:  # P is terminated
-        P, P_, buff_, hP_, frame = term_P(s, x + 1, P, P_, buff_, hP_, frame, typ)
+        P, P_, buff_, hP_, frame = term_P(s, x + 1, P, P_, buff_, hP_, frame, typ, is_dP)
 
     return P, P_, buff_, hP_, frame  # accumulated within line, P_ is a buffer for conversion to _P_
     # ---------- form_P() end -------------------------------------------------------------------------------------------
 
-def term_P(s, x, P, P_, buff_, hP_, frame, typ):
-    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[typ]
-    if typ < 2 and not pri_s:  # dPs formed inside of negative mP. typ < 2: mPs. not pri_s: negative pattern
-        P[typ + dim] = [-1, x0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]
+def term_P(s, x, P, P_, buff_, hP_, frame, typ, is_dP):
+    " Terminates 1D pattern when sign-change is detected or at the end of the line "
+
+    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[is_dP]
+    if not is_dP and not pri_s:  # dPs formed inside of negative mP
+        # P[0] == mP; P[1] == dP
+        P[1] = [-1, x0, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]
 
         for i in range(L):
-            P, P_, buff_, _P_, frame = form_P(ders_[i], x0 + i, x0 + L - 1, P, P_, buff_, hP_, frame, typ + dim)
+            P, P_, buff_, _P_, frame = form_P(ders_[i], x0 + i, x0 + L - 1, P, P_, buff_, hP_, frame, typ + dim, True) # is_dP = 1
 
-        P[typ] = pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_, P_[typ + dim]
+        P[0] = pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_, P_[1]
 
+    # from here, scan_P_(), form_segment() and form_blob(), P, hP, buff are of individual type vs. lists of m and d type of the same dimension
     if y == rng * 2 + ini_y:  # 1st line: form_P converts P to initialized hP, forming initial P_ -> hP_
-        P_[typ].append([P[typ], 0, [], x - 1])  # P, roots, _fork_, x
+        P_[is_dP].append([P[is_dP], 0, [], x - 1])  # P, roots, _fork_, x
     else:
-        P_[typ], buff_[typ], hP_[typ], frame = scan_P_(x - 1, P[typ], P_[typ], buff_[typ], hP_[typ], frame, typ)  # scans higher-line Ps for contiguity
-        # x-1 for prior p
-    P[typ] = s, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, []  # new P initialization
+        P_[is_dP], buff_[is_dP], hP_[is_dP], frame = scan_P_(x - 1, P[is_dP], P_[is_dP], buff_[is_dP], hP_[is_dP], frame, typ)  # scans higher-line Ps for contiguity
+        # x-1 for prior
+    P[is_dP] = s, x, 0, 0, 0, 0, 0, 0, 0, 0, 0, []  # new P initialization
 
     return P, P_, buff_, hP_, frame
 
@@ -367,8 +383,8 @@ def form_blob(term_seg, frame, typ, y_carry=0):
             frame[0][3] += Dy
             frame[0][4] += M
             frame[0][5] += My
-        if not s:
-            for i in range(dim): frame[0][0][i] += L   # L of negative mblobs are summed
+        if not s and typ < dim:
+            frame[0][0][typ] += L   # L of negative mblobs are summed
 
         frame[typ + 1][0] += xD  # ave_x angle, to evaluate frame for re-orientation
         frame[typ + 1][1] += Ly  # +L
@@ -382,7 +398,8 @@ def form_blob(term_seg, frame, typ, y_carry=0):
 def image_to_blobs(image):
     " Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
 
-    _P_ = [deque(), deque(), deque(), deque()]  # higher-line same- d-, m-, dy-, my- sign 1D patterns
+    _xP_ = [deque(), deque()]
+    _yP_ = [deque(), deque()]  # higher-line same- d-, m-, dy-, my- sign 1D patterns
     frame = [[[0, 0], 0, 0, 0, 0, 0], [0, 0, []], [0, 0, []], [0, 0, []], [0, 0, []]]  # [neg_mL, neg_myL, I, D, Dy, M, My], 4 x [xD, Ly, blob_]
 
     global y
@@ -401,16 +418,23 @@ def image_to_blobs(image):
 
         pixel_ = image[y, :]            # vertical coordinate y is index of new line p_
         ders1_ = lateral_comp(pixel_)   # lateral pixel comparison
-        rng_ders2__, _P_, frame = vertical_comp( ders1_, rng_ders2__, _P_, frame )  # vertical pixel comparison
+        rng_ders2__, _xP_, _yP_, frame = vertical_comp( ders1_, rng_ders2__, _xP_, _yP_, frame )  # vertical pixel comparison
 
     # frame ends, last vertical rng of incomplete rng_ders2__ is discarded,
     # merge segs of last line into their blobs:
     y = Y
-    for typ in range(4):
-        hP_ = _P_[typ]
+    for is_dP in range(2):
+        typ = is_dP * dim
+        hP_ = _xP_[is_dP]
         while hP_:
             hP, frame = form_segment( hP_.popleft(), frame, typ )
             frame = form_blob( hP, frame, typ )
+
+        typ += 1
+        hP_ = _yP_[is_dP]
+        while hP_:
+            hP, frame = form_segment( hP_.popleft(), frame, typ )
+            frame = form_blob(hP, frame, typ)
 
     return frame  # frame of 2D patterns, to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
@@ -424,19 +448,19 @@ def image_to_blobs(image):
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
 
-rng = 2     # number of pixels compared to each pixel in four directions
-ave = 15    # |d| value that coincides with average match: mP filter
-ave_rate = 0.25  # not used; match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
-ini_y = 0   # not used
-dim = 2     # Number of dimesions of derivatives, this'll change to 3 in videos
-num_ders = dim * 2  # Total number of derivatives
+rng         = 2     # number of pixels compared to each pixel in four directions
+min_coord   = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
+ave         = 15    # |d| value that coincides with average match: mP filter
+ave_rate    = 0.25  # not used; match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
+ini_y       = 0     # not used
+dim         = 2     # Number of dimesions of derivatives, this'll change to 3 in videos
 
 # Load inputs --------------------------------------------------------------------
 # image = misc.face(gray=True)  # read image as 2d-array of pixels (gray scale):
 # image = image.astype(int)
 # or:
 argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/Vegetable.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
 
