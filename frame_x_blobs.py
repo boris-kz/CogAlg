@@ -262,7 +262,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
             buff_.append(hP)
         elif roots != 1:
             frame = form_blob(hP, frame, typ)  # segment is terminated and packed into its blob
-        x0 = _x + 1  # = first x of next _P
+        _x0 = _x + 1  # = first x of next _P
 
     buff_ += _buff_  # _buff_ is likely empty
     P_.append([P, 0, fork_, x])  # P with no overlap to next _P is extended to hP and buffered for next-line scan_P_
@@ -274,19 +274,19 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
 def form_segment(hP, frame, typ):
     # Convert hP into new segment or add it to higher-line segment, merge blobs
     _P, roots, fork_, last_x = hP
-    [s, first_x], params = _P[:2], list(_P[2:11])
+    [s, first_x], param_ = _P[:2], list(_P[2:11])
     ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
 
-    if not fork_:  # seg is initialized with initialized blob (params, coordinates, remaining_roots, root_, xD)
+    if not fork_:  # seg is initialized with initialized blob (param_, coord_, remaining_roots, root_, xD)
         blob = [[s, 0, 0, 0, 0, 0, 0, 0, 0, 0], [_P[1], hP[3], y - rng - 1, 0, 0], 1, []]
-        hP = [params, roots, fork_, ave_x, 0, [(_P, 0)], blob]
+        hP = [param_, roots, fork_, ave_x, 0, [(_P, 0)], blob]
         blob[3].append(hP)
     else:
         if len(fork_) == 1 and fork_[0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
             # hP is merged into higher-line blob segment (Pars, roots, _fork_, ave_x, xD, Py_, blob) at hP[2][0]:
             fork = fork_[0]
-            L, I, D, Dy, M, My, alt0, alt1, alt2 = params
-            Ls, Is, Ds, Dys, Ms, Mys, alt0s, alt1s, alt2s = fork[0]  # seg params
+            L, I, D, Dy, M, My, alt0, alt1, alt2 = param_
+            Ls, Is, Ds, Dys, Ms, Mys, alt0s, alt1s, alt2s = fork[0]  # seg param_
             fork[0] = [Ls + L, Is + I, Ds + D, Dys + Dy, Ms + M, Mys + My, alt0s + alt0, alt1s + alt1, alt2s + alt2]
             fork[1] = roots
             dx = ave_x - fork[3]
@@ -297,7 +297,7 @@ def form_segment(hP, frame, typ):
             blob = hP[6]
 
         else:  # if >1 forks, or 1 fork that has >1 roots:
-            hP = [params, roots, fork_, ave_x, 0, [(_P, 0)], fork_[0][6]]  # seg is initialized with fork's blob
+            hP = [param_, roots, fork_, ave_x, 0, [(_P, 0)], fork_[0][6]]  # seg is initialized with fork's blob
             blob = hP[6]
             blob[3].append(hP)  # segment is buffered into root_
 
