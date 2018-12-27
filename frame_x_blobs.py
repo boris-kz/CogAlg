@@ -48,7 +48,7 @@ from collections import deque
 # ***********************************************************************************************************************
 
 def rebuild_blobs( frame, print_separate_blobs = 0 ):
-    " Rebuilt data of blobs into an image "
+    # Rebuilt data of blobs into an image
     blob_image = np.array([[[127] * 4] * X] * Y)
 
     for index, blob in enumerate(frame[2]):  # Iterate through blobs
@@ -72,7 +72,7 @@ def rebuild_blobs( frame, print_separate_blobs = 0 ):
 
 
 def segment_sort_by_height(seg):
-    " Used in sort() function at blob termination "
+    # Used in sort() function at blob termination
     return seg[7]
     # ---------- segment_sort_by_height() end ---------------------------------------------------------------------------
 
@@ -90,7 +90,7 @@ def segment_sort_by_height(seg):
 # -image_to_blobs()
 # ***********************************************************************************************************************
 def lateral_comp(pixel_):
-    " Comparison over x coordinate, within rng of consecutive pixels on each line "
+    # Comparison over x coordinate, within rng of consecutive pixels on each line
 
     ders1_ = []  # tuples of complete 1D derivatives: summation range = rng
     rng_ders1_ = deque(maxlen=rng)  # incomplete ders1s, within rng from input pixel: summation range < rng
@@ -102,10 +102,10 @@ def lateral_comp(pixel_):
         for index, (pri_p, fd, fm) in enumerate(rng_ders1_):
             d = p - pri_p
             m = ave - abs(d)
-            fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
-            fm += m  # bilateral fuzzy m: running sum of matches between pixel and all prior and subsequent pixels within rng
-            back_fd += d
-            back_fm += m  # running sum of d and m between pixel and all prior pixels within rng
+            fd += d  # bilateral fuzzy d: running sum of differences between pri_p and all prior and subsequent pixels within rng
+            fm += m  # bilateral fuzzy m: running sum of matches between pri_p and all prior and subsequent pixels within rng
+            back_fd += d  # running sum of d between p and all prior pixels within rng
+            back_fm += m  # running sum of m between p and all prior pixels within rng
 
             if index < max_index:
                 rng_ders1_[index] = (pri_p, fd, fm)
@@ -118,9 +118,9 @@ def lateral_comp(pixel_):
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
 def vertical_comp(ders1_, rng_ders2__, _xP_, _yP_, frame):
-    " Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives"
+    # Comparison to bilateral rng of vertically consecutive pixels, forming ders2: pixel + lateral and vertical derivatives
 
-    # each of the following contains 2 types, per core variables m and d:
+    # Each of the following contains 2 types, per core variables m and d:
     xP = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],  # lateral pattern = pri_s, x0, L, I, D, Dy, M, My, Alt0:4 ders2_
           [0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []]]
     yP = [[0, rng, 0, 0, 0, 0, 0, 0, 0, 0, 0, []],
@@ -143,8 +143,8 @@ def vertical_comp(ders1_, rng_ders2__, _xP_, _yP_, frame):
             my = ave - abs(dy)
             fdy += dy  # running sum of differences between pixel _p and all higher and lower pixels within rng
             fmy += my  # running sum of matches between pixel _p and all higher and lower pixels within rng
-            back_dy += dy
-            back_my += my  # running sum of d and m between pixel p and all lower pixels within rng
+            back_dy += dy   # running sum of d between pixel p and all higher pixels within rng
+            back_my += my   # running sum of m between pixel p and all higher pixels within rng
 
             if index < max_index:
                 rng_ders2_[index] = (_p, _d, fdy, _m, fmy)
@@ -180,7 +180,7 @@ def vertical_comp(ders1_, rng_ders2__, _xP_, _yP_, frame):
     # ---------- vertical_comp() end ------------------------------------------------------------------------------------
 
 def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
-    " Initializes, and accumulates 1D pattern "
+    # Initializes, and accumulates 1D pattern "
     # is_dP = bool(typ // dim), or computed directly for speed and clarity:
 
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
@@ -216,7 +216,7 @@ def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
     # ---------- form_P() end -------------------------------------------------------------------------------------------
 
 def term_P(s, x, P, P_, buff_, hP_, frame, typ, is_dP):
-    " Terminates 1D pattern when sign-change is detected or at the end of P_ "
+    # Terminates 1D pattern when sign-change is detected or at the end of P
 
     pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_ = P[is_dP]
     if not is_dP and not pri_s:
@@ -235,7 +235,7 @@ def term_P(s, x, P, P_, buff_, hP_, frame, typ, is_dP):
     return P, P_, buff_, hP_, frame
 
 def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
-    " P scans shared-x-coordinate hPs in higher P_, combines overlapping Ps into blobs "
+    # P scans shared-x-coordinate hPs in higher P_, combines overlapping Ps into blobs
 
     buff_ = deque()  # new buffer for displaced hPs (higher-line P tuples), for scan_P_(next P)
     fork_ = []  # refs to hPs connected to input P
@@ -272,7 +272,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, typ):
 
 
 def form_segment(hP, frame, typ):
-    " Convert hP into new segment or add it to higher-line segment, merge blobs "
+    # Convert hP into new segment or add it to higher-line segment, merge blobs
     _P, roots, fork_, last_x = hP
     [s, first_x], params = _P[:2], list(_P[2:11])
     ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
@@ -341,7 +341,7 @@ def form_segment(hP, frame, typ):
 
 
 def form_blob(term_seg, frame, typ, y_carry=0):
-    " Terminated segment is merged into continued or initialized blob (all connected segments) "
+    # Terminated segment is merged into continued or initialized blob (all connected segments)
 
     [L, I, D, Dy, M, My, alt0, alt1, alt2], roots, fork_, x, xD, Py_, blob = term_seg  # unique blob in fork_[0][6] is ref'd by other forks
     blob[0][1] += L
@@ -381,7 +381,7 @@ def form_blob(term_seg, frame, typ, y_carry=0):
 
 
 def image_to_blobs(image):
-    " Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
+    # Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable
 
     _xP_ = [deque(), deque()]
     _yP_ = [deque(), deque()]  # higher-line same- d-, m-, dy-, my- sign 1D patterns
