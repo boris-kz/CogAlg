@@ -313,7 +313,7 @@ def term_blob(typ, blob):  # eval for orient_t_scan, norm_P_der, incr_comp_t_sca
         norm = 0
 
     if G2 > ave * 99 * rdn and len(Py_) > 2:  # comp_P cost, or if len(Py_) > n+1: for fuzzy comp
-        blob = scan_comp_Py_(typ, norm, blob)  # blob norm -> P norm: no P eval,-> S_ders, PM, PD
+        blob = scan_Py_(typ, norm, blob)  # blob norm -> P norm: no P eval,-> S_ders, PM, PD
 
     if G2 > ave * 999 * rdn and len(Py_) > 2:  # or if G2 + PM | PD: tot value, or after comp_PP?
 
@@ -333,6 +333,7 @@ def term_blob(typ, blob):  # eval for orient_t_scan, norm_P_der, incr_comp_t_sca
 
     return blob, rdn
 
+'''
 def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | PP_net
 
     s, x, ix, lx, Dx, max_L, (L2, I2, D2, Dy2, M2, My2, G2, OG, Olp), Py_ = blob
@@ -350,8 +351,8 @@ def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | 
             t2__.append((P[9], P[2]))  # t2_, last x
             t2__ = t2__.sort(key=lambda t2_: t2_[1], reverse=True)  # sort by last x
 
-        ''' t2__: 2D array of quadrants per pixel, extracted for blob sort and rescan: initially vertical, then 
-        by diagonal x ^ y or by n-pixels angle nx ^ ny, if G2 * ((Dx - near alt dx) ^ (Dy - near alt dy))? '''
+        # t2__: 2D array of quadrants per pixel, extracted for blob sort and rescan: initially vertical, then 
+        # by diagonal x ^ y or by n-pixels angle nx ^ ny, if G2 * ((Dx - near alt dx) ^ (Dy - near alt dy))? 
 
         t2_, _x = t2__.pop
         y, olp, ovG, odG = 0,0,0,0  # vertical ydP x yvP overlap
@@ -401,19 +402,19 @@ def orient(blob):  # orientation: rescan and P norm, per blob | blob_net | PP | 
     else: norm = 0
     return blob, norm
 
-''' diagonal blob (+ adjacent blobs) rescan and redef by normalized quad, if gain > cost?:
+    # diagonal blob (+ adjacent blobs) rescan and redef by normalized quad, if gain > cost?:
 
     d = (d + dy) / 2 / 1.4  # est d over ver_L, ders sum in 1/1 ver / lat ratio
     dy = (dy - d) / 2 * 1.4  # est dy over lat_L,
     m = (m + my) / 2 / 1.4  # est m over ver_L
     my = (my + m) / 2 * 1.4  # est my over lat_L
              
-    then blob scan across max Dx ^ Dy axis?  g is combined, orient-neutral?
-    or P redef by ortho_dx / ave_x scan line: overlap | stretch at alt ends? 
-    or analog re-input for axis-aligned quads: more accurate than norm for P der comp, blob redef? 
+    # then blob scan across max Dx ^ Dy axis?  g is combined, orient-neutral?
+    # or P redef by ortho_dx / ave_x scan line: overlap | stretch at alt ends? 
+    # or analog re-input for axis-aligned quads: more accurate than norm for P der comp, blob redef? 
 '''
 
-def scan_comp_Py_(typ, norm, blob):  # scan of vertical Py_ -> comp_P -> 2D value PPs and difference PPs
+def scan_Py_(typ, norm, blob):  # scan of vertical Py_ -> comp_P -> 2D value PPs and difference PPs
 
     vPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
     dPP = 0,[],[]  # PP: L2, I2, D2, Dy2, M2, My2, G2, Olp2
@@ -462,6 +463,39 @@ def scan_comp_Py_(typ, norm, blob):  # scan of vertical Py_ -> comp_P -> 2D valu
         redun alt P ) pP) PP ) blob ) network? '''
 
     return blob, SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
+
+
+def orient(typ, L, Ly, I, Dx, Dy, Mx, My, Alt0, Alt1, Alt2, xD, max_y, min_y, max_x, min_x):
+    height = max_y - min_y + 1; width = max_x - min_x + 1
+
+    if typ == 0:   core = Dx; Palt0 = Mx; Palt1 = Dy; Palt2 = My  # core: variable that defines current type of pattern,
+    elif typ == 1: core = Mx; Palt0 = Dx; Palt1 = My; Palt2 = Dy  # alt cores define overlapping alternative-type patterns:
+    elif typ == 2: core = Dy; Palt0 = My; Palt1 = Dx; Palt2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
+    else:          core = My; Palt0 = Dy; Palt1 = Mx; Palt2 = Dx
+    Palt0 += Palt0
+    Palt1 += Palt1
+    Palt2 += Palt2
+
+    max(Dx, Dy) / min(Dx, Dy)  # to maximize D and minimize Dy, redundant max (M, My) / min (M, My)?
+    # or alt vars as indicator of local orientation:
+    if typ == 0 or typ == 2:
+        max(core, Palt1) / min(core, Palt1)
+    else:
+        max(core, Palt1) / min(core, Palt1)
+
+    abs(xD) / Ly  # >|< 1, linear mean long D / seg height, fine structure, more accurate for rescan value than height / width
+
+    # quantized seg orient: during scan_Py_, if min L (dx > 1)?
+    # or oriented comp_P spec instead?
+
+    P_val = L + I + abs(core) + Palt0 + Palt1 + Palt2  # under + over- estimate / 2, vs:
+    # added alt abs sum between Ps only
+
+    # tblob composition/ contiguity = olp * match: selection due to high temporal variation * forking,
+    # far less variation than between disc Ps, simple L-only comp: top-level comp / top-level scan?
+
+    typ_rdn = abs(core) / (abs(core) + Alt0 + Alt1 + Alt2)  # vs. sort by mag; same blob value for all types
+    # type comb if olp * match: L only, other params assumed equal
 
 
 def comp_P(typ, norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
@@ -606,10 +640,10 @@ def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
        PP = incr_deriv_comp_P(typ, PP)  # forming incrementally higher-derivation PP
 
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:  # PM includes results of incr_comp_P
-       PP = scan_parameters_(0, PP)  # forming vpP_ and S_p_ders
+       PP = scan_param_(0, PP)  # forming vpP_ and S_p_ders
 
     if G2 + PD > ave * 99 * rdn and len(Py_) > 2:  # PD includes results of incr_comp_P
-       PP = scan_parameters_(1, PP)  # forming dpP_ and S_p_ders
+       PP = scan_param_(1, PP)  # forming dpP_ and S_p_ders
 
     return PP
 
@@ -622,7 +656,7 @@ def incr_range_comp_P(typ, PP):
 def incr_deriv_comp_P(typ, PP):
     return PP
 
-def scan_parameters_(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders and nvars?
+def scan_param_(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders and nvars?
 
     P_ = PP[11]
     Pars_ = [(0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0),[]]
@@ -644,7 +678,7 @@ def scan_parameters_(typ, PP):  # at term_network, term_blob, or term_PP: + P_de
         Ip, Mp, Dp, par_ = Par
 
         if Mp + Dp > ave * 9 * 7 * 2 * 2:  # ave PP * ave par_P rdn * rdn to PP * par_P typ rdn?
-            par_vPS, par_dPS = form_par_P_(0, par_)
+            par_vPS, par_dPS = form_param_(0, par_)
             par_Pf = 1  # flag
         else:
             par_Pf = 0; par_vPS = Ip, Mp, Dp, par_; par_dPS = Ip, Mp, Dp, par_
@@ -654,9 +688,9 @@ def scan_parameters_(typ, PP):  # at term_network, term_blob, or term_PP: + P_de
 
     return PP
 
-def form_par_P_(typ, par_):  # forming parameter patterns within par_:
+def form_param_(typ, param_):  # forming parameter patterns within par_:
 
-    p, mp, dp = par_.pop()  # initial parameter
+    p, mp, dp = param_.pop()  # initial parameter
     Ip = p, Mp = mp, Dp = dp, p_ = []  # Par init
 
     _vps = 1 if mp > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per par_P?
@@ -667,7 +701,7 @@ def form_par_P_(typ, par_):  # forming parameter patterns within par_:
     par_vPS = 0, 0, 0, []  # IpS, MpS, DpS, par_vP_
     par_dPS = 0, 0, 0, []  # IpS, MpS, DpS, par_dP_
 
-    for par in par_:  # all vars are summed in incr_par_P
+    for par in param_:  # all vars are summed in incr_par_P
         p, mp, dp = par
         vps = 1 if mp > ave * 7 > 0 else 0
         dps = 1 if dp > 0 else 0
@@ -677,7 +711,7 @@ def form_par_P_(typ, par_):  # forming parameter patterns within par_:
             Ip += p; Mp += mp; Dp += dp; par_.append(par)
             par_vP = Ip, Mp, Dp, par_
         else:
-            par_vP = term_par_P(0, par_vP)
+            par_vP = term_param_(0, par_vP)
             IpS, MpS, DpS, par_vP_ = par_vPS
             IpS += Ip; MpS += Mp; DpS += Dp; par_vP_.append(par_vP)
             par_vPS = IpS, MpS, DpS, par_vP_
@@ -688,7 +722,7 @@ def form_par_P_(typ, par_):  # forming parameter patterns within par_:
             Ip += p; Mp += mp; Dp += dp; par_.append(par)
             par_dP = Ip, Mp, Dp, par_
         else:
-            par_dP = term_par_P(1, par_dP)
+            par_dP = term_param_(1, par_dP)
             IpS, MpS, DpS, par_dP_ = par_dPS
             IpS += Ip; MpS += Mp; DpS += Dp; par_dP_.append(par_dP)
             par_vPS = IpS, MpS, DpS, par_dP_
@@ -701,22 +735,22 @@ def form_par_P_(typ, par_):  # forming parameter patterns within par_:
     # LIDV per dx, L, I, D, M? also alt2_: fork_ alt_ concat, for rdn per PP?
     # fpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
 
-def term_par_P(typ, par_P):  # from form_par_P: eval for orient, re_comp? or folded?
+def term_param_(typ, par_P):  # from form_par_P: eval for orient, re_comp? or folded?
     return par_P
 
-def scan_comp_par_P_(typ, par_P_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
+def scan_param_(typ, par_P_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
     return par_P_
 
-def comp_par_P(par_P, _par_P):  # with/out orient, from scan_pP_
+def comp_param_P(par_P, _par_P):  # with/out orient, from scan_pP_
     return par_P
 
-def scan_comp_PP_(PP_):  # within a blob, also within blob_: network?
+def scan_PP_(PP_):  # within a blob, also within blob_: network?
     return PP_
 
 def comp_PP(PP, _PP):  # compares PPs within a blob | network, -> forking PPP_: very rare?
     return PP
 
-def scan_comp_blob_(blob_):  # after full blob network termination,
+def scan_blob_(blob_):  # after full blob network termination,
     return blob_
 
 def comp_blob(blob, _blob):  # compares blob segments
@@ -764,6 +798,9 @@ def frame(f, r):  # postfix '_' denotes array vs. element, prefix '_' denotes hi
         frame_.append((vg_blob_, dg_blob_))  # line of blobs is added to frame of blobs
 
     return frame_  # frame of 2D patterns is outputted to level 2
+
+
+ave_rate = 0.25  # match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
 
 f = misc.face(gray=True)  # input frame of pixels
 f = f.astype(int)
