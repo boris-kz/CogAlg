@@ -22,43 +22,70 @@ from collections import deque
 
 # ************ MISCELLANEOUS FUNCTIONS **********************************************************************************
 # Includes:
-# -rebuild_blobs()
+# -rebuild_segment()
+# -rebuild_blob()
+# -rebuild_frame()
 # -fetch_frame()
 # ***********************************************************************************************************************
 
-def rebuild_blobs(dir, frame, print_separate_blobs=0, print_separate_segs=0):
-    " Rebuilt data of blobs into an image "
-    blob_image = np.array([[[127] * 4] * X] * Y)
+def rebuild_segment(dir, index, seg, blob_img, frame_img, print_separate_blobs=0, print_separate_segs=0):
+    if print_separate_segs: seg_img = np.array([[[127] * 4] * X] * Y)
+    y = seg[7][2]  # min_y
+    for (P, dx) in seg[5]:
+        x = P[1]
+        for i in range(P[2]):
+            frame_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
+            if print_separate_blobs: blob_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
+            if print_separate_segs: seg_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
+            x += 1
+        y += 1
+
+    if print_separate_segs:
+        min_x, max_x, min_y, max_y = seg[7]
+        cv2.rectangle(seg_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
+        cv2.imwrite(dir + 'seg%d.jpg' % (index), seg_img)
+    return blob_img
+    # ---------- rebuild_segment() end ----------------------------------------------------------------------------------
+
+def rebuild_blob(dir, index, blob, frame_img, print_separate_blobs=0, print_separate_segs=0):
+    " Rebuilt data of a blob into an image "
+    if print_separate_blobs: blob_img = np.array([[[127] * 4] * X] * Y)
+    for ids, id in enumerate(blob[4][0]):  # Iterate through segments' sorted id
+        blob_img = rebuild_segment(dir + '/blob%d' % (index), ids, blob[3][id], blob_img, frame_img, print_separate_blobs, print_separate_segs)
+
+    if print_separate_blobs:
+        min_x, max_x, min_y, max_y = blob[1][:4]
+        cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
+        cv2.imwrite(dir + '/blob%d.jpg' % (index), blob_img)
+    return frame_img
+    # ---------- rebuild_blob() end -------------------------------------------------------------------------------------
+
+def rebuild_frame(dir, frame, print_separate_blobs=0, print_separate_segs=0):
+    " Rebuilt data of a frame into an image "
+    frame_img = np.array([[[127] * 4] * X] * Y)
     if (print_separate_blobs or print_separate_segs) and not os.path.exists(dir):
         os.mkdir(dir)
-
     for indexs, index in enumerate(frame[3][0]):  # Iterate through blobs' sorted id
-        blob = frame[2][index]
-        if print_separate_blobs: blob_img = np.array([[[127] * 4] * X] * Y)
-        for ids, id in enumerate(blob[4][0]):  # Iterate through segments' sorted id
-            seg = blob[3][id]
-            if print_separate_segs: seg_img = np.array([[[127] * 4] * X] * Y)
-            y = seg[7][2]   # min_y
-            for (P, dx) in seg[5]:
-                x = P[1]
-                for i in range(P[2]):
-                    blob_image[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
-                    if print_separate_blobs: blob_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
-                    if print_separate_segs: seg_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
-                    x += 1
-                y += 1
+        frame_img = rebuild_blob(dir, indexs, frame[2][index], frame_img, print_separate_blobs, print_separate_segs)
+    cv2.imwrite(dir + '.jpg', frame_img)
+    # ---------- rebuild_frame() end ------------------------------------------------------------------------------------
 
-            if print_separate_segs:
-                min_x, max_x, min_y, max_y = seg[7]
-                cv2.rectangle(seg_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
-                cv2.imwrite(dir + '/blob%dseg%d.jpg' % (indexs, ids), seg_img)
-
-        if print_separate_blobs:
-            min_x, max_x, min_y, max_y = blob[1][:4]
-            cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
-            cv2.imwrite(dir + '/blob%d.jpg' % (indexs), blob_img)
-    cv2.imwrite(dir + '.jpg', blob_image)
-    # ---------- rebuild_blobs() end ------------------------------------------------------------------------------------
+def bin_search(blob_, atb, i, j0, j, target, take_right=0, rdepth =0):
+    ''' a binary search module:
+        - search in: pri_blob, i
+        - search for: j
+        - search condition: pri_blob[i[j-1]][1][0] <= target < pri_blob[i[j]][1][0] '''
+    if target + take_right <= blob_[i[j0]][1][atb]:
+        return j0
+    elif blob_[i[j - 1]][1][atb] < target + take_right:
+        return j
+    else:
+        jm = (j0 + j) // 2
+        if blob_[i[jm]][1][atb] < target + take_right:
+            return bin_search(blob_, atb, i, jm, j, target, take_right, rdepth + 1)
+        else:
+            return bin_search(blob_, atb, i, j0, jm, target, take_right, rdepth + 1)
+    # ---------- bin_search() end ---------------------------------------------------------------------------------------
 
 def fetch_frame(video):
     " Short call to read a gray-scale frame"
@@ -448,41 +475,76 @@ def form_blob(term_seg, frame, _frame, videoo, typ, y_carry=0):
                            sorted(range(len(root_)), key=lambda i: root_[i][7][1]), # id of segments' sorted by max_x
                            sorted(range(len(root_)), key=lambda i: root_[i][7][2]), # id of segments' sorted by min_y
                            sorted(range(len(root_)), key=lambda i: root_[i][7][3]),]# id of segments' sorted by max_y
-        lists of indices of sorted root_ are added to complete root,
-        blob[2] (== 0) will be used as troots
+        # lists of indices of sorted root_ are added to complete root,
+        # blob[2] (== 0) will be used as troots
+        blob[1] = [min_x, max_x, min_y, term_seg[7][3], xD, Ly]
         blob.append(sorted_root_id_)
+        frame[typ + 1][2].append(blob)
         if t > t_rng * 2:
-            frame, _frame, videoo = scan_blob_(complete_blob, frame, _frame, videoo, typ)
-        else:
-            frame[typ + 1][2].append(blob)
+            frame, _frame, videoo = scan_blob_(blob, frame, _frame, videoo, typ)
 
     return frame, _frame, videoo  # no term_seg return: no root segs refer to it
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 def scan_blob_(blob, frame, _frame, videoo, typ):
-    # blob scans hblobss in higher frame, combines overlapping blobs into tblobs
-    # Select only overlapping hblobs in _frame for speed?
+    # blob scans pri_blobs in higher frame, combines overlapping blobs into tblobs
+    # Select only overlapping pri_blobs in _frame for speed?
 
-    [s, L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4], [min_x, max_x, min_y, xD, Ly], troots, root_, sorted_root_id_ = blob
+    [s, L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4], [min_x, max_x, min_y, max_y, xD, Ly], troots, root_, sorted_root_id_ = blob
 
-    hblob_ = _frame[typ + 1][2] # list of hblobs
-    _sorted_by_min_x, _sorted_by_max_x, _sorted_by_min_y, _sorted_by_max_y = frame[typ + 1][3] # lists of indices sorted by hblobs min_x, max_x, min_y, max_y respectively
+    pri_blob_ = _frame[typ + 1][2] # list of same type pri_blobs
+    _id_by_min_x_, _id_by_max_x_, _id_by_min_y_, _id_by_max_y_ = _frame[typ + 1][3] # lists of indices sorted by pri_blobs min_x, max_x, min_y, max_y respectively
 
-    _min_x_id = 0; _max_x_id = 0; _min_y_id = 0; _max_y_id = 0
-    while bblob_[_min_x_id][1][0] < max_x: _min_x_id += 1   # bblob_[_min_x_id][1][0] = min_x of bblob_[_min_x_id]
-    while bblob_[_max_x_id][1][1] < min_x: _max_x_id += 1   # bblob_[_max_x_id][1][1] = max_x of bblob_[_max_x_id]
-    while bblob_[_min_y_id][1][2] < max_y: _min_y_id += 1   # bblob_[_min_y_id][1][2] = min_y of bblob_[_min_y_id]
-    while bblob_[_max_y_id][1][3] < min_y: _max_y_id += 1   # bblob_[_max_y_id][1][3] = max_y of bblob_[_max_y_id]
+    # Search for boundaries of sorted pri_blobs that meet the prerequisites of overlapping with current frame blob
+    _num_blobs = len(_id_by_min_x_)
+    # Binary search:
+    _min_x_id = bin_search(pri_blob_, 0, _id_by_min_x_, 0, _num_blobs, max_x, 1)    # bin_search(blob, atribute, sorted_indices_,
+    _max_x_id = bin_search(pri_blob_, 1, _id_by_max_x_, 0, _num_blobs, min_x, 0)    #            first_index, last_index, target, equal)
+    _min_y_id = bin_search(pri_blob_, 2, _id_by_min_y_, 0, _num_blobs, max_y, 1)    #
+    _max_y_id = bin_search(pri_blob_, 3, _id_by_max_y_, 0, _num_blobs, min_y, 0)    # (see iterative search below)
 
-    # set of overlapping hblobs is common subset of 4 sets: (treating id as reference to hblobs)
-    olp_id_ = intersect(_sorted_by_min_x[:_min_x_id],   # _min_x <= max_x
-                        _sorted_by_max_x[_max_x_id:],   # _max_x >= min_x
-                        _sorted_by_min_y[:_min_y_id],   # _min_y <= max_y
-                        _sorted_by_max_y[_max_y_id:])   # _max_y >= min_y
+    _min_x_less_or_equal_max_x_indices = _id_by_min_x_[:_min_x_id]      # overlap prerequisite: _min_x <= max_x
+    _min_y_less_or_equal_max_y_indices = _id_by_min_y_[:_min_y_id]      # overlap prerequisite: _min_y <= max_y
+    _max_x_greater_or_equal_min_x_indices = _id_by_max_x_[_max_x_id:]   # overlap prerequisite: _max_x <= min_x
+    _max_y_greater_or_equal_min_y_indices = _id_by_max_y_[_max_y_id:]   # overlap prerequisite: _max_y <= min_y
 
-    for olp_id in overlap_id:
-        hblob = hblob_[olp_id]
-        # Partial comp between blob and hblob goes here
+    # Set of overlapping pri_blobs is common subset of 4 sets that meet the 4 prerequisites
+    olp_id_ = np.intersect1d(np.intersect1d(_min_x_less_or_equal_max_x_indices, _max_x_greater_or_equal_min_x_indices),
+                             np.intersect1d(_min_y_less_or_equal_max_y_indices, _max_y_greater_or_equal_min_y_indices))
+
+
+    # Iterative search:
+    # _min_x_id = 0; _max_x_id = 0; _min_y_id = 0; _max_y_id = 0
+    # while _min_x_id < _num_blobs and pri_blob_[ _id_by_min_x_[_min_x_id] ][1][0] <= max_x: _min_x_id += 1 # pri_blob_[i][1][0:4]: min_x, max_x, min_y, max_y index i pri_blob
+    # while _max_x_id < _num_blobs and pri_blob_[ _id_by_max_x_[_max_x_id] ][1][1] < min_x: _max_x_id += 1  # _id_by_min[i]: index of blob that has i-th smallest min_x
+    # while _min_y_id < _num_blobs and pri_blob_[ _id_by_min_y_[_min_y_id] ][1][2] <= max_y: _min_y_id += 1 #
+    # while _max_y_id < _num_blobs and pri_blob_[ _id_by_max_y_[_max_y_id] ][1][3] < min_y: _max_y_id += 1  #
+    # olp_id_ = np.intersect1d(np.intersect1d(_id_by_min_x_[:_min_x_id], _id_by_max_x_[_max_x_id:]),
+    #                          np.intersect1d(_id_by_min_y_[:_min_y_id], _id_by_max_y_[_max_y_id:]))
+
+
+    # For Debugging --------------------------------------------------------------
+    # Print first blob formed in frame at t = t_rng * 2 +  and all it's overlapped blobs in previous frame
+    global olp_debug
+    if t == t_rng * 2 + 1 and len(olp_id_[:]) and olp_debug:
+        filtered_hframe = np.array([[[127] * 4] * X] * Y)
+        rebuild_blob('./images/', 0, blob, filtered_hframe, 1)
+        for i in _id_by_min_x_[:_min_x_id]:
+            rebuild_blob('./images/min_x', i, pri_blob_[i], filtered_hframe, 1)
+        for i in _id_by_max_x_[_max_x_id:]:
+            rebuild_blob('./images/max_x', i, pri_blob_[i], filtered_hframe, 1)
+        for i in _id_by_min_y_[:_min_y_id]:
+            rebuild_blob('./images/min_y', i, pri_blob_[i], filtered_hframe, 1)
+        for i in _id_by_max_y_[_max_y_id:]:
+            rebuild_blob('./images/max_y', i, pri_blob_[i], filtered_hframe, 1)
+        for i in olp_id_:
+            rebuild_blob('./images/olp', i, pri_blob_[i], filtered_hframe, 1)
+        olp_debug = False
+    # ----------------------------------------------------------------------------
+
+    # for olp_id in olp_id_:
+    #     pri_blob = pri_blob_[olp_id]
+        # Partial comp between blob and pri_blob goes here
 
     return frame, _frame, videoo
     # ---------- scan_blob_() end ---------------------------------------------------------------------------------------
@@ -607,12 +669,12 @@ def video_to_tblobs(video):
             frame[typ + 1][3] = blob_sorted_
 
         if record and t == frame_output_at: # change these in program body
-            rebuild_blobs('./images/mblobs_horizontal',frame[1], 1)
-            rebuild_blobs('./images/mblobs_vertical', frame[2], 1)
-            rebuild_blobs('./images/mblobs_temporal', frame[3], 1)
-            rebuild_blobs('./images/dblobs_horizontal', frame[4], 1)
-            rebuild_blobs('./images/dblobs_vertical', frame[5], 1)
-            rebuild_blobs('./images/dblobs_temporal', frame[6], 1)
+            rebuild_frame('./images/mblobs_horizontal',frame[1], record_blobs, record_segs)
+            rebuild_frame('./images/mblobs_vertical', frame[2], record_blobs, record_segs)
+            rebuild_frame('./images/mblobs_temporal', frame[3], record_blobs, record_segs)
+            rebuild_frame('./images/dblobs_horizontal', frame[4], record_blobs, record_segs)
+            rebuild_frame('./images/dblobs_vertical', frame[5], record_blobs, record_segs)
+            rebuild_frame('./images/dblobs_temporal', frame[6], record_blobs, record_segs)
 
         _frame = frame
 
@@ -639,7 +701,12 @@ dim = 3  # Number of dimensions: x, y and t
 
 # For outputs:
 record = bool(0)  # Set to True yield file outputs
+record_blobs = bool(1)
+record_segs = bool(0)
 frame_output_at = t_rng * 2  # first frame that computes 2D blobs
+
+global olp_debug
+olp_debug = bool(0)
 
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
