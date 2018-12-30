@@ -1,4 +1,3 @@
-import os
 import cv2
 import argparse
 import numpy as np
@@ -9,16 +8,8 @@ from collections import deque
 ''' Temporal blob composition over a sequence of frames in a video: 
     pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
     resulting 3D tuples are combined into incremental-dimensionality 1D Ps ) 2D blobs ) 3D tblobs.     	    
-    tblobs will be evaluated for orientation and incremental-dimensionality intra-tblob comparison. 
-
-    recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 	     
-    comp power = depth of content: normalized by hLe pwr miss if hLe diff * hLe match * lLe total	    
-    3rd comp to 3rd-level ff -> filter pattern: longer-range nP forward, binary trans-level fb:	     
-    complemented P: longer-range = higher-level ff & higher-res fb, recursion eval for positive Ps?	 
-    colors will be defined as color / sum-of-colors, 
-    single-color patterns are defined within sum-of-colors patterns, comp between color patterns?	    
- '''
-
+    tblobs will be evaluated for orientation and incremental-dimensionality intra-tblob comparison.     
+'''
 
 # ************ MISCELLANEOUS FUNCTIONS **********************************************************************************
 # Includes:
@@ -28,10 +19,11 @@ from collections import deque
 # -fetch_frame()
 # ***********************************************************************************************************************
 
+
 def rebuild_segment(dir, index, seg, blob_img, frame_img, print_separate_blobs=0, print_separate_segs=0):
     if print_separate_segs: seg_img = np.array([[[127] * 4] * X] * Y)
     y = seg[7][2]  # min_y
-    for (P, dx) in seg[5]:
+    for (P, xd) in seg[5]:
         x = P[1]
         for i in range(P[2]):
             frame_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
@@ -65,19 +57,19 @@ def rebuild_frame(dir, frame, print_separate_blobs=0, print_separate_segs=0):
     frame_img = np.array([[[127] * 4] * X] * Y)
     if (print_separate_blobs or print_separate_segs) and not os.path.exists(dir):
         os.mkdir(dir)
-    for indexs, index in enumerate(frame[3][0]):  # Iterate through blobs' sorted id
-        frame_img = rebuild_blob(dir, indexs, frame[2][index], frame_img, print_separate_blobs, print_separate_segs)
+    for indices, index in enumerate(frame[3][0]):  # Iterate through blobs' sorted id
+        frame_img = rebuild_blob(dir, indices, frame[2][index], frame_img, print_separate_blobs, print_separate_segs)
     cv2.imwrite(dir + '.jpg', frame_img)
     # ---------- rebuild_frame() end ------------------------------------------------------------------------------------
 
-def bin_search(blob_, atb, i, j0, j, target, take_right=0, rdepth =0):
+def bin_search(blob_, atb, i, j0, j, target, take_right=0, rdepth=0):  # take_right -> right_olp, rdepth -> right_olp_L?
     ''' a binary search module:
         - search in: pri_blob, i
         - search for: j
         - search condition: pri_blob[i[j-1]][1][0] <= target < pri_blob[i[j]][1][0] '''
     if target + take_right <= blob_[i[j0]][1][atb]:
         return j0
-    elif blob_[i[j - 1]][1][atb] < target + take_right:
+    elif blob_[i[j - 1]][1][atb] < target + take_right:  # right_olp?
         return j
     else:
         jm = (j0 + j) // 2
@@ -169,7 +161,7 @@ def vertical_comp(ders1_, rng_ders2__):
 
 def temporal_comp(ders2_, rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo):
     # ders2_: input line of complete 2D ders
-    # rng_ders3___: prior frame of incomplete 3D tuple buffers, sliced into lines
+    # rng_ders3___: prior frame of incomplete 3D ders buffers, sliced into lines
     # comparison between t_rng temporally consecutive pixels, forming ders3: 3D tuple of derivatives per pixel
 
     # each of the following contains 2 types, per core variables m and d:
@@ -254,12 +246,12 @@ def form_P(ders, x, max_x, P, P_, buff_, hP_, frame, _frame, videoo, typ, is_dP=
     # is_dP = bool(typ // dim), computed directly for speed and clarity:
 
     p, dx, dy, dt, mx, my, mt = ders  # 3D tuple of derivatives per pixel, "x" for lateral, "y" for vertical, "t" for temporal
-    if      typ == 0:   core = mx; alt0 = dx; alt1 = my; alt2 = mt; alt3 = dy; alt4 = dt
-    elif    typ == 1:   core = my; alt0 = dy; alt1 = mx; alt2 = mt; alt3 = dx; alt4 = dt
-    elif    typ == 2:   core = mt; alt0 = dt; alt1 = mx; alt2 = my; alt3 = dx; alt4 = dy
-    elif    typ == 3:   core = dx; alt0 = mx; alt1 = dy; alt2 = dt; alt3 = my; alt4 = mt
-    elif    typ == 4:   core = dy; alt0 = my; alt1 = dx; alt2 = dt; alt3 = mx; alt4 = mt
-    else:               core = dt; alt0 = mt; alt1 = dx; alt2 = dy; alt3 = mx; alt4 = my
+    if     typ == 0:   core = mx; alt0 = dx; alt1 = my; alt2 = mt; alt3 = dy; alt4 = dt
+    elif   typ == 1:   core = my; alt0 = dy; alt1 = mx; alt2 = mt; alt3 = dx; alt4 = dt
+    elif   typ == 2:   core = mt; alt0 = dt; alt1 = mx; alt2 = my; alt3 = dx; alt4 = dy
+    elif   typ == 3:   core = dx; alt0 = mx; alt1 = dy; alt2 = dt; alt3 = my; alt4 = mt
+    elif   typ == 4:   core = dy; alt0 = my; alt1 = dx; alt2 = dt; alt3 = mx; alt4 = mt
+    else:              core = dt; alt0 = mt; alt1 = dx; alt2 = dy; alt3 = mx; alt4 = my
 
     s = 1 if core > 0 else 0
     pri_s, x0 = P[is_dP][:2]  # P[0] is mP, P[1] is dP
@@ -355,19 +347,19 @@ def form_segment(hP, frame, _frame, videoo, typ):
     # Convert hP into new segment or add it to higher-line segment, merge blobs
 
     _P, roots, fork_, last_x = hP
-    [s, first_x], param_ = _P[:2], list(_P[2:15])
+    [s, first_x], params = _P[:2], list(_P[2:15])
     ave_x = (_P[2] - 1) // 2  # extra-x L = L-1 (1x in L)
 
-    if not fork_:  # seg is initialized with initialized blob (param_, coord_, remaining_roots, root_, xD)
+    if not fork_:  # seg is initialized with initialized blob (params, coords, remaining_roots, root_, xD)
         blob = [[s, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [_P[1], hP[3], y - rng - 1, 0, 0], 1, []]
-        hP = [param_, roots, fork_, ave_x, 0, [(_P, 0)], blob, [first_x, last_x]]
+        hP = [params, roots, fork_, ave_x, 0, [(_P, 0)], blob, [first_x, last_x]]
         blob[3].append(hP)
     else:
         if len(fork_) == 1 and fork_[0][1] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
             # hP is merged into higher-line blob segment (Pars, roots, _fork_, ave_x, xD, Py_, blob) at hP[2][0]:
             fork = fork_[0]
-            L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4 = param_
-            Ls, Is, Dxs, Dys, Dts, Mxs, Mys, Mts, Alt0s, Alt1s, Alt2s, Alt3s, Alt4s = fork[0]  # seg param_
+            L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4 = params
+            Ls, Is, Dxs, Dys, Dts, Mxs, Mys, Mts, Alt0s, Alt1s, Alt2s, Alt3s, Alt4s = fork[0]  # seg params
             fork[0] = [Ls + L, Is + I, Dxs + Dx, Dys + Dy, Dts + Dt, Mxs + Mx, Mys + My, Mts + Mt,
                        Alt0s + Alt0, Alt1s + Alt1, Alt2s + Alt2, Alt3s + Alt3, Alt4s + Alt4]
             fork[1] = roots
@@ -380,7 +372,7 @@ def form_segment(hP, frame, _frame, videoo, typ):
             hP = fork  # replace segment with including fork's segment
 
         else:  # if >1 forks, or 1 fork that has >1 roots:
-            hP = [param_, roots, fork_, ave_x, 0, [(_P, 0)], fork_[0][6],[first_x, last_x]]  # seg is initialized with fork's blob
+            hP = [params, roots, fork_, ave_x, 0, [(_P, 0)], fork_[0][6],[first_x, last_x]]  # seg is initialized with fork's blob
             blob = hP[6]
             blob[3].append(hP)  # segment is buffered into root_
 
@@ -407,7 +399,6 @@ def form_segment(hP, frame, _frame, videoo, typ):
                         blob[0][11] += Alt2
                         blob[0][12] += Alt3
                         blob[0][13] += Alt4
-
                         blob[1][0] = min(min_x, blob[1][0])
                         blob[1][1] = max(max_x, blob[1][1])
                         blob[1][2] = min(min_y, blob[1][2])
@@ -430,7 +421,7 @@ def form_blob(term_seg, frame, _frame, videoo, typ, y_carry=0):
     # Terminated segment is merged into continued or initialized blob (all connected segments)
 
     [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4], roots, fork_, x, xD, Py_, blob, [min_x, max_x] = term_seg
-    last_y = y - rng - 1 - y_carry  # y_carry: min elevation of term_seg over current hP
+    last_y = y - rng - 1 - y_carry  # yd: min elevation of term_seg over current hP
     first_y = last_y - len(Py_) + 1
     # unique blob in fork_[0][6] is referenced by other forks
     blob[0][1] += L
@@ -446,15 +437,13 @@ def form_blob(term_seg, frame, _frame, videoo, typ, y_carry=0):
     blob[0][11] += Alt2
     blob[0][12] += Alt3
     blob[0][13] += Alt4
-
-    # blob[1][2] (min_y) unchanged. Only need to reevaluate min_y in blob-merging
     blob[1][0] = min(min_x, blob[1][0])
     blob[1][1] = max(max_x, blob[1][1])
+    # blob[1][2] min_y changes only if blobs merge
     blob[1][3] += xD    # ave_x angle, to evaluate blob for re-orientation
     blob[1][4] += len(Py_)  # Ly = number of slices in segment
-
     blob[2] += roots - 1  # reference to term_seg is already in blob[9]
-    term_seg[7] += [first_y, last_y]    # Add min_y and max_y to term_seg's coordinate
+    term_seg[7] += [first_y, last_y]   # Add min_y and max_y to term_seg's coordinate
 
     if not blob[2]:  # if remaining_roots == 0: blob is terminated and packed in frame
         [s, L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4], [min_x, max_x, min_y, xD, Ly], remaining_roots, root_ = blob
@@ -486,20 +475,19 @@ def form_blob(term_seg, frame, _frame, videoo, typ, y_carry=0):
     return frame, _frame, videoo  # no term_seg return: no root segs refer to it
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-def scan_blob_(blob, frame, _frame, videoo, typ):
-    # blob scans pri_blobs in higher frame, combines overlapping blobs into tblobs
-    # Select only overlapping pri_blobs in _frame for speed?
+def scan_blob_(blob, frame, pri_frame, videoo, typ):
+    # blob scans overlapping pri_blobs in pri_frame, forms forks if rolp * mL > ave * max(L, _L)
 
     [s, L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4], [min_x, max_x, min_y, max_y, xD, Ly], troots, root_, sorted_root_id_ = blob
 
-    pri_blob_ = _frame[typ + 1][2] # list of same type pri_blobs
-    _id_by_min_x_, _id_by_max_x_, _id_by_min_y_, _id_by_max_y_ = _frame[typ + 1][3] # lists of indices sorted by pri_blobs min_x, max_x, min_y, max_y respectively
+    pri_blob_ = pri_frame[typ + 1][2] # list of same type pri_blobs
+    _id_by_min_x_, _id_by_max_x_, _id_by_min_y_, _id_by_max_y_ = pri_frame[typ + 1][3]  # lists of indices sorted by pri_blobs min_x, max_x, min_y, max_y respectively
 
     # Search for boundaries of sorted pri_blobs that meet the prerequisites of overlapping with current frame blob
     _num_blobs = len(_id_by_min_x_)
     # Binary search:
     _min_x_id = bin_search(pri_blob_, 0, _id_by_min_x_, 0, _num_blobs, max_x, 1)    # bin_search(blob, atribute, sorted_indices_,
-    _max_x_id = bin_search(pri_blob_, 1, _id_by_max_x_, 0, _num_blobs, min_x, 0)    #            first_index, last_index, target, equal)
+    _max_x_id = bin_search(pri_blob_, 1, _id_by_max_x_, 0, _num_blobs, min_x, 0)    # first_index, last_index, target, equal)
     _min_y_id = bin_search(pri_blob_, 2, _id_by_min_y_, 0, _num_blobs, max_y, 1)    #
     _max_y_id = bin_search(pri_blob_, 3, _id_by_max_y_, 0, _num_blobs, min_y, 0)    # (see iterative search below)
 
@@ -546,7 +534,7 @@ def scan_blob_(blob, frame, _frame, videoo, typ):
     #     pri_blob = pri_blob_[olp_id]
         # Partial comp between blob and pri_blob goes here
 
-    return frame, _frame, videoo
+    return frame, pri_frame, videoo
     # ---------- scan_blob_() end ---------------------------------------------------------------------------------------
 
 def video_to_tblobs(video):
@@ -568,16 +556,13 @@ def video_to_tblobs(video):
               [0, 0, [], []],   # dyblobs
               [0, 0, [], []]]   # dtblobs
 
-
-    # Main output: [[Dxf, Lf, If, Dxf, Dyf, Dtf, Mxf, Myf, Mtf], net_]
-    videoo = [[0, 0, 0, 0, 0, 0, 0, 0, 0], [], [], [], [], [], []]
+    videoo = [[0, 0, 0, 0, 0, 0, 0, 0, 0], [], [], [], [], [], []]  # output: [[Dxf, Lf, If, Dxf, Dyf, Dtf, Mxf, Myf, Mtf], 6 x tblob_]
     global t, y
 
     # Initialization:
     t = 0  # temporal coordinate of current frame
     rng_ders2__ = []  # horizontal line of vertical buffers: array of 2D tuples
     rng_ders3___ = []  # temporal buffer per pixel of a frame: 3D tuples in 3D -> 2D array
-
     y = 0  # initial line
     line_ = fetch_frame(video)  # first frame of lines?
     pixel_ = line_[0, :]  # first line of pixels
@@ -623,11 +608,10 @@ def video_to_tblobs(video):
             pixel_ = line_[y, :]
             ders1_ = lateral_comp(pixel_)  # lateral pixel comparison
             ders2_, rng_ders2__ = vertical_comp(ders1_, rng_ders2__)  # vertical pixel comparison
-            if y > min_coord:
-                rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo = temporal_comp(ders2_, rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo)  # temporal pixel comparison
+            if y > min_coord:  # temporal pixel comparison:
+                rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo = temporal_comp(ders2_, rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo)
 
-        # merge segs of last line into their blobs:
-        y = Y
+        y = Y  # merge segs of last line into their blobs:
         for is_dP in range(2):
             typ = is_dP * dim
             hP_ = _xP_[is_dP]
@@ -681,7 +665,7 @@ def video_to_tblobs(video):
     # sequence ends, incomplete ders3__ discarded, but vertically incomplete blobs are still inputted in scan_blob_?
 
     cv2.destroyAllWindows()  # Part of video read
-    return videoo  # frame of 2D patterns is outputted to level 2
+    return videoo  # tblobs output to level 2
     # ---------- video_to_tblobs() end ----------------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
