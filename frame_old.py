@@ -4,7 +4,6 @@ import math as math
 import numpy as np
 
 ''' This is a prototype of complete frame(), but initial six functions are out of date relative to frame_blobs()
-
     core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
     It performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
 
@@ -28,8 +27,17 @@ import numpy as np
     frame() is layered: partial lower functions can work without higher functions.
     
     postfix '_' denotes array name, vs. same-name elements of that array 
-    prefix '_' denotes higher-line variable or pattern '''
-
+    prefix '_' denotes higher-line variable or pattern 
+    
+    recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 	     
+    comp power = depth of content: normalized by hLe pwr miss if hLe diff * hLe match * lLe total	    
+    3rd comp to 3rd-level ff -> filter pattern: longer-range nP forward, binary trans-level fb:	     
+    complemented P: longer-range = higher-level ff & higher-res fb, recursion eval for positive Ps?	 
+    
+    colors are defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
+    relative colors may match across reflecting objects, forming color | lighting objects?     
+    comp between color patterns within an object: segmentation?
+    '''
 
 def comp(p_):  # comparison of consecutive pixels within a line forms tuples: pixel, match, difference
 
@@ -464,6 +472,16 @@ def scan_Py_(typ, norm, blob):  # scan of vertical Py_ -> comp_P -> 2D value PPs
 
     return blob, SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
+'''
+    recursive input scope unroll: .multiple ( integer ( binary, accessed if hLe match * lLe total, 	     
+    comp power = depth of content: normalized by hLe pwr miss if hLe diff * hLe match * lLe total	    
+    3rd comp to 3rd-level ff -> filter pattern: longer-range nP forward, binary trans-level fb:	     
+    complemented P: longer-range = higher-level ff & higher-res fb, recursion eval for positive Ps?	 
+    
+    colors are defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
+    relative colors may match across reflecting objects, forming color | lighting objects?     
+    comp between color patterns within an object: ?	
+'''
 
 def orient(typ, L, Ly, I, Dx, Dy, Mx, My, Alt0, Alt1, Alt2, xD, max_y, min_y, max_x, min_x):
     height = max_y - min_y + 1; width = max_x - min_x + 1
@@ -471,27 +489,25 @@ def orient(typ, L, Ly, I, Dx, Dy, Mx, My, Alt0, Alt1, Alt2, xD, max_y, min_y, ma
     if typ == 0:   core = Dx; Palt0 = Mx; Palt1 = Dy; Palt2 = My  # core: variable that defines current type of pattern,
     elif typ == 1: core = Mx; Palt0 = Dx; Palt1 = My; Palt2 = Dy  # alt cores define overlapping alternative-type patterns:
     elif typ == 2: core = Dy; Palt0 = My; Palt1 = Dx; Palt2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
-    else:          core = My; Palt0 = Dy; Palt1 = Mx; Palt2 = Dx
-    Palt0 += Palt0
-    Palt1 += Palt1
-    Palt2 += Palt2
+    else:          core = My; Palt0 = Dy; Palt1 = Mx; Palt2 = Dx  # Palt0 += palt0, Palt1 += palt1, Palt2 += palt2
+
+    # orient eval -> flip, comp_P:
 
     max(Dx, Dy) / min(Dx, Dy)  # to maximize D and minimize Dy, redundant max (M, My) / min (M, My)?
-    # or alt vars as indicator of local orientation:
-    if typ == 0 or typ == 2:
+    # or alt vars: indicator of fine | local orientation:
+    if typ == (0 or 2):
         max(core, Palt1) / min(core, Palt1)
-    else:
-        max(core, Palt1) / min(core, Palt1)
+    else: max(Palt0, Palt2) / min(Palt0, Palt2)
 
     abs(xD) / Ly  # >|< 1, linear mean long D / seg height, fine structure, more accurate for rescan value than height / width
 
     # quantized seg orient: during scan_Py_, if min L (dx > 1)?
     # or oriented comp_P spec instead?
 
-    P_val = L + I + abs(core) + Palt0 + Palt1 + Palt2  # under + over- estimate / 2, vs:
-    # added alt abs sum between Ps only
+    P_val = L + I + abs(core) + (Palt0+Alt0)/2 + (Palt1+Alt1)/2 + (Palt2+Alt2)/2  # under + over- estimate / 2, vs:
+    P_val = L + I + abs(core) + Palt0 + Palt1 + Palt2  # added alt abs sum between Ps only, not needed for most blobs?
 
-    # tblob composition/ contiguity = olp * match: selection due to high temporal variation * forking,
+    # tblob composition if olp * match: selection for high blob variation: forking, * temporal variation: discontinuity
     # far less variation than between disc Ps, simple L-only comp: top-level comp / top-level scan?
 
     typ_rdn = abs(core) / (abs(core) + Alt0 + Alt1 + Alt2)  # vs. sort by mag; same blob value for all types
@@ -500,13 +516,11 @@ def orient(typ, L, Ly, I, Dx, Dy, Mx, My, Alt0, Alt1, Alt2, xD, max_y, min_y, ma
 
 def comp_P(typ, norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
-    s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_, Dx = P
+    s, ix, x, I, D, Dy, M, My, G, oG, Olp, e_, Dx = P
     _s, _ix, _x, _I, _D, _Dy, _M, _My, _G, _oG, _Olp, _t2_, _Dx = _P
 
     ddx = 0  # optional, 2Le norm / D? s_ddx and s_dL correlate, s_dx position and s_dL dimension don't?
-
-    ix = x - len(t2_)  # initial and last coordinates of P
-    dx = x - len(t2_)/2 - _x - len(_t2_)/2  # Dx? comp(dx), ddx = Ddx / h?
+    # Dx? comp(dx), ddx = Ddx / h?
     mx = x - _ix  # vx = ave_dx - dx: distance (cost) decrease vs. benefit incr? or:
     if ix > _ix: mx -= ix - _ix  # mx = x olp, - a_mx -> vxP, distant P mx = -(a_dx - dx)?
 
@@ -678,7 +692,7 @@ def scan_param_(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders an
         Ip, Mp, Dp, par_ = Par
 
         if Mp + Dp > ave * 9 * 7 * 2 * 2:  # ave PP * ave par_P rdn * rdn to PP * par_P typ rdn?
-            par_vPS, par_dPS = form_param_(0, par_)
+            par_vPS, par_dPS = form_par_P(0, par_)
             par_Pf = 1  # flag
         else:
             par_Pf = 0; par_vPS = Ip, Mp, Dp, par_; par_dPS = Ip, Mp, Dp, par_
@@ -688,7 +702,7 @@ def scan_param_(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders an
 
     return PP
 
-def form_param_(typ, param_):  # forming parameter patterns within par_:
+def form_par_P(typ, param_):  # forming parameter patterns within par_:
 
     p, mp, dp = param_.pop()  # initial parameter
     Ip = p, Mp = mp, Dp = dp, p_ = []  # Par init
@@ -711,7 +725,7 @@ def form_param_(typ, param_):  # forming parameter patterns within par_:
             Ip += p; Mp += mp; Dp += dp; par_.append(par)
             par_vP = Ip, Mp, Dp, par_
         else:
-            par_vP = term_param_(0, par_vP)
+            par_vP = term_par_P(0, par_vP)
             IpS, MpS, DpS, par_vP_ = par_vPS
             IpS += Ip; MpS += Mp; DpS += Dp; par_vP_.append(par_vP)
             par_vPS = IpS, MpS, DpS, par_vP_
@@ -722,7 +736,7 @@ def form_param_(typ, param_):  # forming parameter patterns within par_:
             Ip += p; Mp += mp; Dp += dp; par_.append(par)
             par_dP = Ip, Mp, Dp, par_
         else:
-            par_dP = term_param_(1, par_dP)
+            par_dP = term_par_P(1, par_dP)
             IpS, MpS, DpS, par_dP_ = par_dPS
             IpS += Ip; MpS += Mp; DpS += Dp; par_dP_.append(par_dP)
             par_vPS = IpS, MpS, DpS, par_dP_
@@ -735,13 +749,13 @@ def form_param_(typ, param_):  # forming parameter patterns within par_:
     # LIDV per dx, L, I, D, M? also alt2_: fork_ alt_ concat, for rdn per PP?
     # fpP fb to define vpPs: a_mx = 2; a_mw = 2; a_mI = 256; a_mD = 128; a_mM = 128
 
-def term_param_(typ, par_P):  # from form_par_P: eval for orient, re_comp? or folded?
+def term_par_P(typ, par_P):  # from form_par_P: eval for orient, re_comp? or folded?
     return par_P
 
-def scan_param_(typ, par_P_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
+def scan_par_P(typ, par_P_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
     return par_P_
 
-def comp_param_P(par_P, _par_P):  # with/out orient, from scan_pP_
+def comp_par_P(par_P, _par_P):  # with/out orient, from scan_pP_
     return par_P
 
 def scan_PP_(PP_):  # within a blob, also within blob_: network?
