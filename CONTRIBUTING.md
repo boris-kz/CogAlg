@@ -26,4 +26,4 @@ Andrei Demchenko, $1800 for conventional refactoring and interface improvement i
 
 Todor Arnaudov, $2000 for help in debugging frame_dblobs.py, September - October.
 
-Khanh Nguyen, $1500 for many contributions in debugging and extending line_POC and frame_dblobs, December. 
+Khanh Nguyen, $2700, is a lead developer of this project starting December 2018. 
