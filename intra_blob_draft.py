@@ -1,46 +1,47 @@
-from scipy import misc
 from collections import deque
 import math as math
-import numpy as np
+from time import time
 import frame_blobs
 
 '''
-    intra_blob() performs evaluation for comp_P and recursive frame_blobs within each blob 
-    inter_blob() will be second-level 2D algorithm: a prototype for meta-level alg
+    intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob
+    it is currently just a draft, combined with frame_blobs it will form a 2D version of first-level core algorithm
+    inter_blob() will be second-level 2D algorithm, and a prototype for meta-level algorithm
 '''
 
 def eval_blob(typ, blob):  # evaluate blob for orthogonal flip, comp_P, incr_rng_comp, incr_der_comp
 
     (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, Ly), root_ = blob
-    height = max_y - min_y + 1; width = max_x - min_x + 1
+    height = max_y - min_y + 1; width = max_x - min_x + 1  # or more accurate mean long D / seg height, fine structure:
 
-    if typ == 0:   core = Dx; Palt0 = Mx; Palt1 = Dy; Palt2 = My  # core: variable that defines current type of pattern,
-    elif typ == 1: core = Mx; Palt0 = Dx; Palt1 = My; Palt2 = Dy  # alt cores define overlapping alternative-type patterns:
-    elif typ == 2: core = Dy; Palt0 = My; Palt1 = Dx; Palt2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
-    else:          core = My; Palt0 = Dy; Palt1 = Mx; Palt2 = Dx  # or Palt0 += palt0, Palt1 += palt1, Palt2 += palt2 in form_seg?
+    rDim_xy = abs(xD) / Ly  # >|< 1, separate sum(abs(xd) for flip eval
+    # rDim_xy? flip, quantized seg orient during scan_Py_, if min L (dx > 1)? or oriented comp_P spec instead?
 
-    # orient eval? flip, quantized seg orient during scan_Py_, if min L (dx > 1)? or oriented comp_P spec instead?
-    # primary comp_P eval, rdn recursion eval; else rdn comp_P eval?
+    if typ == 0:   core = Dx; ind_alt0 = Mx; ind_alt1 = Dy; ind_alt2 = My  # core: variable that defines current type of pattern,
+    elif typ == 1: core = Mx; ind_alt0 = Dx; ind_alt1 = My; ind_alt2 = Dy  # individual alt cores define x vs. y D!M orientation bias:
+    elif typ == 2: core = Dy; ind_alt0 = My; ind_alt1 = Dx; ind_alt2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
+    else:          core = My; ind_alt0 = Dy; ind_alt1 = Mx; ind_alt2 = Dx  # or Calt0 += calt0, Calt1 += calt1, Calt2 += calt2 in form_seg?
 
-    rD_xy = max(Dx, Dy) / min(Dx, Dy)  # to maximize D and minimize Dy, or max D + My: projected P_match?
-    # redundant max (M, My) / min (M, My)?
-    # or Palt vars: summed |D| per y, for comp_P eval:
+    rD_xy = max(Dx, Dy) / min(Dx, Dy)  # -> proj_PM coef, after flip eval to maximize D and minimize Dy?
     if typ == (0 or 2):
-        rD_xy = max(core, Palt1) / min(core, Palt1)
+        rD_xy = max(core, ind_alt1) / min(core, ind_alt1)
     else:
-        rD_xy = max(Palt0, Palt2) / min(Palt0, Palt2)
+        rD_xy = max(ind_alt0, ind_alt2) / min(ind_alt0, ind_alt2)  # |ind_alts| sum per y: same as for P_sum?
 
-    rDim_xy = abs(xD) / Ly  # >|< 1, linear mean long D / seg height, fine structure, more accurate for rescan value than height / width
-    # or separate sum(abs(xd) for short_L, long_L, Pm estimation:
+    # or max D + My: predicts P_match? rdn max (M, My) / min (M, My)?
 
-    P_val = L + I + abs(core) + (Palt0 + alt0)/2 + (Palt1 + alt1)/2 + (Palt2 + alt2)/2  # under + over- estimate / 2, vs:
-    P_val = L + I + abs(core) + Palt0 + Palt1 + Palt2  # added alt abs sum between Ps only, not needed for most blobs?
+    P_sum = L + I + abs(core) + (ind_alt0 + alt0)/2 + (ind_alt1 + alt1)/2 + (ind_alt2 + alt2)/2  # under + over- estimate / 2, vs:
+    P_sum = L + I + abs(core) + ind_alt0 + ind_alt1 + ind_alt2  # added alt abs sum between Ps only, not needed for most blobs?
 
-    # tblob composition if olp * match: selection for high blob variation: forking, * temporal variation: discontinuity
-    # far less variation than between disc Ps, simple L-only comp: top-level comp / top-level scan?
+    typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # vs. sort by mag; type comb if rolp * mL, other params assumed equal
 
-    typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # vs. sort by mag; same blob value for all types
-    # type comb if olp * match: L only, other params assumed equal
+    proj_PM = P_sum * rD_xy * typ_rdn * math.hypot(Ly, xD / Ly)
+    # P_sum is a maximal match between Ps, rD_xy is lat / vert M coef, hypot is long axis: max Der span and value
+
+    if proj_PM > ave * 6:  # 6 params to be compared between Ps: comp cost multiplier, primary comp_P | recursion eval?
+        scan_Py_(typ, 0, blob, xD)  # leading to comp_P, etc.
+
+    return blob
 
 
 def incr_range_comp(typ, blob):  # frame_blobs recursion if -M
@@ -50,7 +51,7 @@ def incr_deriv_comp(typ, blob):  # frame_blobs recursion if |D|
     return blob
 
 
-def scan_Py_(typ, norm, blob):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+def scan_Py_(typ, norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
 
     vPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
     dPP = 0,[],[]  # PP: L2, I2, D2, Dy2, M2, My2, G2, Olp2
@@ -64,12 +65,12 @@ def scan_Py_(typ, norm, blob):  # scan of vertical Py_ -> comp_P -> 2D mPPs and 
     while Py_:  # comp_P starts from 2nd P, top-down
 
         P = Py_.popleft()
-        _P, _vs, _ds = comp_P(typ, norm, P, _P)  # per blob, before orient
+        _P, _vs, _ds = comp_P(typ, norm, P, _P, xD)  # per blob, before orient
 
         while Py_:  # form_PP starts from 3rd P
 
             P = Py_.popleft()
-            P, vs, ds = comp_P(typ, norm, P, _P)  # P: S_vars += S_ders in comp_P
+            P, vs, ds = comp_P(typ, norm, P, _P, xD)  # P: S_vars += S_ders in comp_P
 
             if vs == _vs:
                 vPP = form_PP(1, P, vPP)
@@ -231,8 +232,8 @@ def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
 
     rdn = Olp2 / L2  # rdn per PP, alt Ps (if not alt PPs) are complete?
 
-    if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:
-       PP, norm = orient(PP) # PP norm, rescan relative to parent blob, for incr_comp, comp_PP, and:
+    # if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:
+    #     PP, norm = orient(PP) # PP norm, rescan relative to parent blob, for incr_comp, comp_PP, and:
 
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
        PP = incr_range_comp_P(typ, PP)  # forming incrementally fuzzy PP
