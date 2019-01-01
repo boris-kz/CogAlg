@@ -4,7 +4,9 @@ from time import time
 from collections import deque
 
 ''' 
-This is a principal version of 1D alg, with full overlap between difference patterns and match patterns, vs. exclusive dP | mP in line_x_POC. 
+This is a version of 1st level 1D alg with full overlap between difference patterns and match patterns, vs. exclusive dP | positive mP in line_POC. 
+Also possible is additional filter for form_dP -> partial overlap | gap between positive mPs and dPs, but post-comp selection is better? 
+
 Initial match is defined as average_abs(d) - abs(d): secondary to difference because a stable visual property of objects is albedo 
 (vs. brightness), and spatio-temporal stability of albedo itself has low correlation with its magnitude. 
 Although an indirect measure of match, low abs(d) should be predictive: uniformity across space correlates with stability over time.

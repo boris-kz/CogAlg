@@ -5,10 +5,16 @@ from scipy import misc
 from time import time
 from collections import deque
 
+
 ''' Temporal blob composition over a sequence of frames in a video: 
     pixel comparison to rng consecutive pixels over lateral x, vertical y, temporal t coordinates,
     resulting 3D tuples are combined into incremental-dimensionality 1D Ps ) 2D blobs ) 3D tblobs.     	    
-    tblobs will be evaluated for orientation and incremental-dimensionality intra-tblob comparison.     
+    
+    Selective temporal forking due to blob scale variation within a frame * temporal variation between frames.
+    Selection is by top-level comp / top-level scan: inclusion if rel_olp * mL > ave * max(L, _L) 
+    Only top-level because variation is far lower than between discontinuous Ps
+    
+    tblobs will be evaluated for orientation and incremental-dimensionality intra-tblob comparison
 '''
 
 # ************ MISCELLANEOUS FUNCTIONS **********************************************************************************
@@ -18,6 +24,7 @@ from collections import deque
 # -rebuild_frame()
 # -fetch_frame()
 # ***********************************************************************************************************************
+
 
 def rebuild_segment(dir, index, seg, blob_img, frame_img, print_separate_blobs=0, print_separate_segs=0):
     if print_separate_segs: seg_img = np.array([[[127] * 4] * X] * Y)
@@ -38,6 +45,7 @@ def rebuild_segment(dir, index, seg, blob_img, frame_img, print_separate_blobs=0
     return blob_img
     # ---------- rebuild_segment() end ----------------------------------------------------------------------------------
 
+
 def rebuild_blob(dir, index, blob, frame_img, print_separate_blobs=0, print_separate_segs=0):
     " Rebuilt data of a blob into an image "
     if print_separate_blobs: blob_img = np.array([[[127] * 4] * X] * Y)
@@ -50,6 +58,7 @@ def rebuild_blob(dir, index, blob, frame_img, print_separate_blobs=0, print_sepa
         cv2.imwrite(dir + '/blob%d.jpg' % (index), blob_img)
     return frame_img
     # ---------- rebuild_blob() end -------------------------------------------------------------------------------------
+
 
 def rebuild_frame(dir, frame, print_separate_blobs=0, print_separate_segs=0):
     " Rebuilt data of a frame into an image "
@@ -398,7 +407,6 @@ def form_segment(hP, frame, _frame, videoo, typ):
                         blob[0][11] += Alt2
                         blob[0][12] += Alt3
                         blob[0][13] += Alt4
-
                         blob[1][0] = min(min_x, blob[1][0])
                         blob[1][1] = max(max_x, blob[1][1])
                         blob[1][2] = min(min_y, blob[1][2])

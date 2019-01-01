@@ -9,7 +9,7 @@ But there is no general and at the same time constructive definition of either p
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
-I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which would form hierarchical patterns. These terms are defined below, but if you have better definitions, that would be even more valuable. This is an open project, but I will pay per contribution, or per hour if there is a good track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+I need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which would form hierarchical patterns. These terms are defined below, but if you have better definitions, that would be even more valuable. This is an open project, but I will pay per contribution, or monthly if there is a good track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
 
 
@@ -141,17 +141,17 @@ level 3 compares contiguous 2D patterns between incremental-depth frames, formin
 
 level 4 compares contiguous 3D patterns in temporal sequence, forming 4D patterns: processes.
 
-Subsequent cycles would compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions.
+Subsequent cycles will compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions.
 
 Average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be fundamentally limited and biased by the angle of scanning. Hence, initial pixel comparison and patterns should also be over 4D at once, or at least over 2D at once for still images. This is a universe-specific extension of my core algorithm.
 
 Accordingly, my code here consists of three levels:
 
-- 1D: [line_introductory_old.py](https://github.com/boris-kz/CogAlg/blob/master/line_introductory_old.py), which uses full variable names but is too long and dense to trace operations, and very similar but compressed and updated [line_x_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_x_POC.py), which works as intended but is not very useful in our 4D world.
-- 2D: [frame_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), which is meant as a stand-alone 2D algorithm but is not complete, [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py), which will be a model for corresponding components of 3D video algorithm, and [frame_dblobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_dblobs.py), which is simplified version for debugging, currently in progress.
-- 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This algorithm will hopefully be effective and scalable, but is currently less than 5% done.
+- 1D: main version of 1st-level core algorithm is [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
+- 2D: [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py) defines initial blobs and is currently functional. It will pass them to [intra_blob_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), currently work-in-progress, which will evaluate them for internal recursive cross-comparision. Combined, they will be a 2D version of 1st-level core algorithm.  
+- 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This version will hopefully be effective and scalable, but is currently less than 5% done.
 
-This algorithm will be organically extended to process color images, audio, other modalities. Symbolic data will be assigned as labels on patterns derived from analogue inputs. Initial testing could be recognition and automatic labeling of manually labeled images, but it might better to start directly with video: still images are very poor representation of our 4D world.
+This algorithm will be organically extended to process color images, audio, other modalities. Symbolic data will be assigned as labels on patterns derived from analog inputs. Initial testing could be recognition and automatic labeling of manually labeled images, but it might better to start directly with video: still images are very poor representation of our 4D world.
 
 Higher levels will process discontinuous extended-range cross-comparison between full-D-cycle patterns. Complete hierarchical algorithm will have two-level code:
 - 1st level algorithm: contiguous cross-comparison over full-D cycle, plus basic bit-filter feedback

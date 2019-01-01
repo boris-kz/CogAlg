@@ -4,13 +4,12 @@ from time import time
 from collections import deque
 
 ''' 
-Simplified version of line_POC: exclusive positive mP | dP to reduce cost, vs. overlapping Ps in line_POC.
-But secondary dmPs are defined through direct match (min d, independent from dd), so it should use overlapping form_P?
-Also possible is additional filter for form_dP -> partial overlap | gap between positive mPs and dPs, but post-comp selection is better? 
+Principal version of 1st level 1D algorithm: dP definition and recursion eval within negative mPs only, vs. independently in line_olp.
+Secondary dmPs, etc. are defined through direct match (min d, independent from dd), so it should use overlapping form_P?
 
-Updated 1D version of core algorithm, with initial match = ave abs(d) - abs(d). Match is secondary to difference because a stable 
-visual property of objects is albedo (vs. brightness), and stability of albedo has low correlation with its value. 
-Although an indirect measure of match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
+Initial match is defined as ave abs(d) - abs(d): secondary to difference because stable visual property of objects is albedo, but 
+such stability has low correlation with the value of albedo. Although indirect measure of match, low abs(d) is still predictive: 
+uniformity across space correlates with stability over time.
 
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness.
 Cross-comparison of consecutive pixels within horizontal scan line, forming match patterns mPs (spans of pixels with same-sign match),
@@ -38,9 +37,9 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                 pri_sd, Ld, Id, Dd, Md, rd, ed_ = dP
 
                 if ( pri_sd != sd and i > 0 ) or i == L:
-                    if Ld > rng * 2 and Dd > ave_M * rdn:   # comp range increase within e_:
-                        rd = 1                              # rdn: redundancy, incremented per comp recursion
-                        mdP_= []; mdP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
+                    if Ld > rng * 2 and Dd > ave_M * rdn:  # comp range increase within e_, rdn (redundancy) is incremented per comp recursion
+                        rd = 1
+                        mdP_= []; mdP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
                         ed_.append((0, 0, 0))
                         fdd, fmd = 0, 0
                         for j in range(1, Ld + 1):  # bilateral comp between consecutive dj s
@@ -62,9 +61,9 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                 dP = sd, Ld, Id, Dd, Md, rd, ed_
 
             rng += 1
-            if L > rng * 2 and -M > ave_M * rdn:  # comp range increase within e_:
-                r = 1                    # rdn: redundancy, incremented per comp recursion
-                sub_mP_= []; sub_mP = 0,0,0,0,0,0,[]  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
+            if L > rng * 2 and -M > ave_M * rdn:  # comp range increase within e_, rdn (redundancy) is incremented per comp recursion
+                r = 1
+                sub_mP_= []; sub_mP = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, e_;  no Alt: M is defined through abs(d)
                 e_.append( ( 0, 0, 0 ) )
                 for i in range(rng, L+1):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
                     ip, fd, fm = e_[i]

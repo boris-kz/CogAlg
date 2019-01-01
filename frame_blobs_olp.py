@@ -6,12 +6,14 @@ from time import time
 from collections import deque
 
 '''   
-    frame_draft() is a 2D version of 1st level core algorithm: segmentation of image into blobs, then recursive search within blobs,
-    frame_blobs() defines d|dy blobs only inside negative m|my blobs, while in frame_o_blobs() all blob types cover full frame.
-    
-    Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
+    frame_blobs_olp (overlap) is version that segments all image into blobs of four types:
+    per match and difference between pixels in horizontal (m, d) and vertical (my, dy) dimensions.    
+    Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
+    Blob is a contiguous area of positive or negative derivatives from cross-comparison among adjacent pixels within an image. 
+        
+    It performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
-    
+
     1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives ders ) array ders_
     2Le, line y- 1: y_comp(ders_): vertical pixel comp -> 2D tuple ders2 ) array ders2_ 
     3Le, line y- 1+ rng*2: form_P(ders2) -> 1D pattern P
@@ -164,10 +166,10 @@ def form_P( ders, x, P, P_, buff_, hP_, frame, typ ):
     " Initializes, accumulates, and terminates 1D pattern"
 
     p, d, dy, m, my = ders  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
-    if      typ == 0:   core = d; alt_der = m; alt_dir = dy; alt_both = my  # core: variable that defines current type of pattern,
-    elif    typ == 1:   core = m; alt_der = d; alt_dir = my; alt_both = dy  # alt cores define overlapping alternative-type patterns:
-    elif    typ == 2:   core = dy; alt_der = my; alt_dir = d; alt_both = m  # alt derivative, alt direction, alt derivative_and_direction
-    else:               core = my; alt_der = dy; alt_dir = m; alt_both = d
+    if    typ == 0:   core = d; alt_der = m; alt_dir = dy; alt_both = my  # core: variable that defines current type of pattern,
+    elif  typ == 1:   core = m; alt_der = d; alt_dir = my; alt_both = dy  # alt cores define overlapping alternative-type patterns:
+    elif  typ == 2:   core = dy; alt_der = my; alt_dir = d; alt_both = m  # alt derivative, alt direction, alt derivative_and_direction
+    else:             core = my; alt_der = dy; alt_dir = m; alt_both = d
 
     s = 1 if core > 0 else 0
     pri_s, x0, L, I, D, Dy, M, My, alt_Der, alt_Dir, alt_Both, ders_ = P
@@ -412,11 +414,11 @@ cv2.imwrite('./images/dblobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[0]))
 # cv2.imwrite('./images/mblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[3]))
 
 # Check for redundant segments  --------------------------------------------------
-print 'Searching for redundant segments...\n'
+print: 'Searching for redundant segments...\n'
 for frame in frame_of_blobs:
     for blob in frame[2]:
         for i, seg in enumerate(blob):
             for j, seg2 in enumerate(blob):
-                if i != j and seg is seg2: print 'Redundant segment detected!\n'
+                if i != j and seg is seg2: print: 'Redundant segment detected!\n'
 
 # ************ PROGRAM BODY END ******************************************************************************************

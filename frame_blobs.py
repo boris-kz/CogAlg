@@ -6,11 +6,16 @@ from time import time
 from collections import deque
 
 '''   
-    frame_draft() is a 2D version of 1st level core algorithm: segmentation of image into blobs, then recursive search within blobs,
-    frame_blobs() defines d|dy blobs only inside negative m|my blobs, while in frame_blobs_olp() all blob types cover full frame.
-      
-    Each performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y, outlined below.
-    value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image
+    frame_blobs() is a principal version for segmentation of image into initial blobs. 
+    Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
+    Blob is a contiguous area of positive or negative derivatives from cross-comparison among adjacent pixels within an image. 
+
+    Cross-comparison forms match and difference between pixels in horizontal (m, d) and vertical (my, dy) dimensions, and these four 
+    derivatives define four types of blobs. This version defines d | dy blobs only inside negative m | my blobs, 
+    while frame_blobs_olp (overlap) defines each blob type over full frame.
+        
+    frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
+    value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
     
     1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives ders ) array ders_
     2Le, line y- 1: y_comp(ders_): vertical pixel comp -> 2D tuple ders2 ) array ders2_ 
@@ -26,7 +31,7 @@ from collections import deque
     
     They can also be summed to estimate diagonal or hypot derivatives, for blob orientation to maximize primary derivatives.
     Orientation increases primary dimension of blob to maximize match, and decreases secondary dimension to maximize difference.
-    Subsequent union of lateral and vertical patterns is by match, orthogonal sign is not commeasurable?
+    Subsequent union of lateral and vertical blobs is by combined match of their parameters, orthogonal sign is not commeasurable.
     
     Initial pixel comparison is not novel, I design from the scratch to make it organic part of hierarchical algorithm.
     It would be much faster with matrix computation, but this is minor compared to higher-level processing.
@@ -355,10 +360,8 @@ def form_blob(term_seg, frame, typ, y_carry=0):
     blob[0][7] += alt0
     blob[0][8] += alt1
     blob[0][9] += alt2
-
     blob[1][3] += xD        # ave_x angle, to evaluate blob for re-orientation
     blob[1][4] += len(Py_)  # Ly = number of slices in segment
-
     blob[2] += roots - 1  # reference to term_seg is already in blob[9]
     term_seg.append(y - rng - 1 - y_carry)  # y_carry: min elevation of term_seg over current hP
 
@@ -463,11 +466,11 @@ cv2.imwrite('./images/dblobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[3]))
 cv2.imwrite('./images/dblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[4]))
 
 # Check for redundant segments  --------------------------------------------------
-print 'Searching for redundant segments...\n'
+print: 'Searching for redundant segments...\n'
 for frame in frame_of_blobs[1:]:
     for blob in frame[2]:
         for i, seg in enumerate(blob):
             for j, seg2 in enumerate(blob):
-                if i != j and seg is seg2: print 'Redundant segment detected!\n'
+                if i != j and seg is seg2: print: 'Redundant segment detected!\n'
 
 # ************ PROGRAM BODY END ******************************************************************************************

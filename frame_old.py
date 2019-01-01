@@ -3,8 +3,7 @@ from collections import deque
 import math as math
 import numpy as np
 
-''' This is a prototype of complete frame(), but initial six functions are out of date relative to frame_blobs()
-    core algorithm of levels 1 + 2, modified to process one image: find blobs and patterns in 2D frame.
+''' This is an old prototype of frame(): core algorithm of levels 1 + 2, modified to discover patterns within 2D image.
     It performs several steps of encoding, incremental per scan line defined by vertical coordinate y:
 
     input y:    comp(p_): lateral pixel comp -> tuple t,
