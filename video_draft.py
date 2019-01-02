@@ -20,31 +20,55 @@ from collections import deque
  '''
 
 # ************ REUSABLE CLASSES *****************************************************************************************
+class pattern_frame(object):
+    def __init__(self, typ):
+        self.core = typ[0]
+        self.dimension = typ[1]
+        self.xD = 0
+        self.Ly = 0
+        self.blob_ = []
+        if self.core == 'm':
+            self.L = 0
+            self.I = 0
+            self.Dx = 0; self.Dy = 0; self.Dt = 0
+            self.Mx = 0; self.My = 0; self.Mt = 0
+    def update_params(self, params):
+        " update internal params by summing with given params "
+        self.L += params[0]
+        self.I += params[1]
+        self.Dx += params[2]
+        self.Dy += params[3]
+        self.Dt += params[4]
+        self.Mx += params[5]
+        self.My += params[6]
+        self.Mt += params[7]
 class pattern(object):
     def __init__(self, typ, x0 = -1, y0 = -1, x = -1, y = -1, sign = -1):
         " initialize P, segment or blob "
         self.core = typ[0]
         self.dimension = typ[1]
-        self.level = typ[2]
-        self.s = sign
-        self.L = 0      # length/area of a pattern
-        self.I = 0      # summed input
+        self.level = typ[2:]
+        self.sign = sign
+        self.L = 0                              # length/area of a pattern
+        self.I = 0                              # summed input
         self.Dx = 0; self.Dy = 0; self.Dt = 0   # lateral - vertical - temporal D
         self.Mx = 0; self.My = 0; self.Mt = 0   # lateral - vertical - temporal M
         # alternative derivative: m | d;   indicate value, thus redundancy rate, of overlapping alt-core blobs:
         self.Alt0 = 0; self.Alt1 = 0; self.Alt2 = 0; self.Alt3 = 0; self.Alt4 = 0;
-        self.min_x = x0;
+        self.min_x = x0
         self.min_y = y0
-        self.max_x = x;
+        self.max_x = x
         self.element_ = []
         self.terminated = False
 
         # Pattern level-specific init:
-        if pattern_level == 'P':
+        if typ[2:] == 'P':
             self.rename([('min_y', 'y'), ('element_', 'ders_')])
-        elif pattern_level == 'segment':
+        elif typ[2:] == 'segment':
+            self.max_y = y
             self.rename([('element_', 'Py_')])
-        elif pattern_level == 'blob':
+        elif typ[2:] == 'blob':
+            self.max_y = y
             self.rename([('element_', 'root_')])
     def type(self):
         return self.core + self.dimension + self.level
@@ -57,14 +81,14 @@ class pattern(object):
         return [self.min_x, self.max_x, self.min_y, self.max_y]
     def update_params(self, params):
         " update internal params by summing with given params "
-        self.L += params[0];
-        self.I += params[1];
-        self.Dx += params[2];
-        self.Dy += params[3];
-        self.Dt += params[4];
-        self.Mx += params[5];
-        self.My += params[6];
-        self.Mt += params[7];
+        self.L += params[0]
+        self.I += params[1]
+        self.Dx += params[2]
+        self.Dy += params[3]
+        self.Dt += params[4]
+        self.Mx += params[5]
+        self.My += params[6]
+        self.Mt += params[7]
         self.Alt0 += params[8]
         self.Alt1 += params[9]
         self.Alt2 += params[10]
@@ -72,6 +96,7 @@ class pattern(object):
         self.Alt4 += params[12]
     def update_coords(self, coords):
         " update internal coords by comparing with given coords"
+        while len(coords) < 4: coords.append(-1)
         x0, x, y0, y = coords
         self.min_x = min(self.min_x, x0)
         self.max_x = max(self.max_x, x)
@@ -79,13 +104,12 @@ class pattern(object):
         if y != -1: self.max_y = max(self.max_y, y)
     def rename(self, list):
         " rename multiple internal attributes at once "
-        for old_name, new_name in list
+        for old_name, new_name in list:
             self.__dict__[new_name] = self.__dict__.pop(old_name)
     def set(self, dict):
         " create new or set values of multiple attributes at once "
         for key, value in dict.iteritems():
             self.__dict__[key] = value
-
 
 # ************ REUSABLE CLASSES ENDS ************************************************************************************
 
@@ -96,67 +120,80 @@ class pattern(object):
 # -rebuild_frame()
 # -fetch_frame()
 # ***********************************************************************************************************************
-
 def rebuild_segment(dir, index, seg, blob_img, frame_img, print_separate_blobs=0, print_separate_segs=0):
     if print_separate_segs: seg_img = np.array([[[127] * 4] * X] * Y)
-    y = seg[7][2]  # min_y
-    for (P, dx) in seg[5]:
-        x = P[1]
-        for i in range(P[2]):
-            frame_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
-            if print_separate_blobs: blob_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
-            if print_separate_segs: seg_img[y, x, : 3] = [255, 255, 255] if P[0] else [0, 0, 0]
+    y = seg.min_y  # min_y
+    for (P, dx) in seg.Py_:
+        x = P.min_x
+        for i in range(P.L):
+            frame_img[y, x, : 3] = [255, 255, 255] if P.sign else [0, 0, 0]
+            if print_separate_blobs: blob_img[y, x, : 3] = [255, 255, 255] if P.sign else [0, 0, 0]
+            if print_separate_segs: seg_img[y, x, : 3] = [255, 255, 255] if P.sign else [0, 0, 0]
             x += 1
         y += 1
-
     if print_separate_segs:
-        min_x, max_x, min_y, max_y = seg[7]
+        min_x, max_x, min_y, max_y = seg.coords()
         cv2.rectangle(seg_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
         cv2.imwrite(dir + 'seg%d.jpg' % (index), seg_img)
     return blob_img
     # ---------- rebuild_segment() end ----------------------------------------------------------------------------------
-
 def rebuild_blob(dir, index, blob, frame_img, print_separate_blobs=0, print_separate_segs=0):
     " Rebuilt data of a blob into an image "
     if print_separate_blobs:    blob_img = np.array([[[127] * 4] * X] * Y)
     else:                       blob_img = None
-    for ids, id in enumerate(blob[4][0]):  # Iterate through segments' sorted id
-        blob_img = rebuild_segment(dir + '/blob%d' % (index), ids, blob[3][id], blob_img, frame_img, print_separate_blobs, print_separate_segs)
-
+    for idxs, idx in enumerate(blob.sorted_min_x_idx_):  # Iterate through segments' sorted id
+        blob_img = rebuild_segment(dir + '/blob%d' % (index), idxs, blob.root_[idx], blob_img, frame_img, print_separate_blobs, print_separate_segs)
     if print_separate_blobs:
-        min_x, max_x, min_y, max_y = blob[1][:4]
+        min_x, max_x, min_y, max_y = blob.coords()
         cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
         cv2.imwrite(dir + '/blob%d.jpg' % (index), blob_img)
     return frame_img
     # ---------- rebuild_blob() end -------------------------------------------------------------------------------------
-
 def rebuild_frame(dir, frame, print_separate_blobs=0, print_separate_segs=0):
     " Rebuilt data of a frame into an image "
     frame_img = np.array([[[127] * 4] * X] * Y)
     if (print_separate_blobs or print_separate_segs) and not os.path.exists(dir):
         os.mkdir(dir)
-    for indexs, index in enumerate(frame[3][0]):  # Iterate through blobs' sorted id
-        frame_img = rebuild_blob(dir, indexs, frame[2][index], frame_img, print_separate_blobs, print_separate_segs)
+    for indexs, index in enumerate(frame.sorted_min_x_idx_):  # Iterate through blobs' sorted id
+        frame_img = rebuild_blob(dir, indexs, frame.blob_[index], frame_img, print_separate_blobs, print_separate_segs)
     cv2.imwrite(dir + '.jpg', frame_img)
     # ---------- rebuild_frame() end ------------------------------------------------------------------------------------
-
-def bin_search(blob_, atb, i, j0, j, target, take_right=0, rdepth =0):
+def bin_search(a_, i0, i, target, olp_right=0, rdepth =0):
     ''' a binary search module:
-        - search in: pri_blob, i
-        - search for: j
-        - search condition: pri_blob[i[j-1]][1][0] <= target < pri_blob[i[j]][1][0] '''
-    if target + take_right <= blob_[i[j0]][1][atb]:
-        return j0
-    elif blob_[i[j - 1]][1][atb] < target + take_right:
-        return j
+        - search in: a_
+        - search for: i
+        - search condition: a_[i-1][0] <= target < a_[i][1] '''
+    if target + olp_right <= a_[i0]:
+        return i0
+    elif a_[i - 1] < target + olp_right:
+        return i
     else:
-        jm = (j0 + j) // 2
-        if blob_[i[jm]][1][atb] < target + take_right:
-            return bin_search(blob_, atb, i, jm, j, target, take_right, rdepth + 1)
+        im = (i0 + i) // 2
+        if a_[im] < target + olp_right:
+            return bin_search(a_, im, i, target, olp_right, rdepth + 1)
         else:
-            return bin_search(blob_, atb, i, j0, jm, target, take_right, rdepth + 1)
+            return bin_search(a_, i0, im, target, olp_right, rdepth + 1)
     # ---------- bin_search() end ---------------------------------------------------------------------------------------
-
+def sort_coords(e_):
+    " sort code based on their min/max coords"
+    sorted_idx_min_x_ = sorted(range(len(e_)), key=lambda i: e_[i].min_x)  # id of segments' sorted by min_x
+    sorted_idx_max_x_ = sorted(range(len(e_)), key=lambda i: e_[i].max_x)  # id of segments' sorted by max_x
+    sorted_idx_min_y_ = sorted(range(len(e_)), key=lambda i: e_[i].min_y)  # id of segments' sorted by min_y
+    sorted_idx_max_y_ = sorted(range(len(e_)), key=lambda i: e_[i].max_y)  # id of segments' sorted by max_y
+    # the following lists are for zoning olp segs
+    return sorted_idx_min_x_, sorted_idx_max_x_, sorted_idx_min_y_, sorted_idx_max_y_, \
+           [e_[sorted_idx_min_x_[i]].min_x for i in range(len(e_))],\
+           [e_[sorted_idx_max_x_[i]].max_x for i in range(len(e_))],\
+           [e_[sorted_idx_min_y_[i]].min_y for i in range(len(e_))],\
+           [e_[sorted_idx_max_y_[i]].max_y for i in range(len(e_))]
+    # ---------- sort_coords() end --------------------------------------------------------------------------------------
+def term_seg_(hP_, frame, _frame, videoo, typ):
+    " merge segs of last line into their blobs: "
+    while hP_:
+        hP, frame, _frame, videoo = form_segment(hP_.popleft(), frame, _frame, videoo, typ)
+        frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
+    return hP_, frame, _frame, videoo
+    # ---------- term_segs() end ----------------------------------------------------------------------------------------
 def fetch_frame(video):
     " Short call to read a gray-scale frame"
     _, frame = video.read()
@@ -282,32 +319,16 @@ def temporal_comp(ders2_, rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo)
         new_rng_ders3__.append(rng_ders3_)  # rng_ders3__: line of incomplete ders3 buffers, to be added to next-frame rng_ders3___
         x += 1
 
-    typ = dim  # terminate last higher line dxP (typ = 3) within neg mxPs
-    while xbuff_[1]:
-        hP = xbuff_[1].popleft()
-        if hP[1] != 1:  # no roots
-            frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-    while _xP_[1]:
-        hP, frame, _frame, videoo = form_segment(_xP_[1].popleft(), frame, _frame, videoo, typ)
-        frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-
-    typ += 1  # terminate last higher line dyP (typ = 4) within neg myPs
-    while ybuff_[1]:
-        hP = ybuff_[1].popleft()
-        if hP[1] != 1:  # no roots
-            frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-    while _yP_[1]:
-        hP, frame, _frame, videoo = form_segment(_yP_[1].popleft(), frame, _frame, videoo, typ)
-        frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-
-    typ += 1  # terminate last higher line dtP (typ = 5) within neg mtPs
-    while tbuff_[1]:
-        hP = tbuff_[1].popleft()
-        if hP[1] != 1:  # no roots
-            frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-    while _tP_[1]:
-        hP, frame, _frame, videoo = form_segment(_tP_[1].popleft(), frame, _frame, videoo, typ)
-        frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
+    # terminate last higher line dP (typ = 3 -> 5) within neg mPs
+    for typ in range(dim, dim * 2):
+        if typ == 3: buff_ = xbuff_[1]; hP_ = _xP_[1]
+        if typ == 4: buff_ = ybuff_[1]; hP_ = _yP_[1]
+        if typ == 5: buff_ = tbuff_[1]; hP_ = _tP_[1]
+        while buff_:
+            hP = buff_.popleft()
+            if hP.roots != 1:  # no roots
+                frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
+        hP_, frame, _frame, videoo = term_seg_(hP_, frame, _frame, videoo, typ)
 
     rng_ders3___.append(new_rng_ders3__)  # rng_ders3___ for next frame
 
@@ -335,7 +356,7 @@ def form_P(ders, x, term_x, P, P_, buff_, hP_, frame, _frame, videoo, typ, is_dP
     # Continued or initialized input and derivatives are accumulated:
     P[is_dP].update_params([1, p, dx, dy, dt, mx, my, mt, abs(alt0), abs(alt1), abs(alt2), abs(alt3), abs(alt4)]) # params = [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4]
     P[is_dP].ders_.append(ders)
-    if P[is_dP].sign == -1: P[is_dP].assign('sign', s)
+    if P[is_dP].sign == -1: P[is_dP].sign = s
 
     if x == term_x:  # P is terminated
         P, P_, buff_, hP_, frame, _frame, videoo = term_P(s, x + 1, P, P_, buff_, hP_, frame, _frame, videoo, typ, is_dP)
@@ -346,16 +367,16 @@ def form_P(ders, x, term_x, P, P_, buff_, hP_, frame, _frame, videoo, typ, is_dP
 
 def term_P(s, x, P, P_, buff_, hP_, frame, _frame, videoo, typ, is_dP):
     # Terminates 1D pattern if sign change or P_ end
-    if not is_dP and not P[is_dP].sign:
-        x0, L, ders_ = P[1].min_x, P[1].L, P[1].ders_
+    if not is_dP and P[is_dP].sign == 0:
+        x0, L, ders_ = P[0].min_x, P[0].L, P[0].ders_
 
         P[1] = pattern(tas[typ+dim] + 'P', x0, y - rng)  # dPs (P[1]) formed inside of negative mP (P[0])
 
         for i in range(L):
-            P, P_, buff_, _P_, frame, _frame, videoo = form_P(ders_[i], x0 + i, x0 + L - 1, P, P_, buff_, hP_, frame, _frame, videoo, typ + dim, True)  # is_dP = 1
+            P, P_, buff_, _P_, frame, _frame, videoo = form_P(ders_[i], x0 + i, x - 1, P, P_, buff_, hP_, frame, _frame, videoo, typ + dim, True)  # is_dP = 1
 
+    P[is_dP].max_x = x - 1
     P[is_dP].terminated = True
-    P[is_dP].last_x = x - 1
     if y == rng * 2:  # 1st line P_ is converted to init hP_;  scan_P_(), form_segment(), form_blob() use one type of Ps, hPs, buffs
         P_[is_dP].append((P[is_dP], []))  # P, _fork_, no root yet
     else:
@@ -382,13 +403,13 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, _frame, videoo, typ):
             hP, frame, _frame, videoo = form_segment(hP_.popleft(), frame, _frame, videoo, typ)
         else:
             break  # higher line ends, all hPs are converted to segments
-        roots = hP[1]
-        _x0 = hP[5][-1][0][1]  # first_x
-        _x = _x0 + hP[5][-1][0][2] - 1  # last_x = first_x + L - 1
+        roots = hP.roots
+        _x0 = hP.Py_[-1][0].min_x  # hP.Py_[-1][0] is _P
+        _x = hP.Py_[-1][0].max_x
 
-        if P[0] == hP[6][0][0] and not _x < x0 and not x < _x0:  # P comb -> blob if s == _s, _last_x >= first_x and last_x >= _first_x
+        if P.sign == hP.sign and not _x < x0 and not x < _x0:  # P comb -> blob if s == _s, _last_x >= first_x and last_x >= _first_x
             roots += 1
-            hP[1] = roots
+            hP.roots = roots
             fork_.append(hP)  # P-connected hPs will be converted to segments at each _fork
 
         if _x > x:  # x overlap between hP and next P: hP is buffered for next scan_P_, else hP included in a blob segment
@@ -398,7 +419,7 @@ def scan_P_(x, P, P_, _buff_, hP_, frame, _frame, videoo, typ):
         _x0 = _x + 1  # = first x of next _P
 
     buff_ += _buff_  # _buff_ is likely empty
-    P_.append([P, 0, fork_, x])  # P with no overlap to next _P is extended to hP and buffered for next-line scan_P_
+    P_.append([P, fork_])  # P with no overlap to next _P is extended to hP and buffered for next-line scan_P_
 
     return P_, buff_, hP_, frame, _frame, videoo  # hP_ and buff_ contain only remaining _Ps, with _x => next x
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
@@ -415,24 +436,26 @@ def form_segment(hP, frame, _frame, videoo, typ):
         # hP is merged into higher-line blob segment (Pars, roots, ave_x, xD, Py_, coords) at hP.fork_[0]:
         fork.update_params(_P.params())       # params = [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4]
         fork.roots = 0                      # roots
-        xd = ave_x - fork[3]
+        xd = ave_x - fork.ave_x
         fork.ave_x = ave_x                  # ave_x
         fork.xD += xd                       # xD for seg normalization and orientation, or += |dx| for curved yL?
         fork.Py_.append((_P, xd))           # Py_: vertical buffer of Ps merged into seg
-        fork.update_coords(P.min_x, P.max_x)# min_x, max_x, min_y, max_y
+        fork.update_coords([_P.min_x, _P.max_x])# min_x, max_x, min_y, max_y
         hP = fork                           # replace segment with including fork's segment
     else:                                  # New segment is initialized:
-        hP = pattern(tas[typ] + 'segment', _P.min_x, _P.min_y, _P.max_x, sign=_P.sign)  # new instance of pattern class
+        hP = pattern(tas[typ] + 'segment', _P.min_x, _P.y, _P.max_x, sign=_P.sign)  # new instance of pattern class
         # update segment hP with current _P:
         hP.update_params(_P.params())         # init params with _P's params
-        hP.Py_.append((_P, 0))              # Py_
         hP.roots = 0                        # init roots
         hP.fork_ = fork_                    # init fork_
         hP.ave_x = ave_x                    # ave_x
-        fork.xD = 0                         # xD
+        hP.xD = 0                           # xD
+        hP.Py_.append((_P, 0))              # Py_
 
         if not fork_:                       # if no fork_: initialize blob
-            blob = pattern(tas[typ] + 'blob', _P.min_x, _P.min_y, _P.max_x, sign=_P.sign)
+            blob = pattern(tas[typ] + 'blob', _P.min_x, _P.y, _P.max_x, sign=_P.sign)
+            blob.xD = 0
+            blob.Ly = 0
             blob.remaining_roots = 1
         else:                               # else use fork's blob
             blob = fork_[0].superset
@@ -447,10 +470,10 @@ def form_segment(hP, frame, _frame, videoo, typ):
                 if fork.roots == 1:
                     frame, _frame, videoo = form_blob(fork, frame, _frame, videoo, typ, 1)
 
-                if not fork.superset is blob:
+                if not fork.superset is blob:   # if not already merged/same
                     blobs = fork.superset
                     blob.update_params(blobs.params())  # params = [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4]
-                    blob.update_coord(blobs.coords())   # coord = [min_x, max_x, min_y, max_y]
+                    blob.update_coords(blobs.coords())   # coord = [min_x, max_x, min_y, max_y]
                     blob.xD                 += blobs.xD
                     blob.Ly                 += blobs.Ly
                     blob.remaining_roots    += blobs.remaining_roots
@@ -469,40 +492,31 @@ def form_segment(hP, frame, _frame, videoo, typ):
 def form_blob(term_seg, frame, _frame, videoo, typ, y_carry=0):
     # Terminated segment is merged into continued or initialized blob (all connected segments)
     blob = term_seg.superset
-    term_seg.terminated = True
     term_seg.max_y = y - rng - 1 - y_carry  # set max_y <- current y; y_carry: min elevation of term_seg over current hP
     blob.update_params(term_seg.params())   # params = [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4]
-    blob.update_coord(term_seg.coord())     # coords = [min_x, max_x, min_y, max_y]
+    blob.update_coords(term_seg.coords())   # coords = [min_x, max_x, min_y, max_y]
     blob.xD += term_seg.xD                  # ave_x angle, to evaluate blob for re-orientation
-    blob.Ly += len(Py_)                     # Ly = number of slices in segment
+    blob.Ly += len(term_seg.Py_)            # Ly = number of slices in segment
     blob.remaining_roots += term_seg.roots - 1  # reference to term_seg is already in blob[9]
+    term_seg.terminated = True
 
     if blob.remaining_roots == 0:  # if remaining_roots == 0: blob is terminated and packed in frame
-        blob.terminated = False
-        if not typ:  # frame P are to compute averages, redundant for same-scope alt_frames
-            frame[0][1] += blob.I
-            frame[0][2] += blob.Dx
-            frame[0][3] += blob.Dy
-            frame[0][4] += blob.Dt
-            frame[0][5] += blob.Mx
-            frame[0][6] += blob.My
-            frame[0][7] += blob.Mt
-        if term_seg.core == 'm' and term_seg.sign == 0:
-            frame[0][0][typ] += term_seg.L  # L of negative mblobs are summed
-
-        frame[typ + 1][0] += blob.xD  # ave_x angle, to evaluate frame for re-orientation
-        frame[typ + 1][1] += blob.Ly  # +Ly
         # sort segments' id, based on their coordinates
         # then added to complete blob
-        root_ = blob.root_
-        blob.sorted_idx_min_x = sorted(range(len(root_)), key=lambda i: root_[i].min_x) # id of segments' sorted by min_x
-        blob.sorted_idx_max_x = sorted(range(len(root_)), key=lambda i: root_[i].max_x) # id of segments' sorted by max_x
-        blob.sorted_idx_min_y = sorted(range(len(root_)), key=lambda i: root_[i].min_y) # id of segments' sorted by min_y
-        blob.sorted_idx_max_y = sorted(range(len(root_)), key=lambda i: root_[i].max_y) # id of segments' sorted by max_y
+        blob.sorted_min_x_idx_, blob.sorted_max_x_idx_, blob.sorted_min_y_idx_, blob.sorted_max_y_idx_, \
+        blob.sorted_min_x_, blob.sorted_max_x_, blob.sorted_min_y_, blob.sorted_max_y_ = sort_coords(blob.root_)
 
         blob.rename([('remaining_roots', 'troots')])
+        # terminating blob is packed into frame
+        if term_seg.core == 'm' and term_seg.sign == 0:
+            frame[typ].update_params(term_seg.params())
+
+        frame[typ].xD += blob.xD  # ave_x angle, to evaluate frame for re-orientation
+        frame[typ].Ly += blob.Ly  # +Ly
+        blob.terminated = True
+        frame[typ].blob_.append(blob)
         if t > t_rng * 2:
-            frame, _frame, videoo = scan_blob_(blob, frame, _frame, videoo, typ)
+            frame[typ], _frame[typ], videoo = scan_blob_(blob, frame[typ], _frame[typ], videoo, typ)
 
     return frame, _frame, videoo  # no term_seg return: no root segs refer to it
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
@@ -511,38 +525,24 @@ def scan_blob_(blob, frame, _frame, videoo, typ):
     # blob scans pri_blobs in higher frame, combines overlapping blobs into tblobs
     # Select only overlapping pri_blobs in _frame for speed?
 
-    [s, L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4], [min_x, max_x, min_y, max_y, xD, Ly], troots, root_, sorted_root_id_ = blob
-
-    pri_blob_ = _frame[typ + 1][2] # list of same type pri_blobs
-    _idx_by_min_x_, _idx_by_max_x_, _idx_by_min_y_, _idx_by_max_y_ = _frame[typ + 1][3] # lists of indices sorted by pri_blobs min_x, max_x, min_y, max_y respectively
+    pri_blob_ = _frame.blob_ # list of same type pri_blobs
 
     # Search for boundaries of sorted pri_blobs that meet the prerequisites of overlapping with current frame blob
-    _num_blobs = len(_idx_by_min_x_)
+    N = len(pri_blob_)
     # Binary search:
-    _min_x_idx = bin_search(pri_blob_, 0, _idx_by_min_x_, 0, _num_blobs, max_x, 1)  # bin_search(blob, atribute, sorted_indices_,
-    _max_x_idx = bin_search(pri_blob_, 1, _idx_by_max_x_, 0, _num_blobs, min_x, 0)  #            first_index, last_index, target, equal)
-    _min_y_idx = bin_search(pri_blob_, 2, _idx_by_min_y_, 0, _num_blobs, max_y, 1)  #
-    _max_y_idx = bin_search(pri_blob_, 3, _idx_by_max_y_, 0, _num_blobs, min_y, 0)  # (see iterative search below)
+    _min_x_idx = bin_search(_frame.sorted_min_x_, 0, N, blob.max_x, 1)  # bin_search(blob, atribute, sorted_indices_,
+    _max_x_idx = bin_search(_frame.sorted_max_x_, 0, N, blob.min_x, 0)  #            first_index, last_index, target, equal)
+    _min_y_idx = bin_search(_frame.sorted_min_y_, 0, N, blob.max_y, 1)  #
+    _max_y_idx = bin_search(_frame.sorted_max_y_, 0, N, blob.min_y, 0)  # (see iterative search below)
 
-    _min_x_less_or_equal_max_x_indices = _idx_by_min_x_[:_min_x_idx]      # overlap prerequisite: _min_x <= max_x
-    _min_y_less_or_equal_max_y_indices = _idx_by_min_y_[:_min_y_idx]      # overlap prerequisite: _min_y <= max_y
-    _max_x_greater_or_equal_min_x_indices = _idx_by_max_x_[_max_x_idx:]   # overlap prerequisite: _max_x <= min_x
-    _max_y_greater_or_equal_min_y_indices = _idx_by_max_y_[_max_y_idx:]   # overlap prerequisite: _max_y <= min_y
+    _min_x_less_or_equal_max_x_indices = _frame.sorted_min_x_idx_[:_min_x_idx]      # overlap prerequisite: _min_x <= max_x
+    _min_y_less_or_equal_max_y_indices = _frame.sorted_min_y_idx_[:_min_y_idx]      # overlap prerequisite: _min_y <= max_y
+    _max_x_greater_or_equal_min_x_indices = _frame.sorted_max_x_idx_[_max_x_idx:]   # overlap prerequisite: _max_x <= min_x
+    _max_y_greater_or_equal_min_y_indices = _frame.sorted_max_y_idx_[_max_y_idx:]   # overlap prerequisite: _max_y <= min_y
 
     # Set of overlapping pri_blobs is common subset of 4 sets that meet the 4 prerequisites
     olp_idx_ = np.intersect1d(np.intersect1d(_min_x_less_or_equal_max_x_indices, _max_x_greater_or_equal_min_x_indices),
                               np.intersect1d(_min_y_less_or_equal_max_y_indices, _max_y_greater_or_equal_min_y_indices))
-
-
-    # Iterative search:
-    # _min_x_idx = 0; _max_x_idx = 0; _min_y_idx = 0; _max_y_idx = 0
-    # while _min_x_idx < _num_blobs and pri_blob_[ _idx_by_min_x_[_min_x_idx] ][1][0] <= max_x: _min_x_idx += 1 # pri_blob_[i][1][0:4]: min_x, max_x, min_y, max_y index i pri_blob
-    # while _max_x_idx < _num_blobs and pri_blob_[ _idx_by_max_x_[_max_x_idx] ][1][1] < min_x: _max_x_idx += 1  # _idx_by_min[i]: index of blob that has i-th smallest min_x
-    # while _min_y_idx < _num_blobs and pri_blob_[ _idx_by_min_y_[_min_y_idx] ][1][2] <= max_y: _min_y_idx += 1 #
-    # while _max_y_idx < _num_blobs and pri_blob_[ _idx_by_max_y_[_max_y_idx] ][1][3] < min_y: _max_y_idx += 1  #
-    # olp_idx_ = np.intersect1d(np.intersect1d(_idx_by_min_x_[:_min_x_idx], _idx_by_max_x_[_max_x_idx:]),
-    #                          np.intersect1d(_idx_by_min_y_[:_min_y_idx], _idx_by_max_y_[_max_y_idx:]))
-
 
     # For Debugging --------------------------------------------------------------
     # Print first blob formed in frame at t = t_rng * 2 +  and all it's overlapped blobs in previous frame
@@ -550,22 +550,21 @@ def scan_blob_(blob, frame, _frame, videoo, typ):
     if t == t_rng * 2 + 1 and len(olp_idx_[:]) and olp_debug:
         filtered_hframe = np.array([[[127] * 4] * X] * Y)
         rebuild_blob('./images/', 0, blob, filtered_hframe, 1)
-        for i in _idx_by_min_x_[:_min_x_idx]:
+        for i in _frame.sorted_min_x_idx_[:_min_x_idx]:
             rebuild_blob('./images/min_x', i, pri_blob_[i], filtered_hframe, 1)
-        for i in _idx_by_max_x_[_max_x_idx:]:
+        for i in _frame.sorted_max_x_idx_[_max_x_idx:]:
             rebuild_blob('./images/max_x', i, pri_blob_[i], filtered_hframe, 1)
-        for i in _idx_by_min_y_[:_min_y_idx]:
+        for i in _frame.sorted_min_y_idx_[:_min_y_idx]:
             rebuild_blob('./images/min_y', i, pri_blob_[i], filtered_hframe, 1)
-        for i in _idx_by_max_y_[_max_y_idx:]:
+        for i in _frame.sorted_max_y_idx_[_max_y_idx:]:
             rebuild_blob('./images/max_y', i, pri_blob_[i], filtered_hframe, 1)
         for i in olp_idx_:
             rebuild_blob('./images/olp', i, pri_blob_[i], filtered_hframe, 1)
         olp_debug = False
     # ----------------------------------------------------------------------------
 
-    # for olp_idx in olp_idx_:
-    #     pri_blob = pri_blob_[olp_idx]
-        # Partial comp between blob and pri_blob goes here
+    for olp_idx in olp_idx_:
+        pri_blob = pri_blob_[olp_idx]
 
     return frame, _frame, videoo
     # ---------- scan_blob_() end ---------------------------------------------------------------------------------------
@@ -580,15 +579,8 @@ def video_to_tblobs(video):
     _yP_ = [deque(), deque()]
     _tP_ = [deque(), deque()]
 
-    # prior frame: [[neg_mL, neg_myL, neg_mtL], I, Dx, Dy, Dt, Mx, My, Mt], 6 x [xD, Ly, blob_]
-    _frame = [[[0, 0, 0], 0, 0, 0, 0, 0, 0, 0],
-              [0, 0, [], []],   # mxblobs
-              [0, 0, [], []],   # myblobs
-              [0, 0, [], []],   # mtblobs
-              [0, 0, [], []],   # dxblobs
-              [0, 0, [], []],   # dyblobs
-              [0, 0, [], []]]   # dtblobs
-
+    # prior frame:
+    _frame = [pattern_frame(tas[i]) for i in range(2 * dim)]
 
     # Main output: [[Dxf, Lf, If, Dxf, Dyf, Dtf, Mxf, Myf, Mtf], net_]
     videoo = [[0, 0, 0, 0, 0, 0, 0, 0, 0], [], [], [], [], [], []]
@@ -632,13 +624,7 @@ def video_to_tblobs(video):
         if not video.isOpened():  # Terminate at the end of video
             break
         # Main operations
-        frame = [[[0, 0, 0], 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, [], []],  # mxblobs
-                  [0, 0, [], []],  # myblobs
-                  [0, 0, [], []],  # mtblobs
-                  [0, 0, [], []],  # dxblobs
-                  [0, 0, [], []],  # dyblobs
-                  [0, 0, [], []]]  # dtblobs
+        frame = [pattern_frame(tas[i]) for i in range(2 * dim)]
         line_ = fetch_frame(video)
         for y in range(0, Y):
             pixel_ = line_[y, :]
@@ -648,54 +634,26 @@ def video_to_tblobs(video):
                 rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo = temporal_comp(ders2_, rng_ders3___, _xP_, _yP_, _tP_, frame, _frame, videoo)  # temporal pixel comparison
 
         # merge segs of last line into their blobs:
-        y = Y
-        for is_dP in range(2):
-            typ = is_dP * dim
-            hP_ = _xP_[is_dP]
-            while hP_:
-                hP, frame, _frame, videoo = form_segment(hP_.popleft(), frame, _frame, videoo, typ)
-                frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-            # Sort blobs' indices based on min_x, max_x, min_y, max_y:
-            blob_ = frame[typ + 1][2]
-            blob_sorted_ = [sorted(range(len(blob_)), key=lambda i: blob_[i][1][0]), # id of segments' sorted by min_x
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][1]), # id of segments' sorted by max_x
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][2]), # id of segments' sorted by min_y
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][3]),]# id of segments' sorted by max_y
-            frame[typ + 1][3] = blob_sorted_
-
-            typ += 1
-            hP_ = _yP_[is_dP]
-            while hP_:
-                hP, frame, _frame, videoo = form_segment(hP_.popleft(), frame, _frame, videoo, typ)
-                frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-            # Sort blobs' indices based on min_x, max_x, min_y, max_y:
-            blob_ = frame[typ + 1][2]
-            blob_sorted_ = [sorted(range(len(blob_)), key=lambda i: blob_[i][1][0]),  # id of segments' sorted by min_x
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][1]),  # id of segments' sorted by max_x
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][2]),  # id of segments' sorted by min_y
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][3]), ]  # id of segments' sorted by max_y
-            frame[typ + 1][3] = blob_sorted_
-
-            typ += 1
-            hP_ = _tP_[is_dP]
-            while hP_:
-                hP, frame, _frame, videoo = form_segment(hP_.popleft(), frame, _frame, videoo, typ)
-                frame, _frame, videoo = form_blob(hP, frame, _frame, videoo, typ)
-            # Sort blobs' indices based on min_x, max_x, min_y, max_y:
-            blob_ = frame[typ + 1][2]
-            blob_sorted_ = [sorted(range(len(blob_)), key=lambda i: blob_[i][1][0]),  # id of segments' sorted by min_x
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][1]),  # id of segments' sorted by max_x
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][2]),  # id of segments' sorted by min_y
-                            sorted(range(len(blob_)), key=lambda i: blob_[i][1][3]), ]  # id of segments' sorted by max_y
-            frame[typ + 1][3] = blob_sorted_
+        if t > t_min_coord:
+            y = Y
+            for typ in range(6):
+                is_dP = typ // dim
+                dimension = typ % dim
+                if dimension == 0: hP_ = _xP_[is_dP]
+                if dimension == 1: hP_ = _yP_[is_dP]
+                if dimension == 2: hP_ = _tP_[is_dP]
+                hP_, frame, _frame, videoo = term_seg_(hP_, frame, _frame, videoo, typ)
+                # Sort blobs' indices based on min_x, max_x, min_y, max_y:
+                frame[typ].sorted_min_x_idx_, frame[typ].sorted_max_x_idx_, frame[typ].sorted_min_y_idx_, frame[typ].sorted_max_y_idx_, \
+                frame[typ].sorted_min_x_, frame[typ].sorted_max_x_, frame[typ].sorted_min_y_, frame[typ].sorted_max_y_ = sort_coords(frame[typ].blob_)
 
         if record and t == frame_output_at: # change these in program body
-            rebuild_frame('./images/mblobs_horizontal',frame[1], record_blobs, record_segs)
-            rebuild_frame('./images/mblobs_vertical', frame[2], record_blobs, record_segs)
-            rebuild_frame('./images/mblobs_temporal', frame[3], record_blobs, record_segs)
-            rebuild_frame('./images/dblobs_horizontal', frame[4], record_blobs, record_segs)
-            rebuild_frame('./images/dblobs_vertical', frame[5], record_blobs, record_segs)
-            rebuild_frame('./images/dblobs_temporal', frame[6], record_blobs, record_segs)
+            rebuild_frame('./images/mblobs_horizontal',frame[0], record_blobs, record_segs)
+            rebuild_frame('./images/mblobs_vertical', frame[1], record_blobs, record_segs)
+            rebuild_frame('./images/mblobs_temporal', frame[2], record_blobs, record_segs)
+            rebuild_frame('./images/dblobs_horizontal', frame[3], record_blobs, record_segs)
+            rebuild_frame('./images/dblobs_vertical', frame[4], record_blobs, record_segs)
+            rebuild_frame('./images/dblobs_temporal', frame[5], record_blobs, record_segs)
 
         _frame = frame
 
@@ -706,7 +664,6 @@ def video_to_tblobs(video):
     # ---------- video_to_tblobs() end ----------------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
-
 
 # ************ PROGRAM BODY *********************************************************************************************
 
@@ -730,7 +687,7 @@ record_segs = bool(0)
 frame_output_at = t_rng * 2  # first frame that computes 2D blobs
 
 global olp_debug
-olp_debug = bool(1)
+olp_debug = bool(0)
 
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
