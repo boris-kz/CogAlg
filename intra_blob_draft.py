@@ -4,50 +4,65 @@ from time import time
 import frame_blobs
 
 '''
-    intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob
-    it is currently just a draft, combined with frame_blobs it will form a 2D version of first-level core algorithm
+    intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
+    Currently mostly a draft, combined with frame_blobs it will form a 2D version of first-level core algorithm
     inter_blob() will be second-level 2D algorithm, and a prototype for meta-level algorithm
 '''
 
-def eval_blob(typ, blob):  # evaluate blob for orthogonal flip, comp_P, incr_rng_comp, incr_der_comp
-
+def blob_eval(typ, blob):
     (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, Ly), root_ = blob
-    height = max_y - min_y + 1; width = max_x - min_x + 1  # or more accurate mean long D / seg height, fine structure:
 
-    rDim_xy = abs(xD) / Ly  # >|< 1, separate sum(abs(xd) for flip eval
-    # rDim_xy? flip, quantized seg orient during scan_Py_, if min L (dx > 1)? or oriented comp_P spec instead?
-
-    if typ == 0:   core = Dx; ind_alt0 = Mx; ind_alt1 = Dy; ind_alt2 = My  # core: variable that defines current type of pattern,
-    elif typ == 1: core = Mx; ind_alt0 = Dx; ind_alt1 = My; ind_alt2 = Dy  # individual alt cores define x vs. y D!M orientation bias:
-    elif typ == 2: core = Dy; ind_alt0 = My; ind_alt1 = Dx; ind_alt2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
-    else:          core = My; ind_alt0 = Dy; ind_alt1 = Mx; ind_alt2 = Dx  # or Calt0 += calt0, Calt1 += calt1, Calt2 += calt2 in form_seg?
-
-    rD_xy = max(Dx, Dy) / min(Dx, Dy)  # -> proj_PM coef, after flip eval to maximize D and minimize Dy?
-    if typ == (0 or 2):
-        rD_xy = max(core, ind_alt1) / min(core, ind_alt1)
-    else:
-        rD_xy = max(ind_alt0, ind_alt2) / min(ind_alt0, ind_alt2)  # |ind_alts| sum per y: same as for P_sum?
-
-    # or max D + My: predicts P_match? rdn max (M, My) / min (M, My)?
-
-    P_sum = L + I + abs(core) + (ind_alt0 + alt0)/2 + (ind_alt1 + alt1)/2 + (ind_alt2 + alt2)/2  # under + over- estimate / 2, vs:
-    P_sum = L + I + abs(core) + ind_alt0 + ind_alt1 + ind_alt2  # added alt abs sum between Ps only, not needed for most blobs?
+    if typ == 0:   core = Dx; alti0 = Mx; alti1 = Dy; alti2 = My  # core: variable that defines current type of pattern,
+    elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # individual alt cores -> My / My orient, or directly?
+    elif typ == 2: core = Dy; alti0 = My; alti1 = Dx; alti2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
+    else:          core = My; alti0 = Dy; alti1 = Mx; alti2 = Dx  # or Alti0 += alti0, Alti1 += alti1, Alti2 += alti2 in form_seg?
 
     typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # vs. sort by mag; type comb if rolp * mL, other params assumed equal
 
-    proj_PM = P_sum * rD_xy * typ_rdn * math.hypot(Ly, xD / Ly)
-    # P_sum is a maximal match between Ps, rD_xy is lat / vert M coef, hypot is long axis: max Der span and value
+    blob = incr_range_eval(typ, typ_rdn, blob)  # frame_blobs recursion if -M
+    blob = incr_deriv_eval(typ, typ_rdn, blob)  # frame_blobs recursion if |D|
+
+    height = max_y - min_y + 1; width = max_x - min_x + 1
+    # or more accurate mean long D / seg height, fine structure:
+    dim_rate = abs(xD) / Ly  # >|< 1, add abs_xD += abs(xd) in form_segment?
+
+    if dim_rate > flip_ave:  # or scan_Py_-> xdP, flip_eval(xdP)?
+        blob = flip(typ, blob)  # vertical-first blob rescan, param * angle if < 90?
+
+    blob = comp_P_eval(typ, typ_rdn, core, alti0, alti1, alti2, blob)  # evaluate blob comp_P along Py_
+
+    return blob
+
+def incr_range_eval(typ, typ_rdn, blob):  # frame_blobs recursion if -M
+    return blob
+
+def incr_deriv_eval(typ, typ_rdn, blob):  # frame_blobs recursion if |D|
+    return blob
+
+def flip(typ, blob):  # run form_P and deeper over blob's vertical-first ders__
+    return blob
+
+
+def comp_P_eval(typ, typ_rdn, core, alti0, alti1, alti2, blob):   # evaluate blob for comp_P along Py_
+    (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, Ly), root_ = blob
+
+    rM_xy = max(Mx, My) / min(Mx, My)
+    # more precisely by abs(Mx|My) summed between Ps:
+    if typ == (0 or 2):
+        rM_xy = max(core, alti2) / min(core, alti2)  # alti: individual vs. summed alt
+    else:
+        rM_xy = max(alti0, alti1) / min(alti0, alti1)  # |ind_alts| sum per y: same as for P_sum?
+    #   rM_xy: proj_PM coef, after flip eval to maximize My and minimize M?
+
+    P_sum = L + I + abs(core) + (alti0 + alt0)/2 + (alti1 + alt1)/2 + (alti2 + alt2)/2  # under + over- estimate / 2, vs:
+    P_sum = L + I + abs(core) + alti0 + alti1 + alti2  # added alti abs sum between Ps only: not needed for most blobs?
+
+    proj_PM = P_sum * rM_xy * typ_rdn * math.hypot(Ly, xD / Ly)
+    # P_sum is a maximal match between Ps, rD_xy is lat / vert M coef, hypot is long axis: max span and value of Der
 
     if proj_PM > ave * 6:  # 6 params to be compared between Ps: comp cost multiplier, primary comp_P | recursion eval?
         scan_Py_(typ, 0, blob, xD)  # leading to comp_P, etc.
 
-    return blob
-
-
-def incr_range_comp(typ, blob):  # frame_blobs recursion if -M
-    return blob
-
-def incr_deriv_comp(typ, blob):  # frame_blobs recursion if |D|
     return blob
 
 
@@ -134,7 +149,7 @@ def comp_P(typ, norm, P, _P, xD):  # forms vertical derivatives of P vars, also 
     Pd = ddx + dL + dI + dD + dDy + dM + dMy  # defines dPP, dx does not correlate
     Pm = mx + mL + mI + mD + mDy + mM + mMy  # defines vPP; comb rep value = Pm * 2 + Pd?
 
-    if dI * dL > div_a:  # potential d compression, vs. ave * 21(7*3)?
+    if dI * dL > div_ave:  # potential d compression, vs. ave * 21(7*3)?
 
         # DIV comp: cross-scale d, neg if cross-sign, no ndx: single, yes nmx: summed?
         # for S: summed vars I, D, M: nS = S * rL, ~ rS,rP: L defines P?
@@ -233,7 +248,7 @@ def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
     rdn = Olp2 / L2  # rdn per PP, alt Ps (if not alt PPs) are complete?
 
     # if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:
-    #     PP, norm = orient(PP) # PP norm, rescan relative to parent blob, for incr_comp, comp_PP, and:
+    # PP, norm = orient(PP) # PP norm, rescan relative to parent blob, for incr_comp, comp_PP, and:
 
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
        PP = incr_range_comp_P(typ, PP)  # forming incrementally fuzzy PP
@@ -353,18 +368,22 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
     return PP
 
 
-def intra_blob(frame):
-    # evaluate blobs for orthogonal flip, comp_P, incr_rng_comp, incr_der_comp
-    PP_ = []
+def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
     [neg_mL, neg_myL, I, D, Dy, M, My], [xD, Ly, blob_], [xDy, Lyy, yblob_] = frame
 
+    _blob_ = []
     for blob in blob_:
-        eval_blob(0, blob)
+        _blob_.append( blob_eval(0, blob) )
+    frame[1][2] = _blob_
+
+    _yblob_ = []
     for yblob in yblob_:
-        eval_blob(1, yblob)
+        _yblob_.append( blob_eval(1, yblob) )
+    frame[2][2] = _yblob_
 
     return frame  # frame of 2D patterns, to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
+
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
@@ -373,10 +392,13 @@ def intra_blob(frame):
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
 
-rng         = 2     # number of pixels compared to each pixel in four directions
-min_coord   = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
-ave         = 15    # |d| value that coincides with average match: mP filter
-dim         = 2     # Number of dimensions
+ave = 15  # |d| value that coincides with average match: mP filter
+div_ave = 1023  # filter for div_comp(L) -> rL, summed vars scaling
+flip_ave = 10000  # cost of form_P and deeper?
+ave_rate = 0.25   # match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
+dim = 2  # number of dimensions
+rng = 2  # number of pixels compared to each pixel in four directions
+min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
