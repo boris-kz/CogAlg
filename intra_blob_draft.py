@@ -5,12 +5,12 @@ import frame_blobs
 
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
-    Currently mostly a draft, combined with frame_blobs it will form a 2D version of first-level core algorithm
+    Currently mostly a draft, combined with frame_blobs it will form a 2D version of first-level algorithm
     inter_blob() will be second-level 2D algorithm, and a prototype for meta-level algorithm
 '''
 
 def blob_eval(typ, blob):
-    (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, Ly), root_ = blob
+    (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, abs_xD, Ly), root_ = blob
 
     if typ == 0:   core = Dx; alti0 = Mx; alti1 = Dy; alti2 = My  # core: variable that defines current type of pattern,
     elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # individual alt cores -> My / My orient, or directly?
@@ -22,14 +22,26 @@ def blob_eval(typ, blob):
     blob = incr_range_eval(typ, typ_rdn, blob)  # frame_blobs recursion if -M
     blob = incr_deriv_eval(typ, typ_rdn, blob)  # frame_blobs recursion if |D|
 
-    height = max_y - min_y + 1; width = max_x - min_x + 1
-    # or more accurate mean long D / seg height, fine structure:
-    dim_rate = abs(xD) / Ly  # >|< 1, add abs_xD += abs(xd) in form_segment?
+    dim_rate = abs(xD) / Ly  # >|< 1, shift / seg height, more accurate than width / height?
+    if  dim_rate > flip_ave:  # or scan_Py_-> xdP, flip_eval(xdP)?  also depends on rM_xy?
+        blob = flip(typ, blob)  # vertical-first blob rescan, param *= angle if < 90?
 
-    if dim_rate > flip_ave:  # or scan_Py_-> xdP, flip_eval(xdP)?
-        blob = flip(typ, blob)  # vertical-first blob rescan, param * angle if < 90?
+    # evaluate blob for comp_P along Py_:
 
-    blob = comp_P_eval(typ, typ_rdn, core, alti0, alti1, alti2, blob)  # evaluate blob comp_P along Py_
+    if typ == (0 or 2):   # more precise than rM_xy = max(Mx, My) / min(Mx, My)
+        rM_xy = max(core, alti2) / min(core, alti2)  # alti: individual vs. summed alt
+    else:
+        rM_xy = max(alti0, alti1) / min(alti0, alti1)  # |ind_alts| sum per y: same as for P_sum?
+    #   rM_xy: proj_PM / ave*L coef?
+
+    P_sum = L + I + abs(core) + (alti0 + alt0)/2 + (alti1 + alt1)/2 + (alti2 + alt2)/2  # under + over- estimate / 2, vs:
+    # vs P_sum = L + I + abs(core) + Alti0 + Alti1 + Alti2: abs sum between Ps, not needed for most blobs?
+
+    proj_PM = P_sum * rM_xy * typ_rdn * math.hypot(Ly, abs_xD / Ly)
+    # P_sum is a maximal match between Ps, rD_xy is lat / vert M coef, hypot is long axis: max span and value of Der
+
+    if proj_PM > ave * 6:  # 6 params to be compared between Ps: comp cost multiplier, primary comp_P | recursion eval?
+        scan_Py_(typ, 0, blob, xD)  # leading to comp_P, etc.
 
     return blob
 
@@ -39,32 +51,8 @@ def incr_range_eval(typ, typ_rdn, blob):  # frame_blobs recursion if -M
 def incr_deriv_eval(typ, typ_rdn, blob):  # frame_blobs recursion if |D|
     return blob
 
-def flip(typ, blob):  # run form_P and deeper over blob's vertical-first ders__
+def flip(typ, blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
-
-
-def comp_P_eval(typ, typ_rdn, core, alti0, alti1, alti2, blob):   # evaluate blob for comp_P along Py_
-    (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, Ly), root_ = blob
-
-    rM_xy = max(Mx, My) / min(Mx, My)
-    # more precisely by abs(Mx|My) summed between Ps:
-    if typ == (0 or 2):
-        rM_xy = max(core, alti2) / min(core, alti2)  # alti: individual vs. summed alt
-    else:
-        rM_xy = max(alti0, alti1) / min(alti0, alti1)  # |ind_alts| sum per y: same as for P_sum?
-    #   rM_xy: proj_PM coef, after flip eval to maximize My and minimize M?
-
-    P_sum = L + I + abs(core) + (alti0 + alt0)/2 + (alti1 + alt1)/2 + (alti2 + alt2)/2  # under + over- estimate / 2, vs:
-    P_sum = L + I + abs(core) + alti0 + alti1 + alti2  # added alti abs sum between Ps only: not needed for most blobs?
-
-    proj_PM = P_sum * rM_xy * typ_rdn * math.hypot(Ly, xD / Ly)
-    # P_sum is a maximal match between Ps, rD_xy is lat / vert M coef, hypot is long axis: max span and value of Der
-
-    if proj_PM > ave * 6:  # 6 params to be compared between Ps: comp cost multiplier, primary comp_P | recursion eval?
-        scan_Py_(typ, 0, blob, xD)  # leading to comp_P, etc.
-
-    return blob
-
 
 def scan_Py_(typ, norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
 
@@ -131,7 +119,7 @@ def comp_P(typ, norm, P, _P, xD):  # forms vertical derivatives of P vars, also 
     dI = I - _I; mI = min(I, _I)  # L and I are dims vs. ders, not rdn | select, I per quad, no norm?
 
     if norm:  # derivatives are Dx-normalized before comp:
-        hyp = math.hypot(xD, 1)  # len incr = hyp / 1 (vert distance=1)
+        hyp = math.hypot(xD, 1)  # len incr = hyp / 1 (vert distance == 1)
 
         D = (D * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
         Dy= (Dy / hyp - D * hyp) / 2 * hyp  # est D over lat_L

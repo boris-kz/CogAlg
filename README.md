@@ -44,7 +44,7 @@ But none that I know of is strictly incremental in scope and complexity of disco
 
 Autonomous cognition must start with analog inputs, such as video or audio. All symbolic data, including that in natural languages, is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. And the difficulty of decoding is exponential with the level of encoding, so hierarchical learning starting with raw sensory input is by far the easiest to implement.
 
-Such raw inputs have modality-specific properties and comparison should be adjusted accordingly. Which can be done by feedback or coded manually. For example, vision relies on reflected light: brightness or albedo don’t directly represent a source of impact, though they do represent resistance to a very "light" impact. Uniformity of albedo indicates some common underlying property, so it should form match patterns. But they should be defined indirectly, in a way that doesn’t depend on magnitude of albedo. 
+Such raw inputs have modality-specific properties and comparison should be adjusted accordingly. Which can be done by feedback or coded manually. For example, vision relies on reflected light: brightness or albedo don’t directly represent a source of impact, though they do represent resistance to a very "light" impact. Uniformity of albedo indicates some common underlying property, so it should form match patterns. But they should be defined in a way that doesn’t depend on magnitude of albedo. 
 
 That means defining match through the only other derivative produced by basic comparison: as below-average absolute difference. Initial difference is across space, but it’s a product of past interactions in time (time is a macro-dimension due to a lower rate of change). Thus, difference or match across space is predictive of change or stability over time.
 
@@ -107,17 +107,18 @@ The nearest experimentally successful method is recently introduced “capsules�
 - these distances and proportions are also compared to find “equivariance” or affine transformations,
 - capsules also send direct feedback to lower layer (dynamic routing), vs. trans-hidden-layer backprop in ANN
 
-But measure of similarity in CapsNet (“agreement” in dynamic routing) is an unprincipled dot product, vs. additive compression in CogAlg. This is very common, most recognition algorithms use matrix multiplication. But conceptually, similarity is a common subset of comparands, and multiplication vastly exaggerates it by forming a superset. Exaggeration adds resistance to noise, but the distinction between input and noise is case-specific, it should be learned and updated along with the input itself.
+But measure of similarity in CapsNet (“agreement” in dynamic routing) is an unprincipled dot product, vs. additive compression in CogAlg. This is very common, most recognition algorithms use matrix multiplication. Conceptually, similarity is a common subset of comparands, and multiplication vastly exaggerates it by forming a superset. Exaggeration adds resistance to noise, but at the cost of drastically impaired precision. Distinction between input and noise is case-specific, it should be learned from the input itself, not built in the algorithm.    
 
-Common subset of two integers is the smaller of them, = compression of represented magnitude by replacing larger input with a difference between inputs. This is a direct implication of information theory: compression is a measure of similarity, but no one else seems to use it from the bottom up. It’s not sufficient, basic working measure is a deviation of minimum projected by co-derived difference: (minimum - difference) - average (minimum - difference). But minimum is unavoidable as a starting point.
-
+Common subset of two integers is the smaller of them, = compression of represented magnitude by replacing larger input with the difference between inputs. This is a direct implication of information theory: compression must be a measure of similarity, but no one else seems to use it from the bottom up. It’s not sufficient per se, basic working measure would probably be more complex, but minimum is unavoidable as a starting point.
+ 
 Some other problems I have with current implementation of CapsNet:
-- they use CNN for initial layers, to recognize basic features, but a truly general method would apply the same principles on all levels of processing, any differentiation should be learned rather than built-in.
-- capsules of all layers contain the same parameters: probability and pose variables, while I think the number of parameters should be incremental with elevation, each level forms new and higher-order derivatives.
-- the number of layers is pre-determined by design, while I think it should be incremental with experience.
+- CapsNet is initially fully-connected, with a network-centric bias toward uniform matrix operations, vs conditional unfolding. CogAlg search is selective over incremental dimensionality and distance.
+- they use CNN for initial layers, to recognize basic features, but a truly general method should apply the same principles on all levels of processing, any differentiation should be learned rather than built-in.
+- capsules of all layers contain the same parameters: probability and pose variables, while I think the number of parameters should be incremental with elevation: each level forms derivatives of input parameters.
+- the number of layers is fixed, while I think it should be incremental with experience.
 
-My patterns have match instead of probability, a miss that includes pose variables, plus selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances.
-All these variables are derived by incrementally complex comparison: core operation on all levels of CogAlg.
+My patterns have match instead of probability, a miss that includes pose variables, plus selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances. 
+All these variables are derived by incrementally complex comparison: core operation on all levels of CogAlg. 
 
 My hierarchy is also dynamic: pattern is displaced from level by a miss to new input, then forwarded to existing or newly formed higher level. So, higher-level patterns include lower-level variables, as well as their derivatives. The derivatives are summed within pattern, then evaluated for extending intra-pattern search and feedback. Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience.
 
@@ -147,15 +148,15 @@ Average match in our space-time is presumably equal over all four dimensions. Th
 
 Accordingly, my code here consists of three levels:
 
-- 1D: main version of 1st-level core algorithm is [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
+- 1D: main version of 1st level core algorithm is [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
 - 2D: [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py) defines initial blobs and is currently functional. It will pass them to [intra_blob_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), currently work-in-progress, which will evaluate them for internal recursive cross-comparision. Combined, they will be a 2D version of 1st-level core algorithm.  
 - 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This version will hopefully be effective and scalable, but is currently less than 5% done.
 
-This algorithm will be organically extended to process color images, audio, other modalities. Symbolic data will be assigned as labels on patterns derived from analog inputs. Initial testing could be recognition and automatic labeling of manually labeled images, but it might better to start directly with video: still images are very poor representation of our 4D world.
-
-Higher levels will process discontinuous extended-range cross-comparison between full-D-cycle patterns. Complete hierarchical algorithm will have two-level code:
-- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus basic bit-filter feedback
-- recursive increment in complexity of both cross-comparison and feedback, to generate next-level algorithm.
+Higher levels for each will process discontinuous search among full-D patterns.
+Hierarchical algorithm will have two-level code: 
+- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus bit-filter feedback 
+- recursive increment in complexity of both cross-comparison and feedback, generating next-level algorithm
+Algorithm will be extended to add colors, audio, and text. Initial testing could be recognition of labeled images, but 2D is a poor representation of our 4D world, I will probably start directly with video or stereo video.
 
 Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
