@@ -8,15 +8,9 @@ from collections import deque
 
 ''' Temporal blob composition over a sequence of frames in a video: 
     pixels are compared to rng adjacent pixels over lateral x, vertical y, temporal t coordinates,
-    then resulting 3D tuples are combined into incremental-dimensionality patterns: 1D Ps ) 2D blobs ) 3D tblobs.     	    
-
-    Selective temporal forking due to blob scale variation within a frame * temporal variation between frames.
-    Selection is by top-level comp / top-level scan: inclusion if rel_olp * mL > ave * max(L, _L) 
-    Only top-level because variation is far lower than between discontinuous Ps
-
-    tblobs will be evaluated for orientation and incremental-dimensionality intra-tblob comparison
+    then resulting 3D tuples are combined into incremental-dimensionality patterns: 1D Ps ) 2D blobs ) 3D tblobs.     
+    tblobs will then be evaluated for intra-tblob search
 '''
-
 
 # ************ REUSABLE CLASSES *****************************************************************************************
 class frame_of_patterns(object):
@@ -36,12 +30,8 @@ class frame_of_patterns(object):
         if self.core == 'm':
             self.L = 0
             self.I = 0
-            self.Dx = 0;
-            self.Dy = 0;
-            self.Dt = 0
-            self.Mx = 0;
-            self.My = 0;
-            self.Mt = 0
+            self.Dx = 0; self.Dy = 0; self.Dt = 0
+            self.Mx = 0; self.My = 0; self.Mt = 0
 
     def accum_params(self, params):
         " add lower-composition params to higher-composition params "
@@ -64,18 +54,9 @@ class pattern(object):
         self.sign = sign
         self.L = 0  # length/area of a pattern
         self.I = 0  # summed input
-        self.Dx = 0;
-        self.Dy = 0;
-        self.Dt = 0  # lateral - vertical - temporal D
-        self.Mx = 0;
-        self.My = 0;
-        self.Mt = 0  # lateral - vertical - temporal M
-        # alternative derivative: m | d;   indicate value, thus redundancy rate, of overlapping alt-core blobs:
-        self.Alt0 = 0;
-        self.Alt1 = 0;
-        self.Alt2 = 0;
-        self.Alt3 = 0;
-        self.Alt4 = 0
+        self.Dx = 0; self.Dy = 0; self.Dt = 0  # lateral - vertical - temporal D
+        self.Mx = 0; self.My = 0; self.Mt = 0  # lateral - vertical - temporal M
+        self.Alt0 = 0; self.Alt1 = 0; self.Alt2 = 0; self.Alt3 = 0; self.Alt4 = 0  # indicate value of overlapping alt-core blobs
         self.min_x, self.max_x = x_coord
         self.e_ = []
         self.terminated = False
@@ -190,8 +171,8 @@ def rebuild_frame(dir, frame, print_separate_blobs=0, print_separate_segs=0):
     frame_img = np.array([[[127] * 4] * X] * Y)
     if (print_separate_blobs or print_separate_segs) and not os.path.exists(dir):
         os.mkdir(dir)
-    for indexs, index in enumerate(frame.sorted_min_x_idx_):  # Iterate through blobs' sorted indices
-        frame_img = rebuild_blob(dir + '/', indexs, frame.e_[index], frame_img, print_separate_blobs, print_separate_segs)
+    for iindex, index in enumerate(frame.sorted_min_x_idx_):  # Iterate through blobs' sorted indices
+        frame_img = rebuild_blob(dir + '/', iindex, frame.e_[index], frame_img, print_separate_blobs, print_separate_segs)
     cv2.imwrite(dir + '.jpg', frame_img)
     # ---------- rebuild_frame() end ------------------------------------------------------------------------------------
 
@@ -351,18 +332,12 @@ def form_P(ders, x, term_x, P, P_, buff_, hP_, frame, _frame, typ, is_dP=0):
     # is_dP = bool(typ // dim), computed directly for speed and clarity:
 
     p, dx, dy, dt, mx, my, mt = ders  # 3D tuple of derivatives per pixel, "x" for lateral, "y" for vertical, "t" for temporal
-    if typ == 0:
-        core = mx; alt0 = dx; alt1 = my; alt2 = mt; alt3 = dy; alt4 = dt
-    elif typ == 1:
-        core = my; alt0 = dy; alt1 = mx; alt2 = mt; alt3 = dx; alt4 = dt
-    elif typ == 2:
-        core = mt; alt0 = dt; alt1 = mx; alt2 = my; alt3 = dx; alt4 = dy
-    elif typ == 3:
-        core = dx; alt0 = mx; alt1 = dy; alt2 = dt; alt3 = my; alt4 = mt
-    elif typ == 4:
-        core = dy; alt0 = my; alt1 = dx; alt2 = dt; alt3 = mx; alt4 = mt
-    else:
-        core = dt; alt0 = mt; alt1 = dx; alt2 = dy; alt3 = mx; alt4 = my
+    if   typ == 0: core = mx; alt0 = dx; alt1 = my; alt2 = mt; alt3 = dy; alt4 = dt
+    elif typ == 1: core = my; alt0 = dy; alt1 = mx; alt2 = mt; alt3 = dx; alt4 = dt
+    elif typ == 2: core = mt; alt0 = dt; alt1 = mx; alt2 = my; alt3 = dx; alt4 = dy
+    elif typ == 3: core = dx; alt0 = mx; alt1 = dy; alt2 = dt; alt3 = my; alt4 = mt
+    elif typ == 4: core = dy; alt0 = my; alt1 = dx; alt2 = dt; alt3 = mx; alt4 = mt
+    else:          core = dt; alt0 = mt; alt1 = dx; alt2 = dy; alt3 = mx; alt4 = my
 
     s = 1 if core > 0 else 0
     if not (s == P[is_dP].sign or x == P[is_dP].min_x):  # P is terminated. P[0] is mP, P[1] is dP
@@ -461,8 +436,7 @@ def form_segment(hP, frame, _frame, typ):
         hP = fork  # replace segment with including fork's segment
     else:  # new segment is initialized:
         hP = pattern(tas[typ] + 'segment', (_P.min_x, _P.max_x), (y - rng - 1, -1), sign=_P.sign)  # new instance of pattern class
-        # update segment hP with current _P:
-        hP.accum_params(_P.params())  # init params with _P's params
+        hP.accum_params(_P.params())  # initialize params with _P's params, etc.
         hP.roots = 0  # init roots
         hP.fork_ = fork_  # init fork_
         hP.ave_x = ave_x  # ave_x
@@ -535,7 +509,7 @@ def form_blob(term_seg, frame, _frame, typ, y_carry=0):
     if blob.remaining_roots == 0:  # if remaining_roots == 0: blob is terminated and packed in frame
         # sort indices of blob' segments by their min and max coordinates
         blob.sorted_min_x_idx_, blob.sorted_max_x_idx_, blob.sorted_min_y_idx_, blob.sorted_max_y_idx_, \
-        blob.sorted_min_x_, blob.sorted_max_x_, blob.sorted_min_y_, blob.sorted_max_y_ = sort_coords(blob.e_)
+        blob.sorted_min_x_, blob.sorted_max_x_, blob.sorted_min_y_, blob.sorted_max_y_ = sort_segments(blob.e_)
         # terminated blob is packed into frame
         if term_seg.core == 'm' and term_seg.sign == 0:  # is negative mblob
             frame[typ].accum_params(term_seg.params())
@@ -554,13 +528,12 @@ def form_blob(term_seg, frame, _frame, typ, y_carry=0):
     return frame, _frame
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-
-def sort_coords(e_):
-    " sort code based on their min/max coords "
-    sorted_idx_min_x_ = sorted(range(len(e_)), key=lambda i: e_[i].min_x)  # id of segments' sorted by min_x
-    sorted_idx_max_x_ = sorted(range(len(e_)), key=lambda i: e_[i].max_x)  # id of segments' sorted by max_x
-    sorted_idx_min_y_ = sorted(range(len(e_)), key=lambda i: e_[i].min_y)  # id of segments' sorted by min_y
-    sorted_idx_max_y_ = sorted(range(len(e_)), key=lambda i: e_[i].max_y)  # id of segments' sorted by max_y
+def sort_segments(e_):
+    " sort indices by min|max coords of segments"
+    sorted_idx_min_x_ = sorted(range(len(e_)), key=lambda i: e_[i].min_x)  # segment indices sorted by min_x
+    sorted_idx_max_x_ = sorted(range(len(e_)), key=lambda i: e_[i].max_x)  # segment indices sorted by max_x
+    sorted_idx_min_y_ = sorted(range(len(e_)), key=lambda i: e_[i].min_y)  # segment indices sorted by min_y
+    sorted_idx_max_y_ = sorted(range(len(e_)), key=lambda i: e_[i].max_y)  # segment indices sorted by max_y
     # the following lists are for zoning olp segs
     return sorted_idx_min_x_, sorted_idx_max_x_, sorted_idx_min_y_, sorted_idx_max_y_, \
            [e_[sorted_idx_min_x_[i]].min_x for i in range(len(e_))], \
@@ -627,11 +600,11 @@ def scan_segment_(blob, pri_blob, bounding_box):
                 olp_P_idx = olp_min_y - seg.min_y
                 olp_pri_P_idx = olp_min_y - pri_seg.min_y
                 while olp_P_idx < olp_P_idx_stop:
-                    P = seg.e_[olp_P_idx];
+                    P = seg.e_[olp_P_idx]
                     pri_P = pri_seg.e_[olp_pri_P_idx]
                     if P.min_x <= pri_P.max_x and P.max_x >= pri_P.min_x:
                         return True
-                    olp_P_idx += 1;
+                    olp_P_idx += 1
                     olp_pri_P_idx += 1
     return False
     # ---------- scan_segment_() end ------------------------------------------------------------------------------------
@@ -687,7 +660,7 @@ def form_tsegment(blob, videoo):
         yd = ave_y - fork.ave_y
         fork.ave_x = ave_x  # ave_x
         fork.ave_y = ave_y  # ave_y
-        fork.xD += xd  # xD for seg normalization and orientation, or += |dx| for curved yL?
+        fork.xD += xd  # xD for seg normalization and orientation
         fork.yD += yd
         fork.abs_xD += abs(xd)
         fork.abs_yD += abs(yd)
@@ -697,7 +670,6 @@ def form_tsegment(blob, videoo):
         return fork, videoo  # replace blob with including fork's tsegment
     else:  # new segment is initialized:
         tsegment = pattern(tas[typ] + 'tsegment', (blob.min_x, blob.max_x), (blob.min_y, blob.max_y), (t - t_rng, -1), sign=blob.sign)  # new instance of pattern class
-        # update tsegment with current blob:
         tsegment.accum_params(blob.params())  # init params with blob's params
         tsegment.roots = 0  # init roots
         tsegment.fork_ = fork_  # init fork_
@@ -709,7 +681,7 @@ def form_tsegment(blob, videoo):
         tsegment.xyd_ = [(0, 0)]  # xyd_ of blob_
         tsegment.e_.append(blob)  # blob_
 
-        if not fork_:  # if no fork_: initialize tblob
+        if not fork_:  # if no forks: initialize tblob
             tblob = pattern(tas[typ] + 'tblob', (blob.min_x, blob.max_x), (blob.min_y, blob.max_y), (t - t_rng, -1), sign=tsegment.sign)
             tblob.xD = 0
             tblob.yD = 0
@@ -858,7 +830,7 @@ def video_to_tblobs(video):
                 hP_, frame, _frame = term_segment_(hP_, frame, _frame, typ)
                 # Sort blobs' indices based on min_x, max_x, min_y, max_y:
                 frame[typ].sorted_min_x_idx_, frame[typ].sorted_max_x_idx_, frame[typ].sorted_min_y_idx_, frame[typ].sorted_max_y_idx_, \
-                frame[typ].sorted_min_x_, frame[typ].sorted_max_x_, frame[typ].sorted_min_y_, frame[typ].sorted_max_y_ = sort_coords(frame[typ].e_)
+                frame[typ].sorted_min_x_, frame[typ].sorted_max_x_, frame[typ].sorted_min_y_, frame[typ].sorted_max_y_ = sort_segments(frame[typ].e_)
 
         if record and t == frame_output_at:  # change these in program body
             rebuild_frame('./images/mblobs_horizontal', frame[0], record_blobs, record_segs)
