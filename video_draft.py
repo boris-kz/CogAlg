@@ -54,8 +54,8 @@ class pattern(object):
         self.sign = sign
         self.L = 0  # length/area of a pattern
         self.I = 0  # summed input
-        self.Dx = 0; self.Dy = 0; self.Dt = 0  # lateral - vertical - temporal D
-        self.Mx = 0; self.My = 0; self.Mt = 0  # lateral - vertical - temporal M
+        self.Dx = 0; self.Dy = 0; self.Dt = 0  # lateral, vertical, temporal D
+        self.Mx = 0; self.My = 0; self.Mt = 0  # lateral, vertical, temporal M
         self.Alt0 = 0; self.Alt1 = 0; self.Alt2 = 0; self.Alt3 = 0; self.Alt4 = 0  # indicate value of overlapping alt-core blobs
         self.min_x, self.max_x = x_coord
         self.e_ = []
@@ -199,7 +199,7 @@ def fetch_frame(video):
 # -scan_blob_()
 # -scan_segment_()
 # -find_overlaps()
-# -olp_idx_search()
+# -find_olp_index()
 # -form_tsegment()
 # -video_to_tblobs()
 # ***********************************************************************************************************************
@@ -344,7 +344,8 @@ def form_P(ders, x, term_x, P, P_, buff_, hP_, frame, _frame, typ, is_dP=0):
         P, P_, buff_, hP_, frame, _frame = term_P(s, x, P, P_, buff_, hP_, frame, _frame, typ, is_dP)
 
     # Continued or initialized input and derivatives are accumulated:
-    P[is_dP].accum_params([1, p, dx, dy, dt, mx, my, mt, abs(alt0), abs(alt1), abs(alt2), abs(alt3), abs(alt4)])  # params = [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4]
+    P[is_dP].accum_params([1, p, dx, dy, dt, mx, my, mt, abs(alt0), abs(alt1), abs(alt2), abs(alt3), abs(alt4)])  
+    # params = [L, I, Dx, Dy, Dt, Mx, My, Mt, Alt0, Alt1, Alt2, Alt3, Alt4]
     P[is_dP].e_.append(ders)
     if P[is_dP].sign == -1: P[is_dP].sign = s
 
@@ -360,7 +361,7 @@ def term_P(s, x, P, P_, buff_, hP_, frame, _frame, typ, is_dP):
     if not is_dP and P[is_dP].sign == 0:
         x0, L, ders_ = P[0].min_x, P[0].L, P[0].e_
 
-        P[1] = pattern(tas[typ + dim] + 'P', (x0, -1))  # dPs (P[1]) formed inside of negative mP (P[0])
+        P[1] = pattern(typ_str[typ + dim] + 'P', (x0, -1))  # dPs (P[1]) formed inside of negative mP (P[0])
 
         for i in range(L):
             P, P_, buff_, _P_, frame, _frame = form_P(ders_[i], x0 + i, x - 1, P, P_, buff_, hP_, frame, _frame, typ + dim, True)  # is_dP = 1
@@ -372,7 +373,7 @@ def term_P(s, x, P, P_, buff_, hP_, frame, _frame, typ, is_dP):
     else:
         P_[is_dP], buff_[is_dP], hP_[is_dP], frame, _frame \
             = scan_P_(x - 1, P[is_dP], P_[is_dP], buff_[is_dP], hP_[is_dP], frame, _frame, typ)  # P scans hP_
-    P[is_dP] = pattern(tas[typ] + 'P', (x, -1), sign=s)  # new P initialization at x0 = x
+    P[is_dP] = pattern(typ_str[typ] + 'P', (x, -1), sign=s)  # new P initialization at x0 = x
 
     return P, P_, buff_, hP_, frame, _frame
     # ---------- term_P() end -------------------------------------------------------------------------------------------
@@ -435,7 +436,7 @@ def form_segment(hP, frame, _frame, typ):
         fork.extend_coords(_P.coords())  # min_x, max_x
         hP = fork  # replace segment with including fork's segment
     else:  # new segment is initialized:
-        hP = pattern(tas[typ] + 'segment', (_P.min_x, _P.max_x), (y - rng - 1, -1), sign=_P.sign)  # new instance of pattern class
+        hP = pattern(typ_str[typ] + 'segment', (_P.min_x, _P.max_x), (y - rng - 1, -1), sign=_P.sign)  # new instance of pattern class
         hP.accum_params(_P.params())  # initialize params with _P's params, etc.
         hP.roots = 0  # init roots
         hP.fork_ = fork_  # init fork_
@@ -446,7 +447,7 @@ def form_segment(hP, frame, _frame, typ):
         hP.e_.append(_P)  # Py_
 
         if not fork_:  # if no fork_: initialize blob
-            blob = pattern(tas[typ] + 'blob', (_P.min_x, _P.max_x), (y - rng - 1, -1), sign=hP.sign)
+            blob = pattern(typ_str[typ] + 'blob', (_P.min_x, _P.max_x), (y - rng - 1, -1), sign=hP.sign)
             blob.xD = 0
             blob.abs_xD = 0
             blob.Ly = 0
@@ -612,11 +613,11 @@ def find_overlaps(obj, bounding_box):
     # Search for boundaries of sorted pri_blobs that overlap boundaries of input blob
     N = len(obj.e_)
     min_x, max_x, min_y, max_y = bounding_box
-    # olp_idx_search(a_, first_index, last_index, target, right_olp):
-    _min_x_idx = olp_idx_search(obj.sorted_min_x_, 0, N, max_x, 1)
-    _max_x_idx = olp_idx_search(obj.sorted_max_x_, 0, N, min_x, 0)
-    _min_y_idx = olp_idx_search(obj.sorted_min_y_, 0, N, max_y, 1)
-    _max_y_idx = olp_idx_search(obj.sorted_max_y_, 0, N, min_y, 0)
+    # find_olp_index(a_, first_index, last_index, target, right_olp):
+    _min_x_idx = find_olp_index(obj.sorted_min_x_, 0, N, max_x, 1)
+    _max_x_idx = find_olp_index(obj.sorted_max_x_, 0, N, min_x, 0)
+    _min_y_idx = find_olp_index(obj.sorted_min_y_, 0, N, max_y, 1)
+    _max_y_idx = find_olp_index(obj.sorted_max_y_, 0, N, min_y, 0)
 
     _min_x_less_or_equal_max_x_indices = obj.sorted_min_x_idx_[:_min_x_idx]  # overlap prerequisite: _min_x <= max_x
     _min_y_less_or_equal_max_y_indices = obj.sorted_min_y_idx_[:_min_y_idx]  # overlap prerequisite: _min_y <= max_y
@@ -628,7 +629,7 @@ def find_overlaps(obj, bounding_box):
     # ---------- find_overlaps() end ------------------------------------------------------------------------------------
 
 
-def olp_idx_search(a_, i0, i, target, right_olp=0):
+def find_olp_index(a_, i0, i, target, right_olp=0):
     # a binary search module
     if target + right_olp <= a_[i0]:
         return i0
@@ -637,10 +638,10 @@ def olp_idx_search(a_, i0, i, target, right_olp=0):
     else:
         im = (i0 + i) // 2
         if a_[im] < target + right_olp:
-            return olp_idx_search(a_, im, i, target, right_olp)
+            return find_olp_index(a_, im, i, target, right_olp)
         else:
-            return olp_idx_search(a_, i0, im, target, right_olp)
-    # ---------- olp_idx_search() end -----------------------------------------------------------------------------------
+            return find_olp_index(a_, i0, im, target, right_olp)
+    # ---------- find_olp_index() end -----------------------------------------------------------------------------------
 
 
 def form_tsegment(blob, videoo, typ):
@@ -667,7 +668,8 @@ def form_tsegment(blob, videoo, typ):
         fork.extend_coords(blob.coords())  # min_x, max_x, min_y, max_y
         return fork, videoo  # replace blob with including fork's tsegment
     else:  # new segment is initialized:
-        tsegment = pattern(tas[typ] + 'tsegment', (blob.min_x, blob.max_x), (blob.min_y, blob.max_y), (t - t_rng, -1), sign=blob.sign)  # new instance of pattern class
+        tsegment = pattern(typ_str[typ] + 'tsegment', (blob.min_x, blob.max_x), (blob.min_y, blob.max_y), (t - t_rng, -1), sign=blob.sign)  
+        # new instance of pattern class
         tsegment.accum_params(blob.params())  # init params with blob's params
         tsegment.roots = 0  # init roots
         tsegment.fork_ = fork_  # init fork_
@@ -681,7 +683,7 @@ def form_tsegment(blob, videoo, typ):
         tsegment.e_.append(blob)  # blob_
 
         if not fork_:  # if no forks: initialize tblob
-            tblob = pattern(tas[typ] + 'tblob', (blob.min_x, blob.max_x), (blob.min_y, blob.max_y), (t - t_rng, -1), sign=tsegment.sign)
+            tblob = pattern(typ_str[typ] + 'tblob', (blob.min_x, blob.max_x), (blob.min_y, blob.max_y), (t - t_rng, -1), sign=tsegment.sign)
             tblob.xD = 0
             tblob.yD = 0
             tblob.abs_xD = 0
@@ -744,7 +746,7 @@ def form_tblob(term_tseg, videoo, typ, t_carry = 0):
         videoo[typ].yD += tblob.yD
         videoo[typ].abs_xD += tblob.abs_xD
         videoo[typ].abs_yD += tblob.abs_yD
-        videoo[typ].Lt += tblob.Lt  # +Lt
+        videoo[typ].Lt += tblob.Lt  
         delattr(tblob, 'remaining_roots')
         tblob.terminated = True
         videoo[typ].e_.append(tblob)
@@ -762,10 +764,10 @@ def video_to_tblobs(video):
     _xP_ = [deque(), deque()]
     _yP_ = [deque(), deque()]
     _tP_ = [deque(), deque()]
-    _frame = [frame_of_patterns(tas[i] + 'frame') for i in range(2 * dim)]
+    _frame = [frame_of_patterns(typ_str[i] + 'frame') for i in range(2 * dim)]
 
     # Main output: [[Dxf, Lf, If, Dxf, Dyf, Dtf, Mxf, Myf, Mtf], tblob_]
-    videoo = [frame_of_patterns(tas[i] + 'videoo') for i in range(2 * dim)]
+    videoo = [frame_of_patterns(typ_str[i] + 'videoo') for i in range(2 * dim)]
     global t, y
 
     # Initialization:
@@ -798,15 +800,13 @@ def video_to_tblobs(video):
                 rng_ders3_.append(ders3)  # only one tuple in first-frame rng_ders3_
                 rng_ders3__.append(rng_ders3_)
 
-            rng_ders3___.append(rng_ders3__)
+            rng_ders3___.append(rng_ders3__)  # 1st frame, last vertical rng of incomplete ders2__ is discarded
 
-    # frame ends, last vertical rng of incomplete ders2__ is discarded,
-
+    # Main operations
     for t in range(1, T):
         if not video.isOpened():  # Terminate at the end of video
-            break
-        # Main operations
-        frame = [frame_of_patterns(tas[i] + 'frame') for i in range(2 * dim)]
+            break      
+        frame = [frame_of_patterns(typ_str[i] + 'frame') for i in range(2 * dim)]
         line_ = fetch_frame(video)
         for y in range(0, Y):
             pixel_ = line_[y, :]
@@ -867,9 +867,9 @@ min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rn
 t_min_coord = t_rng * 2 - 1  # min t for form_P input: ders3 from comp over t_rng*2 (bidirectional: before and after pixel p)
 ave = 15  # |d| value that coincides with average match: mP filter
 dim = 3  # Number of dimensions: x, y and t
-tas = ('mx', 'my', 'mt', 'dx', 'dy', 'dt')
-cas = ('m', 'd')  # core derivative as string
-das = ('x', 'y', 't')  # dimension as string
+typ_str = ('mx', 'my', 'mt', 'dx', 'dy', 'dt')
+der_str = ('m', 'd')  # derivatives string
+dim_str = ('x', 'y', 't')  # dimensions string
 
 # For outputs:
 record = bool(0)  # Set to True yield file outputs
