@@ -65,7 +65,7 @@ class pattern(object):
         if self.level != 'P':
             self.min_y, self.max_y = y_coord
             if not self.level in ['segment', 'blob']:
-                self.min_y, self.max_y = t_coord
+                self.min_t, self.max_t = t_coord
 
     def type(self):
         return self.core + self.dimension + self.level
@@ -549,30 +549,28 @@ def scan_blob_(blob, frame, _frame):
     debug_idx_ = []
     olp_idx_ = find_overlaps(_frame, blob.coords())
     if len(olp_idx_) != 0:
-        pri_blob_ = _frame.e_  # list of same type pri_blobs
+        pri_tseg_ = _frame.e_  # list of same type pri_tsegs
         for olp_idx in olp_idx_:
-            pri_blob = pri_blob_[olp_idx]
+            pri_tseg = pri_tseg_[olp_idx]
+            pri_blob = pri_tseg.e_[-1]
             if pri_blob.sign == blob.sign:  # Check sign
                 olp_min_x = max(pri_blob.min_x, blob.min_x)
                 olp_max_x = min(pri_blob.max_x, blob.max_x)
                 olp_min_y = max(pri_blob.min_y, blob.min_y)
                 olp_max_y = min(pri_blob.max_y, blob.max_y)
-                olp_val = (olp_max_x - olp_min_x + 1) * (olp_max_y - olp_min_y + 1)
-                mL = min(pri_blob.L, blob.L)
-                ave_L = ave * max(pri_blob.L, blob.L)
                 if scan_segment_(blob, pri_blob, [olp_min_x, olp_max_x, olp_min_y, olp_max_y]):
-                    pri_blob.roots += 1
-                    blob.fork_.append(pri_blob)
+                    pri_tseg.roots += 1
+                    blob.fork_.append(pri_tseg)
                     debug_idx_.append(olp_idx)
     # For Debugging --------------------------------------------------------------
     # Print selected blob formed in frame at t > t_rng * 2 and all it's overlapping blobs in previous frame
     global olp_debug, debug_case
-    if olp_debug and t > t_rng * 2 and len(debug_idx_) != 0 and olp_val > olp_val_min:
+    if olp_debug and t > t_rng * 2 and len(debug_idx_) != 0:
         if debug_case == output_at_case:
             filtered_pri_frame = np.array([[[127] * 4] * X] * Y)
             rebuild_blob('./images/', 0, blob, filtered_pri_frame, 1)
             for i in debug_idx_:
-                rebuild_blob('./images/olp_', i, _frame.e_[i], filtered_pri_frame, 1)
+                rebuild_blob('./images/olp_', i, _frame.e_[i].e_[-1], filtered_pri_frame, 1)
             olp_debug = False
         else:
             debug_case += 1
@@ -645,7 +643,7 @@ def olp_idx_search(a_, i0, i, target, right_olp=0):
     # ---------- olp_idx_search() end -----------------------------------------------------------------------------------
 
 
-def form_tsegment(blob, videoo):
+def form_tsegment(blob, videoo, typ):
     # Add blob to previous-frame tsegment or convert it into new tsegment; merge tblobs
     ave_x = (blob.max_x - blob.min_x) // 2
     ave_y = (blob.max_y - blob.min_y) // 2
@@ -674,6 +672,7 @@ def form_tsegment(blob, videoo):
         tsegment.roots = 0  # init roots
         tsegment.fork_ = fork_  # init fork_
         tsegment.ave_x = ave_x  # ave_x
+        tsegment.ave_y = ave_y
         tsegment.xD = 0  # xD
         tsegment.yD = 0  # yD
         tsegment.abs_xD = 0
@@ -691,16 +690,16 @@ def form_tsegment(blob, videoo):
             tblob.remaining_roots = 1
         else:  # else merge into fork's tblob
             tblob = fork_[0].tblob
-        tsegment.blob = tblob  # merge tsegment into tblob
+        tsegment.tblob = tblob  # merge tsegment into tblob
         tblob.e_.append(tsegment)  # tsegment is buffered into tblob's root_
 
         if len(fork_) > 1:  # merge tblobs of all forks
             if fork_[0].roots == 1:  # if roots == 1
-                videoo = form_tblob(fork_[0], videoo, 1)  # terminate tsegment of 1st fork
+                videoo = form_tblob(fork_[0], videoo, typ, 1)  # terminate tsegment of 1st fork
 
             for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                 if fork.roots == 1:
-                    videoo = form_tblob(fork, videoo, 1)
+                    videoo = form_tblob(fork, videoo, typ, 1)
 
                 if not fork.tblob is tblob:  # if not already merged/same
                     tblobs = fork.tblob
@@ -723,8 +722,7 @@ def form_tsegment(blob, videoo):
     return tsegment, videoo
     # ---------- form_tsegment() end ------------------------------------------------------------------------------------
 
-
-def form_tblob(term_tseg, videoo, t_carry)
+def form_tblob(term_tseg, videoo, typ, t_carry = 0):
     # Terminated tsegment is merged into continued or initialized tblob (all connected tsegments)
     tblob = term_tseg.tblob
     term_tseg.max_t = t - t_rng - 1 - t_carry  # set max_t <- current t; t_carry: min elevation of term_tseg over current pri_blob
@@ -748,7 +746,7 @@ def form_tblob(term_tseg, videoo, t_carry)
         videoo[typ].abs_yD += tblob.abs_yD
         videoo[typ].Lt += tblob.Lt  # +Lt
         delattr(tblob, 'remaining_roots')
-        blob.terminated = True
+        tblob.terminated = True
         videoo[typ].e_.append(tblob)
 
     return videoo
@@ -808,7 +806,7 @@ def video_to_tblobs(video):
         if not video.isOpened():  # Terminate at the end of video
             break
         # Main operations
-        frame = [frame_of_patterns(tas[i]) for i in range(2 * dim)]
+        frame = [frame_of_patterns(tas[i] + 'frame') for i in range(2 * dim)]
         line_ = fetch_frame(video)
         for y in range(0, Y):
             pixel_ = line_[y, :]
@@ -832,6 +830,13 @@ def video_to_tblobs(video):
                 frame[typ].sorted_min_x_idx_, frame[typ].sorted_max_x_idx_, frame[typ].sorted_min_y_idx_, frame[typ].sorted_max_y_idx_, \
                 frame[typ].sorted_min_x_, frame[typ].sorted_max_x_, frame[typ].sorted_min_y_, frame[typ].sorted_max_y_ = sort_segments(frame[typ].e_)
 
+                # tsegments, tblobs operations:
+                for tsegment in _frame[typ].e_:
+                    if tsegment.roots != 1:
+                        videoo = form_tblob(tsegment, videoo, typ)
+                for i in range(len(frame[typ].e_)):
+                    frame[typ].e_[i], videoo = form_tsegment(frame[typ].e_[i], videoo, typ)
+
         if record and t == frame_output_at:  # change these in program body
             rebuild_frame('./images/mblobs_horizontal', frame[0], record_blobs, record_segs)
             rebuild_frame('./images/mblobs_vertical', frame[1], record_blobs, record_segs)
@@ -839,13 +844,6 @@ def video_to_tblobs(video):
             rebuild_frame('./images/dblobs_horizontal', frame[3], record_blobs, record_segs)
             rebuild_frame('./images/dblobs_vertical', frame[4], record_blobs, record_segs)
             rebuild_frame('./images/dblobs_temporal', frame[5], record_blobs, record_segs)
-
-        # tsegments, tblobs operations:
-        for tsegment in _frame.e_:
-            if tsegment.roots != 1:
-                videoo = form_tblob(tsegment, videoo)
-        for i in len(frame.e_):
-            frame.e_[i] = form_tsegment(frame.e_[i], videoo)
 
         _frame = frame
 
@@ -883,7 +881,6 @@ global olp_debug, debug_case
 olp_debug = bool(0)
 debug_case = 0
 output_at_case = 0
-olp_val_min = 0
 
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
