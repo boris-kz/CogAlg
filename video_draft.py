@@ -9,7 +9,7 @@ from collections import deque
 ''' Temporal blob composition over a sequence of frames in a video: 
     pixels are compared to rng adjacent pixels over lateral x, vertical y, temporal t coordinates,
     then resulting 3D tuples are combined into incremental-dimensionality patterns: 1D Ps ) 2D blobs ) 3D tblobs.     
-    tblobs will then be evaluated for intra-tblob search
+    tblobs will then be evaluated for intra-tblob search.
 '''
 
 # ************ REUSABLE CLASSES *****************************************************************************************

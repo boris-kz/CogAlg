@@ -7,23 +7,34 @@ import frame_blobs
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
     Currently mostly a draft, combined with frame_blobs it will form a 2D version of first-level algorithm
     inter_blob() will be second-level 2D algorithm, and a prototype for meta-level algorithm
+    
+    colors are defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
+    relative colors may match across reflecting objects, forming color | lighting objects?     
+    comp between color patterns within an object: segmentation?
+    
+    or inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L? alt-type blob comp:  
+    intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
+    
+    mblob definition by max_gradient = atan2(dy, dx), no direction? 
+    dblob definition by quadrant of +dy & +dx | -dy & -dx, + angle = atan2(dy, dx), 
+    or angle / xd, inclusion along long_L with dblob term if d-sign change, per anchor quadrant? 
 '''
 
 def blob_eval(typ, blob):
     (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, abs_xD, Ly), root_ = blob
 
     if typ == 0:   core = Dx; alti0 = Mx; alti1 = Dy; alti2 = My  # core: variable that defines current type of pattern,
-    elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # individual alt cores -> My / My orient, or directly?
+    elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # individual alt cores -> My / My, or computed directly?
     elif typ == 2: core = Dy; alti0 = My; alti1 = Dx; alti2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
     else:          core = My; alti0 = Dy; alti1 = Mx; alti2 = Dx  # or Alti0 += alti0, Alti1 += alti1, Alti2 += alti2 in form_seg?
 
-    typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # vs. sort by mag; type comb if rolp * mL, other params assumed equal
+    typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # other params assumed equal
 
     blob = incr_range_eval(typ, typ_rdn, blob)  # frame_blobs recursion if -M
     blob = incr_deriv_eval(typ, typ_rdn, blob)  # frame_blobs recursion if |D|
 
-    dim_rate = abs(xD) / Ly  # >|< 1, shift / seg height, more accurate than width / height?
-    if  dim_rate > flip_ave:  # or scan_Py_-> xdP, flip_eval(xdP)?  also depends on rM_xy?
+    rDim = (max_x - min_x +1) / (max_y - min_y +1)  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
+    if rDim * L > flip_ave:  # or scan_Py_-> xdP, flip_eval(xdP)? | rDim + rM_xy: ?
         blob = flip(typ, blob)  # vertical-first blob rescan, param *= angle if < 90?
 
     # evaluate blob for comp_P along Py_:
@@ -118,7 +129,7 @@ def comp_P(typ, norm, P, _P, xD):  # forms vertical derivatives of P vars, also 
     dL = L - _L; mL = min(L, _L)  # relative olp = mx / L? ext_miss: Ddx + DL?
     dI = I - _I; mI = min(I, _I)  # L and I are dims vs. ders, not rdn | select, I per quad, no norm?
 
-    if norm:  # derivatives are Dx-normalized before comp:
+    if norm:  # if xD: derivatives are xd- normalized before comp:
         hyp = math.hypot(xD, 1)  # len incr = hyp / 1 (vert distance == 1)
 
         D = (D * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
