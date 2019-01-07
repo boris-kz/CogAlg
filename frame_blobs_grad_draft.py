@@ -100,29 +100,29 @@ def segment_sort_by_height(seg):
 def lateral_comp(pixel_):
     " Comparison over x coordinate, within rng of consecutive pixels on each line "
 
-    der1_ = []  # tuples of complete 1D derivatives: summation range = rng
-    rng_der1_ = deque(maxlen=rng)  # incomplete der1s, within rng from input pixel: summation range < rng
-    rng_der1_.append((0, 0))
+    dert1_ = []  # tuples of complete 1D derivatives: summation range = rng
+    rng_dert1_ = deque(maxlen=rng)  # incomplete dert1s, within rng from input pixel: summation range < rng
+    rng_dert1_.append((0, 0))
     max_index = rng - 1  # max index of rng_der1_
 
     for x, p in enumerate(pixel_):  # pixel p is compared to rng of prior pixels within horizontal line, summing d and m per prior pixel
         back_fd = 0  # fuzzy derivatives from rng of backward comps per pri_p
-        for index, (pri_p, fd, fm) in enumerate(rng_der1_):
+        for index, (pri_p, fd, fm) in enumerate(rng_dert1_):
             d = p - pri_p
             fd += d  # bilateral fuzzy d: running sum of differences between pixel and all prior and subsequent pixels within rng
             back_fd += d  # running sum of differences between pixel and all prior pixels within rng
 
             if index < max_index:
-                rng_der1_[index] = (pri_p, fd)
+                rng_dert1_[index] = (pri_p, fd)
             elif x > rng * 2 - 1:  # after pri_p comp over full bilateral rng
-                der1_.append((pri_p, fd))  # completed bilateral tuple is transferred from rng_der_ to der_
+                dert1_.append((pri_p, fd))  # completed bilateral tuple is transferred from rng_dert_ to dert_
 
-        rng_der1_.appendleft((p, back_fd))  # new tuple with initialized d and m, maxlen displaces completed tuple
-    # last incomplete rng_der1_ in line are discarded, vs. der1_ += reversed(rng_der1_)
-    return der1_
+        rng_dert1_.appendleft((p, back_fd))  # new tuple with initialized d and m, maxlen displaces completed tuple
+    # last incomplete rng_dert1_ in line are discarded, vs. dert1_ += reversed(rng_dert1_)
+    return dert1_
     # ---------- lateral_comp() end -------------------------------------------------------------------------------------
 
-def vertical_comp(der1_, rng_der2__, _xP_, _yP_, frame):
+def vertical_comp(dert1_, rng_dert2__, _xP_, _yP_, frame):
     " Comparison to bilateral rng of vertically consecutive pixels, forming der2: pixel + lateral and vertical derivatives"
 
     # each of the following contains 2 types, per core variables m and d:
@@ -135,36 +135,33 @@ def vertical_comp(der1_, rng_der2__, _xP_, _yP_, frame):
     xbuff_ = [deque(), deque()]
     ybuff_ = [deque(), deque()]  # line y - 2 + rng*2: _Ps buffered by previous run of scan_P_
 
-    new_rng_der2__ = deque()  # 2D array: line of rng_der2_s buffered for next-line comp
-    max_index = rng - 1  # max rng_der2_ index
-    x = rng  # lateral coordinate of pixel in input der1
+    new_rng_dert2__ = deque()  # 2D array: line of rng_dert2_s buffered for next-line comp
+    max_index = rng - 1  # max rng_dert2_ index
+    x = rng  # lateral coordinate of pixel in input dert1
 
-    for (p, d), rng_der2_ in zip(der1_, rng_der2__):  # pixel comp to rng _pixels in rng_der2_, summing dy and my
+    for (p, d), rng_dert2_ in zip(dert1_, rng_dert2__):  # pixel comp to rng _pixels in rng_dert2_, summing dy and my
         index = 0
         back_dy = 0
-        for (_p, _d, fdy) in rng_der2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
+        for (_p, _d, fdy) in rng_dert2_:  # vertical derivatives are incomplete; prefix '_' denotes higher-line variable
             dy = p - _p
             fdy += dy  # running sum of differences between pixel _p and all higher and lower pixels within rng
             back_dy += dy  # running sum of differences between pixel _p and all higher pixels within rng
 
             if index < max_index:
-                rng_der2_[index] = (_p, _d, fdy)
+                rng_dert2_[index] = (_p, _d, fdy)
             elif y > min_coord:
-                if (fdy >= 0 and _d >= 0) or (fdy < 0 and _d < 0):
 
-                top_grad = int(math.atan2(fdy, _d))  # top_dP is defined by the sign of max gradient in top left quadrant
-                bot_grad = int(math.atan2(-fdy, -_d))  # bot_dP is defined by the sign of max gradient in bottom left quadrant
-                top_m = ave*rng - top_grad
-                bot_m = ave*rng - bot_grad
-                atan = int(math.atan2(fdy, _d))  # atan indicates angle of max gradient
-                der = _p, top_grad, bot_grad, top_m, bot_m, atan
+                g = int( math.hypot(abs(fdy), abs(_d)))  # gP is defined by the sign of max gradient
+                m = ave*rng - g
+                ang = int( math.pi - math.atan2(fdy, _d))  # angle of max gradient, positive if max gradient is in top semicircle
+                dert = _p, g, m, ang
 
-                xP, xP_, xbuff_, _xP_, frame = form_P( der, x, X - rng - 1, xP, xP_, xbuff_, _xP_, frame, 0 )  # lateral mP, typ = 0
-                yP, yP_, ybuff_, _yP_, frame = form_P( der, x, X - rng - 1, yP, yP_, ybuff_, _yP_, frame, 1 )  # vertical mP, typ = 1
+                xP, xP_, xbuff_, _xP_, frame = form_P( dert, x, X - rng - 1, xP, xP_, xbuff_, _xP_, frame, 0 )  # lateral mP, typ = 0
+                yP, yP_, ybuff_, _yP_, frame = form_P( dert, x, X - rng - 1, yP, yP_, ybuff_, _yP_, frame, 1 )  # vertical mP, typ = 1
             index += 1
 
-        rng_der2_.appendleft( ( p, d, back_dy ) )  # new der2 displaces completed one in vertical rng_der2_ via maxlen
-        new_rng_der2__.append(rng_der2_)  # 2D array of vertically-incomplete 2D tuples, converted to rng_der2__, for next-line vertical comp
+        rng_dert2_.appendleft( ( p, d, back_dy ) )  # new der2 displaces completed one in vertical rng_der2_ via maxlen
+        new_rng_dert2__.append(rng_dert2_)  # 2D array of vertically-incomplete 2D tuples, converted to rng_der2__, for next-line vertical comp
         x += 1
 
     typ = dim     # terminate last dP (typ = 2) within neg mPs
@@ -185,14 +182,14 @@ def vertical_comp(der1_, rng_der2__, _xP_, _yP_, frame):
         hP, frame = form_segment(_yP_[1].popleft(), frame, typ)
         frame = form_blob( hP, frame, typ )
 
-    return new_rng_der2__, xP_, yP_, frame
+    return new_rng_dert2__, xP_, yP_, frame
     # ---------- vertical_comp() end ------------------------------------------------------------------------------------
 
-def form_P(der, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
+def form_P(dert, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
     " Initializes, and accumulates 1D pattern "
     # is_dP = bool(typ // dim), or computed directly for speed and clarity:
 
-    p, d, dy, m, my = der  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
+    p, d, dy, m, my = dert  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
     if      typ == 0:   core = m;   alt0 = d;   alt1 = my;  alt2 = dy
     elif    typ == 1:   core = my;  alt0 = dy;  alt1 = m;   alt2 = d
     elif    typ == 2:   core = d;   alt0 = m;   alt1 = dy;  alt2 = my
@@ -203,7 +200,7 @@ def form_P(der, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
     if not ( s == pri_s or x == x0):  # P is terminated
         P, P_, buff_, hP_, frame = term_P(s, x, P, P_, buff_, hP_, frame, typ, is_dP)
 
-    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, der_ = P[is_dP]  # continued or initialized input and derivatives are accumulated:
+    pri_s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, dert_ = P[is_dP]  # continued or initialized input and derivatives are accumulated:
     L += 1  # length of a pattern
     I += p  # summed input
     D += d  # lateral D
@@ -214,8 +211,8 @@ def form_P(der, x, max_x, P, P_, buff_, hP_, frame, typ, is_dP = False):
     Alt1 += abs(alt1)  # alternative direction:  x | y
     Alt2 += abs(alt2)  # alternative derivative and direction
 
-    der_.append(der)  # der2s are buffered for oriented rescan and incremental range | derivation comp
-    P[is_dP] = s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, der_
+    dert_.append(dert)  # der2s are buffered for oriented rescan and incremental range | derivation comp
+    P[is_dP] = s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, dert_
 
     if x == max_x:  # P is terminated
         P, P_, buff_, hP_, frame = term_P(s, x + 1, P, P_, buff_, hP_, frame, typ, is_dP)
@@ -444,6 +441,7 @@ def image_to_blobs(image):
 rng         = 2     # number of pixels compared to each pixel in four directions
 min_coord   = rng * 2 - 1  # min x and y for form_P input: der2 from comp over rng*2 (bidirectional: before and after pixel p)
 ave         = 15    # |d| value that coincides with average match: mP filter
+aave        = 15    # ave d_angle
 dim         = 2     # Number of dimensions
 
 # Load inputs --------------------------------------------------------------------
