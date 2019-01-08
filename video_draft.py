@@ -9,7 +9,7 @@ from collections import deque
 ''' Temporal blob composition over a sequence of frames in a video: 
     pixels are compared to rng adjacent pixels over lateral x, vertical y, temporal t coordinates,
     then resulting 3D tuples are combined into incremental-dimensionality patterns: 1D Ps ) 2D blobs ) 3D tblobs.     
-    tblobs will then be evaluated for intra-tblob search.
+    tblobs will then be evaluated for recursive intra-tblob search.
 '''
 
 # ************ REUSABLE CLASSES *****************************************************************************************
@@ -34,7 +34,7 @@ class frame_of_patterns(object):
             self.Mx = 0; self.My = 0; self.Mt = 0
 
     def accum_params(self, params):
-        " add lower-composition params to higher-composition params "
+        " add lower-composition param to higher-composition param "
         self.L += params[0]
         self.I += params[1]
         self.Dx += params[2]
@@ -85,7 +85,7 @@ class pattern(object):
             return [self.min_x, self.max_x, self.min_y, self.max_y, self.min_t, self.max_t]
 
     def accum_params(self, params):
-        " update internal params by summing with given params "
+        " add lower-composition param to higher-composition param "
         self.L += params[0]
         self.I += params[1]
         self.Dx += params[2]
@@ -156,8 +156,8 @@ def rebuild_blob(dir, index, blob, frame_img, print_separate_blobs=1, print_sepa
         blob_img = np.array([[[127] * 4] * X] * Y)
     else:
         blob_img = None
-    for idxs, idx in enumerate(blob.sorted_min_x_idx_):  # Iterate through segments' sorted id
-        blob_img = rebuild_segment(dir + 'blob%d' % (index), idxs, blob.e_[idx], blob_img, frame_img, print_separate_blobs, print_separate_segs)
+    for iidx, idx in enumerate(blob.sorted_min_x_idx_):  # Iterate through segments' sorted id
+        blob_img = rebuild_segment(dir + 'blob%d' % (index), iidx, blob.e_[idx], blob_img, frame_img, print_separate_blobs, print_separate_segs)
     if print_separate_blobs:
         min_x, max_x, min_y, max_y = blob.coords()
         cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)

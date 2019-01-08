@@ -7,7 +7,8 @@ from collections import deque
 import math as math
 
 '''   
-    frame_blobs_grad() is a version that defines blobs by max gradient, as suggested by Stephen Verbeeck, thank you very much!
+    frame_blobs_grad() is a version that defines gblobs by max gradient and ablobs by its angle, instead of dblobs and dyblobs.
+    This was suggested by Stephan Verbeeck, thank you very much!
     max gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, in vertical_comp before form_P call.
     
     Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
@@ -152,9 +153,11 @@ def vertical_comp(dert1_, rng_dert2__, _xP_, _yP_, frame):
             elif y > min_coord:
 
                 g = int( math.hypot(abs(fdy), abs(_d)))  # gP is defined by the sign of max gradient
-                m = ave*rng - g
-                ang = int( math.pi - math.atan2(fdy, _d))  # angle of max gradient, positive if max gradient is in top semicircle
-                dert = _p, g, m, ang
+                m = ave*rng - g  # match is defined indirectly, as below-average gradient
+                a = int( math.pi - math.atan2(fdy, _d))  # angle of max gradient, positive if in top semicircle
+                dert = _p, g, m, a
+
+                # vs 4 combined gblob types, per pos quadrant? or angle is secondary, for ave | comp_P?
 
                 xP, xP_, xbuff_, _xP_, frame = form_P( dert, x, X - rng - 1, xP, xP_, xbuff_, _xP_, frame, 0 )  # lateral mP, typ = 0
                 yP, yP_, ybuff_, _yP_, frame = form_P( dert, x, X - rng - 1, yP, yP_, ybuff_, _yP_, frame, 1 )  # vertical mP, typ = 1

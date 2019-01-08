@@ -5,53 +5,48 @@ import frame_blobs
 
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
-    Currently mostly a draft, combined with frame_blobs it will form a 2D version of first-level algorithm
+    Currently it's mostly a draft, combined with frame_blobs it will form a 2D version of first-level algorithm
     inter_blob() will be second-level 2D algorithm, and a prototype for meta-level algorithm
     
-    colors are defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
+    colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
     
     or inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L? alt-type blob comp:  
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
-    
-    mblob definition by max_gradient = atan2(dy, dx), no direction? 
-    dblob definition by quadrant of +dy & +dx | -dy & -dx, + angle = atan2(dy, dx), 
-    or angle / xd, inclusion along long_L with dblob term if d-sign change, per anchor quadrant? 
 '''
 
 def blob_eval(typ, blob):
     (s, L, I, Dx, Dy, Mx, My, alt0, alt1, alt2), (min_x, max_x, min_y, max_y, xD, abs_xD, Ly), root_ = blob
 
     if typ == 0:   core = Dx; alti0 = Mx; alti1 = Dy; alti2 = My  # core: variable that defines current type of pattern,
-    elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # individual alt cores -> My / My, or computed directly?
-    elif typ == 2: core = Dy; alti0 = My; alti1 = Dx; alti2 = Mx  # alt derivative, alt direction, alt derivative_and_direction
-    else:          core = My; alti0 = Dy; alti1 = Mx; alti2 = Dx  # or Alti0 += alti0, Alti1 += alti1, Alti2 += alti2 in form_seg?
+    elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # alt cores: alt derivative, alt direction, alt derivative_and_direction
+    elif typ == 2: core = Dy; alti0 = My; alti1 = Dx; alti2 = Mx  # accumulated between Ps in form_seg: Alti0 += alti0, Alti1 += alti1, Alti2 += alti2?
+    else:          core = My; alti0 = Dy; alti1 = Mx; alti2 = Dx
 
     typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # other params assumed equal
 
     blob = incr_range_eval(typ, typ_rdn, blob)  # frame_blobs recursion if -M
     blob = incr_deriv_eval(typ, typ_rdn, blob)  # frame_blobs recursion if |D|
 
-    rDim = (max_x - min_x +1) / (max_y - min_y +1)  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
-    if rDim * L > flip_ave:  # or scan_Py_-> xdP, flip_eval(xdP)? | rDim + rM_xy: ?
-        blob = flip(typ, blob)  # vertical-first blob rescan, param *= angle if < 90?
+    rL_xy = (max_x - min_x +1) / (max_y - min_y +1)  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
 
-    # evaluate blob for comp_P along Py_:
-
-    if typ == (0 or 2):   # more precise than rM_xy = max(Mx, My) / min(Mx, My)
+    if typ == (0 or 2): # more precise than rM_xy = max(Mx, My) / min(Mx, My)
         rM_xy = max(core, alti2) / min(core, alti2)  # alti: individual vs. summed alt
     else:
         rM_xy = max(alti0, alti1) / min(alti0, alti1)  # |ind_alts| sum per y: same as for P_sum?
-    #   rM_xy: proj_PM / ave*L coef?
 
-    P_sum = L + I + abs(core) + (alti0 + alt0)/2 + (alti1 + alt1)/2 + (alti2 + alt2)/2  # under + over- estimate / 2, vs:
-    # vs P_sum = L + I + abs(core) + Alti0 + Alti1 + Alti2: abs sum between Ps, not needed for most blobs?
+    if (rL_xy + rM_xy) * L > flip_ave:  # blob has strongly oriented dimensions and match; or scan_Py_-> xdP, flip_eval(xdP)?
+        blob = flip(typ, blob)  # vertical-first blob rescan, param *= angle if < 90?
 
-    proj_PM = P_sum * rM_xy * typ_rdn * math.hypot(Ly, abs_xD / Ly)
-    # P_sum is a maximal match between Ps, rD_xy is lat / vert M coef, hypot is long axis: max span and value of Der
+    rMy = blob[0][6] / (ave * L)  # vertical M coef: My / ave_M
+    P_sum = L + I + abs(core) + (alti0 + alt0)/2 + (alti1 + alt1)/2 + (alti2 + alt2)/2  # under + over- estimate / 2
+    # vs. P_sum = L + I + abs(core) + Alti0 + Alti1 + Alti2: abs sum between Ps, more accurate but not needed for most blobs?
 
-    if proj_PM > ave * 6:  # 6 params to be compared between Ps: comp cost multiplier, primary comp_P | recursion eval?
+    proj_PM = P_sum * rMy * typ_rdn * math.hypot(Ly, abs_xD / Ly)  # projected match between Ps
+    #  P_sum: maximal P match, hypot= long axis: span of Der summation, to justify added syntax
+
+    if proj_PM > ave * 6:  # evaluate blob for comp_P along Py_, 6 params * comp cost, primary comp_P | recursion eval?
         scan_Py_(typ, 0, blob, xD)  # leading to comp_P, etc.
 
     return blob
