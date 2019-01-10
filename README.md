@@ -93,7 +93,7 @@ Inspiration by the brain kept ANN research going for decades before they became 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. 
 Another likely reason for the prevalence of summation in neurons is to reduce noise, because they often fire at random. That’s probably how they initially connect in the womb, and then temporarily maintain latent connections. But none of that is relevant for electronic circuits. 
 
-In general, a connectionist paradigm is only justifiable for nodes that are complex enough to carry the cost of connections. Less complex representations should be stored in contiguous memory for sequential access. Cognitive function is a search for patterns, so parameters that characterize a pattern should be stored locally, while parallelizing cross-comparison among patterns is a secondary higher-order issue. 
+In general, an algorithm should only be mapped on a network are complex enough to carry the cost of connections. Less complex representations should be stored in contiguous memory for sequential access. Cognitive function is a search for patterns, so parameters that characterize a pattern should be stored locally, while parallelizing cross-comparison among patterns is a secondary higher-order issue. 
 
 
 
