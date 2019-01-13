@@ -9,8 +9,8 @@ import math as math
 '''   
     frame_blobs_grad() defines blobs by gradient, vs. dx and dy. I did that in frame_old, trying it again due to suggestion by Stephan Verbeeck
     gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, in vertical_comp before form_P call.
-    
     Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
+    
     Blob is a contiguous area of positive or negative derivatives from cross-comparison among adjacent pixels within an image. 
     Cross-comparison forms match and difference between pixels in horizontal (m, d) and vertical (my, dy) dimensions, and these four 
     derivatives define four types of blobs. This version defines d | dy blobs only inside negative m | my blobs, 

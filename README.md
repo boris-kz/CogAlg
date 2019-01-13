@@ -112,7 +112,7 @@ But measure of similarity in CapsNet (“agreement” in dynamic routing) is an 
 Common subset of two integers is the smaller of them, = compression of represented magnitude by replacing larger input with the difference between inputs. This is a direct implication of information theory: compression must be a measure of similarity, but no one else seems to use it from the bottom up. It’s not sufficient per se, basic working measure would probably be more complex, but minimum is unavoidable as a starting point.
  
 Some other problems I have with current implementation of CapsNet:
-- CapsNet is initially fully-connected, with a network-centric bias toward uniform matrix operations, vs conditional unfolding. CogAlg search is selective over incremental dimensionality and distance.
+- CapsNet is initially fully-connected, with a network-centric bias toward uniform matrix operations, vs conditional unfolding. CogAlg search is selective over incremental dimensionality, distance, and the depth of input unfolding.
 - they use CNN for initial layers, to recognize basic features, but a truly general method should apply the same principles on all levels of processing, any differentiation should be learned rather than built-in.
 - capsules of all layers contain the same parameters: probability and pose variables, while I think the number of parameters should be incremental with elevation: each level forms derivatives of input parameters.
 - the number of layers is fixed, while I think it should be incremental with experience.

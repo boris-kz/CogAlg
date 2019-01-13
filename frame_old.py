@@ -36,6 +36,13 @@ import numpy as np
     colors are defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
+    
+    if typ == 0:   core = Dx; alti0 = Mx; alti1 = Dy; alti2 = My  # core: variable that defines current type of pattern,
+    elif typ == 1: core = Mx; alti0 = Dx; alti1 = My; alti2 = Dy  # alt cores: alt derivative, alt direction, alt derivative_and_direction
+    elif typ == 2: core = Dy; alti0 = My; alti1 = Dx; alti2 = Mx  # accumulated between Ps in form_seg: Alti0 += alti0, Alti1 += alti1, Alti2 += alti2?
+    else:          core = My; alti0 = Dy; alti1 = Mx; alti2 = Dx
+    
+    typ_rdn = abs(core) / (abs(core) + alt0 + alt1 + alt2)  # other params assumed equal 
     '''
 
 def comp(p_):  # comparison of consecutive pixels within a line forms tuples: pixel, match, difference

@@ -14,16 +14,26 @@ The buffer is accessed if coordinates of contents get relatively close to projec
 
 Kieran Greer, $375 for an attempt to implement level 1 pseudo code in C#
  
-2017: Alexander Loschilov, $2800 for help in converting my level 1 pseudo code into Python, consulting on PyCharm and SciPy, and for insistence on 2D clustering, February-April.
+2017: 
 
-Todor: $2000 for help in optimizing level_1_2D, June-July.
+Alexander Loschilov, $2800 for help in converting my level 1 pseudo code into Python, consulting on PyCharm and SciPy, and for insistence on 2D clustering, February-April.
 
-Kapil Kashyap: $ 2000 for stimulation and effort, help with Python and level_1_2D, September-October
+Todor Arnaudov: $2000 for help in optimizing level_1_2D, June-July.
+
+Kapil Kashyap: $2000 for stimulation and effort, help with Python and level_1_2D, September-October
  
-2018: Todor Anaudov, $1000 mostly for effort and stimulation, January-February
+2018: 
+
+Todor Arnaudov, $1000 mostly for effort and stimulation, January-February
 
 Andrei Demchenko, $1800 for conventional refactoring and interface improvement in line_POC_introductory.py, few improvements in the code, April - May.
 
 Todor Arnaudov, $2000 for help in debugging frame_dblobs.py, September - October.
 
 Khanh Nguyen, $2700, is a lead developer of this project starting December 2018. 
+
+2019:
+
+Stephan Verbeeck, $1000 for insistence on using gradient vs. dx and dy, as well as his perspective on colors and contour tracing, January
+
+
