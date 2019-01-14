@@ -12,63 +12,79 @@ import frame_blobs
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
 
-    or inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L? alt-type blob comp:  
+    inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?   
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
 
 
 def blob_eval(blob):
-    if not s and sG > (ave + a_cost) * L + A_cost:  # a_cost: delay per dert, A_cost: fixed per blob?
-        blob = comp_a(blob)
+    (s, L, I, sG, Dx, Dy, abs_Dx, abs_Dy), (min_x, max_x, min_y, max_y, xD, abs_xD, Ly), root_ = blob
 
-    if True: blob = incr_range_eval(blob)
-    if True: blob = incr_deriv_eval(blob)
-    if True: blob = flip(blob)              # vertical-first blob rescan, param *= angle if < 90?
+    if sG > (ave + a_cost) * L + A_cost:  # a_cost: delay per dert, A_cost: fixed per blob?
+        blob = comp_a(blob)  # angle comp, ablob def, add and accumulate a, da and sda in higher-composition reps
+
+    rC_xy = (max_x - min_x + 1) / (max_y - min_y + 1)  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
+    rD_xy = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)  # lateral variation / vertical variation
+
+    if (rC_xy + rD_xy) * L > flip_ave:  # blob has strongly oriented dimensions and match; or scan_Py_-> xdP, flip_eval(xdP)?
+        blob = flip(blob)  # vertical-first blob rescan, param *= angle if < 90?
 
     rMy = blob[0][6] / (ave * L)  # vertical M coef: My / ave_M
-    P_sum = L + I + abs(core) + (alti0 + alt0) / 2 + (alti1 + alt1) / 2 + (alti2 + alt2) / 2  # under + over- estimate / 2
-    # vs. P_sum = L + I + abs(core) + Alti0 + Alti1 + Alti2: abs sum between Pss, more accurate but not needed for most blobs?
+    P_sum = L + I + sG + Dx + Dy  # or abs_Dx, abs_Dy: sum between Ps, more accurate but not needed for most blobs?
 
-    proj_PM = P_sum * rMy * typ_rdn * math.hypot(Ly, abs_xD / Ly)  # projected match between Ps
-    #  P_sum: maximal P match, hypot= long axis: span of Der summation, to justify added syntax
+    proj_PM = P_sum * rMy * math.hypot(Ly, abs_xD / Ly)  # projected match between Ps
+    #  P_sum: maximal P match, hypot (long axis): span of Der summation, to justify added syntax
 
-    if proj_PM > ave * 6:  # evaluate blob for comp_P along Py_, 6 params * comp cost, primary comp_P | recursion eval?
-        scan_Py_(typ, 0, blob, xD)  # leading to comp_P, etc.
+    if proj_PM > ave * 5:  # evaluate blob for comp_P along Py_, 6 params * comp cost, primary comp_P | recursion eval?
+        scan_Py_(0, blob, xD)  # leading to comp_P, etc.
+
+    if sG > ave * L * 2:
+        blob = incr_range(blob)  # frame_blobs recursion over ps
+
+    if sG * -sDa > ave * L * 2:
+        blob = incr_deriv(blob)  # frame_blobs recursion over ds?
 
     return blob
+
+
 def comp_a(blob):
-    s, [min_x, max_x, min_y, xD, Ly], [L, I, G, sG, Dx, Dy], root_, remaining_roots = blob
+    s, [min_x, max_x, min_y, xD, Ly], [L, I, sG, Dx, Dy], root_, remaining_roots = blob
     A, Da, sDa = 0, 0, 0
-    for seg_idx in range(len(root_)):
-        [min_xs, max_xs, min_ys, xDs, ave_x], [Ls, Is, Gs, sGs, Dxs, Dys], Py_, fork_, roots, blob_ref = root_[seg_idx][1:] # ignore segment's s
+
+    for i, seg in enumerate(range(len(root_))):
+        [min_xs, max_xs, min_ys, xDs, ave_x], [Ls, Is, sGs, Dxs, Dys], Py_, fork_, roots, blob_ref = seg[1:]  # ignore segment's s
         # first P of seg: scan higher-line _Ps in fork_
-        P, dx = Py_[0]
+        P, xd = Py_[0]
         lateral_comp_a(P)
         _P_ = []
         for fork in fork_:
             _P_.append(fork[3][-1][0])  # get a list of _P from fork_
-        P = vertical_comp_a(P, _P_) # reconstruct P
-        Py_[0] = P, dx
-        As, Das, sDas = P[2][-3:] # P[2]: P's params
-        for P_idx in range(len(Py_[1:])):
-            _P = Py_[P_idx-1][0]
-            P, dx = Py_[P_idx]
+
+        P = vertical_comp_a(P, _P_)  # reconstruct P
+        Py_[0] = P, xd
+        As, Das, sDas = P[2][-3:]  # P[2]: P's params
+        for ii, P in enumerate(range(len(Py_[1:]))):
+            _P = Py_[ii - 1][0]
+            P, xd = P
             lateral_comp_a(P)
             P = vertical_comp_a(P, _P)
-            Py_[P_idx] = P, dx
+            Py_[ii] = P, xd
             As += P[2][-3]
             Das += P[2][-2]
             sDas += P[2][-1]
-        root_[seg_idx] = s, (min_xs, max_xs, min_ys, xDs), (Ls, Is, Gs, sGs, Dxs, Dys, As, Das, sDas), tuple(Py_), fork_, roots
+        root_[i] = s, (min_xs, max_xs, min_ys, xDs), (Ls, Is, sGs, Dxs, Dys, As, Das, sDas), tuple(Py_), fork_, roots
         A += As
         Da += Das
         sDa += sDas
-    return s, (min_x, max_x, min_y, xD, Ly), (L, I, G, sG, Dx, Dy, A, Da, sDa), tuple(root_)
+
+    return s, (min_x, max_x, min_y, xD, Ly), (L, I, sG, Dx, Dy, A, Da, sDa), tuple(root_)
+
+
 def lateral_comp_a(P):
     dert_ = P[3]
     dx, dy = dert_[0][-2:]  # first dert
     _a = int((math.atan2(dy, dx)) * degree) + 128  # angle from 0 -> 255
-    da = aave
+    da = ave
     dert_[0] += _a, da
     for i, dert in enumerate(dert_[1:]):
         dx, dy = dert[-2:]
@@ -78,9 +94,12 @@ def lateral_comp_a(P):
         # aP = form_P(dert, _dert)  # i/o must be extended
         _a = a
     P[3] = dert_
+
+
 def vertical_comp_a(P, *_P_):
-    s, [min_x, max_x], [L, G, sG, Dx, Dy], dert_ = P
-    x = min_x; i = 0
+    s, [min_x, max_x], [L, sG, Dx, Dy], dert_ = P
+    x = min_x;
+    i = 0
     for _P in _P_:
         [_min_x, _max_x], _dert_ = _P[1], _P[3]
         if x < _min_x:
@@ -91,32 +110,42 @@ def vertical_comp_a(P, *_P_):
             _i = x - min_x
         while _dert_[_i] and dert_[i]:
             _a = dert_[i][-2]
-            p, g, sg, dx, dy, a, da = dert_[i]
+            p, sg, dx, dy, a, da = dert_[i]
             da += abs(a - _a)
-            sda = 2 * aave - da
-            dert_[i] = p, g, sg, dx, dy, a, da, sda
-            x += 1; i += 1; _i += 1
+            sda = 2 * ave - da
+            dert_[i] = p, sg, dx, dy, a, da, sda
+            x += 1;
+            i += 1;
+            _i += 1
+
     A, Da, sDa = 0, 0, 0
     for i, dert in enumerate(dert_):
-        p, g, sg, dx, dy, a, da = dert
-        if dert[7]:
-            sda = dert[7]
+        p, sg, dx, dy, a, da = dert
+        if dert[6]:
+            sda = dert[6]
         else:
-            sda = aave - da # da += aave; sda = 2 * ave - da <=> sda = aave - da ?
-        dert_[i] = (p, g, sg, dx, dy, a, da, sda)
+            sda = ave - da  # da += ave; sda = 2 * ave - da <=> sda = ave - da ?
+        dert_[i] = (p, sg, dx, dy, a, da, sda)
         A += a
         Da += da
         sDa += sda
-    return s, (min_x, max_x), (L, G, sG, Dx, Dy, A, Da, SDa), tuple(dert_)
+
+    return s, (min_x, max_x), (L, sG, Dx, Dy, A, Da, sDa), tuple(dert_)
+
+
+def incr_range(blob):  # frame_blobs recursion if sG
+    return blob
+
+
+def incr_deriv(blob):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
+    return blob
+
+
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
-def incr_range_eval(blob):  # frame_blobs recursion if M
-    return blob
 
-def incr_deriv_eval(blob):  # frame_blobs recursion if -M
-    return blob
 
-def scan_Py_(typ, norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+def scan_Py_(norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
 
     vPP = 0, [], []  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
     dPP = 0, [], []  # PP: L2, I2, D2, Dy2, M2, My2, G2, Olp2
@@ -130,12 +159,12 @@ def scan_Py_(typ, norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs 
     while Py_:  # comp_P starts from 2nd P, top-down
 
         P = Py_.popleft()
-        _P, _vs, _ds = comp_P(typ, norm, P, _P, xD)  # per blob, before orient
+        _P, _vs, _ds = comp_P(norm, P, _P, xD)  # per blob, before orient
 
         while Py_:  # form_PP starts from 3rd P
 
             P = Py_.popleft()
-            P, vs, ds = comp_P(typ, norm, P, _P, xD)  # P: S_vars += S_ders in comp_P
+            P, vs, ds = comp_P(norm, P, _P, xD)  # P: S_vars += S_ders in comp_P
 
             if vs == _vs:
                 vPP = form_PP(1, P, vPP)
@@ -169,7 +198,7 @@ def scan_Py_(typ, norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs 
     return blob, SvPP, vPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 
-def comp_P(typ, norm, P, _P, xD):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
+def comp_P(norm, P, _P, xD):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
     (s, x0, L, I, D, Dy, M, My, Alt0, Alt1, Alt2, ders_), xd = P
     (_s, _x0, _L, _I, _D, _Dy, _M, _My, _Alt0, _Alt1, _Alt2, _ders_), _xd = P
@@ -484,20 +513,15 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
 
 
 def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
-    [neg_mL, neg_myL, I, D, Dy, M, My], [xD, Ly, blob_], [xDy, Lyy, yblob_] = frame
+    [neg_mL, neg_myL, I, D, Dy, M, My], [xD, Ly, blob_] = frame
 
     _blob_ = []
     for blob in blob_:
-        _blob_.append(blob_eval(0, blob))
+        if blob[0]:  # positive g sign
+            _blob_.append(blob_eval(blob))
     frame[1][2] = _blob_
 
-    _yblob_ = []
-    for yblob in yblob_:
-        _yblob_.append(blob_eval(1, yblob))
-    frame[2][2] = _yblob_
-
     return frame  # frame of 2D patterns, to be outputted to level 2
-    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
@@ -507,13 +531,13 @@ def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, inc
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
 
-ave = 15                # |d| value that coincides with average match: mP filter
-div_ave = 1023          # filter for div_comp(L) -> rL, summed vars scaling
-flip_ave = 10000        # cost of form_P and deeper?
-ave_rate = 0.25         # match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
-dim = 2                 # number of dimensions
-rng = 2                 # number of pixels compared to each pixel in four directions
-min_coord = rng * 2 - 1 # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
+ave = 15  # g value that coincides with average match: gP filter
+div_ave = 1023  # filter for div_comp(L) -> rL, summed vars scaling
+flip_ave = 10000  # cost of form_P and deeper?
+ave_rate = 0.25  # match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
+dim = 2  # number of dimensions
+rng = 2  # number of pixels compared to each pixel in four directions
+min_coord = rng * 2 - 1  # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
 degree = 128 / math.pi  # coef to convert radian to 256 degrees
 
 # Main ---------------------------------------------------------------------------
