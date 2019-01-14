@@ -38,7 +38,7 @@ def blob_eval(blob):
     return blob
 def comp_a(blob):
     s, [min_x, max_x, min_y, xD, Ly], [L, I, G, sG, Dx, Dy], root_, remaining_roots = blob
-    A, DA, sDA = 0, 0, 0
+    A, Da, sDa = 0, 0, 0
     for seg_idx in range(len(root_)):
         [min_xs, max_xs, min_ys, xDs, ave_x], [Ls, Is, Gs, sGs, Dxs, Dys], Py_, fork_, roots, blob_ref = root_[seg_idx][1:] # ignore segment's s
         # first P of seg: scan higher-line _Ps in fork_
@@ -49,7 +49,7 @@ def comp_a(blob):
             _P_.append(fork[3][-1][0])  # get a list of _P from fork_
         P = vertical_comp_a(P, _P_) # reconstruct P
         Py_[0] = P, dx
-        As, DAs, sDAs = P[2][-3:] # P[2]: P's params
+        As, Das, sDas = P[2][-3:] # P[2]: P's params
         for P_idx in range(len(Py_[1:])):
             _P = Py_[P_idx-1][0]
             P, dx = Py_[P_idx]
@@ -57,13 +57,13 @@ def comp_a(blob):
             P = vertical_comp_a(P, _P)
             Py_[P_idx] = P, dx
             As += P[2][-3]
-            DAs += P[2][-2]
-            sDAs += P[2][-1]
-        root_[seg_idx] = s, (min_xs, max_xs, min_ys, xDs), (Ls, Is, Gs, sGs, Dxs, Dys, As, DAs, sDAs), tuple(Py_), fork_, roots
+            Das += P[2][-2]
+            sDas += P[2][-1]
+        root_[seg_idx] = s, (min_xs, max_xs, min_ys, xDs), (Ls, Is, Gs, sGs, Dxs, Dys, As, Das, sDas), tuple(Py_), fork_, roots
         A += As
-        DA += DAs
-        sDA += sDAs
-    return s, (min_x, max_x, min_y, xD, Ly), (L, I, G, sG, Dx, Dy, A, DA, sDA), tuple(root_)
+        Da += Das
+        sDa += sDas
+    return s, (min_x, max_x, min_y, xD, Ly), (L, I, G, sG, Dx, Dy, A, Da, sDa), tuple(root_)
 def lateral_comp_a(P):
     dert_ = P[3]
     dx, dy = dert_[0][-2:]  # first dert
@@ -96,7 +96,7 @@ def vertical_comp_a(P, *_P_):
             sda = 2 * aave - da
             dert_[i] = p, g, sg, dx, dy, a, da, sda
             x += 1; i += 1; _i += 1
-    A, DA, sDA = 0, 0, 0
+    A, Da, sDa = 0, 0, 0
     for i, dert in enumerate(dert_):
         p, g, sg, dx, dy, a, da = dert
         if dert[7]:
@@ -105,16 +105,15 @@ def vertical_comp_a(P, *_P_):
             sda = aave - da # da += aave; sda = 2 * ave - da <=> sda = aave - da ?
         dert_[i] = (p, g, sg, dx, dy, a, da, sda)
         A += a
-        DA += da
-        sDA += sda
-    return s, (min_x, max_x), (L, G, sG, Dx, Dy, A, DA, SDA), tuple(dert_)
+        Da += da
+        sDa += sda
+    return s, (min_x, max_x), (L, G, sG, Dx, Dy, A, Da, SDa), tuple(dert_)
+def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
+    return blob
 def incr_range_eval(blob):  # frame_blobs recursion if M
     return blob
 
 def incr_deriv_eval(blob):  # frame_blobs recursion if -M
-    return blob
-
-def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
 
 def scan_Py_(typ, norm, blob, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
