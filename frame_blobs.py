@@ -7,19 +7,21 @@ from CAmisc import outblobs
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. 
-    Gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, from cross-comparison among adjacent pixels within an image.
+    Gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, from cross-comparison among adjacent pixels.
     Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
     
     frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
     
-    1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives der ) array der_
-    2Le, line y- 1: y_comp(dert1_): vertical pixel comp -> 2D tuple der2 ) array der2_ 
-    3Le, line y- 1+ rng*2: form_P(dert2) -> 1D pattern P
-    4Le, line y- 2+ rng*2: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps 
-    5Le, line y- 3+ rng*2: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
-    6Le, line y- 4+ rng*2+ seg depth: form_blob(seg, blob): merge connected segments in fork_' incomplete blobs, recursively  
+    1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives dert1 ) array dert1_
+    2Le, line y- 1: y_comp(dert1_): vertical pixel comp -> 2D tuple dert2 ) array dert2_ 
+    3Le, line y- 1+ rng: form_P(dert2) -> 1D pattern P
+    4Le, line y- 2+ rng: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps 
+    5Le, line y- 3+ rng: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
+    6Le, line y- 4+ rng+ seg depth: form_blob(seg, blob): merge connected segments in fork_' incomplete blobs, recursively  
     
+    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
+    postfix '_' denotes array name, vs. same-name elements of that array:
     if y = rng * 2: line y == P_, line y-1 == hP_, line y-2 == seg_, line y-4 == blob_
     
     Initial pixel comparison is not novel, I design from the scratch to make it organic part of hierarchical algorithm.
@@ -29,12 +31,9 @@ from CAmisc import outblobs
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, 
     convert elements of lower line into elements of new higher line, then displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
-
-    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
-    postfix '_' denotes array name, vs. same-name elements of that array:
 '''
+
 # ************ MAIN FUNCTIONS *******************************************************************************************
-# Includes:
 # -lateral_comp()
 # -vertical_comp()
 # -form_P()
@@ -226,6 +225,7 @@ def form_segment(hP, frame):
         blob[1][1] = max(max_x, blob[1][1])
     return hP
     # ---------- form_segment() end -----------------------------------------------------------------------------------------
+
 def form_blob(term_seg, frame, y_carry=0):
     " Terminated segment is merged into continued or initialized blob (all connected segments) "
 
@@ -253,6 +253,7 @@ def form_blob(term_seg, frame, y_carry=0):
         frame[5] += Ly
         frame[6].append(blob)
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
+
 def image_to_blobs(image):
     " Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
 
@@ -289,24 +290,25 @@ def image_to_blobs(image):
 
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
+
 rng = 1  # number of pixels compared to each pixel in four directions
 max_index = rng - 1  # max index of rng_dert1_ and rng_dert2_
 min_coord = rng * 2 - 1  # min x and y for form_P input: der2 from comp over rng
-ave = 15  # |d| value that coincides with average match: mP filter
+ave = 15  # P-defining filter: value of gradient that coincides with average higher-level match
 
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
 arguments = vars(argument_parser.parse_args())
 image = cv2.imread(arguments['image'], 0).astype(int)
-
 Y, X = image.shape  # image height and width
+
 # Main ---------------------------------------------------------------------------
 start_time = time()
 frame_of_blobs = image_to_blobs(image)
-
 end_time = time() - start_time
 print(end_time)
+
 # Rebuild blob -------------------------------------------------------------------
 outblobs('./images/output.jpg', frame_of_blobs[7], (Y, X))
 # ************ PROGRAM BODY END ******************************************************************************************
