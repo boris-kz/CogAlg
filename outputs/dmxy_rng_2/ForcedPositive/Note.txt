@@ -1,1 +1,0 @@
-d, m, dy, my of corresponding pixel is edited to: /2 then + 255 to force them to be positive.
