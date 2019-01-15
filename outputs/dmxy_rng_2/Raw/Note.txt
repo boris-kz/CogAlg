@@ -1,1 +1,0 @@
-magnitudes of d, m , dy, my is literally brightness of pixels, from 0 to 255, with negative magnitude = 0 brightness (pure black)
