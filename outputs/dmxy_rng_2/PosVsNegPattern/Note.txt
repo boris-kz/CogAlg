@@ -1,2 +1,0 @@
-Positive pattern: white
-Negative pattern: black
