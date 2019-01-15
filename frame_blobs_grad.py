@@ -3,7 +3,7 @@ import argparse
 from time import time
 from collections import deque
 import math as math
-from CAmisc import outblobs
+from CAmiscs import outBlobs
 '''   
     frame_blobs_grad() defines blobs by gradient, vs. dx and dy. I did that in frame_old, trying it again due to suggestion by Stephan Verbeeck
     gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, in vertical_comp before form_P call.
@@ -93,7 +93,7 @@ def vertical_comp(dert1_, rng_dert2__, _P_, frame):
                 rng_dert2_[index] = (_p, _d, _dy)
             elif y > min_coord:
                 g = int(math.hypot(_dy, _d))    # no explicit angle, quadrant is indicated by signs of d and dy
-                sg = ave * rng * 2 - g           # match is defined as below-average gradient
+                sg = g - ave * rng * 2          # match is defined as below-average gradient
                 dert = _p, g, sg, _d, _dy
                 P = form_P(dert, x, X - rng - 1, P, P_, buff_, _P_, frame)
 
@@ -316,5 +316,5 @@ frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
 # Rebuild blob -------------------------------------------------------------------
-outblobs('./images/output.jpg', frame_of_blobs[7], (Y, X))
+outBlobs('./images/output.jpg', frame_of_blobs[7], (Y, X))
 # ************ PROGRAM BODY END ******************************************************************************************
