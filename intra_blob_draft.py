@@ -11,7 +11,7 @@ import frame_blobs
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
-    
+
     inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?   
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
@@ -24,7 +24,6 @@ def blob_eval(blob):
 
             blob = comp_angle(blob)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
             sDa = blob[2][7]
-
             if G * -sDa > ave * L * 2:  # only after comp_a, -sDa indicates likely d match
                 blob = incr_deriv(blob)  # recursion over ds: dderived?
 
