@@ -11,7 +11,6 @@ import frame_blobs
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
-    
     inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?   
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
@@ -24,6 +23,7 @@ def blob_eval(blob):
 
     rC_xy = (max_x - min_x +1) / (max_y - min_y +1)  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
     rD_xy = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)  # lateral variation / vertical variation
+
 
     if (rC_xy + rD_xy) * L > flip_ave:  # blob has strongly oriented dimensions and match; or scan_Py_-> xdP, flip_eval(xdP)?
         blob = flip(blob)  # vertical-first blob rescan, param *= angle if < 90?
@@ -132,6 +132,7 @@ def incr_range(blob):  # frame_blobs recursion if sG
 
 def incr_deriv(blob):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
     return blob
+
 
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
