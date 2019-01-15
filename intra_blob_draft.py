@@ -11,46 +11,53 @@ import frame_blobs
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
+
     inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?   
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
 
 def blob_eval(blob):
-    (s, L, I, sG, Dx, Dy, abs_Dx, abs_Dy), (min_x, max_x, min_y, max_y, xD, abs_xD, Ly), root_ = blob
+    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
 
-    if sG > (ave + a_cost) * L + A_cost:  # a_cost: delay per dert, A_cost: fixed per blob?
-        blob = comp_a(blob)  # angle comp, ablob def, add and accumulate a, da and sda in higher-composition reps
+    if L > A_cost:  # fixed per blob: ini params + ini params * (added params / ini params), converted to min L?
+        if G > (ave + a_cost) * L:  # comp_a delay - comp delay per dert,
 
-    rC_xy = (max_x - min_x +1) / (max_y - min_y +1)  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
-    rD_xy = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)  # lateral variation / vertical variation
+            blob = comp_angle(blob)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
+            sDa = blob[2][7]
+            if G * -sDa > ave * L * 2:  # only after comp_a, -sDa indicates likely d match
+                blob = incr_deriv(blob)  # recursion over ds: dderived?
 
+    if abs_Dx - abs_Dy > flip_ave:  # blob Ds are horizontally oriented, projecting flipped PM > ave * 5?
+        blob = flip(blob)  # vertical rescan -> Pys for comp_P
+        # vs. scan_Py_ -> xdP, flip_eval(xdP)?  if < 90: param *= angle? or immediate comp_P if flip?
 
-    if (rC_xy + rD_xy) * L > flip_ave:  # blob has strongly oriented dimensions and match; or scan_Py_-> xdP, flip_eval(xdP)?
-        blob = flip(blob)  # vertical-first blob rescan, param *= angle if < 90?
-
-    rMy = blob[0][6] / (ave * L)  # vertical M coef: My / ave_M
-    P_sum = L + I + sG + Dx + Dy  # or abs_Dx, abs_Dy: sum between Ps, more accurate but not needed for most blobs?
+    rMy = (ave * L) / (blob[0][5] * 1.4)  # vertical M coef: inverted Dy / ave_D
+    P_sum = L + I + G + Dx + Dy  # or abs_Dx, abs_Dy: sum between Ps, more accurate but not needed for most blobs?
 
     proj_PM = P_sum * rMy * math.hypot(Ly, abs_xD / Ly)  # projected match between Ps
-    #  P_sum: maximal P match, hypot (long axis): span of Der summation, to justify added syntax
+    #  P_sum: max P match, hypot (long axis): span of Der summation, to justify added syntax
 
-    if proj_PM > ave * 5:  # evaluate blob for comp_P along Py_, 6 params * comp cost, primary comp_P | recursion eval?
+    if proj_PM > ave * 5:  # evaluate blob for comp_P along Py_, 5 params * comp cost, primary comp_P | recursion eval?
         scan_Py_(0, blob, xD)  # leading to comp_P, etc.
 
-    if sG > ave * L * 2:
-        blob = incr_range(blob)  # frame_blobs recursion over ps
+    if G > ave * L * 2:   # sG is absolute variation, indicating likely d reversal and match among distant pixels
+        blob = incr_range(blob)  # recursion over +distant ps, including diagonal?
 
-    if sG * -sDa > ave * L * 2:
-        blob = incr_deriv(blob)  # frame_blobs recursion over ds?
-
+    '''
+    dCx = max_x - min_x + 1;  dCy = max_y - min_y + 1
+    rC = dCx / dCy  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
+    rD = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)  # lateral variation / vertical variation, for flip and comp_P eval
+    '''
     return blob
 
-def comp_a(blob):
-    s, [min_x, max_x, min_y, xD, Ly], [L, I, sG, Dx, Dy], root_, remaining_roots = blob
+def comp_angle(blob):
+    # compute and compare angle, define ablobs, accumulate a, da, sda in higher-composition reps within input blob
+
+    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
     A, Da, sDa = 0, 0, 0
 
     for i, seg in enumerate(range(len(root_))):
-        [min_xs, max_xs, min_ys, xDs, ave_x], [Ls, Is, sGs, Dxs, Dys], Py_, fork_, roots, blob_ref = seg[1:]  # ignore segment's s
+        [min_xs, max_xs, min_ys, xDs, ave_x], [Ls, Is, Gs, Dxs, Dys], Py_, fork_, roots, blob_ref = seg[1:]  # ignore s
         # first P of seg: scan higher-line _Ps in fork_
         P, xd = Py_[0]
         lateral_comp_a(P)
@@ -70,12 +77,12 @@ def comp_a(blob):
             As += P[2][-3]
             Das += P[2][-2]
             sDas += P[2][-1]
-        root_[i] = s, (min_xs, max_xs, min_ys, xDs), (Ls, Is, sGs, Dxs, Dys, As, Das, sDas), tuple(Py_), fork_, roots
+        root_[i] = s, (min_xs, max_xs, min_ys, xDs), (Ls, Is, Gs, Dxs, Dys, As, Das, sDas), tuple(Py_), fork_, roots
         A += As
         Da += Das
         sDa += sDas
 
-    return s, (min_x, max_x, min_y, xD, Ly), (L, I, sG, Dx, Dy, A, Da, sDa), tuple(root_)
+    return s, (min_x, max_x, min_y, xD, Ly), (L, I, G, Dx, Dy, A, Da, sDa), tuple(root_)
 
 def lateral_comp_a(P):
 
@@ -94,7 +101,7 @@ def lateral_comp_a(P):
     P[3] = dert_
 
 def vertical_comp_a(P, *_P_):
-    s, [min_x, max_x], [L, sG, Dx, Dy], dert_ = P
+    s, [min_x, max_x], [L, I, G, Dx, Dy], dert_ = P
     x = min_x; i = 0
     for _P in _P_:
         [_min_x, _max_x], _dert_ = _P[1], _P[3]
@@ -106,25 +113,25 @@ def vertical_comp_a(P, *_P_):
             _i = x - min_x
         while _dert_[_i] and dert_[i]:
             _a = dert_[i][-2]
-            p, sg, dx, dy, a, da = dert_[i]
+            p, g, dx, dy, a, da = dert_[i]
             da += abs(a - _a)
             sda = 2 * ave - da
-            dert_[i] = p, sg, dx, dy, a, da, sda
+            dert_[i] = p, g, dx, dy, a, da, sda
             x += 1; i += 1; _i += 1
 
     A, Da, sDa = 0, 0, 0
     for i, dert in enumerate(dert_):
-        p, sg, dx, dy, a, da = dert
+        p, g, dx, dy, a, da = dert
         if dert[6]:
             sda = dert[6]
         else:
             sda = ave - da  # da += ave; sda = 2 * ave - da <=> sda = ave - da ?
-        dert_[i] = (p, sg, dx, dy, a, da, sda)
+        dert_[i] = (p, g, dx, dy, a, da, sda)
         A += a
         Da += da
         sDa += sda
 
-    return s, (min_x, max_x), (L, sG, Dx, Dy, A, Da, sDa), tuple(dert_)
+    return s, (min_x, max_x), (L, I, G, Dx, Dy, A, Da, sDa), tuple(dert_)
 
 
 def incr_range(blob):  # frame_blobs recursion if sG
@@ -132,7 +139,6 @@ def incr_range(blob):  # frame_blobs recursion if sG
 
 def incr_deriv(blob):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
     return blob
-
 
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
@@ -466,6 +472,8 @@ dim = 2                 # number of dimensions
 rng = 2                 # number of pixels compared to each pixel in four directions
 min_coord = rng * 2 - 1 # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
 degree = 128 / math.pi  # coef to convert radian to 256 degrees
+A_cost = 1000
+a_cost = 15
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
