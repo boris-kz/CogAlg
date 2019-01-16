@@ -53,7 +53,7 @@ def pixel_comp(pixel_, _pixel_, _P_, frame):
         P = form_P(dert, x, X - 1, P, P_, buff_, _P_, frame)
         _p = p; x += 1
     return P_
-    # ---------- lateral_comp() end -------------------------------------------------------------------------------------
+    # ---------- pixel_comp() end ---------------------------------------------------------------------------------------
 def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     " Initializes, and accumulates 1D pattern "
     p, g, dx, dy = dert  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
@@ -117,8 +117,8 @@ def form_segment(hP, frame):
     ave_x = (params[0] - 1) // 2  # extra-x L = L-1 (1x in L)
 
     if not fork_:  # seg is initialized with initialized blob (params, coordinates, remaining_roots, root_, xD)
-        blob = [s, [min_x, max_x, y - 1, -1, 0, 0], [0, 0, 0, 0, 0], [], 1]  # s, coords, params, root_, remaining_roots
-        hP = [s, [min_x, max_x, y - 1, -1, 0, ave_x], params, [(_P, 0)], 0, fork_, blob]
+        blob = [s, [min_x, max_x, y - 1, -1, 0, 0, 0], [0, 0, 0, 0, 0], [], 1]  # s, coords, params, root_, remaining_roots
+        hP = [s, [min_x, max_x, y - 1, -1, 0, 0, ave_x], params, [(_P, 0)], 0, fork_, blob]
         blob[3].append(hP)
     else:
         if len(fork_) == 1 and fork_[0][4] == 1:  # hP has one fork: hP[2][0], and that fork has one root: hP
@@ -128,7 +128,8 @@ def form_segment(hP, frame):
             fork[1][1] = max(fork[1][1], max_x)
             xd = ave_x - fork[1][5]
             fork[1][4] += xd
-            fork[1][5] = ave_x
+            fork[1][5] += abs(xd)
+            fork[1][6] = ave_x
             L, I, G, Dx, Dy = params
             Ls, Is, Gs, Dxs, Dys = fork[2]  # seg params
             fork[2] = [Ls + L, Is + I, Gs + G, Dxs + Dx, Dys + Dy]
@@ -138,7 +139,7 @@ def form_segment(hP, frame):
             blob = hP[6]
 
         else:  # if >1 forks, or 1 fork that has >1 roots:
-            hP = [s, [min_x, max_x, y - 1, -1, 0, ave_x], params, [(_P, 0)], 0, fork_, fork_[0][6]]  # seg is initialized with fork's blob
+            hP = [s, [min_x, max_x, y - 1, -1, 0, 0, ave_x], params, [(_P, 0)], 0, fork_, fork_[0][6]]  # seg is initialized with fork's blob
             blob = hP[6]
             blob[3].append(hP)  # segment is buffered into root_
 
@@ -151,12 +152,13 @@ def form_segment(hP, frame):
                         form_blob(fork, frame, 1)
 
                     if not fork[6] is blob:
-                        [min_x, max_x, min_y, max_y, xD, Ly], [L, I, G, Dx, Dy], root_, remaining_roots = fork[6][1:]  # ommit sign
+                        [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, remaining_roots = fork[6][1:]  # ommit sign
                         blob[1][0] = min(min_x, blob[1][0])
                         blob[1][1] = max(max_x, blob[1][1])
                         blob[1][2] = min(min_y, blob[1][2])
                         blob[1][4] += xD
-                        blob[1][5] += Ly
+                        blob[1][5] += abs_xD
+                        blob[1][6] += Ly
                         blob[2][0] += L
                         blob[2][1] += I
                         blob[2][2] += G
@@ -177,7 +179,7 @@ def form_segment(hP, frame):
     # ---------- form_segment() end -----------------------------------------------------------------------------------------
 def form_blob(term_seg, frame, y_carry=0):
     " Terminated segment is merged into continued or initialized blob (all connected segments) "
-    [min_x, max_x, min_y, max_y, xD, ave_x], [L, I, G, Dx, Dy], Py_, roots, fork_, blob = term_seg[1:]  # ignore sign
+    [min_x, max_x, min_y, max_y, xD, abs_xD, ave_x], [L, I, G, Dx, Dy], Py_, roots, fork_, blob = term_seg[1:]  # ignore sign
     blob[1][4] += xD  # ave_x angle, to evaluate blob for re-orientation
     blob[1][5] += len(Py_)  # Ly = number of slices in segment
     blob[2][0] += L
@@ -189,21 +191,23 @@ def form_blob(term_seg, frame, y_carry=0):
     term_seg[1][3] = y - 1 - y_carry  # y_carry: min elevation of term_seg over current hP
 
     if not blob[4]:  # if remaining_roots == 0: blob is terminated and packed in frame
-        blob[1][3] = max_y
-        [min_x, max_x, min_y, max_y, xD, Ly], [L, I, G, Dx, Dy], root_, remaining_roots = blob[1:]  # ignore sign
+        blob[1][3] = term_seg[1][3]
+        [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, remaining_roots = blob[1:]  # ignore sign
         # frame P are to compute averages, redundant for same-scope alt_frames
         frame[0] += I
         frame[1] += G
         frame[2] += Dx
         frame[3] += Dy
         frame[4] += xD  # ave_x angle, to evaluate frame for re-orientation
-        frame[5] += Ly
-        frame[6].append(blob)
+        frame[5] += abs_xD
+        frame[6] += Ly
+        blob[3] = sorted(root_, key=lambda segment: segment[1][2])    # sorted by min_y
+        frame[7].append(blob)
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 def image_to_blobs(image):
     " Main body of the operation, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
     _P_ = deque()  # higher-line same-m-sign 1D patterns
-    frame = [0, 0, 0, 0, 0, 0, []]
+    frame = [0, 0, 0, 0, 0, 0, 0, []]
     global y
     y = 0
     _pixel_ = image[0, :]  # first line of pixels
@@ -239,5 +243,5 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-draw_blobs('./images/output.jpg', frame_of_blobs[6], (Y, X))
+draw_blobs('./debug', frame_of_blobs[7], (Y, X), debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************
