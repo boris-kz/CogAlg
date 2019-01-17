@@ -15,7 +15,7 @@ def draw_blobs(path, blob_, size, debug=0):
             if debug: seg_img = np.array([[[127] * 4] * X] * Y)
             y = seg[1][2]   # y0
             for (P, dx) in seg[3]:
-                x = P[1][0] # x0
+                x = P[1][0]
                 for i in range(P[2][0]):
                     frame_img[y, x, :3] = [255, 255, 255] if P[0] else [0, 0, 0]
                     if debug:

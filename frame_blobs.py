@@ -62,7 +62,7 @@ def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     if s != pri_s and pri_s != -1:  # P is terminated:
         P[1][1] = x - 1  # P's max_x
         scan_P_(P, P_, buff_, hP_, frame)  # P scans hP_
-        P = s, [x, -1], [0, 0, 0, 0, 0], []  # new P initialization
+        P = [s, [x, -1], [0, 0, 0, 0, 0], []]  # new P initialization
     [min_x, max_x], [L, I, G, Dx, Dy], dert_ = P[1:]  # continued or initialized input and derivatives are accumulated:
     L += 1  # length of a pattern
     I += p  # summed input
@@ -70,12 +70,11 @@ def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     Dx += dx  # lateral D
     Dy += dy  # vertical D
     dert_.append(dert)  # der2s are buffered for oriented rescan and incremental range | derivation comp
-    P = s, [min_x, max_x], [L, I, G, Dx, Dy], dert_
+    P = [s, [min_x, max_x], [L, I, G, Dx, Dy], dert_]
 
     if x == x_stop:  # P is terminated:
         P[1][1] = x  # P's max_x
         scan_P_(P, P_, buff_, hP_, frame)  # P scans hP_
-        P = -1, [1, -1], [0, 0, 0, 0, 0], []  # new-line P initialization
 
     return P  # accumulated within line, P_ is a buffer for conversion to _P_
     # ---------- form_P() end -------------------------------------------------------------------------------------------
