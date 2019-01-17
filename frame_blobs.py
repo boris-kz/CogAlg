@@ -200,7 +200,7 @@ def form_blob(term_seg, frame, y_carry=0):
         frame[4] += xD  # ave_x angle, to evaluate frame for re-orientation
         frame[5] += abs_xD
         frame[6] += Ly
-        blob[3] = sorted(root_, key=lambda segment: segment[1][2])    # sorted by min_y
+        blob[3] = sorted(root_, key=lambda segment: segment[1][3])    # sorted by max_y
         frame[7].append(blob)
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 def image_to_blobs(image):
