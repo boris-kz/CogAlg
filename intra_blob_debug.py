@@ -22,86 +22,79 @@ import frame_blobs
 
 
 def blob_eval(blob):
-    blob = comp_angle_draft(blob)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
+    blob = comp_angle(blob)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
     return blob
-def comp_angle_draft(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
-    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_ = blob[:-1]
-    A, Da, sDa = 0, 0, 0
-    for i, seg in enumerate(root_):
-        [min_xs, max_xs, min_ys, max_ys, xDs, abs_xDs, ave_x], [Ls, Is, Gs, Dxs, Dys], Py_, roots, fork_, blob_ref = seg[1:]  # ignore s
-        # first P of seg: scan higher-line _Ps in fork_
-        P, xd = Py_[0]
-        lateral_comp_a(P)
-        _P_ = []
-        for fork in fork_:
-            _P_.append(fork[3][-1][0])  # get a list of _P from fork_
-
-        P = vertical_comp_a(P, _P_)  # reconstruct P
-        Py_[0] = P, xd
-        As, Das, sDas = P[2][-3:]  # P[2]: P's params
-        for ii in range(1, len(Py_)):
-            _P = Py_[ii - 1][0]
-            P = Py_[ii][0]
-            lateral_comp_a(P)
-            P = vertical_comp_a(P, [_P])
-            Py_[ii] = P, xd
-            As += P[2][-3]
-            Das += P[2][-2]
-            sDas += P[2][-1]
-        root_[i] = s, (min_xs, max_xs, min_ys, xDs, abs_xDs), (Ls, Is, Gs, Dxs, Dys, As, Das, sDas), tuple(Py_), roots, tuple(fork_)
-        A += As
-        Da += Das
-        sDa += sDas
-    return s, (min_x, max_x, min_y, xD, abs_xD, Ly), (L, I, G, Dx, Dy, A, Da, sDa), tuple(root_)
-def lateral_comp_a(P):
-    dert_ = P[3]
-    dx, dy = dert_[0][-2:]  # first dert
-    _a = int((math.atan2(dy, dx)) * degree) + 128  # angle from 0 -> 255
-    da = ave
-    dert_[0] += _a, da
-    for i in range(1, len(dert_)):
-        dx, dy = dert_[i][-2:]
-        a = int((math.atan2(dy, dx)) * degree) + 128
-        da = abs(a - _a)
-        dert_[i] += a, da
-        # aP = form_P(dert, _dert)  # i/o must be extended
-        _a = a
-    P[3] = dert_
-def vertical_comp_a(P, _P_):
-    s, [min_x, max_x], [L, I, G, Dx, Dy], dert_ = P
-    x = min_x
-    i = 0
-    for _P in _P_:
-        [_min_x, _max_x], _dert_ = _P[1], _P[3]
-        if x < _min_x:
-            i += _min_x - x
-            x = _min_x
+def comp_angle(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+    ablob_ = []
+    for segment in blob[3]:
+        global y
+        y = segment[1][2]   # y = segment's min_y
+        # extract haP_ from fork
+        haP_ = []
+        P = segment[3][0][0]    # top-line P of segment
+        for fork in segment[5]:
+            fork_haP_, fork_remaining_roots = fork[-2:] # buffered haPs and remaining roots counter of segment's fork
+            i = 0
+            while i < len(fork_haP_):
+                _aP = fork_haP_[i][0]
+                while _aP[1][0] <= P[1][1] and P[1][0] <= _aP[1][1]:   # only takes overlapping haPs
+                    haP_.append(fork_haP_.pop(i))
+                    if i < len(fork_haP_):
+                        _aP = fork_haP_[i][0]
+                    else:
+                        break
+                i += 1
+            while not fork_remaining_roots and fork_haP_:
+                form_ablob(form_asegment(fork_haP_, ablob_), a_blob)    # terminate haPs with no connections
+        for (P, xd) in segment[3]:  # iterate vertically
+            # extract a higher-line aP_ from haP_
+            _aP_ = []
+            for haP in haP_:
+                _aP_ += haP[0]
+            # init:
+            aP = [-1, [P[1][0], -1], [0, 0, 0], []] # P's init: [s, boundaries, params, dert_]
+            aP_ = []
+            buff_ = deque()
+            i = 0                   # corresponding P's dert index
             _i = 0
-        else:
-            _i = x - min_x
-        stop_x = min(_max_x, max_x) + 1
-        while x < stop_x:
-            _a = dert_[i][-2]
-            p, g, dx, dy, a, da = dert_[i]
-            da += abs(a - _a)
-            sda = 2 * ave - da
-            dert_[i] = p, g, dx, dy, a, da, sda
-            x += 1
-            i += 1
-            _i += 1
-    A, Da, sDa = 0, 0, 0
-    for i, dert in enumerate(dert_):
-        p, g, dx, dy, a, da = dert[:6]
-        if len(dert) > 6:
-            sda = dert[6]
-        else:
-            sda = ave - da  # da += ave; sda = 2 * ave - da <=> sda = ave - da ?
-        dert_[i] = (p, g, dx, dy, a, da, sda)
-        A += a
-        Da += da
-        sDa += sda
-
-    return s, (min_x, max_x), (L, I, G, Dx, Dy, A, Da, sDa), tuple(dert_)
+            x = P[1][0]             # x = min_x
+            _a = ave
+            if not _aP_:
+                no_higher_line = True
+            else:
+                _aP = _aP_.pop(0)
+                while _aP[1][1] < P[1][0] and _aP_:  # repeat until _aP olp with or right-ward to P or no _aP left
+                    _aP = _aP_.pop(0)
+                if not _aP_:     # if no _aP left
+                    no_higher_line = True
+                else:
+                    no_higher_line = False
+                    _i = P[1][0] - _aP[1][0] # _aP's dert index
+            # iteration:
+            while i < P[2][0]       # while i < P's L
+                dy, dx = P[3][i][:-2]  # first P's dert: i = 0
+                a = int((math.atan2(dy, dx)) * degree) + 128
+                # Lateral comp:
+                mx = ave - abs(_a - a)
+                _a = a
+                # Vertical comp:
+                my = ave
+                if not no_higher_line and _i >= 0:  #
+                    __a = _aP[3][i][0]  # vertically prior pixel's angle of gradient
+                    my -= abs(__a - a)
+                m = mx + my
+                dert = a, m
+                aP = form_aP(dert, aP, aP_, buff_, ablob_)
+                x += 1
+                i += 1
+                _i += 1
+                if not no_higher_line and _i > _aP[1][1]:   # end of _aP, pop next _aP
+                    if _aP_:
+                        _aP = _aP_.pop(0)
+                    else:   # if no more _aP
+                        no_higher_line = True
+            y += 1
+            haP_ = aP_  # haP_ buffered for next line
 def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
     I, G, Dx, Dy, xD, abs_xD, Ly, blob_ = frame
     new_blob_ = []
