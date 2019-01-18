@@ -2,7 +2,6 @@ from collections import deque
 import math as math
 from time import time
 import frame_blobs
-
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
     Currently it's mostly a draft, combined with frame_blobs it will form a 2D version of first-level algorithm
@@ -12,101 +11,58 @@ import frame_blobs
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
 
-    inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?   
+    inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 
     dCx = max_x - min_x + 1;  dCy = max_y - min_y + 1
     rC = dCx / dCy  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
     rD = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)  # lateral variation / vertical variation, for flip and comp_P eval
 '''
-
-
-def blob_eval(blob):
-    blob = comp_angle(blob)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
+def blob_eval(blob, dert__):
+    comp_angle(blob, dert__)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
     return blob
-def comp_angle(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+    ''' - Sort list of segments (root_) based on their top line P's coordinate (segment's min_y)    <---------------------------------------|
+        - Iterate through each line in the blob (from blob's min_y to blob's max_y):                                                        |
+            + Have every segment that contains current-line P in a list (runningSegment_). This action is simplified by sorting step above -|
+            + Extract current-line slice of the blob - or the list of every P of this line (P_)
+            + Have every out-of-bound segment removed from list (runningSegment_)
+            + Perform angle computing, comparison and clustering in every dert in P_ '''
+    root_ = blob[3]
+    blob[3] = sorted(root_, key=lambda segment: segment[1][2])  # sorted by min_y
     ablob_ = []
-    for segment in blob[3]:
-        global y
-        y = segment[1][2]   # y = segment's min_y
-        # extract haP_ from fork
-        haP_ = []
-        P = segment[3][0][0]    # top-line P of segment
-        for fork in segment[5]:
-            fork_haP_, fork_remaining_roots = fork[-2:] # buffered haPs and remaining roots counter of segment's fork
-            i = 0
-            while i < len(fork_haP_):
-                _aP = fork_haP_[i][0]
-                while _aP[1][0] <= P[1][1] and P[1][0] <= _aP[1][1]:   # only takes overlapping haPs
-                    haP_.append(fork_haP_.pop(i))
-                    if i < len(fork_haP_):
-                        _aP = fork_haP_[i][0]
-                    else:
-                        break
-                i += 1
-            while not fork_remaining_roots and fork_haP_:
-                form_ablob(form_asegment(fork_haP_, ablob_), a_blob)    # terminate haPs with no connections
-        for (P, xd) in segment[3]:  # iterate vertically
-            # extract a higher-line aP_ from haP_
-            _aP_ = []
-            for haP in haP_:
-                _aP_ += haP[0]
-            # init:
-            aP = [-1, [P[1][0], -1], [0, 0, 0], []] # P's init: [s, boundaries, params, dert_]
-            aP_ = []
-            buff_ = deque()
-            i = 0                   # corresponding P's dert index
-            _i = 0
-            x = P[1][0]             # x = min_x
-            _a = ave
-            if not _aP_:
-                no_higher_line = True
+    global y
+    y = blob[1][2]      # min_y of this blob
+    runningSegment_ = []
+    haP_ = []
+    segmentIndex = 0    # iterator
+    while segmentIndex < len(root_):
+        P_ = []
+        while root_[segmentIndex][1][2] == y:
+            runningSegment_.append([root_[segmentIndex], 0])    # runningSegment consists of segments that contains y-line P and that P's index
+        for i, (segment, PIndex) in enumerate(runningSegment_): # for every segment that contains y-line P
+            P_.append(segment[3][PIndex][0])    # P = Py_[PIndex][0] = segment[3][PIndex][0]
+            if y = segment[1][3]:               # if y has reached segment's bottom
+                runningSegment_.pop(i)          # remove from list
             else:
-                _aP = _aP_.pop(0)
-                while _aP[1][1] < P[1][0] and _aP_:  # repeat until _aP olp with or right-ward to P or no _aP left
-                    _aP = _aP_.pop(0)
-                if not _aP_:     # if no _aP left
-                    no_higher_line = True
-                else:
-                    no_higher_line = False
-                    _i = P[1][0] - _aP[1][0] # _aP's dert index
-            # iteration:
-            while i < P[2][0]       # while i < P's L
-                dy, dx = P[3][i][:-2]  # first P's dert: i = 0
-                a = int((math.atan2(dy, dx)) * degree) + 128
-                # Lateral comp:
-                mx = ave - abs(_a - a)
-                _a = a
-                # Vertical comp:
-                my = ave
-                if not no_higher_line and _i >= 0:  #
-                    __a = _aP[3][i][0]  # vertically prior pixel's angle of gradient
-                    my -= abs(__a - a)
-                m = mx + my
-                dert = a, m
-                aP = form_aP(dert, aP, aP_, buff_, ablob_)
-                x += 1
-                i += 1
-                _i += 1
-                if not no_higher_line and _i > _aP[1][1]:   # end of _aP, pop next _aP
-                    if _aP_:
-                        _aP = _aP_.pop(0)
-                    else:   # if no more _aP
-                        no_higher_line = True
-            y += 1
-            haP_ = aP_  # haP_ buffered for next line
+                runningSegment_[i] += 1         # index point to next-line P
+        # actual comp_angle:
+
+
+        # buffers for next line
+        haP_ = aP_
+
 def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
-    I, G, Dx, Dy, xD, abs_xD, Ly, blob_ = frame
+    I, G, Dx, Dy, xD, abs_xD, Ly, blob_, dert__ = frame
     new_blob_ = []
     for blob in blob_:
         if blob[0]:  # positive g sign
-            new_blob_.append(blob_eval(blob))
-    frame = I, G, Dx, Dy, xD, abs_xD, Ly, new_blob_
+            new_blob_.append(blob_eval(blob, dert__))
+    frame = I, G, Dx, Dy, xD, abs_xD, Ly, new_blob_, dert__
     return frame
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
 # ************ PROGRAM BODY *********************************************************************************************
-
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
 ave = 15  # g value that coincides with average match: gP filter
