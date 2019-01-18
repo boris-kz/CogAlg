@@ -50,8 +50,7 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
 
 
         # buffers for next line
-        haP_ = aP_
-
+        haP_ = aP_`
 def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
     I, G, Dx, Dy, xD, abs_xD, Ly, blob_, dert__ = frame
     new_blob_ = []
