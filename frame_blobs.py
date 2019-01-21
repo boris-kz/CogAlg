@@ -1,6 +1,6 @@
 import cv2
 import argparse
-import numpy
+from constrains import ave
 from time import time
 from collections import deque
 import math as math
@@ -216,9 +216,6 @@ def image_to_blobs(image):
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
 # ************ PROGRAM BODY *********************************************************************************************
-# Pattern filters ----------------------------------------------------------------
-# eventually updated by higher-level feedback, initialized here as constants:
-ave = 15  # P-defining filter: value of gradient that coincides with average higher-level match
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
@@ -231,5 +228,5 @@ frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
 # Rebuild blob -------------------------------------------------------------------
-draw_blobs('./debug', frame_of_blobs[7], (Y, X), debug=0)
+draw_blobs('./debug', frame_of_blobs[7], (Y, X), oablob=0, debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************
