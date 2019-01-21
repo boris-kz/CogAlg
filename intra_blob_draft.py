@@ -2,6 +2,7 @@ from collections import deque
 import math as math
 from time import time
 import frame_blobs
+import comp_angle_draft
 
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
@@ -19,15 +20,29 @@ import frame_blobs
 def blob_eval(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal flip
 
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
-    Ave = ave * L  # filter for whole blob reprocessing
-    rdn = 1  # reprocessing count
+    Ave = ave * L   # filter for whole blob reprocessing
+    rdn = 1  # redundant reprocessing count
 
-    if s:  # positive g sign: the blob is an edge
+    # comp_Py_ and flip eval for both edge and flat blobs, potential match is sign-neutral, primary to recursion or 4-way eval?
+
+    P_sum = L + I + G + Dx + Dy  # max P match, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
+    if P_sum - Ave * 5 * rdn:  # projected match between Ps over comp span = Ly, - cost: added syntax * 5 params
+
+        if (max_x - min_x + 1) / Ly > flip_ave:  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
+        # projected flipped PM gain > cost,  or by rD = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy): y/x variation bias?
+
+            rdn += 1  # or += N: ratio of comp_P cost to comp_p cost?
+            blob = flip(blob, rdn)  # vertical rescan -> comp_Px_, or scan_Py_-> xdP, flip_eval(xdP)?
+
+        blob = comp_Py_(0, blob, xD, rdn)  # comp_P in flip?
+
+    if s:  # positive g sign: the blob is a potential edge
         val_inc_der = 0
         if L > A_cost:  # fixed per blob: ini params + ini params * (added params / ini params), converted to min L?
             if G > (ave + a_cost) * L:  # comp_a delay - comp delay per dert,
-                rdn += 1
-                blob = comp_angle(blob, rdn)  # angle comparison, ablob definition; a, da, sda accumulation in higher-composition reps
+                rdn += 1  # or greater
+                blob = comp_angle_draft(blob)
+                # angle comparison, ablob definition; a, da, sda accumulation in aP, aseg, ablob
                 sDa = blob[2][7]
                 val_inc_der = (G * -sDa)  # -sDa indicates proximate angle match, thus likely d match
 
@@ -46,96 +61,9 @@ def blob_eval(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_co
                 if  b is val_inc_der: blob = incr_deriv(blob, rdn)  # recursive comp over ds: dderived?
                 else: blob = incr_range(blob, rdn)  # recursion over +distant ps, including diagonal?
 
-    # flip and comp_P eval for both edge and flat blobs, potential match is sign-neutral:
-
-    P_sum = L + I + G + Dx + Dy  # max P match, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
-    if P_sum - Ave * 5 * rdn:  # projected match between Ps over comp span = Ly, - cost: added syntax * 5 params
-
-        if (max_x - min_x + 1) / Ly > flip_ave:  # vs shift / height: abs(xD) / Ly for oriented blobs only?
-        # blob width / height projects flipped PM gain > cost?
-
-            blob = flip(blob, rdn)  # vertical rescan -> Pys for comp_P
-            # vs. scan_Py_ -> xdP, flip_eval(xdP)?  if < 90: param *= angle? or immediate comp_P -> blob if flip?
-            # no rD = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)  # lateral variation / vertical variation, for flip and comp_P eval
-
     return blob
 
 # everything below is a draft
-
-def comp_angle(blob, rdn):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
-    ablob_ = []
-
-    for segment in blob[3]:
-        global y
-        y = segment[1][2]   # y = segment's min_y
-        # extract haP_ from fork
-        haP_ = []
-        P = segment[3][0][0]    # top-line P of segment
-        for fork in segment[5]:
-            fork_haP_, fork_remaining_roots = fork[-2:] # buffered haPs and remaining roots counter of segment's fork
-            i = 0
-            while i < len(fork_haP_):
-                _aP = fork_haP_[i][0]
-                while _aP[1][0] <= P[1][1] and P[1][0] <= _aP[1][1]:   # only takes overlapping haPs
-                    haP_.append(fork_haP_.pop(i))
-                    if i < len(fork_haP_):
-                        _aP = fork_haP_[i][0]
-                    else:
-                        break
-                i += 1
-            while not fork_remaining_roots and fork_haP_:
-                form_ablob(form_asegment(fork_haP_, ablob_), _ablob)    # terminate haPs with no connections
-
-        for (P, xd) in segment[3]:  # iterate vertically
-            # extract a higher-line aP_ from haP_
-            _aP_ = []
-            for haP in haP_:
-                _aP_ += haP[0]
-            # init:
-            aP = [-1, [P[1][0], -1], [0, 0, 0], []] # P's init: [s, boundaries, params, dert_]
-            aP_ = []
-            buff_ = deque()
-            i = 0                   # corresponding P's dert index
-            _i = 0
-            x = P[1][0]             # x = min_x
-            _a = ave
-            if not _aP_:
-                no_higher_line = True
-            else:
-                _aP = _aP_.pop(0)
-                while _aP[1][1] < P[1][0] and _aP_:  # repeat until _aP olp with or right-ward to P or no _aP left
-                    _aP = _aP_.pop(0)
-                if not _aP_:     # if no _aP left
-                    no_higher_line = True
-                else:
-                    no_higher_line = False
-                    _i = P[1][0] - _aP[1][0] # _aP's dert index
-            # iteration:
-            while i < P[2][0]:  # while i < P's L
-                dy, dx = P[3][i][:-2]  # first P's dert: i = 0
-                a = int((math.atan2(dy, dx)) * degree) + 128
-                # Lateral comp:
-                mx = ave - abs(_a - a)
-                _a = a
-                # Vertical comp:
-                my = ave
-                if not no_higher_line and _i >= 0:  #
-                    __a = _aP[3][i][0]  # vertically prior pixel's angle of gradient
-                    my -= abs(__a - a)
-                m = mx + my
-                dert = a, m
-                aP = form_aP(dert, aP, aP_, buff_, ablob_)
-                x += 1
-                i += 1
-                _i += 1
-                if not no_higher_line and _i > _aP[1][1]:   # end of _aP, pop next _aP
-                    if _aP_:
-                        _aP = _aP_.pop(0)
-                    else:   # no _aP
-                        no_higher_line = True
-            y += 1
-            haP_ = aP_  # haP_ buffered for next line
-
 
 def incr_range(blob, rdn):  # frame_blobs recursion if sG
     return blob
