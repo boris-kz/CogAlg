@@ -26,11 +26,13 @@ def blob_eval(blob, dert__):
 def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
     I, G, Dx, Dy, xD, abs_xD, Ly, blob_, dert__ = frame
     new_blob_ = []
+    
     for blob in blob_:
         if blob[0]:  # positive g sign
             new_blob_.append(blob_eval(blob, dert__))
     frame = I, G, Dx, Dy, xD, abs_xD, Ly, new_blob_, dert__
     return frame
+
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
 # ************ PROGRAM BODY *********************************************************************************************
