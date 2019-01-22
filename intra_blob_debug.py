@@ -1,8 +1,6 @@
-from collections import deque
-import math as math
 from time import time
 import frame_blobs
-from angle import comp_angle
+from angle_blobs import comp_angle
 from misc import draw_blobs
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
@@ -36,16 +34,17 @@ def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, inc
 # ************ PROGRAM BODY *********************************************************************************************
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
-ave = 15  # g value that coincides with average match: gP filter
-div_ave = 1023  # filter for div_comp(L) -> rL, summed vars scaling
-flip_ave = 10000  # cost of form_P and deeper?
-ave_rate = 0.25  # match rate: ave_match_between_ds / ave_match_between_ps, init at 1/4: I / M (~2) * I / D (~2)
-angle_coeff = 128 / math.pi  # coef to convert radian to 256 degrees
-A_cost = 1000
-a_cost = 15
+from misc import get_filters
+get_filters(globals())          # imports all filters at once
+# --------------------------------------------------------------------------------
 # Main ---------------------------------------------------------------------------
 start_time = time()
 frame = intra_blob(frame_blobs.frame_of_blobs)
 end_time = time() - start_time
 print(end_time)
 draw_blobs('./debug', frame[7], (frame_blobs.Y, frame_blobs.X), oablob=1, debug=0)
+# Check for redundant sda:
+print '\nchecking for sda redundancy...\n'
+for y, dert_ in enumerate(frame[-1][1:]):
+    for x, dert in enumerate(dert_[1:]):
+        if len(dert) > 6: print 'redundancy detected at (%d, %d)!\n' %(y + 1, x + 1)

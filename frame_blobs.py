@@ -1,6 +1,6 @@
 import cv2
 import argparse
-from constrains import ave
+from filters import ave
 from time import time
 from collections import deque
 import math as math
@@ -51,7 +51,7 @@ def pixel_comp(pixel_, _pixel_, _P_, frame):
         dx = p - _p
         dy = p - __p
         g = int(math.hypot(dy, dx)) - ave
-        dert = p, g, dx, dy
+        dert = [p, g, dx, dy]
         dert__[y][x] = dert     # derts are buffered in dert__ to reserve relative position
         P = form_P(dert, x, X - 1, P, P_, buff_, _P_, frame)
         _p = p; x += 1
@@ -228,5 +228,5 @@ frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
 # Rebuild blob -------------------------------------------------------------------
-draw_blobs('./debug', frame_of_blobs[7], (Y, X), oablob=0, debug=0)
+# draw_blobs('./debug', frame_of_blobs[7], (Y, X), oablob=0, debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************
