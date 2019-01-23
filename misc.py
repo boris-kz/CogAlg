@@ -32,7 +32,7 @@ def draw_blobs(path, blob_, size, oablob=0, debug=0):
             min_x, max_x, min_y, max_y = blob[1][:4]
             cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
             cv2.imwrite(path + '/blob%d.bmp' % (blob_idx), blob_img)
-        if oablob:
+        if oablob and type(blob[4]) == list:
             ablob_ = blob[4]
             for ablob in ablob_:
                 for aseg in ablob[3]:

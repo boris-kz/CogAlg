@@ -75,7 +75,7 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
                 day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y - 1][min_x: max_x + 1])]
             x = min_x
             for dert, dax, day in zip(dert_, dax_, day_):
-                dert += [-(dax + day - 2 * ave)]   # sda: d_angle deviation
+                dert += [dax + day - 2 * ave]   # sda: d_angle deviation
                 aP = form_aP(dert, x, max_x, aP, aP_, buff_, haP_, blob)
                 x += 1
                 # ...to next dert/pixel in line...
