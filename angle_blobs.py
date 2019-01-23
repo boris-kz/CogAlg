@@ -5,7 +5,7 @@ from misc import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
-    angle is a component of intra_blob
+    comp_angle is a component of intra_blob
 '''
 # ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
 # Functions:
@@ -17,6 +17,7 @@ get_filters(globals())          # imports all filters at once
 # Utilities:
 # -get_angle()
 # ***********************************************************************************************************************
+
 def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
     ''' - Sort list of segments (root_) based on their top line P's coordinate (segment's min_y)    <---------------------------------------|
         - Iterate through each line in the blob (from blob's min_y to blob's max_y):                                                        |
@@ -24,36 +25,34 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
             + Extract current-line slice of the blob - or the list of every P of this line (P_)
             + Have every out-of-bound segment removed from list (seg_)
             + Perform angle computing, comparison and clustering in every dert in P_ '''
+
     params, root_ = blob[2:4]
-    # sorting based on min_y values
     root_ = sorted(root_, key=lambda segment: segment[1][2])  # sorted by min_y
-    # init:
     blob[4] = []    # ablob_
-    params += [0, 0]# A, sDa
+    params += [0, 0]  # += A, sDa
     global y
-    y = blob[1][2]  # start from top-line of the blob
-    seg_ = []       # for buffering of segments that contain current line
-    haP_ = deque()  # for buffering of higher-line aPs
-    i = 0           # iterator in root_
-    while y <= blob[1][3]:  # while y <= blob's max_y
-        P_ = []             # buffering of current line aPs
-        # preparing (discontinuous) line y of derts in blob
-        while i < len(root_) and root_[i][1][2] == y:
+    y = blob[1][2]  # start from top line (pixel row) of the blob
+    seg_ = []       # buffer of segments that contain y_line
+    haP_ = deque()  # buffer of higher-line aPs
+    i = 0           # root_ index
+
+    while y <= blob[1][3]:  # while y <= blob's max_y, form
+        P_ = []             # buffer of y_line aPs
+        while i < len(root_) and root_[i][1][2] == y:  # buffer all y_line derts in blob
             seg_.append([root_[i], 0])      # seg_ includes blob segments that contain current y
             i += 1
-
         ii = 0
-        while ii < len(seg_):       # for every segment that contains y-row P
+        while ii < len(seg_):       # for every segment that contains y_line P
             seg, iP = seg_[ii]      # P = Py_[ii][0] = seg[3][iP][0]
             P_.append(seg[3][iP][0])
             if y == seg[1][3]:      # if y == max y of a segment
                 seg_.pop(ii)        # remove from list
                 ii -= 1
             else:
-                seg_[ii][1] += 1    # index point to next-line P
+                seg_[ii][1] += 1    # index of next-line P
             ii += 1
 
-        aP_ = deque()
+        aP_ = deque()  # main operations:
         buff_ = deque()
         for P in P_:
             [min_x, max_x], L, dert_ = P[1], P[2][0], P[3]
@@ -62,39 +61,35 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
             dax_ = []
             _a = get_angle(dert_[0])
             if min_x == 1:
-                dax_.append(ave)    # init lateral da with ave
+                dax_.append(ave)  # init lateral da with ave
             else:
                 dax_.append(abs(_a - get_angle(dert__[y][min_x-1])))
             for dert in dert_[1:]:
                 a = get_angle(dert)
                 dax_.append(abs(a - _a))
                 _a = a
-
             # vertical comp:
             if y == 1:
-                day_ = [ave] * L    # init vertical da with ave
+                day_ = [ave] * L  # init vertical da_ with ave
             else:
                 day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y - 1][min_x: max_x + 1])]
-
-            # call form_P:
             x = min_x
             for dert, dax, day in zip(dert_, dax_, day_):
-                dert += [-(dax + day - 2 * ave)]   # sda
+                dert += [-(dax + day - 2 * ave)]   # sda: d_angle deviation
                 aP = form_aP(dert, x, max_x, aP, aP_, buff_, haP_, blob)
                 x += 1
                 # ...to next dert/pixel in line...
             # ...to next P in line...
-        # process remaining hPs:
-        while buff_:
+
+        while buff_:  # remaining hPs
             haP = buff_.popleft()
             if haP[4] != 1: form_ablob(haP, blob)
         while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)
-        # buffers for next line
-        haP_ = aP_
+        haP_ = aP_  # for next line
         y += 1
         # ...to next line...
-    # Last row hPs:
-    y = blob[1][3] + 1
+
+    y = blob[1][3] + 1  # Last row hPs:
     while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 
@@ -102,8 +97,9 @@ def form_aP(dert, x, x_stop, aP, aP_, buff_, haP_, blob):
     a, sda = dert[-2:]
     s = 1 if sda > 0 else 0
     pri_s = aP[0]
+
     if s != pri_s and pri_s != -1:  # aP is terminated:
-        aP[1][1] = x - 1  # aP's max_x
+        aP[1][1] = x - 1  # aP' max_x
         scan_aP_(aP, aP_, buff_, haP_, blob)  # aP scans haP_
         aP = [s, [x, -1], [0, 0, 0], []]  # new aP initialization
 
@@ -124,6 +120,7 @@ def scan_aP_(aP, aP_, _buff_, haP_, blob):
     fork_ = []  # refs to haPs connected to input aP
     _min_x = 0  # to start while loop, next ini_x = _x + 1
     min_x, max_x = aP[1]
+
     while _min_x <= max_x:  # while x values overlap between aP and _aP
         if _buff_:
             haP = _buff_.popleft()  # haP was extended to segment and buffered in prior scan_aP_
@@ -134,6 +131,7 @@ def scan_aP_(aP, aP_, _buff_, haP_, blob):
         roots = haP[4]
         _aP = haP[3][-1][0]
         _min_x, _max_x = _aP[1]  # first_x, last_x
+
         if aP[0] == _aP[0] and min_x <= _max_x and _min_x <= max_x:
             roots += 1
             haP[4] = roots
@@ -143,6 +141,7 @@ def scan_aP_(aP, aP_, _buff_, haP_, blob):
         elif roots != 1:
             form_ablob(haP, blob)  # segment is terminated and packed into its blob
         _min_x = _max_x + 1  # = first x of next _aP
+
     aP_.append((aP, fork_))  # aP with no overlap to next _aP is extended to haP and buffered for next-line scan_aP_
     # ---------- scan_aP_() end -----------------------------------------------------------------------------------------
 
@@ -150,6 +149,7 @@ def form_asegment(haP, blob):
     _aP, fork_ = haP
     s, [min_x, max_x], params = _aP[:-1]
     ave_x = (params[0] - 1) // 2  # extra-x L = L-1 (1x in L)
+
     if not fork_:  # seg is initialized with initialized blob (params, coordinates, incomplete_segments, root_, xD)
         ablob = [s, [min_x, max_x, y - 1, -1, 0, 0, 0], [0, 0, 0], [], 1]  # s, coords, params, root_, incomplete_segments
         haP = [s, [min_x, max_x, y - 1, -1, 0, 0, ave_x], params, [(_aP, 0)], 0, fork_, ablob]
@@ -171,6 +171,7 @@ def form_asegment(haP, blob):
             fork[4] = 0  # reset roots
             haP = fork  # replace segment with including fork's segment
             ablob = haP[6]
+
         else:  # if >1 forks, or 1 fork that has >1 roots:
             haP = [s, [min_x, max_x, y - 1, -1, 0, 0, ave_x], params, [(_aP, 0)], 0, fork_, fork_[0][6]]  # seg is initialized with fork's blob
             ablob = haP[6]
@@ -214,6 +215,7 @@ def form_ablob(term_seg, blob, y_carry=0):
     ablob[2][2] += sDa
     ablob[4] += roots - 1  # reference to term_seg is already in blob[9]
     term_seg[1][3] = y - 1 - y_carry  # y_carry: min elevation of term_seg over current hP
+
     if not ablob[4]:
         ablob[1][3] = term_seg[1][3]
         blob[2][-2] += A    # params: A
@@ -225,6 +227,6 @@ def get_angle(dert):
     " get angle of maximal gradient or compute it, if not available "
     if len(dert) == 4:
         dx, dy = dert[2:]
-        dert += [int(math.atan2(dy, dx) * angle_coeff) + 128]
+        dert += [int(math.atan2(dy, dx) * angle_coef) + 128]
     return dert[4]
-    # ---------- get_angle() end ----------------------------------------------------------------------------------------
+    # ---------- get_angle() end ---------------------------------------------------------------------------------------
