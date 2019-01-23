@@ -2,7 +2,7 @@ from collections import deque
 import math as math
 from time import time
 import frame_blobs
-import comp_angle_draft
+from angle_blobs import comp_angle
 
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
@@ -17,64 +17,66 @@ import comp_angle_draft
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
 
-def blob_eval(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal flip
+def eval_blob(blob, dert__):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
 
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
-    Ave = ave * L   # filter for whole blob reprocessing
-    rdn = 1  # redundant reprocessing count
+    Ave = ave * L   # whole-blob reprocessing filter, fixed: no if L?
+    rdn = 1  # redundant representation counter
+    val_deriv, val_range = 0, 0
 
-    # comp_Py_ and flip eval for both edge and flat blobs, potential match is sign-neutral, primary to recursion or 4-way eval?
+    if s:  # positive blob, primary orientation match eval: noisy or directional gradient
+        if G > Ave:   # likely edge, ave d_angle = ave g?
+            rdn += 1  # or greater?
+            comp_angle(blob, dert__)  # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
+            sDa = blob[2][7]
 
-    P_sum = L + I + G + Dx + Dy  # max P match, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
-    if P_sum - Ave * 5 * rdn:  # projected match between Ps over comp span = Ly, - cost: added syntax * 5 params
+            val_deriv = G * -sDa  # -sDa indicates proximate angle match -> recursive comp(d_): dderived?
+        val_range = G  # G without angle is not directional, thus likely d reversal and match among distant pixels
+    val_comp_Py_ = L + I + G + Dx + Dy  # max P match, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
 
-        if (max_x - min_x + 1) / Ly > flip_ave:  # width / height, vs shift / height: abs(xD) / Ly for oriented blobs only?
-        # projected flipped PM gain > cost,  or by rD = max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy): y/x variation bias?
+    values = val_deriv, val_range, val_comp_Py_
+    c, b, a = sorted(values)
+    # three instances of generic evaluation for three branches of recursion:
 
-            rdn += 1  # or += N: ratio of comp_P cost to comp_p cost?
-            blob = flip(blob, rdn)  # vertical rescan -> comp_Px_, or scan_Py_-> xdP, flip_eval(xdP)?
+    if a > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
+        rdn += 1
+        if a is val_range: inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+        elif a is val_deriv: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+        else:                comp_Py_(val_comp_Py_, 0, blob, xD, rdn)  # leading to comp_P
 
-        blob = comp_Py_(0, blob, xD, rdn)  # comp_P in flip?
+        if b > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
+            rdn += 1
+            if b is val_range: inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+            elif b is val_deriv: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+            else:                comp_Py_(val_comp_Py_, 0, blob, xD, rdn)  # leading to comp_P
 
-    if s:  # positive g sign: the blob is a potential edge
-        val_inc_der = 0
-        if L > A_cost:  # fixed per blob: ini params + ini params * (added params / ini params), converted to min L?
-            if G > (ave + a_cost) * L:  # comp_a delay - comp delay per dert,
-                rdn += 1  # or greater
-                blob = comp_angle_draft(blob)
-                # angle comparison, ablob definition; a, da, sda accumulation in aP, aseg, ablob
-                sDa = blob[2][7]
-                val_inc_der = (G * -sDa)  # -sDa indicates proximate angle match, thus likely d match
-
-        val_inc_rng = G  # G is not directionally selective, thus likely d reversal and match among distant pixels
-        if val_inc_der > val_inc_rng:
-            a = val_inc_der; b = val_inc_rng
-        else: a = val_inc_rng; b = val_inc_der
-
-        if a - Ave * rdn > 0:
-            rdn += 1  # incr / recursion
-            if  a is val_inc_der: blob = incr_deriv(blob, rdn)  # recursive comp over ds: dderived?
-            else: blob = incr_range(blob, rdn)  # recursion over +distant ps, including diagonal?
-
-            if b - Ave * rdn > 0:  # adjusted for redundancy to the above
-                rdn += 1  # incr / recursion
-                if  b is val_inc_der: blob = incr_deriv(blob, rdn)  # recursive comp over ds: dderived?
-                else: blob = incr_range(blob, rdn)  # recursion over +distant ps, including diagonal?
+            if c > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
+                rdn += 1
+                if c is val_range: inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+                elif c is val_deriv: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+                else:                comp_Py_(val_comp_Py_, 0, blob, xD, rdn)  # leading to comp_P
 
     return blob
 
 # everything below is a draft
 
-def incr_range(blob, rdn):  # frame_blobs recursion if sG
+def inc_range(blob, rdn):  # frame_blobs recursion if sG
     return blob
 
-def incr_deriv(blob, rdn):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
+def inc_deriv(blob, rdn):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
     return blob
 
 def flip(blob, rdn):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
 
-def comp_Py_(norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+def comp_Py_(val_comp_Py_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
+
+    if val_comp_Py_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+        # flipped PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
+
+        rdn += 1  # or += N: ratio of comp_P cost to comp_p cost?
+        flip(blob, rdn)  # vertical rescan -> comp_Px_, or scan_Py_-> xd_dev_P, flip_eval(pos xd_dev_P): >> 90?
 
     mPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
     dPP = 0,[],[]  # PP: pattern of patterns
@@ -361,11 +363,11 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
 
 
 def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
-    [neg_mL, neg_myL, I, D, Dy, M, My], [xD, Ly, blob_] = frame
+    I, G, Dx, Dy, xD, abs_xD, Ly, blob_, dert__ = frame
 
     _blob_ = []
     for blob in blob_:
-        _blob_.append( blob_eval(blob) )
+        _blob_.append( eval_blob(blob, dert__) )
     frame[1][2] = _blob_
 
     return frame  # frame of 2D patterns, to be outputted to level 2
@@ -376,7 +378,6 @@ def intra_blob(frame):  # evaluate blobs for orthogonal flip, incr_rng_comp, inc
 # ************ PROGRAM BODY *********************************************************************************************
 
 # Pattern filters ----------------------------------------------------------------
-# eventually updated by higher-level feedback, initialized here as constants:
 
 ave = 15                # g value that coincides with average match: gP filter
 div_ave = 1023          # filter for div_comp(L) -> rL, summed vars scaling
@@ -386,11 +387,11 @@ dim = 2                 # number of dimensions
 rng = 2                 # number of pixels compared to each pixel in four directions
 min_coord = rng * 2 - 1 # min x and y for form_P input: ders2 from comp over rng*2 (bidirectional: before and after pixel p)
 degree = 128 / math.pi  # coef to convert radian to 256 degrees
-A_cost = 1000
-a_cost = 15
+A_coef = 2
+ave_L = 10
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
-frame = intra_blob(frame_blobs)
+frame = intra_blob(frame_blobs.frame_of_blobs)
 end_time = time() - start_time
 print(end_time)
