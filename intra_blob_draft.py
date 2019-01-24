@@ -30,53 +30,60 @@ def eval_blob(blob, dert__):  # evaluate blob for comp_angle, incr_rng_comp, inc
             comp_angle(blob, dert__)  # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
             sDa = blob[2][7]
 
-            val_deriv = G * -sDa  # -sDa indicates proximate angle match -> recursive comp(d_): dderived?
+            val_deriv = G * -sDa  # -sDa indicates proximate angle match -> directional d match, dderived?
         val_range = G  # G without angle is not directional, thus likely d reversal and match among distant pixels
-    val_comp_Py_ = L + I + G + Dx + Dy  # max P match, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
+    val_PP_ = L + I + G + Dx + Dy  # max P match -> PP_, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
 
-    values = val_deriv, val_range, val_comp_Py_
+    values = val_deriv, val_range, val_PP_
     c, b, a = sorted(values)
-    # three instances of generic evaluation for three branches of recursion:
+    # three instances of evaluation for three branches of recursion:
 
     if a > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
         rdn += 1
-        if a is val_range: inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
-        elif a is val_deriv: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
-        else:                comp_Py_(val_comp_Py_, 0, blob, xD, rdn)  # leading to comp_P
+        if a is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+        elif a is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+        else:
+            if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                flip(blob)  # vertical blob rescan -> comp_Px_
+            comp_Py_(0, blob, xD, rdn)  #-> comp_P
 
         if b > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
             rdn += 1
-            if b is val_range: inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
-            elif b is val_deriv: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
-            else:                comp_Py_(val_comp_Py_, 0, blob, xD, rdn)  # leading to comp_P
+            if b is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+            elif b is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+            else:
+                if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                    flip(blob)  # vertical blob rescan -> comp_Px_
+                comp_Py_(0, blob, xD, rdn)  #-> comp_P
 
             if c > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
                 rdn += 1
-                if c is val_range: inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
-                elif c is val_deriv: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
-                else:                comp_Py_(val_comp_Py_, 0, blob, xD, rdn)  # leading to comp_P
+                if c is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+                elif c is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+                else:
+                    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                        flip(blob)  # vertical blob rescan -> comp_Px_
+                    comp_Py_(0, blob, xD, rdn)  #-> comp_P
+
+    # or rdn += rel_rdn: ratio of branch-specific cost | delay per dert to that of comp_pixel?
+    # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
+    # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
 
     return blob
 
 # everything below is a draft
 
-def inc_range(blob, rdn):  # frame_blobs recursion if sG
+def comp_inc_range(blob, rdn):  # frame_blobs recursion if sG
     return blob
 
-def inc_deriv(blob, rdn):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
+def comp_inc_deriv(blob, rdn):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
     return blob
 
-def flip(blob, rdn):  # vertical-first run of form_P and deeper functions over blob's ders__
+def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
 
-def comp_Py_(val_comp_Py_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+def comp_Py_(norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
-
-    if val_comp_Py_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
-        # flipped PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
-
-        rdn += 1  # or += N: ratio of comp_P cost to comp_p cost?
-        flip(blob, rdn)  # vertical rescan -> comp_Px_, or scan_Py_-> xd_dev_P, flip_eval(pos xd_dev_P): >> 90?
 
     mPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
     dPP = 0,[],[]  # PP: pattern of patterns
