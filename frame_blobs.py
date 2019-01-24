@@ -52,20 +52,23 @@ def comp_pixel(pixel_, _pixel_, _P_, frame):
     _p = pixel_[0]; x = 1
 
     for p, __p in zip(pixel_[1:], _pixel_[1:]):  # pixel p is compared to prior pixels vertically and horizontally
+#   for p, _dert, __dert in zip(pixel_[1:], _dert_[1:], _dert_[1:]):  # -> left_and_down ds, g, for consistency with bilateral inc_range
         dx = p - _p
         dy = p - __p
-        g = int(math.hypot(dy, dx)) - ave
+        g = int(math.hypot(dy, dx)) - ave  # gradient of right_and_up quadrant, unique for pixel p
+        # or left_and_down, as for fuzzy comp: requires _dert and __dert?
+
         dert = [p, g, dx, dy]
-        dert__[y][x] = dert     # derts are buffered in dert__ to reserve relative position
+        dert__[y][x] = dert     # derts are buffered in dert__ per blob, for
         P = form_P(dert, x, X - 1, P, P_, buff_, _P_, frame)
         _p = p; x += 1
 
     return P_
-    # ---------- pixel_comp() end ---------------------------------------------------------------------------------------
+    # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     " Initializes, and accumulates 1D pattern "
-    p, g, dx, dy = dert  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
+    p, g, dx, dy = dert  # 2D tuple of derivatives per pixel
     s = 1 if g > 0 else 0
     pri_s = P[0]
 
