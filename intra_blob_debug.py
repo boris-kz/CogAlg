@@ -25,7 +25,7 @@ def eval_blob(blob, dert__):
     val_deriv, val_range = 0, 0
 
     if s:  # positive blob, primary orientation match eval: noisy or directional gradient
-        if G > Ave:  # likely edge, ave d_angle = ave g?
+        if G > -255:  # likely edge, ave d_angle = ave g?
             rdn += 1  # or greater?
             comp_angle(blob, dert__)  # angle comp, ablob def; a, da, sda accum in higher-composition reps
             sDa = blob[2][6]
@@ -98,9 +98,4 @@ start_time = time()
 frame = intra_blob(frame_blobs.frame_of_blobs)
 end_time = time() - start_time
 print(end_time)
-draw_blobs('./debug', frame[7], (frame_blobs.Y, frame_blobs.X), oablob=1, debug=0)
-# Check for redundant sda:
-print '\nchecking for sda redundancy...\n'
-for y, dert_ in enumerate(frame[-1][1:]):
-    for x, dert in enumerate(dert_[1:]):
-        if len(dert) > 6: print 'redundancy detected at (%d, %d)!\n' %(y + 1, x + 1)
+draw_blobs('./debug', frame[7], (frame_blobs.Y, frame_blobs.X), oablob=1, debug=1)

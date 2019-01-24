@@ -52,20 +52,23 @@ def comp_pixel(pixel_, _pixel_, _P_, frame):
     _p = pixel_[0]; x = 1
 
     for p, __p in zip(pixel_[1:], _pixel_[1:]):  # pixel p is compared to prior pixels vertically and horizontally
+    # for p, _dert, __dert in zip(pixel_[1:], _dert_[1:], _dert_[1:]):  # -> left_and_down ds, g, for consistency with bilateral inc_range
         dx = p - _p
         dy = p - __p
-        g = int(math.hypot(dy, dx)) - ave
+        g = int(math.hypot(dy, dx)) - ave  # gradient of right_and_up quadrant, unique for pixel p
+        # or left_and_down, as for fuzzy comp: requires _dert and __dert?
+
         dert = [p, g, dx, dy]
-        dert__[y][x] = dert     # derts are buffered in dert__ to reserve relative position
+        dert__[y][x] = dert     # derts are buffered in dert__ per blob, for
         P = form_P(dert, x, X - 1, P, P_, buff_, _P_, frame)
         _p = p; x += 1
 
     return P_
-    # ---------- pixel_comp() end ---------------------------------------------------------------------------------------
+    # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     " Initializes, and accumulates 1D pattern "
-    p, g, dx, dy = dert  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
+    p, g, dx, dy = dert  # 2D tuple of derivatives per pixel
     s = 1 if g > 0 else 0
     pri_s = P[0]
 
@@ -80,7 +83,7 @@ def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     G += g  # summed gradient
     Dx += dx  # lateral D
     Dy += dy  # vertical D
-    dert_.append(dert)  # der2s are buffered for oriented rescan and incremental range | derivation comp
+    dert_.append(dert)  # derts are buffered for oriented rescan and incremental range | derivation comp
     P = [s, [min_x, max_x], [L, I, G, Dx, Dy], dert_]
 
     if x == x_stop:  # P is terminated:
@@ -159,7 +162,7 @@ def form_segment(hP, frame):
                     if fork[4] == 1:
                         form_blob(fork, frame, 1)
                     if not fork[6] is blob:
-                        [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, incomplete_segments = fork[6][1:]  # ommit sign
+                        [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, open_segments = fork[6][1:]  # ommit sign
                         blob[1][0] = min(min_x, blob[1][0])
                         blob[1][1] = max(max_x, blob[1][1])
                         blob[1][2] = min(min_y, blob[1][2])
@@ -171,7 +174,7 @@ def form_segment(hP, frame):
                         blob[2][2] += G
                         blob[2][3] += Dx
                         blob[2][4] += Dy
-                        blob[4] += incomplete_segments
+                        blob[4] += open_segments
                         for seg in root_:
                             if not seg is fork:
                                 seg[6] = blob  # blobs in other forks are references to blob in the first fork
@@ -250,6 +253,5 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-# draw_blobs('./debug', frame_of_blobs[7], (Y, X), out_ablob=0, debug=0)
-# draw_blobs('./debug', frame_of_blobs[7], (Y, X), debug=0)
+# draw_blobs('./debug', frame_of_blobs[7], (Y, X), oablob=0, debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************
