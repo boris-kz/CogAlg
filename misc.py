@@ -5,14 +5,14 @@ import filters
 # Functions:
 # -draw_blobs()
 # ***********************************************************************************************************************
-def draw_blobs(path, blob_, size, oablob=0, debug=0):
+def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
     " Rebuilt data of blobs into an image, tuple/list version "
     Y, X = size
     frame_img = np.array([[[127] * 4] * X] * Y)
 
     for blob_idx, blob in enumerate(blob_):  # Iterate through blobs
         if debug: blob_img = np.array([[[127] * 4] * X] * Y)
-        if not oablob:
+        if not out_ablob:
             for seg_idx, seg in enumerate(blob[3]): # Iterate through segments
                 if debug: seg_img = np.array([[[127] * 4] * X] * Y)
                 y = seg[1][2]   # min_y
@@ -39,10 +39,10 @@ def draw_blobs(path, blob_, size, oablob=0, debug=0):
                         for (aP, xd) in aseg[3]:
                             x = aP[1][0]
                             for i in range(aP[2][0]):
-                                frame_img[y, x, :3] = [0, 0, 255] if aP[0] else [255, 0, 0]
+                                frame_img[y, x, :3] = [255, 255, 255] if aP[0] else [0, 0, 0]
                                 if debug:
-                                    blob_img[y, x, :3] = [0, 0, 255] if aP[0] else [255, 0, 0]
-                                    ablob_img[y, x, :3] = [0, 0, 255] if aP[0] else [255, 0, 0]
+                                    blob_img[y, x, :3] = [255, 255, 255] if aP[0] else [0, 0, 0]
+                                    ablob_img[y, x, :3] = [255, 255, 255] if aP[0] else [0, 0, 0]
                                 x += 1
                             y += 1
                     if debug:

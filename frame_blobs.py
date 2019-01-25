@@ -1,10 +1,8 @@
 import cv2
 import argparse
-from filters import ave
 from time import time
 from collections import deque
 import math as math
-from misc import draw_blobs
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. 
@@ -46,22 +44,22 @@ from misc import draw_blobs
 def comp_pixel(pixel_, _pixel_, _P_, frame):
     " Comparison of consecutive pixels to compute gradient "
     dert__ = frame[8]
-    P = [-1, [1, -1], [0, 0, 0, 0, 0], []]    # s, [min_x, max_x], [L, I, G, Dx, Dy], dert_
     P_ = deque()
     buff_ = deque()
-    _p = pixel_[0]; x = 1
-
-    for p, __p in zip(pixel_[1:], _pixel_[1:]):  # pixel p is compared to prior pixels vertically and horizontally
-    # for p, _dert, __dert in zip(pixel_[1:], _dert_[1:], _dert_[1:]):  # -> left_and_down ds, g, for consistency with bilateral inc_range
-        dx = p - _p
-        dy = p - __p
+    p = _pixel_[0]  # evaluated pixel
+    x = 0
+    P = [-1, [0, -1], [0, 0, 0, 0, 0], []]  # s, [min_x, max_x], [L, I, G, Dx, Dy], dert_
+    for l_p, r_p in zip(pixel_[:-1], _pixel_[1:]):  # pixel p is compared to prior pixels vertically and horizontally -> left_and_down ds, g, for consistency with bilateral inc_range
+        dy = l_p - p    # compare with lower pixel
+        dx = r_p - p    # compare with pixel on the right
         g = int(math.hypot(dy, dx)) - ave  # gradient of right_and_up quadrant, unique for pixel p
         # or left_and_down, as for fuzzy comp: requires _dert and __dert?
 
         dert = [p, g, dx, dy]
         dert__[y][x] = dert     # derts are buffered in dert__ per blob, for
-        P = form_P(dert, x, X - 1, P, P_, buff_, _P_, frame)
-        _p = p; x += 1
+        P = form_P(dert, x, X - 2 + min_coord, P, P_, buff_, _P_, frame)
+        p = r_p
+        x += 1
 
     return P_
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
@@ -225,13 +223,14 @@ def image_to_blobs(image):
     _pixel_ = image[0, :]  # first line of pixels
     dert__ += [list(_pixel_)]
 
-    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
-        pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
-        dert__ += [list(_pixel_)]
+    for pixel_ in image[1:]:  # or Y-1: default term_blob in scan_P_ at y = Y?
+        dert__ += [list(pixel_)]
         _P_ = comp_pixel(pixel_, _pixel_, _P_, frame)  # vertical and lateral pixel comparison
         _pixel_ = pixel_
+        y += 1
 
-    y = Y  # frame ends, merge segs of last line into their blobs:
+    # frame ends, merge segs of last line into their blobs:
+    y = Y - 1 + min_coord
     while _P_:  form_blob(form_segment(_P_.popleft(), frame), frame)
     return frame  # frame of 2D patterns, to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
@@ -239,6 +238,10 @@ def image_to_blobs(image):
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
 # ************ PROGRAM BODY *********************************************************************************************
+# Pattern filters ----------------------------------------------------------------
+# eventually updated by higher-level feedback, initialized here as constants:
+from misc import get_filters
+get_filters(globals())          # imports all filters at once
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
@@ -253,5 +256,6 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-# draw_blobs('./debug', frame_of_blobs[7], (Y, X), oablob=0, debug=0)
+from misc import draw_blobs
+# draw_blobs('./debug', frame_of_blobs[7], (Y, X), out_ablob=0, debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************
