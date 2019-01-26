@@ -2,7 +2,7 @@ from collections import deque
 import math as math
 from time import time
 
-# this module is a draft
+# this component is a draft, mostly out of date
 
 def comp_Py_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
@@ -13,9 +13,10 @@ def comp_Py_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P ->
     # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
     # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
 
-    mPP = 0,[],[]  # s, PP (with S_ders), Py_ (with P_ders and e_ per P in Py)
-    dPP = 0,[],[]  # PP: pattern of patterns
-    SmPP, SdPP, Sm_, Sd_ = [],[],[],[]
+    mPP = 0,[],[]  # pattern of patterns, defined by deviation of M_params, dderived: match is a minimum, common?
+    dPP = 0,[],[]  # sub PP within negative mPP only?
+
+    SmPP, SdPP, Sm_, Sd_ = [],[],[],[]  # params
     mPP_, dPP_, yP_ = [],[],[]
     Py_ = blob[2]  # unless oriented?
     _P = Py_.popleft()  # initial comparand

@@ -1,13 +1,11 @@
 import cv2
 import argparse
-from filters import ave
 from time import time
 from collections import deque
 import math as math
-from misc import draw_blobs
 
 '''   
-    frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. 
+    frame_blobs() defines blobs: contiguous areas of positive or negative deviation of maximal gradient. 
     Gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, from cross-comparison among adjacent pixels.
     Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
     
@@ -28,14 +26,13 @@ from misc import draw_blobs
     Initial pixel comparison is not novel, I design from the scratch to make it organic part of hierarchical algorithm.
     It would be much faster with matrix computation, but this is minor compared to higher-level processing.
     I implement it sequentially for consistency with accumulation into blobs: irregular and very difficult to map to matrices.
-
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, 
     convert elements of lower line into elements of new higher line, then displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
 '''
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
-# -pixel_comp()
+# -comp_pixel()
 # -form_P()
 # -scan_P_()
 # -form_segment()
@@ -46,26 +43,28 @@ from misc import draw_blobs
 def comp_pixel(pixel_, _pixel_, _P_, frame):
     " Comparison of consecutive pixels to compute gradient "
     dert__ = frame[8]
-    P = [-1, [1, -1], [0, 0, 0, 0, 0], []]    # s, [min_x, max_x], [L, I, G, Dx, Dy], dert_
     P_ = deque()
     buff_ = deque()
-    _p = pixel_[0]; x = 1
+    p = _pixel_[0]  # evaluated pixel
+    x = 0
+    P = [-1, [0, -1], [0, 0, 0, 0, 0], []]  # s, [min_x, max_x], [L, I, G, Dx, Dy], dert_
 
-    for p, __p in zip(pixel_[1:], _pixel_[1:]):  # pixel p is compared to prior pixels vertically and horizontally
-        dx = p - _p
-        dy = p - __p
-        g = int(math.hypot(dy, dx)) - ave
+    for lower_p, right_p in zip(pixel_[:-1], _pixel_[1:]):  # pixel p is compared to vertically and horizontally subsequent pixels
+        dy = lower_p - p    # compare with lower pixel
+        dx = right_p - p    # compare with right-side pixel
+        g = int(math.hypot(dy, dx)) - ave  # max gradient of right_and_down quadrant, unique for pixel p
         dert = [p, g, dx, dy]
-        dert__[y][x] = dert     # derts are buffered in dert__ to reserve relative position
-        P = form_P(dert, x, X - 1, P, P_, buff_, _P_, frame)
-        _p = p; x += 1
+        dert__[y][x] = dert     # derts are buffered in dert__ per blob, for
+        P = form_P(dert, x, X - 2 + min_coord, P, P_, buff_, _P_, frame)
+        p = right_p
+        x += 1
 
     return P_
-    # ---------- pixel_comp() end ---------------------------------------------------------------------------------------
+    # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     " Initializes, and accumulates 1D pattern "
-    p, g, dx, dy = dert  # 2D tuple of derivatives per pixel, "y" denotes vertical vs. lateral derivatives
+    p, g, dx, dy = dert  # 2D tuple of derivatives per pixel
     s = 1 if g > 0 else 0
     pri_s = P[0]
 
@@ -80,7 +79,7 @@ def form_P(dert, x, x_stop, P, P_, buff_, hP_, frame):
     G += g  # summed gradient
     Dx += dx  # lateral D
     Dy += dy  # vertical D
-    dert_.append(dert)  # der2s are buffered for oriented rescan and incremental range | derivation comp
+    dert_.append(dert)  # derts are buffered for oriented rescan and incremental range | derivation comp
     P = [s, [min_x, max_x], [L, I, G, Dx, Dy], dert_]
 
     if x == x_stop:  # P is terminated:
@@ -159,7 +158,7 @@ def form_segment(hP, frame):
                     if fork[4] == 1:
                         form_blob(fork, frame, 1)
                     if not fork[6] is blob:
-                        [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, incomplete_segments = fork[6][1:]  # ommit sign
+                        [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, open_segments = fork[6][1:]  # ommit sign
                         blob[1][0] = min(min_x, blob[1][0])
                         blob[1][1] = max(max_x, blob[1][1])
                         blob[1][2] = min(min_y, blob[1][2])
@@ -171,7 +170,7 @@ def form_segment(hP, frame):
                         blob[2][2] += G
                         blob[2][3] += Dx
                         blob[2][4] += Dy
-                        blob[4] += incomplete_segments
+                        blob[4] += open_segments
                         for seg in root_:
                             if not seg is fork:
                                 seg[6] = blob  # blobs in other forks are references to blob in the first fork
@@ -222,13 +221,14 @@ def image_to_blobs(image):
     _pixel_ = image[0, :]  # first line of pixels
     dert__ += [list(_pixel_)]
 
-    for y in range(1, Y):  # or Y-1: default term_blob in scan_P_ at y = Y?
-        pixel_ = image[y, :]  # vertical coordinate y is index of new line p_
-        dert__ += [list(_pixel_)]
+    for pixel_ in image[1:]:  # or Y-1: default term_blob in scan_P_ at y = Y?
+        dert__ += [list(pixel_)]
         _P_ = comp_pixel(pixel_, _pixel_, _P_, frame)  # vertical and lateral pixel comparison
         _pixel_ = pixel_
+        y += 1
 
-    y = Y  # frame ends, merge segs of last line into their blobs:
+    # frame ends, merge segs of last line into their blobs:
+    y = Y - 1 + min_coord
     while _P_:  form_blob(form_segment(_P_.popleft(), frame), frame)
     return frame  # frame of 2D patterns, to be outputted to level 2
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
@@ -236,6 +236,11 @@ def image_to_blobs(image):
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
 # ************ PROGRAM BODY *********************************************************************************************
+# Pattern filters ----------------------------------------------------------------
+# eventually updated by higher-level feedback, initialized here as constants:
+from misc import get_filters
+get_filters(globals())          # imports all filters at once
+
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
@@ -250,6 +255,6 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
+from misc import draw_blobs
 # draw_blobs('./debug', frame_of_blobs[7], (Y, X), out_ablob=0, debug=0)
-# draw_blobs('./debug', frame_of_blobs[7], (Y, X), debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************

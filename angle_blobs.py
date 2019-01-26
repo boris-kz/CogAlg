@@ -53,14 +53,15 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
                 seg_[ii][1] = P    # index of next-line P
             ii += 1
         P_ = sorted(P_, key = lambda P: P[1][0])    # sorted by min_x, to get scan_aP_() work correctly
-        aP_ = deque()  # main operations:
+        aP_ = deque()
         buff_ = deque()
-        for P in P_:
+
+        for P in P_:  # main operations
             [min_x, max_x], L, dert_ = P[1], P[2][0], P[3]
             aP = [-1, [min_x, -1], [0, 0, 0, 0, 0, 0, 0], []]
             # lateral comp:
             _a = get_angle(dert_[0])    # get_angle() will compute angle of given dert, or simply fetch it, if it has been computed before
-            if min_x == 1:
+            if min_x == min_coord:
                 dax_ = [ave]        # init lateral da with ave
             else:
                 dax_ = [abs(_a - get_angle(dert__[y][min_x - 1])) ]
@@ -69,7 +70,7 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
                 dax_.append(abs(a - _a))
                 _a = a
             # vertical comp:
-            if y == 1:
+            if y == min_coord:
                 day_ = [ave] * L    # init vertical da_ with ave
             else:
                 day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y - 1][min_x: max_x + 1])]
@@ -90,8 +91,8 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
         y += 1
         # ...to next line...
 
-    y = blob[1][3] + 1   # Last row of haPs:
-    while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)
+    y = blob[1][3] + 1
+    while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)  # terminate Last row of haPs
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 
 def form_aP(dert, x, x_stop, aP, aP_, buff_, haP_, blob):
