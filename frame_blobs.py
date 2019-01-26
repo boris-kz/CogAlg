@@ -5,7 +5,7 @@ from collections import deque
 import math as math
 
 '''   
-    frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. 
+    frame_blobs() defines blobs: contiguous areas of positive or negative deviation of maximal gradient. 
     Gradient is estimated as hypot(dx, dy) of a quadrant with +dx and +dy, from cross-comparison among adjacent pixels.
     Complemented by intra_blob (recursive search within blobs), it will be 2D version of first-level core algorithm.
     
@@ -33,7 +33,7 @@ import math as math
 '''
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
-# -pixel_comp()
+# -comp_pixel()
 # -form_P()
 # -scan_P_()
 # -form_segment()
@@ -49,16 +49,15 @@ def comp_pixel(pixel_, _pixel_, _P_, frame):
     p = _pixel_[0]  # evaluated pixel
     x = 0
     P = [-1, [0, -1], [0, 0, 0, 0, 0], []]  # s, [min_x, max_x], [L, I, G, Dx, Dy], dert_
-    for l_p, r_p in zip(pixel_[:-1], _pixel_[1:]):  # pixel p is compared to prior pixels vertically and horizontally -> left_and_down ds, g, for consistency with bilateral inc_range
-        dy = l_p - p    # compare with lower pixel
-        dx = r_p - p    # compare with pixel on the right
-        g = int(math.hypot(dy, dx)) - ave  # gradient of right_and_up quadrant, unique for pixel p
-        # or left_and_down, as for fuzzy comp: requires _dert and __dert?
-
+    
+    for lower_p, right_p in zip(pixel_[:-1], _pixel_[1:]):  # pixel p is compared to vertically and horizontally subsequent pixels 
+        dy = lower_p - p    # compare with lower pixel
+        dx = right_p - p    # compare with right-side pixel
+        g = int(math.hypot(dy, dx)) - ave  # max gradient of right_and_down quadrant, unique for pixel p
         dert = [p, g, dx, dy]
         dert__[y][x] = dert     # derts are buffered in dert__ per blob, for
         P = form_P(dert, x, X - 2 + min_coord, P, P_, buff_, _P_, frame)
-        p = r_p
+        p = right_p
         x += 1
 
     return P_
@@ -242,6 +241,7 @@ def image_to_blobs(image):
 # eventually updated by higher-level feedback, initialized here as constants:
 from misc import get_filters
 get_filters(globals())          # imports all filters at once
+
 # Load inputs --------------------------------------------------------------------
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
