@@ -1,6 +1,9 @@
 from time import time
 import frame_blobs
+
+# Recursion branches -------------------------------------------------------------
 from angle_blobs import comp_angle
+from inc_deriv import  inc_deriv
 # from comp_Py_ import comp_Py_
 
 '''
@@ -18,7 +21,7 @@ from angle_blobs import comp_angle
 
 def eval_blob(blob, dert__):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
 
-    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy], root_, _ = blob
+    [L, I, G, Dx, Dy], root_ = blob[2:4]
     Ave = ave * L   # whole-blob reprocessing filter, fixed: no if L?
     rdn = 1  # redundant representation counter
     val_deriv, val_range = 0, 0
@@ -34,41 +37,28 @@ def eval_blob(blob, dert__):  # evaluate blob for comp_angle, incr_rng_comp, inc
     val_PP_ = L + I + G + Dx + Dy  # max P match -> PP_, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
 
     # Three branches of recursion start with three generic function calls:
-
     values      = [val_range, val_deriv, val_PP_]   # projected values of three branches of recursion
     branches    = [inc_range, inc_deriv, comp_Py_]   # functions of each branch
-    arguments   = [[blob, dert__], [blob, dert__], [val_PP_, 0, blob, xD]]   # arguments of each branch
+    arguments   = [[blob, dert__], [blob, dert__], [val_PP_, 0, blob]]   # arguments of each branch
     eval_queue  = sorted(zip(values, branches, arguments), key= lambda item: item[0], reverse=True)  # sort by value
-    recursion(eval_queue, Ave, rdn)     # Currently use recursion(), might swap for deep_recursion() in the future
+    recursion(eval_queue, Ave, rdn)
     return blob
 
 def recursion(eval_queue, Ave, rdn):
-    " evaluation of recursion branches "
-
-    val, branch, args = eval_queue.pop(0)
-    if val > Ave * rdn:
-        branch( *args, rdn=rdn )   # specific recursive function call
-        if eval_queue:
-            recursion(eval_queue, Ave, rdn+1)  # or rdn += rel_rdn: cost per dert per branch / cost per comp pixel?
-
-def deep_recursion(eval_queue, Ave, rdn):
-    ''' result of evaluation is also evaluated
+    ''' evaluation of recursion branches
+        result of evaluation is also evaluated
         for insertion in eval_queue,
         which determines next step of recursion '''
 
     val, branch, args = eval_queue.pop(0)
     if val > Ave * rdn:
         new_val, new_branch, new_args = branch(*args, rdn=rdn)  # insert new branch into eval_queue, ordered by value
-        new_eval_queue = []
 
-        while eval_queue and eval_queue[0][0] > new_val:
-            new_eval_queue.append(eval_queue.pop(0))
-        new_eval_queue.append((new_val, new_branch, new_args))
-        while eval_queue:
-            new_eval_queue.append(eval_queue.pop(0))
-        eval_queue = new_eval_queue
+        if new_val > 0:
+            eval_queue = sorted(eval_queue.append((new_val, new_branch, new_args)), key= lambda item: item[0], reverse=True))
+
         if eval_queue:
-            deep_recursion(eval_queue, Ave, rdn+1)
+            recursion(eval_queue, Ave, rdn+1)
 
 '''
     values = val_deriv, val_range, val_PP_
@@ -104,10 +94,13 @@ def deep_recursion(eval_queue, Ave, rdn):
 '''
 
 def inc_range(blob, dert__, rdn):  # frame_blobs recursion if G
-    return 0, inc_range, [blob]
+    return -1, inc_range, [blob]
 
-def inc_deriv(blob, dert__, rdn):  # frame_blobs recursion if Dx + Dy: separately, or abs_Dx + abs_Dy: directional, but for both?
-    return 0, inc_deriv, [blob]
+def comp_Py_(val_PP_, norm, blob, rdn):     # here for a variable name definition only
+    [min_x, max_x, min_y, max_y, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][:-2]
+    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+        flip(blob)  # vertical blob rescan -> comp_Px_
+    return -1, [0, 0, blob]
 
 def intra_blob(frame):   # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
     I, G, Dx, Dy, xD, abs_xD, Ly, blob_, dert__ = frame
@@ -118,8 +111,6 @@ def intra_blob(frame):   # evaluate blobs for orthogonal flip, incr_rng_comp, in
 
     frame = I, G, Dx, Dy, xD, abs_xD, Ly, new_blob_, dert__
     return frame  # frame of 2D patterns, to be outputted to level 2
-def comp_Py_(val_PP_, norm, blob, xD, rdn):     # here for a variable name definition only
-    return 0, comp_Py_, [0, 0, blob, xD]
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 

@@ -59,20 +59,22 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
             [min_x, max_x], L, dert_ = P[1], P[2][0], P[3]
             aP = [-1, [min_x, -1], [0, 0, 0, 0, 0, 0, 0], []]
             # lateral comp:
+            dax_ = []
             _a = get_angle(dert_[0])    # get_angle() will compute angle of given dert, or simply fetch it, if it has been computed before
-            if min_x == min_coord:
-                dax_ = [ave]        # init lateral da with ave
-            else:
-                dax_ = [abs(_a - get_angle(dert__[y][min_x - 1])) ]
             for dert in dert_[1:]:
                 a = get_angle(dert)
                 dax_.append(abs(a - _a))
                 _a = a
+            if max_x == len(dert__[y]) - 2:
+                dax_ += [ave]        # init lateral da with ave
+            else:
+                dax_ += [abs(get_angle(dert__[y][max_x + 1]) - _a) ]
+
             # vertical comp:
-            if y == min_coord:
+            if y == len(dert__) - 1:
                 day_ = [ave] * L    # init vertical da_ with ave
             else:
-                day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y - 1][min_x: max_x + 1])]
+                day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y + 1][min_x: max_x + 1])]
             x = min_x
             for dert, dax, day in zip(dert_, dax_, day_):
                 dert += [dax + day - 2 * ave]
