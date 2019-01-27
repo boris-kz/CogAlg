@@ -52,7 +52,7 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
                 P += 1
                 seg_[ii][1] = P    # index of next-line P
             ii += 1
-        P_ = sorted(P_, key = lambda P: P[1][0])    # sorted by min_x, to get scan_aP_() work correctly
+        P_ = sorted(P_, key = lambda P: P[1][0])    # sorted by min_x for scan_aP_()
         aP_ = deque()  # main operations:
         buff_ = deque()
         for P in P_:
@@ -60,10 +60,10 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
             aP = [-1, [min_x, -1], [0, 0, 0, 0, 0, 0, 0], []]
             # lateral comp:
             dax_ = []
-            _a = get_angle(dert_[0])    # get_angle() will compute angle of given dert, or simply fetch it, if it has been computed before
+            _a = get_angle(dert_[0])    # compute or fetch angle of max gradient in a dert quadrant
             for dert in dert_[1:]:
                 a = get_angle(dert)
-                dax_.append(abs(a - _a))
+                dax_.append(abs(a - _a))  # comparison to angle of right-side quadrant
                 _a = a
             if max_x == len(dert__[y]) - 2:
                 dax_ += [ave]        # init lateral da with ave
@@ -75,17 +75,16 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
                 day_ = [ave] * L    # init vertical da_ with ave
             else:
                 day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y + 1][min_x: max_x + 1])]
+                # comparison to angle of higher-line quadrants 
             x = min_x
             for dert, dax, day in zip(dert_, dax_, day_):
-                dert += [dax + day - 2 * ave]
-                # de    rt = p, g, dx, dy, a, + sda: d_angle deviation, dx and dy are now redundant, for convenience only?
+                dert += [dax + day - 2 * ave]  # dert = p, g, dx, dy, a, sda: d_angle deviation, dx and dy for inc_randge?
                 aP = form_aP(dert, x, max_x, aP, aP_, buff_, haP_, blob)
                 x += 1
                 # ...to next dert/pixel in line...
             # ...to next P in line...
 
-        # terminate remaining haPs
-        while buff_:  # remaining haPs
+        while buff_:  # terminate remaining haPs
             haP = buff_.popleft()
             if haP[4] != 1: form_ablob(haP, blob)
         while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)
@@ -93,8 +92,8 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
         y += 1
         # ...to next line...
 
-    y = blob[1][3] + 1   # Last row of haPs:
-    while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)
+    y = blob[1][3] + 1   
+    while haP_: form_ablob(form_asegment(haP_.popleft(), blob), blob)  # terminate Last row of haPs
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 
 def form_aP(dert, x, x_stop, aP, aP_, buff_, haP_, blob):
