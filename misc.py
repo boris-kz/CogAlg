@@ -4,6 +4,8 @@ import filters
 # ***************************************************** MISCELLANEOUS FUNCTIONS *****************************************
 # Functions:
 # -draw_blobs()
+# -get_filters()
+# -tree_traverse()
 # ***********************************************************************************************************************
 def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
     " Rebuilt data of blobs into an image, tuple/list version "
@@ -62,4 +64,11 @@ def get_filters(obj):
     for str in str_:
         var = getattr(filters, str)
         obj[str] = var
+    # ---------- get_filters() end --------------------------------------------------------------------------------------
+
+def tree_traverse(tree, path):
+    list = tree[0]
+    for i, sub_path in path:
+        list += tree_traverse(tree[i], sub_path)
+    return list
 # ***************************************************** MISCELLANEOUS FUNCTIONS END *************************************
