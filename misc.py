@@ -1,13 +1,14 @@
 import cv2
 import numpy as np
 import filters
+import matplotlib.pyplot as plt
 # ***************************************************** MISCELLANEOUS FUNCTIONS *****************************************
 # Functions:
 # -draw_blobs()
 # -get_filters()
 # -tree_traverse()
 # ***********************************************************************************************************************
-def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
+def draw_blobs(path, blob_, size, out_ablob=0, debug=0, show=0):
     " Rebuilt data of blobs into an image, tuple/list version "
     Y, X = size
     frame_img = np.array([[[127] * 4] * X] * Y)
@@ -17,7 +18,7 @@ def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
         if not out_ablob:
             for seg_idx, seg in enumerate(blob[3]): # Iterate through segments
                 if debug: seg_img = np.array([[[127] * 4] * X] * Y)
-                y = seg[1][2]   # min_y
+                y = seg[1][2]   # y_start
                 for (P, xd) in seg[3]:
                     x = P[1][0]
                     for i in range(P[2][0]):
@@ -28,8 +29,8 @@ def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
                         x += 1
                     y += 1
                 if debug:
-                    min_x, max_x, min_y, max_y = seg[1][:4]
-                    cv2.rectangle(seg_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
+                    x_start, x_end, y_start, y_end = seg[1][:4]
+                    cv2.rectangle(seg_img, (x_start - 1, y_start - 1), (x_end, y_end), (0, 255, 255), 1)
                     cv2.imwrite(path + '/blob%dseg%d.bmp' % (blob_idx, seg_idx), seg_img)
         else:
             if type(blob[4]) == list:
@@ -37,7 +38,7 @@ def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
                 for ablob_idx, ablob in enumerate(ablob_):
                     if debug: ablob_img = np.array([[[127] * 4] * X] * Y)
                     for aseg in ablob[3]:
-                        y = aseg[1][2]  # min_y
+                        y = aseg[1][2]  # y_start
                         for (aP, xd) in aseg[3]:
                             x = aP[1][0]
                             for i in range(aP[2][0]):
@@ -48,14 +49,19 @@ def draw_blobs(path, blob_, size, out_ablob=0, debug=0):
                                 x += 1
                             y += 1
                     if debug:
-                        min_x, max_x, min_y, max_y = ablob[1][:4]
-                        cv2.rectangle(ablob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
+                        x_start, x_end, y_start, y_end = ablob[1][:4]
+                        cv2.rectangle(ablob_img, (x_start - 1, y_start - 1), (x_end, y_end), (0, 255, 255), 1)
                         cv2.imwrite(path + '/blob%dablob%d.bmp' % (blob_idx, ablob_idx), ablob_img)
-                if debug:
-                    min_x, max_x, min_y, max_y = blob[1][:4]
-                    cv2.rectangle(blob_img, (min_x - 1, min_y - 1), (max_x + 1, max_y + 1), (0, 255, 255), 1)
-                    cv2.imwrite(path + '/blob%d.bmp' % (blob_idx), blob_img)
-    cv2.imwrite(path + '/frame.bmp',frame_img)
+        if debug:
+            x_start, x_end, y_start, y_end = blob[1][:4]
+            cv2.rectangle(blob_img, (x_start - 1, y_start - 1), (x_end, y_end), (0, 255, 255), 1)
+            cv2.imwrite(path + '/blob%d.bmp' % (blob_idx), blob_img)
+    if show:
+        plt.clf()
+        plt.imshow(frame_img)
+        plt.show()
+    else:
+        cv2.imwrite(path + '/frame.bmp',frame_img)
     # ---------- out_blobs() end ----------------------------------------------------------------------------------------
 
 def get_filters(obj):
@@ -67,7 +73,7 @@ def get_filters(obj):
     # ---------- get_filters() end --------------------------------------------------------------------------------------
 
 def tree_traverse(tree, path):
-    list = tree[0]
+    list = [tree[0]]
     for i, sub_path in path:
         list += tree_traverse(tree[i], sub_path)
     return list

@@ -206,7 +206,7 @@ def form_blob(term_seg, frame, y_carry=0):
     blob[2][3] += Dx
     blob[2][4] += Dy
     blob[4] += roots - 1  # reference to term_seg is already in blob[9]
-    term_seg[1][3] = y - 1 - y_carry  # y_carry: min elevation of term_seg over current hP. - 1 due to higher-line P
+    term_seg[1][3] = y - y_carry  # y_carry: min elevation of term_seg over current hP. - 1 due to higher-line P
 
     if not blob[4]:  # if incomplete_segments == 0: blob is terminated and packed in frame
         blob[1][3] = term_seg[1][3]
@@ -225,8 +225,8 @@ def form_blob(term_seg, frame, y_carry=0):
 def image_to_blobs(image):
     " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
     _P_ = deque()   # higher-line same-m-sign 1D patterns
-    g__ = np.zeros((Y, X))
-    d__ = np.zeros((Y, X, 2))
+    g__ = np.zeros((Y, X), dtype=int)
+    d__ = np.zeros((Y, X, 2), dtype=int)
     frame = [[0, 0, 0, 0, 0, 0, 0], [], [image, [d__, [g__]]]]   # params, blob_, dert_tree
     global y
     for y in range(Y - 1):  # or Y-1: default term_blob in scan_P_ at y = Y?
@@ -261,5 +261,5 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from misc import draw_blobs
-draw_blobs('./debug', frame_of_blobs[1], (Y, X), out_ablob=0, debug=0)
+# draw_blobs('./debug', frame_of_blobs[1], (Y, X), out_ablob=0, debug=0, show=1)
 # ************ PROGRAM BODY END ******************************************************************************************

@@ -31,7 +31,10 @@ def eval_blob(blob, dert_tree):  # evaluate blob for comp_angle, incr_rng_comp, 
         if G > Ave:   # likely edge, ave d_angle = ave g?
             a_branch_add = True
             rdn += 1  # or greater?
-            comp_angle(blob, dert_tree, [1,])  # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
+            comp_angle(blob, dert_tree, [1,[(1, [
+                                                 (1, []),
+                                                 (2, [
+                                                      (1, [])])])]])  # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
             sDa = blob[2][6]
 
             val_deriv = G * -sDa  # -sDa indicates proximate angle match -> directional d match, dderived?
@@ -103,9 +106,9 @@ def inc_deriv(blob, rdn):
     return -1, inc_deriv, [blob]
 
 def comp_Py_(val_PP_, norm, blob, rdn):     # here for a variable name definition only
-    [x_start, x_end, min_y, max_y, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
-    if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
-        flip(blob)  # vertical blob rescan -> comp_Px_
+    # [x_start, x_end, min_y, max_y, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
+    # if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+    #     flip(blob)  # vertical blob rescan -> comp_Px_
     return -1, comp_Py_, [0, 0, blob]
 def flip(blob):
     return
@@ -116,8 +119,8 @@ def intra_blob(frame):   # evaluate blobs for orthogonal flip, incr_rng_comp, in
     frame_params, blob_, dert_tree = frame
     p__, d_branch = dert_tree
     # init new a__ and sda__ in d_branch:
-    a__ = np.full((Y, X), -1)
-    sda__ = np.zeros((Y, X))
+    a__ = np.full((Y, X), -1, dtype=int)
+    sda__ = np.zeros((Y, X), dtype=int)
     d_branch += [[a__, [sda__]]]
 
     for blob in blob_:
@@ -146,4 +149,4 @@ end_time = time() - start_time
 print(end_time)
 
 from misc import draw_blobs
-# draw_blobs('./debug', frame[1], (frame_blobs.Y, frame_blobs.X), out_ablob=1, debug=0)
+draw_blobs('./debug', frame[1], (frame_blobs.Y, frame_blobs.X), out_ablob=1, debug=0, show=0)
