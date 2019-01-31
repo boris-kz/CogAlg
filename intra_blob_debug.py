@@ -1,8 +1,7 @@
 from time import time
-import numpy as np
 
 # Recursion branches -------------------------------------------------------------
-from angle_blobs import comp_angle
+from angle_blobs import blob_to_ablobs
 # from inc_deriv import  inc_deriv
 # from comp_Py_ import comp_Py_
 
@@ -19,24 +18,18 @@ from angle_blobs import comp_angle
     intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
 
-def eval_blob(blob, dert_tree):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
+def eval_blob(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
 
-    [L, I, G, Dx, Dy], root_ = blob[2:4]
+    L, I, G, Dx, Dy = blob.params
     Ave = ave * L   # whole-blob reprocessing filter, fixed: no if L?
     rdn = 1  # redundant representation counter
     val_deriv, val_range = 0, 0
 
-    a_branch_add = False
-    if blob[0]:  # positive blob, primary orientation match eval: noisy or directional gradient
+    if blob.sign:  # positive blob, primary orientation match eval: noisy or directional gradient
         if G > Ave:   # likely edge, ave d_angle = ave g?
-            a_branch_add = True
             rdn += 1  # or greater?
-            comp_angle(blob, dert_tree, [1,[(1, [
-                                                 (1, []),
-                                                 (2, [
-                                                      (1, [])])])]])  # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
-            sDa = blob[2][6]
-
+            frame_of_ablobs = blob_to_ablobs(blob)    # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
+            sDa = frame_of_ablobs.params[5]
             val_deriv = G * -sDa  # -sDa indicates proximate angle match -> directional d match, dderived?
         val_range = G  # G without angle is not directional, thus likely d reversal and match among distant pixels
     val_PP_ = L + I + G + Dx + Dy  # max P match -> PP_, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
@@ -47,7 +40,6 @@ def eval_blob(blob, dert_tree):  # evaluate blob for comp_angle, incr_rng_comp, 
     arguments   = [[blob], [blob], [val_PP_, 0, blob]]   # arguments of each branch
     eval_queue  = sorted(zip(values, branches, arguments), key= lambda item: item[0], reverse=True)  # sort by value
     recursion(eval_queue, Ave, rdn)
-    return a_branch_add
 
 def recursion(eval_queue, Ave, rdn):
     ''' evaluation of recursion branches
@@ -115,21 +107,8 @@ def flip(blob):
 
 def intra_blob(frame):   # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
 
-    # load vars:
-    frame_params, blob_, dert_tree = frame
-    p__, d_branch = dert_tree
-    # init new a__ and sda__ in d_branch:
-    a__ = np.full((Y, X), -1, dtype=int)
-    sda__ = np.zeros((Y, X), dtype=int)
-    d_branch += [[a__, [sda__]]]
-
-    for blob in blob_:
-        eval_blob(blob, dert_tree)
-
-    # assign vars:
-    dert_tree = p__, d_branch
-    frame = frame_params, blob_, dert_tree
-
+    for blob in frame.blob_:
+        eval_blob(blob)
     return frame  # frame of 2D patterns, to be outputted to level 2
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
@@ -148,5 +127,6 @@ frame = intra_blob(frame_blobs.frame_of_blobs)
 end_time = time() - start_time
 print(end_time)
 
-from misc import draw_blobs
-draw_blobs('./debug', frame[1], (frame_blobs.Y, frame_blobs.X), out_ablob=1, debug=0, show=0)
+# Rebuild blob -------------------------------------------------------------------
+from DEBUG import DEBUG
+DEBUG('./debug', frame_of_blobs.blob_, (Y, X), debug_ablob=1, debug_parts=0, debug_local=0, show=0)

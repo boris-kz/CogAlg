@@ -1,4 +1,3 @@
-from collections import deque
 import math as math
 from time import time
 import frame_blobs
