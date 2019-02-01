@@ -1,21 +1,26 @@
 import math
+import numpy as np
 from collections import deque
+import Classes
+from frame_blobs import form_P
+from frame_blobs import form_segment
+from frame_blobs import form_blob
 # Filters ------------------------------------------------------------------------
 from misc import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
-    comp_angle is a component of intra_blob
+    angle_blob is a component of intra_blob
 '''
 # ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
 # Functions:
-# -comp_angle()
+# -blob_to_ablobs()
+# -compute_angle()
+# -compare_angle()
 # -form_aP()
 # -scan_aP_()
 # -form_asegment()
-# -from_ablob()
-# Utilities:
-# -get_angle()
+# -form_ablob()
 # ***********************************************************************************************************************
 
 def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
