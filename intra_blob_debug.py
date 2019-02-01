@@ -52,7 +52,6 @@ def recursion(eval_queue, Ave, rdn):
         new_val, new_branch, new_args = branch(*args, rdn=rdn)  # insert new branch into eval_queue, ordered by value
 
         if new_val > 0:
-            # eval_queue =
             eval_queue = sorted(eval_queue.append((new_val, new_branch, new_args)), key= lambda item: item[0], reverse=True)
 
         if eval_queue:
@@ -128,5 +127,5 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-from DEBUG import DEBUG
-DEBUG('./debug', frame_of_blobs.blob_, (Y, X), debug_ablob=1, debug_parts=0, debug_local=0, show=0)
+# from DEBUG import draw_blob
+# draw_blob('./debug', frame, debug_ablob=1, debug_parts=0, debug_local=0, show=0)
