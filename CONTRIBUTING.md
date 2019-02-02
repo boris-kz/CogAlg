@@ -30,10 +30,10 @@ Andrei Demchenko, $1800 for conventional refactoring and interface improvement i
 
 Todor Arnaudov, $2000 for help in debugging frame_dblobs.py, September - October.
 
-Khanh Nguyen, $2700, is a lead developer of this project starting December 2018. 
+Khanh Nguyen, $2700, a lead programmer of this project starting December 2018. 
 
 2019:
 
 Stephan Verbeeck, $1000 for insistence on using gradient vs. dx and dy, as well as his perspective on colors and contour tracing, January
 
-
+Khanh Nguyen, $1500, a lead programmer of this project, January 

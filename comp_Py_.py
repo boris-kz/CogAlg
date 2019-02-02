@@ -2,98 +2,47 @@ from collections import deque
 import math as math
 from time import time
 
-# this component is a draft, mostly out of date
-
-def comp_Py_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
-    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
-
-    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
-        flip(blob)  # vertical blob rescan -> comp_Px_
-
-    # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
-    # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
-
-    mPP = 0,[],[]  # pattern of patterns, defined by deviation of M_params, dderived: match is a minimum, common?
-    dPP = 0,[],[]  # sub PP within negative mPP only?
-
-    SmPP, SdPP, Sm_, Sd_ = [],[],[],[]  # params
-    mPP_, dPP_, yP_ = [],[],[]
-    Py_ = blob[2]  # unless oriented?
-    _P = Py_.popleft()  # initial comparand
-
-    while Py_:  # comp_P starts from 2nd P, top-down
-        P = Py_.popleft()
-        _P, _ms, _ds = comp_P(norm, P, _P)  # per blob, before orient
-
-        while Py_:  # form_PP starts from 3rd P
-            P = Py_.popleft()
-            P, ms, ds = comp_P(norm, P, _P)  # P: S_vars += S_ders in comp_P
-            if ms == _ms:
-                mPP = form_PP(1, P, mPP)
-            else:
-                mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
-                mPP_.append(mPP)
-                for par, S in zip(mPP[1], SmPP):  # blob-wide summation of 16 S_vars from incr_PP
-                    S += par
-                    Sm_.append(S)  # or S is directly modified in SvPP?
-                SmPP = Sm_  # but SPP is redundant, if len(PP_) > ave?
-                mPP = ms, [], []  # s, PP, Py_ init
-            if ds == _ds:
-                dPP = form_PP(0, P, dPP)
-            else:
-                dPP = term_PP(0, dPP)
-                dPP_.append(dPP)
-                for var, S in zip(dPP[1], SdPP):
-                    S += var
-                    Sd_.append(S)
-                SdPP = Sd_
-                dPP = ds,[],[]
-            _P = P; _ms = ms; _ds = ds
-
-    # S_ders | S_vars eval for PP ) seg ) blob orient, incr rng | der comp_P -> redun alt P ) pP) PP ) seg ) blob?
-    return blob, SmPP, mPP_, SdPP, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
-
+# this component is a draft and mostly out of date
 
 def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
-    (s, x0, L, I, G, Dx, Dy, dert_), xd = P
+    (s, x0, L, I, G, Dx, Dy, dert_), xd = P  # + optional A, sDa
     (_s, _x0, _L, _I, _G, _Dx, _Dy, _dert_), _xd = P
-    xdd = 0  # optional, 2Le norm / D? s_xdd and s_dL correlate, s_dx position and s_dL dimension don't?
+    xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't?
 
-    mx = (x0 + L-1) - _x0  # vx = ave_xd - xd: distance (cost) decrease vs. benefit incr? or:
-    if x0 > _x0: mx -= x0 - _x0  # mx = x olp, - ave_mx -> vxP, distant P mx = -(ave_xd - xd)?
+    mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
+    if x0 > _x0: mx -= x0 - _x0   # vx only for !olp distant-P comp?
 
-    dL = L - _L; mL = min(L, _L)  # relative olp = mx / L? ext_miss: Ddx + DL?
-    dI = I - _I; mI = min(I, _I)  # L and I are dims vs. ders, not rdn | select, I per quad, no norm?
-    '''
-    | S: I + G + Dx + Dy: sum of lower params is a top-level param?
-    '''
-    if norm:  # if xD: derivatives are xd- normalized before comp:
-        hyp = math.hypot(xd, 1)  # len incr = hyp / 1 (vert distance == 1)
+    # no if mx > ave:  # >min rolp, else Py_ termination? by full comp only?
+    if norm:  # if xD / Ly * (Dx + Dy) > ave: derivatives are xd-normalized before comp:
+
+        hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vert distance)
+        L /= hyp; I /= hyp; Dx /= hyp; Dy /= hyp  # est orthogonal slice is reduced from P
 
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
         Dy = (Dy / hyp - Dx * hyp) / 2 * hyp  # est D over lat_L
-        G = math.hypot(Dy, Dx)  # reformed, not adjusted?
 
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)
+    dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL? L, I, G, A: int, I, dif, no S = I + G + A: too few?
+    dI = I - _I; mI = min(I, _I)  # L and I are not xd-normalized
+
+    G = math.hypot(Dy, Dx)  # re-formed vs. accumulated: lost cross-sign Ds, and normalized?
+    dG = G - _G; mG = min(G, _G)  # primary to Ds?
+
+    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # conditional or primary if norm?
     dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # lat sum of y_ders also indicates P match and orientation?
-    dG = G - _G;    mG = min(G, _G)     # or no G comp: redundant to Ds?
 
-    Pd = xdd + dL + dI + dG + dDx + dDy  # defines dPP, dx does not correlate
-    Pm = mx +  mL + mI + mG + mDx + mDy  # defines mPP; comb rep value = Pm * 2 + Pd?
+    Pd = xdd + dL + dI + dG + dDx + dDy  # defines dPP, no dS-to-xd correlation?
+    Pm = mx +  mL + mI + mG + mDx + mDy  # defines mPP; comb rep value = Pm * 2 + Pd, for intra_blob?
 
-    if dI * dL > div_ave:  # potential d compression, vs. ave * 21(7*3)?
+    if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression?
 
-        # DIV comp: cross-scale d, neg if cross-sign, no ndx: single, yes nmx: summed?
-        # for S: summed vars I, D, M: nS = S * rL, ~ rS,rP: L defines P?
-
-        rL = L / _L  # L defines P, SUB comp of rL-normalized nS:
+        rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
         nI = I * rL; ndI = nI - _I; nmI = min(nI, _I)  # vs. nI = dI * nrL?
 
         nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 
-        Pnm = mx + nmI + nmDx + nmDy  # normalized m defines norm_vPP, if rL
+        Pnm = mx + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
 
         if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
         else: mPP_rdn = 1; nmPP_rdn = 0
@@ -105,7 +54,7 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also condition
 
         div_f = 1
         nvars = Pnm, nmI, nmDx, nmDy, mPP_rdn, nmPP_rdn, \
-                Pnd, ndI, ndDx, ndDy, dPP_rdn, ndPP_rdn
+            Pnd, ndI, ndDx, ndDy, dPP_rdn, ndPP_rdn
 
     else:
         div_f = 0  # DIV comp flag
@@ -299,6 +248,55 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
 
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
+
+
+def comp_Py_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
+
+    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+        # | (max(Dx, Dy) / min(Dx, Dy): cumulative?
+        flip(blob)  # vertical blob rescan -> comp_Px_
+
+    # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
+    # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
+
+    mPP = 0,[],[]  # pattern of patterns, defined by deviation of M_params, dderived: match is a minimum, per P | param?
+    dPP = 0,[],[]  # sub PP within negative mPP: min value of signed dS
+    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # comparable params and their derivatives
+
+    Py_ = blob[3][last]  # per segment, also flip eval per seg?
+    _P = Py_.popleft()  # initial comparand
+
+    while Py_:  # comp_P starts from 2nd P, top-down
+        P = Py_.popleft()
+        _P, _ms, _ds = comp_P(norm, P, _P)
+
+        while Py_:  # form_PP starts from 3rd P
+            P = Py_.popleft()
+            P, ms, ds = comp_P(norm, P, _P)  # P: S_vars += S_ders in comp_P
+            if ms == _ms:
+                mPP = form_PP(1, P, mPP)
+            else:
+                mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
+                mPP_.append(mPP)
+                for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 S_vars from incr_PP
+                    C += par
+                    Cm_.append(C)  # or S is directly modified in SvPP?
+                CmPP_ = Cm_  # but SPP is redundant, if len(PP_) > ave?
+                mPP = ms, [], []  # s, PP, Py_ init
+            if ds == _ds:
+                dPP = form_PP(0, P, dPP)
+            else:
+                dPP = term_PP(0, dPP)
+                dPP_.append(dPP)
+                for var, C in zip(dPP[1], CdPP_):
+                    C += var
+                    Cd_.append(C)
+                CdPP_ = Cd_
+                dPP = ds,[],[]
+            _P = P; _ms = ms; _ds = ds
+
+    return blob, CmPP_, mPP_, CdPP_, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 
 flip_ave = 1000

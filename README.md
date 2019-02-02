@@ -3,7 +3,7 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Intelligence is the ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
+Intelligence is ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
 But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity) So, I came up with my own definitions, which directly translate into algorithm proposed below.
 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
