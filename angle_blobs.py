@@ -23,19 +23,19 @@ get_filters(globals())          # imports all filters at once
 def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
     ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
-    frame = Classes.frame(blob.dert__, blob_map=blob.blob_map, num_params=9)
-    # initialize frame object: initialize blob_ and params, assign dert__ and blob_map, assign frame shape
+    frame = Classes.frame(blob.dert__, blob_rectangle=blob.blob_rectangle, num_params=9)
+    # initialize frame object: initialize blob_ and params, assign dert__ and blob_rectangle, assign frame shape
     _P_ = deque()
     global y, Y, X
     Y, X = frame.dert__.shape
-    a_ = get_angle(frame.dert__[0], frame.blob_map[0])  # compute max gradient angles within gblob
+    a_ = get_angle(frame.dert__[0], frame.blob_rectangle[0])  # compute max gradient angles within gblob
     for y in range(Y - 1):
         a_, _P_ = comp_angle(a_, _P_, frame)  # vertical and lateral pixel comparison
 
     y = Y - 1   # frame ends, merge segs of last line into their blobs:
     while _P_:  form_blob(form_segment(_P_.popleft(), frame), frame)
 
-    frame.terminate()  # delete frame.dert__ and frame.blob_map
+    frame.terminate()  # delete frame.dert__ and frame.blob_rectangle
     blob.frame_ablobs = frame
     return frame
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
@@ -58,7 +58,7 @@ def comp_angle(a_, _P_, frame):
     " compare angle of adjacent pixels within frame == gblob "
 
     dert_, lower_dert_ = frame.dert__[y:y+2]
-    P_map_, lower_P_map_ = frame.blob_map[y:y+2]
+    P_map_, lower_P_map_ = frame.blob_rectangle[y:y+2]
 
     lower_a_ = get_angle(lower_dert_, P_map_, lower_P_map_)
     sda_ = np.abs(a_[1:] - a_[:-1]) + np.abs(lower_a_[:-1] - a_[:-1]) - 2 * ave
@@ -70,7 +70,7 @@ def comp_angle(a_, _P_, frame):
         while x < X - 1 and not P_map_[x]:
             x += 1
         if x < X - 1 and P_map_[x]:
-            aP = Classes.P(y, x_start=x, num_params=7)    # aP initialization
+            aP = Classes.P(y, x_1st=x, num_params=7)    # aP initialization
             while x < X - 1 and P_map_[x]:
                 a = a_[x]
                 sda = sda_[x]
@@ -78,7 +78,7 @@ def comp_angle(a_, _P_, frame):
                 s = sda > 0
                 aP = form_P(s, dert, x, aP, P_, buff_, _P_, frame)
                 x += 1
-            aP.terminate(x)  # aP' x_end
+            aP.terminate(x)  # aP' x_last
             scan_P_(aP, P_, buff_, _P_, frame)  # P scans hP_, constructing asegs and ablobs
             
     while buff_:

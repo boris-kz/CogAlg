@@ -150,7 +150,7 @@ def form_blob(term_seg, frame, y_carry=0):
     blob.term_segment(segment=term_seg, y=y - y_carry)  # segments packed in blob, y_carry: min elevation of term_seg over current hP
 
     if not blob.open_segments:  # blob is terminated and packed into frame
-        blob.terminate(term_seg.y_end()).localize(frame)
+        blob.terminate(term_seg.y_last()).localize(frame)
         frame.accum_params(blob.params[1:] + blob.orientation_params)  # frame.params: [I, G, Dx, Dy, xD, abs_xD, Ly], orient: [xD, abs_xD, Ly]
         frame.blob_.append(blob)    # blob is buffered into blob_
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
@@ -196,5 +196,5 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from DEBUG import draw_blob
-draw_blob('./debug', frame_of_blobs, debug_ablob=0, debug_parts=0, debug_local=1, show=0)
+draw_blob('./debug', frame_of_blobs, debug_ablob=0, debug_parts=1, debug_local=1, show=0)
 # ************ PROGRAM BODY END ******************************************************************************************

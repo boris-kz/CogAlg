@@ -67,7 +67,7 @@ def recursion(eval_queue, Ave, rdn):
         if a is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
         elif a is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
         else:
-            if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+            if val_PP_ * ((x_last - x_1st) / (y_last - y_1st)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
                 flip(blob)  # vertical blob rescan -> comp_Px_
             comp_Py_(0, blob, xD, rdn)  #-> comp_P
 
@@ -76,7 +76,7 @@ def recursion(eval_queue, Ave, rdn):
             if b is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
             elif b is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
             else:
-                if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                if val_PP_ * ((x_last - x_1st) / (y_last - y_1st)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
                     flip(blob)  # vertical blob rescan -> comp_Px_
                 comp_Py_(0, blob, xD, rdn)  #-> comp_P
 
@@ -85,7 +85,7 @@ def recursion(eval_queue, Ave, rdn):
                 if c is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
                 elif c is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
                 else:
-                    if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                    if val_PP_ * ((x_last - x_1st) / (y_last - y_1st)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
                         flip(blob)  # vertical blob rescan -> comp_Px_
                     comp_Py_(0, blob, xD, rdn)  #-> comp_P
 '''
@@ -97,8 +97,8 @@ def inc_deriv(blob, rdn):
     return -1, inc_deriv, [blob]
 
 def comp_Py_(val_PP_, norm, blob, rdn):     # here for a variable name definition only
-    # [x_start, x_end, min_y, max_y, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
-    # if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+    # [x_1st, x_last, y_1st, y_last, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
+    # if val_PP_ * ((x_last - x_1st) / (y_last - y_1st)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
     #     flip(blob)  # vertical blob rescan -> comp_Px_
     return -1, comp_Py_, [0, 0, blob]
 def flip(blob):

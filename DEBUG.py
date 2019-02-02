@@ -11,18 +11,18 @@ def draw_blob(path, frame, debug_ablob=0, debug_parts=0, debug_local=0, show=0):
     for blob_idx, blob in enumerate(frame.blob_):  # Iterate through blobs
         if debug_parts: blob_img = np.array([[[127] * 4] * X] * Y)
         if not debug_ablob and debug_local:
-            x_start, x_end, y_start, y_end = blob.boundaries
-            slice = frame_img[y_start:y_end, x_start:x_end]
-            slice[blob.blob_map == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
+            x_1st, x_last, y_1st, y_last = blob.boundaries
+            slice = frame_img[y_1st:y_last, x_1st:x_last]
+            slice[blob.blob_rectangle == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
             if debug_parts:
-                slice = blob_img[y_start:y_end, x_start:x_end]
-                slice[blob.blob_map == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
+                slice = blob_img[y_1st:y_last, x_1st:x_last]
+                slice[blob.blob_rectangle == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
         elif not debug_ablob and not debug_local:
             for seg_idx, seg in enumerate(blob.segment_): # Iterate through segments
                 if debug_parts: seg_img = np.array([[[127] * 4] * X] * Y)
-                y = blob.y_start() + seg.y_start()   # y_start
+                y = blob.y_1st() + seg.y_1st()   # y_1st
                 for (P, xd) in seg.Py_:
-                    x = blob.x_start() + P.x_start()
+                    x = blob.x_1st() + P.x_1st()
                     for i in range(P.L()):
                         frame_img[y, x, :3] = [255, 255, 255] if P.sign else [0, 0, 0]
                         if debug_parts:
@@ -31,8 +31,8 @@ def draw_blob(path, frame, debug_ablob=0, debug_parts=0, debug_local=0, show=0):
                         x += 1
                     y += 1
                 if debug_parts:
-                    x_start, x_end, y_start, y_end = [b + blob.x_start() for b in seg.boundaries[:2]] + [b + blob.y_start() for b in seg.boundaries[2:]]
-                    cv2.rectangle(seg_img, (x_start - 1, y_start - 1), (x_end, y_end), (0, 255, 255), 1)
+                    x_1st, x_last, y_1st, y_last = [b + blob.x_1st() for b in seg.boundaries[:2]] + [b + blob.y_1st() for b in seg.boundaries[2:]]
+                    cv2.rectangle(seg_img, (x_1st - 1, y_1st - 1), (x_last, y_last), (0, 255, 255), 1)
                     cv2.imwrite(path + '/blob%dseg%d.bmp' % (blob_idx, seg_idx), seg_img)
         else:
             if hasattr(blob, 'frame_of_ablob'):
@@ -40,9 +40,9 @@ def draw_blob(path, frame, debug_ablob=0, debug_parts=0, debug_local=0, show=0):
                 for ablob_idx, ablob in enumerate(ablob_):
                     if debug_parts: ablob_img = np.array([[[127] * 4] * X] * Y)
                     for aseg in ablob.segment_:
-                        y = aseg.y_start() + ablob.y_start() + blob.y_start()
+                        y = aseg.y_1st() + ablob.y_1st() + blob.y_1st()
                         for (aP, xd) in aseg.Py_:
-                            x = aP.x_start() + ablob.x_start() + blob.x_start()
+                            x = aP.x_1st() + ablob.x_1st() + blob.x_1st()
                             for i in range(aP.L()):
                                 frame_img[y, x, :3] = [255, 255, 255] if aP.sign else [0, 0, 0]
                                 if debug_parts:
@@ -51,12 +51,12 @@ def draw_blob(path, frame, debug_ablob=0, debug_parts=0, debug_local=0, show=0):
                                 x += 1
                             y += 1
                     if debug_parts:
-                        x_start, x_end, y_start, y_end = [b + blob.x_start() for b in ablob.boundaries[:2]] + [b + blob.y_start() for b in ablob.boundaries[2:]]
-                        cv2.rectangle(ablob_img, (x_start - 1, y_start - 1), (x_end, y_end), (0, 255, 255), 1)
+                        x_1st, x_last, y_1st, y_last = [b + blob.x_1st() for b in ablob.boundaries[:2]] + [b + blob.y_1st() for b in ablob.boundaries[2:]]
+                        cv2.rectangle(ablob_img, (x_1st - 1, y_1st - 1), (x_last, y_last), (0, 255, 255), 1)
                         cv2.imwrite(path + '/blob%dablob%d.bmp' % (blob_idx, ablob_idx), ablob_img)
         if debug_parts:
-            x_start, x_end, y_start, y_end = blob.boundaries
-            cv2.rectangle(blob_img, (x_start - 1, y_start - 1), (x_end, y_end), (0, 255, 255), 1)
+            x_1st, x_last, y_1st, y_last = blob.boundaries
+            cv2.rectangle(blob_img, (x_1st - 1, y_1st - 1), (x_last, y_last), (0, 255, 255), 1)
             cv2.imwrite(path + '/blob%d.bmp' % (blob_idx), blob_img)
     if show:
         plt.clf()
