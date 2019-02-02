@@ -1,31 +1,100 @@
-import math
+import matplotlib.pyplot as plt
+import numpy as np
 from collections import deque
+import Classes
+from frame_blobs import form_P
+from frame_blobs import scan_P_
+from frame_blobs import form_segment
+from frame_blobs import form_blob
 # Filters ------------------------------------------------------------------------
 from misc import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
-    comp_angle is a component of intra_blob
+    angle_blob is a component of intra_blob
 '''
 # ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
 # Functions:
-# -comp_angle()
-# -form_aP()
-# -scan_aP_()
-# -form_asegment()
-# -from_ablob()
-# Utilities:
+# -blob_to_ablobs()
 # -get_angle()
+# -comp_angle()
 # ***********************************************************************************************************************
 
-def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
-    ''' - Sort list of segments (root_) based on their top line P's coordinate (segment's min_y)    <---------------------------------------|
-        - Iterate through each line in the blob (from blob's min_y to blob's max_y):                                                        |
-            + Have every segment that contains current-line P in a list (seg_). This action is simplified by sorting step above  -----------|
-            + Extract current-line slice of the blob - or the list of every P of this line (P_)
-            + Have every out-of-bound segment removed from list (seg_)
-            + Perform angle computing, comparison and clustering in every dert in P_ '''
+def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+    # same functionality as image_to_blobs() in frame_blobs.py
 
+    frame = Classes.frame(blob.dert__, blob_map=blob.blob_map, num_params=9)
+    # initialize frame object: initialize blob_ and params, assign dert__ and blob_map, assign frame shape
+    _P_ = deque()
+    global y, Y, X
+    Y, X = frame.dert__.shape
+    a_ = get_angle(frame.dert__[0], frame.blob_map[0])  # compute max gradient angles within gblob
+    for y in range(Y - 1):
+        a_, _P_ = comp_angle(a_, _P_, frame)  # vertical and lateral pixel comparison
+
+    y = Y - 1   # frame ends, merge segs of last line into their blobs:
+    while _P_:  form_blob(form_segment(_P_.popleft(), frame), frame)
+
+    frame.terminate()  # delete frame.dert__ and frame.blob_map
+    blob.frame_ablobs = frame
+    return frame
+    # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
+
+def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-line for first line
+    " compute angle of gradient in and adjacent to selected gblob"
+    a_ = np.full(P_map_.shape, -1)
+
+    marg_angle_ = np.zeros(P_map_.shape, dtype=bool)           # to compute angle in blob-marginal derts
+    marg_angle_[:-1] = np.logical_or(P_map_[:-1], P_map_[1:])  # derts right-adjacent to blob, for lower-line lateral comp
+    marg_angle_ = np.logical_or(marg_angle_, _P_map_)          # derts down-adjacent to blob, for higher-line vertical comp
+
+    dx_, dy_ = np.array([[dx, dy] for p, g, dx, dy in dert_]).T  # construct dx, dy array
+
+    a_[marg_angle_] = np.arctan2(dy_[marg_angle_], dx_[marg_angle_]) * angle_coef + 128  # computes angle if marg_angle_== True
+    return a_
+    # ---------- compute_angle() end ------------------------------------------------------------------------------------
+
+def comp_angle(a_, _P_, frame):
+    " compare angle of adjacent pixels within frame == gblob "
+
+    dert_, lower_dert_ = frame.dert__[y:y+2]
+    P_map_, lower_P_map_ = frame.blob_map[y:y+2]
+
+    lower_a_ = get_angle(lower_dert_, P_map_, lower_P_map_)
+    sda_ = np.abs(a_[1:] - a_[:-1]) + np.abs(lower_a_[:-1] - a_[:-1]) - 2 * ave
+
+    P_ = deque()
+    buff_ = deque()
+    x = 0
+    while x < X - 1:  # excludes last column
+        while x < X - 1 and not P_map_[x]:
+            x += 1
+        if x < X - 1 and P_map_[x]:
+            aP = Classes.P(y, x_start=x, num_params=7)    # aP initialization
+            while x < X - 1 and P_map_[x]:
+                a = a_[x]
+                sda = sda_[x]
+                dert = dert_[x] + [a, sda]
+                s = sda > 0
+                aP = form_P(s, dert, x, aP, P_, buff_, _P_, frame)
+                x += 1
+            aP.terminate(x)  # aP' x_end
+            scan_P_(aP, P_, buff_, _P_, frame)  # P scans hP_, constructing asegs and ablobs
+
+    while buff_:
+        seg = buff_.popleft()
+        if seg.roots != 1:
+            form_blob(seg, frame)
+    while _P_:
+        form_blob(form_segment(_P_.popleft(), frame), frame)
+    return lower_a_, P_
+    # ---------- comp_angle() end ------------------------------------------------------------------------------------
+
+
+''' without Classes:
+
+def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+    
     params, root_ = blob[2:4]
     root_ = sorted(root_, key=lambda segment: segment[1][2])  # sorted by min_y of a segment
     blob[4] = []    # ablob_
@@ -52,32 +121,34 @@ def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accum
                 P += 1
                 seg_[ii][1] = P    # index of next-line P
             ii += 1
-        P_ = sorted(P_, key = lambda P: P[1][0])    # sorted by min_x, to get scan_aP_() work correctly
+        P_ = sorted(P_, key = lambda P: P[1][0])    # sorted by min_x for scan_aP_()
         aP_ = deque()
         buff_ = deque()
 
-        for P in P_:  # main operations
+        for P in P_:    # main operations:
             [min_x, max_x], L, dert_ = P[1], P[2][0], P[3]
             aP = [-1, [min_x, -1], [0, 0, 0, 0, 0, 0, 0], []]
             # lateral comp:
-            _a = get_angle(dert_[0])    # get_angle() will compute angle of given dert, or simply fetch it, if it has been computed before
-            if min_x == min_coord:
-                dax_ = [ave]        # init lateral da with ave
-            else:
-                dax_ = [abs(_a - get_angle(dert__[y][min_x - 1])) ]
+            dax_ = []
+            _a = get_angle(dert_[0])    # compute or fetch angle of max gradient in dert quadrant
             for dert in dert_[1:]:
                 a = get_angle(dert)
-                dax_.append(abs(a - _a))
+                dax_.append(abs(a - _a))  # compare angle to that of right-side quadrant
                 _a = a
+            if max_x == len(dert__[y]) - 2:
+                dax_ += [ave]        # init lateral da with ave
+            else:
+                dax_ += [abs(get_angle(dert__[y][max_x + 1]) - _a) ]
+
             # vertical comp:
-            if y == min_coord:
+            if y == len(dert__) - 1:
                 day_ = [ave] * L    # init vertical da_ with ave
             else:
-                day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y - 1][min_x: max_x + 1])]
+                day_ = [abs(get_angle(dert) - get_angle(_dert)) for dert, _dert in zip(dert_, dert__[y + 1][min_x: max_x + 1])]
+                # compare angles to those of same-x lower-line quadrants
             x = min_x
             for dert, dax, day in zip(dert_, dax_, day_):
-                dert += [dax + day - 2 * ave]
-                # dert = p, g, dx, dy, a, + sda: d_angle deviation, dx and dy are now redundant, for convenience only?
+                dert += [dax + day - 2 * ave]  # dert = p, g, dx, dy, a, sda: d_angle deviation, dx and dy for inc_range?
                 aP = form_aP(dert, x, max_x, aP, aP_, buff_, haP_, blob)
                 x += 1
                 # ...to next dert/pixel in line...
@@ -112,8 +183,8 @@ def form_aP(dert, x, x_stop, aP, aP_, buff_, haP_, blob):
     Dx += dx    # lateral D
     Dy += dy    # vertical D
     A += a      # summed angle
-    sDa += sda  # summed sda
-    dert_.append(dert)  # derts are buffered for oriented rescan and incremental range | derivation comp
+    sDa += sda  # summed deviation of difference in angle
+    dert_.append(dert)  # derts are buffered for intra-blob()
     aP = [s, [min_x, max_x], [L, I, G, Dx, Dy, A, sDa], dert_]
 
     if x == x_stop:     # aP is terminated:
@@ -238,9 +309,10 @@ def form_ablob(term_seg, blob, y_carry=0):
     # ---------- form_ablob() end ---------------------------------------------------------------------------------------
 
 def get_angle(dert):
-    " get angle of maximal gradient or compute it, if not available "
+    " get angle of maximal gradient, or compute it if not available "
     if len(dert) == 4:
         dx, dy = dert[2:]
         dert += [int(math.atan2(dy, dx) * angle_coef) + 128]
     return dert[4]
     # ---------- get_angle() end ---------------------------------------------------------------------------------------
+'''
