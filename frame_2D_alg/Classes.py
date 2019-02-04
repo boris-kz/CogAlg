@@ -1,6 +1,15 @@
 import numpy as np
+from collections import deque
 
-class frame(object):
+# ******************************************** OBJECT CLASSES ***********************************************************
+# Object Classes:
+# -frame
+# -P
+# -segment
+# -blob
+# ***********************************************************************************************************************
+
+class cl_frame(object):
     ''' frame class hold references and buffers essential for comparison and clustering operations.
         Core objects include:
         - frame.params: to compute averages, redundant for same-scope alt_frames
@@ -10,13 +19,14 @@ class frame(object):
         - blob_rectangle: boolean map for local frame inside a blob, = True inside the blob, = False outside
         provide ways to manipulate blob's dert.
     '''
-    def __init__(self, dert__, blob_rectangle = None, num_params = 7):
+    def __init__(self, dert__, blob_rectangle = None, num_params = 7, copy_dert = False):
         " constructor function of frame "
         self.params = [0] * num_params  # 7 params initially: I, G, Dx, Dy, xD, abs_xD, Ly
         self.blob_ = []                 # buffer for terminated blobs
         self.dert__ = dert__            # 2D-array buffer of derts
         self.shape = dert__.shape       # shape of the frame: self.shape = (Y, X)
-        self.blob_rectangle = blob_rectangle  
+        self.blob_rectangle = blob_rectangle
+        self.copy_dert = copy_dert
 
     def accum_params(self, params1, attr = 'params'):
         ''' accumulate a list attribute with given list.
@@ -35,7 +45,7 @@ class frame(object):
 
     # ---------- class frame end ----------------------------------------------------------------------------------------
 
-class P(frame):
+class cl_P(cl_frame):
     ''' P class holds P: individual 1D patterns that are continuous pixels,
         separated by sign of core parameter. P's variable attributes:
         - sign: determine the sign of P core parameter (which define the initial separate condition).
@@ -45,17 +55,15 @@ class P(frame):
         P has frame class method: accum_params()
     '''
 
-    def __init__(self, y, x_1st = 0, num_params = 5, sign=-1):
+    def __init__(self, x_1st = 0, num_params = 5, sign=-1):
         " constructor function of P "
         self.sign = sign            # either 0 or 1 normally. -1 for unknown sign
         self.boundaries = [x_1st] # initialize boundaries with only x_start
-        self.y = y                  # buffer to add to boundaries in P's termination
         self.params = [0] * num_params  # initialize params with zeroes: [L, I, G, Dx, Dy] for initial comp (default)
 
-    def terminate(self, x_last):
+    def terminate(self, x_last, y):
         " P ends, complete boundaries with x_end and y "
-        self.boundaries += [x_last, self.y]  # complete boundaries with x_end and y
-        del self.y
+        self.boundaries += [x_last, y]  # complete boundaries with x_end and y
         return self
 
     def localize(self, x0, y0):
@@ -75,7 +83,7 @@ class P(frame):
 
     # ---------- class P end --------------------------------------------------------------------------------------------
 
-class segment(P):
+class cl_segment(cl_P):
     ''' segments are contiguous same-sign Ps, with only one P per line.
         segment's variable attributes:
         - sign: determine the sign of core parameter
@@ -142,7 +150,7 @@ class segment(P):
         return self.boundaries[3]
     # ---------- class segment end --------------------------------------------------------------------------------------
 
-class blob(segment):
+class cl_blob(cl_segment):
     ''' blobs are 2D patterns of continuous same-sign pixels.
         same areas could be determined with flood fill algorithm,
         but blobs are more composite structure with:
@@ -196,24 +204,149 @@ class blob(segment):
         self.open_segments -= 1 # same or not, open_segments is reduced by 1 (because of fork joining)
         return self
 
-    def localize(self, frame, copy_dert__ = 1):
+    def localize(self, frame):
         " localize coordinate system. Get a slice of global dert_map if required "
         x0, xn, y0, yn = self.boundaries    # x_1st, x_last, y_1st, y_last
+        copy_dert = frame.copy_dert
 
-        if copy_dert__:  # receive a slice of global map:
+        if copy_dert:  # receive a slice of global map:
             self.dert__ = frame.dert__[y0:yn, x0:xn]
 
-        if copy_dert__:  # localize inner structures:
+        if copy_dert:  # localize inner structures:
             blob_rectangle = np.zeros(shape=(yn - y0, xn - x0), dtype=bool)
         for seg in self.segment_:
             seg.localize(x0, y0)
             for P, xd in seg.Py_:
                 P.localize(x0, y0)
-                if copy_dert__:
+                if copy_dert:
                     x_1st, x_last, y = P.boundaries
                     blob_rectangle[y, x_1st:x_last] = True   # pixels inside blob rectangle = True
 
-        if copy_dert__:
+        if copy_dert:
             self.blob_rectangle = blob_rectangle
         return self
-    # ---------- class segment end --------------------------------------------------------------------------------------
+    # ---------- class blob end -----------------------------------------------------------------------------------------
+
+# ****************************************** OBJECT CLASSES END *********************************************************
+
+# ******************************************* GENERIC FUNCTIONS *********************************************************
+# -form_P()
+# -scan_P_()
+# -form_segment()
+# -form_blob()
+# ***********************************************************************************************************************
+
+def form_P(x, y, s, dert, P, P_):
+    " Initialize, accumulate, terminate 1D pattern "
+    pri_s = P.sign
+
+    if s != pri_s and pri_s != -1:
+        P.terminate(x, y)  # P.boundaries = [x_1st, x_last, y]
+        P_.append(P)
+        P = cl_P(x_1st=x, sign=s)  # initialize P with y, x_1st = x, sign = s, all params ([L, I, G, Dx, Dy, optional A, sDa]) = 0
+
+    if pri_s == -1: P.sign = s  # new-line P.sign is -1
+    P.accum_params([1] + dert)  # P.params [L, I, G, Dx, Dy, optional A, sDa] accumulated with [1] + dert [1, p, g, dx, dy, optional a, sda]
+
+    return P  # accumulated within line, P_ is a buffer for conversion to _P_
+    # ---------- form_P() end -------------------------------------------------------------------------------------------
+
+
+def scan_P_(y, P_, seg_, frame):
+    " P scans shared-x-coordinate in _P, buffered in seg , combining overlapping Ps into blobs "
+
+    new_P_ = deque()
+    if P_ and seg_:
+        P = P_.popleft()
+        seg = seg_.popleft()
+        _P, xd = seg.Py_[-1]    # higher-line P is last element in seg.Py_
+
+        stop = False
+        fork_ = []
+
+        while not stop:
+            x_1st, x_last = P.boundaries[:2]
+            _x_1st, _x_last = _P.boundaries[:2]
+
+            if not _x_1st < x_last:         # P is left of _P: switch to new P
+                new_P_.append((P, fork_))
+                fork_ = []
+                if P_:  # switch to new P
+                    P = P_.popleft()
+                else:   # terminate loop
+                    if seg.roots != 1:
+                        form_blob(y, seg, frame)
+                    stop = True
+            elif not x_1st < _x_last:       # _P is left of P: switch to new _P
+                if seg.roots != 1:
+                    form_blob(y, seg, frame)
+
+                if seg_:    # switch to new _P
+                    seg = seg_.popleft()
+                    _P, xd = seg.Py_[-1]
+                else:   # terminate loop
+                    new_P_.append((P, fork_))
+                    stop = True
+            elif P.sign == _P.sign:         # P and _P are olp, check sign
+                seg.roots += 1
+                fork_.append(seg)  # P-connected segments buffered into fork_
+
+    # handle the remainders:
+    while P_:
+        new_P_.append((P_.popleft(), []))   # no fork
+    while seg_:
+        form_blob(seg_.popleft(), frame)    # seg_.popleft().roots always == 0
+
+    return new_P_
+
+    # ---------- scan_P_() end ------------------------------------------------------------------------------------------
+
+
+def form_segment(y, P_, frame):
+    " Convert ervery Ps into segments or add to higher-line segment, merge blobs "
+
+    seg_ = deque()
+    while P_:
+        P, fork_ = P_.popleft()  # unpack P and it's fork_
+
+        if not fork_:  # if no higher-line connection:
+            seg = cl_segment(P, fork_)  # init segment with P and fork_: sign, boundaries, params, orient [xD, abs_xD], ave_x, Py_, roots, fork_
+            blob = cl_blob(seg)  # init blob with segment: sign, boundaries, params, orient [xD, abs_xD, Ly]), segment_, open_segments
+
+        else:
+            if len(fork_) == 1 and fork_[0].roots == 1:  # single connection with higher-line segment, which has single lower-line connection: roots == 1
+                # hP is merged into higher-line connected segment:
+                seg = fork_[0]  # the only fork
+                seg.accum_P(P)  # merge P into seg, accumulating params, Py_ and orientation_params
+
+            else:  # initialize new segment with shared higher-line-connected-segment's blob:
+                seg = cl_segment(P, fork_)  # seg is initialized
+                blob = fork_[0].blob  # load first fork' blob
+                blob.accum_segment(seg)  # add seg to fork' blob
+                blob.extend_boundaries(P.boundaries[:2])  # extend x-boundaries
+
+                if len(fork_) > 1:  # terminate all fork in fork_, merge blobs joined through current seg
+                    if fork_[0].roots == 1:  # segment could be terminated only if roots == 1
+                        form_blob(y, fork_[0], frame)
+
+                    for fork in fork_[1:len(fork_)]:
+                        if fork.roots == 1:  # segment could be terminated only if roots == 1
+                            form_blob(y, fork, frame)
+                        blob.merge(fork.blob)  # merge blobs of other forks into blob of 1st fork
+        seg_.append(seg)
+    return seg_
+    # ---------- form_segment() end -----------------------------------------------------------------------------------------
+
+
+def form_blob(y, term_seg, frame):
+    " Terminate segments and completed blobs "
+    blob = term_seg.blob  # blob of terminated segment
+    blob.term_segment(term_seg, y)  # segments packed in blob, y_carry: min elevation of term_seg over current hP
+
+    if not blob.open_segments:  # blob is terminated and packed into frame
+        blob.terminate(term_seg.y_last()).localize(frame)
+        frame.accum_params(blob.params[1:] + blob.orientation_params)  # frame.params: [I, G, Dx, Dy, xD, abs_xD, Ly], orient: [xD, abs_xD, Ly]
+        frame.blob_.append(blob)  # blob is buffered into blob_
+    # ---------- form_blob() end ----------------------------------------------------------------------------------------
+
+# ***************************************** GENERIC FUNCTIONS END *******************************************************

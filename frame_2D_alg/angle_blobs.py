@@ -1,13 +1,12 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from collections import deque
 import Classes
-from frame_blobs import form_P
-from frame_blobs import scan_P_
-from frame_blobs import form_segment
-from frame_blobs import form_blob
+from frame_2D_alg.frame_blobs import form_P
+from frame_2D_alg.frame_blobs import scan_P_
+from frame_2D_alg.frame_blobs import form_segment
+from frame_2D_alg.frame_blobs import form_blob
 # Filters ------------------------------------------------------------------------
-from misc import get_filters
+from frame_2D_alg.misc import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
