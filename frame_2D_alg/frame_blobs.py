@@ -44,7 +44,7 @@ def comp_pixel(y, p_, lower_p_, dert_):
     P_ = deque()
     p = p_[0]  # input pixel
     x = 0
-    P = Classes.cl_P(x_1st=0)  # initialize P with: y, x_1st = 0, sign = -1, all params = 0, initially [L, I, G, Dx, Dy]
+    P = Classes.cl_P(x0=0)  # initialize P with: y, x0 = 0, sign = -1, all params = 0, initially [L, I, G, Dx, Dy]
 
     for right_p, lower_p in zip(p_[1:], lower_p_[:-1]):  # pixel p is compared to vertically and horizontally subsequent pixels
         dy = lower_p - p    # compare to lower pixel
@@ -57,7 +57,7 @@ def comp_pixel(y, p_, lower_p_, dert_):
         p = right_p         # for next lateral comp
         x += 1
     
-    P.terminate(x, y)  # terminate last P, P.boundaries = [x_1st, x_last, y]
+    P.terminate(x, y)  # terminate last P, P.boundaries = [x0, xn, y]
     P_.append(P)
 
     return lower_p_, P_
@@ -71,7 +71,6 @@ def image_to_blobs(image):
 
     seg_ = deque()   # higher-line 1D patterns
     p_ = image[0]   # first horizontal line of pixels
-    global y
     for y in range(Y - 1):
         lower_p_ = image[y + 1]                         # pixels at line y + 1
         p_, P_ = comp_pixel(y, p_, lower_p_, dert_=frame.dert__[y])  # vertical and lateral pixel comparison, form Ps, segments and eventually blobs
@@ -79,7 +78,7 @@ def image_to_blobs(image):
         seg_ = Classes.form_segment(y, P_, frame)
 
     y = Y - 1   # frame ends, merge segs of last line into their blobs
-    while seg_:  Classes.form_blob(seg_.popleft(), frame)
+    while seg_:  Classes.form_blob(y, seg_.popleft(), frame)
 
     frame.terminate()   # delete frame.dert__. derts are distributed to all blobs no need to keep their reference here
     return frame        # frame of 2D patterns, to be outputted to level 2
@@ -105,6 +104,6 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-from debug import draw_blob
-draw_blob('./../debug', frame_of_blobs, debug_ablob=0, debug_parts=0, debug_local=0, show=0)
+# from DEBUG import draw_blob
+# draw_blob('./../debug', frame_of_blobs, debug_ablob=0, debug_parts=0, debug_local=0, show=0)
 # ************ PROGRAM BODY END ******************************************************************************************

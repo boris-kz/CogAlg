@@ -19,7 +19,7 @@ from angle_blobs import blob_to_ablobs
 
 def eval_blob(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
 
-    L, I, G, Dx, Dy = blob.params
+    L, I, G, Dx, Dy, xD, abs_xD, Ly = blob.params + blob.orientation_params
     Ave = ave * L   # whole-blob reprocessing filter, fixed: no if L?
     rdn = 1  # redundant representation counter
     val_deriv, val_range = 0, 0
@@ -115,5 +115,5 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-# from DEBUG import draw_blob
-# draw_blob('./debug', frame, debug_ablob=1, debug_parts=0, debug_local=0, show=0)
+from DEBUG import draw_blob
+draw_blob('./../debug', frame, debug_ablob=1, debug_parts=0, debug_local=0, show=0)

@@ -1,10 +1,6 @@
 import numpy as np
 from collections import deque
 import Classes
-from frame_2D_alg.frame_blobs import form_P
-from frame_2D_alg.frame_blobs import scan_P_
-from frame_2D_alg.frame_blobs import form_segment
-from frame_2D_alg.frame_blobs import form_blob
 # Filters ------------------------------------------------------------------------
 from frame_2D_alg.misc import get_filters
 get_filters(globals())          # imports all filters at once
@@ -22,17 +18,28 @@ get_filters(globals())          # imports all filters at once
 def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
     ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
-    frame = Classes.frame(blob.dert__, blob_rectangle=blob.blob_rectangle, num_params=9)
+    frame = Classes.cl_frame(blob.dert__, blob_box=blob.blob_box, num_params=9)
     # initialize frame object: initialize blob_ and params, assign dert__ and blob_rectangle, assign frame shape
-    _P_ = deque()
-    global y, Y, X
+    seg_ = deque()
+    global Y, X
     Y, X = frame.dert__.shape
-    a_ = get_angle(frame.dert__[0], frame.blob_rectangle[0])  # compute max gradient angles within gblob
+    dert_ = frame.dert__[0]
+    P_map_ = frame.blob_box[0]
+    a_ = get_angle(dert_ , P_map_)  # compute max gradient angles within gblob
     for y in range(Y - 1):
-        a_, _P_ = comp_angle(a_, _P_, frame)  # vertical and lateral pixel comparison
+
+        lower_dert_ = frame.dert__[y + 1]
+        lower_P_map_ = frame.blob_box[y + 1]
+        lower_a_ = get_angle(lower_dert_, lower_P_map_, P_map_)
+
+        P_ = comp_angle(y, a_, lower_a_, dert_, P_map_) # vertical and lateral pixel comparison
+        P_ = Classes.scan_P_(y, P_, seg_, frame)        # P_ scans _P_ from seg_
+        seg_ = Classes.form_segment(y, P_, frame)       # form segments with P_ and their fork_s
+
+        a_, dert_, P_map_ = lower_a_, lower_dert_, lower_P_map_ # buffers for next line
 
     y = Y - 1   # frame ends, merge segs of last line into their blobs:
-    while _P_:  form_blob(form_segment(_P_.popleft(), frame), frame)
+    while seg_:  Classes.form_blob(y, seg_.popleft(), frame)
 
     frame.terminate()  # delete frame.dert__ and frame.blob_rectangle
     blob.frame_ablobs = frame
@@ -44,8 +51,10 @@ def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-lin
     a_ = np.full(P_map_.shape, -1)
 
     marg_angle_ = np.zeros(P_map_.shape, dtype=bool)           # to compute angle in blob-marginal derts
-    marg_angle_[:-1] = np.logical_or(P_map_[:-1], P_map_[1:])  # derts right-adjacent to blob, for lower-line lateral comp
+    marg_angle_[0] = P_map_[0]
+    marg_angle_[1:] = np.logical_or(P_map_[:-1], P_map_[1:])  # derts right-adjacent to blob, for lower-line lateral comp
     marg_angle_ = np.logical_or(marg_angle_, _P_map_)          # derts down-adjacent to blob, for higher-line vertical comp
+
 
     dx_, dy_ = np.array([[dx, dy] for p, g, dx, dy in dert_]).T  # construct dx, dy array
 
@@ -53,38 +62,27 @@ def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-lin
     return a_
     # ---------- compute_angle() end ------------------------------------------------------------------------------------
 
-def comp_angle(a_, _P_, frame):
+def comp_angle(y, a_, lower_a_, dert_, P_map_):
     " compare angle of adjacent pixels within frame == gblob "
 
-    dert_, lower_dert_ = frame.dert__[y:y+2]
-    P_map_, lower_P_map_ = frame.blob_rectangle[y:y+2]
-
-    lower_a_ = get_angle(lower_dert_, P_map_, lower_P_map_)
     sda_ = np.abs(a_[1:] - a_[:-1]) + np.abs(lower_a_[:-1] - a_[:-1]) - 2 * ave
 
     P_ = deque()
-    buff_ = deque()
     x = 0
     while x < X - 1:  # excludes last column
         while x < X - 1 and not P_map_[x]:
             x += 1
         if x < X - 1 and P_map_[x]:
-            aP = Classes.P(y, x_1st=x, num_params=7)    # aP initialization
+            P = Classes.cl_P(x0=x, num_params=7)    # aP initialization
             while x < X - 1 and P_map_[x]:
                 a = a_[x]
                 sda = sda_[x]
                 dert = dert_[x] + [a, sda]
                 s = sda > 0
-                aP = form_P(s, dert, x, aP, P_, buff_, _P_, frame)
+                P = Classes.form_P(x, y, s, dert, P, P_)
                 x += 1
-            aP.terminate(x)  # aP' x_last
-            scan_P_(aP, P_, buff_, _P_, frame)  # P scans hP_, constructing asegs and ablobs
-            
-    while buff_:
-        seg = buff_.popleft()
-        if seg.roots != 1:
-            form_blob(seg, frame)
-    while _P_:
-        form_blob(form_segment(_P_.popleft(), frame), frame)
-    return lower_a_, P_
+            P.terminate(x, y)  # aP' x_last
+            P_.append(P)
+
+    return P_
     # ---------- compare_angle() end ------------------------------------------------------------------------------------

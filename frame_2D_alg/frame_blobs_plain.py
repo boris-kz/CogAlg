@@ -127,7 +127,7 @@ def form_segment(hP, frame):
     " Convert hP into new segment or add it to higher-line segment, merge blobs "
     _P, fork_ = hP
     s, [min_x, max_x], params = _P[:-1]
-    ave_x = (params[0] - 1) // 2  # extra-x L = L-1 (1x in L)
+    ave_x = (min_x + max_x) // 2  # extra-x L = L-1 (1x in L)
 
     if not fork_:  # seg is initialized with initialized blob (params, coordinates, incomplete_segments, root_, xD)
         blob = [s, [min_x, max_x, y - 1, -1, 0, 0, 0], [0, 0, 0, 0, 0], [], 1]  # s, coords, params, root_, incomplete_segments
@@ -262,8 +262,4 @@ start_time = time()
 frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
-
-# Rebuild blob -------------------------------------------------------------------
-# from misc import draw_blobs
-# draw_blobs('./debug', frame_of_blobs[7], (Y, X), out_ablob=0, debug=0)
 # ************ PROGRAM BODY END ******************************************************************************************
