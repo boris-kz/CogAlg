@@ -1,6 +1,6 @@
 from time import time
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg.frame_main.intra_blob.angle_blobs import blob_to_ablobs
+from frame_2D_alg.intra_blob.angle_blobs import blob_to_ablobs
 # from inc_deriv import inc_deriv
 # from comp_Py_ import comp_Py_
 
@@ -56,9 +56,9 @@ def recursion(eval_queue, Ave, rdn):
         if eval_queue:
             recursion(eval_queue, Ave, rdn+1)
 
-''' # one evaluation: 
+''' # eval instance: 
     values = val_deriv, val_range, val_PP_
-    c, b, a = sorted(values)  # three instances of evaluation for three branches of recursion:
+    c, b, a = sorted(values)  # projected values for each branch of recursion:
     
     if a > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
         rdn += 1
@@ -101,7 +101,7 @@ from frame_2D_alg.misc import get_filters
 get_filters(globals())          # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
-from frame_2D_alg.frame_main import frame_blobs
+from frame_2D_alg import frame_blobs
 
 Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()
