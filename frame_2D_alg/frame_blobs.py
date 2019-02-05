@@ -57,7 +57,7 @@ def comp_pixel(y, p_, lower_p_, dert_):
         p = right_p  # for next lateral comp
         x += 1
 
-    P.terminate(x, y)  # terminate last P, P.boundaries = [x0, xn, y]
+    P.terminate(x, y)  # terminate last P, P.box = [x0, xn, y]
     P_.append(P)
     return lower_p_, P_
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------

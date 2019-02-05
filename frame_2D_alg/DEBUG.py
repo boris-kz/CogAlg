@@ -13,10 +13,10 @@ def draw_blob(path, frame, debug_ablob=0, debug_parts=0, debug_local=0, show=0):
         if not debug_ablob and debug_local:
             x0, xn, y0, yn = blob.boundaries
             slice = frame_img[y0:yn, x0:xn]
-            slice[blob.blob_box == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
+            slice[blob.blob_map == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
             if debug_parts:
                 slice = blob_img[y0:yn, x0:xn]
-                slice[blob.blob_box == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
+                slice[blob.blob_map == True, :3] = [255, 255, 255] if blob.sign else [0, 0, 0]
         elif not debug_ablob and not debug_local:
             for seg_idx, seg in enumerate(blob.segment_): # Iterate through segments
                 if debug_parts: seg_img = np.array([[[127] * 4] * X] * Y)

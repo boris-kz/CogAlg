@@ -17,17 +17,17 @@ get_filters(globals()) # imports all filters at once
 def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
     ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
-    frame = Classes.cl_frame(blob.dert__, blob_box=blob.blob_box, num_params=9)  # initialize frame object per gblob
+    frame = Classes.cl_frame(blob.dert__, blob_map=blob.blob_map, num_params=9)  # initialize frame object per gblob
     seg_ = deque()
     global Y, X
     Y, X = frame.dert__.shape
     dert_ = frame.dert__[0]
-    P_map_ = frame.blob_box[0]
+    P_map_ = frame.blob_map[0]
     a_ = get_angle(dert_, P_map_)  # compute angle of max gradients within gblob (contiguous area of same-sign gradient)
 
     for y in range(Y - 1):
         lower_dert_ = frame.dert__[y + 1]
-        lower_P_map_ = frame.blob_box[y + 1]
+        lower_P_map_ = frame.blob_map[y + 1]
         lower_a_ = get_angle(lower_dert_, lower_P_map_, P_map_)
 
         P_ = comp_angle(y, a_, lower_a_, dert_, P_map_) # vertical and lateral angle comparison
@@ -38,7 +38,7 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     y = Y - 1   # frame ends, merge segs of last line into their blobs:
     while seg_: Classes.form_blob(y, seg_.popleft(), frame)
 
-    frame.terminate()  # delete frame.dert__ and frame.blob_box
+    frame.terminate()  # delete frame.dert__ and frame.blob_map
     blob.frame_ablobs = frame
     return frame
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------

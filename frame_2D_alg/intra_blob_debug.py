@@ -47,14 +47,17 @@ def eval_blob(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_co
 def recursion(eval_queue, Ave, rdn):
     ''' evaluation of recursion branches, result is evaluated for insertion in eval_queue, which determines next step of recursion '''
 
-    val, branch, args = eval_queue.pop(0)
-    if val > Ave * rdn:
-        new_val, new_branch, new_args = branch(*args, rdn=rdn)  # insert new branch into eval_queue, ordered by value
+    while eval_queue:
+        val, branch, args = eval_queue.pop(0)
+        if val > Ave * rdn:
+            new_val, new_branch, new_args = branch(*args, rdn=rdn)  # insert new branch into eval_queue, ordered by value
 
-        if new_val > 0:
-            eval_queue = sorted(eval_queue.append((new_val, new_branch, new_args)), key= lambda item: item[0], reverse=True)
-        if eval_queue:
-            recursion(eval_queue, Ave, rdn+1)
+            if new_val > 0:
+                eval_queue = sorted(eval_queue.append((new_val, new_branch, new_args)), key= lambda item: item[0], reverse=True)
+
+            rdn += 1
+        else:
+            break
 
 ''' # eval instance: 
     values = val_deriv, val_range, val_PP_
