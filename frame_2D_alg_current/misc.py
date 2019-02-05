@@ -1,4 +1,4 @@
-from frame_2D_alg import filters
+from frame_2D_alg_current import filters
 
 
 # ***************************************************** MISCELLANEOUS FUNCTIONS *****************************************

@@ -1,6 +1,6 @@
 from time import time
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg.intra_blob.angle_blobs import blob_to_ablobs
+from frame_2D_alg_current.intra_blob_reprocessing.angle_blobs import blob_to_ablobs
 # from inc_deriv import inc_deriv
 # from comp_Py_ import comp_Py_
 
@@ -17,15 +17,15 @@ from frame_2D_alg.intra_blob.angle_blobs import blob_to_ablobs
     intra_blob rdn is reduced by full inclusion: mediated access, also by cross-derivation blob comp?
 '''
 
-def eval_blob(blob):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
+def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
 
     L, I, G, Dx, Dy, Ly = blob.params
-    Ave = ave * L   # whole-blob reprocessing filter, fixed: no if L?
+    Ave = ave * L   # whole-blob reprocessing filter
     rdn = 1  # redundant representation counter
     val_deriv, val_range = 0, 0
 
     if blob.sign:  # positive gblob: area of noisy or directional gradient
-        if G > Ave:  # likely edge, angle comp, ablobs def:
+        if G > Ave:  # likely edge, angle comp, ablobs definition
             rdn += 1  # or branch-specific cost ratio?
             blob_of_ablobs = blob_to_ablobs(blob)
             sDa = blob_of_ablobs.params[5]
@@ -97,11 +97,11 @@ def intra_blob(frame):   # evaluate blobs for comp_angle, inc_range comp, inc_de
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg_current.misc import get_filters
 get_filters(globals())          # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
-from frame_2D_alg import frame_blobs
+from frame_2D_alg_current import frame_blobs
 
 Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()

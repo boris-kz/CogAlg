@@ -1,12 +1,12 @@
 import numpy as np
 from collections import deque
-from frame_2D_alg.frame_main import Classes
-from frame_2D_alg.frame_blobs import form_P
-from frame_2D_alg.frame_blobs import scan_P_
-from frame_2D_alg.frame_blobs import form_segment
-from frame_2D_alg.frame_blobs import form_blob
+from frame_2D_alg_current import Classes
+from frame_2D_alg_current.Classes import form_P
+from frame_2D_alg_current.Classes import scan_P_
+from frame_2D_alg_current.Classes import form_segment
+from frame_2D_alg_current.Classes import form_blob
 # Filters ------------------------------------------------------------------------
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg_current.misc import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
 '''

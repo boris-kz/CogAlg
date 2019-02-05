@@ -18,8 +18,8 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also condition
     if norm:  # if xD / Ly * (Dx + Dy) > ave: params are xd-normalized for alt comp, then comp results, as div comp?
 
         hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vert distance)
-        aL = L / hyp; aI = I / hyp  # est orthogonal slice is a reduced P
-
+        aL = L / hyp  # est. orthogonal slice is reduced from P
+        aI = I / hyp
         aDx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
         aDy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over lat_L
 
@@ -67,7 +67,6 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also condition
     ds = 1 if Pd > 0 else 0
 
     return (P, P_ders), vs, ds
-
 
 ''' no comp_q_(q_, _q_, yP_): vert comp by ycomp, ortho P by orientation?
     comp_P is not fuzzy: x, y vars are already fuzzy?
@@ -255,7 +254,7 @@ def comp_Py_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P ->
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
 
     if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
-        # or (max(Dx, Dy) / min(Dx, Dy): cumulative values?
+        # or (max(Dx, Dy) / min(Dx, Dy): cumulative vs extremal values?
         flip(blob)  # vertical blob rescan -> comp_Px_
 
     # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
