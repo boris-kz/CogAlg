@@ -16,17 +16,18 @@ class cl_frame(object):
         - blob_: hold buffers of local or global blobs, depends on the scope of frame
         Others include:
         - dert__: buffer of derts in 2D-array, provide spatial proximity information for inputs
-        - blob_map: boolean map for local frame inside a blob, = True inside the blob, = False outside
+        - map: boolean map for local frame inside a blob, = True inside the blob, = False outside
         provide ways to manipulate blob's dert.
     '''
-    def __init__(self, dert__, blob_map = None, num_params = 7, copy_dert = False):
+    def __init__(self, dert__, map = None, copy_dert = False):
         " constructor function of frame "
-        self.params = [0] * num_params  # 7 params initially: I, G, Dx, Dy, xD, abs_xD, Ly
         self.blob_ = []                 # buffer for terminated blobs
         self.dert__ = dert__            # 2D-array buffer of derts
         self.shape = dert__.shape       # shape of the frame: self.shape = (Y, X)
-        self.blob_map = blob_map
+        self.map = map
         self.copy_dert = copy_dert
+        num_params = self.shape[2] + 3  # 3 params more: xD, abs_xD, Ly
+        self.params = [0] * num_params  # 7 params initially: I, G, Dx, Dy, xD, abs_xD, Ly
 
     def accum_params(self, params1, attr = 'params'):
         ''' accumulate a list attribute with given list.
@@ -40,7 +41,7 @@ class cl_frame(object):
     def terminate(self):
         " frame ends, delete redundant objects "
         del self.dert__
-        del self.blob_map
+        del self.map
         return self
 
     # ---------- class frame end ----------------------------------------------------------------------------------------
@@ -162,7 +163,7 @@ class cl_blob(cl_segment):
         - open_segments: counter of unfinished segments, for blob termination check
         if potentially evaluated for recursive comp:
         - dert__: a slice of outer frame, buffered for further comp
-        - blob_map: to determine which dert in dert__ belongs to current blob
+        - map: to determine which dert in dert__ belongs to current blob
         blob has access to all segment class method
     '''
 
@@ -213,28 +214,35 @@ class cl_blob(cl_segment):
             self.dert__ = frame.dert__[y0:yn, x0:xn]
 
         if copy_dert:  # localize inner structures:
-            blob_map = np.zeros(shape=(yn - y0, xn - x0), dtype=bool)
+            map = np.zeros(shape=(yn - y0, xn - x0), dtype=bool)
         for seg in self.segment_:
             seg.localize(x0, y0)
             for P, xd in seg.Py_:
                 P.localize(x0, y0)
                 if copy_dert:
                     x_1st, x_last, y = P.box
-                    blob_map[y, x_1st:x_last] = True   # pixels inside blob box = True
+                    map[y, x_1st:x_last] = True   # pixels inside blob box = True
 
         if copy_dert:
-            self.blob_map = blob_map
+            self.map = map
         return self
     # ---------- class blob end -----------------------------------------------------------------------------------------
 
 # ****************************************** OBJECT CLASSES END *********************************************************
 
 # ******************************************* GENERIC FUNCTIONS *********************************************************
+# -init_dert__()
 # -form_P()
 # -scan_P_()
 # -form_segment()
 # -form_blob()
 # ***********************************************************************************************************************
+def init_dert__(num_derts, input__):
+    " initialize dert__ from of input__ "
+    height, width, depth = input__.shape
+    dert__ = np.zeros((height, width, (depth + num_derts)), dtype=int)
+    dert__[:, :, :depth] = input__
+    return dert__
 
 def form_P(x, y, s, dert, P, P_):
     " Initialize, accumulate, terminate 1D pattern "
@@ -246,7 +254,7 @@ def form_P(x, y, s, dert, P, P_):
         P = cl_P(x0=x, sign=s)  # initialize P with y, x0 = x, sign = s, all params ([L, I, G, Dx, Dy, optional A, sDa]) = 0
 
     if pri_s == -1: P.sign = s  # new-line P.sign is -1
-    P.accum_params([1] + dert)  # P.params [L, I, G, Dx, Dy, optional A, sDa] accumulated with [1] + dert [1, p, g, dx, dy, optional a, sda]
+    P.accum_params([1] + list(dert))  # P.params [L, I, G, Dx, Dy, optional A, sDa] accumulated with [1] + dert [1, p, g, dx, dy, optional a, sda]
 
     return P  # accumulated within line, P_ is a buffer for conversion to _P_
     # ---------- form_P() end -------------------------------------------------------------------------------------------
