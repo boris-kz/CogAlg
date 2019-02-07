@@ -1,7 +1,7 @@
 from time import time
 # Recursion branches -------------------------------------------------------------
 from angle_blobs import blob_to_ablobs
-# from inc_deriv import  inc_deriv
+from inc_deriv import inc_deriv
 # from comp_Py_ import comp_Py_
 
 '''
@@ -84,9 +84,6 @@ def recursion(eval_queue, Ave, rdn):
 def inc_range(blob, rdn):
     return -1, inc_range, [blob]
 
-def inc_deriv(blob, rdn):
-    return -1, inc_deriv, [blob]
-
 def comp_Py_(val_PP_, norm, blob, rdn):     # here for a variable name definition only
     # [x_1st, x_last, y_1st, y_last, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
     # if val_PP_ * ((x_last - x_1st) / (y_last - y_1st)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
@@ -98,7 +95,8 @@ def flip(blob):
 def intra_blob(frame):   # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
 
     for blob in frame.blob_:
-        eval_blob(blob)
+        # eval_blob(blob)
+        if blob.sign: inc_deriv(blob)
     return frame  # frame of 2D patterns, to be outputted to level 2
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
@@ -119,4 +117,4 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from DEBUG import draw_blob
-draw_blob('./../debug', frame, debug_ablob=1, debug_parts=0, debug_local=0, show=0)
+draw_blob('./../debug', frame, typ=2, debug_parts=0, debug_local=0, show=0)

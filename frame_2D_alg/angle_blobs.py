@@ -41,7 +41,7 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     while seg_: Classes.form_blob(y, seg_.popleft(), frame)
 
     frame.terminate()  # delete frame.dert__ and frame.map
-    blob.frame_ablobs = frame
+    blob.angle_frame = frame
     return frame
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-lin
 
     a_[marg_angle_] = np.arctan2(dy_[marg_angle_], dx_[marg_angle_]) * angle_coef + 128  # computes angle if marg_angle_== True
     return a_
-    # ---------- compute_angle() end ------------------------------------------------------------------------------------
+    # ---------- get_angle() end ----------------------------------------------------------------------------------------
 
 def comp_angle(y, a_, lower_a_, dert_, P_map_):
     " compare angle of adjacent gradients within frame per gblob "
@@ -82,4 +82,4 @@ def comp_angle(y, a_, lower_a_, dert_, P_map_):
             P_.append(P)
 
     return  P_
-    # ---------- compare_angle() end ------------------------------------------------------------------------------------
+    # ---------- comp_angle() end ---------------------------------------------------------------------------------------
