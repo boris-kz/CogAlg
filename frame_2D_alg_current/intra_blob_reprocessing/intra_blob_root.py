@@ -56,7 +56,7 @@ def recursion(eval_queue, Ave, rdn):
         if eval_queue:
             recursion(eval_queue, Ave, rdn+1)
 
-''' # eval instance: 
+''' # init eval: 
     values = val_deriv, val_range, val_PP_
     c, b, a = sorted(values)  # projected values for each branch of recursion:
     

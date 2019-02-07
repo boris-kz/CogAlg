@@ -89,11 +89,10 @@ def comp_angle(a_, _P_, frame):
     return lower_a_, P_
     # ---------- comp_angle() end ------------------------------------------------------------------------------------
 
-
-''' without Classes:
+    # without Classes:
 
 def comp_angle(blob, dert__):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
-    
+
     params, root_ = blob[2:4]
     root_ = sorted(root_, key=lambda segment: segment[1][2])  # sorted by min_y of a segment
     blob[4] = []    # ablob_
@@ -314,4 +313,3 @@ def get_angle(dert):
         dert += [int(math.atan2(dy, dx) * angle_coef) + 128]
     return dert[4]
     # ---------- get_angle() end ---------------------------------------------------------------------------------------
-'''

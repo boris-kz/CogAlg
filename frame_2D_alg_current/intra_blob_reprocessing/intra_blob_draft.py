@@ -26,11 +26,11 @@ def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv 
 
     if blob.sign:  # positive gblob: area of noisy or directional gradient
         if G > Ave:  # likely edge, angle comp, ablobs definition
-            rdn += 1  # or branch-specific cost ratio?
-            blob_of_ablobs = blob_to_ablobs(blob)
-            sDa = blob_of_ablobs.params[5]
 
-            val_deriv = (G / Ave) * -sDa  # relative G * angle Match
+            rdn += 1  # or branch-specific cost ratio?
+            blob_ablobs = blob_to_ablobs(blob)
+            val_deriv = (G / Ave) * -blob_ablobs.params[5]  # relative_G * -sDa: angle Match
+
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
     val_PP_ = (L + I + G + Dx + Dy) * (L / Ly / Ly)
 
@@ -39,47 +39,56 @@ def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv 
     # ~ box elongation = (x_max - x_min) / (y_max - y_min)?
     # plus D_bias: Dx / Dy | Dy / Dx: indicates deviation of P match?
 
-    return Ave, ((val_deriv, blob.map), (val_range, blob.map), (val_PP_, blob.map))  # estimated value per branch
+    return (val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)  # estimated values per branch
 
 
-def eval_layer(val_, blob, rdn, Ave):  # evaluation of val_: one layer of recursion tree, unfinished
-    new_val_ = []
+def eval_layer(val_, rdn):
+
+    # val_: estimated values of active branches in current layer across recursion tree per blob
     eval_ = sorted(val_, key= lambda item: item[0])
+    new_val_ = []   # estimated branch values of deeper layer of recursion tree per blob
+    map_ = []  # blob maps of stronger branches in eval_, appended for next val evaluation
 
     while eval_:
-        val, typ, map_ = eval_.pop
+        val, typ, blob = eval_.pop
         for map in map_:
-            olp = blob.map and map   # pseudo code for sum of AND between maps
+            olp = blob.map and map   # pseudo code for counting AND between maps, if box overlap?
             rdn += 1 * (olp / blob.L)  # redundancy to previously formed representations
 
-        if val > Ave * rdn:
-            if typ == 0:   inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
-            elif typ == 1: inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
-            else:          comp_Py_(val, 0, blob, rdn)  # -> comp_P
+        if val >   ave * blob.L * rdn:
+            if typ == 0: blob_sub_blobs = inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+            elif typ==1: blob_sub_blobs = inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+            else:        blob_sub_blobs = comp_Py_(val, 0, blob, rdn)  # -> comp_P
 
-            Ave, ((val_deriv, imap), (val_range, imap), (val_PP_, imap)) = eval_blob(blob)
-            map_.append(imap)
-            new_val_ += [(val_deriv, 0, map_), (val_range, 1, map_), (val_PP_, 2, map_)]
-            # merge three estimated branch values per blob into deeper layer of recursion tree
+            map_.append( blob.map)
+            new_val_ += [intra_blob_recur( val_, blob_sub_blobs)]  # returns recursion values of the next layer of blob
+            # eval_blob(sub_blob) in intra_blob_recur() returns (val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)
         else:
             break
 
-    eval_layer(new_val_, blob, rdn, Ave)  # evaluation of new_val_ for recursion
+    eval_layer(new_val_, rdn+1)  # evaluation of new_val_ for recursion
+
 
 def inc_range(blob, rdn):
-    return -1, inc_range, [blob]
+    return blob
 
 def inc_deriv(blob, rdn):
-    return -1, inc_deriv, [blob]
+    return blob
 
 def comp_Py_(val_PP_, norm, blob, rdn):
-    return -1, comp_Py_, [0, 0, blob]
+    return blob
+
+def intra_blob_recur(val_, blob_sub_blobs):
+
+    for blob in blob_sub_blobs.blob_:
+        val_ += [eval_blob(blob)]
+    return val_
 
 def intra_blob(frame):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
 
     for blob in frame.blob_:
-        Ave, val_ = eval_blob(blob)
-        eval_layer(val_, blob, 1, Ave)  # recursive
+        val_ = eval_blob(blob)
+        eval_layer(val_, 1)  # calls intra_blob_recur()
 
     return frame  # frame of 2D patterns, to be outputted to level 2
 
