@@ -17,17 +17,16 @@ from frame_2D_alg_current.intra_blob_reprocessing.angle_blobs import blob_to_abl
     intra_blob rdn is reduced by full inclusion: mediated access, also by cross-derivation blob comp?
 '''
 
-def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
+def eval_blob(blob, rdn):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
 
     L, I, G, Dx, Dy, Ly = blob.params
     Ave = ave * L   # whole-blob reprocessing filter
-    rdn = 1  # redundant representation counter
     val_deriv, val_range = 0, 0
 
     if blob.sign:  # positive gblob: area of noisy or directional gradient
         if G > Ave:  # likely edge, angle comp, ablobs definition
 
-            rdn += 1  # or branch-specific cost ratio?
+            rdn += 1  # redundant representation counter or branch-specific cost ratio?
             blob_ablobs = blob_to_ablobs(blob)
             val_deriv = (G / Ave) * -blob_ablobs.params[5]  # relative_G * -sDa: angle Match
 
@@ -39,30 +38,31 @@ def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv 
     # ~ box elongation = (x_max - x_min) / (y_max - y_min)?
     # plus D_bias: Dx / Dy | Dy / Dx: indicates deviation of P match?
 
-    return (val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)  # estimated values per branch
+    return [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)]  # estimated values per branch
 
 
-def eval_layer(val_, rdn):
+def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
-    # val_: estimated values of active branches in current layer across recursion tree per blob
-    eval_ = sorted(val_, key= lambda item: item[0])
+    sorted(val_, key= lambda item: item[0])
     new_val_ = []   # estimated branch values of deeper layer of recursion tree per blob
-    map_ = []  # blob maps of stronger branches in eval_, appended for next val evaluation
+    map_ = []  # blob maps of stronger branches in val_, appended for next val evaluation
 
-    while eval_:
-        val, typ, blob = eval_.pop
+    while val_:
+        val, typ, blob = val_.pop
         for map in map_:
             olp = blob.map and map   # pseudo code for counting AND between maps, if box overlap?
             rdn += 1 * (olp / blob.L)  # redundancy to previously formed representations
 
         if val >   ave * blob.L * rdn:
             if typ == 0: blob_sub_blobs = inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
-            elif typ==1: blob_sub_blobs = inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+            elif typ==1: blob_sub_blobs = inc_deriv(blob, rdn)  # recursive comp over g_ of incremental derivation
             else:        blob_sub_blobs = comp_Py_(val, 0, blob, rdn)  # -> comp_P
 
             map_.append( blob.map)
-            new_val_ += [intra_blob_recur( val_, blob_sub_blobs)]  # returns recursion values of the next layer of blob
+            new_val_ += [intra_blob_recur( new_val_, blob_sub_blobs, rdn)]  # returns estimated recursion values of the next layer
+
             # eval_blob(sub_blob) in intra_blob_recur() returns (val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)
+            # deep angle_blobs is called from eval_blob, from intra_blob_recur()
         else:
             break
 
@@ -78,16 +78,16 @@ def inc_deriv(blob, rdn):
 def comp_Py_(val_PP_, norm, blob, rdn):
     return blob
 
-def intra_blob_recur(val_, blob_sub_blobs):
+def intra_blob_recur(new_val_, blob_sub_blobs, rdn):
 
-    for blob in blob_sub_blobs.blob_:
-        val_ += [eval_blob(blob)]
-    return val_
+    for blob in blob_sub_blobs.sub_blob_:
+        new_val_ += [eval_blob(blob, rdn)]  # rdn = 1
+    return new_val_
 
 def intra_blob(frame):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
 
     for blob in frame.blob_:
-        val_ = eval_blob(blob)
+        val_ = eval_blob(blob, 2)
         eval_layer(val_, 1)  # calls intra_blob_recur()
 
     return frame  # frame of 2D patterns, to be outputted to level 2

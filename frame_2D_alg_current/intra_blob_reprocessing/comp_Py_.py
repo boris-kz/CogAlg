@@ -2,7 +2,7 @@ from collections import deque
 import math as math
 from time import time
 
-# this component is a draft and mostly out of date
+# this component of intra_blob is a draft and out of date
 
 def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
