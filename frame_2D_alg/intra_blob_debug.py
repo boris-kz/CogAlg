@@ -96,7 +96,11 @@ def intra_blob(frame):   # evaluate blobs for comp_angle, inc_range comp, inc_de
 
     for blob in frame.blob_:
         # eval_blob(blob)
-        if blob.sign: inc_deriv(blob)
+        if blob.sign:
+            blob_to_ablobs(blob)
+            inc_deriv(blob)
+            # inc_range(blob)
+            # comp_Py_(blob)
     return frame  # frame of 2D patterns, to be outputted to level 2
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
@@ -117,4 +121,4 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from DEBUG import draw_blob
-draw_blob('./../debug', frame, typ=2, debug_parts=0, debug_local=0, show=0)
+draw_blob('./../debug', frame, typ=1, debug_parts=0, debug_local=0, show=0)

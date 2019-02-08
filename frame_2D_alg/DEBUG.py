@@ -40,11 +40,11 @@ def draw_blob(path, frame, typ=0, debug_parts=0, debug_local=0, show=0):
         else:
             in_blob_ = []
             if typ == 1:
-                if hasattr(blob, 'angle_frame'):
-                    in_blob_ = blob.angle_frame.blob_
+                if hasattr(blob, 'angle_in_blob'):
+                    in_blob_ = blob.angle_in_blob.blob_
             else:
-                if hasattr(blob, 'deriv_frame'):
-                    in_blob_ = blob.deriv_frame.blob_
+                if hasattr(blob, 'deriv_in_blob'):
+                    in_blob_ = blob.deriv_in_blob.blob_
             if not in_blob_:
                 pass
             for in_blob_idx, in_blob in enumerate(in_blob_):

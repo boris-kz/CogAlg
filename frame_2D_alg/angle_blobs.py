@@ -21,28 +21,28 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     Y, X = blob.map.shape
 
     dert__ = Classes.init_dert__(2, blob.dert__)
-    frame = Classes.cl_frame(dert__, map=blob.map)  # initialize frame object per gblob
+    in_blob = Classes.cl_frame(dert__, map=blob.map)  # initialize in_blob object per gblob
     seg_ = deque()
     dert_ = dert__[0]
-    P_map_ = frame.map[0]
+    P_map_ = in_blob.map[0]
     a_ = get_angle(dert_, P_map_)  # compute angle of max gradients within gblob (contiguous area of same-sign gradient)
 
     for y in range(Y - 1):
         lower_dert_ = dert__[y + 1]
-        lower_P_map_ = frame.map[y + 1]
+        lower_P_map_ = in_blob.map[y + 1]
         lower_a_ = get_angle(lower_dert_, lower_P_map_, P_map_)
 
         P_ = comp_angle(y, a_, lower_a_, dert_, P_map_) # vertical and lateral angle comparison
-        P_ = Classes.scan_P_(y, P_, seg_, frame)        # aP_ scans _aP_ from seg_
-        seg_ = Classes.form_segment(y, P_, frame)       # form segments with P_ and their fork_s
+        P_ = Classes.scan_P_(y, P_, seg_, in_blob)        # aP_ scans _aP_ from seg_
+        seg_ = Classes.form_segment(y, P_, in_blob)       # form segments with P_ and their fork_s
         a_, dert_, P_map_ = lower_a_, lower_dert_, lower_P_map_  # buffers for next line
 
-    y = Y - 1   # frame ends, merge segs of last line into their blobs:
-    while seg_: Classes.form_blob(y, seg_.popleft(), frame)
+    y = Y - 1   # in_blob ends, merge segs of last line into their blobs:
+    while seg_: Classes.form_blob(y, seg_.popleft(), in_blob)
 
-    frame.terminate()  # delete frame.dert__ and frame.map
-    blob.angle_frame = frame
-    return frame
+    in_blob.terminate()  # delete in_blob.dert__ and in_blob.map
+    blob.angle_in_blob = in_blob
+    return in_blob
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
 
 def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-line for first line
