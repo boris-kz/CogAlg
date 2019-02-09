@@ -17,26 +17,26 @@ def inc_deriv(blob):
     global Y, X
     Y, X = blob.map.shape
 
-    dert__ = Classes.init_dert__(3, blob.dert__)        # 3 params added: gg, gdx, dgy
-    in_blob = Classes.cl_frame(dert__, map=blob.map)    # initialize in_blob object per gblob
+    dert__ = Classes.init_dert__(3, blob.dert__)                        # 3 params added: gg, dxg, dyg
+    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
     seg_ = deque()
     dert_ = dert__[0]
-    P_map = in_blob.map[0]
+    P_map = sub_blob.map[0]
 
     for y in range(Y - 1):
         lower_dert_ = dert__[y + 1]
-        lower_P_map = in_blob.map[y + 1]
+        lower_P_map = sub_blob.map[y + 1]
 
         P_ = comp_g(y, dert_, lower_dert_, P_map, lower_P_map) # vertical and lateral g comparison
-        P_ = Classes.scan_P_(y, P_, seg_, in_blob)        # P_ scans _P_ from seg_
-        seg_ = Classes.form_segment(y, P_, in_blob)       # form segments with P_ and their fork_s
+        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)        # P_ scans _P_ from seg_
+        seg_ = Classes.form_segment(y, P_, sub_blob)       # form segments with P_ and their fork_s
         dert_, P_map = lower_dert_, lower_P_map       # buffers for next line
 
-    y = Y - 1   # in_blob ends, merge segs of last line into their blobs:
-    while seg_: Classes.form_blob(y, seg_.popleft(), in_blob)
+    y = Y - 1   # sub_blob ends, merge segs of last line into their blobs:
+    while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)
 
-    in_blob.terminate()  # delete in_blob.dert__ and in_blob.map
-    blob.g_in_blob = in_blob
+    sub_blob.terminate()  # delete sub_blob.dert__ and sub_blob.map
+    blob.g_sub_blob = sub_blob
     # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
 
 def comp_g(y, dert_, lower_dert_, P_map, lower_P_map):

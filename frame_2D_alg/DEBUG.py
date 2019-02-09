@@ -36,35 +36,38 @@ def draw_blob(path, frame, typ=0, debug_parts=0, debug_local=0, show=0):
                         x0, xn, y0, yn = [b + blob.x0() for b in seg.box[:2]] + [b + blob.y0() for b in seg.box[2:]]
                         cv2.rectangle(seg_img, (x0 - 1, y0 - 1), (xn, yn), (0, 255, 255), 1)
                         cv2.imwrite(path + '/blob%dseg%d.bmp' % (blob_idx, seg_idx), seg_img)
-        # debug in_blob - segment ----------------------------------------------------------------------
+        # debug sub_blob - segment ----------------------------------------------------------------------
         else:
-            in_blob_ = []
+            sub_blob_ = []
             if typ == 1:
-                if hasattr(blob, 'angle_in_blob'):
-                    in_blob_ = blob.angle_in_blob.blob_
+                if hasattr(blob, 'angle_sub_blob'):
+                    sub_blob_ = blob.angle_sub_blob.blob_
+            elif typ == 2:
+                if hasattr(blob, 'g_sub_blob'):
+                    sub_blob_ = blob.g_sub_blob.blob_
             else:
-                if hasattr(blob, 'deriv_in_blob'):
-                    in_blob_ = blob.deriv_in_blob.blob_
-            if not in_blob_:
+                if hasattr(blob, 'r_sub_blob'):
+                    sub_blob_ = blob.r_sub_blob.blob_
+            if not sub_blob_:
                 pass
-            for in_blob_idx, in_blob in enumerate(in_blob_):
-                if debug_parts: in_blob_img = np.array([[[127] * 4] * X] * Y)
-                for seg in in_blob.segment_:
-                    y = seg.y0() + in_blob.y0() + blob.y0()
+            for sub_blob_idx, sub_blob in enumerate(sub_blob_):
+                if debug_parts: sub_blob_img = np.array([[[127] * 4] * X] * Y)
+                for seg in sub_blob.segment_:
+                    y = seg.y0() + sub_blob.y0() + blob.y0()
                     for (P, xd) in seg.Py_:
-                        x = P.x0() + in_blob.x0() + blob.x0()
+                        x = P.x0() + sub_blob.x0() + blob.x0()
                         for i in range(P.L()):
                             frame_img[y, x, :3] = [255, 255, 255] if P.sign else [0, 0, 0]
                             if debug_parts:
                                 blob_img[y, x, :3] = [255, 255, 255] if P.sign else [0, 0, 0]
-                                in_blob_img[y, x, :3] = [255, 255, 255] if P.sign else [0, 0, 0]
+                                sub_blob_img[y, x, :3] = [255, 255, 255] if P.sign else [0, 0, 0]
                             x += 1
                         y += 1
                 if debug_parts:
-                    x0, xn, y0, yn = [b + blob.x0() for b in in_blob.box[:2]] + [b + blob.y0() for b in in_blob.box[2:]]
-                    cv2.rectangle(in_blob_img, (x0 - 1, y0 - 1), (xn, yn), (0, 255, 255), 1)
-                    cv2.imwrite(path + '/blob%din_blob%d.bmp' % (blob_idx, in_blob_idx), in_blob_img)
-            del in_blob_
+                    x0, xn, y0, yn = [b + blob.x0() for b in sub_blob.box[:2]] + [b + blob.y0() for b in sub_blob.box[2:]]
+                    cv2.rectangle(sub_blob_img, (x0 - 1, y0 - 1), (xn, yn), (0, 255, 255), 1)
+                    cv2.imwrite(path + '/blob%dsub_blob%d.bmp' % (blob_idx, sub_blob_idx), sub_blob_img)
+            del sub_blob_
         if debug_parts:
             x0, xn, y0, yn = blob.box
             cv2.rectangle(blob_img, (x0 - 1, y0 - 1), (xn, yn), (0, 255, 255), 1)
