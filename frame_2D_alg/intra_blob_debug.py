@@ -2,6 +2,7 @@ from time import time
 # Recursion branches -------------------------------------------------------------
 from angle_blobs import blob_to_ablobs
 from inc_deriv import inc_deriv
+from inc_range import inc_range
 # from comp_Py_ import comp_Py_
 
 '''
@@ -81,8 +82,6 @@ def recursion(eval_queue, Ave, rdn):
                 elif c is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
                 else:  comp_Py_(0, blob, xD, rdn)  #-> comp_P
 '''
-def inc_range(blob, rdn):
-    return -1, inc_range, [blob]
 
 def comp_Py_(val_PP_, norm, blob, rdn):     # here for a variable name definition only
     # [x_1st, x_last, y_1st, y_last, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
