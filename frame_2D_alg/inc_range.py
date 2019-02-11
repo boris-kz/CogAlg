@@ -40,62 +40,62 @@ def inc_range(blob, rng):
 def comp_p(dert__, map, rng):
     " compare rng-spaced pixels per blob "
     p__ = dert__[:, :, 0]
-    mask = ~map     # complemented blob.map is the mask of array
+    mask = ~map     # complemented blob.map is a mask of array
 
-    dy__ = ma.zeros(p__.shape, dtype=int)   # initialize dy__ as masked array - basically just numpy arrays with masks, for selective computation
+    dy__ = ma.zeros(p__.shape, dtype=int)   # initialize dy__ as array masked for selective computation
     dx__ = ma.zeros(p__.shape, dtype=int)   # initialize dx__ as masked array
     dy__.mask = dx__.mask = mask            # all operations performed on masked arrays ignore where mask == True.
 
     # pure vertical comp:
-    d__ = p__[rng:] - p__[:-rng]    # comparison performed on p at coordinate (x, y) and p at coordinate (x, y + rng)
-    dy__[rng:] += d__               # bilateral accumulation on dy at coordinate (x, y + rng)
-    dy__[:-rng] += d__              # bilateral accumulation on dy at coordinate (x, y)
+    d__ = p__[rng:] - p__[:-rng]    # comparison between p (x, y) and p (x, y+ rng)
+    dy__[rng:] += d__               # bilateral accumulation on dy (x, y+ rng)
+    dy__[:-rng] += d__              # bilateral accumulation on dy (x, y)
 
     # pure horizontal comp:
-    d__ = p__[:, rng:] - p__[:, :-rng]  # comparison performed on p at coordinate (x, y) and p at coordinate (x + rng, y)
-    dx__[:, rng:] += d__                # bilateral accumulation on dx at coordinate (x + rng, y)
-    dx__[:, :-rng] += d__               # bilateral accumulation on dx at coordinate (x, y)
+    d__ = p__[:, rng:] - p__[:, :-rng]  # comparison between p (x, y) and p (x + rng, y)
+    dx__[:, rng:] += d__                # bilateral accumulation on dx (x + rng, y)
+    dx__[:, :-rng] += d__               # bilateral accumulation on dx (x, y)
 
     # diagonal comps:
-    for rx in range(1, rng):
-        ry = rng - rx           # ry, rx: difference in position of comparants
+    for xd in range(1, rng):
+        yd = rng - xd           # y and x distance between comparands
 
-        hyp = hypot(rx, ry)     # hyp = sqrt(rx^2 + ry^2)
-        y_coef = ry / hyp       # y_coef = ry / sqrt(rx^2 + ry^2) - for decomposition of d in to dy
-        x_coef = rx / hyp       # x_coef = rx / sqrt(rx^2 + ry^2) - for decomposition of d in to dx
+        hyp = hypot(xd, yd)
+        y_coef = yd / hyp       # to decompose d into dy
+        x_coef = xd / hyp       # to decompose d into dx
 
         # top-left and bottom-right quadrant:
 
-        d__ = p__[ry:, rx:] - p__[:-ry, :-rx]   # comparison performed on p at coordinate (x, y) and p at coordinate (x + rx, y + ry)
+        d__ = p__[yd:, xd:] - p__[:-yd, :-xd]   # comparison performed on p at coordinate (x, y) and p at coordinate (x + xd, y + yd)
 
-        # decompose every d into dy, dx:
+        # decompose eveyd d into dy, dx:
         temp_dy__ = d__ * y_coef                # buffer for dy accumulation
         temp_dx__ = d__ * x_coef                # buffer for dx accumulation
 
         # accumulate dy, dx:
-        dy__[ry:, rx:] += temp_dy__             # bilateral accumulation on dy at coordinate (x + rx, y + ry)
-        dy__[:-ry, :-rx] += temp_dy__           # bilateral accumulation on dy at coordinate (x, y)
+        dy__[yd:, xd:] += temp_dy__             # bilateral accumulation on dy (x + xd, y + yd)
+        dy__[:-yd, :-xd] += temp_dy__           # bilateral accumulation on dy (x, y)
 
-        dx__[ry:, rx:] += temp_dx__             # bilateral accumulation on dx at coordinate (x + rx, y + ry)
-        dx__[:-ry, :-rx] += temp_dx__           # bilateral accumulation on dx at coordinate (x, y)
+        dx__[yd:, xd:] += temp_dx__             # bilateral accumulation on dx (x + xd, y + yd)
+        dx__[:-yd, :-xd] += temp_dx__           # bilateral accumulation on dx (x, y)
 
         # top-right and bottom-left quadrant:
 
-        d__ = p__[ry:, :-rx] - p__[:-ry, rx:]   # comparison performed on p at coordinate (x + rx, y) and p at coordinate (x, y + ry)
+        d__ = p__[yd:, :-xd] - p__[:-yd, xd:]   # comparison between p (x + xd, y) and p (x, y + yd)
 
-        # decompose every d into dy, dx:
+        # decompose eveyd d into dy, dx:
         temp_dy__ = d__ * y_coef                # buffer for dy accumulation
-        temp_dx__ = -(d__ * x_coef)             # buffer for dx accumulation. inverted sign because of inverted x comp direction
+        temp_dx__ = -(d__ * x_coef)             # buffer for dx accumulation, sign inverted with comp direction
 
         # accumulate dy, dx:
-        dy__[ry:, :-rx] += temp_dy__            # bilateral accumulation on dy at coordinate (x, y + ry)
-        dy__[:-ry, rx:] += temp_dy__            # bilateral accumulation on dy at coordinate (x + rx, y)
+        dy__[yd:, :-xd] += temp_dy__            # bilateral accumulation on dy (x, y + yd)
+        dy__[:-yd, xd:] += temp_dy__            # bilateral accumulation on dy (x + xd, y)
 
-        dx__[ry:, :-rx] += temp_dx__            # bilateral accumulation on dx at coordinate (x, y + ry)
-        dx__[:-ry, rx:] += temp_dx__            # bilateral accumulation on dx at coordinate (x + rx, y)
+        dx__[yd:, :-xd] += temp_dx__            # bilateral accumulation on dx (x, y + yd)
+        dx__[:-yd, xd:] += temp_dx__            # bilateral accumulation on dx (x + xd, y)
 
-    dert__[:, :, 2] += dx__  # add the result to the result of previous rng comps
-    dert__[:, :, 3] += dy__  # add the result to the result of previous rng comps
+    dert__[:, :, 2] += dx__  # add each der to accumulated shorter-rng der
+    dert__[:, :, 3] += dy__  # add each der to accumulated shorter-rng der
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
 def cal_g(y, dert_, P_map, rng):
