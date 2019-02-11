@@ -6,34 +6,34 @@ from time import time
 
 def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
-    (s, x0, L, I, G, Dx, Dy, dert_), xd = P  # + optional A, sDa
-    (_s, _x0, _L, _I, _G, _Dx, _Dy, _dert_), _xd = P
+    (s, x0, L, I, G, dert_), xd, af = P[:2]
+    (_s, _x0, _L, _I, _G, _dert_), _xd, _af = _P[:2]
+    if af and _af:  # flag for optional computed angle params:
+        A, sDa = P[3]
+        _A, _sDa = _P[3]
 
-    Ave = ave * L
+    Ave = ave * L  # L int, I, dif G,A, no S = I + G + A: too few?
     xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't?
 
     mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: mx -= x0 - _x0   # vx only for distant-P comp?   no if mx > ave, only PP termination by comp_P?
 
-    if norm:  # if xD / Ly * (Dx + Dy) > ave: params are xd-normalized for alt comp, then comp results, as div comp?
+    if norm:  # if xD / Ly * (Dx + Dy) > ave: params are xd-normalized for comp, no alt comp: secondary to axis?
 
         hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vert distance)
-        aL = L / hyp  # est. orthogonal slice is reduced from P
-        aI = I / hyp
-        aDx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
-        aDy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over lat_L
+        L /= hyp  # est. orthogonal slice is reduced P
+        I /= hyp
+        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
+        # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_Py_ eval only, no comp?
 
-    dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL? L, I, G, A: int, I, dif, no S = I + G + A: too few?
-    dI = I - _I; vI = dI - Ave  # L and I are not xd-normalized, I is not dderived, vI is signed?
+        # or rate of A deviation from vertical: y_dev = A - 128*L, if y_dev > 63:
 
-    G = math.hypot(Dy, Dx)  # re-formed vs accumulated: cross-sign D is lost, also normalized?
-    dG = G - _G; mG = min(G, _G)  # primary to Ds?
+    dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
+    dI = I - _I; vI = dI - Ave    # L and I are not xd-normalized, I is not dderived, vI is signed
+    dG = G - _G; mG = min(G, _G)  # primary, no Dx, Dy comp?
 
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # conditional or primary if norm?
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # lat sum of y_ders also indicates P match and orientation?
-
-    Pd = xdd + dL + dI + dG + dDx + dDy  # defines dPP, no dS-to-xd correlation?
-    Pm = mx +  mL + vI + mG + mDx + mDy  # defines mPP; comb rep value = Pm * 2 + Pd, for intra_blob?
+    Pd = xdd + dL + dI + dG  # defines dPP, no dS-to-xd correlation
+    Pm = mx +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd, for intra_blob?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 

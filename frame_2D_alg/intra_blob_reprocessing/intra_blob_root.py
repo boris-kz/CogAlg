@@ -1,6 +1,6 @@
 from time import time
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg_current.intra_blob_reprocessing.angle_blobs import blob_to_ablobs
+from frame_2D_alg.intra_blob_reprocessing.angle_blobs import blob_to_ablobs
 # from inc_deriv import inc_deriv
 # from comp_Py_ import comp_Py_
 
@@ -97,11 +97,11 @@ def intra_blob(frame):   # evaluate blobs for comp_angle, inc_range comp, inc_de
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg_current.misc import get_filters
+from frame_2D_alg.misc import get_filters
 get_filters(globals())          # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
-from frame_2D_alg_current import frame_blobs
+from frame_2D_alg import frame_blobs
 
 Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()

@@ -4,7 +4,7 @@ from time import time
 from collections import deque
 import math
 import numpy as np
-from frame_2D_alg_current import Classes
+from frame_2D_alg import Classes
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of maximal gradient. 
@@ -86,7 +86,7 @@ def image_to_blobs(image):
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg_current.misc import get_filters
+from frame_2D_alg.misc import get_filters
 get_filters(globals())  # imports all filters at once
 
 # Load inputs --------------------------------------------------------------------

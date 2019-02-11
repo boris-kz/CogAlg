@@ -1,6 +1,6 @@
 from time import time
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg_current.intra_blob_reprocessing.angle_blobs import blob_to_ablobs
+from frame_2D_alg.intra_blob_reprocessing.angle_blobs import blob_to_ablobs
 # from inc_deriv import inc_deriv
 # from comp_Py_ import comp_Py_
 
@@ -19,24 +19,23 @@ from frame_2D_alg_current.intra_blob_reprocessing.angle_blobs import blob_to_abl
 
 def eval_blob(blob, rdn):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
 
-    L, I, G, Dx, Dy, Ly = blob.params
+    L, I, G, Ly = blob.params
     Ave = ave * L   # whole-blob reprocessing filter
     val_deriv, val_range = 0, 0
 
     if blob.sign:  # positive gblob: area of noisy or directional gradient
         if G > Ave:  # likely edge, angle comp, ablobs definition
 
-            rdn += 1  # redundant representation counter or branch-specific cost ratio?
+            rdn += 1  # redundant representation counter, or branch-specific cost ratio?
             blob_ablobs = blob_to_ablobs(blob)
             val_deriv = (G / Ave) * -blob_ablobs.params[5]  # relative_G * -sDa: angle Match
 
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
-    val_PP_ = (L + I + G + Dx + Dy) * (L / Ly / Ly)
+    val_PP_ = (L + I + G) * (L / Ly / Ly)
 
     # first term is proj P match; abs_Dx and abs_Dy: more accurate but not needed for most blobs?
-    # last term is elongation: indicates above-average match of cross-section P?
-    # ~ box elongation = (x_max - x_min) / (y_max - y_min)?
-    # plus D_bias: Dx / Dy | Dy / Dx: indicates deviation of P match?
+    # last term is elongation: above-average P match? ~ box elongation: (x_max - x_min) / (y_max - y_min)?
+    # + D|M bias: G * A' quadrant ortho: 3 bit shift, 32 - A if alt, no Dx | Dy?
 
     return [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)]  # estimated values per branch
 
@@ -96,11 +95,11 @@ def intra_blob(frame):  # evaluate blobs for comp_angle, inc_range comp, inc_der
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg_current.misc import get_filters
+from frame_2D_alg.misc import get_filters
 get_filters(globals())          # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
-from frame_2D_alg_current import frame_blobs
+from frame_2D_alg import frame_blobs
 
 Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()
