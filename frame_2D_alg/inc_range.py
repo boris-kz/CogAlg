@@ -25,7 +25,7 @@ def inc_range(blob, rng):
     comp_p(dert__, blob.map, rng // 2)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
 
     for y in range(rng, Y - rng):
-        P_ = cal_g(y, dert__[y], sub_blob.map[y], rng // 2)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng // 2)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -98,7 +98,7 @@ def comp_p(dert__, map, rng):
     dert__[:, :, 3] += dy__  # add each der to accumulated shorter-rng der
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
-def cal_g(y, dert_, P_map, rng):
+def calc_g(y, dert_, P_map, rng):
     " use dx, dy to compute g and form Ps "
     P_ = deque()
     x = rng             # discard first rng column
@@ -119,4 +119,4 @@ def cal_g(y, dert_, P_map, rng):
             P_.append(P)
 
     return P_
-    # ---------- cal_g() end --------------------------------------------------------------------------------------------
+    # ---------- calc_g() end -------------------------------------------------------------------------------------------
