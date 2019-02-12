@@ -130,33 +130,23 @@ Another technique similar to mine is hierarchical clustering. But conventional c
 
 
 
-Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions with a significant lag, much more coarsely than inputs themselves. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. There is no default degradation of positional information in my method.
+Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions much more coarsely than the inputs. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. There is no such default degradation of positional information in my method.
 
-My core algorithm is 1D: time only. Our space-time is 4D, but each of these dimensions can be mapped on one level of search. This way, levels can select input patterns that are strong enough to justify the cost of representing additional dimension, as well as derivatives (matches and differences) in that dimension. Initial 4D cycle of search would compare contiguous inputs, analogously to connected-component analysis:
+Core algorithm is 1D: time only. Our space-time is 4D, and average match is presumably equal over all dimensions. That means patterns defined in fewer dimensions will be only slices of actual input, fundamentally limited and biased by the angle of scanning / slicing. Hence, initial pixel comparison should also be over 4D at once, or at least over 3D for video and 2D for still images. This full-D-cycle level of search is a universe-specific extension of core algorithm.
 
-level 1 compares consecutive 0D pixels within horizontal scan line, forming 1D patterns: line segments.
+“Dimension” here defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions. 
 
-level 2 compares contiguous 1D patterns between consecutive lines in a frame, forming 2D patterns: blobs.
+Initial D cycle compares contiguous inputs, analogously to connected-component analysis.
+Subsequent cycles will compare full-D-terminated input patterns over increasing distance in each dimension, forming discontinuous patterns of incremental composition and range. Space-time dimensions can be coded as implementation shortcut, or discovered by core algorithm itself. 
 
-level 3 compares contiguous 2D patterns between incremental-depth frames, forming 3D patterns: objects.
-
-level 4 compares contiguous 3D patterns in temporal sequence, forming 4D patterns: processes.
-
-Subsequent cycles will compare 4D input patterns over increasing distance in each dimension, forming longer-range discontinuous patterns. These cycles can be coded as implementation shortcut, or discovered by core algorithm itself, which can adapt to inputs of any dimensionality. “Dimension” here is a parameter that defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions.
-
-Average match in our space-time is presumably equal over all four dimensions. That means patterns defined in fewer dimensions will be fundamentally limited and biased by the angle of scanning. Hence, initial pixel comparison and patterns should also be over 4D at once, or at least over 2D at once for still images. This is a universe-specific extension of my core algorithm.
-
-Accordingly, my code here consists of three levels:
-
-- 1D: main version of 1st level core algorithm is [line_POC.py](https://github.com/boris-kz/CogAlg/blob/master/line_POC.py), which works as intended but is not very useful in our 4D world.
-- 2D: [frame_blobs.py](https://github.com/boris-kz/CogAlg/blob/master/frame_blobs.py) defines initial blobs and is currently functional. It will pass them to [intra_blob_draft.py](https://github.com/boris-kz/CogAlg/blob/master/frame_draft.py), currently work-in-progress, which will evaluate them for internal recursive cross-comparision. Combined, they will be a 2D version of 1st-level core algorithm.  
-- 3D: [video_draft.py](https://github.com/boris-kz/CogAlg/blob/master/video_draft.py) for processing video: 2D + time. This version will hopefully be effective and scalable, but is currently less than 5% done.
-
-Higher levels for each will process discontinuous search among full-D patterns.
-Hierarchical algorithm will have two-level code: 
+Final hierarchical algorithm will have two-level code: 
 - 1st level algorithm: contiguous cross-comparison over full-D cycle, plus bit-filter feedback 
-- recursive increment in complexity of both cross-comparison and feedback, generating next-level algorithm
-Algorithm will be extended to add colors, audio, and text. Initial testing could be recognition of labeled images, but 2D is a poor representation of our 4D world, I will probably start directly with video or stereo video.
+- recursive increment in complexity of comparison and feedback, generating higher-level algorithm to accommodate increasingly deep input patterns.
+
+This repository currently has three levels of code, designed for corresponding D-cycles: 1D line algorithm, 2D frame algorithm, and 3D video algorithm. 
+This code will be extended to add colors, audio, text. Initial testing could be on recognition of labeled images, but video or stereo video should be far better, more predictive representations of our 4D world.
+
+For more detailed account of current development see [WIKI](https://github.com/boris-kz/CogAlg/wiki).
 
 Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
