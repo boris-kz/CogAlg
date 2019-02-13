@@ -25,11 +25,11 @@ def inc_range(blob, rng):
     sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
     seg_ = deque()
 
-    comp_p(dert__, blob.map, rng // 2)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
-    num_compared_pixels = (rng // 2) ** 2 - 1
+    comp_p(dert__, blob.map, rng)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
+    num_compared_pixels = rng ** 2 + (rng + 1) ** 2 - 1
 
     for y in range(rng, Y - rng):
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng // 2, num_compared_pixels)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng, num_compared_pixels)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
