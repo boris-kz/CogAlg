@@ -11,11 +11,12 @@ get_filters(globals())  # imports all filters at once
 # ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
 # -inc_range()
+# -inc_range_deep()
 # -comp_p()
 # -calc_g()
 # ***********************************************************************************************************************
 
-def inc_range(blob, rng):
+def inc_range(blob):
     ''' same functionality as image_to_blobs() in frame_blobs.py '''
 
     global Y, X
@@ -25,8 +26,41 @@ def inc_range(blob, rng):
     sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
     seg_ = deque()
 
+    dert__[:, 1:, 2] += dert__[:, 1:, 0] - dert__[:, :-1, 0]    # compare left, accumulate to dx__
+    dert__[1:, :, 3] += dert__[1:, :, 0] - dert__[:-1, :, 0]    # compare up, accumulate to dy__
+
+    # or:
+    # p__ = dert__[:, :, 0]
+    # dy__ = dert__[:, :, 3]
+    # dx__ = dert__[:, :, 2]
+    # dy__[1:] += p__[1:] - p__[:-1]            # compare up
+    # dx__[:, 1:] += p__[:, 1:] - p__[:, -1]    # compare left
+
+    for y in range(1, Y):                       # discard first incomplete row
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, num_compared_pixels=4)
+        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
+        seg_ = Classes.form_segment(y, P_, sub_blob)
+
+    y = Y
+    while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)
+
+    sub_blob.terminate()
+    blob.rng_sub_blob = sub_blob
+    # ---------- inc_range() end ----------------------------------------------------------------------------------------
+
+def inc_range_deep(blob, rng):
+    ''' same functionality as image_to_blobs() in frame_blobs.py
+        with rng > 1 '''
+
+    global Y, X
+    Y, X = blob.map.shape
+
+    dert__ = Classes.init_dert__(0, blob.dert__)
+    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
+    seg_ = deque()
+
     comp_p(dert__, blob.map, rng)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
-    num_compared_pixels = rng ** 2 + (rng + 1) ** 2 + 1
+    num_compared_pixels = rng ** 2 + (rng + 1) ** 2 - 1
 
     for y in range(rng, Y - rng):
         P_ = calc_g(y, dert__[y], sub_blob.map[y], rng, num_compared_pixels)
@@ -38,15 +72,15 @@ def inc_range(blob, rng):
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
-    # ---------- inc_range() end ----------------------------------------------------------------------------------------
+    # ---------- inc_range_deep() end -----------------------------------------------------------------------------------
 
 def comp_p(dert__, map, rng):
     " compare rng-distant pixels within blob "
     p__ = dert__[:, :, 0]
     mask = ~map     # complemented blob.map is a mask of array
 
-    dy__ = ma.zeros(p__.shape, dtype=int)   # initialize dy__ as array masked for selective computation
-    dx__ = ma.zeros(p__.shape, dtype=int)
+    dy__ = ma.zeros((Y, X), dtype=int)   # initialize dy__ as array masked for selective computation
+    dx__ = ma.zeros((Y, X), dtype=int)
     dy__.mask = dx__.mask = mask    # all operations on masked arrays ignore elements at mask == True.
 
     # vertical comp:
@@ -98,13 +132,17 @@ def comp_p(dert__, map, rng):
 def calc_g(y, dert_, P_map, rng, num_compared_pixels):
     " compute g from dx, dy; form Ps "
     P_ = deque()
-    x = rng             # discard first rng column
-    while x < X - rng:  # discard last rng column
-        while x < X - rng and not P_map[x]:
+    x = rng                 # discard first rng columns
+    if rng > 1:
+        x_stop = X - rng    # discard last rng columns
+    else:
+        x_stop = X          # if rng = 1, no right comp, no need to discard last column
+    while x < x_stop:
+        while x < x_stop and not P_map[x]:
             x += 1
-        if x < X - rng and P_map[x]:
+        if x < x_stop and P_map[x]:
             P = Classes.cl_P(x0=x, num_params=dert_.shape[1])  # P initialization
-            while x < X - rng and P_map[x]:
+            while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
                 g = hypot(dx, dy) - ave * num_compared_pixels

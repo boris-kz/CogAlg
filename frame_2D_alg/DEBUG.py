@@ -46,8 +46,8 @@ def draw_blob(path, frame, typ=0, debug_parts=0, debug_local=0, show=0):
                 if hasattr(blob, 'g_sub_blob'):
                     sub_blob_ = blob.g_sub_blob.blob_
             else:
-                if hasattr(blob, 'r_sub_blob'):
-                    sub_blob_ = blob.r_sub_blob.blob_
+                if hasattr(blob, 'rng_sub_blob'):
+                    sub_blob_ = blob.rng_sub_blob.blob_
             if not sub_blob_:
                 pass
             for sub_blob_idx, sub_blob in enumerate(sub_blob_):
