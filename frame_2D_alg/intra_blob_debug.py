@@ -120,4 +120,4 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from DEBUG import draw_blob
-draw_blob('./../debug', frame, typ=1, debug_parts=0, debug_local=0, show=0)
+draw_blob('./../debug', frame, typ=3, debug_parts=0, debug_local=0, show=0)

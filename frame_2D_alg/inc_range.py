@@ -8,10 +8,12 @@ get_filters(globals())  # imports all filters at once
 '''
     inc_range is a component of intra_blob
 '''
+# ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
 # -inc_range()
 # -comp_p()
 # -calc_g()
+# ***********************************************************************************************************************
 
 def inc_range(blob, rng):
     ''' same functionality as image_to_blobs() in frame_blobs.py '''
@@ -24,9 +26,10 @@ def inc_range(blob, rng):
     seg_ = deque()
 
     comp_p(dert__, blob.map, rng // 2)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
+    num_compared_pixels = 4 + (rng - 2) ^ 2
 
     for y in range(rng, Y - rng):
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng // 2)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng // 2, num_compared_pixels)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -92,7 +95,7 @@ def comp_p(dert__, map, rng):
     dert__[:, :, 3] += dy__  # add dy to shorter-rng-accumulated dy
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
-def calc_g(y, dert_, P_map, rng):
+def calc_g(y, dert_, P_map, rng, num_compared_pixels):
     " compute g from dx, dy; form Ps "
     P_ = deque()
     x = rng             # discard first rng column
@@ -104,7 +107,7 @@ def calc_g(y, dert_, P_map, rng):
             while x < X - rng and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave
+                g = hypot(dx, dy) - ave #* num_compared_pixels
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
