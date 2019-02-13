@@ -33,9 +33,14 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, inc_range comp, inc_d
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
     val_PP_ = (L + I + G) * (L / Ly / Ly)
 
-    # first term is proj P match; abs_Dx and abs_Dy: more accurate but not needed for most blobs?
+    # first term is proj P match; + abs_Dx and abs_Dy: more accurate but not needed for most blobs?
     # last term is elongation: above-average P match? ~ box elongation: (x_max - x_min) / (y_max - y_min)?
-    # + D|M bias: G * A' quadrant ortho: 3 bit shift, 32 - A if alt, no Dx | Dy?
+
+    # * D bias: A deviation from vertical: y_dev = A - 128*L, if y_dev > 63:
+    # A adjust -> ave / each sum?
+
+    # vs Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
+    #    Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_Py_ eval only, no comp?
 
     return [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)]  # estimated values per branch
 

@@ -10,9 +10,9 @@ from collections import deque
 # ***********************************************************************************************************************
 
 class cl_frame(object):
-    ''' frame class hold references and buffers essential for comparison and clustering operations.
+    ''' frame class hold references and buffers for comparison and clustering operations.
         Core objects include:
-        - frame.params: to compute averages, redundant for same-scope alt_frames
+        - frame.params: to compute averages
         - blob_: hold buffers of local or global blobs, depends on the scope of frame
         Others include:
         - dert__: buffer of derts in 2D-array, provide spatial proximity information for inputs
@@ -58,8 +58,8 @@ class cl_P(cl_frame):
 
     def __init__(self, x0 = 0, num_params = 5, sign=-1):
         " constructor function of P "
-        self.sign = sign            # either 0 or 1 normally. -1 for unknown sign
-        self.box = [x0] # initialize box with only x_start
+        self.sign = sign  # either 0 or 1 normally. -1 for unknown sign
+        self.box = [x0]   # initialize box with only x_start
         self.params = [0] * num_params  # initialize params with zeroes: [L, I, G, Dx, Dy] for initial comp (default)
 
     def terminate(self, xn, y):

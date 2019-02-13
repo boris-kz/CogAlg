@@ -1,8 +1,10 @@
 from collections import deque
 import math as math
 from time import time
-
-# this component of intra_blob is a draft and out of date
+'''
+    comp_Py_ is a component of intra_blob
+    currently a draft
+'''
 
 def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
 
@@ -12,28 +14,24 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also condition
         A, sDa = P[3]
         _A, _sDa = _P[3]
 
-    Ave = ave * L  # L int, I, dif G,A, no S = I + G + A: too few?
+    Ave = ave * L  # L int, I, dif G, A; no S = I + G + A: too few?
     xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't?
 
     mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: mx -= x0 - _x0   # vx only for distant-P comp?   no if mx > ave, only PP termination by comp_P?
 
     if norm:  # if xD / Ly * (Dx + Dy) > ave: params are xd-normalized for comp, no alt comp: secondary to axis?
-
-        hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vert distance)
-        L /= hyp  # est. orthogonal slice is reduced P
-        I /= hyp
-        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
-        # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_Py_ eval only, no comp?
-
-        # or rate of A deviation from vertical: y_dev = A - 128*L, if y_dev > 63:
+        hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance)
+        L /= hyp  # est. orthogonal slice is reduced P,
+        I /= hyp  # for each param
+        G /= hyp
 
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
     dI = I - _I; vI = dI - Ave    # L and I are not xd-normalized, I is not dderived, vI is signed
-    dG = G - _G; mG = min(G, _G)  # primary, no Dx, Dy comp?
+    dG = G - _G; mG = min(G, _G)  # Dx+Dy -> G: direction and reduced variation (g is abs), both restorable from ave_a?
 
     Pd = xdd + dL + dI + dG  # defines dPP, no dS-to-xd correlation
-    Pm = mx +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd, for intra_blob?
+    Pm = mx +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
