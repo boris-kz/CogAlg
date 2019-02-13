@@ -26,7 +26,7 @@ def inc_range(blob, rng):
     seg_ = deque()
 
     comp_p(dert__, blob.map, rng // 2)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
-    num_compared_pixels = (rng // 2) ^^ 2 - 1
+    num_compared_pixels = (rng // 2) ** 2 - 1
 
     for y in range(rng, Y - rng):
         P_ = calc_g(y, dert__[y], sub_blob.map[y], rng // 2, num_compared_pixels)
@@ -107,7 +107,7 @@ def calc_g(y, dert_, P_map, rng, num_compared_pixels):
             while x < X - rng and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave #* num_compared_pixels
+                g = hypot(dx, dy) - ave * num_compared_pixels
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
