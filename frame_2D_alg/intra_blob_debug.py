@@ -2,7 +2,7 @@ from time import time
 # Recursion branches -------------------------------------------------------------
 from angle_blobs import blob_to_ablobs
 from inc_deriv import inc_deriv
-from inc_range import inc_range
+from inc_range import bilateral
 # from comp_Py_ import comp_Py_
 
 '''
@@ -98,7 +98,7 @@ def intra_blob(frame):   # evaluate blobs for comp_angle, inc_range comp, inc_de
         if blob.sign:
             blob_to_ablobs(blob)
             inc_deriv(blob)
-            inc_range(blob)
+            bilateral(blob)
             # comp_Py_(blob)
     return frame  # frame of 2D patterns, to be outputted to level 2
 

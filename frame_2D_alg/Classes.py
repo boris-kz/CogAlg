@@ -15,6 +15,7 @@ class cl_frame(object):
         - frame.params: to compute averages, redundant for same-scope alt_frames
         - blob_: hold buffers of local or global blobs, depends on the scope of frame
         Others include:
+        - copy_dert: if True, buffer a slice of global dert__ into each blob
         - dert__: buffer of derts in 2D-array, provide spatial proximity information for inputs
         - map: boolean map for local frame inside a blob, = True inside the blob, = False outside
         provide ways to manipulate blob's dert.

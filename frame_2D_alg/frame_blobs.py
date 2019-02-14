@@ -3,7 +3,6 @@ import argparse
 from time import time
 from collections import deque
 import math
-import numpy as np
 from frame_2D_alg import Classes
 
 '''   

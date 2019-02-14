@@ -8,11 +8,13 @@ get_filters(globals())  # imports all filters at once
 '''
     inc_range is a component of intra_blob
 '''
+# ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
 # -bilateral()
 # -inc_range()
 # -comp_p()
 # -calc_g()
+# ***********************************************************************************************************************
 
 def bilateral(blob):
     ''' reversed-direction image_to_blobs() in frame_blobs.py '''
@@ -32,8 +34,11 @@ def bilateral(blob):
     # dy__[1:] += p__[1:] - p__[:-1]            # compare higher pixel
     # dx__[:, 1:] += p__[:, 1:] - p__[:, -1]    # compare left pixel
 
+    ncomp = 4
+    ave_coef = ncomp // 2
+
     for y in range(1, Y):                       # discard first incomplete row
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, ncomp=4)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, ave_coef=ave_coef)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -42,6 +47,7 @@ def bilateral(blob):
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
+    return ncomp
     # ---------- bilateral() end ----------------------------------------------------------------------------------------
 
 def inc_range(blob, rng, ncomp):
@@ -51,14 +57,17 @@ def inc_range(blob, rng, ncomp):
     global Y, X
     Y, X = blob.map.shape
     dert__ = Classes.init_dert__(0, blob.dert__)
-    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
+    sub_blob = Classes.cl_frame(dert__,
+                                map=blob.map,
+                                copy_dert=True)
     seg_ = deque()
 
     comp_p(dert__, blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
-    ncomp += rng * 4  # ncomp = rng ** 2 + (rng + 1) ** 2 - 1
+    ncomp += rng * 4
+    ave_coef = ncomp // 2
 
     for y in range(rng, Y - rng):
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng, ncomp)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=rng, ave_coef=ave_coef)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -67,7 +76,9 @@ def inc_range(blob, rng, ncomp):
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
-    # ---------- inc_range_deep() end -----------------------------------------------------------------------------------
+
+    return ncomp
+    # ---------- inc_range() end ----------------------------------------------------------------------------------------
 
 def comp_p(dert__, map, rng):
     " compare rng-distant pixels within blob "
@@ -124,7 +135,7 @@ def comp_p(dert__, map, rng):
     dert__[:, :, 3] += dy__  # add dy to shorter-rng-accumulated dy
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
-def calc_g(y, dert_, P_map, rng, ncomp):
+def calc_g(y, dert_, P_map, rng, ave_coef):
     " compute g from dx, dy; form Ps "
     P_ = deque()
     x = rng                 # discard first rng columns
@@ -140,7 +151,7 @@ def calc_g(y, dert_, P_map, rng, ncomp):
             while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave * (ncomp // 2)
+                g = hypot(dx, dy) - ave * ave_coef
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
