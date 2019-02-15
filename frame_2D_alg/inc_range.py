@@ -34,11 +34,8 @@ def bilateral(blob):
     # dy__[1:] += p__[1:] - p__[:-1]            # compare higher pixel
     # dx__[:, 1:] += p__[:, 1:] - p__[:, -1]    # compare left pixel
 
-    ncomp = 4
-    ave_coef = ncomp // 2
-
     for y in range(1, Y):                       # discard first incomplete row
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, ave_coef=ave_coef)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, ncomp=2)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -47,7 +44,7 @@ def bilateral(blob):
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
-    return ncomp
+    return 2  # ncomp = 2
     # ---------- bilateral() end ----------------------------------------------------------------------------------------
 
 def inc_range(blob, rng, ncomp):
@@ -57,17 +54,14 @@ def inc_range(blob, rng, ncomp):
     global Y, X
     Y, X = blob.map.shape
     dert__ = Classes.init_dert__(0, blob.dert__)
-    sub_blob = Classes.cl_frame(dert__,
-                                map=blob.map,
-                                copy_dert=True)
+    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
     seg_ = deque()
 
     comp_p(dert__, blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
-    ncomp += rng * 4
-    ave_coef = ncomp // 2
+    ncomp += rng * 2
 
     for y in range(rng, Y - rng):
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=rng, ave_coef=ave_coef)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=rng, ncomp=ncomp)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -135,7 +129,7 @@ def comp_p(dert__, map, rng):
     dert__[:, :, 3] += dy__  # add dy to shorter-rng-accumulated dy
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
-def calc_g(y, dert_, P_map, rng, ave_coef):
+def calc_g(y, dert_, P_map, rng, ncomp):
     " compute g from dx, dy; form Ps "
     P_ = deque()
     x = rng                 # discard first rng columns
@@ -151,7 +145,7 @@ def calc_g(y, dert_, P_map, rng, ave_coef):
             while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave * ave_coef
+                g = hypot(dx, dy) - ave * ncomp
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
