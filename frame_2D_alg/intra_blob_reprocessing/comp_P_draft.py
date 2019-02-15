@@ -2,11 +2,11 @@ from collections import deque
 import math as math
 from time import time
 '''
-    comp_Py_ is a component of intra_blob
+    comp_P_ is a component of intra_blob
     currently a draft
 '''
 
-def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also conditional ders from DIV comp
+def comp_P(norm, P, _P):  # forms vertical derivatives of P params, also conditional ders from DIV comp
 
     (s, x0, L, I, G, dert_), xd, af = P[:2]
     (_s, _x0, _L, _I, _G, _dert_), _xd, _af = _P[:2]
@@ -14,21 +14,28 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P vars, also condition
         A, sDa = P[3]
         _A, _sDa = _P[3]
 
+    # also params are derived by all recursion branches, which form interlaced prior der_H | rng_H reps per branch:
+    # angle, deriv..| bilat, range.. per branch switch, at the cost of new H rep?
+    # comp_P_ is a terminal branch: unit is P ! p?
+
     Ave = ave * L  # L int, I, dif G, A; no S = I + G + A: too few?
     xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't?
 
     mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: mx -= x0 - _x0   # vx only for distant-P comp?   no if mx > ave, only PP termination by comp_P?
 
-    if norm:  # if xD / Ly * (Dx + Dy) > ave: params are xd-normalized for comp, no alt comp: secondary to axis?
-        hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance)
+    if norm:  # if xD / Ly * A > ave:
+        # params are xd-normalized for comp, no alt comp: secondary to axis?
+        hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance):
         L /= hyp  # est. orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
 
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - Ave    # L and I are not xd-normalized, I is not dderived, vI is signed
-    dG = G - _G; mG = min(G, _G)  # Dx+Dy -> G: direction and reduced variation (g is abs), both restorable from ave_a?
+    dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
+    dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
+
+    # but da is also abs and short-range?
 
     Pd = xdd + dL + dI + dG  # defines dPP, no dS-to-xd correlation
     Pm = mx +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
@@ -248,7 +255,7 @@ def flip(blob):  # vertical-first run of form_P and deeper functions over blob's
     return blob
 
 
-def comp_Py_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+def comp_P_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
 
     if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:

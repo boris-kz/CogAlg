@@ -8,25 +8,60 @@ get_filters(globals())  # imports all filters at once
 '''
     inc_range is a component of intra_blob
 '''
+# ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
+# -bilateral()
 # -inc_range()
 # -comp_p()
 # -calc_g()
+# ***********************************************************************************************************************
 
-def inc_range(blob, rng):
-    ''' same functionality as image_to_blobs() in frame_blobs.py '''
+def bilateral(blob):
+    ''' reversed-direction image_to_blobs() in frame_blobs.py '''
 
     global Y, X
     Y, X = blob.map.shape
-
     dert__ = Classes.init_dert__(0, blob.dert__)
     sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
     seg_ = deque()
 
-    comp_p(dert__, blob.map, rng // 2)  # comp_p over the whole sub-blob. use half rng for computation, for convenience
+    dert__[:, 1:, 2] += dert__[:, 1:, 0] - dert__[:, :-1, 0]    # compare left pixel, accumulate to dx__
+    dert__[1:, :, 3] += dert__[1:, :, 0] - dert__[:-1, :, 0]    # compare higher pixel, accumulate to dy__
+    # or:
+    # p__ = dert__[:, :, 0]
+    # dy__ = dert__[:, :, 3]
+    # dx__ = dert__[:, :, 2]
+    # dy__[1:] += p__[1:] - p__[:-1]            # compare higher pixel
+    # dx__[:, 1:] += p__[:, 1:] - p__[:, -1]    # compare left pixel
+
+    for y in range(1, Y):                       # discard first incomplete row
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, ncomp=2)
+        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
+        seg_ = Classes.form_segment(y, P_, sub_blob)
+
+    y = Y
+    while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)
+
+    sub_blob.terminate()
+    blob.rng_sub_blob = sub_blob
+    return 2  # ncomp = 2
+    # ---------- bilateral() end ----------------------------------------------------------------------------------------
+
+def inc_range(blob, rng, ncomp):
+    ''' same functionality as image_to_blobs() in frame_blobs.py
+        with rng > 1 '''
+
+    global Y, X
+    Y, X = blob.map.shape
+    dert__ = Classes.init_dert__(0, blob.dert__)
+    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
+    seg_ = deque()
+
+    comp_p(dert__, blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
+    ncomp += rng * 2
 
     for y in range(rng, Y - rng):
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng // 2)
+        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=rng, ncomp=ncomp)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
 
@@ -35,6 +70,8 @@ def inc_range(blob, rng):
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
+
+    return ncomp
     # ---------- inc_range() end ----------------------------------------------------------------------------------------
 
 def comp_p(dert__, map, rng):
@@ -42,8 +79,8 @@ def comp_p(dert__, map, rng):
     p__ = dert__[:, :, 0]
     mask = ~map     # complemented blob.map is a mask of array
 
-    dy__ = ma.zeros(p__.shape, dtype=int)   # initialize dy__ as array masked for selective computation
-    dx__ = ma.zeros(p__.shape, dtype=int)
+    dy__ = ma.zeros((Y, X), dtype=int)   # initialize dy__ as array masked for selective computation
+    dx__ = ma.zeros((Y, X), dtype=int)
     dy__.mask = dx__.mask = mask    # all operations on masked arrays ignore elements at mask == True.
 
     # vertical comp:
@@ -92,19 +129,23 @@ def comp_p(dert__, map, rng):
     dert__[:, :, 3] += dy__  # add dy to shorter-rng-accumulated dy
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
-def calc_g(y, dert_, P_map, rng):
+def calc_g(y, dert_, P_map, rng, ncomp):
     " compute g from dx, dy; form Ps "
     P_ = deque()
-    x = rng             # discard first rng column
-    while x < X - rng:  # discard last rng column
-        while x < X - rng and not P_map[x]:
+    x = rng                 # discard first rng columns
+    if rng > 1:
+        x_stop = X - rng    # discard last rng columns
+    else:
+        x_stop = X          # if rng = 1, no right comp, no need to discard last column
+    while x < x_stop:
+        while x < x_stop and not P_map[x]:
             x += 1
-        if x < X - rng and P_map[x]:
+        if x < x_stop and P_map[x]:
             P = Classes.cl_P(x0=x, num_params=dert_.shape[1])  # P initialization
-            while x < X - rng and P_map[x]:
+            while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave
+                g = hypot(dx, dy) - ave * ncomp
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)

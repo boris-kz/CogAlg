@@ -10,11 +10,12 @@ from collections import deque
 # ***********************************************************************************************************************
 
 class cl_frame(object):
-    ''' frame class hold references and buffers for comparison and clustering operations.
+    ''' frame class hold references and buffers essential for comparison and clustering operations.
         Core objects include:
-        - frame.params: to compute averages
+        - frame.params: to compute averages, redundant for same-scope alt_frames
         - blob_: hold buffers of local or global blobs, depends on the scope of frame
         Others include:
+        - copy_dert: if True, buffer a slice of global dert__ into each blob
         - dert__: buffer of derts in 2D-array, provide spatial proximity information for inputs
         - map: boolean map for local frame inside a blob, = True inside the blob, = False outside
         provide ways to manipulate blob's dert.
@@ -58,8 +59,8 @@ class cl_P(cl_frame):
 
     def __init__(self, x0 = 0, num_params = 5, sign=-1):
         " constructor function of P "
-        self.sign = sign  # either 0 or 1 normally. -1 for unknown sign
-        self.box = [x0]   # initialize box with only x_start
+        self.sign = sign            # either 0 or 1 normally. -1 for unknown sign
+        self.box = [x0] # initialize box with only x_start
         self.params = [0] * num_params  # initialize params with zeroes: [L, I, G, Dx, Dy] for initial comp (default)
 
     def terminate(self, xn, y):
@@ -115,7 +116,7 @@ class cl_segment(cl_P):
     def accum_P(self, P):
         " merge terminated P into segment "
 
-        new_ave_x = (P.x0() + P.xn()) // 2            # new P's ave_x
+        new_ave_x = (P.x0() + P.xn()) // 2      # new P's ave_x
         xd = new_ave_x - self.ave_x             # xd = new_ave_x - ave_x
         self.ave_x = new_ave_x                  # replace ave_x with new_ave_x
         self.accum_params([xd, abs(xd)], 'orientation_params')  # xD += xd; abs_xD += abs(xd)
@@ -312,7 +313,7 @@ def scan_P_(y, P_, seg_, frame):
 
 
 def form_segment(y, P_, frame):
-    " Convert ervery Ps into segments or add to higher-line segment, merge blobs "
+    " Convert every Ps into segments or add to higher-line segment, merge blobs "
 
     seg_ = deque()
     while P_:
