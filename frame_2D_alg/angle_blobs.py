@@ -62,7 +62,10 @@ def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-lin
 def comp_angle(y, a_, lower_a_, dert_, P_map_):
     " compare angle of adjacent gradients within frame per gblob "
 
-    sda_ = correct_da(np.abs(a_[1:] - a_[:-1])) + correct_da(np.abs(lower_a_[:-1] - a_[:-1])) - 2 * ave # calculate sda_
+    dax_ = correct_da(np.abs(a_[1:] - a_[:-1]))
+    day_ = correct_da(np.abs(lower_a_[:-1] - a_[:-1]))
+    da_ = dax_ + day_
+    sda_ = da_ - 2 * ave # calculate sda_
     dert_[:, 4] = a_        # assign a_ to a slice of dert_
     dert_[:-1, 5] = sda_    # assign sda_ to a slice of dert_
     P_ = deque()
