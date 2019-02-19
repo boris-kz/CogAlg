@@ -48,7 +48,7 @@ def comp_pixel(y, p_, lower_p_, dert_):
     for right_p, lower_p in zip(p_[1:], lower_p_[:-1]):  # pixel p is compared to vertically and horizontally subsequent pixels
         dy = lower_p - p  # compare to lower pixel
         dx = right_p - p  # compare to right-side pixel
-        g = int(math.hypot(dy, dx)) - ave  # max gradient of right_and_down quadrant per pixel p
+        g = abs(dy) + abs(dx) - ave  # max gradient of right_and_down quadrant per pixel p
         dert = [p, g, dx, dy]
         dert_[x] = dert  # dert ) dert_ ) dert__ 
         s = g > 0
@@ -64,8 +64,7 @@ def comp_pixel(y, p_, lower_p_, dert_):
 def image_to_blobs(image):
     " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
 
-    dert__ = Classes.init_dert__(3, image.reshape((Y, X, 1)))       # init dert__ as a cube: depth is 1 + number of derivatives: p, g, dx, dy
-    frame = Classes.cl_frame(dert__, copy_dert=True)  # init frame object: blob_, dert__, shape, params (= [I, G, Dx, Dy, xD, abs_xD, Ly])
+    frame = Classes.cl_frame(image.reshape((Y, X, 1)), num_derts=3, copy_dert=True)  # init frame object: blob_, dert__, shape, params (= [I, G, Dx, Dy, xD, abs_xD, Ly])
 
     seg_ = deque()  # higher-line 1D patterns
     p_ = image[0]  # first horizontal line of pixels

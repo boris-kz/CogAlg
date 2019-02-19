@@ -1,9 +1,10 @@
 from time import time
+import numpy as np
 # Recursion branches -------------------------------------------------------------
 from frame_2D_alg.angle_blobs import blob_to_ablobs
 from frame_2D_alg.inc_deriv import inc_deriv
 from frame_2D_alg.inc_range import bilateral, inc_range
-# from comp_Py_ import comp_Py_
+# from comp_P_ import comp_P_
 
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
@@ -19,7 +20,7 @@ from frame_2D_alg.inc_range import bilateral, inc_range
 '''
 
 
-def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
+def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_P_
 
     global rdn
     L, I, G = blob.params[:3]
@@ -44,7 +45,7 @@ def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv 
     # A adjust -> ave / each sum?
 
     # vs Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
-    #    Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_Py_ eval only, no comp?
+    #    Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_P_ eval only, no comp?
 
     # return [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)]  # estimated values per branch
     return [(val_deriv, 0, blob), (val_range, 1, blob)]  # estimated values per branch
@@ -54,14 +55,14 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
 
     global rdn
     val_ = sorted(val_, key=lambda val: val[0])
-    new_val_ = []  # estimated branch values of deeper layer of recursion tree per blob
+    sub_val_ = []  # estimated branch values of deeper layer of recursion tree per blob
     map_ = []  # blob maps of stronger branches in val_, appended for next val evaluation
 
     while val_:
         val, typ, blob = val_.pop()
         for map in map_:
-            olp = blob.map and map  # pseudo code for counting AND between maps, if box overlap?
-            rdn += 1 * (olp / blob.L)  # redundancy to previously formed representations
+            olp = np.logical_and(blob.map, map) # pseudo code for counting AND between maps, if box overlap?
+            rdn += 1 * (olp / blob.L)           # redundancy to previously formed representations
 
         if val > ave * blob.L() * rdn:
             if typ == 0:
@@ -69,35 +70,38 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
             elif typ == 1:
                 blob_sub_blobs = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
             # else:
-            #     blob_sub_blobs = comp_Py_(val, 0, blob, rdn)  # -> comp_P
+            #     blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
 
             map_.append(blob.map)
-            new_val_ += intra_blob_recur(new_val_, blob_sub_blobs)  # returns estimated recursion values of the next layer
+            sub_val_ += eval_sub_blob(sub_val_, blob_sub_blobs)  # returns estimated recursion values of the next layer
 
-            # eval_blob(sub_blob) in intra_blob_recur() returns (val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)
-            # deep angle_blobs is called from eval_blob, from intra_blob_recur()
+            # eval_blob(sub_blob) in eval_sub_blob() returns (val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)
+            # deep angle_blobs is called from eval_blob, from eval_sub_blob()
         else:
             break
 
-    if new_val_:
-        eval_layer(new_val_)  # evaluation of new_val_ for recursion
+    if sub_val_:
+        eval_layer(sub_val_)  # evaluation of sub_val_ for recursion
 
-def intra_blob_recur(new_val_, blob_sub_blobs):
+def eval_sub_blob(sub_val_, blob_sub_blobs):
 
     global rdn
     for blob in blob_sub_blobs.sub_blob_:
-        new_val_ += eval_blob(blob)  # rdn = 1
-    return new_val_
+        sub_val_ += eval_blob(blob)  # rdn = 1
+    return sub_val_
 
 
-def intra_blob(frame):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
+def intra_blob(frame, redundancy=1):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_P_
 
     global rdn
     for blob in frame.blob_:
-        rdn = 1
-        val_ = eval_blob(blob)
-        eval_layer(val_)  # calls intra_blob_recur()
-
+        rdn = redundancy
+        # val_ = eval_blob(blob)
+        # eval_layer(val_)  # calls eval_sub_blob()
+        if blob.sign:
+            blob_to_ablobs(blob)
+            inc_range(blob)
+            inc_deriv(blob)
     return frame  # frame of 2D patterns, to be outputted to level 2
 
 
@@ -119,5 +123,5 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-# from DEBUG import draw_blob
-# draw_blob('./debug', frame, debug_ablob=1, debug_parts=0, debug_local=0, show=0)
+from DEBUG import draw_blob
+draw_blob('../debug', frame, typ=3, debug_parts=0, debug_local=0, show=0)

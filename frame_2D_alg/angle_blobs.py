@@ -20,15 +20,14 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     global Y, X
     Y, X = blob.map.shape
 
-    dert__ = Classes.init_dert__(2, blob.dert__)
-    sub_blob = Classes.cl_frame(dert__, map=blob.map)  # initialize sub_blob object per gblob
+    sub_blob = Classes.cl_frame(blob.dert__, num_derts=2, map=blob.map)  # initialize sub_blob object per gblob
     seg_ = deque()
-    dert_ = dert__[0]
+    dert_ = sub_blob.dert__[0]
     P_map_ = sub_blob.map[0]
     a_ = get_angle(dert_, P_map_)  # compute angle of max gradients within gblob (contiguous area of same-sign gradient)
 
     for y in range(Y - 1):
-        lower_dert_ = dert__[y + 1]
+        lower_dert_ = sub_blob.dert__[y + 1]
         lower_P_map_ = sub_blob.map[y + 1]
         lower_a_ = get_angle(lower_dert_, lower_P_map_, P_map_)
 

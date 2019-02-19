@@ -20,15 +20,18 @@ class cl_frame(object):
         - map: boolean map for local frame inside a blob, = True inside the blob, = False outside
         provide ways to manipulate blob's dert.
     '''
-    def __init__(self, dert__, map = None, copy_dert = False):
+    def __init__(self, input, num_derts=0, map=None, rng=1, ncomp=2, copy_dert=False):
         " constructor function of frame "
-        self.blob_ = []                 # buffer for terminated blobs
-        self.dert__ = dert__            # 2D-array buffer of derts
-        self.shape = dert__.shape       # shape of the frame: self.shape = (Y, X)
+
+        self.dert__ = init_dert__(input, num_derts)  # init dert__ as a cube: depth is 1 + number of derivatives: p, g, dx, dy
+        self.shape =  self.dert__.shape # shape of the frame: self.shape = (Y, X)
         self.map = map
         self.copy_dert = copy_dert
         num_params = self.shape[2] + 3  # 3 params more: xD, abs_xD, Ly
         self.params = [0] * num_params  # 7 params initially: I, G, Dx, Dy, xD, abs_xD, Ly
+        self.rng = rng                  # comp range
+        self.ncomp = ncomp              # number of compared inputs
+        self.blob_ = []                 # buffer for terminated blobs
 
     def accum_params(self, params1, attr = 'params'):
         ''' accumulate a list attribute with given list.
@@ -238,7 +241,7 @@ class cl_blob(cl_segment):
 # -form_segment()
 # -form_blob()
 # ***********************************************************************************************************************
-def init_dert__(num_derts, input__):
+def init_dert__(input__, num_derts=0):
     " initialize dert__ from of input__ "
     height, width, depth = input__.shape
     dert__ = np.zeros((height, width, (depth + num_derts)), dtype=int)
@@ -353,10 +356,12 @@ def form_blob(y, term_seg, frame):
     blob = term_seg.blob  # blob of terminated segment
     blob.term_segment(term_seg, y)  # segments packed in blob, y_carry: min elevation of term_seg over current hP
 
-    if not blob.open_segments:  # blob is terminated and packed into frame
+    if not blob.open_segments:      # blob is terminated and packed into frame
         blob.terminate(term_seg.yn()).localize(frame)
+        blob.rng = frame.rng        # comp range
+        blob.ncomp = frame.ncomp    # number of compared inputs
         frame.accum_params(blob.params[1:] + blob.orientation_params)  # frame.params: [I, G, Dx, Dy, xD, abs_xD, Ly], orient: [xD, abs_xD, Ly]
-        frame.blob_.append(blob)  # blob is buffered into blob_
+        frame.blob_.append(blob)    # blob is buffered into blob_
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 # ***************************************** GENERIC FUNCTIONS END *******************************************************
