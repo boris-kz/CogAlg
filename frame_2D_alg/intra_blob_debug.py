@@ -61,19 +61,13 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
 
             map_.append(blob.map)
-            sub_val_ += eval_sub_blob(sub_val_, blob_sub_blobs)  # returns estimated recursion values of the next layer:
-            # [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)] per sub_blob, may include deeper angle_blobs?
+            for blob in blob_sub_blobs.sub_blob_:
+                sub_val_ += eval_blob(blob)  # returns estimated recursion values of the next layer:
+                # [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)] per sub_blob, may include deeper angle_blobs?
         else:
             break
     if sub_val_:
         eval_layer(sub_val_)  # evaluation of sub_val_ for recursion
-
-def eval_sub_blob(sub_val_, blob_sub_blobs):
-
-    global rdn
-    for blob in blob_sub_blobs.sub_blob_:
-        sub_val_ += eval_blob(blob)  # rdn = 1
-    return sub_val_
 
 
 def intra_blob(frame):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_Py_
