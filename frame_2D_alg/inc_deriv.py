@@ -17,14 +17,13 @@ def inc_deriv(blob):
     global Y, X
     Y, X = blob.map.shape
 
-    dert__ = Classes.init_dert__(3, blob.dert__)                        # 3 params added: gg, dxg, dyg
-    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
+    sub_blob = Classes.cl_frame(blob.dert__, num_derts=3, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
     seg_ = deque()
-    dert_ = dert__[0]
+    dert_ = sub_blob.dert__[0]
     P_map = sub_blob.map[0]
 
     for y in range(Y - 1):
-        lower_dert_ = dert__[y + 1]
+        lower_dert_ = sub_blob.dert__[y + 1]
         lower_P_map = sub_blob.map[y + 1]
 
         P_ = comp_g(y, dert_, lower_dert_, P_map, lower_P_map) # vertical and lateral g comparison
@@ -37,6 +36,8 @@ def inc_deriv(blob):
 
     sub_blob.terminate()  # delete sub_blob.dert__ and sub_blob.map
     blob.g_sub_blob = sub_blob
+
+    return sub_blob
     # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
 
 def comp_g(y, dert_, lower_dert_, P_map, lower_P_map):
