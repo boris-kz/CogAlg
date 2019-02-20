@@ -88,10 +88,11 @@ from frame_2D_alg.misc import get_filters
 get_filters(globals())  # imports all filters at once
 
 # Load inputs --------------------------------------------------------------------
-argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./../images/raccoon_eye.jpg')
-arguments = vars(argument_parser.parse_args())
-image = cv2.imread(arguments['image'], 0).astype(int)
+# argument_parser = argparse.ArgumentParser()
+# argument_parser.add_argument('-i', '--image', help='path to image file', default='./../images/raccoon_eye.jpg')
+# arguments = vars(argument_parser.parse_args())
+# image = cv2.imread(arguments['image'], 0).astype(int)
+image = cv2.imread(input_path, 0).astype(int)
 Y, X = image.shape  # image height and width
 
 # Main ---------------------------------------------------------------------------
