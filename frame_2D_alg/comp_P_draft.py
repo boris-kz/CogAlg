@@ -8,31 +8,37 @@ from time import time
 
 def comp_P(norm, P, _P):  # forms vertical derivatives of P params, also conditional ders from DIV comp
 
-    (s, x0, L, I, G, dert_), xd, af = P[:2]
-    (_s, _x0, _L, _I, _G, _dert_), _xd, _af = _P[:2]
-    if af and _af:  # flag for optional computed angle params:
-        A, sDa = P[3]
-        _A, _sDa = _P[3]
+    (s, x0, L, I, G, Dx, Dy, dert_), xd, af = P[:2]
+    (_s, _x0, _L, _I, _G, _Dx, _Dy, _dert_), _xd, _af = _P[:2]
+    if af and _af:  # if _P[3]?
+        sDa = P[3]; _sDa = _P[3]  # optional computed angle params
 
-    # also params are derived by all recursion branches, which form interlaced prior der_H | rng_H reps per branch:
-    # angle, deriv..| bilat, range.. per branch switch, at the cost of new H rep?
-    # comp_P_ is a terminal branch: unit is P ! p?
-
-    Ave = ave * L  # L int, I, dif G, A; no S = I + G + A: too few?
     xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't?
+    Ave = ave * L
+    # comparands: L int, I, dif G, Dx, Dy: summed dert params, + Dx, Dy to compute higher-structures g and a?
+    # + params of higher branches, in hierarchical rep sequence, S if n_params > min, switching cost / sblob?
 
     mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
-    if x0 > _x0: mx -= x0 - _x0   # vx only for distant-P comp?   no if mx > ave, only PP termination by comp_P?
+    if x0 > _x0: mx -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
 
-    if norm:  # if xD / Ly * A > ave:
+    if abs(Dx) + abs(Dy) > Ave:  # or if lower-structure deviation ssD = (abs_D - D.) - Ave: g refine || a compute,
+        # per element for sub-blob definition and intra-blob comp, low cost per group?
+
+        g_P = math.hypot(Dy, Dx)  # P | seg | blob- wide variation params are sD | G,
+        a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
+
+    if norm:  # if xD_seg / Ly * a_seg > ave: blob- | seg- wide for common syntax and comp
         # params are xd-normalized for comp, no alt comp: secondary to axis?
+
         hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance):
         L /= hyp  # est. orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
+        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
+        # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_Py_ eval only, no comp: scan-biased?
 
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
+    dI = I - _I; vI = dI - Ave  # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
 
     # but da is also abs and short-range?
@@ -305,3 +311,8 @@ def comp_P_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 
 
 
 flip_ave = 1000
+'''
+    colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
+    relative colors may match across reflecting objects, forming color | lighting objects?     
+    comp between color patterns within an object: segmentation?
+'''

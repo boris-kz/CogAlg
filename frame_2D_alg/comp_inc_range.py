@@ -6,7 +6,7 @@ from frame_2D_alg.misc import get_filters
 get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
-    inc_range is a component of intra_blob
+    comp_inc_range is a component of intra_blob
 '''
 # ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
@@ -57,7 +57,7 @@ def inc_range(blob, rng, ncomp):
     sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
     seg_ = deque()
 
-    comp_p(dert__, blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
+    comp_p(dert__, blob.map, rng)  # comp_p within blob, rng measure is unilateral
     ncomp += rng * 2
 
     for y in range(rng, Y - rng):
