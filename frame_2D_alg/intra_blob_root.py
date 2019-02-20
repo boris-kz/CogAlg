@@ -3,7 +3,7 @@ import numpy as np
 # Recursion branches -------------------------------------------------------------
 from frame_2D_alg.angle_blobs import blob_to_ablobs
 from frame_2D_alg.comp_inc_deriv import inc_deriv
-from frame_2D_alg.comp_inc_range import bilateral, inc_range
+from frame_2D_alg.comp_inc_range import inc_range
 # from comp_Py_ import comp_Py_
 
 '''
@@ -55,8 +55,8 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
         if val > ave * blob.L() * rdn:
             if typ == 0: blob_sub_blobs = inc_range(blob, blob.ncomp)  # recursive comp over p_ of incremental distance
             elif typ==1: blob_sub_blobs = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
-            # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
 
+            # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
             map_.append(blob.map)
             for sub_blob in blob_sub_blobs.sub_blob_:
                 sub_val_ += eval_blob(sub_blob)  # returns estimated recursion values of the next layer:
