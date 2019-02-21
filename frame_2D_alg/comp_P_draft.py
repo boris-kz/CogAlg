@@ -13,16 +13,14 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P params, also conditi
     if af and _af:  # if _P[3]?
         sDa = P[3]; _sDa = _P[3]  # optional computed angle params
 
-    xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't?
+    xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
     Ave = ave * L
-    # comparands: L int, I, dif G, Dx, Dy: summed dert params, + Dx, Dy to compute higher-structures g and a?
-    # + params of higher branches, in hierarchical rep sequence, S if n_params > min, switching cost / sblob?
+    # comparands: L int, I, dif G, + abs_Dx, abs_Dy, Dx, Dy for struct g+a calc, + higher branch params, S if n_params > min
 
     mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: mx -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
 
-    if abs(Dx) + abs(Dy) > Ave:  # or if lower-structure deviation ssD = (abs_D - D.) - Ave: g refine || a compute,
-        # per element for sub-blob definition and intra-blob comp, low cost per group?
+    if abs(Dx) + abs(Dy) > Ave:  # or if lower-struct deviation ssD = (abs_D - D.) - Ave: g,a calc, intra_blob eval
 
         g_P = math.hypot(Dy, Dx)  # P | seg | blob- wide variation params are sD | G,
         a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
