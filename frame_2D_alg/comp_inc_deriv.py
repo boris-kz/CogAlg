@@ -9,6 +9,7 @@ get_filters(globals()) # imports all filters at once
 # Functions:
 # -inc_deriv()
 # -comp_g()
+# -cluster_dert()
 # ***********************************************************************************************************************
 
 def inc_deriv(blob):
@@ -17,19 +18,17 @@ def inc_deriv(blob):
     global Y, X
     Y, X = blob.map.shape
 
-    sub_blob = Classes.cl_frame(blob.dert__, num_derts=3, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
+    sub_blob = Classes.cl_frame(blob.dert__, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
+
+    comp_g(sub_blob.dert__, sub_blob.map)
+
     seg_ = deque()
-    dert_ = sub_blob.dert__[0]
-    P_map = sub_blob.map[0]
 
     for y in range(Y - 1):
-        lower_dert_ = sub_blob.dert__[y + 1]
-        lower_P_map = sub_blob.map[y + 1]
 
-        P_ = comp_g(y, dert_, lower_dert_, P_map, lower_P_map) # vertical and lateral g comparison
-        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)        # P_ scans _P_ from seg_
-        seg_ = Classes.form_segment(y, P_, sub_blob)       # form segments with P_ and their fork_s
-        dert_, P_map = lower_dert_, lower_P_map       # buffers for next line
+        P_ = cluster_dert(y, sub_blob)                    # cluster derts into g
+        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)     # P_ scans _P_ from seg_
+        seg_ = Classes.form_segment(y, P_, sub_blob)    # form segments with P_ and their fork_s
 
     y = Y - 1   # sub_blob ends, merge segs of last line into their blobs:
     while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)
@@ -39,38 +38,43 @@ def inc_deriv(blob):
 
     return sub_blob
     # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
+def comp_g(dert__, map):
+    " compare g within sub blob "
 
-def comp_g(y, dert_, lower_dert_, P_map, lower_P_map):
-    " compare pixels of increasing range within frame per blob "
+    g = dert__[:, :, 1]
+    map[:-1] = np.logical_and(map[:-1], map[1:])
+    map[:, :-1] = np.logical_and(map[:, :-1], map[:, 1:])
 
-    comp_map = np.logical_and(P_map, lower_P_map)
-    comp_map = np.logical_and(comp_map[:-1], comp_map[1:])
+    dx = np.empty(g.shape)
+    dy = np.empty(g.shape)
+    gg = np.empty(g.shape)
 
-    g_ = dert_[:-1, 1]  # assigned manually for now. Will change in the future when dert syntax is consistent
-    right_g_ = dert_[1:, 1]
-    lower_g_ = lower_dert_[:-1, 1]
+    dx[:-1] = g[1:] - g[:-1]
+    dy[:, :-1] = g[:, 1:] - g[:, :-1]
 
-    dxg_ = np.zeros(g_.shape, dtype=int)
-    dxg_[comp_map] = right_g_[comp_map] - g_[comp_map]
-    dyg_ = np.zeros(g_.shape, dtype=int)
-    dyg_[comp_map] = lower_g_[comp_map] - g_[comp_map]
+    g[map] = np.abs(dx[map]) + np.abs(dy[map]) - ave
 
-    gg_ = np.hypot(dyg_, dxg_) - ave
+    dert__[:, :, 0] = g
+    dert__[:, :, 1] = gg
+    dert__[:, :, 2] = dx
+    dert__[:, :, 3] = dy
+    # ---------- comp_g() end -------------------------------------------------------------------------------------------
 
-    dert_[:-1, -3] = gg_  # assign gg_ to a slice of dert_
-    dert_[:-1, -2] = dxg_ # assign dxg_ to a slice of dert_
-    dert_[:-1, -1] = dyg_ # assign dyg_ to a slice of dert_
+def cluster_dert(y, sub_blob):
+    " cluster derts into Ps "
+    dert_ = sub_blob.dert__[y]
+    P_map = sub_blob.map[y]
 
     P_ = deque()
     x = 0
     while x < X - 1:  # exclude last column
-        while x < X - 1 and not comp_map[x]:
+        while x < X - 1 and not P_map[x]:
             x += 1
-        if x < X - 1 and comp_map[x]:
+        if x < X - 1 and P_map[x]:
             P = Classes.cl_P(x0=x, num_params=dert_.shape[1]+1)  # P initialization
-            while x < X - 1 and comp_map[x]:
+            while x < X - 1 and P_map[x]:
                 dert = dert_[x]
-                gg = dert[-3]
+                gg = dert[1]
                 s = gg > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
                 x += 1
@@ -78,4 +82,4 @@ def comp_g(y, dert_, lower_dert_, P_map, lower_P_map):
             P_.append(P)
 
     return  P_
-    # ---------- comp_g() end -------------------------------------------------------------------------------------------
+    # ---------- cluster_dert() end -------------------------------------------------------------------------------------

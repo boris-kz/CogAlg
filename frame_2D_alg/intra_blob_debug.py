@@ -32,7 +32,9 @@ def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv 
         if G > Ave:  # likely edge, angle comp, ablobs definition
 
             rdn += 1  # redundant representation counter, or branch-specific cost ratio?
+            blob.dert__[blob.map, 1] = np.hypot(blob.dert__[blob.map, 2], blob.dert__[blob.map, 3])
             blob_ablobs = blob_to_ablobs(blob)
+            blob_ablobs = intra_blob(blob_ablobs.frame_of_blobs)
             val_deriv = (G / Ave) * -blob_ablobs.params[5]  # relative_G * -sDa: angle Match
 
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
@@ -118,4 +120,4 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from DEBUG import draw_blob
-draw_blob('../debug', frame, typ=1, debug_parts=0, debug_local=0, show=0)
+draw_blob('../debug', frame, typ=0, debug_parts=0, debug_local=0, show=0)
