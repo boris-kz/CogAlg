@@ -6,43 +6,36 @@ from time import time
     currently a draft
 '''
 
-def comp_P(norm, P, _P):  # forms vertical derivatives of P params, also conditional ders from DIV comp
+def comp_P(ortho, P, _P):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    (s, x0, L, I, G, Dx, Dy, dert_), xd, af = P[:2]
-    (_s, _x0, _L, _I, _G, _Dx, _Dy, _dert_), _xd, _af = _P[:2]
-    if af and _af:  # if _P[3]?
-        sDa = P[3]; _sDa = _P[3]  # optional computed angle params
+    (s, x0, L, I, G, Dx, Dy, dert_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    (_s, _x0, _L, _I, _G, _Dx, _Dy, _dert_), _xd = _P  # + params from higher branches, S if min n_params?
 
     xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
     Ave = ave * L
-    # comparands: L int, I, dif G, + abs_Dx, abs_Dy, Dx, Dy for struct g+a calc, + higher branch params, S if n_params > min
 
-    mx = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
-    if x0 > _x0: mx -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
+    xm = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
+    if x0 > _x0: xm -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
 
-    if abs(Dx) + abs(Dy) > Ave:  # or if lower-struct deviation ssD = (abs_D - D.) - Ave: g,a calc, intra_blob eval
+    if abs(Dx) + abs(Dy) > Ave:  # rough g_P or lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
+       g_P = math.hypot(Dy, Dx)  # P | seg | blob- wide variation params are G and Ga,
+       a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
 
-        g_P = math.hypot(Dy, Dx)  # P | seg | blob- wide variation params are sD | G,
-        a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
-
-    if norm:  # if xD_seg / Ly * a_seg > ave: blob- | seg- wide for common syntax and comp
-        # params are xd-normalized for comp, no alt comp: secondary to axis?
+    if ortho:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
         hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance):
         L /= hyp  # est. orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
-        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
-        # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_Py_ eval only, no comp: scan-biased?
+        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval?  not worth it?  no alt comp: secondary to axis?
+        # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
     dI = I - _I; vI = dI - Ave  # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
 
-    # but da is also abs and short-range?
-
     Pd = xdd + dL + dI + dG  # defines dPP, no dS-to-xd correlation
-    Pm = mx +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
+    Pm = xm +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
@@ -52,7 +45,7 @@ def comp_P(norm, P, _P):  # forms vertical derivatives of P params, also conditi
         nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 
-        Pnm = mx + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
+        Pnm = xm + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
 
         if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
         else: mPP_rdn = 1; nmPP_rdn = 0
@@ -259,7 +252,7 @@ def flip(blob):  # vertical-first run of form_P and deeper functions over blob's
     return blob
 
 
-def comp_P_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
+def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
     s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
 
     if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
@@ -268,6 +261,9 @@ def comp_P_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 
 
     # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
     # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
+
+    if xD / Ly * val_PP_ > ave * L: ortho = 1
+    else: ortho = 0  # estimate params of Ps orthogonal to long axis, seg-wide for same-syntax comp_P
 
     mPP = 0,[],[]  # pattern of patterns, defined by deviation of M_params, dderived: match is a minimum, per P | param?
     dPP = 0,[],[]  # sub PP within negative mPP: min value of signed dS
@@ -278,11 +274,11 @@ def comp_P_(val_PP_, norm, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 
 
     while Py_:  # comp_P starts from 2nd P, top-down
         P = Py_.popleft()
-        _P, _ms, _ds = comp_P(norm, P, _P)
+        _P, _ms, _ds = comp_P(ortho, P, _P)
 
         while Py_:  # form_PP starts from 3rd P
             P = Py_.popleft()
-            P, ms, ds = comp_P(norm, P, _P)  # P: S_vars += S_ders in comp_P
+            P, ms, ds = comp_P(ortho, P, _P)  # P: S_vars += S_ders in comp_P
             if ms == _ms:
                 mPP = form_PP(1, P, mPP)
             else:

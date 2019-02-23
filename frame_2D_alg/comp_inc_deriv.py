@@ -5,11 +5,11 @@ from frame_2D_alg.misc import get_filters
 get_filters(globals()) # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
-    inc_deriv is a component of intra_blob
+    comp_inc_deriv is a component of intra_blob
 '''
 # ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
 # Functions:
-# -comp_inc_deriv()
+# -inc_deriv()
 # -comp_g()
 # ***********************************************************************************************************************
 
