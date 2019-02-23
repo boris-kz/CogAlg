@@ -52,7 +52,7 @@ def comp_g(dert__, map):
     dx[:-1] = g[1:] - g[:-1]
     dy[:, :-1] = g[:, 1:] - g[:, :-1]
 
-    g[map] = np.abs(dx[map]) + np.abs(dy[map]) - ave
+    gg[map] = np.abs(dx[map]) + np.abs(dy[map]) - ave
 
     dert__[:, :, 0] = g
     dert__[:, :, 1] = gg

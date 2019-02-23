@@ -34,7 +34,7 @@ def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv 
             rdn += 1  # redundant representation counter, or branch-specific cost ratio?
             blob.dert__[blob.map, 1] = np.hypot(blob.dert__[blob.map, 2], blob.dert__[blob.map, 3])
             blob_ablobs = blob_to_ablobs(blob)
-            blob_ablobs = intra_blob(blob_ablobs.frame_of_blobs)
+            blob_ablobs = intra_blob(blob_ablobs)
             val_deriv = (G / Ave) * -blob_ablobs.params[5]  # relative_G * -sDa: angle Match
 
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match

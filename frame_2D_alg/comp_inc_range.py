@@ -152,7 +152,7 @@ def calc_g(y, sub_blob):
             while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave * ncomp
+                g = dx + dy - ave * ncomp
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)

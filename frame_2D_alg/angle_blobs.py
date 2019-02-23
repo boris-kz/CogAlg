@@ -20,7 +20,7 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     global Y, X
     Y, X = blob.map.shape
 
-    sub_blob = Classes.cl_frame(blob.dert__, num_derts=2, map=blob.map)  # initialize sub_blob object per gblob
+    sub_blob = Classes.cl_frame(blob.dert__, num_derts=2, map=blob.map, copy_dert=True)  # initialize sub_blob object per gblob
     seg_ = deque()
     dert_ = sub_blob.dert__[0]
     P_map_ = sub_blob.map[0]
