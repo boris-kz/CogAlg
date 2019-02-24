@@ -7,71 +7,69 @@ get_filters(globals()) # imports all filters at once
 '''
     comp_inc_deriv is a component of intra_blob
 '''
-# ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
+# ***************************************************** INC_DERIV FUNCTIONS *********************************************
 # Functions:
 # -inc_deriv()
 # -comp_g()
+# -cluster_derts()
 # ***********************************************************************************************************************
 
 def inc_deriv(blob):  # compare gradient to define gg_blobs
-    ''' same functionality as image_to_blobs() in frame_blobs.py '''
+    ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
     global Y, X
     Y, X = blob.map.shape
-
-    dert__ = Classes.init_dert__(3, blob.dert__)    # 3 params added: gg, dxg, dyg
-    blob = Classes.cl_frame(dert__, map=blob.map)  # initialize blob object per ablob
+    sub_blob = Classes.cl_frame(blob.dert__, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
+    comp_g(sub_blob.dert__, sub_blob.map)
     seg_ = deque()
-    dert_ = dert__[0]
-    P_map = blob.map[0]
 
     for y in range(Y - 1):
-        lower_dert_ = dert__[y + 1]
-        lower_P_map = blob.map[y + 1]
+        P_ = cluster_derts(y, sub_blob)                 # cluster derts by g sign
+        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)     # P_ scans _P_ from seg_
+        seg_ = Classes.form_segment(y, P_, sub_blob)    # form segments with P_ and their fork_s
+    y = Y - 1
+    while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)  # merge segs of last blob line into their sub_blobs
 
-        P_ = comp_g(y, dert_, lower_dert_, P_map, lower_P_map) # vertical and lateral g comparison
-        P_ = Classes.scan_P_(y, P_, seg_, blob)   # P_ scans _P_ from seg_
-        seg_ = Classes.form_segment(y, P_, blob)  # form segments with P_ and their fork_s
-        dert_, P_map = lower_dert_, lower_P_map    # buffers for next line
-
-    y = Y - 1   # frame ends, merge segs of last line into their blobs:
-    while seg_: Classes.form_blob(y, seg_.popleft(), blob)
-
-    blob.terminate()  # delete frame.dert__ and frame.map
-    blob.gblob = blob
+    sub_blob.terminate()  # delete sub_blob.dert__ and sub_blob.map
+    blob.g_sub_blob = sub_blob
+    return sub_blob
     # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
 
-def comp_g(y, dert_, lower_dert_, P_map, lower_P_map):
-    " compare gradient adjacent derts within frame per ablob "
+def comp_g(dert__, map):
+    " compare gradient of left and higher derts within sub blob "
 
-    comp_map = np.logical_and(P_map, lower_P_map)
-    comp_map = np.logical_and(comp_map[:-1], comp_map[1:])
+    g = dert__[:, :, 1]
+    map[:-1] = np.logical_and(map[:-1], map[1:])
+    map[:, :-1] = np.logical_and(map[:, :-1], map[:, 1:])
+    dx = np.empty(g.shape)
+    dy = np.empty(g.shape)
+    gg = np.empty(g.shape)
 
-    g_ = dert_[:-1, 1]  # assigned manually for now. Will change in the future when dert syntax is consistent
-    right_g_ = dert_[1:, 1]
-    lower_g_ = lower_dert_[:-1, 1]
+    dx[:-1] = g[1:] - g[:-1]
+    dy[:, :-1] = g[:, 1:] - g[:, :-1]
+    gg[map] = np.abs(dx[map]) + np.abs(dy[map]) - ave
 
-    dxg_ = np.zeros(g_.shape, dtype=int)
-    dxg_[comp_map] = right_g_[comp_map] - g_[comp_map]
-    dyg_ = np.zeros(g_.shape, dtype=int)
-    dyg_[comp_map] = lower_g_[comp_map] - g_[comp_map]
+    dert__[:, :, 0] = g
+    dert__[:, :, 1] = gg
+    dert__[:, :, 2] = dx
+    dert__[:, :, 3] = dy
+    # ---------- comp_g() end -------------------------------------------------------------------------------------------
 
-    gg_ = np.hypot(dyg_, dxg_) - ave
-
-    dert_[:-1, -3] = gg_  # assign gg_ to a slice of dert_
-    dert_[:-1, -2] = dxg_ # assign dxg_ to a slice of dert_
-    dert_[:-1, -1] = dyg_ # assign dyg_ to a slice of dert_
+def cluster_derts(y, sub_blob):
+    " forms gPs "
+    dert_ = sub_blob.dert__[y]
+    P_map = sub_blob.map[y]
 
     P_ = deque()
     x = 0
     while x < X - 1:  # exclude last column
-        while x < X - 1 and not comp_map[x]:
+        while x < X - 1 and not P_map[x]:
             x += 1
-        if x < X - 1 and comp_map[x]:
+        if x < X - 1 and P_map[x]:
             P = Classes.cl_P(x0=x, num_params=dert_.shape[1]+1)  # P initialization
-            while x < X - 1 and comp_map[x]:
+            while x < X - 1 and P_map[x]:
                 dert = dert_[x]
-                gg = dert[-3]
+                gg = dert[1]
                 s = gg > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
                 x += 1
@@ -79,4 +77,4 @@ def comp_g(y, dert_, lower_dert_, P_map, lower_P_map):
             P_.append(P)
 
     return  P_
-    # ---------- comp_g() end -------------------------------------------------------------------------------------------
+    # ---------- cluster_dert() end -------------------------------------------------------------------------------------

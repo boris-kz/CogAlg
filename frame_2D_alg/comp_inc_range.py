@@ -21,9 +21,9 @@ def bilateral(blob):
 
     global Y, X
     Y, X = blob.map.shape
-    dert__ = Classes.init_dert__(0, blob.dert__)
-    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
+    sub_blob = Classes.cl_frame(blob.dert__, map=blob.map, copy_dert=True)
     seg_ = deque()
+    dert__ = sub_blob.dert__
 
     dert__[:, 1:, 2] += dert__[:, 1:, 0] - dert__[:, :-1, 0]    # compare left pixel, accumulate to dx__
     dert__[1:, :, 3] += dert__[1:, :, 0] - dert__[:-1, :, 0]    # compare higher pixel, accumulate to dy__
@@ -35,43 +35,41 @@ def bilateral(blob):
     # dx__[:, 1:] += p__[:, 1:] - p__[:, -1]    # compare left pixel
 
     for y in range(1, Y):                       # discard first incomplete row
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=1, ncomp=2)
+        P_ = calc_g(y, sub_blob)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
-
     y = Y
     while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
-    return 2  # ncomp = 2
+    return sub_blob  # ncomp = 2
     # ---------- bilateral() end ----------------------------------------------------------------------------------------
 
-def inc_range(blob, rng, ncomp):
+def inc_range(blob):
     ''' same functionality as image_to_blobs() in frame_blobs.py
         with rng > 1 '''
 
     global Y, X
     Y, X = blob.map.shape
-    dert__ = Classes.init_dert__(0, blob.dert__)
-    sub_blob = Classes.cl_frame(dert__, map=blob.map, copy_dert=True)
+    rng = blob.rng + 1
+    ncomp = blob.ncomp + rng * 2
+    sub_blob = Classes.cl_frame(blob.dert__, map=blob.map, rng=rng, ncomp=ncomp, copy_dert=True)
     seg_ = deque()
 
-    comp_p(dert__, blob.map, rng)  # comp_p within blob, rng measure is unilateral
-    ncomp += rng * 2
+    comp_p(sub_blob.dert__, sub_blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
 
     for y in range(rng, Y - rng):
-        P_ = calc_g(y, dert__[y], sub_blob.map[y], rng=rng, ncomp=ncomp)
+        P_ = calc_g(y, sub_blob)
         P_ = Classes.scan_P_(y, P_, seg_, sub_blob)
         seg_ = Classes.form_segment(y, P_, sub_blob)
-
     y = Y - rng
     while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)
 
     sub_blob.terminate()
     blob.rng_sub_blob = sub_blob
 
-    return ncomp
+    return sub_blob
     # ---------- inc_range() end ----------------------------------------------------------------------------------------
 
 def comp_p(dert__, map, rng):
@@ -108,10 +106,10 @@ def comp_p(dert__, map, rng):
         temp_dy__ = d__ * y_coef                # buffer for dy accumulation
         temp_dx__ = d__ * x_coef                # buffer for dx accumulation
         # accumulate dy, dx:
-        dy__[yd:, xd:] += temp_dy__             # bilateral accumulation on dy (x + xd, y + yd)
-        dy__[:-yd, :-xd] += temp_dy__           # bilateral accumulation on dy (x, y)
-        dx__[yd:, xd:] += temp_dx__             # bilateral accumulation on dx (x + xd, y + yd)
-        dx__[:-yd, :-xd] += temp_dx__           # bilateral accumulation on dx (x, y)
+        dy__[yd:, xd:] += temp_dy__.astype(int)     # bilateral accumulation on dy (x + xd, y + yd)
+        dy__[:-yd, :-xd] += temp_dy__.astype(int)   # bilateral accumulation on dy (x, y)
+        dx__[yd:, xd:] += temp_dx__.astype(int)     # bilateral accumulation on dx (x + xd, y + yd)
+        dx__[:-yd, :-xd] += temp_dx__.astype(int)   # bilateral accumulation on dx (x, y)
 
         # top-right and bottom-left quadrants:
 
@@ -120,19 +118,24 @@ def comp_p(dert__, map, rng):
         temp_dy__ = d__ * y_coef                # buffer for dy accumulation
         temp_dx__ = -(d__ * x_coef)             # buffer for dx accumulation, sign inverted with comp direction
         # accumulate dy, dx:
-        dy__[yd:, :-xd] += temp_dy__            # bilateral accumulation on dy (x, y + yd)
-        dy__[:-yd, xd:] += temp_dy__            # bilateral accumulation on dy (x + xd, y)
-        dx__[yd:, :-xd] += temp_dx__            # bilateral accumulation on dx (x, y + yd)
-        dx__[:-yd, xd:] += temp_dx__            # bilateral accumulation on dx (x + xd, y)
+        dy__[yd:, :-xd] += temp_dy__.astype(int)    # bilateral accumulation on dy (x, y + yd)
+        dy__[:-yd, xd:] += temp_dy__.astype(int)    # bilateral accumulation on dy (x + xd, y)
+        dx__[yd:, :-xd] += temp_dx__.astype(int)    # bilateral accumulation on dx (x, y + yd)
+        dx__[:-yd, xd:] += temp_dx__.astype(int)    # bilateral accumulation on dx (x + xd, y)
 
     dert__[:, :, 2] += dx__  # add dx to shorter-rng-accumulated dx
     dert__[:, :, 3] += dy__  # add dy to shorter-rng-accumulated dy
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
 
-def calc_g(y, dert_, P_map, rng, ncomp):
+def calc_g(y, sub_blob):
     " compute g from dx, dy; form Ps "
+    dert_ = sub_blob.dert__[y]
+    P_map = sub_blob.map[y]
+    rng = sub_blob.rng
+    ncomp = sub_blob.ncomp
     P_ = deque()
     x = rng                 # discard first rng columns
+
     if rng > 1:
         x_stop = X - rng    # discard last rng columns
     else:
@@ -145,7 +148,7 @@ def calc_g(y, dert_, P_map, rng, ncomp):
             while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = hypot(dx, dy) - ave * ncomp
+                g = dx + dy - ave * ncomp
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)

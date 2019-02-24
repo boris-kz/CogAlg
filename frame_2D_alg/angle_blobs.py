@@ -14,27 +14,26 @@ get_filters(globals()) # imports all filters at once
 # -comp_angle()
 # ***********************************************************************************************************************
 
-def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, ga in all reps within gblob
     ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
     global Y, X
     Y, X = blob.map.shape
 
-    dert__ = Classes.init_dert__(2, blob.dert__)
-    sub_blob = Classes.cl_frame(dert__, map=blob.map)  # initialize sub_blob object per gblob
+    sub_blob = Classes.cl_frame(blob.dert__, num_dert=2, map=blob.map, copy_dert=True)  # initialize sub_blob object per gblob
     seg_ = deque()
-    dert_ = dert__[0]
+    dert_ = sub_blob.dert__[0]
     P_map_ = sub_blob.map[0]
     a_ = get_angle(dert_, P_map_)  # compute angle of max gradients within gblob (contiguous area of same-sign gradient)
 
     for y in range(Y - 1):
-        lower_dert_ = dert__[y + 1]
+        lower_dert_ = sub_blob.dert__[y + 1]
         lower_P_map_ = sub_blob.map[y + 1]
         lower_a_ = get_angle(lower_dert_, lower_P_map_, P_map_)
 
-        P_ = comp_angle(y, a_, lower_a_, dert_, P_map_) # vertical and lateral angle comparison
-        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)        # aP_ scans _aP_ from seg_
-        seg_ = Classes.form_segment(y, P_, sub_blob)       # form segments with P_ and their fork_s
+        P_ = comp_angle(y, a_, lower_a_, dert_, P_map_)  # vertical and lateral angle comparison
+        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)      # aP_ scans _aP_ from seg_
+        seg_ = Classes.form_segment(y, P_, sub_blob)     # form segments with P_ and their fork_s
         a_, dert_, P_map_ = lower_a_, lower_dert_, lower_P_map_  # buffers for next line
 
     y = Y - 1   # sub_blob ends, merge segs of last line into their blobs:
@@ -62,12 +61,11 @@ def get_angle(dert_, P_map_, _P_map_ = False):  # default = False: no higher-lin
 def comp_angle(y, a_, lower_a_, dert_, P_map_):
     " compare angle of adjacent gradients within frame per gblob "
 
-    dax_ = correct_da(np.abs(a_[1:] - a_[:-1]))
-    day_ = correct_da(np.abs(lower_a_[:-1] - a_[:-1]))
-    da_ = dax_ + day_
-    sda_ = da_ - 2 * ave # calculate sda_
-    dert_[:, 4] = a_        # assign a_ to a slice of dert_
-    dert_[:-1, 5] = sda_    # assign sda_ to a slice of dert_
+    dxa_ = correct_da(np.abs(a_[1:] - a_[:-1]))
+    dya_ = correct_da(np.abs(lower_a_[:-1] - a_[:-1]))
+    ga_ = (dxa_ + dya_) - 2 * ave
+    dert_[:, 4] = a_      # assign a_ to a slice of dert_
+    dert_[:-1, 5] = ga_   # assign ga_ to a slice of dert_
     P_ = deque()
     x = 0
     while x < X - 1:  # exclude last column
@@ -77,8 +75,8 @@ def comp_angle(y, a_, lower_a_, dert_, P_map_):
             P = Classes.cl_P(x0=x, num_params=dert_.shape[1]+1)  # aP initialization
             while x < X - 1 and P_map_[x]:
                 dert = dert_[x]
-                sda = dert[5]
-                s = sda > 0
+                ga = dert[5]
+                s = ga > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)
                 x += 1
             P.terminate(x, y)  # aP' x_last
@@ -88,7 +86,7 @@ def comp_angle(y, a_, lower_a_, dert_, P_map_):
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 def correct_da(da):
     " make da 0 - 128 instead of 0 - 255 "
-    over = da > 128
-    da[over] = 256 - da[over]
+    where = da > 128
+    da[where] = 256 - da[where]
     return da
     # ---------- correct_da() end ---------------------------------------------------------------------------------------
