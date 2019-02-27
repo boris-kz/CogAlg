@@ -48,9 +48,10 @@ def form_blob(term_seg, frame):
     blob[3] += roots - 1    # number of open segments
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
-        [L, Y, X, I, Dy, Dx, sG], root_, incomplete_segments = blob[1:]
+        blob.pop()
+        [Hs, S, Y, X, I, Dy, Dx, sG] = blob[1]
         # frame P are to compute averages, redundant for same-scope alt_frames
-        global debug; debug += L
+
         frame[0][0] += I
         frame[0][1] += Dy
         frame[0][2] += Dx
@@ -69,8 +70,8 @@ def form_seg_(P_, frame):
         s, params, dert_ = P
 
         if not fork_:  # seg is initialized with initialized blob (params, coordinates, incomplete_segments, root_, xD)
-            blob = [s, [0] * len(params), [], 1]    # s, params, seg_, open_segments
-            seg = [s, params, [P], 0, fork_, blob] # s, params. P_, roots, fork_, blob
+            blob = [s, [0] * (len(params) + 1), [], 1]      # s, params, seg_, open_segments
+            seg = [s, [1] + params, [P], 0, fork_, blob]    # s, params. P_, roots, fork_, blob
             blob[2].append(seg)
         else:
             if len(fork_) == 1 and fork_[0][3] == 1:  # P has one fork and that fork has one root
@@ -78,16 +79,16 @@ def form_seg_(P_, frame):
                 seg = fork_[0]
 
                 L, Y, X, I, Dy, Dx, sG = params
-                Ls, Ys, Xs, Is, Dys, Dxs, sGs = seg[1]     # fork's params
+                H, S, Ys, Xs, Is, Dys, Dxs, sGs = seg[1]     # fork's params. H: height. S: area
 
-                seg[1] = [L + Ls, Y + Ys, X + Xs, I + Is, Dy + Dys, Dx + Dxs, sG + sGs]
+                seg[1] = [H + 1, S + L, Ys + Y, Xs + X, Is + I, Dys + Dy, Dxs + Dx, sGs + sG]
 
                 seg[2].append(P)    # P_: vertical buffer of Ps merged into seg
                 seg[3] = 0          # reset roots
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0][5]                       # fork's blob
-                seg = [s, params, [P], 0, fork_, blob] # seg is initialized with fork's blob
+                seg = [s, [1] + params, [P], 0, fork_, blob] # seg is initialized with fork's blob
                 blob[2].append(seg) # segment is buffered into blob
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][3] == 1:  # if roots == 1: fork hasn't been terminated
@@ -236,7 +237,7 @@ def comp_pixel(frame, p__):
 
 def image_to_blobs(image):
     " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
-    global debug; debug = 0
+
     frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
 
     comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
@@ -273,8 +274,7 @@ start_time = time()
 frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
-print(debug)
-print((height - 1) * (width - 1))
+
 # Rebuild blob -------------------------------------------------------------------
 from frame_2D_alg.DEBUG import draw_blob
 draw_blob('../debug/frame', frame_of_blobs)
