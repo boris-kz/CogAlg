@@ -32,32 +32,157 @@ import numpy as np
 '''
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
-# -form_blob()
-# -form_seg_()
-# -scan_P_()
-# -form_P_()
-# -comp_pixel()
 # -image_to_blobs()
+# -comp_pixel()
+# -form_P_()
+# -scan_P_()
+# -form_seg_()
+# -form_blob()
 # ***********************************************************************************************************************
 
-def form_blob(term_seg, frame):
-    " Terminated segment is merged into continued or initialized blob (all connected segments) "
-    params, P_, roots, fork_, blob = term_seg[1:]
+def image_to_blobs(image):
+    " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
 
-    blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
-    blob[3] += roots - 1    # number of open segments
+    frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
 
-    if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
-        blob.pop()
-        [Ly, L, Y, X, I, Dy, Dx, sG] = blob[1]
-        # frame P are to compute averages, redundant for same-scope alt_frames
+    comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
 
-        frame[0][0] += I
-        frame[0][1] += Dy
-        frame[0][2] += Dx
-        frame[0][3] += sG
-        frame[1].append(blob)
-    # ---------- form_blob() end ----------------------------------------------------------------------------------------
+    # clustering of inputs:
+
+    seg_ = deque()   # buffer of running segments
+
+    for y in range(1, height - 1):   # first and last row are discarded
+
+        P_ = form_P_(y, frame)  # horizontal clustering
+        P_ = scan_P_(P_, seg_, frame)
+        seg_ = form_seg_(P_, frame)
+
+    # frame ends, merge segs of last line into their blobs:
+    while seg_:  form_blob(seg_.popleft(), frame)
+    return frame  # frame of 2D patterns, to be outputted to level 2
+    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
+
+def comp_pixel(frame, p__):
+    ''' Bilateral comparison of consecutive pixels, vertically and horizontally, over the whole image. '''
+
+    Y, X = p__.shape    # height and width of frame
+    dert__ = np.empty(shape=(Y, X, 4), dtype=int)   # initialize dert__ - place holders of parameters derived from pixels
+
+    # vertical pixel comp. dy is twice the gradient magnitude at 90 degree
+    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]   # horizontal indices slicing (1:-1): first and last column are discarded
+
+    # horizontal pixel comp. dx is twice the gradient magnitude at 0 degree:
+    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]   # vertical indices slicing (1:-1): first and last row are discarded
+
+    # sg is L1 norm of dy and dx, minus twice the value of ave
+    sg__ = np.abs(dy__) + np.abs(dx__) - 2 * ave
+
+    dert__[:, :, 0] = p__
+    dert__[1:-1, 1:-1, 1] = dy__    # first row, last row, first column and last-column are discarded
+    dert__[1:-1, 1:-1, 2] = dx__
+    dert__[1:-1, 1:-1, 3] = sg__
+
+    frame.append(dert__)    # pack dert__ into frame
+
+    # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
+
+def form_P_(y, frame):
+    ''' cluster horizontally consecutive inputs into Ps, buffered in P_ '''
+
+    P_ = deque()  # initialize the output of this function
+
+    dert_ = frame[-1][y, :, :]  # row y
+
+    x_stop = width - 1
+    x = 1                                   # first and last column are discarded
+
+    while x < x_stop:
+
+        s = dert_[x][-1] > 0  # s = (sg > 0)
+        params = [0, 0, 0, 0, 0, 0, 0]  # L, Y, X, I, Dy, Dx, sG
+
+        P = [s, params, []]
+
+        while x < x_stop and s == P[0]:
+
+            i, dy, dx, sg = dert_[x, :]
+
+            # accumulate P's params:
+            params[0] += 1      # L
+            params[1] += y      # Y
+            params[2] += x      # X
+            params[3] += i      # I
+            params[4] += dy     # dy
+            params[5] += dx     # dx
+            params[6] += sg     # sG
+
+            P[2].append((y, x, i, dy, dx, sg))
+
+            x += 1
+
+            s = dert_[x][-1] > 0  # s = (sg > 0)
+
+        if params[0]:       # if L > 0
+            P_.append(P)    # P is packed into P_
+
+    return P_
+
+    # ---------- form_P_() end ------------------------------------------------------------------------------------------
+
+def scan_P_(P_, seg_, frame):
+    ''' each running segment in seg_ has 1 _P, or P of higher-line. P_ contain current line P.
+        This function detects all connections between every P and _P in the form of fork_ '''
+
+    new_P_ = deque()
+    if P_ and seg_:             # if both are not empty
+
+        P = P_.popleft()
+        seg = seg_.popleft()
+        _P = seg[2][-1]         # higher-line P is last element in seg's P_
+
+        stop = False
+        fork_ = []
+
+        while not stop:
+
+            x0 = P[2][0][1]     # P's first dert's x: y, x, i, dy, dx, sg = P[2][0]
+            xn = P[2][-1][1]    # P's last dert's x: y, x, i, dy, dx, sg = P[2][-1]
+
+            _x0 = _P[2][0][1]   # P's first dert's x: y, x, i, dy, dx, sg = P[2][0]
+            _xn = _P[2][-1][1]  # P's last dert's x: y, x, i, dy, dx, sg = P[2][-1]
+
+            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # check sign and olp
+                seg[3] += 1
+                fork_.append(seg)  # P-connected segments buffered into fork_
+
+            if xn < _xn:    # P is on the left of _P: next P
+                new_P_.append((P, fork_))
+                fork_ = []
+                if P_:      # switch to next P
+                    P = P_.popleft()
+                else:       # terminate loop
+                    if seg[3] != 1: # if roots != 1
+                        form_blob(seg, frame)
+                    stop = True
+            else:           # _P is on the left of P_: next _P
+                if seg[3] != 1: # if roots != 1
+                    form_blob(seg, frame)
+
+                if seg_:    # switch to new _P
+                    seg = seg_.popleft()
+                    _P = seg[2][-1]
+                else:       # terminate loop
+                    new_P_.append((P, fork_))
+                    stop = True
+
+    # handle the remainders:
+    while P_:
+        new_P_.append((P_.popleft(), []))     # no fork
+    while seg_:
+        form_blob(seg_.popleft(), frame)  # roots always == 0
+
+    return new_P_
+    # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
 def form_seg_(P_, frame):
     " Convert or merge every P into segment. Merge blobs "
@@ -114,148 +239,24 @@ def form_seg_(P_, frame):
     return new_seg_
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
-def scan_P_(P_, seg_, frame):
-    ''' each running segment in seg_ has 1 _P, or P of higher-line. P_ contain current line P.
-        This function detects all connections between every P and _P in the form of fork_ '''
+def form_blob(term_seg, frame):
+    " Terminated segment is merged into continued or initialized blob (all connected segments) "
+    params, P_, roots, fork_, blob = term_seg[1:]
 
-    new_P_ = deque()
-    if P_ and seg_:             # if both are not empty
-        P = P_.popleft()
-        seg = seg_.popleft()
-        _P = seg[2][-1]         # higher-line P is last element in seg's P_
+    blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
+    blob[3] += roots - 1    # number of open segments
 
-        stop = False
-        fork_ = []
+    if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
+        blob.pop()
+        [Ly, L, Y, X, I, Dy, Dx, sG] = blob[1]
+        # frame P are to compute averages, redundant for same-scope alt_frames
 
-        while not stop:
-
-            x0 = P[2][0][1]     # P's first dert's x: y, x, i, dy, dx, sg = P[2][0]
-            xn = P[2][-1][1]    # P's last dert's x: y, x, i, dy, dx, sg = P[2][-1]
-
-            _x0 = _P[2][0][1]   # P's first dert's x: y, x, i, dy, dx, sg = P[2][0]
-            _xn = _P[2][-1][1]  # P's last dert's x: y, x, i, dy, dx, sg = P[2][-1]
-
-            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # check sign and olp
-                seg[3] += 1
-                fork_.append(seg)  # P-connected segments buffered into fork_
-
-            if xn < _xn:    # P is on the left of _P: next P
-                new_P_.append((P, fork_))
-                fork_ = []
-                if P_:      # switch to next P
-                    P = P_.popleft()
-                else:       # terminate loop
-                    if seg[3] != 1: # if roots != 1
-                        form_blob(seg, frame)
-                    stop = True
-            else:           # _P is on the left of P_: next _P
-                if seg[3] != 1: # if roots != 1
-                    form_blob(seg, frame)
-
-                if seg_:    # switch to new _P
-                    seg = seg_.popleft()
-                    _P = seg[2][-1]
-                else:       # terminate loop
-                    new_P_.append((P, fork_))
-                    stop = True
-
-    # handle the remainders:
-    while P_:
-        new_P_.append((P_.popleft(), []))     # no fork
-    while seg_:
-        form_blob(y, seg_.popleft(), frame)  # roots always == 0
-
-    return new_P_
-    # ---------- scan_P_() end ------------------------------------------------------------------------------------------
-
-def form_P_(y, frame):
-    ''' cluster horizontally consecutive inputs into Ps, buffered in P_ '''
-
-    P_ = deque()  # initialize the output of this function
-
-    dert_ = frame[-1][y, :, :]  # row y
-
-    x_stop = width - 1
-    x = 1                                   # first and last column are discarded
-
-    while x < x_stop:
-
-        s = dert_[x][-1] > 0  # s = (sg > 0)
-        params = [0, 0, 0, 0, 0, 0, 0]  # L, Y, X, I, Dy, Dx, sG
-
-        P = [s, params, []]
-
-        while x < x_stop and s == P[0]:
-
-            i, dy, dx, sg = dert_[x, :]
-
-            # accumulate P's params:
-            params[0] += 1      # L
-            params[1] += y      # Y
-            params[2] += x      # X
-            params[3] += i      # I
-            params[4] += dy     # dy
-            params[5] += dx     # dx
-            params[6] += sg     # sG
-
-            P[2].append((y, x, i, dy, dx, sg))
-
-            x += 1
-
-            s = dert_[x][-1] > 0  # s = (sg > 0)
-
-        if params[0]:       # if L > 0
-            P_.append(P)    # P is packed into P_
-
-    return P_
-
-    # ---------- form_P_() end ------------------------------------------------------------------------------------------
-
-def comp_pixel(frame, p__):
-    ''' Bilateral comparison of consecutive pixels, vertically and horizontally, over the whole image. '''
-
-    Y, X = p__.shape    # height and width of frame
-    dert__ = np.empty(shape=(Y, X, 4), dtype=int)   # initialize dert__ - place holders of parameters derived from pixels
-
-    # vertical pixel comp. dy is twice the gradient magnitude at 90 degree
-    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]   # horizontal indices slicing (1:-1): first and last column are discarded
-
-    # horizontal pixel comp. dx is twice the gradient magnitude at 0 degree:
-    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]   # vertical indices slicing (1:-1): first and last row are discarded
-
-    # sg is L1 norm of dy and dx, minus twice the value of ave
-    sg__ = np.abs(dy__) + np.abs(dx__) - 2 * ave
-
-    dert__[:, :, 0] = p__
-    dert__[1:-1, 1:-1, 1] = dy__    # first row, last row, first column and last-column are discarded
-    dert__[1:-1, 1:-1, 2] = dx__
-    dert__[1:-1, 1:-1, 3] = sg__
-
-    frame.append(dert__)    # pack dert__ into frame
-
-    # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
-
-def image_to_blobs(image):
-    " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
-
-    frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
-
-    comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
-
-    # clustering of inputs:
-
-    seg_ = deque()   # buffer of running segments
-
-    for y in range(1, height - 1):   # first and last row are discarded
-
-        P_ = form_P_(y, frame)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, frame)
-        seg_ = form_seg_(P_, frame)
-
-    # frame ends, merge segs of last line into their blobs:
-    while seg_:  form_blob(seg_.popleft(), frame)
-    return frame  # frame of 2D patterns, to be outputted to level 2
-    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
+        frame[0][0] += I
+        frame[0][1] += Dy
+        frame[0][2] += Dx
+        frame[0][3] += sG
+        frame[1].append(blob)
+    # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
