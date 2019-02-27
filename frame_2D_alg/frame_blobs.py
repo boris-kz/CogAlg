@@ -49,7 +49,7 @@ def form_blob(term_seg, frame):
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
         blob.pop()
-        [Hs, S, Y, X, I, Dy, Dx, sG] = blob[1]
+        [Ly, L, Y, X, I, Dy, Dx, sG] = blob[1]
         # frame P are to compute averages, redundant for same-scope alt_frames
 
         frame[0][0] += I
@@ -79,9 +79,9 @@ def form_seg_(P_, frame):
                 seg = fork_[0]
 
                 L, Y, X, I, Dy, Dx, sG = params
-                H, S, Ys, Xs, Is, Dys, Dxs, sGs = seg[1]     # fork's params. H: height. S: area
+                Ly, Ls, Ys, Xs, Is, Dys, Dxs, sGs = seg[1]     # fork's params
 
-                seg[1] = [H + 1, S + L, Ys + Y, Xs + X, Is + I, Dys + Dy, Dxs + Dx, sGs + sG]
+                seg[1] = [Ly + 1, Ls + L, Ys + Y, Xs + X, Is + I, Dys + Dy, Dxs + Dx, sGs + sG]
 
                 seg[2].append(P)    # P_: vertical buffer of Ps merged into seg
                 seg[3] = 0          # reset roots

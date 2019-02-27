@@ -1,5 +1,12 @@
 from collections import deque
 
+# ************ FUNCTIONS ************************************************************************************************
+# -form_blob()
+# -form_seg_()
+# -scan_P()
+# -form_P_()
+# ***********************************************************************************************************************
+
 def form_blob(term_seg, frame):
     " Terminated segment is merged into continued or initialized blob (all connected segments) "
     params, P_, roots, fork_, blob = term_seg[1:]
@@ -37,7 +44,7 @@ def form_seg_(P_, frame):
                 # P is merged into segment fork_[0] (seg):
                 seg = fork_[0]
 
-                seg[1] = [par1 + par2 for par1, par2 in zip([1] + params, seg[1])]  # sum all params of P into seg, in addition to +1 in H
+                seg[1] = [par1 + par2 for par1, par2 in zip([1] + params, seg[1])]  # sum all params of P into seg, in addition to +1 in Ly
 
                 seg[2].append(P)    # P_: vertical buffer of Ps merged into seg
                 seg[3] = 0          # reset roots
@@ -70,6 +77,60 @@ def form_seg_(P_, frame):
     return new_seg_
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
+def scan_P_(P_, seg_, frame):
+    ''' each running segment in seg_ has 1 _P, or P of higher-line. P_ contain current line P.
+        This function detects all connections between every P and _P in the form of fork_ '''
+
+    new_P_ = deque()
+    if P_ and seg_:             # if both are not empty
+        P = P_.popleft()
+        seg = seg_.popleft()
+        _P = seg[2][-1]         # higher-line P is last element in seg's P_
+
+        stop = False
+        fork_ = []
+
+        while not stop:
+
+            x0 = P[2][0][1]     # P's first dert's x: y, x, i, dy, dx, sg = P[2][0]
+            xn = P[2][-1][1]    # P's last dert's x: y, x, i, dy, dx, sg = P[2][-1]
+
+            _x0 = _P[2][0][1]   # P's first dert's x: y, x, i, dy, dx, sg = P[2][0]
+            _xn = _P[2][-1][1]  # P's last dert's x: y, x, i, dy, dx, sg = P[2][-1]
+
+            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # check sign and olp
+                seg[3] += 1
+                fork_.append(seg)  # P-connected segments buffered into fork_
+
+            if xn < _xn:    # P is on the left of _P: next P
+                new_P_.append((P, fork_))
+                fork_ = []
+                if P_:      # switch to next P
+                    P = P_.popleft()
+                else:       # terminate loop
+                    if seg[3] != 1: # if roots != 1
+                        form_blob(seg, frame)
+                    stop = True
+            else:           # _P is on the left of P_: next _P
+                if seg[3] != 1: # if roots != 1
+                    form_blob(seg, frame)
+
+                if seg_:    # switch to new _P
+                    seg = seg_.popleft()
+                    _P = seg[2][-1]
+                else:       # terminate loop
+                    new_P_.append((P, fork_))
+                    stop = True
+
+    # handle the remainders:
+    while P_:
+        new_P_.append((P_.popleft(), []))     # no fork
+    while seg_:
+        form_blob(seg_.popleft(), frame)  # roots always == 0
+
+    return new_P_
+    # ---------- scan_P_() end ------------------------------------------------------------------------------------------
+
 def form_P_(y, dert__, rng = 1):
     ''' cluster horizontally consecutive inputs into Ps, buffered in P_ '''
 
@@ -91,18 +152,17 @@ def form_P_(y, dert__, rng = 1):
             dert = dert_[x, :]
 
             # accumulate P's params:
-            P[1] = [par1 + par2 for par1, par2 in zip(P[1], [1, y, x] + list(dert)]
+            P[1] = [par1 + par2 for par1, par2 in zip(P[1], [1, y, x] + list(dert))]
 
-            P[2].append(dert)
+            P[2].append((y, x) + tuple(dert))
 
             x += 1
 
             s = dert_[x][-1] > 0  # s = (sdert > 0)
 
-        if P[0][0]:         # if L > 0
+        if P[1][0]:         # if L > 0
             P_.append(P)    # P is packed into P_
 
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
-
