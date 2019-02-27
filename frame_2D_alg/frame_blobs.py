@@ -1,6 +1,7 @@
 import cv2
 from time import time
 from collections import deque
+from collections import namedtuple
 import numpy as np
 
 '''   
@@ -32,13 +33,35 @@ import numpy as np
 '''
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
+# -image_to_blobs()
 # -comp_pixel()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
-# -image_to_blobs()
 # ***********************************************************************************************************************
+
+def image_to_blobs(image):
+    " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
+
+    frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
+
+    comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
+
+    # clustering of inputs:
+
+    seg_ = deque()   # buffer of running segments
+
+    for y in range(1, height - 1):   # first and last row are discarded
+
+        P_ = form_P_(y, frame)  # horizontal clustering
+        P_ = scan_P_(P_, seg_, frame)
+        seg_ = form_seg_(P_, frame)
+
+    # frame ends, merge segs of last line into their blobs:
+    while seg_:  form_blob(seg_.popleft(), frame)
+    return frame  # frame of 2D patterns, to be outputted to level 2
+    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 def comp_pixel(frame, p__):
     ''' Bilateral comparison of consecutive pixels, vertically and horizontally, over the whole image. '''
@@ -225,38 +248,18 @@ def form_blob(term_seg, frame):
     blob[3] += roots - 1    # number of open segments
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
-        blob.pop()
-        [Ly, L, Y, X, I, Dy, Dx, sG] = blob[1]
+        s, [Ly, L, Y, X, I, Dy, Dx, sG], e_ = blob[:3]
+        for seg in e_:
+            seg.pop()   # remove references to blob
         # frame P are to compute averages, redundant for same-scope alt_frames
 
         frame[0][0] += I
         frame[0][1] += Dy
         frame[0][2] += Dx
         frame[0][3] += sG
-        frame[1].append(blob)
+
+        frame[1].append(nt_blob(sign=s, params=[Ly, L, Y, X, I, Dy, Dx, sG], e_=e_, sub_blob=[]))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
-
-def image_to_blobs(image):
-    " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
-
-    frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
-
-    comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
-
-    # clustering of inputs:
-
-    seg_ = deque()   # buffer of running segments
-
-    for y in range(1, height - 1):   # first and last row are discarded
-
-        P_ = form_P_(y, frame)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, frame)
-        seg_ = form_seg_(P_, frame)
-
-    # frame ends, merge segs of last line into their blobs:
-    while seg_:  form_blob(seg_.popleft(), frame)
-    return frame  # frame of 2D patterns, to be outputted to level 2
-    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
@@ -272,6 +275,7 @@ height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
+nt_blob = namedtuple('blob', 'sign params e_ sub_blob') # define named tuple
 frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
