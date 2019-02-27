@@ -32,35 +32,13 @@ import numpy as np
 '''
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
-# -image_to_blobs()
 # -comp_pixel()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
+# -image_to_blobs()
 # ***********************************************************************************************************************
-
-def image_to_blobs(image):
-    " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
-
-    frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
-
-    comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
-
-    # clustering of inputs:
-
-    seg_ = deque()   # buffer of running segments
-
-    for y in range(1, height - 1):   # first and last row are discarded
-
-        P_ = form_P_(y, frame)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, frame)
-        seg_ = form_seg_(P_, frame)
-
-    # frame ends, merge segs of last line into their blobs:
-    while seg_:  form_blob(seg_.popleft(), frame)
-    return frame  # frame of 2D patterns, to be outputted to level 2
-    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 def comp_pixel(frame, p__):
     ''' Bilateral comparison of consecutive pixels, vertically and horizontally, over the whole image. '''
@@ -257,6 +235,28 @@ def form_blob(term_seg, frame):
         frame[0][3] += sG
         frame[1].append(blob)
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
+
+def image_to_blobs(image):
+    " root function, postfix '_' denotes array vs. element, prefix '_' denotes higher-line vs. lower-line variable "
+
+    frame = [[0, 0, 0, 0], []]   # initialize frame: params, blob_
+
+    comp_pixel(frame, image)            # bilateral comp of image's pixels, vertically and horizontally
+
+    # clustering of inputs:
+
+    seg_ = deque()   # buffer of running segments
+
+    for y in range(1, height - 1):   # first and last row are discarded
+
+        P_ = form_P_(y, frame)  # horizontal clustering
+        P_ = scan_P_(P_, seg_, frame)
+        seg_ = form_seg_(P_, frame)
+
+    # frame ends, merge segs of last line into their blobs:
+    while seg_:  form_blob(seg_.popleft(), frame)
+    return frame  # frame of 2D patterns, to be outputted to level 2
+    # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
