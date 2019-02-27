@@ -246,7 +246,7 @@ def image_to_blobs(image):
 # ************ PROGRAM BODY *********************************************************************************************
 # Pattern filters ----------------------------------------------------------------
 # eventually updated by higher-level feedback, initialized here as constants:
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg_classes.misc import get_filters
 
 get_filters(globals())  # imports all filters at once
 

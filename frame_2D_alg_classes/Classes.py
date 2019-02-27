@@ -20,10 +20,10 @@ class cl_frame(object):
         - map: boolean map for local frame inside a blob, = True inside the blob, = False outside
         provide ways to manipulate blob's dert.
     '''
-    def __init__(self, input, num_derts=0, map=None, rng=1, ncomp=2, copy_dert=False):
+    def __init__(self, input, dert_levels=0, map=None, rng=1, ncomp=2, copy_dert=False):
         " constructor function of frame "
 
-        self.dert__ = init_dert__(input, num_derts)  # init dert__ as a cube: depth is 1 + number of derivatives: p, g, dx, dy
+        self.dert__ = init_dert__(input, dert_levels)  # init dert__ as a cube: depth is 1 + number of derivatives: p, g, dx, dy
         self.shape =  self.dert__.shape # shape of the frame: self.shape = (Y, X)
         self.map = map
         self.copy_dert = copy_dert
@@ -241,10 +241,10 @@ class cl_blob(cl_segment):
 # -form_segment()
 # -form_blob()
 # ***********************************************************************************************************************
-def init_dert__(input__, num_derts=0):
+def init_dert__(input__, dert_levels=0):
     " initialize dert__ from of input__ "
     height, width, depth = input__.shape
-    dert__ = np.zeros((height, width, (depth + num_derts)), dtype=int)
+    dert__ = np.zeros((height, width, (depth + dert_levels)), dtype=int)
     dert__[:, :, :depth] = input__
     return dert__
 

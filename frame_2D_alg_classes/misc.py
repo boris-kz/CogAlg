@@ -1,10 +1,8 @@
-import cv2
-import numpy as np
-from frame_2D_alg_classes import filters
-import matplotlib.pyplot as plt
+import filters
 # ***************************************************** MISCELLANEOUS FUNCTIONS *****************************************
 # Functions:
 # -get_filters()
+# -tree_traverse()
 # ***********************************************************************************************************************
 def get_filters(obj):
     " imports all variables in filters.py "
@@ -13,4 +11,9 @@ def get_filters(obj):
         var = getattr(filters, str)
         obj[str] = var
     # ---------- get_filters() end --------------------------------------------------------------------------------------
+def tree_traverse(tree, path):
+    list = [tree[0]]
+    for i, sub_path in path:
+        list += tree_traverse(tree[i], sub_path)
+    return list
 # ***************************************************** MISCELLANEOUS FUNCTIONS END *************************************

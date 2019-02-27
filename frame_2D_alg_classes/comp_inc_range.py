@@ -1,8 +1,8 @@
 import numpy.ma as ma
 from math import hypot
 from collections import deque
-from frame_2D_alg import Classes
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg_classes import Classes
+from frame_2D_alg_classes.misc import get_filters
 get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
@@ -152,7 +152,7 @@ def calc_g(y, sub_blob):
             while x < x_stop and P_map[x]:
                 dert = dert_[x]
                 dx, dy = dert[2:4]
-                g = dx + dy - ave * ncomp
+                g = abs(dx) + abs(dy) - ave * ncomp
                 dert[1] = g
                 s = g > 0
                 P = Classes.form_P(x, y, s, dert, P, P_)

@@ -1,123 +1,152 @@
 from time import time
 import numpy as np
+
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg.angle_blobs import blob_to_ablobs
-from frame_2D_alg.comp_inc_deriv import inc_deriv
-from frame_2D_alg.comp_inc_range import bilateral, inc_range
-# from comp_P_ import comp_P_
+from angle_blobs import comp_angle
+# from inc_deriv import  inc_deriv
+# from comp_Py_ import comp_Py_
 
 '''
     intra_blob() is an extension to frame_blobs, it performs evaluation for comp_P and recursive frame_blobs within each blob.
     Currently it's mostly a draft, combined with frame_blobs it will form a 2D version of first-level algorithm
     inter_blob() will be second-level 2D algorithm, and a prototype for meta-level algorithm
-
+    
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
-
+    
     inter_olp_blob: scan alt_typ_ ) alt_color, rolp * mL > ave * max_L?   
-    intra_blob rdn is reduced by full inclusion: mediated access, also by cross-derivation blob comp?
+    intra_blob rdn is eliminated by merging blobs, reduced by full inclusion: mediated access?
 '''
 
+def eval_blob(blob, dert_tree):  # evaluate blob for comp_angle, incr_rng_comp, incr_der_comp, comp_Py_, orthogonal blob flip
 
-def eval_blob(blob):  # evaluate blob for comp_angle, inc_range comp, inc_deriv comp, comp_P_
-
-    global rdn
-    L, I, G = blob.params[:3]
-    Ly = blob.orientation_params[2]
-    Ave = ave * L  # whole-blob reprocessing filter
+    [L, I, G, Dx, Dy], root_ = blob[2:4]
+    Ave = ave * L   # whole-blob reprocessing filter, fixed: no if L?
+    rdn = 1  # redundant representation counter
     val_deriv, val_range = 0, 0
 
-    if blob.sign:  # positive gblob: area of noisy or directional gradient
-        if G > Ave:  # likely edge, angle comp, ablobs definition
+    a_branch_add = False
+    if blob[0]:  # positive blob, primary orientation match eval: noisy or directional gradient
+        if G > Ave:   # likely edge, ave d_angle = ave g?
+            a_branch_add = True
+            rdn += 1  # or greater?
+            comp_angle(blob, dert_tree, [1,[(1, [
+                                                 (1, []),
+                                                 (2, [
+                                                      (1, [])])])]])  # angle comparison, ablob definition; A, sDa accumulation in aP, aseg, ablob, blob
+            sDa = blob[2][6]
 
-            rdn += 1  # redundant representation counter, or branch-specific cost ratio?
-            blob.dert__[blob.map, 1] = np.hypot(blob.dert__[blob.map, 2], blob.dert__[blob.map, 3])
-            blob_ablobs = blob_to_ablobs(blob)
-            blob_ablobs = intra_blob(blob_ablobs)
-            val_deriv = (G / Ave) * -blob_ablobs.params[5]  # relative_G * -sDa: angle Match
+            val_deriv = G * -sDa  # -sDa indicates proximate angle match -> directional d match, dderived?
+        val_range = G  # G without angle is not directional, thus likely d reversal and match among distant pixels
+    val_PP_ = L + I + G + Dx + Dy  # max P match -> PP_, also abs_Dx, abs_Dy: more accurate but not needed for most blobs?
 
-        val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
-    val_PP_ = (L + I + G) * (L / Ly / Ly)
+    # Three branches of recursion start with three generic function calls:
+    values      = [val_range, val_deriv, val_PP_]   # projected values of three branches of recursion
+    branches    = [inc_range, inc_deriv, comp_Py_]   # functions of each branch
+    arguments   = [[blob], [blob], [val_PP_, 0, blob]]   # arguments of each branch
+    eval_queue  = sorted(zip(values, branches, arguments), key= lambda item: item[0], reverse=True)  # sort by value
+    recursion(eval_queue, Ave, rdn)
+    return a_branch_add
 
-    # first term is proj P match; + abs_Dx and abs_Dy: more accurate but not needed for most blobs?
-    # last term is elongation: above-average P match? ~ box elongation: (x_max - x_min) / (y_max - y_min)?
+def recursion(eval_queue, Ave, rdn):
+    ''' evaluation of recursion branches
+        result of evaluation is also evaluated
+        for insertion in eval_queue,
+        which determines next step of recursion '''
 
-    # * D bias: A deviation from vertical: y_dev = A - 128*L, if y_dev > 63:
-    # A adjust -> ave / each sum?
+    val, branch, args = eval_queue.pop(0)
+    if val > Ave * rdn:
+        new_val, new_branch, new_args = branch(*args, rdn=rdn)  # insert new branch into eval_queue, ordered by value
 
-    # vs Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio
-    #    Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # for flip and comp_P_ eval only, no comp?
+        if new_val > 0:
+            # eval_queue =
+            eval_queue = sorted(eval_queue.append((new_val, new_branch, new_args)), key= lambda item: item[0], reverse=True)
 
-    # return [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)]  # estimated values per branch
-    return [(val_deriv, 0, blob), (val_range, 1, blob)]  # estimated values per branch
+        if eval_queue:
+            recursion(eval_queue, Ave, rdn+1)
 
+'''
+    values = val_deriv, val_range, val_PP_
+    c, b, a = sorted(values)
+    # three instances of evaluation for three branches of recursion:
 
-def eval_layer(val_):  # val_: estimated values of active branches in current layer across recursion tree per blob
-
-    global rdn
-    val_ = sorted(val_, key=lambda val: val[0])
-    sub_val_ = []  # estimated branch values of deeper layer of recursion tree per blob
-    map_ = []  # blob maps of stronger branches in val_, appended for next val evaluation
-
-    while val_:
-        val, typ, blob = val_.pop()
-        for map in map_:
-            olp = np.sum(np.logical_and(blob.map, map))
-            rdn += 1 * (olp / blob.L())           # redundancy to previously formed representations
-
-        if val > ave * blob.L() * rdn:
-            if typ == 0:
-                blob_sub_blobs = inc_range(blob)  # recursive comp over p_ of incremental distance, also diagonal?
-            else:
-                blob_sub_blobs = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
-            # else:
-            #     blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
-
-            map_.append(blob.map)
-            for blob in blob_sub_blobs.blob_:
-                sub_val_ += eval_blob(blob)  # returns estimated recursion values of the next layer:
-                # [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)] per sub_blob, may include deeper angle_blobs?
-        else:
-            break
-
-    if sub_val_:
+    if a > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
         rdn += 1
-        eval_layer(sub_val_)  # evaluation of sub_val_ for recursion
+        if a is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+        elif a is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+        else:
+            if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                flip(blob)  # vertical blob rescan -> comp_Px_
+            comp_Py_(0, blob, xD, rdn)  #-> comp_P
 
+        if b > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
+            rdn += 1
+            if b is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+            elif b is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+            else:
+                if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                    flip(blob)  # vertical blob rescan -> comp_Px_
+                comp_Py_(0, blob, xD, rdn)  #-> comp_P
 
-def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_P_
+            if c > Ave * rdn:  # filter adjusted for redundancy to previously formed representations
+                rdn += 1
+                if c is val_range: comp_inc_range(blob, rdn)  # recursive comp over p_ of incremental distance, also diagonal?
+                elif c is val_deriv: comp_inc_deriv(blob, rdn)  # recursive comp over d_ of incremental derivation
+                else:
+                    if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+                        flip(blob)  # vertical blob rescan -> comp_Px_
+                    comp_Py_(0, blob, xD, rdn)  #-> comp_P
+'''
 
-    global rdn
-    for blob in frame.blob_:
-        rdn = redundancy
-        eval_layer(eval_blob(blob))  # calls eval_sub_blob()
+def inc_range(blob, rdn):  # frame_blobs recursion if G
+    return -1, inc_range, [blob]
 
-        # for debugging:
-        # if blob.sign:
-        #     blob_to_ablobs(blob)
-        #     inc_range(blob)
-        #     inc_deriv(blob)
+def inc_deriv(blob, rdn):
+    return -1, inc_deriv, [blob]
+
+def comp_Py_(val_PP_, norm, blob, rdn):     # here for a variable name definition only
+    # [x_start, x_end, min_y, max_y, xD], [abs_Dx, abs_Dy] = blob[1][:5], blob[2][-2:]
+    # if val_PP_ * ((x_end - x_start) / (max_y - min_y)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+    #     flip(blob)  # vertical blob rescan -> comp_Px_
+    return -1, comp_Py_, [0, 0, blob]
+def flip(blob):
+    return
+
+def intra_blob(frame):   # evaluate blobs for orthogonal flip, incr_rng_comp, incr_der_comp, comp_P
+
+    # load vars:
+    frame_params, blob_, dert_tree = frame
+    p__, d_branch = dert_tree
+    # init new a__ and sda__ in d_branch:
+    a__ = np.full((Y, X), -1, dtype=int)
+    sda__ = np.zeros((Y, X), dtype=int)
+    d_branch += [[a__, [sda__]]]
+
+    for blob in blob_:
+        eval_blob(blob, dert_tree)
+
+    # assign vars:
+    dert_tree = p__, d_branch
+    frame = frame_params, blob_, dert_tree
+
     return frame  # frame of 2D patterns, to be outputted to level 2
-
 
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 
 # ************ PROGRAM BODY *********************************************************************************************
-
-from frame_2D_alg.misc import get_filters
-
-get_filters(globals())  # imports all filters at once
+# Pattern filters ----------------------------------------------------------------
+# eventually updated by higher-level feedback, initialized here as constants:
+from misc import get_filters
+get_filters(globals())          # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
-from frame_2D_alg import frame_blobs
-
+import frame_blobs
 Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()
 frame = intra_blob(frame_blobs.frame_of_blobs)
 end_time = time() - start_time
 print(end_time)
 
-# Rebuild blob -------------------------------------------------------------------
-from DEBUG import draw_blob
-draw_blob('../debug', frame, typ=0, debug_parts=0, debug_local=0, show=0)
+from misc import draw_blobs
+draw_blobs('./debug', frame[1], (frame_blobs.Y, frame_blobs.X), out_ablob=1, debug=0, show=0)
