@@ -1,7 +1,4 @@
-import cv2
-import numpy as np
-from frame_2D_alg_classes import filters
-import matplotlib.pyplot as plt
+import filters
 # ***************************************************** MISCELLANEOUS FUNCTIONS *****************************************
 # Functions:
 # -get_filters()

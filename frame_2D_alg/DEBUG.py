@@ -8,12 +8,12 @@ def draw_blob(path, frame):
     frame_img = np.array([[127] * width] * height)
 
     for blob in frame[1]:
-        sign = blob[0]
-        for seg in blob[2]:
+        sign = blob.sign
+        for seg in blob.e_:
             for P in seg[2]:
                 for dert in P[2]:
                     y, x = dert[:2]
                     frame_img[y, x] = 255 if sign else 0
 
-    cv2.imwrite(path + '.bmp',frame_img)
+    cv2.imwrite(path + '.bmp', frame_img)
     # ---------- draw_blob() end ----------------------------------------------------------------------------------------

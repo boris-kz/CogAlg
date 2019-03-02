@@ -1,5 +1,7 @@
 from collections import deque, namedtuple
 
+nt_blob = namedtuple('blob', 'sign params e_ box map sub_blob')
+
 # ************ FUNCTIONS ************************************************************************************************
 # -form_P_()
 # -scan_P()
@@ -143,8 +145,18 @@ def form_blob(term_seg, frame): # terminated segment is merged into continued or
         for seg in e_:
             seg.pop()   # remove references of blob
             for P in seg[2]:
-                for
+                y0 = max(y0, P[2][0][0])
+                x0 = max(x0, P[2][0][1])
+                yn = min(yn, P[2][0][0]) + 1
+                xn = min(xn, P[2][-1][1]) + 1
+
+        map = np.zeros((height, width), dtype=bool)
+        for seg in e_:
+            for P in seg[2]:
+                for y, x, i, dy, dx, g in P[2]:
+                    map[y, x] = True
+
         frame[0] = [par1 + par2 for par1, par2 in zip(frame[0], blob_params[4:])]
-        frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, sub_blob=[]))
+        frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, box=(y0, yn, x0, xn), map=map, sub_blob=[]))
         
     # ---------- form_blob() end -------------------------------------------------------------------------------------
