@@ -7,8 +7,7 @@ from collections import deque, namedtuple
 # -form_blob()
 # ***********************************************************************************************************************
 
-def form_P_(y, dert__, rng = 1):
-    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
+def form_P_(y, dert__, rng = 1):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # initialize output
     dert_ = dert__[y, :, :]  # row of pixels + derivatives
@@ -33,8 +32,7 @@ def form_P_(y, dert__, rng = 1):
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-def scan_P_(P_, seg_, frame):
-     # this function detects connections (forks) between Ps and _Ps, to form blob segments
+def scan_P_(P_, seg_, frame):   # this function detects connections (forks) between Ps and _Ps, to form blob segments
     new_P_ = deque()
 
     if P_ and seg_:            # if both are not empty
@@ -81,8 +79,7 @@ def scan_P_(P_, seg_, frame):
 
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
-def form_seg_(P_, frame):
-    " Convert or merge every P into segment. Merge blobs "
+def form_seg_(P_, frame):   # Convert or merge every P into segment. Merge blobs
     new_seg_ = deque()
 
     while P_:
@@ -132,8 +129,7 @@ def form_seg_(P_, frame):
 
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
-def form_blob(term_seg, frame):
-    # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, frame): # terminated segment is merged into continued or initialized blob (all connected segments)
     
     nt_blob = namedtuple('blob', 'sign params e_ sub_blob')  
     params, P_, roots, fork_, blob = term_seg[1:]
@@ -146,9 +142,9 @@ def form_blob(term_seg, frame):
         s, blob_params, e_ = blob
         for seg in e_:
             seg.pop()   # remove references of blob
+            for P in seg[2]:
+                for
         frame[0] = [par1 + par2 for par1, par2 in zip(frame[0], blob_params[4:])]
         frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, sub_blob=[]))
         
     # ---------- form_blob() end -------------------------------------------------------------------------------------
-
-    

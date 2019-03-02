@@ -56,8 +56,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 
 def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
-    Y, X = p__.shape  # frame height and width
-    dert__ = np.empty(shape=(Y, X, 4), dtype=int)  # initialize dert__
+    dert__ = np.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
 
     dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]   # vertical comp between rows -> dy, (1:-1): first and last column are discarded
     dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]   # lateral comp between columns -> dx, (1:-1): first and last row are discarded
@@ -97,13 +96,14 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
             x += 1
             s = dert_[x][-1] > 0  # s = (g > 0)
 
-        if params[0]:       # if L > 0
+        if params[0]:   # if L > 0
             P_.append(P)    # P is packed into P_
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
 def scan_P_(P_, seg_, frame):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
+
     new_P_ = deque()
 
     if P_ and seg_:            # if both are not empty
@@ -128,18 +128,18 @@ def scan_P_(P_, seg_, frame):  # this function detects connections (forks) betwe
                 fork_ = []
                 if P_:    
                     P = P_.popleft()  # load next P
-                else:       
-                    if seg[3] != 1:  # if roots != 1: terminate loop
+                else:   # if no P left: terminate loop
+                    if seg[3] != 1: # if roots != 1: terminate seg
                         form_blob(seg, frame)
                     stop = True
             else:  # no next-P overlap
-                if seg[3] != 1: # if roots != 1
+                if seg[3] != 1: # if roots != 1: terminate seg
                     form_blob(seg, frame)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
                     _P = seg[2][-1]
-                else:    # terminate loop
+                else:    # if no seg left: terminate loop
                     new_P_.append((P, fork_))
                     stop = True
                     
@@ -158,9 +158,9 @@ def form_seg_(P_, frame):  # convert or merge every P into segment, merge blobs
         P, fork_ = P_.popleft()
         s, params, dert_ = P
         
-        if not fork_:  # seg is initialized with initialized blob
+        if not fork_:   # seg is initialized with initialized blob
             blob = [s, [0] * (len(params) + 1), [], 1]    # s, params, seg_, open_segments
-            seg = [s, [1] + params, [P], 0, fork_, blob]  # s, params. P_, roots, fork_, blob
+            seg = [s, [1] + params, [P], 0, fork_, blob]  # s, params, P_, roots, fork_, blob
             blob[2].append(seg)
 
         else:
@@ -188,7 +188,7 @@ def form_seg_(P_, frame):  # convert or merge every P into segment, merge blobs
 
                         if not fork[5] is blob:
                             params, e_, open_segments = fork[5][1:]  # merged blob, omit sign
-                            blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]  # sum same-type params of merging blobs
+                            blob[1] = [par1 + par2 for par1, par2 in zip(blob[1], params)]  # sum same-type params of merging blobs
                             blob[3] += open_segments
                             for e in e_:
                                 if not e is fork:
@@ -213,6 +213,8 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         s, [Ly, L, Y, X, I, Dy, Dx, G], e_ = blob[:3]
         for seg in e_:
             seg.pop()  # remove references to blob
+            for P in seg[2]:
+
         frame[0][0] += I
         frame[0][1] += Dy
         frame[0][2] += Dx
@@ -241,5 +243,4 @@ print(end_time)
 # Rebuild blob -------------------------------------------------------------------
 from frame_2D_alg.DEBUG import draw_blob
 draw_blob('../debug/frame', frame_of_blobs)
-
 # ************ PROGRAM BODY END ******************************************************************************************
