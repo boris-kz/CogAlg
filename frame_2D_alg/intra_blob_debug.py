@@ -24,13 +24,13 @@ def eval_blob(blob):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_d
     if blob.sign:  # positive gblob: area of noisy or directional (edge) gradient
         if G > Ave:  # + fixed costs of hypot_g, angle_blobs, evaluation?
             rdn += 1
-            hypot(blob)
             # max g is more precisely estimated as hypot(dx, dy)
             blob_ablobs = blob_to_ablobs(blob)
-            if blob.Ga > Ave:
+            Ga = blob_ablobs.params[-1]
+            if Ga > Ave:
                 blob_ablobs = intra_blob(blob_ablobs)  # eval for recursion within ablobs
 
-            val_deriv = (G / Ave) * -blob_ablobs.params[5]  # rG * -Ga: angle match, likely edge
+            val_deriv = (G / Ave) * -Ga  # rG * -Ga: angle match, likely edge
             val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
     # val_PP_ = (L + I + G) * (L / Ly / Ly) * (Dy / Dx)
@@ -54,12 +54,9 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
             olp = olp(blob.map, map)        # if box overlap?
             rdn += 1 * (olp / blob.L())     # redundancy to previously formed representations
 
-        if val > ave * blob.L() * rdn:
+        if val > ave * blob.params[1] * rdn:
             if typ == 0:
-                if blob.ncomp == 1:  # add ncomp param init=1, incr per bilateral | inc_range
-                    blob_sub_blobs = bilateral(blob)  # recursive comp over p_ of incremental distance
-                else:
-                    blob_sub_blobs = inc_range(blob)  # recursive comp over p_ of incremental distance
+                blob_sub_blobs = inc_range(blob)  # recursive comp over p_ of incremental distance
             else:
                 blob_sub_blobs = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
                 # dderived, but min_g is not necessary because +gblob already selected for it
@@ -88,7 +85,6 @@ def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_ran
 
         # for debugging:
         if blob.sign:
-            hypot(blob)
             blob_to_ablobs(blob)
         #     inc_range(blob)
         #     inc_deriv(blob)
@@ -99,7 +95,7 @@ def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_ran
 from frame_2D_alg.misc import get_filters
 get_filters(globals())  # imports all filters at once
 # Main ---------------------------------------------------------------------------
-import frame_2D_alg.frame_blobs
+import frame_blobs
 
 start_time = time()
 frame = intra_blob(frame_blobs.frame_of_blobs)

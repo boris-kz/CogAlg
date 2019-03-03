@@ -1,6 +1,6 @@
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'sign params e_ box map sub_blob')
+nt_blob = namedtuple('blob', 'sign params e_ box map dert__ rng ncomp sub_blob_')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -form_P_()
@@ -9,8 +9,9 @@ nt_blob = namedtuple('blob', 'sign params e_ box map sub_blob')
 # -form_blob()
 # ***********************************************************************************************************************
 
-def form_P_(y, dert__, rng = 1):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
+def form_P_(y, frame, rng = 1):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
+    dert__ = frame[-1]
     P_ = deque()  # initialize output
     dert_ = dert__[y, :, :]  # row of pixels + derivatives
     x_stop = len(dert_) - rng
@@ -132,8 +133,7 @@ def form_seg_(P_, frame):   # Convert or merge every P into segment. Merge blobs
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 def form_blob(term_seg, frame): # terminated segment is merged into continued or initialized blob (all connected segments)
-    
-    nt_blob = namedtuple('blob', 'sign params e_ sub_blob')  
+
     params, P_, roots, fork_, blob = term_seg[1:]
     
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
@@ -142,14 +142,20 @@ def form_blob(term_seg, frame): # terminated segment is merged into continued or
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
         blob.pop()   # remove e_
         s, blob_params, e_ = blob
+
+        y0 = 9999999
+        x0 = 9999999
+        yn = 0;
+        xn = 0;
         for seg in e_:
             seg.pop()   # remove references of blob
             for P in seg[2]:
-                y0 = max(y0, P[2][0][0])
-                x0 = max(x0, P[2][0][1])
-                yn = min(yn, P[2][0][0]) + 1
-                xn = min(xn, P[2][-1][1]) + 1
+                y0 = min(y0, P[2][0][0])
+                x0 = min(x0, P[2][0][1])
+                yn = max(yn, P[2][0][0] + 1)
+                xn = max(xn, P[2][-1][1] + 1)
 
+        dert__ = frame[-1][y0:yn, x0:xn, :]
         map = np.zeros((height, width), dtype=bool)
         for seg in e_:
             for P in seg[2]:
@@ -157,6 +163,6 @@ def form_blob(term_seg, frame): # terminated segment is merged into continued or
                     map[y, x] = True
 
         frame[0] = [par1 + par2 for par1, par2 in zip(frame[0], blob_params[4:])]
-        frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, box=(y0, yn, x0, xn), map=map, sub_blob=[]))
+        frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, box=(y0, yn, x0, xn), map=map, dert__=dert__, rng=1, ncomp=1, sub_blob_=[]))
         
     # ---------- form_blob() end -------------------------------------------------------------------------------------

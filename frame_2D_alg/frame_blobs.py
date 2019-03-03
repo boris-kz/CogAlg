@@ -1,7 +1,6 @@
 import cv2
 from time import time
-from collections import deque
-from collections import namedtuple
+from collections import deque, namedtuple
 import numpy as np
 
 '''   
@@ -91,8 +90,8 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
             params[1] += y  # Y
             params[2] += x  # X
             params[3] += i  # I
-            params[4] += dy  # dy
-            params[5] += dx  # dx
+            params[4] += dy # dy
+            params[5] += dx # dx
             params[6] += g  # G
             P[2].append((y, x, i, dy, dx, g))
             x += 1
@@ -216,6 +215,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
         s, [Ly, L, Y, X, I, Dy, Dx, G], e_ = blob[:3]
+
         y0 = 9999999
         x0 = 9999999
         yn = 0;
@@ -223,11 +223,12 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         for seg in e_:
             seg.pop()  # remove references to blob
             for P in seg[2]:
-                y0 = max(y0, P[2][0][0])
-                x0 = max(x0, P[2][0][1])
-                yn = min(yn, P[2][0][0]) + 1
-                xn = min(xn, P[2][-1][1]) + 1
+                y0 = min(y0, P[2][0][0])
+                x0 = min(x0, P[2][0][1])
+                yn = max(yn, P[2][0][0] + 1)
+                xn = max(xn, P[2][-1][1] + 1)
 
+        dert__ = frame[-1][y0:yn, x0:xn, :]
         map = np.zeros((height, width), dtype=bool)
         for seg in e_:
             for P in seg[2]:
@@ -239,7 +240,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(sign=s, params=[Ly, L, Y, X, I, Dy, Dx, G], e_=e_, box=(y0, yn, x0, xn), map=map, sub_blob=[]))
+        frame[1].append(nt_blob(sign=s, params=[Ly, L, Y, X, I, Dy, Dx, G], e_=e_, box=(y0, yn, x0, xn), map=map, dert__=dert__, rng=1, ncomp=1, sub_blob_=[]))
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
@@ -256,7 +257,7 @@ height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
-nt_blob = namedtuple('blob', 'sign params e_ box map sub_blob')  # define named tuple
+nt_blob = namedtuple('blob', 'sign params e_ box map dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
