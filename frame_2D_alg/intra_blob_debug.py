@@ -1,9 +1,9 @@
 from time import time
 import numpy as np
-from frame_2D_alg import hypot_gradient 
-from frame_2D_alg import blob_to_ablobs
-from frame_2D_alg.comp_inc_deriv import inc_deriv
-from frame_2D_alg.comp_inc_range import inc_range
+from hypot_gradient import hypot_gradient
+from angle_blobs import blob_to_ablobs
+# from comp_inc_deriv import inc_deriv
+# from comp_inc_range import inc_range
 # from comp_P_ import comp_P_
 '''
     - intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob
@@ -23,10 +23,10 @@ def eval_blob(blob):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_d
     val_deriv, val_range = 0, 0
 
     if blob.sign:  # positive gblob: area of noisy or directional (edge) gradient
-        if G > ave_fixed:  # fixed cost of (hypot_g() + angle_blobs() + eval) per blob
+        if G > ave_blob:  # fixed cost of (hypot_g() + angle_blobs() + eval) per blob
             '''    
-            ave_fixed should be estimated as a multiple of ave (variable cost of refining g and a per dert)
-            ave_fixed = (hypot_g() + angle_blobs()) blob_delay / (hypot_g() + angle_blobs()) dert_delay
+            ave_blob should be estimated as a multiple of ave (variable cost of refining g and a per dert)
+            ave_blob = (hypot_g() + angle_blobs()) blob_delay / (hypot_g() + angle_blobs()) dert_delay
             ave: variable cost per dert = sum_g mag that coincides with positive value of adjustment
             tentative value of adjustment:
             ((sum_g - hypot_g) + val_deriv) - (hypot_grad_dert_delay + angle_blobs_dert_delay) / sum_g_delay
@@ -58,7 +58,7 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
     while val_:
         val, typ, blob = val_.pop()
         for map in map_:
-            olp = np.sum( np.logical_and( blob.map, map))  # if box overlap?
+            olp = olp(blob, map)  # if box overlap?
             rdn += 1 * (olp / blob.L())   # redundancy to previously formed representations
 
         if val > ave * blob.params(1) * rdn:
@@ -69,7 +69,7 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
             # val-= sub_blob and branch switch cost: added map?  only after g,a calc: no rough g comp?
 
-            map_.append(blob.map)
+            map_.append(blob.box, blob.map)
             for blob in blob_sub_blobs.blob_:
                 sub_val_ += eval_blob(blob)  # returns estimated recursion values of the next layer:
                 # [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)] per sub_blob, may include deep angle_blobs

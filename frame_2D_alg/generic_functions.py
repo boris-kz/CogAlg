@@ -14,23 +14,27 @@ def form_P_(y, frame, rng = 1):    # cluster and sum horizontally consecutive pi
     dert__ = frame[-1]
     P_ = deque()  # initialize output
     dert_ = dert__[y, :, :]  # row of pixels + derivatives
+    P_map_[x] = ~dert.mask[y, :, 0]
     x_stop = len(dert_) - rng
     x = rng  # first and last rng columns are discarded
 
     while x < x_stop:
-        s = dert_[x][-1] > 0  # s = g > 0
-        P = [s, [0, 0, 0] + [0] * len(dert_[0]), []]
-        while x < x_stop and s == P[0]:
-
-            dert = dert_[x, :]
-            # accumulate P params:
-            P[1] = [par1 + par2 for par1, par2 in zip(P[1], [1, y, x] + list(dert))]
-            P[2].append((y, x) + tuple(dert))
+        while x < x_stop and not P_map_[x]:
             x += 1
+        if x < x_stop and P_map_[x]:
             s = dert_[x][-1] > 0  # s = g > 0
+            P = [s, [0, 0, 0] + [0] * len(dert_[0]), []]
+            while x < x_stop and P_map_[x] and s == P[0]:
 
-        if P[1][0]:         # if L > 0
-            P_.append(P)    # P is packed into P_
+                dert = dert_[x, :]
+                # accumulate P params:
+                P[1] = [par1 + par2 for par1, par2 in zip(P[1], [1, y, x] + list(dert))]
+                P[2].append((y, x) + tuple(dert))
+                x += 1
+                s = dert_[x][-1] > 0  # s = g > 0
+
+            if P[1][0]:         # if L > 0
+                P_.append(P)    # P is packed into P_
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
