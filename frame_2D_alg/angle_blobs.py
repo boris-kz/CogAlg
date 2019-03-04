@@ -31,12 +31,13 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
 
     seg_ = deque()
 
-    for y in range(1, Y - 1):
+    for y in range(1, height - 1):
         P_ = generic_functions.form_P_(y, sub_blob)  # horizontal clustering
         P_ = generic_functions.scan_P_(P_, seg_, sub_blob)
         seg_ = generic_functions.form_seg_(P_, sub_blob)
 
-    while seg_:  form_blob(seg_.popleft(), sub_blob)
+    while seg_:  generic_functions.form_blob(seg_.popleft(), sub_blob)
+
     blob.sub_blob_.append(sub_blob)
     return sub_blob
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------

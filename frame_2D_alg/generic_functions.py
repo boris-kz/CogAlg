@@ -167,6 +167,10 @@ def form_blob(term_seg, frame): # terminated segment is merged into continued or
                     map[y, x] = True
 
         frame[0] = [par1 + par2 for par1, par2 in zip(frame[0], blob_params[4:])]
-        frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, box=(y0, yn, x0, xn), map=map, dert__=dert__, rng=1, ncomp=1, sub_blob_=[]))
+        if (type(frame[2]) == int) and (type(frame[3]) == int):
+            rng, ncomp = frame[2:4]
+        else:
+            rng = ncomp = 1
+        frame[1].append(nt_blob(sign=s, params=blob_params, e_=e_, box=(y0, yn, x0, xn), map=map, dert__=dert__, rng=rng, ncomp=ncomp, sub_blob_=[]))
         
     # ---------- form_blob() end -------------------------------------------------------------------------------------
