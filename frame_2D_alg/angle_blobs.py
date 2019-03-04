@@ -17,29 +17,27 @@ get_filters(globals())          # imports all filters at once
 # -correct_da
 # ***********************************************************************************************************************
 
-def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, dxa, dya, ga in all reps within gblob
     ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
     global height, width
     height, width = blob.map.shape
-
-    sub_blob = [0, 0, 0, 0, []]  # initialize sub_blob
+    sub_blob = [0, 0, 0, 0, []]  # initialization
 
     a__ = get_angle(blob.dert__, blob.map)
-
     comp_angle(sub_blob, a__)
-
     seg_ = deque()
 
     for y in range(1, height - 1):
         P_ = generic_functions.form_P_(y, sub_blob)  # horizontal clustering
-        P_ = generic_functions.scan_P_(P_, seg_, sub_blob)
+        P_ = generic_functions.scan_P_(P_, seg_, sub_blob)  # vertical clustering
         seg_ = generic_functions.form_seg_(P_, sub_blob)
 
     while seg_:  generic_functions.form_blob(seg_.popleft(), sub_blob)
 
-    blob.sub_blob_.append(sub_blob)
-    return sub_blob
+    blob.e_.append(sub_blob)
+    return blob
+
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
 
 def get_angle(dert__, map):  # default = False: no higher-line for first line
@@ -47,19 +45,15 @@ def get_angle(dert__, map):  # default = False: no higher-line for first line
 
     dy = dert__[:, :, 1]
     dx = dert__[:, :, 2]
-
     a__ = ma.empty(map.shape, dtype=int)
 
     a__[map] = np.arctan2(dy, dx, where=[map])[map] * angle_coef + 128
-
     a__.mask = ~map
-
     return a__
     # ---------- get_angle() end ----------------------------------------------------------------------------------------
 
 def comp_angle(sub_blob, a__):
     " compare angle of adjacent gradients within frame per gblob "
-
     dert__ = ma.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
 
     dy__ = correct_da(a__[2:, 1:-1] - a__[:-2, 1:-1])   # vertical comp between rows -> dy, (1:-1): first and last column are discarded
@@ -73,6 +67,7 @@ def comp_angle(sub_blob, a__):
 
     sub_blob.append(dert__)
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
+
 def correct_da(da):
     " make da 0 - 128 instead of 0 - 255 "
     where = da > 128
