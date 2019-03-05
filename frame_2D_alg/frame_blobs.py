@@ -240,7 +240,15 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(sign=s, params=[Ly, L, Y, X, I, Dy, Dx, G], e_=e_, box=(y0, yn, x0, xn), map=map, dert__=dert__, rng=1, ncomp=1, sub_blob_=[]))
+        frame[1].append(nt_blob(sign=s,
+                                params=[Ly, L, Y, X, I, Dy, Dx, G],
+                                e_=e_,
+                                box=(y0, yn, x0, xn),
+                                map=map,
+                                dert__=dert__,
+                                new_dert__=None,
+                                rng=1, ncomp=1,
+                                sub_blob_=[]))
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
@@ -257,7 +265,7 @@ height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
-nt_blob = namedtuple('blob', 'sign params e_ box map dert__ rng ncomp sub_blob_')  # define named tuple
+nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)

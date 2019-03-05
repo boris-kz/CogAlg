@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.ma as ma
 from collections import deque
 # Filters ------------------------------------------------------------------------
 from misc import get_filters
@@ -11,26 +12,25 @@ def hypot_gradient(blob):  # compute and compare angle, define ablobs, accumulat
     global height, width
     height, width = blob.map.shape
 
-    sub_blob = [0, 0, 0, 0, []]  # initialize sub_blob
-    seg_ = deque()
-    dert__ = blob.dert__
+    for i in range(4):
+        blob.params.append(0)
 
-    recalc_g(sub_blob, blob.dert__)
+    seg_ = deque()
+
+    recalc_g(blob)
 
     for y in range(1, height - 1):
-        P_ = generic_functions.form_P_(y, sub_blob)  # horizontal clustering
-        P_ = generic_functions.scan_P_(P_, seg_, sub_blob)
-        seg_ = generic_functions.form_seg_(P_, sub_blob)
+        P_ = generic_functions.form_P_(y, blob)  # horizontal clustering
+        P_ = generic_functions.scan_P_(P_, seg_, blob)
+        seg_ = generic_functions.form_seg_(P_, blob)
 
-    while seg_: generic_functions.form_blob(seg_.popleft(), sub_blob)
-    blob.sub_blob_.append(sub_blob)
+    while seg_: generic_functions.form_blob(seg_.popleft(), blob)
 
-    return sub_blob
+    return blob.sub_blob_[-1]
     # ---------- hypot_gradient() end -----------------------------------------------------------------------------------
 
-def recalc_g(sub_blob, dert__):
+def recalc_g(blob):
 
-    dert__.mask = ~blob.map
-    dert__[:, :, 3] = np.hypot(dert__[:, :, 1], dert__[:, :, 2]) - ave
-    sub_blob.append(dert__)
+    blob.new_dert__ = ma.array(blob.dert__, mask=~blob.map)
+    blob.new_dert__[:, :, 3] = np.hypot(blob.new_dert__[:, :, 1], blob.new_dert__[:, :, 2]) - ave
     # ---------- recalc_g() end -----------------------------------------------------------------------------------------
