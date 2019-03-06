@@ -1,7 +1,7 @@
 from time import time
 import numpy as np
 import numpy.ma as ma
-import generic_functions
+import generic
 from angle_blobs import blob_to_ablobs
 from comp_inc_deriv import inc_deriv
 from comp_inc_range import inc_range
@@ -141,7 +141,7 @@ def overlap(blob, box, map):    # returns number of overlap pixels between blob.
 # ************ PROGRAM BODY *********************************************************************************************
 
 # Main ---------------------------------------------------------------------------
-import frame_blobs
+import frame_2D_alg.frame_blobs
 
 start_time = time()
 frame = intra_blob(frame_blobs.frame_of_blobs)

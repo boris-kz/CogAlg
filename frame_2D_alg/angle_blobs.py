@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.ma as ma
 from collections import deque
-import generic_functions
+import generic
 # Filters ------------------------------------------------------------------------
 from frame_2D_alg.filters import get_filters
 get_filters(globals())          # imports all filters at once
@@ -29,11 +29,11 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     seg_ = deque()
 
     for y in range(1, height - 1):
-        P_ = generic_functions.form_P_(y, sub_blob)  # horizontal clustering
-        P_ = generic_functions.scan_P_(P_, seg_, sub_blob)  # vertical clustering
-        seg_ = generic_functions.form_seg_(P_, sub_blob)
+        P_ = generic.form_P_(y, sub_blob)  # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, sub_blob)  # vertical clustering
+        seg_ = generic.form_seg_(P_, sub_blob)
 
-    while seg_:  generic_functions.form_blob(seg_.popleft(), sub_blob)
+    while seg_:  generic.form_blob(seg_.popleft(), sub_blob)
 
     blob.e_.append(sub_blob)
     return blob
