@@ -1,6 +1,7 @@
 from time import time
 import numpy as np
-from hypot_gradient import hypot_gradient
+import numpy.ma as ma
+import generic_functions
 from angle_blobs import blob_to_ablobs
 # from comp_inc_deriv import inc_deriv
 # from comp_inc_range import inc_range
@@ -25,9 +26,9 @@ def eval_blob(blob):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_d
     if blob.sign:  # positive gblob: area of noisy or directional (edge) gradient
         if G > ave_blob:  # ave, ave_blob: variable, fixed cost of hypot_g() per blob
             rdn += 1
-            blob = hypot_gradient()  # max g is more precisely estimated as hypot(dx, dy), replaces dert_ with sub_blob_: 
+            hypot_gradient(blob)  # max g is more precisely estimated as hypot(dx, dy), replaces dert_ with sub_blob_:
             # sub_blobs are defined by reduced g and increased ave, ave_blob: var, fixed costs of angle_blobs() and eval:
-            blob = blob_to_ablobs(blob)  
+            blob_to_ablobs(blob)
             if blob.Ga > Ave:
                 blob = intra_blob(blob)  # eval for angle comp recursion within ablobs: additional ref arg in intra_blob?
 
@@ -40,7 +41,33 @@ def eval_blob(blob):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_d
     # 3rd term: dimensional variation bias
 
     return [(val_deriv, 0, blob), (val_range, 1, blob)]  # + (val_PP_, 2, blob), estimated values per branch
+    # ---------- eval_blob() end ----------------------------------------------------------------------------------------
 
+def hypot_gradient(blob):  # compute and compare angle, define ablobs, accumulate a, da, sda in all reps within gblob
+    ''' same functionality as image_to_blobs() in frame_blobs.py'''
+
+    height, width = blob.map.shape
+
+    for i in range(4):
+        blob.params.append(0)
+
+    seg_ = deque()
+
+    recalc_g(blob)
+
+    for y in range(1, height - 1):
+        P_ = generic_functions.form_P_(y, blob)  # horizontal clustering
+        P_ = generic_functions.scan_P_(P_, seg_, blob)
+        seg_ = generic_functions.form_seg_(P_, blob)
+
+    while seg_: generic_functions.form_blob(seg_.popleft(), blob)
+    # ---------- hypot_gradient() end -----------------------------------------------------------------------------------
+
+def recalc_g(blob):
+
+    blob.new_dert__ = ma.array(blob.dert__, mask=~blob.map)
+    blob.new_dert__[:, :, 3] = np.hypot(blob.new_dert__[:, :, 1], blob.new_dert__[:, :, 2]) - ave
+    # ---------- recalc_g() end -----------------------------------------------------------------------------------------
 
 def eval_layer(val_):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
@@ -72,7 +99,7 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
     if sub_val_:
         rdn += 1
         eval_layer(sub_val_)  # evaluation of sub_val_ for recursion
-
+    # ---------- eval_layer() end ---------------------------------------------------------------------------------------
 
 def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_P_
 
@@ -87,6 +114,7 @@ def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_ran
         #     inc_range(blob)
         #     inc_deriv(blob)
     return frame  # frame of 2D patterns, to be outputted to level 2
+    # ---------- intra_blob() end ---------------------------------------------------------------------------------------
 
 # ************ PROGRAM BODY *********************************************************************************************
 
