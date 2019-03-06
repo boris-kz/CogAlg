@@ -19,3 +19,8 @@ tentative value of adjustment:
 val_deriv above is value of angle, computation of which is also conditional on ave,
 or added eval of refined blobs for angle_blobs? 
 '''
+def get_filters(obj):
+    " imports all variables in filters.py "
+    str_ = [item for item in globals() if not item.startswith("__")]
+    for str in str_:
+        obj[str] = globals()[str]

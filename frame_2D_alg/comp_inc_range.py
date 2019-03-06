@@ -1,8 +1,8 @@
 import numpy.ma as ma
 from math import hypot
 from collections import deque
-from frame_2D_alg_classes import Classes
-from frame_2D_alg_classes.misc import get_filters
+# Filters ------------------------------------------------------------------------
+from frame_2D_alg.filters import get_filters
 get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------
 '''

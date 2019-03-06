@@ -7,7 +7,7 @@ from comp_inc_deriv import inc_deriv
 from comp_inc_range import inc_range
 # from comp_P_ import comp_P_
 
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg.filters import get_filters
 get_filters(globals())  # imports all filters at once
 
 '''

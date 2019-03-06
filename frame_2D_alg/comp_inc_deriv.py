@@ -1,7 +1,8 @@
 import numpy as np
 from collections import deque
 import generic_functions
-from frame_2D_alg_classes.misc import get_filters
+# Filters ------------------------------------------------------------------------
+from frame_2D_alg.filters import get_filters
 get_filters(globals()) # imports all filters at once
 # --------------------------------------------------------------------------------
 

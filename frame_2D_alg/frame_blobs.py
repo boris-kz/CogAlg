@@ -255,7 +255,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from misc import get_filters
+from filters import get_filters
 
 get_filters(globals())  # import all filters at once
 

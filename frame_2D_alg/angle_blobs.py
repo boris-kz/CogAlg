@@ -3,7 +3,7 @@ import numpy.ma as ma
 from collections import deque
 import generic_functions
 # Filters ------------------------------------------------------------------------
-from misc import get_filters
+from frame_2D_alg.filters import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
