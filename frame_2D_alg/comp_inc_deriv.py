@@ -1,80 +1,45 @@
 import numpy as np
 from collections import deque
-from frame_2D_alg import Classes
+from frame_2D_alg import generic
 from frame_2D_alg.misc import get_filters
 get_filters(globals()) # imports all filters at once
-# --------------------------------------------------------------------------------
-'''
-    comp_inc_deriv is a component of intra_blob
-'''
+
 # ***************************************************** INC_DERIV FUNCTIONS *********************************************
 # Functions:
 # -inc_deriv()
 # -comp_g()
-# -cluster_derts()
 # ***********************************************************************************************************************
 
-def inc_deriv(blob):  # compare gradient to define gg_blobs
-    ''' same functionality as image_to_blobs() in frame_blobs.py'''
+def inc_deriv(blob):    # same functionality as image_to_blobs() in frame_blobs.py
 
-    global Y, X
-    Y, X = blob.map.shape
-    sub_blob = Classes.cl_frame(blob.dert__, map=blob.map, copy_dert=True)   # initialize sub_blob object per gblob
-    comp_g(sub_blob.dert__, sub_blob.map)
+    global height, width
+    height, width = blob.map.shape
+    sub_blob = [0, 0, 0, 0, []]
+    comp_g(sub_blob, blob.dert__[:, :, -1], blob.map)
     seg_ = deque()
 
-    for y in range(Y - 1):
-        P_ = cluster_derts(y, sub_blob)                 # cluster derts by g sign
-        P_ = Classes.scan_P_(y, P_, seg_, sub_blob)     # P_ scans _P_ from seg_
-        seg_ = Classes.form_segment(y, P_, sub_blob)    # form segments with P_ and their fork_s
-    y = Y - 1
-    while seg_: Classes.form_blob(y, seg_.popleft(), sub_blob)  # merge segs of last blob line into their sub_blobs
+    for y in range(1, height - 1):
+        P_ = generic.form_P_(y, sub_blob)  # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, sub_blob)
+        seg_ = generic.form_seg_(P_, sub_blob)
 
-    sub_blob.terminate()  # delete sub_blob.dert__ and sub_blob.map
-    blob.g_sub_blob = sub_blob
+    while seg_:  generic.form_blob(seg_.popleft(), sub_blob)
+    blob.sub_blob_.append(sub_blob)
     return sub_blob
+
     # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
 
-def comp_g(dert__, map):
-    " compare gradient of left and higher derts within sub blob "
+def comp_g(sub_blob, g__, map):  # compare g within sub blob
+    dert__ = ma.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
 
-    g = dert__[:, :, 1]
-    map[:-1] = np.logical_and(map[:-1], map[1:])
-    map[:, :-1] = np.logical_and(map[:, :-1], map[:, 1:])
-    dx = np.empty(g.shape)
-    dy = np.empty(g.shape)
-    gg = np.empty(g.shape)
+    dy__ = g__[2:, 1:-1] - g__[:-2, 1:-1]   # vertical comp between rows -> dy, (1:-1): first and last column are discarded
+    dx__ = g__[1:-1, 2:] - g__[1:-1, :-2]   # lateral comp between columns -> dx, (1:-1): first and last row are discarded
+    gg__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
 
-    dx[:-1] = g[1:] - g[:-1]
-    dy[:, :-1] = g[:, 1:] - g[:, :-1]
-    gg[map] = np.abs(dx[map]) + np.abs(dy[map]) - ave
+    dert__[:, :, 0] = g__
+    dert__[1:-1, 1:-1, 1] = dy__  # first row, last row, first column and last-column are discarded
+    dert__[1:-1, 1:-1, 2] = dx__
+    dert__[1:-1, 1:-1, 3] = gg__
 
-    dert__[:, :, 0] = g
-    dert__[:, :, 1] = gg
-    dert__[:, :, 2] = dx
-    dert__[:, :, 3] = dy
+    sub_blob.append(dert__)
     # ---------- comp_g() end -------------------------------------------------------------------------------------------
-
-def cluster_derts(y, sub_blob):
-    " forms gPs "
-    dert_ = sub_blob.dert__[y]
-    P_map = sub_blob.map[y]
-
-    P_ = deque()
-    x = 0
-    while x < X - 1:  # exclude last column
-        while x < X - 1 and not P_map[x]:
-            x += 1
-        if x < X - 1 and P_map[x]:
-            P = Classes.cl_P(x0=x, num_params=dert_.shape[1]+1)  # P initialization
-            while x < X - 1 and P_map[x]:
-                dert = dert_[x]
-                gg = dert[1]
-                s = gg > 0
-                P = Classes.form_P(x, y, s, dert, P, P_)
-                x += 1
-            P.terminate(x, y)  # P' x_last
-            P_.append(P)
-
-    return  P_
-    # ---------- cluster_dert() end -------------------------------------------------------------------------------------

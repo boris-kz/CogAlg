@@ -2,26 +2,84 @@ from collections import deque
 import math as math
 from time import time
 '''
-    comp_P_ is a component of intra_blob
+    comp_P_ is a component of intra_blob,
     currently a draft
 '''
 
-def comp_P(ortho, P, _P):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
+def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
+    # differential Pm: all params are dderived, not pre-selected?
 
-    (s, x0, L, I, G, Dx, Dy, dert_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
-    (_s, _x0, _L, _I, _G, _Dx, _Dy, _dert_), _xd = _P  # + params from higher branches, S if min n_params?
+    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
+    xDd = 0; Ave = ave * L
 
-    xdd = 0  # optional, signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
+    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
+        # or (max(Dx, Dy) / min(Dx, Dy): cumulative vs extremal values?
+        flip(blob)  # vertical blob rescan -> comp_Px_
+
+    # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
+    # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
+
+    if xD / Ly * val_PP_ > Ave: ort = 1  # estimate params of Ps orthogonal to long axis, seg-wide for same-syntax comp_P
+    else: ort = 0  # to max ave ders, or if xDd to min Pd?
+
+    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # comparable params and their derivatives, C for combined
+
+    mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
+    dPP = 0, [], []  # per dev of D_params, sum of abs? or signed: correlated?
+
+    Py_ = blob[3][last]  # per segment, also flip eval per seg?
+    _P = Py_.popleft()  # initial comparand
+
+    while Py_:  # comp_P starts from 2nd P, top-down
+        P = Py_.popleft()
+        _P, _ms, _ds = comp_P(ort, P, _P, xDd)
+
+        while Py_:  # form_PP starts from 3rd P
+            P = Py_.popleft()
+            P, ms, ds = comp_P(ort, P, _P, xDd)  # P: S_vars += S_ders in comp_P
+            if ms == _ms:
+                mPP = form_PP(1, P, mPP)
+            else:
+                mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
+                mPP_.append(mPP)
+                for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 S_vars from incr_PP
+                    C += par
+                    Cm_.append(C)  # or S is directly modified in SvPP?
+                CmPP_ = Cm_  # but SPP is redundant, if len(PP_) > ave?
+                mPP = ms, [], []  # s, PP, Py_ init
+            if ds == _ds:
+                dPP = form_PP(0, P, dPP)
+            else:
+                dPP = term_PP(0, dPP)
+                dPP_.append(dPP)
+                for var, C in zip(dPP[1], CdPP_):
+                    C += var
+                    Cd_.append(C)
+                CdPP_ = Cd_
+                dPP = ds, [], []
+
+            _P = P; _ms = ms; _ds = ds
+    return blob, CmPP_, mPP_, CdPP_, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
+
+
+def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
+
+    (s, x0, L, I, G, Dx, Dy, e_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    (_s, _x0, _L, _I, _G, _Dx, _Dy, _e_), _xd = _P  # + params from higher branches, S if min n_params?
+
     Ave = ave * L
 
     xm = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: xm -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
 
+    xdd = xd - _xd  # for ortho eval if first-run ave_xDd * Pm: += compensated orientation change,
+    xDd += xdd  # signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
+
     if abs(Dx) + abs(Dy) > Ave:  # rough g_P or lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
-       g_P = math.hypot(Dy, Dx)  # P | seg | blob- wide variation params are G and Ga,
+       g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
        a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
 
-    if ortho:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
+    if ort:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
         hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance):
         L /= hyp  # est. orthogonal slice is reduced P,
@@ -31,7 +89,7 @@ def comp_P(ortho, P, _P):  # forms vertical derivatives of P params, also condit
         # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - Ave  # I is not dderived, vI is signed
+    dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
 
     Pd = xdd + dL + dI + dG  # defines dPP, no dS-to-xd correlation
@@ -250,59 +308,6 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
 
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
-
-
-def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs
-    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
-
-    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
-        # or (max(Dx, Dy) / min(Dx, Dy): cumulative vs extremal values?
-        flip(blob)  # vertical blob rescan -> comp_Px_
-
-    # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
-    # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
-
-    if xD / Ly * val_PP_ > ave * L: ortho = 1
-    else: ortho = 0  # estimate params of Ps orthogonal to long axis, seg-wide for same-syntax comp_P
-
-    mPP = 0,[],[]  # pattern of patterns, defined by deviation of M_params, dderived: match is a minimum, per P | param?
-    dPP = 0,[],[]  # sub PP within negative mPP: min value of signed dS
-    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # comparable params and their derivatives
-
-    Py_ = blob[3][last]  # per segment, also flip eval per seg?
-    _P = Py_.popleft()  # initial comparand
-
-    while Py_:  # comp_P starts from 2nd P, top-down
-        P = Py_.popleft()
-        _P, _ms, _ds = comp_P(ortho, P, _P)
-
-        while Py_:  # form_PP starts from 3rd P
-            P = Py_.popleft()
-            P, ms, ds = comp_P(ortho, P, _P)  # P: S_vars += S_ders in comp_P
-            if ms == _ms:
-                mPP = form_PP(1, P, mPP)
-            else:
-                mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
-                mPP_.append(mPP)
-                for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 S_vars from incr_PP
-                    C += par
-                    Cm_.append(C)  # or S is directly modified in SvPP?
-                CmPP_ = Cm_  # but SPP is redundant, if len(PP_) > ave?
-                mPP = ms, [], []  # s, PP, Py_ init
-            if ds == _ds:
-                dPP = form_PP(0, P, dPP)
-            else:
-                dPP = term_PP(0, dPP)
-                dPP_.append(dPP)
-                for var, C in zip(dPP[1], CdPP_):
-                    C += var
-                    Cd_.append(C)
-                CdPP_ = Cd_
-                dPP = ds,[],[]
-            _P = P; _ms = ms; _ds = ds
-
-    return blob, CmPP_, mPP_, CdPP_, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
-
 
 flip_ave = 1000
 '''

@@ -1,38 +1,57 @@
 from time import time
 import numpy as np
-# Recursion branches -------------------------------------------------------------
+import numpy.ma as ma
+from collections import deque
+from frame_2D_alg import generic
 from frame_2D_alg.angle_blobs import blob_to_ablobs
 from frame_2D_alg.comp_inc_deriv import inc_deriv
-from frame_2D_alg.comp_inc_range import bilateral, inc_range
+from frame_2D_alg.comp_inc_range import inc_range
 # from comp_P_ import comp_P_
+
+from frame_2D_alg.misc import get_filters
+get_filters(globals()) # imports all filters at once
 '''
     - intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob
       combined with frame_blobs(), it forms a 2D version of first-level algorithm
       
     - inter_subb() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
     - inter_level() will compare between blob levels, where lower composition level is integrated by inter_subb
-      match between levels'edges may form composite blob, axis comp if margin sub_blobs over super blobs?
-       
-    - inter_blob() comp will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
+      match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
+    - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
 '''
+
+def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_P_
+
+    global rdn
+    for blob in frame.blob_:
+        rdn = redundancy
+        # eval_layer(eval_blob(blob))  # eval_blob returns val_
+        # for debugging:
+        if blob.sign:
+            blob_to_ablobs(blob)
+        #     inc_range(blob)
+        #     inc_deriv(blob)
+    return frame  # frame of 2D patterns, to be outputted to level 2
+
 
 def eval_blob(blob):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
 
     global rdn  # redundant representation counter, or branch-specific cost ratio?
-    L, I, G = blob.params[:3]  # Ly = blob.orientation_params[2]
-    Ave = ave * L  # whole-blob reprocessing filter
+    Ly, L, Y, X, I, Dy, Dx, G = blob.params
     val_deriv, val_range = 0, 0
 
     if blob.sign:  # positive gblob: area of noisy or directional (edge) gradient
-        if G > Ave:  # + fixed costs of hypot_g, angle_blobs, evaluation?
+        if G > ave_blob:  # fixed cost of hypot_g() per blob
             rdn += 1
-            blob.dert__[blob.map, 1] = np.hypot(blob.dert__[blob.map, 2], blob.dert__[blob.map, 3])
-            # max g is more precisely estimated as hypot(dx, dy)
-            blob_ablobs = blob_to_ablobs(blob)
-            if blob.Ga > Ave:
-                blob_ablobs = intra_blob(blob_ablobs)  # eval for recursion within ablobs
+            blob = hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob with blob + sub_blob_
 
-            val_deriv = (G / Ave) * -blob_ablobs.params[5]  # rG * -Ga: angle match, likely edge
+            if blob.G > ave_blob * 2:        # fixed cost of blob_to_ablobs() per blob
+                blob = blob_to_ablobs(blob)  # in blob_to_ablobs, add: for sub_blob in blob.sub_blob_:...
+                if blob.Ga > ave_blob * 4:   # fixed cost of angle comp recursion within ablobs, per blob
+                    blob = intra_blob(blob)  # intra recursion per angle and ga, vs. initial per pixel and g
+
+            Ave = ave * L
+            val_deriv = ((G + Ave) / Ave) * -blob.Ga  # relative G * -Ga: angle match, likely edge
             val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
     # val_PP_ = (L + I + G) * (L / Ly / Ly) * (Dy / Dx)
@@ -53,26 +72,21 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
     while val_:
         val, typ, blob = val_.pop()
         for map in map_:
-            olp = np.sum( np.logical_and( blob.map, map))  # if box overlap?
-            rdn += 1 * (olp / blob.L())   # redundancy to previously formed representations
+            olp = overlap(blob, map)  # to be defined; if box overlap?
+            rdn += 1 * (olp / blob.L())  # redundancy to previously formed representations
 
-        if val > ave * blob.L() * rdn:
-            if typ == 0:
-                if blob.ncomp == 1:  # add ncomp param init=1, incr per bilateral | inc_range
-                    blob_sub_blobs = bilateral(blob)  # recursive comp over p_ of incremental distance
-                else:
-                    blob_sub_blobs = inc_range(blob)  # recursive comp over p_ of incremental distance
-            else:
-                blob_sub_blobs = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
-                # dderived, but min_g is not necessary because +gblob already selected for it
+        if val > ave * blob.params(1) * rdn:
+            if typ==0: blob = inc_range(blob)  # recursive comp over p_ of incremental distance
+            else:      blob = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
+                       # dderived, blob selected for min_g
 
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
             # val-= sub_blob and branch switch cost: added map?  only after g,a calc: no rough g comp?
 
-            map_.append(blob.map)
-            for blob in blob_sub_blobs.blob_:
-                sub_val_ += eval_blob(blob)  # returns estimated recursion values of the next layer:
-                # [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)] per sub_blob, may include deeper angle_blobs?
+            map_.append((blob.box, blob.map))
+            for sub_blob in blob.sub_blob_:
+                sub_val_ += eval_blob(sub_blob)  # returns estimated recursion values of the next layer:
+                # [(val_deriv, 0, blob), (val_range, 1, blob), (val_PP_, 2, blob)] per sub_blob, may include deep angle_blobs
         else:
             break
 
@@ -80,36 +94,34 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
         rdn += 1
         eval_layer(sub_val_)  # evaluation of sub_val_ for recursion
 
+def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
 
-def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_range comp, inc_deriv comp, comp_P_
+    global height, width
+    height, width = blob.map.shape
+    for i in range(4):
+        blob.params.append(0)
+    seg_ = deque()
+    blob.new_dert__ = ma.array(blob.dert__, mask=~blob.map)
+    # redefine g = hypot(dx, dy):
+    blob.new_dert__[:, :, 3] = np.hypot(blob.new_dert__[:, :, 1], blob.new_dert__[:, :, 2]) - ave * 2
 
-    global rdn
-    for blob in frame.blob_:
-        rdn = redundancy
-        eval_layer( eval_blob( blob))  # eval_blob returns val_
+    for y in range(1, height - 1):
+        P_ = generic.form_P_(y, blob)         # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, blob)  # vertical clustering
+        seg_ = generic.form_seg_(P_, blob)
 
-        # for debugging:
-        # if blob.sign:
-        #     blob_to_ablobs(blob)
-        #     inc_range(blob)
-        #     inc_deriv(blob)
-    return frame  # frame of 2D patterns, to be outputted to level 2
+    while seg_: generic.form_blob(seg_.popleft(), blob)
+    return blob.sub_blob_[-1]
 
 # ************ PROGRAM BODY *********************************************************************************************
-
-from frame_2D_alg.misc import get_filters
-get_filters(globals())  # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
 from frame_2D_alg import frame_blobs
 
-Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()
 frame = intra_blob(frame_blobs.frame_of_blobs)
 end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-
-from DEBUG import draw_blob
-draw_blob('../debug', frame, typ=0, debug_parts=0, debug_local=0, show=0)
+# from DEBUG import draw_blob
