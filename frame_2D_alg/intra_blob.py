@@ -67,8 +67,7 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
 
     global height, width
     height, width = blob.map.shape
-    for i in range(4):
-        blob.params.append(0)
+
     seg_ = deque()
     blob.new_dert__ = ma.array(blob.dert__, mask=~blob.map)
     # redefine g = hypot(dx, dy):
@@ -92,8 +91,8 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
 
     while val_:
         val, typ, blob = val_.pop()
-        for map in map_:
-            olp = overlap(blob, map)  # to be defined; if box overlap?
+        for box, map in map_:
+            olp = overlap(blob, box, map)  # to be defined; if box overlap?
             rdn += 1 * (olp / blob.L())  # redundancy to previously formed representations
 
         if val > ave * blob.params(1) * rdn:
@@ -115,6 +114,29 @@ def eval_layer(val_):  # val_: estimated values of active branches in current la
         rdn += 1
         eval_layer(sub_val_)  # evaluation of sub_val_ for recursion
     # ---------- eval_layer() end ---------------------------------------------------------------------------------------
+
+def overlap(blob, box, map):    # returns number of overlap pixels between blob.map and map
+    y0, yn, x0, xn = blob.box
+    y0_2, yn_2, x0_2, xn_2 = box
+
+    olp_y0 = max(y0, y0_2)
+    olp_yn = min(yn, yn_2)
+    if olp_yn - olp_y0 <= 0:    # if no overlapping y coordinate span, return 0
+        return 0
+
+    olp_x0 = max(x0, x0_2)
+    olp_xn = min(xn, xn_2)
+    if olp_xn - olp_x0 <= 0:    # if no overlapping x coordinate span, return 0
+        return 0
+
+    # olp_y0, olp_yn, olp_x0, olp_xn are master_blob's coordinates, convert to local coordinates before slicing:
+    map1 = box.map[(olp_y0 - y0):(olp_yn - y0), (olp_x0 - x0):(olp_xn - x0)]
+    map2 = map[(olp_y0 - y0_2):(olp_yn - y0_2), (olp_x0 - x0_2):(olp_xn - x0_2)]
+
+    olp = np.logical_and(map1, map2).sum()  # compute the number of overlapping pixels
+
+    return olp
+    # ---------- overlap() end ------------------------------------------------------------------------------------------
 
 # ************ PROGRAM BODY *********************************************************************************************
 
