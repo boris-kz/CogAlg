@@ -2,6 +2,8 @@ import cv2
 from time import time
 from collections import deque, namedtuple
 import numpy as np
+from frame_2D_alg.filters import get_filters
+get_filters(globals()) # imports all filters at once
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -245,17 +247,19 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from misc import get_filters
-get_filters(globals())  # import all filters at once
-
 # Load inputs --------------------------------------------------------------------
 image = cv2.imread(input_path, 0).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
+
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
+
+from frame_2D_alg.intra_blob_root import intra_blob
+frame_of_blobs = intra_blob(frame_of_blobs, 1)  # evaluate for deeper recursive clustering inside each blob
+
 end_time = time() - start_time
 print(end_time)
 

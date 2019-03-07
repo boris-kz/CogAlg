@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque
 from frame_2D_alg import generic
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg.filters import get_filters
 get_filters(globals()) # imports all filters at once
 
 # ***************************************************** INC_DERIV FUNCTIONS *********************************************

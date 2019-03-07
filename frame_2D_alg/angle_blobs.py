@@ -2,8 +2,7 @@ import numpy as np
 import numpy.ma as ma
 from collections import deque
 from frame_2D_alg import generic
-# Filters ------------------------------------------------------------------------
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg.filters import get_filters
 get_filters(globals()) # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
@@ -11,13 +10,14 @@ get_filters(globals()) # imports all filters at once
 '''
 # ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
 # Functions:
+# -root(): for sub_blob in blob.sub_blob_:...
 # -blob_to_ablobs()
 # -get_angle()
 # -comp_angle()
 # -correct_da
 # ***********************************************************************************************************************
 
-def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, dxa, dya, ga in all reps within blob
+def blob_to_ablobs(blob, rdn):  # compute and compare angle, define ablobs, accumulate a, dxa, dya, ga in all reps within blob
     ''' same functionality as image_to_blobs() in frame_blobs.py'''
 
     global height, width

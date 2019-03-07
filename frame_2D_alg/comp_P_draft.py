@@ -25,7 +25,7 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
     mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # comparable params and their derivatives, C for combined
 
     mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
-    dPP = 0, [], []  # per dev of D_params, sum of abs? or signed: correlated?
+    dPP = 0, [], []  # per dev of D_params: abs or co-signed?
 
     Py_ = blob[3][last]  # per segment, also flip eval per seg?
     _P = Py_.popleft()  # initial comparand
@@ -92,7 +92,7 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
 
-    Pd = xdd + dL + dI + dG  # defines dPP, no dS-to-xd correlation
+    Pd = xdd + dL + dI + dG  # defines dPP, abs for ddPP? no dS-to-xd correlation
     Pm = xm +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
