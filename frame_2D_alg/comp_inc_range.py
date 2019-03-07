@@ -1,8 +1,8 @@
 import numpy.ma as ma
 from math import hypot
 from collections import deque
-# Filters ------------------------------------------------------------------------
-from frame_2D_alg.filters import get_filters
+import generic
+from filters import get_filters
 get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
@@ -10,38 +10,37 @@ get_filters(globals())  # imports all filters at once
 '''
 # ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
-# -in_range()
+# -inc_range()
 # -comp_p()
 # ***********************************************************************************************************************
+
 def inc_range(blob): # same functionality as image_to_blobs() in frame_blobs.py
 
     global height, width
     height, width = blob.map.shape
-
     rng = blob.rng + 1
     ncomp = blob.ncomp + rng
-
     sub_blob = [0, 0, 0, 0, [], rng, ncomp]
 
-    comp_p(sub_blob, blob.dert__, blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
-
+    comp_p(blob.dert__, blob.map, rng)  # comp_p over the whole sub-blob, rng measure is unilateral
     seg_ = deque()
 
-    for y in range(rng, Y - rng):
-        P_ = generic_functions.form_P_(y, sub_blob)  # horizontal clustering
-        P_ = generic_functions.scan_P_(P_, seg_, sub_blob)
-        seg_ = generic_functions.form_seg_(P_, sub_blob)
+    for y in range(rng, height - rng):
+        P_ = generic.form_P_(y, sub_blob)  # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, sub_blob)
+        seg_ = generic.form_seg_(P_, sub_blob)
 
-    while seg_: generic_functions.form_blob(seg_.popleft(), sub_blob)
+    while seg_: generic.form_blob(seg_.popleft(), sub_blob)
 
     blob.rng_sub_blob = sub_blob
     return sub_blob
+
     # ---------- inc_range() end ----------------------------------------------------------------------------------------
 
 def comp_p(dert__, map, rng):   # compare rng-distant pixels within blob
+
     p__ = dert__[:, :, 0]
     mask = ~map     # complemented blob.map is a mask of array
-
     dy__ = ma.zeros(map.shape, dtype=int)   # initialize dy__ as array masked for selective computation
     dx__ = ma.zeros(map.shape, dtype=int)
     dy__.mask = dx__.mask = mask    # all operations on masked arrays ignore elements at mask == True.
@@ -56,7 +55,7 @@ def comp_p(dert__, map, rng):   # compare rng-distant pixels within blob
     dx__[:, rng:] += d__                # bilateral accumulation on dx (x + rng, y)
     dx__[:, :-rng] += d__               # bilateral accumulation on dx (x, y)
 
-    # diagonal comps:
+    # diagonal comparison:
 
     for xd in range(1, rng):
         yd = rng - xd           # y and x distance between comparands
