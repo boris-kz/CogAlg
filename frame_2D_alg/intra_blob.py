@@ -19,15 +19,20 @@ get_filters(globals()) # imports all filters at once
     - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
 '''
 
-def intra_blob(frame, rdn):  # root function
+def intra_blob(frame, redundancy=1):  # root function
 
-    for blob in frame.blob_:
-        eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
+    blob_ = frame[1]
+
+    global rdn
+    rdn = redundancy
+    for blob in blob_:
+        # eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
         # for debug:
-        # if blob.sign:
-        #    blob_to_ablobs(blob)
-        #    inc_range(blob)
-        #    inc_deriv(blob)
+        if blob.sign:
+            hypot_g(blob)
+            # blob_to_ablobs(blob)
+            # inc_range(blob)
+            # inc_deriv(blob)
     return frame  # frame of 2D patterns is output to level 2
 
 
@@ -42,7 +47,7 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
 
             if blob.G > ave_blob * 2:  # fixed cost of blob_to_ablobs() per blob
                 rdn += 1  # redundant representation counter: stronger overlapping blobs, or branch-specific cost ratio?
-                blob = blob_to_ablobs(blob, rdn)
+                blob_to_ablobs(blob)
                 if blob.Ga > ave_blob * 4:  # fixed cost of angle comp recursion within ablobs, per blob
                     blob = intra_blob(blob, rdn)  # intra recursion per angle and ga, vs pixel and g
 
@@ -94,10 +99,15 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
 
     global height, width
     height, width = blob.map.shape
-    seg_ = deque()
-    blob.new_dert__ = ma.array(blob.dert__, mask=~blob.map)
+
+    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)
     # redefine g = hypot(dx, dy):
-    blob.new_dert__[:, :, 3] = np.hypot(blob.new_dert__[:, :, 1], blob.new_dert__[:, :, 2]) - ave * 2  # incr filter = cost of angle calc
+    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2  # incr filter = cost of angle calc
+
+    blob.sub_blob_.append([])
+
+    seg_ = deque()
 
     for y in range(1, height - 1):
         P_ = generic.form_P_(y, blob)         # horizontal clustering
@@ -126,6 +136,5 @@ def overlap(blob, box, map):    # returns number of overlapping pixels between b
 
     olp = np.logical_and(map1, map2).sum()  # compute number of overlapping pixels
     return olp
-
     # ---------- overlap() end ------------------------------------------------------------------------------------------
 

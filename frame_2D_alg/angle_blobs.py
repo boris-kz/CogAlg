@@ -22,22 +22,19 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
 
     global height, width
     height, width = blob.map.shape
-    sub_blob = [0, 0, 0, 0, []]  # initialization
 
     a__ = get_angle(blob.dert__, blob.map)
-    comp_angle(sub_blob, a__)
+    comp_angle(blob, a__)
     seg_ = deque()
 
     for y in range(1, height - 1):
-        P_ = generic.form_P_(y, sub_blob)  # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, sub_blob)  # vertical clustering
-        seg_ = generic.form_seg_(P_, sub_blob)
+        P_ = generic.form_P_(y, blob)  # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, blob)  # vertical clustering
+        seg_ = generic.form_seg_(P_, blob)
 
-    while seg_:  generic.form_blob(seg_.popleft(), sub_blob)
+    while seg_:  generic.form_blob(seg_.popleft(), blob)
 
     blob.e_.append(sub_blob)
-    return blob
-
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
 
 def get_angle(dert__, map):  # default = False: no higher-line for first line
@@ -65,7 +62,7 @@ def comp_angle(sub_blob, a__):
     dert__[1:-1, 1:-1, 2] = dx__
     dert__[1:-1, 1:-1, 3] = g__
 
-    sub_blob.append(dert__)
+    # blob.new_dert__ =
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 
 def correct_da(da):

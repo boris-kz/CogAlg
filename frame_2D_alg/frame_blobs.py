@@ -2,6 +2,7 @@ import cv2
 from time import time
 from collections import deque, namedtuple
 import numpy as np
+import numpy.ma as ma
 from filters import get_filters
 get_filters(globals()) # imports all filters at once
 
@@ -58,7 +59,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 
 def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
-    dert__ = np.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
+    dert__ = ma.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
 
     dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
     dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
@@ -228,6 +229,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[2]:
                     map[y, x] = True
+        map = map[y0:yn, x0:xn]
 
         frame[0][0] += I
         frame[0][1] += Dy
@@ -240,14 +242,14 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 dert__=dert__,
-                                new_dert__=None,
+                                new_dert__=[None],
                                 rng=1, ncomp=1,
                                 sub_blob_=[]))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg.misc import get_filters
+from frame_2D_alg.filters import get_filters
 get_filters(globals())  # import all filters at once
 
 # Load inputs --------------------------------------------------------------------
@@ -260,13 +262,13 @@ start_time = time()
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 
-from frame_2D_alg.intra_blob_root import intra_blob
-frame_of_blobs = intra_blob(frame_of_blobs, 1)  # evaluate for deeper recursive clustering inside each blob
+from frame_2D_alg.intra_blob import intra_blob
+frame_of_blobs = intra_blob(frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
 
 end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-from frame_2D_alg.DEBUG import draw_blob
-draw_blob('../debug/frame', frame_of_blobs)
+from frame_2D_alg.DEBUG import draw_blobs
+draw_blobs('../debug/frame', frame_of_blobs, isb=0)
 # ************ PROGRAM BODY END ******************************************************************************************
