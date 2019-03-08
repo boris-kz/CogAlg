@@ -1,3 +1,4 @@
+import numpy as np
 from collections import deque, namedtuple
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')
 
@@ -10,10 +11,10 @@ nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp
 
 def form_P_(y, master_blob, rng = 1):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
-    dert__ = master_blob.new_dert__
+    dert__ = master_blob.new_dert__[0]
     P_ = deque()  # initialize output
     dert_ = dert__[y, :, :]  # row of pixels + derivatives
-    P_map_[x] = ~dert.mask[y, :, 0]   # unresolved: dert_.mask?
+    P_map_ = ~dert__.mask[y, :, 0]
     x_stop = len(dert_) - rng
     x = rng  # first and last rng columns are discarded
 
@@ -154,12 +155,12 @@ def form_blob(term_seg, master_blob): # terminated segment is merged into contin
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        dert__ = master_blob.new_dert__[y0:yn, x0:xn, :]
+        dert__ = master_blob.new_dert__[0][y0:yn, x0:xn, :]
         map = np.zeros((yn-y0, xn-x0), dtype=bool)
         for seg in e_:
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[2]:
-                    map[y, x] = True
+                    map[y-y0, x-x0] = True
 
         master_blob.params[-4:] = [par1 + par2 for par1, par2 in zip(master_blob.params[-4:], blob_params[-4:])]
         master_blob.sub_blob_[-1].append(nt_blob(sign=s,
@@ -168,7 +169,7 @@ def form_blob(term_seg, master_blob): # terminated segment is merged into contin
                                                  box=(y0, yn, x0, xn),
                                                  map=map,
                                                  dert__=dert__,
-                                                 new_dert__=None,
+                                                 new_dert__=[None],
                                                  rng=master_blob.rng,
                                                  ncomp=master_blob.ncomp, sub_blob_=[]))
     # ---------- form_blob() end -------------------------------------------------------------------------------------

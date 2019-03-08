@@ -75,13 +75,13 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     xdd = xd - _xd  # for ortho eval if first-run ave_xDd * Pm: += compensated orientation change,
     xDd += xdd  # signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
 
-    if abs(Dx) + abs(Dy) > Ave:  # rough g_P or lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
+    if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
        g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
        a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
 
     if ort:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
-        hyp = math.hypot(xd, 1)  # Ly increment = hyp / 1 (vertical distance):
+        hyp = math.hypot(xd, 1)  # long axis increment = hyp / 1 (vertical distance):
         L /= hyp  # est. orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
@@ -91,8 +91,12 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
     dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
+    '''
+    or primary comp Dx, Dy: direction is assumed to be stable because blob is oriented? 
+    P-redefine by Dx, secondary G-redefine by Dx, Dy?  
+    '''
 
-    Pd = xdd + dL + dI + dG  # defines dPP, abs for ddPP? no dS-to-xd correlation
+    Pd = xdd + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation
     Pm = xm +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp

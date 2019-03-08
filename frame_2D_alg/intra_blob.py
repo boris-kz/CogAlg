@@ -19,7 +19,7 @@ get_filters(globals()) # imports all filters at once
     - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
 '''
 
-def intra_blob(frame, rdn):  # root function
+def intra_blob_root(frame, rdn):
 
     for blob in frame.blob_:
         eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
@@ -41,10 +41,10 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
             hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob with blob + sub_blob_
 
             if blob.G > ave_blob * 2:  # fixed cost of blob_to_ablobs() per blob
-                rdn += 1  # redundant representation counter: stronger overlapping blobs, or branch-specific cost ratio?
+                rdn += 1  # redundant reps counter: stronger overlapping blobs, or branch-specific cost ratio?
                 blob = blob_to_ablobs(blob, rdn)
                 if blob.Ga > ave_blob * 4:  # fixed cost of angle comp recursion within ablobs, per blob
-                    blob = intra_blob(blob, rdn)  # intra recursion per angle and ga, vs pixel and g
+                    blob = intra_blob_root(blob, rdn)  # intra recursion per angle and ga, vs pixel and g
 
             val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
             val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
@@ -91,16 +91,19 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
     # ---------- eval_layer() end ---------------------------------------------------------------------------------------
 
 def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
-
     global height, width
     height, width = blob.map.shape
-    seg_ = deque()
-    blob.new_dert__ = ma.array(blob.dert__, mask=~blob.map)
+
+    mask = ~blob.map[:, :, np.new_axis].repeat(4, axis=2)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)
     # redefine g = hypot(dx, dy):
-    blob.new_dert__[:, :, 3] = np.hypot(blob.new_dert__[:, :, 1], blob.new_dert__[:, :, 2]) - ave * 2  # incr filter = cost of angle calc
+
+    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2  # incr cost of angle calc
+    blob.sub_blob_.append([])
+    seg_ = deque()
 
     for y in range(1, height - 1):
-        P_ = generic.form_P_(y, blob)         # horizontal clustering
+        P_ = generic.form_P_(y, blob)  # horizontal clustering
         P_ = generic.scan_P_(P_, seg_, blob)  # vertical clustering
         seg_ = generic.form_seg_(P_, blob)
     while seg_: generic.form_blob(seg_.popleft(), blob)
