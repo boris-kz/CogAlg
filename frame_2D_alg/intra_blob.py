@@ -19,18 +19,16 @@ get_filters(globals()) # imports all filters at once
     - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
 '''
 
-def intra_blob(frame, redundancy=1):  # root function
+def intra_blob(frame, rdn=1):  # root function
 
     blob_ = frame[1]
 
-    global rdn
-    rdn = redundancy
     for blob in blob_:
         # eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
         # for debug:
         if blob.sign:
             hypot_g(blob)
-            # blob_to_ablobs(blob)
+            blob_to_ablobs(blob)
             # inc_range(blob)
             # inc_deriv(blob)
     return frame  # frame of 2D patterns is output to level 2
@@ -105,6 +103,7 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
     # redefine g = hypot(dx, dy):
     blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2  # incr filter = cost of angle calc
 
+    blob.params[-4:] = [0, 0, 0, 0]
     blob.sub_blob_.append([])
 
     seg_ = deque()

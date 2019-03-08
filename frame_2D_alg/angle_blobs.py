@@ -23,8 +23,19 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
     global height, width
     height, width = blob.map.shape
 
+    for _ in range(4):
+        blob.params.append(0)
+    blob.sub_blob_.append([])
+
+    if height < 3 or width < 3:
+        return False
+
     a__ = get_angle(blob.dert__, blob.map)
     comp_angle(blob, a__)
+
+    if blob.new_dert__[0].mask.all():
+        return False
+
     seg_ = deque()
 
     for y in range(1, height - 1):
@@ -34,7 +45,7 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
 
     while seg_:  generic.form_blob(seg_.popleft(), blob)
 
-    blob.e_.append(sub_blob)
+    return True
     # ---------- blob_to_ablobs() end -----------------------------------------------------------------------------------
 
 def get_angle(dert__, map):  # default = False: no higher-line for first line
@@ -43,15 +54,15 @@ def get_angle(dert__, map):  # default = False: no higher-line for first line
     dy = dert__[:, :, 1]
     dx = dert__[:, :, 2]
     a__ = ma.empty(map.shape, dtype=int)
-
-    a__[map] = np.arctan2(dy, dx, where=[map])[map] * angle_coef + 128
     a__.mask = ~map
+
+    a__ = np.arctan2(dy, dx) * angle_coef + 128
     return a__
     # ---------- get_angle() end ----------------------------------------------------------------------------------------
 
-def comp_angle(sub_blob, a__):
+def comp_angle(blob, a__):
     " compare angle of adjacent gradients within frame per gblob "
-    dert__ = ma.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
+    dert__ = ma.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
     dy__ = correct_da(a__[2:, 1:-1] - a__[:-2, 1:-1])   # vertical comp between rows -> dy, (1:-1): first and last column are discarded
     dx__ = correct_da(a__[1:-1, 2:] - a__[1:-1, :-2])   # lateral comp between columns -> dx, (1:-1): first and last row are discarded
@@ -62,7 +73,7 @@ def comp_angle(sub_blob, a__):
     dert__[1:-1, 1:-1, 2] = dx__
     dert__[1:-1, 1:-1, 3] = g__
 
-    # blob.new_dert__ =
+    blob.new_dert__[0] = dert__
     # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 
 def correct_da(da):
