@@ -88,7 +88,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         else:
             break
 
-    if sub_val_:
+    if sub_val_:s
         rdn += 1
         eval_layer(sub_val_, rdn)  # evaluation of sub_val_ for recursion
 
