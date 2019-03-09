@@ -14,7 +14,7 @@ def form_P_(y, master_blob, rng = 1):    # cluster and sum horizontally consecut
     dert__ = master_blob.new_dert__[0]
     P_ = deque()  # initialize output
     dert_ = dert__[y, :, :]  # row of pixels + derivatives
-    P_map_ = ~dert__.mask[y, :, 0]  # dert_.mask?
+    P_map_ = ~dert_.mask[:, 3]  # dert_.mask?
     x_stop = len(dert_) - rng
     x = rng  # first and last rng columns are discarded
 

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-def draw_blob(blob, img, globalize_coords):
+def draw_blob(blob, img, globalize_coords = (0, 0)):
     " draw a single blob "
     s = blob.sign
     y0, x0 = globalize_coords
@@ -17,13 +17,13 @@ def draw_blobs(path, frame, isb=-1):
     height, width = frame[-1].shape[:2]
     frame_img = np.array([[127] * width] * height)
 
-    for blob in frame[1]:
+    for i, blob in enumerate(frame[1]):
         if isb < 0:
             draw_blob(blob, frame_img)
         elif blob.sign:
             y0, yn, x0, xn = blob.box
             for sub_blob in blob.sub_blob_[isb]:
-                    draw_blob(sub_blob, frame_img, (y0, x0))
+                draw_blob(sub_blob, frame_img, (y0, x0))
 
     cv2.imwrite(path + '.bmp', frame_img)
     # ---------- draw_blob() end ----------------------------------------------------------------------------------------

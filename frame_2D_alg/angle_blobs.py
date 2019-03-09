@@ -51,10 +51,8 @@ def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulat
 def get_angle(dert__, map):  # default = False: no higher-line for first line
     " compute angle of gradient in and adjacent to selected gblob "
 
-    dy = dert__[:, :, 1]
-    dx = dert__[:, :, 2]
-    a__ = ma.empty(map.shape, dtype=int)
-    a__.mask = ~map
+    dy = ma.array(dert__[:, :, 1], mask=~map)
+    dx = ma.array(dert__[:, :, 2], mask=~map)
 
     a__ = np.arctan2(dy, dx) * angle_coef + 128
     return a__

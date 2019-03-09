@@ -22,8 +22,7 @@ get_filters(globals()) # imports all filters at once
 def intra_blob(frame, rdn=1):  # root function
 
     blob_ = frame[1]
-
-    for blob in blob_:
+    for i, blob in enumerate(blob_):
         # eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
         # for debug:
         if blob.sign:
@@ -31,6 +30,8 @@ def intra_blob(frame, rdn=1):  # root function
             blob_to_ablobs(blob)
             # inc_range(blob)
             # inc_deriv(blob)
+
+
     return frame  # frame of 2D patterns is output to level 2
 
 
@@ -73,8 +74,8 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             rdn += 1 * (olp / blob.L())  # redundancy to previously formed representations
 
         if val > ave * blob.params(1) * rdn:
-            if typ==0: blob = inc_range(blob)  # recursive comp over p_ of incremental distance
-            else:      blob = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
+            if typ == 0:    blob = inc_range(blob)  # recursive comp over p_ of incremental distance
+            else:           blob = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
                        # dderived, blob selected for min_g
 
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
@@ -99,12 +100,10 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
     height, width = blob.map.shape
 
     mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)
-    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)   # There's only one new_dert__. It is put on a list for mutability
     # redefine g = hypot(dx, dy):
     blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2  # incr filter = cost of angle calc
-
-    blob.params[-4:] = [0, 0, 0, 0]
-    blob.sub_blob_.append([])
+    blob.sub_blob_.append([])   # sub_g_blob_
 
     seg_ = deque()
 
