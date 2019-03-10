@@ -28,13 +28,12 @@ def intra_blob(frame, rdn=1):  # root function
         if blob.sign:
             hypot_g(blob)
             blob_to_ablobs(blob)
-            # inc_range(blob)
-            # inc_deriv(blob)
+            inc_deriv(blob)
+            inc_range(blob)
 
 
     return frame  # frame of 2D patterns is output to level 2
-
-
+    # ---------- intra_blob() end ---------------------------------------------------------------------------------------
 def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
 
     Ly, L, Y, X, I, Dy, Dx, G = blob.params
@@ -59,6 +58,7 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
     # 3rd term: dimensional variation bias
 
     return [(val_deriv, 0, blob), (val_range, 1, blob)]  # + (val_PP_, 2, blob), estimated values per branch
+    # ---------- eval_blob() end ----------------------------------------------------------------------------------------
 
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
@@ -88,7 +88,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         else:
             break
 
-    if sub_val_:s
+    if sub_val_:
         rdn += 1
         eval_layer(sub_val_, rdn)  # evaluation of sub_val_ for recursion
 
@@ -102,7 +102,7 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
     mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)
     blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)   # There's only one new_dert__. It is put on a list for mutability
     # redefine g = hypot(dx, dy):
-    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2  # incr filter = cost of angle calc
+    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp  * 2    # incr filter = cost of angle calc
     blob.sub_blob_.append([])   # sub_g_blob_
 
     seg_ = deque()
@@ -113,7 +113,7 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
         seg_ = generic.form_seg_(P_, blob)
     while seg_: generic.form_blob(seg_.popleft(), blob)
 
-    # ---------- hypot_g() end -----------------------------------------------------------------------------------
+    # ---------- hypot_g() end ------------------------------------------------------------------------------------------
 
 def overlap(blob, box, map):    # returns number of overlapping pixels between blob.map and map
     y0, yn, x0, xn = blob.box
@@ -135,4 +135,3 @@ def overlap(blob, box, map):    # returns number of overlapping pixels between b
     olp = np.logical_and(map1, map2).sum()  # compute number of overlapping pixels
     return olp
     # ---------- overlap() end ------------------------------------------------------------------------------------------
-
