@@ -75,10 +75,6 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     xdd = xd - _xd  # for ortho eval if first-run ave_xDd * Pm: += compensated orientation change,
     xDd += xdd  # signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
 
-    if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
-       g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
-       a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
-
     if ort:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
         hyp = math.hypot(xd, 1)  # long axis increment = hyp / 1 (vertical distance):
@@ -92,8 +88,14 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
     '''
-    or primary comp Dx, Dy: direction is assumed to be stable because blob is oriented? 
-    P-redefine by Dx, secondary G-redefine by Dx, Dy?  
+    or P redefine by dx, ignore dy: 1D-specific and more selective,  for any comp_P?
+    primary comp Dx: variation crit, direction is stable in oriented blob, 
+    Dy redefine by refined I comp: more selective? 
+        
+    G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
+    if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
+       g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
+       a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
     '''
 
     Pd = xdd + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation

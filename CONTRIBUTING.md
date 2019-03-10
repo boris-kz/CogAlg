@@ -1,5 +1,5 @@
-I need help with design and implementation of this algorithm, in Python. All contributions must be consistent with the principles introduced here. Unless you find some conceptual flaws or omissions, which would be even more valuable.  
-This is an open project, but I will pay per contribution, or per hour once there is a track record. I have ~1M in liquid assets and fully expect to spend it on this project, although it could take a long time.
+We need help with design and implementation of this algorithm, in Python. All contributions must be consistent with the principles introduced here. Unless you find some conceptual flaws or omissions, which would be even more valuable.  
+This is an open project, but I will pay per contribution, or monthly once there is a track record. I have ~1M in liquid assets and fully expect to spend it on this project, although it could take a long time.
 
 Contributions:
 

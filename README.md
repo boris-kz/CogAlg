@@ -9,7 +9,7 @@ But there is no general and at the same time constructive definition of either p
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering, then explain my code in Implementation part.
 
-We need help with design and implementation of this algorithm. Contributions should be justified in terms of strictly incremental search for similarity, which would form hierarchical patterns. These terms are defined below, but if you have better definitions, that would be even more valuable. This is an open project, but I will pay for contributions, or monthly if there is a good track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
+We need help with design and implementation of this algorithm. This is an open project, but I will pay for contributions, or monthly if there is a good track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). Contributions should be justified in terms of strictly incremental search for similarity, which would form hierarchical patterns. These terms are defined below, but if you have better definitions, that would be even more valuable. 
 
 
 
@@ -44,7 +44,7 @@ Autonomous cognition must start with analog inputs, such as video or audio. All 
 
 Such raw inputs have modality-specific properties and comparison should be adjusted accordingly, by feedback or manually. For example, vision relies on reflected light: brightness or albedo don’t directly represent source of impact, though they do represent some resistance to a very "light" impact. Uniformity of albedo indicates some common property within object, so it should form patterns. But the degree of commonality doesn’t depend on intensity of albedo, so match should be defined indirectly, as below-average |difference| or |ratio| of albedo.
 
-*Many readers feel a jarring gap between the abstract and the concrete in the above. But main principle here is selectively incremental complexity: though derived from the most abstract principles, initial operations must be the simplest. Complexity should be added recursively per higher levels, vs. uniform layers in ANN. Our universe is a space-time continuum, thus these search levels must be 4D cycles. I am currently working on initial cycle, to use as a kernel for subsequent recursion. Others note lack of higher math, but I can't use it for the same reason: it's not selectively incremental.*
+*Many readers feel a gap between my theory and algorithm, but I don't see where. My definitions can be made fully explicit only in representations of the lowest complexity, but they will be built into recursive complexity increment, thus apply on all levels of search. Since our universe is a space-time continuum, search should expand in 4D cycles. We are currently working on the first cycle (level), which will be a kernel for recursion. Others note lack of higher math, but I can't use it because it's not selectively incremental.*
 
 
 
@@ -136,7 +136,7 @@ Again, main feature of my approach is incrementally deep hierarchical syntax (en
 
 
 
-Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent S-T dimensions much more coarsely than the inputs. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. There is no such default degradation of positional information in my method.
+Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent coordinates much more coarsely than the inputs. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. That's not the case here because my top-level patterns are contiguous.
 
 Core algorithm is 1D: time only. Our space-time is 4D, and average match is presumably equal over all dimensions. That means patterns defined in fewer dimensions will be only slices of actual input, fundamentally limited and biased by the angle of scanning / slicing. Hence, initial pixel comparison should also be over 4D at once, or at least over 3D for video and 2D for still images. This full-D-cycle level of search is a universe-specific extension of core algorithm.
 
