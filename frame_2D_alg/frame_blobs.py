@@ -62,12 +62,12 @@ def comp_pixel(frame, p__):  # bilateral comparison between vertically and horiz
 
     dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
     dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
-    g__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
+    vg__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
 
     dert__[:, :, 0] = p__
     dert__[1:-1, 1:-1, 1] = dy__  # first row, last row, first column and last-column are discarded
     dert__[1:-1, 1:-1, 2] = dx__
-    dert__[1:-1, 1:-1, 3] = g__
+    dert__[1:-1, 1:-1, 3] = vg__
 
     frame.append(dert__)
 
@@ -258,7 +258,7 @@ nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp
 frame_of_blobs = image_to_blobs(image)
 
 from frame_2D_alg.intra_blob import intra_blob_root
-frame_of_blobs = intra_blob_root(frame_of_blobs, 1)  # evaluate for deeper recursive clustering inside each blob
+frame_of_blobs = intra_blob_root( frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
 
 end_time = time() - start_time
 print(end_time)

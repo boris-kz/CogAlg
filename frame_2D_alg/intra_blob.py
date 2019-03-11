@@ -19,10 +19,10 @@ get_filters(globals()) # imports all filters at once
     - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
 '''
 
-def intra_blob_root(frame, rdn):
+def intra_blob_root(frame):
 
     for blob in frame.blob_:
-        eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
+        eval_layer( eval_blob(blob), rdn=1)  # eval_blob returns val_
         # for debug:
         # if blob.sign:
         #    blob_to_ablobs(blob)
@@ -31,7 +31,7 @@ def intra_blob_root(frame, rdn):
     return frame  # frame of 2D patterns is output to level 2
 
 
-def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
+def eval_blob(blob):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
 
     Ly, L, Y, X, I, Dy, Dx, G = blob.params
     val_ = []
@@ -42,9 +42,8 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
 
             for sub_blob in blob.sub_blob_:
                 if sub_blob.G > ave_blob * 2:    # fixed cost of blob_to_ablobs() per blob
-                    # add code for extend sub_blob here
 
-                    rdn += 1  # redundant gblob, counter of stronger overlapping blobs, or branch-specific cost ratio?
+                    # add code to extend ablob syntax here
                     blob = blob_to_ablobs(blob)  # branch selection per ablob core param: p, a rng, g, ga der:
 
                     val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
@@ -75,7 +74,8 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         val, typ, blob = val_.pop()
         for box, map in map_:
             olp = overlap(blob, box, map)
-            rdn += 1 * (olp / blob.L())  # redundancy to previously formed representations
+            rdn += 1  # ablob redundancy to default gblob
+            rdn += 1 * (olp / blob.L())  # redundancy to previous or stronger overlapping blobs, or branch-specific cost ratio?
 
         if val > ave * blob.params(1) * rdn:
             if   typ == 0: blob = inc_range(blob, 0)  # recursive comp over p_ of incremental distance
@@ -83,7 +83,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             elif typ == 2: blob = inc_range(blob, 1)  # recursive comp over a_ of incremental distance
             else:          blob = inc_deriv(blob, 1)  # recursive comp over ga_ of incremental derivation
 
-            # last arg is a flag that selects operand: p | a or g | ga, in the same dert
+            # last arg is af: angle flag. It selects operand for a branch: p | a or g | ga, in the same dert
             # g and ga are dderived, blob selected for min_g
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
             # val-= sub_blob and branch switch cost: added map?  only after g,a calc: no rough g comp?
