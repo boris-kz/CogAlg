@@ -40,24 +40,21 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
         if G > ave_blob:  # fixed cost of hypot_g() per blob
             hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob and adds sub_blob_
 
-            if blob.G > ave_blob * 2:  # fixed cost of blob_to_ablobs() per blob
-                rdn += 1  # redundant reps: counter of stronger overlapping blobs, or branch-specific cost ratio?
-                # add code for extend blob here
-
-                for sub_blob in blob.sub_blob_:
+            for sub_blob in blob.sub_blob_:
+                if sub_blob.G > ave_blob * 2:    # fixed cost of blob_to_ablobs() per blob
                     # add code for extend sub_blob here
 
-                    if sub_blob.G > ave_blob * 2:    # fixed cost of blob_to_ablobs() per blob
-                        blob = blob_to_ablobs(blob)  # branch selection per ablob core param: p, a rng, g, ga der:
+                    rdn += 1  # redundant gblob, counter of stronger overlapping blobs, or branch-specific cost ratio?
+                    blob = blob_to_ablobs(blob)  # branch selection per ablob core param: p, a rng, g, ga der:
 
-                        val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
-                        val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
+                    val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
+                    val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
-                        val_der_a = ((blob.Ga + ave*L) / ave*L) * -blob.Gga  # comp ga
-                        val_rng_a = blob.Ga - val_der_a  # comp rng a
+                    val_der_a = ((blob.Ga + ave*L) / ave*L) * -blob.Gga  # comp ga
+                    val_rng_a = blob.Ga - val_der_a  # comp rng a
 
-                        val_ += [(val_deriv, 0, blob), (val_range, 1, blob), (val_der_a, 2, blob), (val_rng_a, 3, blob)]
-                        # estimated values per branch
+                    val_ += [(val_deriv, 0, blob), (val_range, 1, blob), (val_der_a, 2, blob), (val_rng_a, 3, blob)]
+                    # estimated values per branch, per hypot_g sub_blob
 
     return val_  # 0-valued branches are not returned: no val_deriv, val_range, val_der_a, val_rng_a = 0, 0, 0, 0
 ''' 
@@ -86,7 +83,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             elif typ == 2: blob = inc_range(blob, 1)  # recursive comp over a_ of incremental distance
             else:          blob = inc_deriv(blob, 1)  # recursive comp over ga_ of incremental derivation
 
-            # last arg is a flag that selects for p | a or g | ga in the same dert
+            # last arg is a flag that selects operand: p | a or g | ga, in the same dert
             # g and ga are dderived, blob selected for min_g
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
             # val-= sub_blob and branch switch cost: added map?  only after g,a calc: no rough g comp?
