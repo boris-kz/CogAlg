@@ -20,9 +20,11 @@ def inc_range(blob): # same functionality as image_to_blobs() in frame_blobs.py
     global height, width
     height, width = blob.map.shape
 
-    for _ in range(4):
-        blob.params.append(0)
-    blob.sub_blob_.append([])
+    blob.params.append(0)       # Add inc_range's I
+    blob.params.append(0)       # Add inc_range's Dy
+    blob.params.append(0)       # Add inc_range's Dx
+    blob.params.append(0)       # Add inc_range's G
+    blob.sub_blob_.append([])   # add inc_range_blob_
 
     if height < 3 or width < 3:
         return False
@@ -35,11 +37,11 @@ def inc_range(blob): # same functionality as image_to_blobs() in frame_blobs.py
     seg_ = deque()
 
     for y in range(1, height - 1):
-        P_ = generic.form_P_(y, blob)                   # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, blob, inc_rng=True)    # vertical clustering
-        seg_ = generic.form_seg_(P_, blob, inc_rng=True)
+        P_ = generic.form_P_(y, blob)                       # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, blob, inc_rng=True)  # vertical clustering
+        seg_ = generic.form_seg_(P_, blob, inc_rng=True)    # vertical clustering
 
-    while seg_:  generic.form_blob(seg_.popleft(), blob, inc_rng=True)
+    while seg_:  generic.form_blob(seg_.popleft(), blob, inc_rng=True)  # terminate last running segments
 
     return True
 
@@ -65,16 +67,16 @@ def comp_p(blob, rng):   # compare rng-distant pixels within blob
     # diagonal comparison:
 
     for xd in range(1, rng):
-        yd = rng - xd
-        bxd = xd * 2
-        byd = comp_rng - bxd    # y and x distance between comparands
-        hyp = hypot(byd, bxd)
-        y_coef = byd / hyp      # to decompose d into dy
-        x_coef = bxd / hyp      # to decompose d into dx
+        yd = rng - xd               # half y and x distance between comparands
+        bi_xd = xd * 2
+        bi_yd = comp_rng - bi_xd    # y and x distance between comparands
+        hyp = hypot(bi_yd, bi_xd)
+        y_coef = bi_yd / hyp      # to decompose d into dy
+        x_coef = bi_xd / hyp      # to decompose d into dx
 
         # top-left and bottom-right quadrants:
 
-        d__ = p__[byd:, bxd:] - p__[:-byd, :-bxd]   # comparison between p (x - xd, y - yd) and p (x + xd, y + yd)
+        d__ = p__[bi_yd:, bi_xd:] - p__[:-bi_yd, :-bi_xd]   # comparison between p (x - xd, y - yd) and p (x + xd, y + yd)
         # decompose d to dy, dx:
         temp_dy__ = d__ * y_coef                    # buffer for dy accumulation
         temp_dx__ = d__ * x_coef                    # buffer for dx accumulation
@@ -84,7 +86,7 @@ def comp_p(blob, rng):   # compare rng-distant pixels within blob
 
         # top-right and bottom-left quadrants:
 
-        d__ = p__[byd:, :-bxd] - p__[:-byd, bxd:]   # comparison between p (x + xd, y - yd) and p (x - xd, y + yd)
+        d__ = p__[bi_yd:, :-bi_xd] - p__[:-bi_yd, bi_xd:]   # comparison between p (x + xd, y - yd) and p (x - xd, y + yd)
         # decompose d to dy, dx:
         temp_dy__ = d__ * y_coef                    # buffer for dy accumulation
         temp_dx__ = -(d__ * x_coef)                 # buffer for dx accumulation, sign inverted with comp direction
@@ -93,12 +95,13 @@ def comp_p(blob, rng):   # compare rng-distant pixels within blob
         dx__[yd:-yd, xd:-xd] += temp_dx__.astype(int)   # bilateral accumulation on dx (x, y)
 
 
-    g__ = np.abs(dy__[rng:-rng, rng:-rng]) + np.abs(dx__[rng:-rng, rng:-rng]) - ave * blob.ncomp  # compute g__
+    g__ = np.hypot(dy__, dx__) - ave * blob.ncomp  # compute g__
 
+    # pack all derts into dert__
     dert__[:, :, 0] = p__
     dert__[:, :, 1] = dy__
     dert__[:, :, 2] = dx__
     dert__[rng:-rng, rng:-rng, 3] = g__
 
-    blob.new_dert__[0] = dert__
+    blob.new_dert__[0] = dert__ # pack dert__ into blob
     # ---------- comp_p() end -------------------------------------------------------------------------------------------

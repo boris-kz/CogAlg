@@ -23,43 +23,47 @@ def intra_blob(frame, rdn=1):  # root function
 
     blob_ = frame[1]
     for i, blob in enumerate(blob_):
-        # eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
-        # for debug:
-        if blob.sign:
-            hypot_g(blob)
-            blob_to_ablobs(blob)
-            inc_deriv(blob)
-            inc_range(blob)
+
+        eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
+
+        # for debugging branches:
+        # if blob.sign:
+        #     hypot_g(blob)
+        #     blob_to_ablobs(blob)
+        #     inc_deriv(blob)
+        #     inc_range(blob)
 
 
     return frame  # frame of 2D patterns is output to level 2
     # ---------- intra_blob() end ---------------------------------------------------------------------------------------
+
 def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
 
     Ly, L, Y, X, I, Dy, Dx, G = blob.params
-    val_deriv, val_range = 0, 0
+    val_ = []
 
     if blob.sign:  # positive gblob: area of noisy or directional (edge) gradient
-        if G > ave_blob:   # fixed cost of hypot_g() per blob
-            hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob with blob + sub_blob_
+        if G > ave_blob:  # fixed cost of hypot_g() per blob
+            hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob and adds sub_blob_
 
-            if blob.G > ave_blob * 2:  # fixed cost of blob_to_ablobs() per blob
-                rdn += 1  # redundant representation counter: stronger overlapping blobs, or branch-specific cost ratio?
-                blob_to_ablobs(blob)
-                if blob.Ga > ave_blob * 4:  # fixed cost of angle comp recursion within ablobs, per blob
-                    blob = intra_blob(blob, rdn)  # intra recursion per angle and ga, vs pixel and g
+            for sub_blob in blob.sub_blob_[0]:      # sub_blob_[0] contain sub blobs of hypot_g branch
+                if sub_blob.G > ave_blob * 2:  # fixed cost of blob_to_ablobs() per blob
+                    # add code for extend sub_blob here
 
-            val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
-            val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
+                    rdn += 1  # redundant gblob, counter of stronger overlapping blobs, or branch-specific cost ratio?
+                    blob_to_ablobs(blob)  # branch selection per ablob core param: p, a rng, g, ga der:
 
-    # val_PP_ = (L + I + G) * (L / Ly / Ly) * (Dy / Dx)
-    # 1st term: proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
-    # 2nd term: elongation: >ave Pm? ~ box elong: (x_max - x_min) / (y_max - y_min)?
-    # 3rd term: dimensional variation bias
+                    val_deriv = ((G + ave * L) / ave * L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
+                    val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
-    return [(val_deriv, 0, blob), (val_range, 1, blob)]  # + (val_PP_, 2, blob), estimated values per branch
+                    val_der_a = ((blob.Ga + ave * L) / ave * L) * -blob.Gga  # comp ga
+                    val_rng_a = blob.Ga - val_der_a  # comp rng a
+
+                    val_ += [(val_deriv, 0, blob), (val_range, 1, blob), (val_der_a, 2, blob), (val_rng_a, 3, blob)]
+                    # estimated values per branch, per hypot_g sub_blob
+
+    return val_  # 0-valued branches are not returned: no val_deriv, val_range, val_der_a, val_rng_a = 0, 0, 0, 0
     # ---------- eval_blob() end ----------------------------------------------------------------------------------------
-
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
@@ -99,8 +103,8 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
     global height, width
     height, width = blob.map.shape
 
-    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)
-    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)   # There's only one new_dert__. It is put on a list for mutability
+    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)    # stack map 4 times to fit the shape of dert__ (width, height, num_params)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)
     # redefine g = hypot(dx, dy):
     blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp  * 2    # incr filter = cost of angle calc
     blob.sub_blob_.append([])   # sub_g_blob_
@@ -108,10 +112,10 @@ def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave
     seg_ = deque()
 
     for y in range(1, height - 1):
-        P_ = generic.form_P_(y, blob)         # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, blob)  # vertical clustering
-        seg_ = generic.form_seg_(P_, blob)
-    while seg_: generic.form_blob(seg_.popleft(), blob)
+        P_ = generic.form_P_(y, blob)           # horizontal clustering
+        P_ = generic.scan_P_(P_, seg_, blob)    # vertical clustering
+        seg_ = generic.form_seg_(P_, blob)      # vertical clustering
+    while seg_: generic.form_blob(seg_.popleft(), blob) # terminate last running segments
 
     # ---------- hypot_g() end ------------------------------------------------------------------------------------------
 
