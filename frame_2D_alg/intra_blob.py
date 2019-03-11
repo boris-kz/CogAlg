@@ -34,28 +34,39 @@ def intra_blob_root(frame, rdn):
 def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
 
     Ly, L, Y, X, I, Dy, Dx, G = blob.params
-    val_deriv, val_range = 0, 0
+    val_ = []
 
     if blob.sign:  # positive gblob: area of noisy or directional (edge) gradient
-        if G > ave_blob:   # fixed cost of hypot_g() per blob
-            hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob with blob + sub_blob_
+        if G > ave_blob:  # fixed cost of hypot_g() per blob
+            hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replaces blob and adds sub_blob_
 
             if blob.G > ave_blob * 2:  # fixed cost of blob_to_ablobs() per blob
-                rdn += 1  # redundant reps counter: stronger overlapping blobs, or branch-specific cost ratio?
-                blob = blob_to_ablobs(blob, rdn)
-                if blob.Ga > ave_blob * 4:  # fixed cost of angle comp recursion within ablobs, per blob
-                    blob = intra_blob_root(blob, rdn)  # intra recursion per angle and ga, vs pixel and g
+                rdn += 1  # redundant reps: counter of stronger overlapping blobs, or branch-specific cost ratio?
+                # add code for extend blob here
 
-            val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
-            val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
+                for sub_blob in blob.sub_blob_:
+                    # add code for extend sub_blob here
 
-    # val_PP_ = (L + I + G) * (L / Ly / Ly) * (Dy / Dx)
-    # 1st term: proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
-    # 2nd term: elongation: >ave Pm? ~ box elong: (x_max - x_min) / (y_max - y_min)?
-    # 3rd term: dimensional variation bias
+                    if sub_blob.G > ave_blob * 2:    # fixed cost of blob_to_ablobs() per blob
+                        blob = blob_to_ablobs(blob)  # branch selection per ablob core param: p, a rng, g, ga der:
 
-    return [(val_deriv, 0, blob), (val_range, 1, blob)]  # + (val_PP_, 2, blob), estimated values per branch
+                        val_deriv = ((G + ave*L) / ave*L) * -blob.Ga  # relative G * -Ga: angle match, likely edge
+                        val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
+                        val_der_a = ((blob.Ga + ave*L) / ave*L) * -blob.Gga  # comp ga
+                        val_rng_a = blob.Ga - val_der_a  # comp rng a
+
+                        val_ += [(val_deriv, 0, blob), (val_range, 1, blob), (val_der_a, 2, blob), (val_rng_a, 3, blob)]
+                        # estimated values per branch
+
+    return val_  # 0-valued branches are not returned: no val_deriv, val_range, val_der_a, val_rng_a = 0, 0, 0, 0
+''' 
+    + (val_PP_, 4, blob), (val_aPP_, 5, blob):
+    val_PP_ = (L + I + G) * (L / Ly / Ly) * (Dy / Dx)
+    1st term: proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
+    2nd term: elongation: >ave Pm? ~ box elong: (x_max - x_min) / (y_max - y_min)?
+    3rd term: dimensional variation bias
+'''
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
@@ -70,10 +81,13 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             rdn += 1 * (olp / blob.L())  # redundancy to previously formed representations
 
         if val > ave * blob.params(1) * rdn:
-            if typ==0: blob = inc_range(blob)  # recursive comp over p_ of incremental distance
-            else:      blob = inc_deriv(blob)  # recursive comp over g_ of incremental derivation
-                       # dderived, blob selected for min_g
+            if   typ == 0: blob = inc_range(blob, 0)  # recursive comp over p_ of incremental distance
+            elif typ == 1: blob = inc_deriv(blob, 0)  # recursive comp over g_ of incremental derivation
+            elif typ == 2: blob = inc_range(blob, 1)  # recursive comp over a_ of incremental distance
+            else:          blob = inc_deriv(blob, 1)  # recursive comp over ga_ of incremental derivation
 
+            # last arg is a flag that selects for p | a or g | ga in the same dert
+            # g and ga are dderived, blob selected for min_g
             # else: blob_sub_blobs = comp_P_(val, 0, blob, rdn)  # -> comp_P
             # val-= sub_blob and branch switch cost: added map?  only after g,a calc: no rough g comp?
 

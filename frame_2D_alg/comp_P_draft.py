@@ -90,7 +90,7 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     '''
     or P redefine by dx, ignore dy: 1D-specific and more selective,  for any comp_P?
     primary comp Dx: variation crit, direction is stable in oriented blob, 
-    Dy redefine by refined I comp: more selective? 
+    Dy redefine by refined I comp: = accuracy but more selective? 
         
     G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
     if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
