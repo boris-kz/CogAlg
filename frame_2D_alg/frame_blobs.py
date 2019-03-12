@@ -3,9 +3,10 @@ from time import time
 from collections import deque, namedtuple
 import numpy as np
 import numpy.ma as ma
-from filters import get_filters
-get_filters(globals()) # imports all filters at once
-
+# Filters ------------------------------------------------------------------------
+from frame_2D_alg.filters import get_filters
+get_filters(globals())          # imports all filters at once
+# --------------------------------------------------------------------------------
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
     as |dx| + |dy|, then selectively and more precisely as hypot(dx, dy), from cross-comparison among adjacent pixels.
@@ -270,5 +271,5 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from frame_2D_alg.DEBUG import draw_blobs
-draw_blobs('../debug/out', frame_of_blobs, isb=3)
+draw_blobs('../debug/out', frame_of_blobs, isb=2)
 # ************ PROGRAM BODY END ******************************************************************************************

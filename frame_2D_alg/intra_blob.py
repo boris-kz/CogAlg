@@ -1,8 +1,7 @@
 import numpy as np
 import numpy.ma as ma
-from collections import deque
-import generic
-from angle_blobs import blob_to_ablobs
+from generic import branching
+from angle_blobs import angle_blobs
 from comp_inc_deriv import inc_deriv
 from comp_inc_range import inc_range
 # from comp_P_ import comp_P_
@@ -24,14 +23,14 @@ def intra_blob(frame, rdn=1):  # root function
     blob_ = frame[1]
     for i, blob in enumerate(blob_):
 
-        eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
+        # eval_layer( eval_blob(blob, rdn), rdn)  # eval_blob returns val_
 
         # for debugging branches:
-        # if blob.sign:
-        #     hypot_g(blob)
-        #     blob_to_ablobs(blob)
-        #     inc_deriv(blob)
-        #     inc_range(blob)
+        if blob.sign:
+            branching(blob, hypot_g, new_params=False)  # no new params added because this branch only redefine g
+            branching(blob, angle_blobs)
+            branching(blob, inc_deriv)
+            # inc_range(blob)
 
 
     return frame  # frame of 2D patterns is output to level 2
@@ -65,6 +64,14 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
     return val_  # 0-valued branches are not returned: no val_deriv, val_range, val_der_a, val_rng_a = 0, 0, 0, 0
     # ---------- eval_blob() end ----------------------------------------------------------------------------------------
 
+def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
+
+    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, num_params)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)  # initialize dert__ with mask for selective comp
+    # redefine g = hypot(dx, dy):
+    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp * 2  # incr filter = cost of angle calc
+    # ---------- hypot_g() end ------------------------------------------------------------------------------------------
+
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
     val_ = sorted(val_, key=lambda val: val[0])
@@ -97,27 +104,6 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         eval_layer(sub_val_, rdn)  # evaluation of sub_val_ for recursion
 
     # ---------- eval_layer() end ---------------------------------------------------------------------------------------
-
-def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
-
-    global height, width
-    height, width = blob.map.shape
-
-    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)    # stack map 4 times to fit the shape of dert__ (width, height, num_params)
-    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)
-    # redefine g = hypot(dx, dy):
-    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp  * 2    # incr filter = cost of angle calc
-    blob.sub_blob_.append([])   # sub_g_blob_
-
-    seg_ = deque()
-
-    for y in range(1, height - 1):
-        P_ = generic.form_P_(y, blob)           # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, blob)    # vertical clustering
-        seg_ = generic.form_seg_(P_, blob)      # vertical clustering
-    while seg_: generic.form_blob(seg_.popleft(), blob) # terminate last running segments
-
-    # ---------- hypot_g() end ------------------------------------------------------------------------------------------
 
 def overlap(blob, box, map):    # returns number of overlapping pixels between blob.map and map
     y0, yn, x0, xn = blob.box

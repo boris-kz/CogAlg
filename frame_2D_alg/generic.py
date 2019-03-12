@@ -3,11 +3,41 @@ from collections import deque, namedtuple
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')
 
 # ************ FUNCTIONS ************************************************************************************************
+# -branching()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
 # ***********************************************************************************************************************
+def branching(blob, comp_func, new_params=True):    # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
+
+    height, width = blob.map.shape
+
+    if new_params:
+        blob.params.append(0)  # Add I
+        blob.params.append(0)  # Add Dy
+        blob.params.append(0)  # Add Dx
+        blob.params.append(0)  # Add G
+
+    blob.sub_blob_.append([])   # append sub_blob_
+
+    if height < 3 or width < 3:
+        return False
+
+    comp_func(blob)
+
+    if blob.new_dert__[0].mask.all():
+        return False
+    seg_ = deque()
+
+    for y in range(1, height - 1):
+        P_ = form_P_(y, blob)           # horizontal clustering
+        P_ = scan_P_(P_, seg_, blob)    # vertical clustering
+        seg_ = form_seg_(P_, blob)      # vertical clustering
+    while seg_: form_blob(seg_.popleft(), blob) # terminate last running segments
+
+    return True # return True if successfully form new sub-blobs
+    # ---------- branching() end ----------------------------------------------------------------------------------------
 
 def form_P_(y, master_blob):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 

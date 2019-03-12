@@ -101,7 +101,7 @@ def comp_p(blob, rng):   # compare rng-distant pixels within blob
     dert__[:, :, 0] = p__
     dert__[:, :, 1] = dy__
     dert__[:, :, 2] = dx__
-    dert__[rng:-rng, rng:-rng, 3] = g__
+    dert__[:, :, 3] = g__
 
     blob.new_dert__[0] = dert__ # pack dert__ into blob
     # ---------- comp_p() end -------------------------------------------------------------------------------------------
