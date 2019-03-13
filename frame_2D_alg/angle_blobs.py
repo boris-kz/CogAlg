@@ -37,10 +37,13 @@ def angle_blobs(blob):  # compute and compare angles
     dert__[1:-1, 1:-1, 3] = ga__
 
     blob.new_dert__[0] = dert__  # pack dert__ into blob
+
+    return 1    # rng
     # ---------- angle_blobs() end --------------------------------------------------------------------------------------
 
 def correct_da(da):
     " make da -128->127 instead of -256->255 "
+
     where = da > 128
     da[where] = da[where] - 256
     where = da < -128

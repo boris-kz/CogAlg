@@ -29,4 +29,6 @@ def inc_deriv(blob):    # compare g within sub blob
     dert__[1:-1, 1:-1, 3] = gg__
 
     blob.new_dert__[0] = dert__  # pack dert__ into blob
+
+    return 1  # rng
     # ---------- inc_deriv() end ----------------------------------------------------------------------------------------

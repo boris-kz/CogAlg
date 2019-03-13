@@ -3,13 +3,13 @@ from collections import deque, namedtuple
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')
 
 # ************ FUNCTIONS ************************************************************************************************
-# -branching()
+# -branch_master_blob()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
 # ***********************************************************************************************************************
-def branching(blob, comp_func, new_params=True):    # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
+def branch_master_blob(blob, comp_func, new_params=True):    # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
 
     height, width = blob.map.shape
 
@@ -24,20 +24,22 @@ def branching(blob, comp_func, new_params=True):    # redefine blob and sub_blob
     if height < 3 or width < 3:
         return False
 
-    comp_func(blob)
+    rng = comp_func(blob)
+    rng_inc = bool(rng - 1)
 
     if blob.new_dert__[0].mask.all():
         return False
+
     seg_ = deque()
 
-    for y in range(1, height - 1):
+    for y in range(rng, height - rng):
         P_ = form_P_(y, blob)           # horizontal clustering
-        P_ = scan_P_(P_, seg_, blob)    # vertical clustering
-        seg_ = form_seg_(P_, blob)      # vertical clustering
-    while seg_: form_blob(seg_.popleft(), blob) # terminate last running segments
+        P_ = scan_P_(P_, seg_, blob, rng_inc)    # vertical clustering
+        seg_ = form_seg_(P_, blob, rng_inc)      # vertical clustering
+    while seg_: form_blob(seg_.popleft(), blob, rng_inc) # terminate last running segments
 
     return True # return True if successfully form new sub-blobs
-    # ---------- branching() end ----------------------------------------------------------------------------------------
+    # ---------- branch_master_blob() end -------------------------------------------------------------------------------
 
 def form_P_(y, master_blob):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
@@ -70,7 +72,7 @@ def form_P_(y, master_blob):    # cluster and sum horizontally consecutive pixel
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-def scan_P_(P_, seg_, master_blob, inc_rng = False):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
+def scan_P_(P_, seg_, master_blob, rng_inc = False):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
     new_P_ = deque()
 
     if P_ and seg_:            # if both are not empty
@@ -96,11 +98,11 @@ def scan_P_(P_, seg_, master_blob, inc_rng = False):  # this function detects co
                     P = P_.popleft()  # load next P
                 else:
                     if seg[3] != 1:  # if roots != 1: terminate loop
-                        form_blob(seg, master_blob, inc_rng)
+                        form_blob(seg, master_blob, rng_inc)
                     stop = True
             else:
                 if seg[3] != 1:  # if roots != 1
-                    form_blob(seg, master_blob, inc_rng)
+                    form_blob(seg, master_blob, rng_inc)
                 if seg_:
                     seg = seg_.popleft()  # load next seg and _P
                     _P = seg[2][-1]
@@ -111,12 +113,12 @@ def scan_P_(P_, seg_, master_blob, inc_rng = False):  # this function detects co
     while P_:  # handle Ps and segs that don't terminate at line end
         new_P_.append(( P_.popleft(), []))  # no fork
     while seg_:
-        form_blob( seg_.popleft(), master_blob, inc_rng)  # roots always == 0
+        form_blob( seg_.popleft(), master_blob, rng_inc)  # roots always == 0
     return new_P_
 
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
-def form_seg_(P_, master_blob, inc_rng = False):   # Convert or merge every P into segment. Merge blobs
+def form_seg_(P_, master_blob, rng_inc = False):   # Convert or merge every P into segment. Merge blobs
     new_seg_ = deque()
     while P_:
         P, fork_ = P_.popleft()
@@ -141,11 +143,11 @@ def form_seg_(P_, master_blob, inc_rng = False):   # Convert or merge every P in
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][3] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob(fork_[0], master_blob, inc_rng)  # merge seg of 1st fork into its blob
+                        form_blob(fork_[0], master_blob, rng_inc)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork[3] == 1:
-                            form_blob(fork, master_blob, inc_rng)
+                            form_blob(fork, master_blob, rng_inc)
 
                         if not fork[5] is blob:
                             params, e_, open_segments = fork[5][1:]  # merged blob, omit sign
@@ -164,7 +166,7 @@ def form_seg_(P_, master_blob, inc_rng = False):   # Convert or merge every P in
 
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
-def form_blob(term_seg, master_blob, inc_rng = False): # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, master_blob, rng_inc = False): # terminated segment is merged into continued or initialized blob (all connected segments)
 
     params, P_, roots, fork_, blob = term_seg[1:]
 
@@ -201,7 +203,7 @@ def form_blob(term_seg, master_blob, inc_rng = False): # terminated segment is m
                                                  map=map,
                                                  dert__=dert__,
                                                  new_dert__=[None],
-                                                 rng=(master_blob.rng + 1) if inc_rng else master_blob.rng,
-                                                 ncomp=(master_blob.ncomp + master_blob.rng + 1) if inc_rng else master_blob.ncomp,
+                                                 rng=(master_blob.rng + 1) if rng_inc else 1,                           # increase rng or reset rng back to 1
+                                                 ncomp=(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1,
                                                  sub_blob_=[]))
     # ---------- form_blob() end -------------------------------------------------------------------------------------

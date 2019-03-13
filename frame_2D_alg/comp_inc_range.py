@@ -12,43 +12,11 @@ get_filters(globals())  # imports all filters at once
 # ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
 # -inc_range()
-# -comp_p()
 # ***********************************************************************************************************************
 
-def inc_range(blob): # same functionality as image_to_blobs() in frame_blobs.py
+def comp_p(blob):   # compare rng-distant pixels within blob
 
-    global height, width
-    height, width = blob.map.shape
-
-    blob.params.append(0)       # Add inc_range's I
-    blob.params.append(0)       # Add inc_range's Dy
-    blob.params.append(0)       # Add inc_range's Dx
-    blob.params.append(0)       # Add inc_range's G
-    blob.sub_blob_.append([])   # add inc_range_blob_
-
-    if height < 3 or width < 3:
-        return False
-
-    comp_p(blob, blob.rng + 1)
-
-    if blob.new_dert__[0].mask.all():
-        return False
-
-    seg_ = deque()
-
-    for y in range(1, height - 1):
-        P_ = generic.form_P_(y, blob)                       # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, blob, inc_rng=True)  # vertical clustering
-        seg_ = generic.form_seg_(P_, blob, inc_rng=True)    # vertical clustering
-
-    while seg_:  generic.form_blob(seg_.popleft(), blob, inc_rng=True)  # terminate last running segments
-
-    return True
-
-    # ---------- inc_range() end ----------------------------------------------------------------------------------------
-
-def comp_p(blob, rng):   # compare rng-distant pixels within blob
-
+    rng = blob.rng + 1
     p__ = ma.array(blob.dert__[:, :, 0], mask=~blob.map)  # apply mask = ~map
     dy__ = ma.array(blob.dert__[:, :, 1], mask=~blob.map)
     dx__ = ma.array(blob.dert__[:, :, 2], mask=~blob.map)
@@ -94,14 +62,16 @@ def comp_p(blob, rng):   # compare rng-distant pixels within blob
         dy__[yd:-yd, xd:-xd] += temp_dy__.astype(int)   # bilateral accumulation on dy (x, y)
         dx__[yd:-yd, xd:-xd] += temp_dx__.astype(int)   # bilateral accumulation on dx (x, y)
 
-
     g__ = np.hypot(dy__, dx__) - ave * blob.ncomp  # compute g__
 
     # pack all derts into dert__
+
     dert__[:, :, 0] = p__
     dert__[:, :, 1] = dy__
     dert__[:, :, 2] = dx__
     dert__[:, :, 3] = g__
 
     blob.new_dert__[0] = dert__ # pack dert__ into blob
-    # ---------- comp_p() end -------------------------------------------------------------------------------------------
+
+    return rng
+    # ---------- inc_range() end ----------------------------------------------------------------------------------------

@@ -27,10 +27,10 @@ def intra_blob(frame, rdn=1):  # root function
 
         # for debugging branches:
         if blob.sign:
-            branching(blob, hypot_g, new_params=False)  # no new params added because this branch only redefine g
-            branching(blob, angle_blobs)
-            branching(blob, inc_deriv)
-            # inc_range(blob)
+            branch_master_blob(blob, hypot_g, new_params=False)  # no new params added because this branch only redefine g
+            branch_master_blob(blob, angle_blobs)
+            branch_master_blob(blob, inc_deriv)
+            branch_master_blob(blob, inc_range)
 
 
     return frame  # frame of 2D patterns is output to level 2
@@ -63,14 +63,6 @@ def eval_blob(blob, rdn):  # evaluate blob for comp_angle, comp_inc_range, comp_
 
     return val_  # 0-valued branches are not returned: no val_deriv, val_range, val_der_a, val_rng_a = 0, 0, 0, 0
     # ---------- eval_blob() end ----------------------------------------------------------------------------------------
-
-def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
-
-    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, num_params)
-    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)  # initialize dert__ with mask for selective comp
-    # redefine g = hypot(dx, dy):
-    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp * 2  # incr filter = cost of angle calc
-    # ---------- hypot_g() end ------------------------------------------------------------------------------------------
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
@@ -125,3 +117,13 @@ def overlap(blob, box, map):    # returns number of overlapping pixels between b
     olp = np.logical_and(map1, map2).sum()  # compute number of overlapping pixels
     return olp
     # ---------- overlap() end ------------------------------------------------------------------------------------------
+
+def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
+
+    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, num_params)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)  # initialize dert__ with mask for selective comp
+    # redefine g = hypot(dx, dy):
+    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp * 2  # incr filter = cost of angle calc
+
+    return 1  # rng
+    # ---------- hypot_g() end ------------------------------------------------------------------------------------------
