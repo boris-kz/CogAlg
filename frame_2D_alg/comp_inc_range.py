@@ -2,7 +2,7 @@ import numpy as np
 import numpy.ma as ma
 from math import hypot
 from collections import deque
-import generic
+import generic_branch
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------
@@ -14,14 +14,14 @@ get_filters(globals())  # imports all filters at once
 # -inc_range()
 # ***********************************************************************************************************************
 
-def comp_p(blob):   # compare rng-distant pixels within blob
+def inc_range(blob):   # compare rng-distant pixels within blob
 
     rng = blob.rng + 1
     p__ = ma.array(blob.dert__[:, :, 0], mask=~blob.map)  # apply mask = ~map
     dy__ = ma.array(blob.dert__[:, :, 1], mask=~blob.map)
     dx__ = ma.array(blob.dert__[:, :, 2], mask=~blob.map)
 
-    dert__ = ma.empty(shape=(height, width, 4), dtype=int)  # initialize new dert__
+    dert__ = ma.empty(shape=blob.dert__.shape, dtype=int)  # initialize new dert__
     comp_rng = rng * 2
 
     # vertical comp:

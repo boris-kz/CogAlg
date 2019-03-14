@@ -271,5 +271,5 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 from frame_2D_alg.DEBUG import draw_blobs
-draw_blobs('../debug/out', frame_of_blobs, isb=2)
+draw_blobs('../debug/out', frame_of_blobs, isb=3)
 # ************ PROGRAM BODY END ******************************************************************************************

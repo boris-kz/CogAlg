@@ -3,13 +3,13 @@ from collections import deque, namedtuple
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')
 
 # ************ FUNCTIONS ************************************************************************************************
-# -branch_master_blob()
+# -master_blob()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
 # ***********************************************************************************************************************
-def branch_master_blob(blob, comp_func, new_params=True):    # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
+def master_blob(blob, branch_comp, new_params=True):    # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
 
     height, width = blob.map.shape
 
@@ -24,8 +24,8 @@ def branch_master_blob(blob, comp_func, new_params=True):    # redefine blob and
     if height < 3 or width < 3:
         return False
 
-    rng = comp_func(blob)
-    rng_inc = bool(rng - 1)
+    rng = branch_comp(blob) # blob adds a branch-specific dert_
+    rng_inc = bool(rng - 1) # indicate if comp range is increasing
 
     if blob.new_dert__[0].mask.all():
         return False
@@ -33,13 +33,13 @@ def branch_master_blob(blob, comp_func, new_params=True):    # redefine blob and
     seg_ = deque()
 
     for y in range(rng, height - rng):
-        P_ = form_P_(y, blob)           # horizontal clustering
-        P_ = scan_P_(P_, seg_, blob, rng_inc)    # vertical clustering
-        seg_ = form_seg_(P_, blob, rng_inc)      # vertical clustering
-    while seg_: form_blob(seg_.popleft(), blob, rng_inc) # terminate last running segments
+        P_ = form_P_(y, blob)                   # horizontal clustering
+        P_ = scan_P_(P_, seg_, blob, rng_inc)   # vertical clustering
+        seg_ = form_seg_(P_, blob, rng_inc)     # vertical clustering
+    while seg_: form_blob(seg_.popleft(), blob, rng_inc)    # terminate last running segments
 
-    return True # return True if successfully form new sub-blobs
-    # ---------- branch_master_blob() end -------------------------------------------------------------------------------
+    return True # if sub_blob_ != 0
+    # ---------- master_blob() end --------------------------------------------------------------------------------------
 
 def form_P_(y, master_blob):    # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
