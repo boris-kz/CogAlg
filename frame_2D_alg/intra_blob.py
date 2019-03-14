@@ -1,14 +1,14 @@
 import numpy as np
 import numpy.ma as ma
-from collections import deque
-from frame_2D_alg import generic
-from frame_2D_alg.angle_blobs import blob_to_ablobs
-from frame_2D_alg.comp_inc_deriv import inc_deriv
-from frame_2D_alg.comp_inc_range import inc_range
+from comp_angle import comp_angle
+from comp_inc_deriv import inc_deriv
+from comp_inc_range import inc_range
 # from comp_P_ import comp_P_
 
-from frame_2D_alg.filters import get_filters
+from filters import get_filters
 get_filters(globals()) # imports all filters at once
+
+from generic_branch import master_blob
 '''
     - this function is under revision
     - intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob
@@ -20,21 +20,21 @@ get_filters(globals()) # imports all filters at once
     - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
 '''
 
-def intra_blob_root(frame):  # move to frame_blobs?
+def intra_blob_root(frame):  # simplified initial branch + eval_layer
 
     for blob in frame.blob_:
         if blob.sign and blob.G > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: area of noisy or directional gradient
-            hypot_g(blob)  # g is more precisely estimated as hypot(dx, dy), replace blob and add sub_blob_
+            master_blob(blob, hypot_g, new_params=False)  # no new params, this branch only redefines g as hypot(dx, dy)
 
-            if blob.G > ave_blob * 2:  # fixed costs of blob_to_ablobs
-                # blob params += A
+            if blob.G > ave_blob * 2:  # > fixed costs of comp_angle
                 rdn = 1
                 val_ = []
                 for sub_blob in blob.sub_blob_:
-                    if sub_blob.sign and sub_blob.G > ave_blob * 2:  # variable and fixed costs
+                    if sub_blob.sign and sub_blob.G > ave_blob * 2:  # > variable and fixed costs
 
-                        blob = blob_to_ablobs(blob)  # a must for deeper eval per ablob core param: p, a rng, g, ga der:
+                        master_blob(blob, comp_angle)
                         L = blob.L; G = blob.G; Ga = blob.Ga; Gga = blob.Gga
+                        # deeper eval per ablob core param: p | a rng or g | ga der:
 
                         val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
                         val_range = G - val_deriv    # non-directional G: likely d reversal, distant-pixels match
@@ -44,28 +44,25 @@ def intra_blob_root(frame):  # move to frame_blobs?
                         val_ += [(val_deriv, 0, blob), (val_range, 1, blob), (val_der_a, 2, blob), (val_rng_a, 3, blob)]
                 if val_:
                     eval_layer(val_, rdn)
-    # for debug:
-    # if blob.sign:
-    #    blob_to_ablobs(blob)
-    #    inc_range(blob)
-    #    inc_deriv(blob)
 
     return frame  # frame of 2D patterns is output to level 2
 
 
 def branch(blob, typ):  # compute branch per blob, evaluate for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
     vals = []
-    # extend blob syntax, typ also selects operand for a branch: p | a or g | ga, in the same dert:
 
-    if   typ == 0: blob = inc_range(blob, typ)  # recursive comp over p_ of incremental distance
-    elif typ == 1: blob = inc_deriv(blob, typ)  # recursive comp over g_ of incremental derivation
-    elif typ == 2: blob = inc_range(blob, typ)  # recursive comp over a_ of incremental distance
-    else:          blob = inc_deriv(blob, typ)  # recursive comp over ga_ of incremental derivation
+    if   typ == 0: master_blob(blob, inc_range, 0)  # recursive comp over p_ of incremental distance
+    elif typ == 1: master_blob(blob, inc_deriv, 0)  # recursive comp over g_ of incremental derivation
+    elif typ == 2: master_blob(blob, inc_range, 1)  # recursive comp over a_ of incremental distance
+    else:          master_blob(blob, inc_deriv, 1)  # recursive comp over ga_ of incremental derivation
+
+    # added last 0 | 1 to select operand for a branch: p | a or g | ga, in the same dert
 
     if blob.G > ave_blob * 2:
-        # blob params += A
-        blob = blob_to_ablobs(blob)  #  a must for deeper eval per ablob core param: p, a rng, g, ga der:
+        master_blob(blob, comp_angle)
         L = blob.L; G = blob.G; Ga = blob.Ga; Gga = blob.Gga
+
+        # deeper eval per ablob core param: p | a rng or g | ga der:
 
         val_deriv = ((G + ave*L) / ave*L) * -Ga    # relative G * -Ga: angle match, likely edge
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
@@ -90,7 +87,8 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             rdn += 1 * (olp / blob.L())  # redundancy to previous + stronger overlapping blobs, * branch cost ratio?
 
         if val > ave * blob.L * rdn:  # extend master blob syntax: += branch syntax
-            for sub_blob in blob.sub_blob_:
+            for sub_blob in blob.sub_blob_:  # sub_blobs are angle blobs
+
                 sub_vals = branch(sub_blob, typ)  # branch-specific recursion step
                 if sub_vals:  # not empty []
                     sub_val_ += sub_vals
@@ -99,7 +97,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         else:
             break
 
-    if sub_val_:
+    if sub_val_:  # not empty []
         rdn += 1  # ablob redundancy to default gblob
         eval_layer(sub_val_, rdn)  # evaluation of each sub_val for recursion
 
@@ -117,24 +115,16 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
     # ---------- eval_layer() end ---------------------------------------------------------------------------------------
 
 def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
-    global height, width
-    height, width = blob.map.shape
 
-    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)
-    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)
-    # redefine g = hypot(dx, dy):
+    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, num_params)
+    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)  # initialize dert__ with mask for selective comp
 
-    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2  # incr cost of angle calc
-    blob.sub_blob_.append([])
-    seg_ = deque()
+    # redefine g = hypot(dx, dy), with incr filter = cost of angle calc
+    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp * 2
 
-    for y in range(1, height - 1):
-        P_ = generic.form_P_(y, blob)  # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, blob)  # vertical clustering
-        seg_ = generic.form_seg_(P_, blob)
-    while seg_: generic.form_blob(seg_.popleft(), blob)
+    return 1  # comp rng
 
-    # ---------- hypot_g() end -----------------------------------------------------------------------------------
+# ---------- hypot_g() end -----------------------------------------------------------------------------------
 
 def overlap(blob, box, map):    # returns number of overlapping pixels between blob.map and map
     y0, yn, x0, xn = blob.box

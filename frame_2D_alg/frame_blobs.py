@@ -2,8 +2,8 @@ import cv2
 from time import time
 from collections import deque, namedtuple
 import numpy as np
-from frame_2D_alg.filters import get_filters
-get_filters(globals()) # imports all filters at once
+from filters import get_filters
+get_filters(globals())  # imports all filters at once
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -42,7 +42,7 @@ get_filters(globals()) # imports all filters at once
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], []]  # params, blob_
-    comp_pixel(frame, image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    comp_pixel(frame, image)   # vertically and horizontally bilateral comparison of adjacent pixels
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
@@ -81,11 +81,11 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
     x = 1  # first and last columns are discarded
 
     while x < x_stop:
-        s = dert_[x][-1] > 0  # s = (g > 0)
+        s = dert_[x][-1] > 0  # s = g > 0
         params = [0, 0, 0, 0, 0, 0, 0]  # L, Y, X, I, Dy, Dx, G
         P = [s, params, []]
         while x < x_stop and s == P[0]:
-            i, dy, dx, g = dert_[x, :]  # accumulate P' params:
+            i, dy, dx, g = dert_[x, :]  # accumulate P params:
             params[0] += 1  # L
             params[1] += y  # Y
             params[2] += x  # X
@@ -95,7 +95,7 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
             params[6] += g  # G
             P[2].append((y, x, i, dy, dx, g))
             x += 1
-            s = dert_[x][-1] > 0  # s = (g > 0)
+            s = dert_[x][-1] > 0  # s = g > 0
 
         if params[0]:  # if L > 0
             P_.append(P)  # P is packed into P_
@@ -257,13 +257,13 @@ start_time = time()
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 
-from frame_2D_alg.intra_blob import intra_blob_root
+from intra_blob import intra_blob_root
 frame_of_blobs = intra_blob_root( frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
 
 end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-from frame_2D_alg.DEBUG import draw_blob
+from DEBUG import draw_blob
 draw_blob('../debug/frame', frame_of_blobs, -1)
 # ************ PROGRAM BODY END ******************************************************************************************

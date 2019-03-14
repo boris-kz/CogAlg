@@ -1,45 +1,23 @@
 import numpy as np
-from collections import deque
-from frame_2D_alg import generic
-from frame_2D_alg.filters import get_filters
-get_filters(globals()) # imports all filters at once
+import numpy.ma as ma
 
-# ***************************************************** INC_DERIV FUNCTIONS *********************************************
-# Functions:
-# -inc_deriv()
-# -comp_g()
-# ***********************************************************************************************************************
+from filters import get_filters
+get_filters(globals())  # imports all filters at once
 
-def inc_deriv(blob):    # same functionality as image_to_blobs() in frame_blobs.py
+def inc_deriv(blob):  # compare g within sub blob, a component of intra_blob
 
-    global height, width
-    height, width = blob.map.shape
-    sub_blob = [0, 0, 0, 0, []]
-    comp_g(sub_blob, blob.dert__[:, :, -1], blob.map)
-    seg_ = deque()
+    dert__ = ma.empty(shape=blob.dert__.shape, dtype=int)   # initialize dert__
+    g__ = ma.array(blob.dert__[:, :, 3], mask=~blob.map)    # apply mask = ~map
 
-    for y in range(1, height - 1):
-        P_ = generic.form_P_(y, sub_blob)  # horizontal clustering
-        P_ = generic.scan_P_(P_, seg_, sub_blob)
-        seg_ = generic.form_seg_(P_, sub_blob)
+    dy__ = g__[2:, 1:-1] - g__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
+    dx__ = g__[1:-1, 2:] - g__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
+    gg__ = np.hypot(dy__, dx__) - ave      # deviation of gradient
 
-    while seg_:  generic.form_blob(seg_.popleft(), sub_blob)
-    blob.sub_blob_.append(sub_blob)
-    return sub_blob
-
-    # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
-
-def comp_g(sub_blob, g__, map):  # compare g within sub blob
-    dert__ = ma.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
-
-    dy__ = g__[2:, 1:-1] - g__[:-2, 1:-1]   # vertical comp between rows -> dy, (1:-1): first and last column are discarded
-    dx__ = g__[1:-1, 2:] - g__[1:-1, :-2]   # lateral comp between columns -> dx, (1:-1): first and last row are discarded
-    gg__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
-
+    # pack all derts into dert__
     dert__[:, :, 0] = g__
     dert__[1:-1, 1:-1, 1] = dy__  # first row, last row, first column and last-column are discarded
     dert__[1:-1, 1:-1, 2] = dx__
     dert__[1:-1, 1:-1, 3] = gg__
 
-    sub_blob.append(dert__)
-    # ---------- comp_g() end -------------------------------------------------------------------------------------------
+    blob.new_dert__[0] = dert__  # pack dert__ into blob
+    return 1  # comp rng
