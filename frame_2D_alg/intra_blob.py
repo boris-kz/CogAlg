@@ -26,20 +26,17 @@ from generic_branch import master_blob
 def intra_blob_root(frame):  # simplified initial branch + eval_layer
 
     for blob in frame.blob_:
-        if blob.sign and blob.G > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: area of noisy or directional gradient
+        if blob.sign and blob.params[-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: area of noisy or directional gradient
             master_blob(blob, hypot_g, new_params=False)  # no new params, this branch only redefines g as hypot(dx, dy)
 
-            if blob.G > ave_blob * 2:  # > fixed costs of comp_angle
+            if blob.params[-1] > ave_blob * 2:  # G > fixed costs of comp_angle
                 rdn = 1
                 val_ = []
                 for sub_blob in blob.sub_blob_:
-                    if sub_blob.sign and sub_blob.G > ave_blob * 2:  # > variable and fixed costs
+                    if sub_blob.sign and sub_blob.params[-1] > ave_blob * 2:  # > variable and fixed costs
 
-                        master_blob(blob, comp_angle)
-                        L = blob.L;
-                        G = blob.G;
-                        Ga = blob.Ga;
-                        Gga = blob.Gga
+                        master_blob(sub_blob, comp_angle)
+                        Ly, L, Y, X, I, Dx, Dy, G, A, Dax, Day, Ga = sub_blob.params
                         # deeper eval per ablob core param: p | a rng or g | ga der:
 
                         val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
@@ -47,7 +44,7 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
                         val_der_a = ((Ga + ave * L) / ave * L) * -Gga  # comp ga
                         val_rng_a = Ga - val_der_a  # comp rng
 
-                        val_ += [(val_deriv, 0, blob), (val_range, 1, blob), (val_der_a, 2, blob), (val_rng_a, 3, blob)]
+                        val_ += [(val_deriv, 0, sub_blob), (val_range, 1, sub_blob), (val_der_a, 2, sub_blob), (val_rng_a, 3, sub_blob)]
                 if val_:
                     eval_layer(val_, rdn)
 
@@ -68,12 +65,9 @@ def branch(blob, typ):  # compute branch per blob, evaluate for comp_angle, comp
 
     # added last 0 | 1 to select operand for a branch: p | a or g | ga, in the same dert
 
-    if blob.G > ave_blob * 2:
+    if blob.params[-1] > ave_blob * 2:  # if G > ave_blob * 2
         master_blob(blob, comp_angle)
-        L = blob.L;
-        G = blob.G;
-        Ga = blob.Ga;
-        Gga = blob.Gga
+        Ly, L, Y, X, I, Dx, Dy, G, A, Dax, Day, Ga = sub_blob.params
 
         # deeper eval per ablob core param: p | a rng or g | ga der:
 
@@ -86,7 +80,6 @@ def branch(blob, typ):  # compute branch per blob, evaluate for comp_angle, comp
         # estimated values per branch per blob
     return vals
 
-
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
     val_ = sorted(val_, key=lambda val: val[0])
@@ -97,9 +90,9 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         val, typ, blob = val_.pop()
         for box, map in map_:
             olp = overlap(blob, box, map)
-            rdn += 1 * (olp / blob.L())  # redundancy to previous + stronger overlapping blobs, * branch cost ratio?
+            rdn += 1 * (olp / blob.params[1])  # rdn += 1 * (olp / G): redundancy to previous + stronger overlapping blobs, * branch cost ratio?
 
-        if val > ave * blob.L * rdn:  # extend master blob syntax: += branch syntax
+        if val > ave * blob.params[1] * rdn:  # val > ave * G * rdn: extend master blob syntax: += branch syntax
             for sub_blob in blob.sub_blob_:  # sub_blobs are angle blobs
 
                 sub_vals = branch(sub_blob, typ)  # branch-specific recursion step
@@ -130,14 +123,13 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
 
 def hypot_g(blob):  # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
 
-    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, num_params)
+    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, number of params)
     blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)  # initialize dert__ with mask for selective comp
 
     # redefine g = hypot(dx, dy), with incr filter = cost of angle calc
     blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * blob.ncomp * 2
 
     return 1  # comp rng
-
 
 # ---------- hypot_g() end -----------------------------------------------------------------------------------
 
