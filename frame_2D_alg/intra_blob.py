@@ -1,8 +1,8 @@
 import numpy as np
 import numpy.ma as ma
 from comp_angle import comp_angle
-from comp_inc_deriv import inc_deriv
-from comp_inc_range import inc_range
+from comp_deriv import comp_deriv
+from comp_range import comp_range
 # from comp_P_ import comp_P_
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
@@ -22,7 +22,7 @@ from generic_branch import master_blob
 def intra_blob_root(frame):  # simplified initial branch + eval_layer
 
     for blob in frame.blob_:
-        if blob.sign and blob.params[-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: area of noisy or directional gradient
+        if blob.sign and blob.params[-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: noisy or directional gradient
             master_blob(blob, hypot_g, new_params=False)  # no new params, this branch only redefines g as hypot(dx, dy)
 
             if blob.params[-1] > ave_blob * 2:  # G > fixed costs of comp_angle
@@ -32,8 +32,11 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
                     if sub_blob.sign and sub_blob.params[-1] > ave_blob * 2:  # > variable and fixed costs of comp_angle
 
                         master_blob(sub_blob, comp_angle)
-                        Ly, L, Y, X, I, Dx, Dy, G, A, Dax, Day, Ga = sub_blob.params
-                        # next recursion vals:
+                        Ly, L, Y, X, Dert_tree = sub_blob.params
+                        I, Dx, Dy, G, dert_ = Dert_tree[len(Dert_tree) - 1]
+                        A, Dax, Day, Ga, adert_ = Dert_tree[len(Dert_tree)]
+                        
+                        # estimated values of next-layer recursion per sub_blob:
 
                         val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
                         val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
@@ -46,31 +49,37 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
     return frame  # frame of 2D patterns is output to level 2
 
 
-def branch(blob, typ):  # compute branch per blob, evaluate for comp_angle, comp_inc_range, comp_inc_deriv, comp_P_
+def branch(blob, typ):  # compute branch, evaluate next branches: comp_angle, comp_range, comp_deriv, comp_angle_deriv
     vals = []
 
-    if typ == 0:   master_blob(blob, inc_deriv, 1)  # comp over ga_: last 0|1 selects a_dert vs. i_dert
-    elif typ == 1: master_blob(blob, inc_deriv, 0)  # recursive comp over g_ of incremental derivation
-    else:          master_blob(blob, inc_range, 0)  # recursive comp over i_ of incremental distance
+    if typ == 0:   master_blob(blob, comp_deriv, 1)  # comp over ga_: last 0|1 selects a_dert vs. i_dert
+    elif typ == 1: master_blob(blob, comp_deriv, 0)  # recursive comp over g_ with incremental derivation
+    else:          master_blob(blob, comp_range, 0)  # recursive comp over i_ with incremental distance
 
-    if blob.params[-1] > ave_blob * 2:  # if G > ave_blob * 2
+    # arg blob contains Dert @ last index, and return is master_blob that contains higher Dert @ last index + 1:
+
+    if blob.params[-1] > ave_blob * 2:  # G = blob.params[-1]
         master_blob(blob, comp_angle)
-        Ly, L, Y, X, I, Dx, Dy, G, A, Dax, Day, Ga = blob.params
-        # next recursion vals:
+        Ly, L, Y, X, Dert_tree = blob.params
+        I, Dx, Dy, G, dert_ = Dert_tree[ len( Dert_tree) - 1]
+        A, Dax, Day, Ga, adert_ = Dert_tree[ len( Dert_tree)]
+
+        # Dert_tree node = root_Dert, ?ang_Dert? ?ang_der_Dert, ?der_Dert, ?rng_Dert
+        # estimated values of next-layer branches per blob:
 
         val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
         val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
-        vals = [(val_angle, 0, blob), (val_deriv, 1, blob), (val_range, 2, blob)]
-        # estimated values per branch per blob
+        vals = [(val_angle, 0, blob), (val_deriv, 1, blob), (val_range, 2, blob)]  # branch values per blob
     return vals
+
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
     val_ = sorted(val_, key=lambda val: val[0])
     sub_val_ = []  # estimated branch values of deeper layer of recursion tree per blob
-    map_ = []  # blob boxes + maps of stronger branches in val_, appended for next val evaluation
+    map_ = []  # blob boxes + maps of stronger branches in val_, appended for next (lower) val evaluation
 
     while val_:
         val, typ, blob = val_.pop()
@@ -78,7 +87,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             olp = overlap(blob, box, map)
             rdn += 1 * (olp / blob.params[1])  # rdn += 1 * (olp / G): redundancy to previous + stronger overlapping blobs, * branch cost ratio?
 
-        if val > ave * blob.params[1] * rdn:  # val > ave * G * rdn: extend master blob syntax: += branch syntax
+        if val > ave * blob.params[1] * rdn + ave_blob:  # val > ave * G * rdn + fix_cost: extend master blob syntax: += branch syntax
             for sub_blob in blob.sub_blob_:  # sub_blobs are angle blobs
 
                 sub_vals = branch(sub_blob, typ)  # branch-specific recursion step
@@ -90,7 +99,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             break
 
     if sub_val_:  # not empty []
-        rdn += 1  # ablob redundancy to default gblob
+        rdn += 1  # ablob redundancy to default gblob, or rdn += 2 for additional cost of angle calc?
         eval_layer(sub_val_, rdn)  # evaluation of each sub_val for recursion
 
     ''' 
@@ -130,6 +139,7 @@ def overlap(blob, box, map):  # returns number of overlapping pixels between blo
     olp_xn = min(xn, _xn)
     if olp_xn - olp_x0 <= 0:  # no overlapping x coordinate span
         return 0
+    
     # master_blob coordinates olp_y0, olp_yn, olp_x0, olp_xn are converted to local coordinates before slicing:
 
     map1 = box.map[(olp_y0 - y0):(olp_yn - y0), (olp_x0 - x0):(olp_xn - x0)]
