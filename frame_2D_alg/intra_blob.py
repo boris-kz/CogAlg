@@ -21,7 +21,7 @@ from generic_branch import master_blob
 
 def intra_blob_root(frame):  # simplified initial branch + eval_layer
 
-    for blob in frame.blob_:
+    for blob in frame[1]:
         if blob.sign and blob.params[-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: noisy or directional gradient
             master_blob(blob, hypot_g, new_params=False)  # no new params, this branch only redefines g as hypot(dx, dy)
 
@@ -146,6 +146,6 @@ def overlap(blob, box, map):  # returns number of overlapping pixels between blo
     map2 = map[(olp_y0 - _y0):(olp_yn - _y0), (olp_x0 - _x0):(olp_xn - _x0)]
 
     olp = np.logical_and(map1, map2).sum()  # compute number of overlapping pixels
-    return olp
 
+    return olp
     # ---------- overlap() end ------------------------------------------------------------------------------------------

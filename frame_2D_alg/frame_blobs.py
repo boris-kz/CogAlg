@@ -263,8 +263,8 @@ start_time = time()
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 
-from frame_2D_alg.intra_blob import intra_blob
-frame_of_blobs = intra_blob(frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
+from frame_2D_alg.intra_blob import intra_blob_root
+frame_of_blobs = intra_blob_root(frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
 
 end_time = time() - start_time
 print(end_time)

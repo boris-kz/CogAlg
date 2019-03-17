@@ -4,16 +4,14 @@ import numpy.ma as ma
 from frame_2D_alg.filters import get_filters
 get_filters(globals())          # imports all filters at once
 # --------------------------------------------------------------------------------
-'''
-    angle_blob is a component of intra_blob
-'''
+
 # ***************************************************** ANGLE BLOBS FUNCTIONS *******************************************
 # Functions:
-# -angle_blobs()
+# -comp_angle()
 # -correct_da()
 # ***********************************************************************************************************************
 
-def angle_blobs(blob):  # compute and compare angles
+def comp_angle(blob):  # compute and compare angles
 
     # Compute angles:
 
@@ -39,7 +37,7 @@ def angle_blobs(blob):  # compute and compare angles
     blob.new_dert__[0] = dert__  # pack dert__ into blob
 
     return 1    # rng
-    # ---------- angle_blobs() end --------------------------------------------------------------------------------------
+    # ---------- comp_angle() end ---------------------------------------------------------------------------------------
 
 def correct_da(da):
     " make da -128->127 instead of -256->255 "
