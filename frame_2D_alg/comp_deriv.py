@@ -4,7 +4,7 @@ import numpy.ma as ma
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
 
-def inc_deriv(blob):  # compare g within sub blob, a component of intra_blob
+def comp_deriv(blob):  # compare g within sub blob, a component of intra_blob
 
     dert__ = ma.empty(shape=blob.dert__.shape, dtype=int)   # initialize dert__
     g__ = ma.array(blob.dert__[:, :, 3], mask=~blob.map)    # apply mask = ~map

@@ -10,7 +10,7 @@ nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp
 # -form_blob()
 # ***********************************************************************************************************************
 
-def master_blob(blob, branch_comp, new_params=True):  # redefine blob as branch-specific master blob and sub_blob_
+def master_blob(blob, branch_comp, new_params=True):  # redefine blob as branch-specific master blob: local equivalent of frame
 
     height, width = blob.map.shape
 
@@ -25,8 +25,8 @@ def master_blob(blob, branch_comp, new_params=True):  # redefine blob as branch-
     if height < 3 or width < 3:
         return False
 
-    rng = branch_comp(blob)  # blob adds a branch-specific dert_
-    rng_inc = bool(rng - 1)
+    rng = branch_comp(blob)  # also adds a branch-specific dert_ to blob
+    rng_inc = bool(rng - 1)  # flag for comp range increase
 
     if blob.new_dert__[0].mask.all():
         return False
@@ -38,7 +38,7 @@ def master_blob(blob, branch_comp, new_params=True):  # redefine blob as branch-
         seg_ = form_seg_(P_, blob, rng_inc)      # vertical clustering
     while seg_: form_blob(seg_.popleft(), blob, rng_inc) # terminate last running segments
 
-    return True  # if sub_blob_ != 0
+    return True  # sub_blob_ != 0
 
     # ---------- branch_master_blob() end -------------------------------------------------------------------------------
 

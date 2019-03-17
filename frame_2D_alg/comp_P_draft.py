@@ -66,7 +66,33 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
 
     (s, x0, L, I, G, Dx, Dy, e_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
     (_s, _x0, _L, _I, _G, _Dx, _Dy, _e_), _xd = _P  # + params from higher branches, S if min n_params?
-    Ave = ave * L
+    '''
+    primary Dx comp: 1D variation, with stable direction in oriented blob,
+    I comp-> refined Dy: same accuracy, more selective?
+    G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
+    
+    if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
+    g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
+    a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? '''
+
+    P_ = deque()  # P buffer
+    dert_ = []  # row of pixels + derivatives
+    nL = 0; nI = 0; nDy = 0; nDx = 0; nG = 0
+
+    while e_:  # P redefine by dx | ort_dx: rescan before comp, no need for initial P?
+        i, dx, dy, g = e_[0].pop
+        sd = dx > 0  # -> dP, ~ aP  # 1D only, ignore dy?
+        vd = abs(dx) - ave  # deviation | value
+        sv = vd > 0  # -> vP, ~ gP
+        term = 1
+        if nL:
+            if sd == _sd:  # accumulate P params:
+                nL += 1; nI += _i; nDx += _dx; nDy += _dy; nG += _g
+                dert_.append((_i, _dy, _dx, _g))
+            else:
+                P_.append(P); term = 0
+        _i = i; _dx = dx; _dy = dy; _g = g; _sd = sd; _sv = sv
+    if term == 1: P_.append(P)
 
     xm = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: xm -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
@@ -80,22 +106,13 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
         L /= hyp  # est. orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
-        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval?  not worth it?  no alt comp: secondary to axis?
+        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
     dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - Ave    # I is not dderived, vI is signed
+    dI = I - _I; vI = dI - ave * L    # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
-    '''
-    or P redefine by dx, ignore dy: 1D-specific and more selective,  for any comp_P?
-    primary comp Dx: variation crit, direction is stable in oriented blob, 
-    Dy redefine by refined I comp: = accuracy but more selective? 
-        
-    G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
-    if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
-       g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
-       a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
-    '''
+
 
     Pd = xdd + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation
     Pm = xm +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?

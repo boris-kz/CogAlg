@@ -5,7 +5,7 @@ from math import hypot
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
 
-def inc_range(blob):   # compare rng-distant pixels within blob: a component of intra_blob
+def comp_range(blob):   # compare rng-distant pixels within blob: a component of intra_blob
 
     rng = blob.rng + 1
     p__ = ma.array(blob.dert__[:, :, 0], mask=~blob.map)  # apply mask = ~map
