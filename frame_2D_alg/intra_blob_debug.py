@@ -32,9 +32,9 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
                     if sub_blob.sign and sub_blob.params[-1] > ave_blob * 2:  # > variable and fixed costs of comp_angle
 
                         master_blob(sub_blob, comp_angle)
-                        Ly, L, Y, X, Dert_tree = sub_blob.params
-                        I, Dx, Dy, G, dert_ = Dert_tree[len(Dert_tree) - 1]
-                        A, Dax, Day, Ga, adert_ = Dert_tree[len(Dert_tree)]
+                        Ly, L, Y, X, Dert_ = blob.params  # Ly, L, Y, X are common for all Dert_ (a tree of lower branches)
+                        I, Dx, Dy, G, dert_ = Dert_[len(Dert_) - 1]  # +2nd parallel eval node per root Dert:
+                        A, Dax, Day, Ga, adert_ = Dert_[len(Dert_)]
 
                         # estimated values of next-layer recursion per sub_blob:
 
@@ -52,19 +52,22 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
 def branch(blob, typ):  # compute branch, evaluate next branches: comp_angle, comp_range, comp_deriv, comp_angle_deriv
     vals = []
 
-    if typ == 0:   master_blob(blob, comp_deriv, 1)  # comp over ga_: last 0|1 selects a_dert vs. i_dert
+    if typ == 0:   master_blob(blob, comp_deriv, 1)  # comp over ga_: 1 selects angle_Dert at len Dert_tree
     elif typ == 1: master_blob(blob, comp_deriv, 0)  # recursive comp over g_ with incremental derivation
     else:          master_blob(blob, comp_range, 0)  # recursive comp over i_ with incremental distance
 
-    # arg blob contains Dert @ last index, and return is master_blob that contains higher Dert @ last index + 1:
+    # arg blob contains Dert @ len(Dert_| Dert_-1)), and return is master_blob with higher Dert @ len(Dert_) + 1
+    # Dert_ is a tree with a node = root_Dert, ?ang_Dert? ?ang_der_Dert, ?der_Dert, ?rng_Dert,
+
+    # each layer of the tree has a counter of sub_blobs per type, incr from <= 4 types @ 1st layer:
+    # interlaced reference: type_( blob_( type_., to trace lineage between layers?
 
     if blob.params[-1] > ave_blob * 2:  # G = blob.params[-1]
         master_blob(blob, comp_angle)
-        Ly, L, Y, X, Dert_tree = blob.params
-        I, Dx, Dy, G, dert_ = Dert_tree[ len( Dert_tree) - 1]
-        A, Dax, Day, Ga, adert_ = Dert_tree[ len( Dert_tree)]
+        Ly, L, Y, X, Dert_ = blob.params  # Ly, L, Y, X are common for all Derts in Dert_ (a tree of lower branches)
+        I, Dx, Dy, G, dert_ = Dert_[ len(Dert_) - 1]  # +2nd parallel eval node per root Dert:
+        A, Dax, Day, Ga, adert_ = Dert_[ len(Dert_)]
 
-        # Dert_tree node = root_Dert, ?ang_Dert? ?ang_der_Dert, ?der_Dert, ?rng_Dert
         # estimated values of next-layer branches per blob:
 
         val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob

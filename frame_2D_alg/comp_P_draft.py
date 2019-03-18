@@ -61,38 +61,54 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
             _P = P; _ms = ms; _ds = ds
     return blob, CmPP_, mPP_, CdPP_, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
+'''
+primary Dx comp: 1D variation, with stable direction in oriented blob,
+I comp-> refined Dy: same accuracy, more selective?
+G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
+
+if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
+g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
+a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? 
+'''
+
+def form_P_(P_, P, _ders, s, _s):
+    L, I, Dy, Dx, G, dert_ = P
+    i, dx, dy, g = _ders
+    if s == _s:
+        L += 1; I += i; Dx += dx; Dy += dy; G += g  # accumulate P params
+        dert_.append((i, dy, dx, g))
+        term = 1
+    else:
+        P_.append((L, I, Dy, Dx, G, dert_))  # terminate P
+        P = 0, 0, 0, 0, 0, []
+        term = 0
+    return P_, P, term
 
 def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
     (s, x0, L, I, G, Dx, Dy, e_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
     (_s, _x0, _L, _I, _G, _Dx, _Dy, _e_), _xd = _P  # + params from higher branches, S if min n_params?
-    '''
-    primary Dx comp: 1D variation, with stable direction in oriented blob,
-    I comp-> refined Dy: same accuracy, more selective?
-    G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
-    
-    if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
-    g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
-    a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? '''
 
-    P_ = deque()  # P buffer
-    dert_ = []  # row of pixels + derivatives
-    nL = 0; nI = 0; nDy = 0; nDx = 0; nG = 0
+    if L > 1:  # or min_L: Ps redefined by dx | ort_dx: rescan before comp, no need for initial P?
+        dP_, vP_ = deque(), deque()
+        dP, vP = (0,0,0,0,0,[]), (0,0,0,0,0,[])  # L, I, Dy, Dx, G, dert_
+        ini = 0
+        for ders in e_:  # i, dx, dy, g; e_ is preserved?
+            dx = ders[1]
+            vd = abs(dx) - ave  # v for deviation | value
+            sd = dx > 0
+            sv = vd > 0
+            if ini:
+                dP_, dP, dterm = form_P_(dP_, dP, _ders, sd, _sd)  # direction dP ~ aP
+                vP_, vP, vterm = form_P_(vP_, vP, _ders, sv, _sv)  # magnitude vP ~ gP
+            _ders = ders; _sd = sd; _sv = sv
+            ini = 1
+        if dterm: dP_.append(dP)
+        if vterm: dP_.append(vP)
 
-    while e_:  # P redefine by dx | ort_dx: rescan before comp, no need for initial P?
-        i, dx, dy, g = e_[0].pop
-        sd = dx > 0  # -> dP, ~ aP  # 1D only, ignore dy?
-        vd = abs(dx) - ave  # deviation | value
-        sv = vd > 0  # -> vP, ~ gP
-        term = 1
-        if nL:
-            if sd == _sd:  # accumulate P params:
-                nL += 1; nI += _i; nDx += _dx; nDy += _dy; nG += _g
-                dert_.append((_i, _dy, _dx, _g))
-            else:
-                P_.append(P); term = 0
-        _i = i; _dx = dx; _dy = dy; _g = g; _sd = sd; _sv = sv
-    if term == 1: P_.append(P)
+        '''
+        scan_P_ -> comp_P: strictly 1D -> 2D?
+        '''
 
     xm = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: xm -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
@@ -103,7 +119,7 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
     if ort:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
         hyp = math.hypot(xd, 1)  # long axis increment = hyp / 1 (vertical distance):
-        L /= hyp  # est. orthogonal slice is reduced P,
+        L /= hyp  # est orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
         # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
