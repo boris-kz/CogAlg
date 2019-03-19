@@ -9,10 +9,10 @@ get_filters(globals()) # imports all filters at once
 
 # ***************************************************** INC_DERIV FUNCTIONS *********************************************
 # Functions:
-# -inc_deriv()
+# -comp_deriv()
 # ***********************************************************************************************************************
 
-def inc_deriv(blob):    # compare g within sub blob
+def comp_deriv(blob):    # compare g within sub blob
 
     dert__ = ma.empty(shape=blob.dert__.shape, dtype=int)         # initialize dert__
 
@@ -31,4 +31,4 @@ def inc_deriv(blob):    # compare g within sub blob
     blob.new_dert__[0] = dert__  # pack dert__ into blob
 
     return 1  # rng
-    # ---------- inc_deriv() end ----------------------------------------------------------------------------------------
+    # ---------- comp_deriv() end ---------------------------------------------------------------------------------------

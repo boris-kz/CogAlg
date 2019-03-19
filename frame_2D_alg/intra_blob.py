@@ -28,13 +28,13 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
             if blob.params[-1] > ave_blob * 2:  # G > fixed costs of comp_angle
                 rdn = 1
                 val_ = []
-                for sub_blob in blob.sub_blob_:
+                for sub_blob in blob.sub_blob_[0]:
                     if sub_blob.sign and sub_blob.params[-1] > ave_blob * 2:  # > variable and fixed costs of comp_angle
 
                         master_blob(sub_blob, comp_angle)
                         Ly, L, Y, X, Dert_tree = sub_blob.params
-                        I, Dx, Dy, G, dert_ = Dert_tree[len(Dert_tree) - 1]
-                        A, Dax, Day, Ga, adert_ = Dert_tree[len(Dert_tree)]
+                        I, Dy, Dx, G, dert_ = Dert_tree[-2]
+                        A, Day, Dax, Ga, adert_ = Dert_tree[-1]
                         
                         # estimated values of next-layer recursion per sub_blob:
 
@@ -61,8 +61,8 @@ def branch(blob, typ):  # compute branch, evaluate next branches: comp_angle, co
     if blob.params[-1] > ave_blob * 2:  # G = blob.params[-1]
         master_blob(blob, comp_angle)
         Ly, L, Y, X, Dert_tree = blob.params
-        I, Dx, Dy, G, dert_ = Dert_tree[ len( Dert_tree) - 1]
-        A, Dax, Day, Ga, adert_ = Dert_tree[ len( Dert_tree)]
+        I, Dx, Dy, G, dert_ = Dert_tree[-2]
+        A, Dax, Day, Ga, adert_ = Dert_tree[-1]
 
         # Dert_tree node = root_Dert, ?ang_Dert? ?ang_der_Dert, ?der_Dert, ?rng_Dert
         # estimated values of next-layer branches per blob:
@@ -73,7 +73,6 @@ def branch(blob, typ):  # compute branch, evaluate next branches: comp_angle, co
 
         vals = [(val_angle, 0, blob), (val_deriv, 1, blob), (val_range, 2, blob)]  # branch values per blob
     return vals
-
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 

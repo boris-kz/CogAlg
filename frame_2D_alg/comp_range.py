@@ -11,10 +11,10 @@ get_filters(globals())  # imports all filters at once
 '''
 # ***************************************************** INC_RANGE FUNCTIONS *********************************************
 # Functions:
-# -inc_range()
+# -comp_range()
 # ***********************************************************************************************************************
 
-def inc_range(blob):   # compare rng-distant pixels within blob
+def comp_range(blob):   # compare rng-distant pixels within blob
 
     rng = blob.rng + 1
     p__ = ma.array(blob.dert__[:, :, 0], mask=~blob.map)  # apply mask = ~map
@@ -74,4 +74,4 @@ def inc_range(blob):   # compare rng-distant pixels within blob
     blob.new_dert__[0] = dert__ # pack dert__ into blob
 
     return rng
-    # ---------- inc_range() end ----------------------------------------------------------------------------------------
+    # ---------- comp_range() end ---------------------------------------------------------------------------------------

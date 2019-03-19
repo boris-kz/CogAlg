@@ -270,6 +270,6 @@ end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-from frame_2D_alg.DEBUG import draw_blobs
-draw_blobs('../debug/out', frame_of_blobs, isb=3)
+# from frame_2D_alg.DEBUG import draw_blobs
+# draw_blobs('../debug/out', frame_of_blobs, isb=3)
 # ************ PROGRAM BODY END ******************************************************************************************
