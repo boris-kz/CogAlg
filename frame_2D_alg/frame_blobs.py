@@ -60,7 +60,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 
 def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
-    dert__ = ma.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
+    dert__ = ma.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
     dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
     dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
@@ -99,8 +99,6 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
             x += 1
             s = dert_[x][-1] > 0  # s = (g > 0)
 
-        if params[0]:  # if L > 0
-            P_.append(P)  # P is packed into P_
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
@@ -263,13 +261,13 @@ start_time = time()
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 
-from frame_2D_alg.intra_blob import intra_blob_root
-frame_of_blobs = intra_blob_root(frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
+# from frame_2D_alg.intra_blob import intra_blob_root
+# frame_of_blobs = intra_blob_root(frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
 
 end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
-# from frame_2D_alg.DEBUG import draw_blobs
-# draw_blobs('../debug/out', frame_of_blobs, isb=3)
+from frame_2D_alg.DEBUG import draw_blobs
+draw_blobs('../debug/out', frame_of_blobs, isb=-1)
 # ************ PROGRAM BODY END ******************************************************************************************

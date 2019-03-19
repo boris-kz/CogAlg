@@ -55,8 +55,8 @@ def form_P_(y, master_blob):    # cluster and sum horizontally consecutive pixel
         while x < x_stop and not P_map_[x]:
             x += 1
         if x < x_stop and P_map_[x]:
-            s = dert_[x][-1] > 0  # s = g > 0
-            P = [s, [0, 0, 0] + [0] * len(dert_[0]), []]
+            s = dert_[x][-1] > 0                            # s = g > 0
+            P = [s, [0, 0, 0] + [0] * len(dert_[0]), []]    # params = [L, Y, X and other derts]
             while x < x_stop and P_map_[x] and s == P[0]:
 
                 dert = dert_[x, :]
@@ -66,8 +66,6 @@ def form_P_(y, master_blob):    # cluster and sum horizontally consecutive pixel
                 x += 1
                 s = dert_[x][-1] > 0  # s = g > 0
 
-            if P[1][0]:         # if L > 0
-                P_.append(P)    # P is packed into P_
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
