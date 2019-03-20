@@ -44,7 +44,7 @@ Autonomous cognition must start with analog inputs, such as video or audio. All 
 
 Such raw inputs have modality-specific properties and comparison should be adjusted accordingly, by feedback or manually. For example, vision relies on reflected light: brightness or albedo don’t directly represent source of impact, though they do represent some resistance to a very "light" impact. Uniformity of albedo indicates some common property within object, so it should form patterns. But the degree of commonality doesn’t depend on intensity of albedo, so match should be defined indirectly, as below-average |difference| or |ratio| of albedo.
 
-*Many readers feel a gap between my theory and algorithm, but I don't see where. My definitions can be made fully explicit only in representations of the lowest complexity, but they will be built into recursive complexity increment, thus apply on all levels of search. Since our universe is a space-time continuum, search should expand in 4D cycles. We are currently working on the first cycle (level), which will be a kernel for recursion. Others note lack of higher math, but I can't use it because it's not selectively incremental.*
+*Many readers see a gap between my theory and algorithm, or a lack of the latter. It’s true that algorithm is far from complete, but we are well on our way in translating the above-explained principles into code. Final algorithm will be a meta-level of search: 1st level + recursive complexity increment to generate incrementally higher levels. Our universe is a space-time continuum, thus each level will be 3D or 4D cycle. Others note lack of higher math, but that’s because it's not selectively incremental.*
 
 
 

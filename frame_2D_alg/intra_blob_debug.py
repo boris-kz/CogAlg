@@ -25,16 +25,16 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
         if blob.sign and blob.params[-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: noisy or directional gradient
             master_blob(blob, hypot_g, new_params=False)  # no new params, this branch only redefines g as hypot(dx, dy)
 
-            if blob.params[-1] > ave_blob * 2:  # G > fixed costs of comp_angle
+            if blob.params[2][0][5] > ave_blob * 2:  # G > fixed costs of comp_angle
                 rdn = 1
                 val_ = []
                 for sub_blob in blob.sub_blob_:
-                    if sub_blob.sign and sub_blob.params[-1] > ave_blob * 2:  # > variable and fixed costs of comp_angle
+                    if sub_blob.sign and sub_blob.params[2][0][5] > ave_blob * 2:  # > variable and fixed costs of comp_angle
 
                         master_blob(sub_blob, comp_angle)
-                        Ly, L, Y, X, Dert_ = blob.params  # Ly, L, Y, X are common for all Dert_ (a tree of lower branches)
-                        I, Dx, Dy, G, dert_ = Dert_[len(Dert_) - 1]  # +2nd parallel eval node per root Dert:
-                        A, Dax, Day, Ga, adert_ = Dert_[len(Dert_)]
+                        Y, X, Dert_ = blob.params  # Y, X are common for all layers, but Ls are incrementally selective:
+                        Ly, L, I, Dx, Dy, G, dert_ = Dert_[-2]   # +2nd parallel eval node per root Dert:
+                        Lya, La, A, Dax, Day, Ga, adert_ = Dert_[-1]
 
                         # estimated values of next-layer recursion per sub_blob:
 
@@ -49,24 +49,29 @@ def intra_blob_root(frame):  # simplified initial branch + eval_layer
     return frame  # frame of 2D patterns is output to level 2
 
 
-def branch(blob, typ):  # compute branch, evaluate next branches: comp_angle, comp_range, comp_deriv, comp_angle_deriv
+def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_angle, comp_ga, comp_deriv, comp_range
     vals = []
 
     if typ == 0:   master_blob(blob, comp_deriv, 1)  # comp over ga_: 1 selects angle_Dert at len Dert_tree
     elif typ == 1: master_blob(blob, comp_deriv, 0)  # recursive comp over g_ with incremental derivation
     else:          master_blob(blob, comp_range, 0)  # recursive comp over i_ with incremental distance
 
-    # arg blob contains Dert @ len(Dert_| Dert_-1)), and return is master_blob with higher Dert @ len(Dert_) + 1
-    # Dert_ is a tree with a node = root_Dert, ?ang_Dert? ?ang_der_Dert, ?der_Dert, ?rng_Dert,
+    '''
+    blob is represented as Y, X Dert_tree: a sequence of horizontal slices across derivation tree 
+    each slice has two layers: higher branch types and sub_blobs per type, with the same structure as top blob
+    
+    branch type selection: root_blob? ang_blobs: +ang_blob? ang_der_blobs | der_blobs, -ang_blob? rng_blobs
+    deep selection is by stable | noisy angle, not per whole root blob?
+    
+    each layer is Dert_ array of sub_blob Dert_trees
+    both layers and their node trees are headed with summed rep: Dert = Ly, L, I, Dx, Dy, G, dert_ '''
 
-    # each layer of the tree has a counter of sub_blobs per type, incr from <= 4 types @ 1st layer:
-    # interlaced reference: type_( blob_( type_., to trace lineage between layers?
+    if blob.params[2][0][5] > ave_blob * 2:  # G = Dert[5]
 
-    if blob.params[-1] > ave_blob * 2:  # G = blob.params[-1]
         master_blob(blob, comp_angle)
-        Ly, L, Y, X, Dert_ = blob.params  # Ly, L, Y, X are common for all Derts in Dert_ (a tree of lower branches)
-        I, Dx, Dy, G, dert_ = Dert_[ len(Dert_) - 1]  # +2nd parallel eval node per root Dert:
-        A, Dax, Day, Ga, adert_ = Dert_[ len(Dert_)]
+        Y, X, Dert_ = blob.params  # Y, X are common for all layers, but Ls are incrementally selective:
+        Ly, L, I, Dx, Dy, G, dert_ = Dert_[-2]  # +2nd parallel eval node per root Dert:
+        Lya, La, A, Dax, Day, Ga, adert_ = Dert_[-1]
 
         # estimated values of next-layer branches per blob:
 
@@ -75,7 +80,8 @@ def branch(blob, typ):  # compute branch, evaluate next branches: comp_angle, co
         val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
         vals = [(val_angle, 0, blob), (val_deriv, 1, blob), (val_range, 2, blob)]  # branch values per blob
-    return vals
+
+    return vals  # blob is converted into master_blob with added Dert[-1]
 
 
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
@@ -107,10 +113,12 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
 
     ''' 
         comp_P_(val, 0, blob, rdn) -> (val_PP_, 4, blob), (val_aPP_, 5, blob),
-        val_PP_ = (L + I + G) * (L / Ly / Ly) * (Dy / Dx):
-        1st term: proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
-        2nd term: elongation: >ave Pm? ~ box elong: (x_max - x_min) / (y_max - y_min)?
-        3rd term: dimensional variation bias
+        val_PP_ = 
+        (L + I + G):   proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
+        * (L/Ly / Ly)  elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
+        * (Dy / Dx):   dimensional variation bias 
+        * Ave - Ga:    angle match
+        
         g and ga are dderived, blob selected for min_g
         val-= sub_blob and branch switch cost: added map?  only after g,a calc: no rough g comp?
     '''
