@@ -138,19 +138,17 @@ Again, main feature of my approach is incrementally deep hierarchical syntax (en
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent coordinates much more coarsely than the inputs. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. That's not the case here because my top-level patterns are contiguous.
 
-Core algorithm is 1D: time only. Our space-time is 4D, and average match is presumably equal over all dimensions. That means patterns defined in fewer dimensions will be only slices of actual input, fundamentally limited and biased by the angle of scanning / slicing. Hence, initial pixel comparison should also be over 4D at once, or at least over 3D for video and 2D for still images. This full-D-cycle level of search is a universe-specific extension of core algorithm.
+Core algorithm is 1D: time only. Our space-time is 4D, and average match is presumably equal over all dimensions. That means patterns defined in fewer dimensions will be only slices of actual input, fundamentally limited and biased by the angle of scanning / slicing. Hence, initial pixel comparison should also be over 4D at once, or at least over 3D for video and 2D for still images. This full-D-cycle level of search is a universe-specific extension of core algorithm. The dimensions should be discoverable by the core algorithm, but coding it in is much faster. 
 
+This repository currently has three versions of 1st D-cycle, analogous to connected-component analysis: 1D line algorithm, 2D frame algorithm, and 3D video algorithm.
+Subsequent cycles will compare full-D-terminated input patterns over increasing distance in each dimension, forming discontinuous patterns of incremental composition and range.
 “Dimension” here defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions. 
-
-Initial D cycle compares contiguous inputs, analogously to connected-component analysis.
-Subsequent cycles will compare full-D-terminated input patterns over increasing distance in each dimension, forming discontinuous patterns of incremental composition and range. Space-time dimensions can be coded as implementation shortcut, or discovered by core algorithm itself. 
 
 Final hierarchical algorithm will have two-level code: 
 - 1st level algorithm: contiguous cross-comparison over full-D cycle, plus bit-filter feedback 
 - recursive increment in complexity of comparison and feedback, generating higher-level algorithm to accommodate increasingly deep input patterns.
 
-This repository currently has three levels of code, designed for corresponding D-cycles: 1D line algorithm, 2D frame algorithm, and 3D video algorithm. 
-This code will be extended to add colors, audio, text. Initial testing could be on recognition of labeled images, but video or stereo video should be far better, more predictive representations of our 4D world.
+Initial testing could be on recognition of labeled images, but video or stereo video should be much better. We will then add colors, maybe audio and text. 
 
 For more detailed account of current development see [WIKI](https://github.com/boris-kz/CogAlg/wiki).
 
