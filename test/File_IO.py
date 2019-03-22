@@ -15,4 +15,4 @@ def Read_Image(path):
     for y, p_ in enumerate(image):          # iterate through lines
         output_ += [(y, x, p) for x, p in enumerate(p_)]
 
-    return ouput_
+    return output_

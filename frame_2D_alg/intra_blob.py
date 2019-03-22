@@ -32,7 +32,7 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
                     if sub_blob.sign and sub_blob.params[0][5] > ave_blob * 2:  # > variable and fixed costs of comp_angle
 
                         master_blob(sub_blob, comp_angle)
-                        Ly, L, I, Dx, Dy, G, dert_Y, X, = blob.params[0]   # +2nd parallel eval node per root Dert:
+                        Ly, L, I, Dx, Dy, G, dert_Y, X = blob.params[0]   # +2nd parallel eval node per root Dert:
                         Lya, La, A, Dxa, Dya, Ga, adert_ = blob.params[1]
 
                         # estimated values of next-layer recursion per sub_blob:
