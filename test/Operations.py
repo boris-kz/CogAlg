@@ -40,16 +40,23 @@ def Compare(input_, offset, comparand=2, axes=(0, 1)):
 
         coords = [input_[i][axis] + offset[iaxis] for iaxis, axis in enumerate(axes)]   # coordinates of second comparand
 
-        t = False                       # signal variable
-        for k in range(1, len(axes)):   # iterate through coordinates
-            sub_axes = axes[:k]
+        t = False                               # signal variable, to check matching of higher order axes' coordinates
+        for iaxis, axis in enumerate(axes):     # iterate through the axes
+            sub_axes = axes[:iaxis]             # list of higher order axes
 
-            while j < len(input_) and not sum([input_[j][axis] >= coords[iaxis] for iaxis, axis in enumerate(sub_axes)]):   # increase j by 1 if no input_[j]'s coordinates is >= corrensponding included coordinates
+            while j < len(input_):
+                # increase j by 1 if current axis coordinates < target coordinate and all previous coordinates are equal to target coordinates:
+                t = not sum([input_[j][saxis] != coords[isaxis] for isaxis, saxis in enumerate(sub_axes)])  # check matching of higher order axes' coordinates
+
+                if not (t and input_[j][axis] < coords[iaxis]):     # also look for matching of current axis coordinate
+                    break
+
                 j += 1
 
-            t = j < len(input_) and not sum([input_[j][axis] != coords[iaxis] for iaxis, axis in enumerate(sub_axes)])  # check if input_[j] are mathced with included coordinates
+            if j < len(input_):
+                t = t and input_[j][axis] == coords[iaxis] and j < len(input_)
 
-            if not t:
+            if not t:       # if there's a coordinate unmatch
                 break
 
         if j < len(input_) and t:  # compare input_[i] and input_[j] if input_[j] is in the target coordinate
