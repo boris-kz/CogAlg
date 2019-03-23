@@ -15,8 +15,9 @@ def master_blob(blob, branch_comp, add_dert=True):  # redefine blob as branch-sp
     height, width = blob.map.shape
 
     if add_dert:
-        blob.Derts.append(0,0,0,0,0,0)  # Ly, L, I, Dy, Dx, G
-        # also append (i,dy,dx,g) to each derts in derts_
+        blob.Derts.append(0, 0, 0, 0, 0, 0)  # Ly, L, I, Dy, Dx, G
+        for i, derts in enumerate (blob.derts_):
+            blob.derts_[i] = derts.append(0, 0, 0, 0)  # i, dy, dx, g
 
     # blob.sub_blobs[1].append([])  # append sub_blob_ # no need, only one sub_blob_ per blob
 
@@ -205,4 +206,23 @@ def form_blob(term_seg, master_blob, rng_inc = False): # terminated segment is m
                                                  rng=(master_blob.rng + 1) if rng_inc else 1,  # increase or reset rng
                                                  ncomp=(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1,
                                                  sub_blob_=[]))
+        '''
+        replace with:
+        
+        master_blob.sub_blobs[0][:] += Derts[:]  # accumulate each Derts param
+        
+        master_blob.sub_blobs[1][-1].append(nt_blob(
+                                typ=typ,
+                                sign=s,
+                                Y=Y,
+                                X=X,
+                                Derts = [(Ly, L, I, Dy, Dx, G)],
+                                derts_ = [dert__],  # extend all elements
+                                sub_blobs = [],   # replace derts_, replaced by sub_layers
+                                sub_layers = [],  # type ignored if == 1
+                                box=(y0, yn, x0, xn),
+                                map=map,
+                                add_dert=None,
+                                rng=1, ncomp=1
+                                ))'''
     # ---------- form_blob() end -------------------------------------------------------------------------------------

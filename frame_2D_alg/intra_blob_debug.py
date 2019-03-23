@@ -9,37 +9,39 @@ get_filters(globals())  # imports all filters at once
 from generic_branch import master_blob
 
 '''
-    this function is under revision
-    intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob,
-    combined with frame_blobs(), it forms a 2D version of 1st-level algorithm
-      
-    inter_sub_blob() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
-    inter_level() will compare between blob levels, where lower composition level is integrated by inter_subb
-    match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
-    inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
+    intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
+    frame_blobs + intra_blob forms a 2D version of 1st-level algorithm.
     
-    blob = 
-        typ,  # blob types: g_angle = 0, ga_angle = 1, gg = 2, range_g = 3;  typ = 0 is also default, for primary blobs  
+    recursive intra_blob' eval_layer' branch() calls add new dert to derts, Dert to Derts, sub_blobs ) sub_layers to blob,
+    where Dert params are summed params of all elements in its structure:
+    
+    blob =  
+        typ,  # typ 0: angle(g) blob, typ 1: angle(ga) blob, typ 2: g(g) blob, typ 3: g(range) blob  # primary blobs are also 0  
+              # eval: ga_sign?( Ga? typ 1 = comp_deriv(a)) : G * -Ga? typ 2 = comp_deriv(i) : G - (G * -Ga)? typ 3 = comp_range(i)
         sign, Y, X,     
         Derts = 
-            [ Dert = Ly, L, I, Dx, Dy, G ],  # +1 Dert per layer above root blob
+            [ Dert = Ly, L, I, Dx, Dy, G ],  # +1 Dert per layer above root blob, for sub_blobs
         derts_ = 
             [ derts = 
-                [ dert = i, dx, dy, g ] ],  # +1 dert per layer above root blob
+                [ dert = i, dx, dy, g ] ],   # +1 dert per layer above root blob, for sub_blobs
         sub_blobs = 
-            Derts, sub_blob_,  # Derts and sub_blob structure is same as in root blob, optional 
-        layers =   
-            Derts, layer_,  # array of horizontal slices across derivation tree per root blob, optional
+            [ Derts, blob_],   # Derts and sub_blob structure is same as in root blob, optional 
+        sub_layers =   
+            [ Derts, layer_],  # array of lower slices across derivation tree per root blob, optional 
     
-    all Dert params are summed over params of all elements of a given structure 
-    typ def: ga_sign? ( Ga? der_blobs(a)) : G * -Ga? der_blobs(i) : G - (G * -Ga)? rng_blobs(i)
+    to be added:
+    
+    inter_sub_blob() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
+    inter_level() will compare between blob levels, where lower composition level is integrated by inter_sub_blob
+    match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
+    inter_blob() will be 2nd level 2D algorithm: a prototype for recursive meta-level
 '''
 
 def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
 
     for blob in frame.blob_:
         if blob.sign and blob.Derts[-1][-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: noisy or directional gradient
-            master_blob(blob, hypot_g, add_dert=False)  # this branch only redefines g as hypot(dx, dy)
+            master_blob(blob, hypot_g, add_dert=False)  # redefines g as hypot(dx, dy)
 
             if blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
                 val_ = []
@@ -70,11 +72,13 @@ def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_ang
     elif typ == 1: master_blob(blob, comp_deriv, 0)  # recursive comp over g_ with incremental derivation
     else:          master_blob(blob, comp_range, 0)  # recursive comp over i_ with incremental distance
 
+    # master_blob: blob.sub_blobs[0][:] += Dert[:]
+
     if blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
         master_blob(blob, comp_angle)  # converts blob into master ablob, no lateral xtype rdn: no eval_layer
 
         for ablob in blob.sub_blob_:  # eval / ablob: unique, def / ga sign, vs. rdn ablob_ || xblob_ if / gblob
-            Ly, L, I, Dx, Dy, G = ablob.Derts[-2]   # Derts include params of all higher-slices
+            Ly, L, I, Dx, Dy, G = ablob.Derts[-2]   # Derts include params of all higher layers
             Lya, La, A, Dxa, Dya, Ga = ablob.Derts[-1]
 
             val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
@@ -103,12 +107,15 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             for sub_blob in blob.sub_blob_:  # sub_blobs are angle blobs
 
                 sub_vals = branch(sub_blob, typ)  # branch-specific recursion step
-                if sub_vals:  # not empty []
+                if sub_vals:  # not empty
                     sub_val_ += sub_vals
 
             map_.append((blob.box, blob.map))
         else:
             break
+
+    blob.sub_layers[0][:] += blob.sub_blobs[0][:]  # probably wrong, for sub_layers Derts params += sub_blobs Derts params
+    blob.sub_layers[1].append(blob.sub_blobs)      # or all sub_blobs of sub_blobs is one layer?
 
     if sub_val_:  # not empty []
         rdn += 1  # ablob redundancy to default gblob, or rdn += 2 for additional cost of angle calc?

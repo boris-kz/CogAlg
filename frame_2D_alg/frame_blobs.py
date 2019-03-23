@@ -239,9 +239,9 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 Y=Y,
                                 X=X,
                                 Derts = [(Ly, L, I, Dy, Dx, G)],
-                                derts_ = dert__,  # extensible elements?
-                                sub_blobs = ([],[]),  # preserve or replace derts_?
-                                layers = ([],[]),  # xtype if > 0?
+                                derts_ = [dert__],  # extend all elements
+                                sub_blobs = [],   # replace derts_, replaced by sub_layers
+                                sub_layers = [],  # type ignored if == 1
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,
@@ -258,7 +258,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Y X Derts derts_ sub_blobs, layers map box add_dert rng ncomp')  # define named tuple
+nt_blob = namedtuple('blob', 'typ sign Y X Derts derts_ sub_blobs, sub_layers map box add_dert rng ncomp')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_root
