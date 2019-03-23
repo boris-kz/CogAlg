@@ -234,15 +234,19 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(sign=s,
-                                params=[Ly, L, Y, X, I, Dy, Dx, G],
-                                e_=e_,
+        frame[1].append(nt_blob(typ=0,
+                                sign=s,
+                                Y=Y,
+                                X=X,
+                                Derts = [(Ly, L, I, Dy, Dx, G)],
+                                derts_ = dert__,  # extensible elements?
+                                sub_blobs = ([],[]),  # preserve or replace derts_?
+                                layers = ([],[]),  # xtype if > 0?
                                 box=(y0, yn, x0, xn),
                                 map=map,
-                                dert__=dert__,
-                                new_dert__=None,
-                                rng=1, ncomp=1,
-                                sub_blob_=[]))
+                                add_dert=None,
+                                rng=1, ncomp=1
+                                ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 # ************ PROGRAM BODY *********************************************************************************************
@@ -254,11 +258,11 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
+nt_blob = namedtuple('blob', 'typ sign Y X Derts derts_ sub_blobs, layers map box add_dert rng ncomp')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_root
-frame_of_blobs = intra_blob_root( frame_of_blobs)  # evaluate for deeper recursive clustering inside each blob
+frame_of_blobs = intra_blob_root( frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
 end_time = time() - start_time
 print(end_time)

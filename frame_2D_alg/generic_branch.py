@@ -10,17 +10,15 @@ nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp
 # -form_blob()
 # ***********************************************************************************************************************
 
-def master_blob(blob, branch_comp, new_params=True):  # redefine blob as branch-specific master blob: local equivalent of frame
+def master_blob(blob, branch_comp, add_dert=True):  # redefine blob as branch-specific master blob: local equivalent of frame
 
     height, width = blob.map.shape
 
-    if new_params:
-        blob.params.append(0)  # Add I
-        blob.params.append(0)  # Add Dy
-        blob.params.append(0)  # Add Dx
-        blob.params.append(0)  # Add G
+    if add_dert:
+        blob.Derts.append(0,0,0,0,0,0)  # Ly, L, I, Dy, Dx, G
+        # also append (i,dy,dx,g) to each derts in derts_
 
-    blob.sub_blob_.append([])  # append sub_blob_
+    # blob.sub_blobs[1].append([])  # append sub_blob_ # no need, only one sub_blob_ per blob
 
     if height < 3 or width < 3:
         return False

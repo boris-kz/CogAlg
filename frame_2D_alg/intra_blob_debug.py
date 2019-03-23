@@ -9,41 +9,56 @@ get_filters(globals())  # imports all filters at once
 from generic_branch import master_blob
 
 '''
-    - this function is under revision
-    - intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob
-      combined with frame_blobs(), it forms a 2D version of first-level algorithm
+    this function is under revision
+    intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob,
+    combined with frame_blobs(), it forms a 2D version of 1st-level algorithm
       
-    - inter_subb() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
-    - inter_level() will compare between blob levels, where lower composition level is integrated by inter_subb
-      match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
-    - inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
+    inter_sub_blob() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
+    inter_level() will compare between blob levels, where lower composition level is integrated by inter_subb
+    match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
+    inter_blob() comparison will be second-level 2D algorithm, and a prototype for recursive meta-level algorithm
+    
+    blob = 
+        typ,  # blob types: g_angle = 0, ga_angle = 1, gg = 2, range_g = 3;  typ = 0 is also default, for primary blobs  
+        sign, Y, X,     
+        Derts = 
+            [ Dert = Ly, L, I, Dx, Dy, G ],  # +1 Dert per layer above root blob
+        derts_ = 
+            [ derts = 
+                [ dert = i, dx, dy, g ] ],  # +1 dert per layer above root blob
+        sub_blobs = 
+            Derts, sub_blob_,  # Derts and sub_blob structure is same as in root blob, optional 
+        layers =   
+            Derts, layer_,  # array of horizontal slices across derivation tree per root blob, optional
+    
+    all Dert params are summed over params of all elements of a given structure 
+    typ def: ga_sign? ( Ga? der_blobs(a)) : G * -Ga? der_blobs(i) : G - (G * -Ga)? rng_blobs(i)
 '''
 
 def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
 
     for blob in frame.blob_:
-        if blob.sign and blob.params[0][5] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: noisy or directional gradient
-            master_blob(blob, hypot_g, new_params=False)  # no new params, this branch only redefines g as hypot(dx, dy)
+        if blob.sign and blob.Derts[-1][-1] > ave_blob:  # g > var_cost and G > fix_cost of hypot_g: noisy or directional gradient
+            master_blob(blob, hypot_g, add_dert=False)  # this branch only redefines g as hypot(dx, dy)
 
-            if blob.params[0][5] > ave_blob * 2:  # G > fixed costs of comp_angle
-                rdn = 1
+            if blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
                 val_ = []
                 for sub_blob in blob.sub_blob_:
-                    if sub_blob.sign and sub_blob.params[0][5] > ave_blob * 2:  # > variable and fixed costs of comp_angle
+                    if sub_blob.sign and sub_blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
+                        master_blob( sub_blob, comp_angle)  # converts sub_blob to master ablob, no type rdn: no eval_layer
 
-                        master_blob(sub_blob, comp_angle)
-                        Ly, L, I, Dx, Dy, G, dert_Y, X, = blob.params[0]   # +2nd parallel eval node per root Dert:
-                        Lya, La, A, Dxa, Dya, Ga, adert_ = blob.params[1]
+                        for ablob in sub_blob.sub_blob_:  # eval / ablob: unique, def / ga sign, vs. rdn ablob_ || xblob_ if / gblob
+                            Ly, L, I, Dx, Dy, G = ablob.Derts[-2]  # Derts include params of all higher layers
+                            Lya, La, A, Dxa, Dya, Ga = ablob.Derts[-1]
 
-                        # estimated values of next-layer recursion per sub_blob:
+                            val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
+                            val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
+                            val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
-                        val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
-                        val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
-                        val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
-
-                        val_ += [(val_angle, 0, sub_blob), (val_deriv, 1, sub_blob), (val_range, 2, sub_blob)]
+                            # estimated next-layer values per ablob:
+                            val_ += [(val_angle, 0, sub_blob), (val_deriv, 1, sub_blob), (val_range, 2, sub_blob)]
                 if val_:
-                    eval_layer(val_, rdn)
+                    eval_layer(val_, 2)  # rdn = 2: + ablobs
 
     return frame  # frame of 2D patterns is output to level 2
 
@@ -51,35 +66,23 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
 def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_angle, comp_ga, comp_deriv, comp_range
     vals = []
 
-    if typ == 0:   master_blob(blob, comp_deriv, 1)  # comp over ga_: 1 selects angle_Dert at len Dert_tree
+    if typ == 0:   master_blob(blob, comp_deriv, 1)  # comp over ga_: 1 selects angle_Dert at Derts[1]
     elif typ == 1: master_blob(blob, comp_deriv, 0)  # recursive comp over g_ with incremental derivation
     else:          master_blob(blob, comp_range, 0)  # recursive comp over i_ with incremental distance
 
-    ''' 
-    blob or sub blob is a Dert_tree: array of horizontal slices across derivation tree, which has:
-    head: 
-    root Dert = Ly, L, I, Dx, Dy, G, dert_, Y, X   # single top blob 
-    tree Dert = Ly, L, I, Dx, Dy, G, slice_   # summed over all slices
-    slice:
-    angle_layer = Ly, L, I, Dx, Dy, G, blob_  # ablobs, refer to sub blobs:
-    xtype_layer = Ly, L, I, Dx, Dy, G, blob_  # summed root sub blobs, of specified type
-    
-    type definition: ga_sign? (Ga? der_blobs(a)) : G *-Ga? der_blobs(i) : G - G *-Ga? rng_blobs(i)? 
-    '''
+    if blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
+        master_blob(blob, comp_angle)  # converts blob into master ablob, no lateral xtype rdn: no eval_layer
 
-    if blob.params[0][5] > ave_blob * 2:  # G = Dert[5]
+        for ablob in blob.sub_blob_:  # eval / ablob: unique, def / ga sign, vs. rdn ablob_ || xblob_ if / gblob
+            Ly, L, I, Dx, Dy, G = ablob.Derts[-2]   # Derts include params of all higher-slices
+            Lya, La, A, Dxa, Dya, Ga = ablob.Derts[-1]
 
-        master_blob(blob, comp_angle)
-        Ly, L, I, Dx, Dy, G, dert_, Y, X, = blob.params[0]  # +2nd parallel eval node per root Dert:
-        Lya, La, A, Dxa, Dya, Ga, adert_ = blob.params[0]
+            val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
+            val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
+            val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
 
-        # estimated values of next-layer branches per blob:
-
-        val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
-        val_deriv = ((G + ave * L) / ave * L) * -Ga  # relative G * -Ga: angle match, likely edge
-        val_range = G - val_deriv  # non-directional G: likely d reversal, distant-pixels match
-
-        vals = [(val_angle, 0, blob), (val_deriv, 1, blob), (val_range, 2, blob)]  # branch values per blob
+            # estimated next-layer values per ablob:
+            vals += [(val_angle, 0, blob), (val_deriv, 1, blob), (val_range, 2, blob)]
 
     return vals  # blob is converted into master_blob with added Dert[-1]
 
