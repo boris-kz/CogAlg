@@ -222,7 +222,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        dert__ = frame[-1][y0:yn, x0:xn, :]
+        dert__ = frame[-1][y0:yn, x0:xn, :]  # also convert each dert into [dert]
         map = np.zeros((height, width), dtype=bool)
         for seg in e_:
             for P in seg[2]:
@@ -234,14 +234,11 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(typ=0,
-                                sign=s,
-                                Y=Y,
-                                X=X,
-                                Derts = [(Ly, L, I, Dy, Dx, G)],
+        frame[1].append(nt_blob(typ=0, Y=Y, X=X, Ly=Ly, L=L,
+                                Derts = [(s, I, Dy, Dx, G)],
                                 derts_ = [dert__],  # extend all elements
-                                sub_blobs = [],   # replace derts_, replaced by sub_layers
-                                sub_layers = [],  # type ignored if == 1
+                                sub_blobs = ((0,0,0,0,0,0),[]),  # (Ly, L, I, Dy, Dx, G), sub_blob_; replaces Derts, derts_
+                                sub_layers = ((0,0,0,0,0,0),[]), # (Ly, L, I, Dy, Dx, G), sub_layer_; replaces Derts, sub_blob_
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,
@@ -258,7 +255,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Y X Derts derts_ sub_blobs, sub_layers map box add_dert rng ncomp')
+nt_blob = namedtuple('blob', 'typ Y X Ly, L Derts derts_ sub_blobs, sub_layers map box add_dert rng ncomp')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_root
