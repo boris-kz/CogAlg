@@ -222,7 +222,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        dert__ = [[[dert] for dert in dert_[x0:xn]] for dert_ in frame[-1][y0:yn]]
+        derts_ = [[[dert] for dert in dert_[x0:xn]] for dert_ in frame[-1][y0:yn]]
         # dert__ = frame[-1][y0:yn, x0:xn, :] + convert each dert into [dert]
         map = np.zeros((height, width), dtype=bool)
         for seg in e_:
@@ -236,13 +236,12 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][3] += G
 
         frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
-                                Derts = [(I, Dy, Dx, G)],
-                                derts_ = [dert__],  # extend all elements
-                                sub_blobs = ([(0,0,0,0,0,0)], []), # [(Ly, L, I, Dy, Dx, G)], sub_blob_
-                                low_layers= ([(0,0,0,0,0,0)], []), # [(Ly, L, I, Dy, Dx, G)], lower_layer_
-                                # or replace:
-                                # Derts <- sub_blobs <- low_layers, root params are not selective?
-                                # then add depth = 0|1|2: levels of derts_?
+                                Derts = [(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
+                                derts_ = derts_,
+                                subf = 0,  # flag: derts_ = sub_blob_ conversion in intra_blob, blob derts_-> sub_blob derts_
+                                layerf = 0,  # flag: derts_ = [derts_], appended by lower layers if intra_blob recursion
+                                subbs_Derts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                layers_Derts = [],  # lower_layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,
@@ -259,7 +258,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ sub_blobs low_layers map box add_dert rng ncomp')
+nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ subf layerf subbs_Derts layers_Derts map box add_dert rng ncomp')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_root
