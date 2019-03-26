@@ -53,7 +53,14 @@ def Go_to(input_, target, from_idx=0, axes=(0, 1)):
                 break
                 
     return i, t    # return True if i points at the target coordinate
-    
+
+def Sum_Params(param_):
+
+    if type(param_[0]) not in {object, tuple}:
+        return sum(param_)
+    else:
+        return [Sum_Params(sub_param_) for sub_param_ in zip(*param_)]
+
 def Compare(input_, offset, comparand=2, axes=(0, 1)):
 
     ''' Compare imputs over indicated offset. Return differences between compared inputs.
@@ -124,14 +131,14 @@ def Form_P_(input_, param=4, axes=(0, 1)):
 
         # keep increasing j while coordinates are contiguous and signs are identical
         while j < len(input_) \
-          and s[i] == s[j] \
+          and s_[i] == s_[j] \
           and not sum([input_[j][axis] != input_[j - 1][axis] for axis in axes[:-1]]) \
           and input_[j][axes[-1]] == input_[j - 1][axes[-1]] + 1:
             
             j += 1
 
-        P_.append([s,
-                   [sum([param for param in param_[i:j]]) for param_ in param__],
+        P_.append([s_[i],
+                   [j - i] + [Sum_Params(param_[i:j]) for param_ in param__],
                    [dert for dert in input_[i:j]]
                     ])
 
@@ -139,3 +146,7 @@ def Form_P_(input_, param=4, axes=(0, 1)):
         j += 1
         
     return P_
+
+def Form_Blob_(P_, axes=(0, 1)):
+
+    return blob_
