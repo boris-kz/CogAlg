@@ -238,10 +238,10 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
                                 Derts = [(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
                                 derts_ = derts_,
-                                subf = 0,  # flag: derts_ = sub_blob_ conversion in intra_blob, blob derts_-> sub_blob derts_
-                                layerf = 0,  # flag: derts_ = [derts_], appended by lower layers if intra_blob recursion
+                                subf = 0,  # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
+                                layerf = 0,  # flag: derts_ = [(subbs_Derts, derts_)], appended per intra_blob eval_layer
                                 subbs_Derts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layers_Derts = [],  # lower_layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
+                                layers_Derts = [],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,

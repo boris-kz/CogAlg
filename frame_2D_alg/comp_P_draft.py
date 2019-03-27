@@ -27,7 +27,7 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
     mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
     dPP = 0, [], []  # per dev of D_params: abs or co-signed?
 
-    Py_ = blob[3][last]  # per segment, also flip eval per seg?
+    Py_ = blob[3][-1]  # per segment, also flip eval per seg?
     _P = Py_.popleft()  # initial comparand
 
     while Py_:  # comp_P starts from 2nd P, top-down
@@ -42,10 +42,10 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
             else:
                 mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
                 mPP_.append(mPP)
-                for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 S_vars from incr_PP
+                for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 summed vars from incr_PP
                     C += par
-                    Cm_.append(C)  # or S is directly modified in SvPP?
-                CmPP_ = Cm_  # but SPP is redundant, if len(PP_) > ave?
+                    Cm_.append(C)  # or C is directly modified in CvPP?
+                CmPP_ = Cm_  # but CPP is redundant, if len(PP_) > ave?
                 mPP = ms, [], []  # s, PP, Py_ init
             if ds == _ds:
                 dPP = form_PP(0, P, dPP)
@@ -83,6 +83,50 @@ def form_P_(P_, P, _ders, s, _s):
         P = 0, 0, 0, 0, 0, []
         term = 0
     return P_, P, term
+
+'''
+def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps, to comp Ps and form PPs
+    new_P_ = deque()
+
+    if P_ and _P_:
+        P = P_.popleft()    # input-line Ps
+        _P = _P_.popleft()  # higher-line Ps
+        stop = False
+        fork_ = []
+        while not stop:
+            x0 = P[2][0][1]  # first x in P
+            xn = P[2][-1][1]  # last x in P
+            _x0 = _P[2][0][1]  # first x in _P
+            _xn = _P[2][-1][1]  # last x in _P
+
+            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # test for sign match and x overlap
+                seg[3] += 1
+                fork_.append(seg)  # P-connected segments are buffered into fork_
+
+            if xn < _xn:  # _P overlaps next P in P_
+                new_P_.append((P, fork_))
+                fork_ = []
+                if P_:
+                    P = P_.popleft()  # load next P
+                else:  # if no P left: terminate loop
+                    if seg[3] != 1:  # if roots != 1: terminate seg
+                        form_blob(seg, frame)
+                    stop = True
+            else:  # no next-P overlap
+                if seg[3] != 1:  # if roots != 1: terminate seg
+                    form_blob(seg, frame)
+
+                if seg_:  # load next _P
+                    seg = seg_.popleft()
+                    _P = seg[2][-1]
+                else:  # if no seg left: terminate loop
+                    new_P_.append((P, fork_))
+                    stop = True
+
+    while seg_: # sub_Ps also fork?
+        form_blob(seg_.popleft(), frame)  # roots always == 0
+    return new_P_
+'''
 
 def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
