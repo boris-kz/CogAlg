@@ -1,65 +1,4 @@
-def Axes_Rearrange(input_, axes=(0, 1)):
-
-    ''' Sort inputs based on parameters chosen as coordinates
-
-        - input_: list of inputs
-        - axes: indices of parameters chosen as coordinates
-        Return: a list sorted
-            + First element is number of comps (not every input is compared twice)
-            + Remaining elements: difference value for every axis
-
-        For example:
-
-            >> input_ = [(1, 0, 18), (0, 1, 17), (0, 0, 15), (1, 1, 20)]
-
-            >> sorted_input_ = Axes_Rearrange(input_, axes=(0, 1))
-
-            >> print(sorted_input_)
-
-            [(0, 0, 15), (0, 1, 17), (1, 0, 18), (1, 1, 20)]
-
-    '''
-
-    output_ = list(input_)
-
-    for axis in reversed(axes):
-        output_.sort(key=lambda ip: ip[axis])    # sort based on each axis' coordinates, least significant axis first
-
-    return output_
-
-def Go_to(input_, target, from_idx=0, axes=(0, 1)):
-
-    ''' Given a start index (is 0 by default), keep increasing it until it's >= target coordinate.
-        Input list must be sorted by coordinates first '''
-
-    i = from_idx
-    t = False                               # signal variable, to check matching of higher order axes' coordinates
-    for iaxis, axis in enumerate(axes):     # iterate through the axes
-        sub_axes = axes[:iaxis]             # list of higher order axes
-
-        while i < len(input_):
-            # increase i by 1 if current axis coordinates < target coordinate and all previous coordinates are equal to target coordinates:
-            t = not sum([input_[i][saxis] != target[isaxis] for isaxis, saxis in enumerate(sub_axes)])  # check matching of higher order axes' coordinates
-
-            if not (t and input_[i][axis] < target[iaxis]):     # also look for matching of current axis coordinate
-                break
-
-            i += 1
-
-        if i < len(input_):
-            t = t and input_[i][axis] == target[iaxis] and i < len(input_)
-
-            if not t:       # if there's a coordinate unmatch
-                break
-                
-    return i, t    # return True if i points at the target coordinate
-
-def Sum_Params(param_):
-
-    if type(param_[0]) not in {object, tuple}:
-        return sum(param_)
-    else:
-        return [Sum_Params(sub_param_) for sub_param_ in zip(*param_)]
+from Utilities import Go_to, Sum_Params
 
 def Compare(input_, offset, comparand=2, axes=(0, 1)):
 
@@ -126,6 +65,7 @@ def Form_P_(input_, param=4, axes=(0, 1)):
 
     i = 0   # index of input at P's head
     j = 1   # index of input at P's tail
+    k = 0   # _P's index
 
     while i < len(input_):
 
@@ -137,16 +77,45 @@ def Form_P_(input_, param=4, axes=(0, 1)):
             
             j += 1
 
-        P_.append([s_[i],
-                   [j - i] + [Sum_Params(param_[i:j]) for param_ in param__],
-                   [dert for dert in input_[i:j]]
-                    ])
+        P = [s_[i],
+             [j - i] + [Sum_Params(param_[i:j]) for param_ in param__],
+             [dert for dert in input_[i:j]] ]
+
+        # scan P for connections with higher-line Ps:
+
+        fork_ = []
+        y = P[2][0][0]  # first param (y coordinate) of first element of P
+        x_first = P[2][0][1]  # second param (x coordinate)of first element of P
+        x_last = P[2][-1][1]  # second param (x coordinate)of last element of P
+
+        while k < len(P_):  # increases k until end of list is met or encounters stopping conditions below
+
+            _P = P_[k]
+
+            _y = _P[2][0][0]    # first param (y coordinate) of first element of _P
+
+            if y == _y + 1:     # if _P is on the higher line of P
+
+                _x_first = _P[2][0][1]  # second param (x coordinate) of first element of _P
+                _x_last = _P[2][-1][1]  # second param (x coordinate)of last element of _P
+
+                if P[0] == _P[0] and x_first <= _x_last and _x_first <= x_last:     # if s are the same and x coordinates overlap
+                    fork_.append(_P)
+
+                if _x_last >= x_last:
+                    break
+
+            elif _y >= y:
+                break
+
+            k += 1
+
+
+        P_.append((P, fork_))
 
         i = j
         j += 1
+
+        # scan P
         
     return P_
-
-def Form_Blob_(P_, axes=(0, 1)):
-
-    return blob_
