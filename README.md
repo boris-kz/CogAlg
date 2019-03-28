@@ -44,7 +44,7 @@ Autonomous cognition must start with analog inputs, such as video or audio. All 
 
 Such raw inputs have modality-specific properties and comparison should be adjusted accordingly, by feedback or manually. For example, vision relies on reflected light: brightness or albedo don’t directly represent source of impact, though they do represent some resistance to a very "light" impact. Uniformity of albedo indicates some common property within object, so it should form patterns. But the degree of commonality doesn’t depend on intensity of albedo, so match should be defined indirectly, as below-average |difference| or |ratio| of albedo.
 
-*Many readers see a gap between my theory and algorithm, or a lack of the latter. It’s true that algorithm is far from complete, but we are well on our way in translating the above-explained principles into code. Final algorithm will be a meta-level of search: 1st level + recursive complexity increment to generate incrementally higher levels. Our universe is a space-time continuum, thus each level will be 3D or 4D cycle. Others note lack of higher math, but that’s because it's not selectively incremental.*
+*Many readers see a gap between my theory and algorithm, or a lack of the latter. It’s true that this algorithm is far from complete, but above-explained principles are stable, and we are translating them into code. Final algorithm will be a meta-level of search: 1st level + recursive complexity increment to generate incrementally higher levels. Our universe is a space-time continuum, thus each level is 3-4D cycle. Others note lack of higher math, but that’s because it's not selectively incremental.*
 
 
 
@@ -114,9 +114,9 @@ Some other problems I have with current implementation of CapsNet:
 - the number of layers is fixed, while I think it should be incremental with experience.
 
 My patterns have match instead of probability, a miss that includes pose variables, plus selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances. 
-All these variables are derived by incrementally complex comparison: core operation on all levels of CogAlg. 
-
-My hierarchy is also dynamic: pattern is displaced from level by a miss to new input, then forwarded to existing or newly formed higher level. So, higher-level patterns include lower-level variables, as well as their derivatives. The derivatives are summed within pattern, then evaluated for extending intra-pattern search and feedback. Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience.
+All these variables are derived by incrementally complex comparison: core operation on all levels of CogAlg.
+ 
+Search hierarchy is also dynamic: pattern is displaced from level by a miss to new input, then forwarded to existing or newly formed higher level. So, higher-level patterns include lower-level variables, as well as their derivatives. The derivatives are summed within pattern, then evaluated for extending intra-pattern search and feedback. Thus, both hierarchy of patterns per system and sub-hierarchy of variables per pattern expand with experience.
 
 
 
@@ -140,13 +140,13 @@ Any prediction has two components: what and where. We must have both: value of p
 
 Core algorithm is 1D: time only. Our space-time is 4D, and average match is presumably equal over all dimensions. That means patterns defined in fewer dimensions will be only slices of actual input, fundamentally limited and biased by the angle of scanning / slicing. Hence, initial pixel comparison should also be over 4D at once, or at least over 3D for video and 2D for still images. This full-D-cycle level of search is a universe-specific extension of core algorithm. The dimensions should be discoverable by the core algorithm, but coding it in is much faster. 
 
-This repository currently has three versions of 1st D-cycle, analogous to connected-component analysis: 1D line algorithm, 2D frame algorithm, and 3D video algorithm.
+This repository currently has three versions of 1st D-cycle, analogous to connected-component analysis: 1D line alg, 2D frame alg, and 3D video alg.
 Subsequent cycles will compare full-D-terminated input patterns over increasing distance in each dimension, forming discontinuous patterns of incremental composition and range.
 “Dimension” here defines external sequence and distance among inputs. This is different from conventional clustering, which treats both external and internal parameters as dimensions. 
 
-Final hierarchical algorithm will have two-level code: 
-- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus bit-filter feedback 
-- recursive increment in complexity of comparison and feedback, generating higher-level algorithm to accommodate increasingly deep input patterns.
+Complete hierarchical algorithm will have two-level code: 
+- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus feedback to adjust most and least significant bits of the input. 
+- Recurrent increment in complexity, extending current-level alg to next-level alg. This increment will account for increasing internal complexity of input patterns on higher levels, unfolding them for cross-comparison and re-folding results for evaluation and feedback.
 
 Initial testing could be on recognition of labeled images, but video or stereo video should be much better. We will then add colors, maybe audio and text. 
 

@@ -8,7 +8,7 @@ Most of the programming is currently done by [Khanh Nguyen](https://github.com/k
 
 **frame_2D alg:** currently a work-in-progress, will process still images:
 
-- [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. This is basic clustering / segmentation within an image, but resulting blobs also contain comparison-derived parameters for future inter-blob comparison. This code is functional.
+- [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. This is a basic clustering / segmentation within an image, but resulting blobs contain comparison-derived parameters for future inter-blob comparison. The code is functional.
 
 - [intra_blob_debug](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob_debug): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs:
 
@@ -26,10 +26,11 @@ Most of the programming is currently done by [Khanh Nguyen](https://github.com/k
 
 - [video_draft()](https://github.com/boris-kz/CogAlg/blob/master/video_3D_alg/video_draft.py) is a 3D extension of outdated frame_blobs. Eventually, it will extend all of 2D alg with time dimension. This version will hopefully be fully recursive and effective in real world.
 
-Higher levels for each will process discontinuous search among full-D patterns. We will then add colors, maybe audio and text. Initial testing could be recognition of labeled images, but 2D is a poor representation of our 4D world, we will probably start directly with video or stereo video.
-
+Higher levels for each D-cycle alg will process discontinuous search among full-D patterns.
 Complete hierarchical algorithm will have two-level code: 
-- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus bit-filter feedback 
-- recursive increment in complexity of both cross-comparison and feedback, generating next-level algorithm.
+- 1st level algorithm: contiguous cross-comparison over full-D cycle, plus feedback to adjust most and least significant bits of the input. 
+- Recurrent increment in complexity, extending current-level alg to next-level alg. This increment will account for increasing internal complexity of input patterns on higher levels, unfolding them for cross-comparison and re-folding results for evaluation and feedback. 
+
+We will then add colors, maybe audio and text. Initial testing could be recognition of labeled images, but 2D is a poor representation of our 4D world, we will probably start directly with video or stereo video.
 
 Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).

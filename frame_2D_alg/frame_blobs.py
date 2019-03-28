@@ -55,7 +55,6 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
-
 def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
     dert__ = np.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
@@ -223,7 +222,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                 xn = max(xn, P[2][-1][1] + 1)
 
         derts_ = [[[dert] for dert in dert_[x0:xn]] for dert_ in frame[-1][y0:yn]]
-        # dert__ = frame[-1][y0:yn, x0:xn, :] + convert each dert into [dert]
+        # dert__ = frame[-1][y0:yn, x0:xn, :] + convert each dert into [dert]: in master_blob, along with derts_[:]= sub_blob_?
         map = np.zeros((height, width), dtype=bool)
         for seg in e_:
             for P in seg[2]:
@@ -238,10 +237,10 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
                                 Derts = [(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
                                 derts_ = derts_,
-                                subf = 0,  # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
-                                layerf = 0,  # flag: derts_ = [(subbs_Derts, derts_)], appended per intra_blob eval_layer
-                                subbs_Derts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layers_Derts = [],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
+                                subf = 0,     # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
+                                layerf = 0,   # flag: derts_ = [(subbs_Derts, derts_)], appended per intra_blob eval_layer
+                                sDerts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                lDerts = [],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,
@@ -258,7 +257,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ subf layerf subbs_Derts layers_Derts map box add_dert rng ncomp')
+nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ subf layerf sDerts lDerts map box add_dert rng ncomp')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_root

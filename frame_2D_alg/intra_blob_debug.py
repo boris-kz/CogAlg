@@ -37,14 +37,14 @@ from generic_branch import master_blob
             derts_[:] = sub_blob_   # sub_blob structure is same as in root blob 
             
             if len( sub_blob_) > min:
-                subbs_Derts += [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs and their higher layers
+                sDerts += [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs and their higher layers
                  
         if eval_layer branch call:  # multi-layer intra_blob, top derts_ structure is layer_
             layerf = 1
-            sub_blob_ = [(subbs_Derts, derts_)]  # appended by lower layers across derivation tree per root blob, flat | nested?  
+            sub_blob_ = [(sDerts, derts_)]  # appended by lower layers across derivation tree per root blob, flat | nested?  
             
             if len( sub_blob_) > min
-                layers_Derts += [(Ly, L, I, Dx, Dy, G)]  # one Dert per pos sub_blobs of referred layer and its higher layers
+                lDerts += [(Ly, L, I, Dx, Dy, G)]  # one Dert per pos sub_blobs of referred layer and its higher layers
               
         # sub blobs and lower layers Derts params: same as in their root_blob Derts, but summed from positive sub_blobs only. 
         # Derts of Lower layers are not represented in higher layers.
@@ -82,10 +82,11 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
                             # estimated next-layer values per ablob:
                             val_ += [(val_angle, 1, ablob), (val_deriv, 2, ablob), (val_range, 3, ablob)]
                 if val_:
-                    sub_blob.derts_ = [(sub_blob.subbs_Derts, sub_blob.derts_)]  # per master_gblob ! master_ablob?
+                    sub_blob.derts_ = [(sub_blob.sDerts, sub_blob.derts_)]  # sDerts eval for fill-in in master_blob()?
+                    # for unique root gblobs of ablobs in val_, then master blobs of converted gblobs, by reverse ref?
                     # layer is packed (won't be extended), layer_ is appended at future intra_blob eval_layer calls
 
-                    eval_layer(val_, 2)  # rdn = 2, eval per two layers: input sub_gblobs and new sub_ablobs
+                    eval_layer(val_, 2)  # rdn = 2, val_ is merged from two new layers: gblob_ ( ablob_
 
     return frame  # frame of 2D patterns is output to level 2
 
@@ -144,7 +145,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
     if sub_val_:  # not empty
         rdn += 1  # redundancy to higher-layer blobs
         if blob.layerf == 0:  # derts_ == sub_blob_, convert to layer_:
-            blob.derts_ = [(blob.subbs_Derts, blob.derts_)]  # blob referred by sub_blob in sub_val_?
+            blob.derts_ = [(blob.sDerts, blob.derts_)]  # for unique root blobs of sub_blob in sub_val_?
 
         eval_layer(sub_val_, rdn)  # evaluate each sub_val for recursion within its sub_blob
 
