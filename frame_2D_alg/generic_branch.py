@@ -15,11 +15,9 @@ def master_blob(blob, branch_comp, add_dert=True):  # redefine blob as branch-sp
     height, width = blob.map.shape
 
     if add_dert:
-        blob.Derts.append(0, 0, 0, 0, 0, 0)  # Ly, L, I, Dy, Dx, G
+        blob.Derts.append(0, 0, 0, 0)  # I, Dy, Dx, G
         for i, derts in enumerate (blob.derts_):
-            blob.derts_[i] = derts.append(0, 0, 0, 0)  # i, dy, dx, g
-
-    # blob.sub_blobs[1].append([])  # append sub_blob_ # no need, only one sub_blob_ per blob
+            blob.derts_[i] = derts.append((0, 0, 0, 0))  # i, dy, dx, g
 
     if height < 3 or width < 3:
         return False
@@ -188,24 +186,29 @@ def form_blob(term_seg, master_blob, rng_inc = False): # terminated segment is m
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        dert__ = master_blob.new_dert__[0][y0:yn, x0:xn, :]
+        derts_ = master_blob.new_dert__[0][y0:yn, x0:xn, :]
         map = np.zeros((yn-y0, xn-x0), dtype=bool)
         for seg in e_:
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[2]:
                     map[y-y0, x-x0] = True
+        map = map[y0:yn, x0:xn]
 
         master_blob.params[-4:] = [par1 + par2 for par1, par2 in zip(master_blob.params[-4:], blob_params[-4:])]
-        master_blob.sub_blob_[-1].append(nt_blob(sign=s,
-                                                 params=blob_params,
-                                                 e_=e_,
+        
+        master_blob.sub_blob_[-1].append(nt_blob(typ=0, sign=s, Ly=Ly, L=L,
+                                                 Derts=[(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
+                                                 derts_=derts_,  # intra_blob will convert each dert of selected blobs into [dert]
+                                                 subf=0,   # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
+                                                 layerf=0,  # flag: derts_ = [(sub_Derts, derts_)], appended per intra_blob eval_layer
+                                                 sub_Derts=[],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                                 lay_Derts=[],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
                                                  box=(y0, yn, x0, xn),
                                                  map=map,
-                                                 dert__=dert__,
-                                                 new_dert__=[None],
+                                                 add_dert=None,
                                                  rng=(master_blob.rng + 1) if rng_inc else 1,  # increase or reset rng
-                                                 ncomp=(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1,
-                                                 sub_blob_=[]))
+                                                 ncomp=1(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1,
+                                                 ))
         '''
         replace with:
         

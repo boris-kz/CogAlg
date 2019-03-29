@@ -2,33 +2,32 @@ import cv2
 from time import time
 from collections import deque, namedtuple
 import numpy as np
-from filters import get_filters
-get_filters(globals())  # imports all filters at once
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
     as |dx| + |dy|, then selectively and more precisely as hypot(dx, dy), from cross-comparison among adjacent pixels.
     Complemented by intra_blob (recursive search within blobs), it will be a 2D version of first-level core algorithm.
-    
+
     frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
-    
+
     1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives dert1 ) array dert1_
     2Le, line y- 1: y_comp(dert1_): vertical pixel comp -> 2D tuple dert2 ) array dert2_ 
     3Le, line y- 1+ rng: form_P(dert2) -> 1D pattern P
     4Le, line y- 2+ rng: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps 
     5Le, line y- 3+ rng: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     6Le, line y- 4+ rng+ seg depth: form_blob(seg, blob): merge connected segments in fork_' incomplete blobs, recursively  
-    
+
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array:
     if y = rng * 2: line y == P_, line y-1 == hP_, line y-2 == seg_, line y-4 == blob_
-    
+
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, convert elements of 
     lower line into elements of new higher line, then displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     Processing is mostly sequential because blobs are irregular and very difficult to map to matrices.
 '''
+
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
@@ -42,7 +41,7 @@ get_filters(globals())  # imports all filters at once
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], []]  # params, blob_
-    comp_pixel(frame, image)   # vertically and horizontally bilateral comparison of adjacent pixels
+    comp_pixel(frame, image)  # vertically and horizontally bilateral comparison of adjacent pixels
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
@@ -55,9 +54,10 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
+
 def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
-    dert__ = np.empty(shape=(width, height, 4), dtype=int)  # initialize dert__
+    dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
     dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
     dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
@@ -71,6 +71,7 @@ def comp_pixel(frame, p__):  # bilateral comparison between vertically and horiz
     frame.append(dert__)
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
+
 
 def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
@@ -89,8 +90,8 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
             params[1] += y  # Y
             params[2] += x  # X
             params[3] += i  # I
-            params[4] += dy # dy
-            params[5] += dx # dx
+            params[4] += dy  # dy
+            params[5] += dx  # dx
             params[6] += g  # G
             P[2].append((y, x, i, dy, dx, g))
             x += 1
@@ -102,13 +103,14 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-def scan_P_(P_, seg_, frame): # this function detects connections (forks) between Ps and _Ps, to form blob segments
+
+def scan_P_(P_, seg_, frame):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
     new_P_ = deque()
 
-    if P_ and seg_:           # if both are not empty
-        P = P_.popleft()      # input-line Ps
+    if P_ and seg_:  # if both are not empty
+        P = P_.popleft()  # input-line Ps
         seg = seg_.popleft()  # higher-line segments,
-        _P = seg[2][-1]       # last element of each segment is higher-line P
+        _P = seg[2][-1]  # last element of each segment is higher-line P
         stop = False
         fork_ = []
         while not stop:
@@ -149,6 +151,7 @@ def scan_P_(P_, seg_, frame): # this function detects connections (forks) betwee
 
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
+
 def form_seg_(P_, frame):  # merge each P into connected segment if one, else convert to new segment, merge blobs
     new_seg_ = deque()
 
@@ -186,7 +189,8 @@ def form_seg_(P_, frame):  # merge each P into connected segment if one, else co
 
                         if not fork[5] is blob:
                             params, e_, open_segments = fork[5][1:]  # merged blob, omit sign
-                            blob[1] = [par1 + par2 for par1, par2 in zip(blob[1], params)]  # sum same-type params of merging blobs
+                            blob[1] = [par1 + par2 for par1, par2 in
+                                       zip(blob[1], params)]  # sum same-type params of merging blobs
                             blob[3] += open_segments
                             for e in e_:
                                 if not e is fork:
@@ -201,7 +205,9 @@ def form_seg_(P_, frame):  # merge each P into connected segment if one, else co
 
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
-def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+
+def form_blob(term_seg,
+              frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     params, P_, roots, fork_, blob = term_seg[1:]
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
@@ -221,13 +227,13 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        derts_ = [[[dert] for dert in dert_[x0:xn]] for dert_ in frame[-1][y0:yn]]
-        # dert__ = frame[-1][y0:yn, x0:xn, :] + convert each dert into [dert]: in master_blob, along with derts_[:]= sub_blob_?
+        dert__ = frame[-1][y0:yn, x0:xn, :]
         map = np.zeros((height, width), dtype=bool)
         for seg in e_:
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[2]:
                     map[y, x] = True
+        map = map[y0:yn, x0:xn]
 
         frame[0][0] += I
         frame[0][1] += Dy
@@ -235,12 +241,12 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][3] += G
 
         frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
-                                Derts = [(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
-                                derts_ = derts_,
-                                subf = 0,     # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
-                                layerf = 0,   # flag: derts_ = [(subbs_Derts, derts_)], appended per intra_blob eval_layer
-                                sDerts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                lDerts = [],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
+                                Derts=[(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
+                                derts_=dert__,  # intra_blob will convert each dert of selected blobs into [dert]
+                                subf=0,   # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
+                                layerf=0,  # flag: derts_ = [(sub_Derts, derts_)], appended per intra_blob eval_layer
+                                sub_Derts=[],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                lay_Derts=[],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,
@@ -248,25 +254,52 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
+
 # ************ PROGRAM BODY *********************************************************************************************
+
+ave = 20
 
 # Load inputs --------------------------------------------------------------------
 image = cv2.imread(input_path, 0).astype(int)
+# image = cv2.imread('./images/raccoon_eye.jpg', 0).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ subf layerf sDerts lDerts map box add_dert rng ncomp')
+nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ subf layerf sub_Derts lay_Derts map box add_dert rng ncomp')
 frame_of_blobs = image_to_blobs(image)
 
-from intra_blob_debug import intra_blob_root
-frame_of_blobs = intra_blob_root( frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+from intra_blob_debug import intra_blob_root      # not yet functional, comment-out to run
+frame_of_blobs = intra_blob_root(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
 end_time = time() - start_time
 print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
+
 from DEBUG import draw_blob
-draw_blob('../debug/frame', frame_of_blobs, -1)
+draw_blob('./debug/frame', frame_of_blobs, -1)
+
+'''
+from filters import get_filters
+get_filters(globals())  # imports all filters at once
+from scipy import misc
+image = misc.face(gray=True)  # input frame of pixels
+image = image.astype(int)
+
+op = np.array([[0] * width] * height)
+for blob in frame_of_blobs[1]:
+    y0, yn, x0, xn = blob.box
+    map = blob.map
+    slice = op[y0:yn, x0:xn]
+
+    if blob.sign:
+        slice[map] = 255
+    else:
+        slice[map] = 0
+
+cv2.imwrite('./debug/frame.bmp', op)
+
+'''
 # ************ PROGRAM BODY END ******************************************************************************************
