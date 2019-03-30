@@ -12,9 +12,9 @@ Most of the programming is currently done by [Khanh Nguyen](https://github.com/k
 
 - [intra_blob_debug](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob_debug): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs:
 
-  - [generic_branch](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/generic_branch.py) is called by intra_blob to perform branch-specific extended comparison and form a corresponding master blob. Each layer of intra-blob may call four types of deeper comparison branches:
+  - [intra_comp_debug](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp_debug.py) is called by intra_blob to perform branch-specific extended comparison and form a corresponding master blob. Each layer of intra-blob may call four types of deeper comparison branches:
   - [comp_angle](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_angle.py) computes and compares angle of gradient, to define sub- angle_blobs: contiguous areas of same-sign deviation of difference between angles of adjacent gradients
-  - [comp_deriv](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_deriv.py) compares gradient to define sub- deriv_blobs: contiguous areas of same-sign deviation of higher-derivation gradients
+  - [comp_gradient](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_gradient.py) compares gradient to define sub_blobs of same-sign deviation of higher-derivation gradients
   - [comp_range](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_range.py) compares input parameter at incrementally greater range to define sub- range_blobs: contiguous areas of same-sign deviation of extended-range gradients
   - [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): a draft for comparison between vertically consecutive Ps: horizontal slices of blob segments. This will be similar to higher levels of 1D alg.
 

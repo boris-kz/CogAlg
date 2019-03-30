@@ -1,19 +1,19 @@
 import numpy as np
 import numpy.ma as ma
 from comp_angle import comp_angle
-from comp_deriv import comp_deriv
+from comp_gradient import comp_gradient
 from comp_range import comp_range
 # from comp_P_ import comp_P_
 # from filters import get_filters
 # get_filters(globals())  # imports all filters at once
-from generic_branch import master_blob
+from intra_comp_debug import master_blob
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
     frame_blobs + intra_blob forms a 2D version of 1st-level algorithm.
     
-    recursive intra_blob' eval_layer' branch() calls add new dert to derts, Dert to Derts, sub_blobs ) layers to blob,
-    where Dert params are summed params of all positive blobs per structure, with optional sub_blobs ) layers:
+    recursive intra_blob' eval_layer' branch() calls add new dert to derts, Dert to Derts, layer of sub_blobs to blob,
+    where Dert params are summed params of all positive blobs per structure, with optional layer_:
     
     blob =  
         typ,  # typ 0: primary | angle_g_blob, typ 1: angle_ga_blob, typ 2: gg_blob, typ 3: range_g_blob, formed / eval:  
@@ -28,23 +28,22 @@ from generic_branch import master_blob
         
         Derts = 
             [ Dert = I, Dx, Dy, G ],  # one Dert per current and higher layers (higher if root blob is a sub_blob)
-        derts_ = 
-            [ derts = 
-                [ dert = i, dx, dy, g ] ],  # one dert per current and higher layers  
+        seg_ = 
+            [ seg_params,  # formed in frame blobs
+              Py  # vertical buffer of Ps per segment
+                [ P_params,
+                  derts = [ dert = i, dx, dy, g ]]],  # one dert per current and higher layers  
                               
-        if intra_blob_root call:
-            subf = 1 
-            derts_[:] = sub_blob_   # sub_blob structure is same as in root blob 
-            
+        sub_blob_ # sub_blob structure is same as in root blob 
             if len( sub_blob_) > min:
-                sub_Derts += [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs and their higher layers
+                sub_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs and their higher layers
                  
         if eval_layer branch call:  # multi-layer intra_blob, top derts_ structure is layer_
-            layerf = 1
-            sub_blob_ = [(sub_Derts, derts_)]  # appended by lower layers across derivation tree per root blob, flat | nested?  
+            layer_f = 1
+            sub_blob_ = [(sub_Derts, sub_blob_)]  # appended by lower layers across derivation tree per root blob, flat | nested?  
             
             if len( sub_blob_) > min
-                lay_Derts += [(Ly, L, I, Dx, Dy, G)]  # one Dert per pos sub_blobs of referred layer and its higher layers
+                lay_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs of referred layer and its higher layers
               
     Derts over sub_blobs_ and layer_ are same params as in Derts of their root blob, but summed from positive sub_blobs only
     Derts of Lower layers are not represented in higher layers.
@@ -66,24 +65,23 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
 
             if blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
                 val_ = []
-                for sub_blob in blob.derts_:
-                    sub_blob.derts_ = [[[dert] for dert in sub_blob.derts_]]  # each dert = [dert] before 1st derts.append
+                for sub_blob in blob.sub_blob_:
 
                     if sub_blob.sign and sub_blob.Derts[-1][-1] > ave_blob * 2:  # g > ave and G > fixed costs of comp_angle
                         master_blob( sub_blob, comp_angle)  # sub_blob = master ablob, no alt type rdn: no eval_layer
 
-                        for ablob in sub_blob.derts_:  # eval / ablob: unique, def / ga sign, vs. rdn ablob_ || xblob_ if / gblob
+                        for ablob in sub_blob.sub_blob_:  # eval / ablob: unique, def / ga sign, vs. rdn ablob_ || xblob_ if / gblob
                             I, Dx, Dy, G = ablob.Derts[-2]  # Derts include params of all higher layers
                             A, Dxa, Dya, Ga = ablob.Derts[-1]; Ave = ave * ablob.L
 
                             val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
-                            val_deriv = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
-                            val_range = G - val_deriv  # non-directional G: likely reversal, distant-pixels match
+                            val_gradient = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
+                            val_range = G - val_gradient  # non-directional G: likely reversal, distant-pixels match
 
                             # estimated next-layer values per ablob:
-                            val_ += [(val_angle, 1, ablob), (val_deriv, 2, ablob), (val_range, 3, ablob)]
+                            val_ += [(val_angle, 1, ablob), (val_gradient, 2, ablob), (val_range, 3, ablob)]
                 if val_:
-                    sub_blob.derts_ = [(sub_blob.sub_Derts, sub_blob.derts_)]  # sub_Derts fill-in eval in master_blob()
+                    sub_blob.derts_ = [(sub_blob.sub_Derts, sub_blob.sub_blob_)]  # sub_Derts fill-in eval in master_blob()
                     # for unique root gblobs of ablobs in val_, then master blobs of converted gblobs, by reverse ref?
                     # layer is packed (won't be extended), layer_ is appended at future intra_blob eval_layer calls
 
@@ -97,23 +95,23 @@ def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_ang
 
     if typ == 0:
         master_blob(blob, comp_angle)
-        for ablob in blob.derts_:  # sub_blobs are defined by the sign of angle gradient deviation
+        for ablob in blob.sub_blob_:  # sub_blobs are defined by the sign of angle gradient deviation
 
             I, Dx, Dy, G = ablob.Derts[-2]   # Derts include params of all higher layers
             A, Dxa, Dya, Ga = ablob.Derts[-1]; Ave = ave * ablob.L  # to restore G from G_deviation for val_deriv:
 
             val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
-            val_deriv = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
-            val_range = G - val_deriv  # non-directional G: likely reversal, distant-pixels match
+            val_gradient = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
+            val_range = G - val_gradient  # non-directional G: likely reversal, distant-pixels match
 
             # estimated next-layer values per ablob:
-            vals += [(val_angle, 1, ablob), (val_deriv, 2, ablob), (val_range, 3, ablob)]
+            vals += [(val_angle, 1, ablob), (val_gradient, 2, ablob), (val_range, 3, ablob)]
     else:
-        if typ == 1:   master_blob(blob, comp_deriv, 1)  # comp over ga_: 1 selects aDert at Derts[-1]
-        elif typ == 2: master_blob(blob, comp_deriv, 0)  # comp over g_ with incremental derivation
+        if typ == 1:   master_blob(blob, comp_gradient, 1)  # comp over ga_: 1 selects aDert at Derts[-1]
+        elif typ == 2: master_blob(blob, comp_gradient, 0)  # comp over g_ with incremental derivation
         else:          master_blob(blob, comp_range, 0)  # comp over i_ with incremental distance
 
-        for xblob in blob.derts_:  # mixed-type sub_blobs, evaluated for comp_angle:
+        for xblob in blob.sub_blob_:  # mixed-type sub_blobs, evaluated for comp_angle:
             vals += [(xblob.Derts[-1][-1], 0, xblob)]  # val_comp_angle = G
 
     return vals  # also, blob is converted into branch-specific master_blob, with added Derts[-1] and derts[-1]
@@ -133,9 +131,9 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
             # redundancy to higher and stronger-branch overlapping blobs, * specific branch cost ratio?
 
         if val > ave * blob.L * rdn + ave_blob:  # val > ave * blob_area * rdn + fixed cost of master_blob per branch
-            for sub_blob in blob.derts_:  # sub_blob_ of any type
+            for xblob in blob.sub_blob_:  # sub_blob_ of any type
 
-                sub_vals = branch(sub_blob, typ)  # branch-specific recursion step
+                sub_vals = branch(xblob, typ)  # branch-specific recursion step
                 if sub_vals:  # not empty
                     sub_val_ += sub_vals
 
@@ -145,8 +143,8 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
 
     if sub_val_:  # not empty
         rdn += 1  # redundancy to higher-layer blobs
-        if blob.layerf == 0:  # derts_ == sub_blob_, convert to layer_:
-            blob.derts_ = [(blob.sub_Derts, blob.derts_)]  # for unique root blobs of sub_blob in sub_val_?
+        if blob.layers_f == 0:  # convert sub_blob_ to layer_:
+            blob.sub_blob_ = [(blob.sub_Derts, blob.sub_blob_)]  # for unique root blobs of sub_blob in sub_val_?
 
         eval_layer(sub_val_, rdn)  # evaluate each sub_val for recursion within its sub_blob
 

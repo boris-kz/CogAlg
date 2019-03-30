@@ -414,11 +414,11 @@ cv2.imwrite('./images/dblobs_horizontal.jpg', rebuild_blobs(frame_of_blobs[0]))
 # cv2.imwrite('./images/mblobs_vertical.jpg', rebuild_blobs(frame_of_blobs[3]))
 
 # Check for redundant segments  --------------------------------------------------
-print: 'Searching for redundant segments...\n'
+# print: 'Searching for redundant segments...\n'
 for frame in frame_of_blobs:
     for blob in frame[2]:
         for i, seg in enumerate(blob):
             for j, seg2 in enumerate(blob):
-                if i != j and seg is seg2: print: 'Redundant segment detected!\n'
+                if i != j and seg is seg2: print 'Redundant segment detected!\n'
 
 # ************ PROGRAM BODY END ******************************************************************************************

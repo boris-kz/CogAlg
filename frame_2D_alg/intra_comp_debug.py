@@ -1,6 +1,6 @@
 import numpy as np
 from collections import deque, namedtuple
-nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')
+nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f sub_Derts map box add_dert rng ncomp')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -master_blob()
@@ -10,7 +10,9 @@ nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp
 # -form_blob()
 # ***********************************************************************************************************************
 
-def master_blob(blob, branch_comp, add_dert=True):  # redefine blob as branch-specific master blob: local equivalent of frame
+''' this function is under revision '''
+
+def master_blob(blob, comp_branch, add_dert=True):  # redefine blob as branch-specific master blob: local equivalent of frame
 
     height, width = blob.map.shape
 
@@ -22,7 +24,7 @@ def master_blob(blob, branch_comp, add_dert=True):  # redefine blob as branch-sp
     if height < 3 or width < 3:
         return False
 
-    rng = branch_comp(blob)  # also adds a branch-specific dert_ to blob
+    rng = comp_branch(blob)  # also adds a branch-specific dert_ to blob
     rng_inc = bool(rng - 1)  # flag for comp range increase
 
     if blob.new_dert__[0].mask.all():
@@ -195,9 +197,9 @@ def form_blob(term_seg, master_blob, rng_inc = False): # terminated segment is m
         map = map[y0:yn, x0:xn]
 
         master_blob.params[-4:] = [par1 + par2 for par1, par2 in zip(master_blob.params[-4:], blob_params[-4:])]
-        
+
         master_blob.sub_blob_[-1].append(nt_blob(typ=0, sign=s, Ly=Ly, L=L,
-                                                 Derts=[(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
+                                                 Derts=[(I, Dy, Dx, G)],  # not selective to +sub blobs as sub_Derts
                                                  derts_=derts_,  # intra_blob will convert each dert of selected blobs into [dert]
                                                  subf=0,   # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
                                                  layerf=0,  # flag: derts_ = [(sub_Derts, derts_)], appended per intra_blob eval_layer
@@ -210,7 +212,7 @@ def form_blob(term_seg, master_blob, rng_inc = False): # terminated segment is m
                                                  ncomp=1(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1,
                                                  ))
         '''
-        replace with:
+        replace:
         
         master_blob.sub_blobs[0][:] += Derts[:]  # accumulate each Derts param
         

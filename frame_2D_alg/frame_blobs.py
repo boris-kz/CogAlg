@@ -214,12 +214,12 @@ def form_blob(term_seg,
     blob[3] += roots - 1  # number of open segments
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
-        s, [Ly, L, Y, X, I, Dy, Dx, G], e_ = blob[:3]
+        s, [Ly, L, Y, X, I, Dy, Dx, G], seg_ = blob[:3]
         y0 = 9999999
         x0 = 9999999
         yn = 0
         xn = 0
-        for seg in e_:
+        for seg in seg_:
             seg.pop()  # remove references to blob
             for P in seg[2]:
                 y0 = min(y0, P[2][0][0])
@@ -227,9 +227,9 @@ def form_blob(term_seg,
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        dert__ = frame[-1][y0:yn, x0:xn, :]
-        map = np.zeros((height, width), dtype=bool)
-        for seg in e_:
+        # dert__ = frame[-1][y0:yn, x0:xn, :]  # not needed?
+        map = np.zeros((height, width), dtype=bool)  # not needed?
+        for seg in seg_:
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[2]:
                     map[y, x] = True
@@ -241,12 +241,11 @@ def form_blob(term_seg,
         frame[0][3] += G
 
         frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
-                                Derts=[(I, Dy, Dx, G)],  # will remain after derts_ replacement: not selective to +sub_blobs
-                                derts_=dert__,  # intra_blob will convert each dert of selected blobs into [dert]
-                                subf=0,   # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
-                                layerf=0,  # flag: derts_ = [(sub_Derts, derts_)], appended per intra_blob eval_layer
-                                sub_Derts=[],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                lay_Derts=[],  # layer_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(layer_) > min
+                                Derts=[(I, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
+                                seg_=seg_,  # intra_comp will convert each dert of selected blobs into [dert]
+                                sub_blob_ = [],  # no derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
+                                sub_Derts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                layer_f = 0,  # flag: layer_ Derts = sub_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
                                 box=(y0, yn, x0, xn),
                                 map=map,
                                 add_dert=None,
@@ -267,7 +266,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts derts_ subf layerf sub_Derts lay_Derts map box add_dert rng ncomp')
+nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layer_f sub_Derts map box add_dert rng ncomp')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_root      # not yet functional, comment-out to run
