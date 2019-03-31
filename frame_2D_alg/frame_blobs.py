@@ -228,7 +228,7 @@ def form_blob(term_seg,
                 xn = max(xn, P[2][-1][1] + 1)
 
         # dert__ = frame[-1][y0:yn, x0:xn, :]  # not needed?
-        map = np.zeros((height, width), dtype=bool)  # not needed?
+        map = np.zeros((height, width), dtype=bool)
         for seg in seg_:
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[2]:
