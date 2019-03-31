@@ -7,14 +7,15 @@ def draw_blob(blob, img, globalize_coords = (0, 0)):
     y0, x0 = globalize_coords
     for seg in blob.e_:
         for P in seg[2]:
+            y = P[1][1] // P[1][0]
             for dert in P[2]:
-                y, x = dert[:2]
+                x = dert[:2]
                 img[y+y0, x+x0] = 255 if s else 0
 
 def draw_blobs(path, frame, isb=-1):
     " Rebuilt data of blobs into an image "
 
-    height, width = frame[-1].shape[:2]
+    height, width = frame[-1]
     frame_img = np.array([[127] * width] * height)
 
     for i, blob in enumerate(frame[1]):
