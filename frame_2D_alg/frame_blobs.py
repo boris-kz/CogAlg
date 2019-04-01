@@ -41,11 +41,11 @@ import numpy as np
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], []]  # params, blob_
-    comp_pixel(frame, image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    dert_ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
-        P_ = form_P_(y, frame)  # horizontal clustering
+        P_ = form_P_(y, dert_)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(P_, frame)
 
@@ -55,7 +55,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
-def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
+def comp_pixel(p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
     dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
@@ -68,43 +68,40 @@ def comp_pixel(frame, p__):  # bilateral comparison between vertically and horiz
     dert__[1:-1, 1:-1, 2] = dx__
     dert__[1:-1, 1:-1, 3] = vg__
 
-    frame.append(dert__)
+    return dert__
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 
-def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
+def form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # P buffer
-    dert_ = frame[-1][y, :, :]  # row of pixels + derivatives
-    x_stop = width - 1
-    x = 1  # first and last columns are discarded
+    L, I, Dy, Dx, G = 0, 0, 0, 0, 0
+    P_dert_ = []
+    dert_ = dert__[y]  # row of pixels + derivatives
+    _i, _dy, _dx, _g = dert_[0]
+    _s = _g > 0
 
-    while x < x_stop:
-        s = dert_[x][-1] > 0  # s = g > 0
-        params = [0, 0, 0, 0, 0, 0, 0]  # L, Y, X, I, Dy, Dx, G
-        P = [s, params, []]
-        while x < x_stop and s == P[0]:
-            i, dy, dx, g = dert_[x, :]  # accumulate P params:
-            params[0] += 1  # L
-            params[1] += y  # Y
-            params[2] += x  # X
-            params[3] += i  # I
-            params[4] += dy  # dy
-            params[5] += dx  # dx
-            params[6] += g  # G
-            P[2].append((y, x, i, dy, dx, g))
-            x += 1
-            s = dert_[x][-1] > 0  # s = g > 0
+    for x, (i, dy, dx, g) in enumerate(dert_[1:]):
+        s = g > 0
+        if s != _s:
+            P_.append([_s, L, I, Dy, Dx, G, P_dert_])  # P is packed into P_
+            L, I, Dy, Dx, G = 0, 0, 0, 0, 0   # new P
+            P_dert_ = []
+        L += 1
+        I += _i  # accumulate P params
+        Dy += _dy
+        Dx += _dx
+        G += _g
+        P_dert_.append((y, x-1, i, dy, dx, g))
+        _s = s; _i = i; _dy = dy; _dx = dx; _g = g  # convert dert to prior dert
 
-        if params[0]:  # if L > 0
-            P_.append(P)  # P is packed into P_
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
 
-def scan_P_(P_, seg_, frame):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
+def scan_P_(P_, seg_, frame):  # detect contiguity (forks) between Ps and _Ps, to form blob segments
     new_P_ = deque()
 
     if P_ and seg_:  # if both are not empty
@@ -113,7 +110,7 @@ def scan_P_(P_, seg_, frame):  # this function detects connections (forks) betwe
         _P = seg[2][-1]  # last element of each segment is higher-line P
         stop = False
         fork_ = []
-        while not stop:
+        while not stop:    # P = s, (L, I, Dy, Dx, G), dert_ (each: y, x, i, dy, dx, g)
             x0 = P[2][0][1]  # first x in P
             xn = P[2][-1][1]  # last x in P
             _x0 = _P[2][0][1]  # first x in _P
@@ -243,13 +240,14 @@ def form_blob(term_seg,
         frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
                                 Derts=[(I, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
                                 seg_=seg_,  # intra_comp will convert each dert of selected blobs into [dert]
-                                sub_blob_ = [],  # no derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
-                                sub_Derts = [],  # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layer_f = 0,  # flag: layer_ Derts = sub_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
-                                box=(y0, yn, x0, xn),
-                                map=map,
-                                add_dert=None,
-                                rng=1, ncomp=1
+                                sub_blob_ = [],  # top layer, blob derts_ -> sub_blob derts_
+                                sub_Derts = [],  # sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                layer_f = 0,   # flag: layer_ Derts = sub_Derts, sub_blob_= [(sub_Derts, derts_)], append / eval_layer
+                                box=(y0, yn, x0, xn),  # boundary box
+                                map=map,  # blob boolean map, to compute overlap
+                                add_dert=None,  # for hypot_g only?
+                                rng=1,    # for comp_range per blob
+                                ncomp=1   # for comp_range per dert
                                 ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 

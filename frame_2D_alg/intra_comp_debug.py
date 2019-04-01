@@ -18,8 +18,8 @@ def master_blob(blob, comp_branch, add_dert=True):  # redefine blob as branch-sp
 
     if add_dert:
         blob.Derts.append(0, 0, 0, 0)  # I, Dy, Dx, G
-        for i, derts in enumerate (blob.derts_):
-            blob.derts_[i] = derts.append((0, 0, 0, 0))  # i, dy, dx, g
+        # for i, derts in enumerate (blob.derts_):
+        #    blob.derts_[i] = derts.append((0, 0, 0, 0))  # i, dy, dx, g
 
     if height < 3 or width < 3:
         return False

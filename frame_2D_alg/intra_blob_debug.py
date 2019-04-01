@@ -82,7 +82,7 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
                             val_ += [(val_angle, 1, ablob, blob), (val_gradient, 2, ablob, blob), (val_range, 3, ablob, blob)]
 
                 if val_: eval_layer(val_, 2)  # rdn = 2: redundancy to higher-layer blob, or rdn = n ablobs?
-                # val_ is merged over two new layers: blob_ ( ablob_, for each top_blob
+                # val_ is merged over two new layers: blob_ ( ablob_) for each top_blob,
 
     return frame  # frame of 2D patterns is output to level 2
 
@@ -118,21 +118,20 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
 
     val_ = sorted(val_, key=lambda val: val[0])
     sub_val_ = []  # estimated branch values of a deeper layer of recursion tree per blob
-    box_map_ = []  # blob boxes + maps of stronger branches in val_, appended for next (lower) val evaluation
+    map_ = []  # blob boxes + maps of stronger branches in val_, appended for next (lower) val evaluation
 
     while val_:
         val, typ, blob, root_blob = val_.pop()  # root_blob: ref to add new layer to master blob, root_blobs if multi-layer:
-        for box, map in box_map_:  # of higher-value blobs in the layer, incrementally nested, with root_blobs per blob?
+        for box, map in map_:  # of higher-value blobs in the layer, incrementally nested, with root_blobs per blob?
             
             olp = overlap(blob, box, map)
             rdn += 1 * (olp / blob.Derts[-1][-1])  # rdn += 1 * (olp / G):
             # redundancy to higher and stronger-branch overlapping blobs, * specific branch cost ratio?
 
         if val > ave * blob.L * rdn + ave_blob:  # val > ave * blob_area * rdn + fixed cost of master_blob per branch
-            for xblob in blob.sub_blob_:  
-                sub_vals, box_maps = branch(xblob, typ)  # from sub_blobs of specific intra_comp branch
-                sub_val_ += sub_vals
-                box_map_ += box_maps
+            map_ += [(blob.box, blob.map)]
+            for xblob in blob.sub_blob_:
+                sub_val_ += branch(xblob, typ)  # from sub_blobs of intra_comp branch = typ
         else:
             break
     if root_blob.layer_f:  # root_blob per sub_blob in sub_val_, root_blobs if multi-layer?
