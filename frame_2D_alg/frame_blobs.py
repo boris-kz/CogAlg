@@ -79,7 +79,7 @@ def comp_pixel(p__):  # bilateral comparison between vertically and horizontally
     g__ = np.abs(dy__) + np.abs(dx__) - ave             # deviation of gradient, initially approximated as |dy| + |dx|
 
     # break-down into derts:
-    derts__ = [[(p__[y, x], (ncomp__[y, x], dy__[y, x], dx__[y, x], g__[y, x])) for x in range(width)] for y in range(height)]
+    derts__ = [[(p__[y, x], (ncomp__[y, x], dy__[y, x], dx__[y, x]), g__[y, x]) for x in range(width)] for y in range(height)]
 
     return derts__
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
@@ -91,7 +91,7 @@ def form_P_(y, derts__):  # cluster and sum horizontally consecutive pixels and 
     x = 0
 
     while x < width:
-        i, (n, dy, dx, g) = derts_[x]
+        i, (n, dy, dx), g = derts_[x]
         s = g > 0                   # pre-evaluate
         Derts = [0, 0, 0, 0, [0, 0, 0, 0]]  # L, Y, X, I, [N, Dy, Dx, G]
         P = [s, Derts, []]
@@ -105,11 +105,13 @@ def form_P_(y, derts__):  # cluster and sum horizontally consecutive pixels and 
             Derts[4][1] += dy # Dy
             Derts[4][2] += dx # Dx
             Derts[4][3] += g  # G
-            P[2].append((x, i, (n, dy, dx, g)))
+            P[2].append((x, i, (n, dy, dx), g))
 
             x += 1
 
             s = g > 0  # s = (g > 0)
+
+        P_.append(P)
 
     return P_
 
