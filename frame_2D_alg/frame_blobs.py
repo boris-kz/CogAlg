@@ -101,7 +101,7 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
             params[4] += dy  # dy
             params[5] += dx  # dx
             params[6] += g  # G
-            P[2].append((y, x, i, dy, dx, g))
+            P[2].append((x, i, dy, dx, g))
             x += 1
             s = dert_[x][-1] > 0  # s = (g > 0)
 
@@ -227,21 +227,21 @@ def form_blob(term_seg,
         x0 = 9999999
         yn = 0
         xn = 0
+
+        map = np.zeros((height, width), dtype=bool)
         for seg in e_:
             seg.pop()  # remove references to blob
             for P in seg[2]:
-                y0 = min(y0, P[2][0][0])
-                x0 = min(x0, P[2][0][1])
-                yn = max(yn, P[2][0][0] + 1)
-                xn = max(xn, P[2][-1][1] + 1)
-
-        dert__ = frame[-1][y0:yn, x0:xn, :]
-        map = np.zeros((height, width), dtype=bool)
-        for seg in e_:
-            for P in seg[2]:
-                for y, x, i, dy, dx, g in P[2]:
+                L, Y = P[1][:2]
+                y = Y // L              # y of P
+                y0 = min(y0, y)         # upper bound of blob
+                yn = max(yn, y + 1)     # lower bound of blob
+                for x, i, dy, dx, g in P[2]:
                     map[y, x] = True
-        map = map[y0:yn, x0:xn]
+                    x0 = min(x0, x)     # left bound of blob
+                    xn = max(xn, x + 1) # right bound of blob
+
+        map = map[y0:yn, x0:xn]         # get local map
 
         frame[0][0] += I
         frame[0][1] += Dy

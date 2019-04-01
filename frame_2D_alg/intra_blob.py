@@ -6,7 +6,7 @@ from comp_range import comp_range
 # from comp_P_ import comp_P_
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
-from generic_branch import master_blob
+from intra_comp import master_blob
 
 '''
     - this function is under revision

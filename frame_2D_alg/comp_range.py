@@ -2,7 +2,7 @@ import numpy as np
 import numpy.ma as ma
 from math import hypot
 from collections import deque
-import generic_branch
+import intra_comp
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------

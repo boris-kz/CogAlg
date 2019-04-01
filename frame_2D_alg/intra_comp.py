@@ -1,14 +1,111 @@
+import bisect
 import numpy as np
 from collections import deque, namedtuple
 nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')
 
 # ************ FUNCTIONS ************************************************************************************************
+# -unfold()
 # -master_blob()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
 # ***********************************************************************************************************************
+def unfold1(blob, offset_):     # perform compare while unfolding
+    # Process every segment bottom-up (spatially)
+    # indicate comparands
+    # if a comparand goes beyond the segment vertically, look into it's forks (recursive)
+    # by convention, comparand's vertical coordinate is always smaller than that of the main comparand (yd > 0)
+    # currently dert_ produced is only a draft
+
+    raw_dert_ = []              # buffer for results
+
+    yd_, xd_ = zip(*offset_)    # here, we assume that each offset is in the form of (yd, xd) and yd > 0
+    yd_ = [-yd for yd in dy_]   # comps are upward
+
+    # fetch a list of no-root segments, reverse-sorted by minimum vertical coordinates: (Py_'s first P's y: Y // L)
+    root_ = sorted([(seg[2][0][1][1] // seg[2][0][1][0], seg) for seg in blob[2] if seg[3] == 0], key=lambda root: root[0], reverse=True)
+
+    while root_:
+        min_y, seg = root_.pop(0)
+
+        for iP, P in seg[2]:        # vertical search
+
+            y = P[1][1] // P[1][0]
+            P2__ = []               # list of list of potential comparands' P (there might be more than 1 in forks)
+            for yd in yd_:          # iterate through the list of comparands' yds
+                P2_ = []            # keep a list of potential comparands' P (there might be more than 1 in forks)
+                iP2 = iP + yd       # index in Py_ based on vertical coordinate
+                find_P2(seg, P2_, iP2)  # find all potential comparands' P
+
+            for dert in P[2]:       # horizontal search
+
+                x = dert[0]
+                for xd, P2_ in zip(xd_, P2__):  # iterate through potential comparands
+                    x2 = x + xd                 # horizontal coordinate
+
+                    stop = False                # stop flag
+                    for P2 in P2_:              # iterate through potential comparands' Ps
+                        if stop:
+                            break
+                        for dert2 in P2[2]:     # iterate through potential comparands' Ps' derts
+                            if x2 == dert2[0]:  # if dert's coordinates are identical with target coordinates (vertical coordinate is already matched)
+                                y2 = y + yd     # compute actual vertical coordinate
+                                stop = True     # stop
+                                break
+
+                    if stop == True:            # if a comparand with the right coordinate is found:
+                        # comparison goes here:
+
+                        raw_dert_.append((y, x, dy, dx))    # dert is wrong here
+                        raw_dert_.append((y2, x2, dy, dx))  # dert is wrong here
+
+        for fork in seg[4]: # buffer seg into root_
+            bisect.insort(root_, (fork[2][0][1][1] // fork[2][0][1][0], fork))      # insert the tuple so that root_ stay sorted (by min_y)
+
+    # combine raw derts back into derts (with ncomp):
+
+    dert_ = []
+
+    raw_dert_.sort(key=lambda dert: dert[1])    # sorted by x coordinates
+    raw_dert_.sort(key=lambda dert: dert[0])    # sorted by y coordinates
+
+    i = 0
+    while i < len(raw_dert_) - 1:
+        y, x, dy, dx = dert_[i][:2]
+        ncomp = 0
+        while y == dert_[i + 1][0] and x == dert_[i + 1][1]:        # x, y axes' coordinates are identical
+            i += 1
+            ncomp += 1
+            dy += dert_[i][2]
+            dx += dert_[i][3]
+
+        dert_.append((y, x, (ncomp, dy, dx)))   # dert is wrong here, will correct it in a complete version
+
+        i += 1
+
+    return dert_
+
+def find_P2(seg, P2_, iP2):     # used in unfold1() to find all potential comparands' Ps (P2) with given vertical coordinate (P index in Py_)
+
+    if iP2 > 0:                 # if P's coordinate is within segment
+        P2_.append(seg[2][iP2]) # buffer P with given index
+    else:                       # if P's is beyond segment
+        for fork in seg[4]:         # look for P in segment's forks. Stop if seg[4] == []  (no fork)
+            find_P2(fork, P2_, fork[1][0] - iP2)    # fork[1][0] - iP2: Ly - iP2 (supposedly index of P2)
+
+def unfold2(blob):  # unfold blob and it's lower composite structures back to dert_
+
+    dert_ = []  # buffer of all blob's dert
+
+    for seg in blob.seg_:
+        for P in seg[2]:
+            y = P[1][1] // P[1][0]
+            for dert in P[2]:
+                dert_.append((y,) + dert)   # add vertical coordinate to dert
+
+    return dert_    # depend on which branch it is, Compare() function will then compare dert_ accordingly
+
 def master_blob(blob, branch_comp, new_params=True):    # redefine blob and sub_blobs by reduced g and increased ave + ave_blob: var + fixed costs of angle_blobs() and eval
 
     height, width = blob.map.shape
