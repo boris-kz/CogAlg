@@ -87,25 +87,29 @@ def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and th
     dert_ = frame[-1][y, :, :]  # row of pixels + derivatives
     x_stop = width - 1
     x = 1  # first and last columns are discarded
+    _s = dert_[x][-1] > 0  # s = (g > 0)
+    s = dert_[x][-1] > 0
 
     while x < x_stop:
-        s = dert_[x][-1] > 0  # s = (g > 0)
-        params = [0, 0, 0, 0, 0, 0, 0]  # L, Y, X, I, Dy, Dx, G
-        P = [s, params, []]
-        while x < x_stop and s == P[0]:
+        L, Y, X, I, Dy, Dx, G = 0, 0, 0, 0, 0, 0, 0
+        Pdert_ = []
+        while x < x_stop and s == _s:
             i, dy, dx, g = dert_[x, :]  # accumulate P' params:
-            params[0] += 1  # L
-            params[1] += y  # Y
-            params[2] += x  # X
-            params[3] += i  # I
-            params[4] += dy  # dy
-            params[5] += dx  # dx
-            params[6] += g  # G
-            P[2].append((x, i, dy, dx, g))
+            L += 1
+            Y += y
+            X += x
+            I += i
+            Dy += dy
+            Dx += dx
+            G += g
+            Pdert_.append((x, i, dy, dx, g))
+
             x += 1
+
+            _s = s
             s = dert_[x][-1] > 0  # s = (g > 0)
 
-        P_.append(P)
+        P_.append((_s, [L, Y, X, I, Dy, Dx, G], Pdert_))
 
     return P_
 
@@ -253,9 +257,6 @@ def form_blob(term_seg,
                                 e_=e_,
                                 box=(y0, yn, x0, xn),
                                 map=map,
-                                dert__=dert__,
-                                new_dert__=[None],
-                                rng=1, ncomp=1,
                                 sub_blob_=[]))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
@@ -273,7 +274,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'sign params e_ box map dert__ new_dert__ rng ncomp sub_blob_')  # define named tuple
+nt_blob = namedtuple('blob', 'sign params e_ box map sub_blob_')  # define named tuple
 frame_of_blobs = image_to_blobs(image)
 
 # from frame_2D_alg.intra_blob import intra_blob_root

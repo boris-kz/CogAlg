@@ -32,23 +32,23 @@ def unfold1(blob, offset_):     # perform compare while unfolding
         for iP, P in seg[2]:        # vertical search
 
             y = P[1][1] // P[1][0]
-            P2__ = []               # list of list of potential comparands' P (there might be more than 1 in forks)
+            _P__ = []               # list of list of potential comparands' P (there might be more than 1 in forks)
             for yd in yd_:          # iterate through the list of comparands' yds
-                P2_ = []            # keep a list of potential comparands' P (there might be more than 1 in forks)
-                iP2 = iP + yd       # index in Py_ based on vertical coordinate
-                find_P2(seg, P2_, iP2)  # find all potential comparands' P
+                _P_ = []            # keep a list of potential comparands' P (there might be more than 1 in forks)
+                _iP = iP + yd       # index in Py_ based on vertical coordinate
+                find_P(seg, _P_, _iP)  # find all potential comparands' P
 
             for dert in P[2]:       # horizontal search
 
                 x = dert[0]
-                for xd, P2_ in zip(xd_, P2__):  # iterate through potential comparands
+                for xd, _P_ in zip(xd_, _P__):  # iterate through potential comparands
                     x2 = x + xd                 # horizontal coordinate
 
                     stop = False                # stop flag
-                    for P2 in P2_:              # iterate through potential comparands' Ps
+                    for _P in _P_:              # iterate through potential comparands' Ps
                         if stop:
                             break
-                        for dert2 in P2[2]:     # iterate through potential comparands' Ps' derts
+                        for dert2 in _P[2]:     # iterate through potential comparands' Ps' derts
                             if x2 == dert2[0]:  # if dert's coordinates are identical with target coordinates (vertical coordinate is already matched)
                                 y2 = y + yd     # compute actual vertical coordinate
                                 stop = True     # stop
@@ -86,13 +86,13 @@ def unfold1(blob, offset_):     # perform compare while unfolding
 
     return dert_
 
-def find_P2(seg, P2_, iP2):     # used in unfold1() to find all potential comparands' Ps (P2) with given vertical coordinate (P index in Py_)
+def find_P(seg, _P_, _iP):     # used in unfold1() to find all potential comparands' Ps (_P) with given vertical coordinate (P index in Py_)
 
-    if iP2 > 0:                 # if P's coordinate is within segment
-        P2_.append(seg[2][iP2]) # buffer P with given index
+    if _iP > 0:                 # if P's coordinate is within segment
+        _P_.append(seg[2][_iP]) # buffer P with given index
     else:                       # if P's is beyond segment
         for fork in seg[4]:         # look for P in segment's forks. Stop if seg[4] == []  (no fork)
-            find_P2(fork, P2_, fork[1][0] - iP2)    # fork[1][0] - iP2: Ly - iP2 (supposedly index of P2)
+            find_P(fork, _P_, fork[1][0] - _iP)    # fork[1][0] - _iP: Ly - _iP (supposedly index of _P)
 
 def unfold2(blob):  # unfold blob and it's lower composite structures back to dert_
 
