@@ -41,16 +41,16 @@ def unfold1(blob, offset_):     # perform compare while unfolding
             for dert in P[2]:       # horizontal search
 
                 x = dert[0]
-                for xd, _P_ in zip(xd_, _P__):  # iterate through potential comparands
-                    x2 = x + xd                 # horizontal coordinate
+                for xd, yd, _P_ in zip(xd_, yd_, _P__):  # iterate through potential comparands
+                    _x = x + xd                 # horizontal coordinate
 
                     stop = False                # stop flag
                     for _P in _P_:              # iterate through potential comparands' Ps
                         if stop:
                             break
                         for dert2 in _P[2]:     # iterate through potential comparands' Ps' derts
-                            if x2 == dert2[0]:  # if dert's coordinates are identical with target coordinates (vertical coordinate is already matched)
-                                y2 = y + yd     # compute actual vertical coordinate
+                            if _x == dert2[0]:  # if dert's coordinates are identical with target coordinates (vertical coordinate is already matched)
+                                _y = y + yd     # compute actual vertical coordinate
                                 stop = True     # stop
                                 break
 
@@ -58,7 +58,7 @@ def unfold1(blob, offset_):     # perform compare while unfolding
                         # comparison goes here:
 
                         raw_dert_.append((y, x, dy, dx))    # dert is wrong here
-                        raw_dert_.append((y2, x2, dy, dx))  # dert is wrong here
+                        raw_dert_.append((_y, _x, dy, dx))  # dert is wrong here
 
         for fork in seg[4]: # buffer seg into root_
             bisect.insort(root_, (fork[2][0][1][1] // fork[2][0][1][0], fork))      # insert the tuple so that root_ stay sorted (by min_y)
