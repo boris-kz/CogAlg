@@ -73,31 +73,34 @@ def comp_pixel(p__):  # bilateral comparison between vertically and horizontally
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 
-def form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(y, frame):  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # P buffer
-    L, I, Dy, Dx, G = 0, 0, 0, 0, 0
-    P_dert_ = []
-    dert_ = dert__[y]  # row of pixels + derivatives
-    _i, _dy, _dx, _g = dert_[0]
-    _s = _g > 0
+    dert_ = frame[-1][y, :, :]  # row of pixels + derivatives
+    x_stop = width - 1
+    x = 1  # first and last columns are discarded
+    _s = dert_[x][-1] > 0  # s = (g > 0)
+    s = dert_[x][-1] > 0
 
-    for x, (i, dy, dx, g) in enumerate(dert_[1:]):
-        s = g > 0
-        if s != _s:
-            P_.append([_s, L, I, Dy, Dx, G, P_dert_])  # P is packed into P_
-            L, I, Dy, Dx, G = 0, 0, 0, 0, 0   # new P
-            P_dert_ = []
-        L += 1
-        I += _i  # accumulate P params
-        Dy += _dy
-        Dx += _dx
-        G += _g
-        P_dert_.append((y, x-1, i, dy, dx, g))
-        _s = s; _i = i; _dy = dy; _dx = dx; _g = g  # convert dert to prior dert
+    while x < x_stop:
+        L, Y, X, I, Dy, Dx, G = 0, 0, 0, 0, 0, 0, 0
+        Pdert_ = []
+        while x < x_stop and s == _s:
+            i, dy, dx, g = dert_[x, :]  # accumulate P' params:
+            L += 1
+            Y += y
+            X += x
+            I += i
+            Dy += dy
+            Dx += dx
+            G += g
+            Pdert_.append((x, i, dy, dx, g))
+            x += 1
+            _s = s
+            s = dert_[x][-1] > 0  # s = (g > 0)
+        P_.append((_s, [L, Y, X, I, Dy, Dx, G], Pdert_))
 
     return P_
-
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
 
@@ -116,7 +119,7 @@ def scan_P_(P_, seg_, frame):  # detect contiguity (forks) between Ps and _Ps, t
             _x0 = _P[2][0][1]  # first x in _P
             _xn = _P[2][-1][1]  # last x in _P
 
-            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # test for sign match and x overlap
+            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # if sign match and x overlap
                 seg[3] += 1
                 fork_.append(seg)  # P-connected segments are buffered into fork_
 
@@ -216,21 +219,21 @@ def form_blob(term_seg,
         x0 = 9999999
         yn = 0
         xn = 0
+
+        map = np.zeros((height, width), dtype=bool)
         for seg in seg_:
             seg.pop()  # remove references to blob
             for P in seg[2]:
-                y0 = min(y0, P[2][0][0])
-                x0 = min(x0, P[2][0][1])
-                yn = max(yn, P[2][0][0] + 1)
-                xn = max(xn, P[2][-1][1] + 1)
-
-        # dert__ = frame[-1][y0:yn, x0:xn, :]  # not needed?
-        map = np.zeros((height, width), dtype=bool)
-        for seg in seg_:
-            for P in seg[2]:
-                for y, x, i, dy, dx, g in P[2]:
+                L, Y = P[1][:2]
+                y = Y // L              # y of P
+                y0 = min(y0, y)         # upper bound of blob
+                yn = max(yn, y + 1)     # lower bound of blob
+                for x, i, dy, dx, g in P[2]:
                     map[y, x] = True
-        map = map[y0:yn, x0:xn]
+                    x0 = min(x0, x)     # left bound of blob
+                    xn = max(xn, x + 1) # right bound of blob
+
+        map = map[y0:yn, x0:xn]         # get local map
 
         frame[0][0] += I
         frame[0][1] += Dy
@@ -279,6 +282,31 @@ from DEBUG import draw_blob
 draw_blob('./debug/frame', frame_of_blobs, -1)
 
 '''
+def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+
+    P_ = deque()  # P buffer
+    L, I, Dy, Dx, G = 0, 0, 0, 0, 0
+    Pdert_ = []
+    dert_ = dert__[y]  # row of pixels + derivatives
+    _i, _dy, _dx, _g = dert_[0]
+    _s = _g > 0
+
+    for x, (i, dy, dx, g) in enumerate(dert_[1:]):
+        s = g > 0
+        if s != _s:
+            P_.append([_s, L, I, Dy, Dx, G, Pdert_])  # P is packed into P_
+            L, I, Dy, Dx, G = 0, 0, 0, 0, 0   # new P
+            Pdert_ = []
+        L += 1
+        I += _i  # accumulate P params
+        Dy += _dy
+        Dx += _dx
+        G += _g
+        Pdert_.append((y, x-1, i, dy, dx, g))
+        _s = s; _i = i; _dy = dy; _dx = dx; _g = g  # convert dert to prior dert
+
+    return P_
+
 from filters import get_filters
 get_filters(globals())  # imports all filters at once
 from scipy import misc

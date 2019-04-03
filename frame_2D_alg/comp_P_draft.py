@@ -2,8 +2,11 @@ from collections import deque
 import math as math
 from time import time
 '''
-    comp_P_ is a component of intra_blob,
-    currently a draft
+    comp_P_ is a component of intra_blob, currently a draft
+    it will cross-compare vertically adjacent Ps (representing horizontally contiguous slices across a blob)
+    and form dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation of P params
+    (difference | match deviation per param is summed between all compared params in P)
+    This will be compositionally recursive: resulting vertically adjacent dPPs and vPPs are also evaluated for cross-comparison
 '''
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?

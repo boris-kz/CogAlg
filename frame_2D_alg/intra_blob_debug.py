@@ -74,20 +74,20 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
                             I, Dx, Dy, G = ablob.Derts[-2]  # Derts include params of all higher layers
                             A, Dxa, Dya, Ga = ablob.Derts[-1]; Ave = ave * ablob.L
 
-                            val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
+                            val_angle_g = Ga  # value of comp_ga -> gga, eval comp_angle(dax, day), next layer / aga_blob
                             val_gradient = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
                             val_range = G - val_gradient  # non-directional G: likely reversal, distant-pixels match
 
                             # estimated next-layer values per ablob:
-                            val_ += [(val_angle, 1, ablob, blob), (val_gradient, 2, ablob, blob), (val_range, 3, ablob, blob)]
+                            val_ += [(val_angle_g, 1, ablob, blob), (val_gradient, 2, ablob, blob), (val_range, 3, ablob, blob)]
 
-                if val_: eval_layer(val_, 2)  # rdn = 2: redundancy to higher-layer blob, or rdn = n ablobs?
-                # val_ is merged over two new layers: blob_ ( ablob_) for each top_blob,
+                if val_: eval_layer(val_, 2)  # rdn = 2: redundancy to higher-layer blob, or rdn = n ablobs: actual cost?
+                # val_ is merged over two new layers: blob_ ( ablob_) for each top_blob
 
     return frame  # frame of 2D patterns is output to level 2
 
 
-def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_angle, comp_ga, comp_deriv, comp_range
+def comp_branch(blob, typ):  # branch-specific comp, evaluate next-layer branches: comp_angle, comp_ga, comp_deriv, comp_range
     vals = []
 
     if typ == 0:
@@ -97,19 +97,19 @@ def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_ang
             I, Dx, Dy, G = ablob.Derts[-2]   # Derts include params of all higher layers
             A, Dxa, Dya, Ga = ablob.Derts[-1]; Ave = ave * ablob.L  # to restore G from G_deviation for val_deriv:
 
-            val_angle = Ga  # value of comp_ga -> gga, eval comp_angle(dxa, dya), next layer / aga_blob
+            val_angle_g = Ga  # value of comp_ga -> gga, eval comp_angle(dxa, dya), next layer / aga_blob
             val_gradient = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
             val_range = G - val_gradient  # non-directional G: likely reversal, distant-pixels match
 
             # estimated next-layer values per ablob:
-            vals += [(val_angle, 1, ablob, blob), (val_gradient, 2, ablob, blob), (val_range, 3, ablob, blob)]
+            vals += [(val_angle_g, 1, ablob, blob), (val_gradient, 2, ablob, blob), (val_range, 3, ablob, blob)]
     else:
         if typ == 1:   master_blob(blob, comp_gradient, 1)  # comp over ga_: 1 selects aDert at Derts[-1]
         elif typ == 2: master_blob(blob, comp_gradient, 0)  # comp over g_ with incremental derivation
-        else:          master_blob(blob, comp_range, 0)  # comp over i_ with incremental distance
+        else:          master_blob(blob, comp_range, 0)     # comp over i_ with incremental distance
 
         for xblob in blob.sub_blob_:  # mixed-type sub_blobs, evaluated for comp_angle:
-            vals += [(xblob.Derts[-1][-1], 0, xblob, blob)]  # val_comp_angle = G
+            vals += [(xblob.Derts[-1][-1], 0, xblob, blob)]  # val_angle = G
 
     return vals  # blob is converted into branch-specific root_blob, with added Derts[-1] and derts[-1]
 
@@ -131,7 +131,7 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
         if val > ave * blob.L * rdn + ave_blob:  # val > ave * blob_area * rdn + fixed cost of master_blob per branch
             map_ += [(blob.box, blob.map)]
             for xblob in blob.sub_blob_:
-                sub_val_ += branch(xblob, typ)  # from sub_blobs of intra_comp branch = typ
+                sub_val_ += comp_branch(xblob, typ)  # from sub_blobs of intra_comp branch = typ
         else:
             break
     if root_blob.layer_f:  # root_blob per sub_blob in sub_val_, root_blobs if multi-layer?
