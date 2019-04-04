@@ -9,7 +9,7 @@ ave_rate = 0.25     # match rate: ave_match_between_ds / ave_match_between_ps, i
 angle_coef = 128 / __math__.pi  # coef to convert radian to 256 degrees
 A_cost = 1000
 a_cost = 15
-input_path = './../images/raccoon.jpg'
+input_path = './../images/raccoon_eye.jpg'
 '''    
 ave_blob should be estimated as a multiple of ave (variable cost of refining g and a per dert):
 ave_blob = (hypot_g() + angle_blobs()) blob_delay / (hypot_g() + angle_blobs()) dert_delay

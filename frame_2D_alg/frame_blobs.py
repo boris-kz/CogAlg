@@ -42,15 +42,14 @@ get_filters(globals())  # imports all filters at once
 # -form_blob()
 # ***********************************************************************************************************************
 
-def image_to_blobs(
-        image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
+def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    frame = [[0, 0, 0, 0], []]  # params, blob_
-    comp_pixel(frame, image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    frame = [[0, 0, 0, 0], [], image.shape]     # params, blob_, shape
+    dert__ = comp_pixel(image)                  # vertically and horizontally bilateral comparison of adjacent pixels
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
-        P_ = form_P_(y, frame)  # horizontal clustering
+        P_ = form_P_(y, dert__)     # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(P_, frame)
 
@@ -60,14 +59,12 @@ def image_to_blobs(
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
-def comp_pixel(frame, p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
+def comp_pixel(p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
     dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
-    dy__ = p__[2:, 1:-1] - p__[:-2,
-                           1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
-    dx__ = p__[1:-1, 2:] - p__[1:-1,
-                           :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
+    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
+    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
     g__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
 
     dert__[:, :, 0] = p__
@@ -75,36 +72,38 @@ def comp_pixel(frame, p__):  # bilateral comparison between vertically and horiz
     dert__[1:-1, 1:-1, 2] = dx__
     dert__[1:-1, 1:-1, 3] = g__
 
-    frame.append(dert__)
+    return dert__
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 
-def form_P_(y, frame):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
-    dert__ = frame[-1]
-    P_ = deque()  # P buffer
-    dert_ = dert__[y]  # row of pixels + derivatives
-    _i, _dy, _dx, _g = dert_[1]
-    L, I, Dy, Dx, G = 1, _i, _dy, _dx, _g
-    P_dert_ = [(y, 1, _i, _dy, _dx, _g)]
-    _s = _g > 0
+    P_ = deque()                        # P buffer
+
+    dert_ = dert__[y]                   # row of pixels + derivatives
+    i, dy, dx, g = dert_[1]             # first dert in line
+    L, I, Dy, Dx, G = 1, i, dy, dx, g   # first dert's params buffer
+    P_dert_ = [(y, 1, i, dy, dx, g)]    # first dert buffer
+    _s = g > 0                          # first dert's sign
 
     for x, (i, dy, dx, g) in enumerate(dert_[2:-1], start=2):
-        s = g > 0
-        if s != _s:
-            P_.append([_s, L, I, Dy, Dx, G, P_dert_])  # P is packed into P_
-            L, I, Dy, Dx, G = 0, 0, 0, 0, 0   # new P
-            P_dert_ = []
+        s = g > 0                       # sign of the next dert
+        if s != _s:                     # termination check
+            P_.append([_s, L, I, Dy, Dx, G, P_dert_])   # P is packed into P_
+            L, I, Dy, Dx, G = 0, 0, 0, 0, 0             # new params for P
+            P_dert_ = []                                # new derts' buffer for P
+
+        # accumulate P params:
         L += 1
-        I += i  # accumulate P params
+        I += i
         Dy += dy
         Dx += dx
         G += g
-        P_dert_.append((y, x, i, dy, dx, g))
-        _s = s  # prior sign buffer
+        P_dert_.append((y, x, i, dy, dx, g))    # buffer dert
+        _s = s  # prior sign buffer             # buffer s for sign-checking with next dert
 
-    P_.append([_s, L, I, Dy, Dx, G, P_dert_])
+    P_.append([_s, L, I, Dy, Dx, G, P_dert_])   # terminate last P
 
     return P_
 
@@ -112,6 +111,7 @@ def form_P_(y, frame):  # horizontally cluster and sum consecutive pixels and th
 
 
 def scan_P_(P_, seg_, frame):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
+
     new_P_ = deque()
 
     if P_ and seg_:  # if both are not empty
@@ -160,19 +160,20 @@ def scan_P_(P_, seg_, frame):  # this function detects connections (forks) betwe
 
 
 def form_seg_(P_, frame):  # convert or merge every P into segment, merge blobs
+
     new_seg_ = deque()
 
     while P_:
         P, fork_ = P_.popleft()
         s = P[0]
-        params = P[1:-1]
+        params = P[1:-1]        # L, I, Dx, Dy, G
         dert_ = P[-1]
-        y, x0 = dert_[0][:2]
-        xn = dert_[-1][1]
+        y, x0 = dert_[0][:2]    # first dert's y, x
+        xn = dert_[-1][1]       # last dert's x
 
         if not fork_:  # seg is initialized with initialized blob
-            blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]      # s, params, seg_, open_segments, box
-            seg = [s, [1] + params, [P], 0, fork_, blob]    # s, params, P_, roots, fork_, blob
+            blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box
+            seg = [s, [1] + params, [P], 0, fork_, blob]                # s, params, P_, roots, fork_, blob
             blob[2].append(seg)
 
         else:
@@ -204,9 +205,9 @@ def form_seg_(P_, frame):  # convert or merge every P into segment, merge blobs
                             blob[1] = [par1 + par2 for par1, par2 in
                                        zip(blob[1], params)]  # sum same-type params of merging blobs
                             blob[3] += open_segments
-                            blob[4][0] = min(blob[4][0], box[0])
-                            blob[4][1] = min(blob[4][1], box[1])
-                            blob[4][2] = max(blob[4][2], box[2])
+                            blob[4][0] = min(blob[4][0], box[0])    # box extending: y0
+                            blob[4][1] = min(blob[4][1], box[1])    # box extending: x0
+                            blob[4][2] = max(blob[4][2], box[2])    # box extending: xn
                             for e in e_:
                                 if not e is fork:
                                     e[5] = blob  # blobs in other forks are references to blob in the first fork
@@ -214,8 +215,8 @@ def form_seg_(P_, frame):  # convert or merge every P into segment, merge blobs
                             fork[5] = blob
                             blob[2].append(fork)
                         blob[3] -= 1  # open_segments -= 1 due to merged blob shared seg
-        blob[4][1] = min(blob[4][1], x0)
-        blob[4][2] = max(blob[4][2], xn)
+        blob[4][1] = min(blob[4][1], x0)    # box extending: x0
+        blob[4][2] = max(blob[4][2], xn)    # box extending: xn
         new_seg_.append(seg)
     return new_seg_
 
@@ -224,7 +225,7 @@ def form_seg_(P_, frame):  # convert or merge every P into segment, merge blobs
 
 def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
-    params, P_, roots, fork_, blob = term_seg[1:]
+    s, params, P_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
     blob[3] += roots - 1  # number of open segments
 
@@ -233,24 +234,30 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         y0, x0, xn = box
         yn = P_[-1][-1][0][0]       # yn is y of last line
 
+        Y, X = 0, 0                 # the of all y, x of derts
         map = np.zeros((yn - y0 + 1, xn - x0 + 1), dtype=bool)  # local map of blob
         for seg in e_:
             seg.pop()  # remove references to blob
             for P in seg[2]:
                 for y, x, i, dy, dx, g in P[-1]:
                     map[y - y0, x - x0] = True
+                    Y += y
+                    x += x
 
         frame[0][0] += I
         frame[0][1] += Dy
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(sign=s,
-                                params=[Ly, L, I, Dy, Dx, G],
-                                e_=e_,
+        frame[1].append(nt_blob(typ=0, sign=s, Y=Y, X=X, Ly=Ly, L=L,
+                                Derts=[(I, Dy, Dx, G)],     # not selective to +sub_blobs as in sub_Derts
+                                seg_=e_,                    # intra_comp will convert each dert of selected blobs into [dert]
+                                sub_blob_=[],   # no derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
+                                sub_Derts=[],   # sub_blob_ Derts += [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
                                 box=(y0, yn, x0, xn),
                                 map=map,
-                                sub_blob_=[]))
+                                rng=1,
+                                ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 
@@ -267,7 +274,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'sign params e_ box map sub_blob_')  # define named tuple
+nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ sub_Derts map box rng')
 frame_of_blobs = image_to_blobs(image)
 
 # from frame_2D_alg.intra_blob import intra_blob_root
