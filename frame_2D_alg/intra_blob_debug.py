@@ -22,17 +22,18 @@ from intra_comp_debug import master_blob
               #    : G * -Ga? 
               #        typ_2_blob = comp_deriv(i) 
               #        : G - (G * -Ga)? 
-              #            typ_3_blob = comp_range(i)
+              #            typ_3_blob = comp_range(i)  # no lateral overlap between typ blobs?
               
         sign, Y, X, Ly, L,  # these are common for all Derts, higher-Derts sign is always positive, else no branching 
         
         Derts = 
-            [ Dert = I, Dx, Dy, G ],  # one Dert per current and higher layers (higher if root blob is a sub_blob)
+            [ Dert = I, Dx, Dy, G ],  # one Dert per current and higher layers (higher if root blob is a sub_blob) 
         seg_ = 
             [ seg_params,  # formed in frame blobs
               Py  # vertical buffer of Ps per segment
                 [ P_params,
-                  derts = [ dert = i, dx, dy, g ]]],  # one dert per current and higher layers  
+                  derts = [ dert = i, dx, dy, g ]]],  # one dert per current and higher layers, 
+                  # for 2+ derts: typ instead of i and added ncomp?
                               
         sub_blob_ # sub_blob structure is same as in root blob 
             if len( sub_blob_) > min:
@@ -44,6 +45,8 @@ from intra_comp_debug import master_blob
             
             if len( sub_blob_) > min
                 lay_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs of referred layer and its higher layers
+                
+        map, box, rng
               
     Derts over sub_blobs_ and layer_ are same params as in Derts of their root blob, but summed from positive sub_blobs only
     Derts of Lower layers are not represented in higher layers.
@@ -53,7 +56,7 @@ from intra_comp_debug import master_blob
     inter_sub_blob() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
     inter_level() will compare between blob levels, where lower composition level is integrated by inter_sub_blob
     match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
-    inter_blob() will be 2nd level 2D algorithm: a prototype for recursive meta-level
+    inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 '''
 
 def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
@@ -70,7 +73,7 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
                     if blob.sign and blob.Derts[-1][-1] > ave_blob * 2:  # g > ave and G > fixed costs of comp_angle
                         master_blob( blob, comp_angle)  # sub_blob = master ablob, no alt type rdn: no eval_layer
 
-                        for ablob in blob.sub_blob_:  # eval / ablob: unique, def / ga sign, vs. rdn ablob_ || xblob_ if / gblob
+                        for ablob in blob.sub_blob_:  # eval / ablob: unique def / ga sign, vs rdn ablob_ || xblob_ if / gblob
                             I, Dx, Dy, G = ablob.Derts[-2]  # Derts include params of all higher layers
                             A, Dxa, Dya, Ga = ablob.Derts[-1]; Ave = ave * ablob.L
 
@@ -80,9 +83,9 @@ def intra_blob_root(frame):  # simplified initial branch() and eval_layer() call
 
                             # estimated next-layer values per ablob:
                             val_ += [(val_angle_g, 1, ablob, blob), (val_gradient, 2, ablob, blob), (val_range, 3, ablob, blob)]
-
-                if val_: eval_layer(val_, 2)  # rdn = 2: redundancy to higher-layer blob, or rdn = n ablobs: actual cost?
-                # val_ is merged over two new layers: blob_ ( ablob_) for each top_blob
+                if val_:
+                    eval_layer(val_, 2)  # rdn = 2: redundancy to higher-layer blob, or rdn = n ablobs: actual cost?
+                    # val_ is two merged layers: blob_ ( ablob_), for each top_blob
 
     return frame  # frame of 2D patterns is output to level 2
 
@@ -91,7 +94,7 @@ def comp_branch(blob, typ):  # branch-specific comp, evaluate next-layer branche
     vals = []
 
     if typ == 0:
-        master_blob(blob, comp_angle)
+        master_blob(blob, comp_angle)  # blob will pass complete variable-depth sub_blob_ to its root_blob, and so on
         for ablob in blob.sub_blob_:  # sub_blobs are defined by the sign of angle gradient deviation
 
             I, Dx, Dy, G = ablob.Derts[-2]   # Derts include params of all higher layers
@@ -121,12 +124,13 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
     map_ = []  # blob boxes + maps of stronger branches in val_, appended for next (lower) val evaluation
 
     while val_:
-        val, typ, blob, root_blob = val_.pop()  # root_blob: ref to add new layer to master blob, root_blobs if multi-layer:
+        val, typ, blob, root_blob = val_.pop()
+        # root_blob: blob per layer above blob, to assign sub_blob_ ref to add new layer to master blob
+        '''
         for box, map in map_:  # of higher-value blobs in the layer, incrementally nested, with root_blobs per blob?
-            
-            olp = overlap(blob, box, map)
+            olp = overlap(blob, box, map)  # or no lateral overlap between xblobs?
             rdn += 1 * (olp / blob.Derts[-1][-1])  # rdn += 1 * (olp / G):
-            # redundancy to higher and stronger-branch overlapping blobs, * specific branch cost ratio?
+            # redundancy to higher and stronger-branch overlapping blobs, * specific branch cost ratio? '''
 
         if val > ave * blob.L * rdn + ave_blob:  # val > ave * blob_area * rdn + fixed cost of master_blob per branch
             map_ += [(blob.box, blob.map)]
@@ -134,8 +138,8 @@ def eval_layer(val_, rdn):  # val_: estimated values of active branches in curre
                 sub_val_ += comp_branch(xblob, typ)  # from sub_blobs of intra_comp branch = typ
         else:
             break
-    if root_blob.layer_f:  # root_blob per sub_blob in sub_val_, root_blobs if multi-layer?
-        root_blob.sub_blob_+= [(blob.sub_Derts, blob.sub_blob_)]  # convert sub_blob_ to layer in layer_, new_sub_blob_?
+    if root_blob.layer_f:
+        root_blob.sub_blob_+= [(blob.sub_Derts, blob.sub_blob_)]  # convert sub_blob_ to layer_, new sub_blob_=[] in master_blob
     else:
         root_blob.sub_blob_ = [(blob.sub_Derts, blob.sub_blob_)]; root_blob.layer_f = 1
 

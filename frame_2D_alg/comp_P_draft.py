@@ -6,7 +6,9 @@ from time import time
     it will cross-compare vertically adjacent Ps (representing horizontally contiguous slices across a blob)
     and form dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation of P params
     (difference | match deviation per param is summed between all compared params in P)
-    This will be compositionally recursive: resulting vertically adjacent dPPs and vPPs are also evaluated for cross-comparison
+    comp_P is potentially micro- and macro- recursive: 
+    - resulting param derivatives are also evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
+    - resulting vertically adjacent dPPs and vPPs are also evaluated for cross-comparison, to form PPPs and so on
 '''
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
@@ -74,10 +76,12 @@ g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
 a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? 
 '''
 
-def form_P_(P_, P, _ders, s, _s):
+def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
+
     L, I, Dy, Dx, G, dert_ = P
     i, dx, dy, g = _ders
-    if s == _s:
+
+    if s == _s:  # sign of dx or dx deviation
         L += 1; I += i; Dx += dx; Dy += dy; G += g  # accumulate P params
         dert_.append((i, dy, dx, g))
         term = 1
@@ -87,20 +91,17 @@ def form_P_(P_, P, _ders, s, _s):
         term = 0
     return P_, P, term
 
-'''
+
 def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps, to comp Ps and form PPs
     new_P_ = deque()
 
-    if P_ and _P_:
-        P = P_.popleft()    # input-line Ps
-        _P = _P_.popleft()  # higher-line Ps
-        stop = False
-        fork_ = []
-        while not stop:
-            x0 = P[2][0][1]  # first x in P
-            xn = P[2][-1][1]  # last x in P
-            _x0 = _P[2][0][1]  # first x in _P
-            _xn = _P[2][-1][1]  # last x in _P
+    for (L, I, Dy, Dx, G, dert_) in P_:
+        for (_L, _I, _Dy, _Dx, _G, _dert_) in _P_:
+
+            x0 = dert_[0][1]  # first x in P
+            xn = dert_[-1][1]  # last x in P
+            _x0 = _dert_[2][0][1]  # first x in _P
+            _xn = _dert_[2][-1][1]  # last x in _P
 
             if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # test for sign match and x overlap
                 seg[3] += 1
@@ -110,7 +111,7 @@ def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps, to c
                 new_P_.append((P, fork_))
                 fork_ = []
                 if P_:
-                    P = P_.popleft()  # load next P
+                    P = P_.popleft()   # load next P
                 else:  # if no P left: terminate loop
                     if seg[3] != 1:  # if roots != 1: terminate seg
                         form_blob(seg, frame)
@@ -129,7 +130,7 @@ def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps, to c
     while seg_: # sub_Ps also fork?
         form_blob(seg_.popleft(), frame)  # roots always == 0
     return new_P_
-'''
+
 
 def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 

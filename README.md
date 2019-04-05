@@ -20,7 +20,7 @@ We need help with design and implementation of this algorithm, in Python or Juli
 Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. 
 It performs hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. “Incremental” means that first-level inputs must be minimal in complexity, such as pixels of video or equivalents in other modalities. Symbolic data is second-hand, it shouldn’t be used as primary input. 
 
-Their comparison must also be minimal in complexity: a lossless transform by inverse arithmetic operations. Initial comparison is by subtraction, similar to edge detection kernel in CNN. But my comparison forms partial match along with miss, and accumulates both inside patterns: spans of same-sign miss or match deviation. Match is compression of represented magnitude by replacing larger comparand with the miss. 
+Pixel comparison must also be minimal in complexity: a lossless transform by inverse arithmetic operations. Initial comparison is by subtraction, similar to edge detection kernel in CNN. But my comparison forms partial match along with miss, and accumulates both inside patterns: spans of same-sign miss or match deviation. Match is compression of represented magnitude by replacing larger comparand with the miss between comparands. 
 
 Specific match and miss between two variables are determined by the power of comparison operation: 
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss), 
