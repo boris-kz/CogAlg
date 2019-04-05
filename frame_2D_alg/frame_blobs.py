@@ -264,7 +264,6 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 # ************ PROGRAM BODY *********************************************************************************************
 
 from frame_2D_alg.filters import get_filters
-
 get_filters(globals())  # import all filters at once
 
 # Load inputs --------------------------------------------------------------------
