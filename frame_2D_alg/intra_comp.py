@@ -53,25 +53,25 @@ def master_blob(blob, comp_branch, add_dert=True):  # redefine blob as branch-sp
 
     # ---------- branch_master_blob() end -------------------------------------------------------------------------------
 
-def unfold(blob, offset_, comp_id):     # perform compare while unfolding. offset_ is per direction
+def unfold(blob, shift_, typ):     # perform compare while unfolding. shift_ is per direction
     # Process every segment bottom-up (spatially)
     # indicate comparands
     # if a comparand goes beyond the segment vertically, look into it's forks (recursive)
     # by convention, comparand's vertical coordinate is always smaller than that of the main comparand (yd > 0)
 
-    comp_result_ = []              # buffer for results
+    new_dert__ = []              # buffer for results
 
-    if comp_id == 2:            # compute coefs_ for comp_range (if comp_id == 2)
+    if typ == 2:            # compute coefs_ for comp_range (if typ == 2)
 
         coefs_ = []
 
-        for yd, xd in offset_:  # compute a pair of coefficient for each comp direction
+        for yd, xd in shift_:  # compute a pair of coefficient for each comp direction
 
             denominator = hypot(yd, xd)     # common denominator for the pair of coefficients
 
             coefs_.append((yd / denominator, xd / denominator))
 
-    yd_, xd_ = zip(*offset_)    # here, we assume that each offset is in the form of (yd, xd) and yd > 0
+    yd_, xd_ = zip(*shift_)    # here, we assume that each shift is in the form of (yd, xd) and yd > 0
     yd_ = [-yd for yd in dy_]   # comps are upward
 
     for seg in blob.seg_:       # iterate through blob's segments
@@ -105,49 +105,49 @@ def unfold(blob, offset_, comp_id):     # perform compare while unfolding. offse
 
                     if stop == True:            # if a comparand with the right coordinate is found:
 
-                        if comp_id == 0:        # comp_angle, will compute angle (dert[5]) if it hasn't been computed
+                        if typ == 0:        # comp_angle, will compute angle (dert[5]) if it hasn't been computed
 
                             vert = yd == -1     # indicate comp direction
                             _i, i, dy, dx = comp_angle(dert, _dert, vert)
 
-                        elif comp_id == 1:      # comp_deriv, compare g (dert[4])
+                        elif typ == 1:      # comp_deriv, compare g (dert[4])
                             vert = yd == -1     # indicate comp direction
                             _i, i, dy, dx = comp_deriv(dert, _dert, vert)
 
                         else:                   # comp_range, compare i (dert[2])
                             _i, i, dy, dx = comp_range(dert, _dert, coefs_)
 
-                        comp_result_.append((y, x, i, dy, dx))
-                        comp_result_.append((_y, _x, _i, dy, dx))
+                        new_dert__.append((y, x, i, dy, dx))
+                        new_dert__.append((_y, _x, _i, dy, dx))
 
     # combine raw derts back into derts (with ncomp) and compute g:
 
-    new_dert_ = []
+    new_new_dert_ = []
 
-    comp_result_.sort(key=lambda dert: dert[1])    # sorted by x coordinates
-    comp_result_.sort(key=lambda dert: dert[0])    # sorted by y coordinates
+    new_dert__.sort(key=lambda dert: dert[1])    # sorted by x coordinates
+    new_dert__.sort(key=lambda dert: dert[0])    # sorted by y coordinates
 
     i = 0
-    max_i = len(comp_result_) - 1
+    max_i = len(new_dert__) - 1
     while i < max_i:   # i goes through comp results with identical y, x (summing dy, dx along)
 
-        y, x, i, dy, dx, g = comp_result_[i]    # initialize dert
+        y, x, i, dy, dx, g = new_dert__[i]    # initialize dert
         ncomp = 1                               # number of comps with current dert (at coordinates y, x)
-        while i < max_i and y == comp_result_[i + 1][0] and x == comp_result_[i + 1][1]:    # y, x axes' coordinates are identical
+        while i < max_i and y == new_dert__[i + 1][0] and x == new_dert__[i + 1][1]:    # y, x axes' coordinates are identical
             i += 1  # increment i
 
             # merge derts:
             ncomp += 1                  # +1 number of comps
-            dy += new_dert_[i][3]       # sum dy
-            dx += new_dert_[i][4]       # sum dx
+            dy += new_new_dert_[i][3]       # sum dy
+            dx += new_new_dert_[i][4]       # sum dx
 
         g = hypot(dy, dx) - ncomp * ave # compute g with complete dy, dx
 
-        new_dert_.append((y, x, i, (ncomp, dy, dx), g))     # buffer into new_dert_ for folding/clustering functions
+        new_new_dert_.append((y, x, i, (ncomp, dy, dx), g))     # buffer into new_new_dert_ for folding/clustering functions
 
         i += 1
 
-    return new_dert_
+    return new_new_dert_
 
     # ---------- unfold() end -----------------------------------------------------------------------------------------------
 
@@ -226,7 +226,7 @@ def comp_range(dert, _dert, coefs):     # compare i of derts over indicated dist
     dix = int(di * coefs[1])    # horizontal coefficient
 
     return _i, i, diy, dix
-    
+
     # ---------- comp_range() end -------------------------------------------------------------------------------------------
 
 def form_P_(y, master_blob):  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
@@ -382,7 +382,6 @@ def form_blob(term_seg, master_blob,
                 yn = max(yn, P[2][0][0] + 1)
                 xn = max(xn, P[2][-1][1] + 1)
 
-        derts_ = master_blob.new_dert__[0][y0:yn, x0:xn, :]
         map = np.zeros((yn - y0, xn - x0), dtype=bool)
         for seg in e_:
             for P in seg[2]:
@@ -394,10 +393,6 @@ def form_blob(term_seg, master_blob,
 
         master_blob.sub_blob_[-1].append(nt_blob(typ=0, sign=s, Ly=Ly, L=L,
                                                  Derts=[(I, Dy, Dx, G)],  # not selective to +sub blobs as sub_Derts
-                                                 derts_=derts_,
-                                                 # intra_blob will convert each dert of selected blobs into [dert]
-                                                 subf=0,
-                                                 # flag: derts_[:]= sub_blob_ convert in intra_blob, blob derts_-> sub_blob derts_
                                                  layerf=0,
                                                  # flag: derts_ = [(sub_Derts, derts_)], appended per intra_blob eval_layer
                                                  sub_Derts=[],
@@ -408,8 +403,7 @@ def form_blob(term_seg, master_blob,
                                                  map=map,
                                                  add_dert=None,
                                                  rng=(master_blob.rng + 1) if rng_inc else 1,  # increase or reset rng
-                                                 ncomp=1(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1,
-                                                 ))
+                                                 ncomp=(master_blob.ncomp + master_blob.rng + 1) if rng_inc else 1))
         '''
         replace:
 

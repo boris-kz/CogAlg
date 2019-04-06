@@ -6,9 +6,9 @@ def draw_blob(blob, img, globalize_coords = (0, 0)):
     s = blob.sign
     y0, x0 = globalize_coords
     for seg in blob.seg_:
-        for P in seg[2]:
-            for dert in P[-1]:
-                y, x = dert[:2]
+        for y, P in zip(range(seg[0], seg[0] + seg[1][0]), seg[2]):
+            x0P, L = P[1:3]
+            for x in range(x0P, x0P + L):
                 img[y+y0, x+x0] = 255 if s else 0
 
 def draw_blobs(path, frame, isb=-1):

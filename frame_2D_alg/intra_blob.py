@@ -83,7 +83,6 @@ def branch(blob, typ):  # compute branch, evaluate next-layer branches: comp_ang
 
     return vals  # blob is converted into master_blob with added Dert[-1]
 
-
 def eval_layer(val_, rdn):  # val_: estimated values of active branches in current layer across recursion tree per blob
 
     val_ = sorted(val_, key=lambda val: val[0])
