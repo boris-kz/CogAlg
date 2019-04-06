@@ -10,28 +10,25 @@ get_filters(globals())  # imports all filters at once
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
     as |dx| + |dy|, then selectively and more precisely as hypot(dx, dy), from cross-comparison among adjacent pixels.
-    
+
     Complemented by intra_blob (recursive search within blobs), it will be a 2D version of first-level core algorithm.
     frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
-    
-    1Le, line y:    x_comp(p_): lateral pixel comparison -> tuple of derivatives dert1 ) array dert1_
-    2Le, line y- 1: y_comp(dert1_): vertical pixel comp -> 2D tuple dert2 ) array dert2_ 
-    3Le, line y- 1+ rng: form_P(dert2) -> 1D pattern P
-    4Le, line y- 2+ rng: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps 
-    5Le, line y- 3+ rng: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
-    6Le, line y- 4+ rng+ seg depth: form_blob(seg, blob): merge connected segments in fork_' incomplete blobs, recursively  
-    
-    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
-    postfix '_' denotes array name, vs. same-name elements of that array:
-    if y = rng * 2: line y == P_, line y-1 == hP_, line y-2 == seg_, line y-4 == blob_
-    
+
+    1Le, line y:   comp_pixel (lateral and vertical comp) -> pixel + derivatives tuple: dert ) frame of derts: dert__ 
+    2Le, line y-1: form_P(dert2) -> 1D pattern P
+    3Le, line y-2: scan_P_(P, hP)-> hP, roots: down-connections, fork_: up-connections between Ps 
+    4Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
+    5Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively  
+
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, convert elements of 
     lower line into elements of new higher line, then displace elements of old higher line into higher function.
     Higher-line elements include additional variables, derived while they were lower-line elements.
     Processing is mostly sequential because blobs are irregular and very difficult to map to matrices.
+    
+    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
+    postfix '_' denotes array name, vs. same-name elements of that array
 '''
-
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
@@ -44,12 +41,12 @@ get_filters(globals())  # imports all filters at once
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    frame = [[0, 0, 0, 0], [], image.shape]     # params, blob_, shape
-    dert__ = comp_pixel(image)                  # vertically and horizontally bilateral comparison of adjacent pixels
+    frame = [[0, 0, 0, 0], [], image.shape]  # params, blob_, shape
+    dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
-        P_ = form_P_(dert__[y])         # horizontal clustering
+        P_ = form_P_(dert__[y])  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
 
@@ -57,6 +54,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     return frame  # frame of 2D patterns
 
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
+
 
 def comp_pixel(p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
@@ -75,21 +73,21 @@ def comp_pixel(p__):  # bilateral comparison between vertically and horizontally
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
+
 def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
-    P_ = deque()                        # row of Ps
-    i, dy, dx, g = dert_[1]             # first dert
-    x0, L, I, Dy, Dx, G = 1, 1, i, dy, dx, g   # P params
-    P_dert_ = [(i, dy, dx, g)]    # dert buffer
-    _s = g > 0                          # sign
+    P_ = deque()  # row of Ps
+    i, dy, dx, g = dert_[1]  # first dert
+    x0, L, I, Dy, Dx, G = 1, 1, i, dy, dx, g  # P params
+    P_dert_ = [(i, dy, dx, g)]  # dert buffer
+    _s = g > 0  # sign
 
     for x, (i, dy, dx, g) in enumerate(dert_[2:-1], start=2):
         s = g > 0
-        if s != _s:                     # P is terminated and new P is initialized
+        if s != _s:  # P is terminated and new P is initialized
             P_.append([_s, x0, L, I, Dy, Dx, G, P_dert_])
             x0, L, I, Dy, Dx, G = x, 0, 0, 0, 0, 0
             P_dert_ = []
-
         # accumulate P params:
         L += 1
         I += i
@@ -99,26 +97,27 @@ def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their
         P_dert_.append((i, dy, dx, g))
         _s = s  # prior sign
 
-    P_.append([_s, x0, L, I, Dy, Dx, G, P_dert_])   # last P in row
+    P_.append([_s, x0, L, I, Dy, Dx, G, P_dert_])  # last P in row
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
+
 
 def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
 
     new_P_ = deque()
 
-    if P_ and seg_:             # if both are not empty
-        P = P_.popleft()        # input-line Ps
-        seg = seg_.popleft()    # higher-line segments,
-        _P = seg[2][-1]         # last element of each segment is higher-line P
+    if P_ and seg_:           # if both are not empty
+        P = P_.popleft()      # input-line Ps
+        seg = seg_.popleft()  # higher-line segments,
+        _P = seg[2][-1]       # last element of each segment is higher-line P
         stop = False
         fork_ = []
         while not stop:
-            x0 = P[1]           # first x in P
-            xn = x0 + P[2]      # last x in P
-            _x0 = _P[1]         # first x in _P
-            _xn = _x0 + _P[2]   # last x in _P
+            x0 = P[1]         # first x in P
+            xn = x0 + P[2]    # first x in next P
+            _x0 = _P[1]       # first x in _P
+            _xn = _x0 +_P[2]  # first x in next _P
 
             if P[0] == _P[0] and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
                 seg[3] += 1
@@ -129,18 +128,18 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                 fork_ = []
                 if P_:
                     P = P_.popleft()  # load next P
-                else:                 # if no P left: terminate loop
-                    if seg[3] != 1:   # if roots != 1: terminate seg
+                else:  # if no P left: terminate loop
+                    if seg[3] != 1:  # if roots != 1: terminate seg
                         form_blob(seg, frame)
                     stop = True
-            else:                     # no next-P overlap
-                if seg[3] != 1:       # if roots != 1: terminate seg
+            else:  # no next-P overlap
+                if seg[3] != 1:  # if roots != 1: terminate seg
                     form_blob(seg, frame)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
                     _P = seg[2][-1]
-                else:     # if no seg left: terminate loop
+                else:  # if no seg left: terminate loop
                     new_P_.append((P, fork_))
                     stop = True
 
@@ -153,20 +152,20 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
 
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
+
 def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blobs
     new_seg_ = deque()
 
     while P_:
         P, fork_ = P_.popleft()
-        s, x0 = P[:2]           # s, x0
-        params = P[2:-1]        # L, I, Dx, Dy, G
-        xn = x0 + params[0]     # xn = x0 + L
+        s, x0 = P[:2]  # s, x0
+        params = P[2:-1]  # L, I, Dx, Dy, G
+        xn = x0 + params[0]  # next-P x0 = x0 + L
 
         if not fork_:  # new_seg is initialized with initialized blob
-            blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box
-            new_seg = [y, [1] + params, [P], 0, fork_, blob]            # y0, params, Py_, roots, fork_, blob
+            blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]  # s, params, seg_, open_segments, box
+            new_seg = [y, [1] + params, [P], 0, fork_, blob]   # y0, params, Py_, roots, fork_, blob
             blob[2].append(new_seg)
-
         else:
             if len(fork_) == 1 and fork_[0][3] == 1:  # P has one fork and that fork has one root
                 new_seg = fork_[0]
@@ -180,9 +179,9 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0][5]
                 new_seg = [y, [1] + params, [P], 0, fork_, blob]  # new_seg is initialized with fork blob
-                blob[2].append(new_seg)     # segment is buffered into blob
+                blob[2].append(new_seg)  # segment is buffered into blob
 
-                if len(fork_) > 1:      # merge blobs of all forks
+                if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][3] == 1:  # if roots == 1: fork hasn't been terminated
                         form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
 
@@ -205,8 +204,8 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
                             blob[2].append(fork)
                         blob[3] -= 1  # open_segments -= 1: shared with merged blob
 
-        blob[4][1] = min(blob[4][1], x0)    # extend box x0
-        blob[4][2] = max(blob[4][2], xn)    # extend box xn
+        blob[4][1] = min(blob[4][1], x0)  # extend box x0
+        blob[4][2] = max(blob[4][2], xn)  # extend box xn
         new_seg_.append(new_seg)
 
     return new_seg_
@@ -223,7 +222,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
 
         s, [Ly, L, I, Dy, Dx, G], seg_, open_segs, (y0, x0, xn) = blob
-        yn = y0s + params[0]    # yn = y0 + Ly
+        yn = y0s + params[0]  # yn = y0 + Ly
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
         for seg in seg_:
             seg.pop()  # remove references to blob
@@ -242,11 +241,10 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 seg_=seg_,
                                 sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
                                 sub_Derts=[],  # optional sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layer_f=0,     # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
+                                layer_f=0,   # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
                                 box=(y0, yn, x0, xn),  # boundary box
-                                map=map,       # blob boolean map, to compute overlap
-                                add_dert=None, # for hypot_g only?
-                                rng=1,   # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
+                                map=map,  # blob boolean map, to compute overlap
+                                rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
                                 ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
@@ -254,6 +252,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 # ************ PROGRAM BODY *********************************************************************************************
 
 from frame_2D_alg.filters import get_filters
+
 get_filters(globals())  # import all filters at once
 
 # Load inputs --------------------------------------------------------------------
@@ -263,7 +262,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ sub_blob_ sub_Derts layer_f add_dert map box rng')
+nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ sub_blob_ sub_Derts layer_f map box rng')
 frame_of_blobs = image_to_blobs(image)
 
 # from frame_2D_alg.intra_blob import intra_blob_root
@@ -276,4 +275,5 @@ print(end_time)
 from frame_2D_alg.DEBUG import draw_blobs
 
 draw_blobs('../debug/out', frame_of_blobs, isb=-1)
+
 # ************ PROGRAM BODY END ******************************************************************************************
