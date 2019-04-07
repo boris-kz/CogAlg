@@ -24,132 +24,134 @@ nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f su
 ''' this module is under revision '''
 
 
-def master_blob(blob, comp_branch, add_dert=True):  # redefine blob as branch-specific master blob: local equivalent of frame
+def add_sub_blob(dert_, root_blob):  # redefine blob as branch-specific master blob: local equivalent of frame
 
-    height, width = blob.map.shape
-
-    if add_dert:
-        blob.Derts.append(0, 0, 0, 0)  # I, Dy, Dx, G
-        # for i, derts in enumerate (blob.derts_):
-        #    blob.derts_[i] = derts.append((0, 0, 0, 0))  # i, dy, dx, g
-
-    if height < 3 or width < 3:
-        return False
-
-    rng = comp_branch(blob)  # also adds a branch-specific dert_ to blob
-    rng_inc = bool(rng - 1)  # flag for comp range increase
-
-    if blob.new_dert__[0].mask.all():
-        return False
     seg_ = deque()
 
-    for y in range(rng, height - rng):
-        P_ = form_P_(y, blob)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, blob, rng_inc)  # vertical clustering
-        seg_ = form_seg_(P_, blob, rng_inc)  # vertical clustering
-    while seg_: form_blob(seg_.popleft(), blob, rng_inc)  # terminate last running segments
+    while dert_:
+        P_ = form_P_(dert_)                     # horizontal clustering
+        P_ = scan_P_(P_, seg_, root_blob)       # vertical clustering
+        seg_ = form_seg_(P_, blob, root_blob)   # vertical clustering
+    while seg_: form_blob(seg_.popleft(), root_blob)  # terminate last running segments
 
-    return True  # sub_blob_ != 0
+    # ---------- add_sub_blob() end -----------------------------------------------------------------------------------------
 
-    # ---------- branch_master_blob() end -------------------------------------------------------------------------------
-
-def unfold(blob, shift_, typ):     # perform compare while unfolding. shift_ is per direction
+def unfold_blob(blob, typ, shift_):     # perform compare while unfolding. shift_ is per direction
     # Process every segment bottom-up (spatially)
     # indicate comparands
     # if a comparand goes beyond the segment vertically, look into it's forks (recursive)
     # by convention, comparand's vertical coordinate is always smaller than that of the main comparand (yd > 0)
+    # 4 typ of operations: hypot_g, comp_angle, comp_deriv, comp_range
 
-    new_dert__ = []              # buffer for results
+    new_dert_ = []  # buffer for results
 
-    if typ == 2:            # compute coefs_ for comp_range (if typ == 2)
+    if typ == 0:            # unfold for hypot_g
+        for seg in blob.seg_:
+            for y, P in enumerate(seg[2], start=seg[0]):        # y starts from y0
+                for x, i, dy, dx, g in enumerate(P[-1], start=P[1]):    # x starts from x0
 
-        coefs_ = []
+                    g = hypot(dy, dx) - ave
+                    new_dert_.append((y, x, i, dy, dx, g))
 
-        for yd, xd in shift_:  # compute a pair of coefficient for each comp direction
+    elif typ == 1:           # unfold for comp_angle
 
-            denominator = hypot(yd, xd)     # common denominator for the pair of coefficients
+        a_ = []
+        for seg in blob.seg_:
+            for y, P in enumerate(seg[2], start=seg[0]):        # y starts from y0
+                for x, i, dy, dx, g in enumerate(P[-1], start=P[1]):    # x starts from x0
+                    a = int(atan2(dy, dx) * 128 / __math__.pi) + 128
+                    a_.append((y, x, a))
 
-            coefs_.append((yd / denominator, xd / denominator))
+        new_dert_ = comp_angle_(a_)
 
-    yd_, xd_ = zip(*shift_)    # here, we assume that each shift is in the form of (yd, xd) and yd > 0
-    yd_ = [-yd for yd in dy_]   # comps are upward
+    else:                   # unfold for comp_deriv or comp_range
+        if typ == 3:            # compute coefs_ for comp_range (if typ == 2)
 
-    for seg in blob.seg_:       # iterate through blob's segments
+            coefs_ = []
 
-        for iP, P in seg[2]:        # vertical search
+            for yd, xd in shift_:  # compute a pair of coefficient for each comp direction
 
-            y = P[-1][0][0]         # y of first dert
-            _P__ = []               # list of list of potential comparands' P (there might be more than 1 in forks)
-            for yd in yd_:          # iterate through the list of comparands' yds
-                _P_ = []            # keep a list of potential comparands' P (there might be more than 1 in forks)
-                _iP = iP + yd       # index in Py_ based on vertical coordinate
-                find_P(seg, _P_, _iP)  # find all potential comparands' P
+                denominator = hypot(yd, xd)     # common denominator for the pair of coefficients
 
-            for dert in P[2]:       # horizontal search
+                coefs_.append((yd / denominator, xd / denominator))
 
-                x = dert[0]
-                for xd, yd, _P_ in zip(xd_, yd_, _P__):  # iterate through potential comparands
-                    _x = x + xd                 # horizontal coordinate
+        yd_, xd_ = zip(*shift_)    # here, we assume that each shift is in the form of (yd, xd) and yd > 0
+        yd_ = [-yd for yd in dy_]   # comps are upward
 
-                    stop = False                # stop flag
-                    _dert = None                # _dert initialization
-                    for _P in _P_:              # iterate through potential comparands' Ps
-                        if stop:
-                            break
+        for seg in blob.seg_:       # iterate through blob's segments
 
-                        for _dert in _P[2]:     # iterate through potential comparands' Ps' derts
-                            if _x == _dert[1]:  # if dert's coordinates are identical with target coordinates (vertical coordinates are already matched)
-                                _y = y + yd     # compute actual vertical coordinate
-                                stop = True     # stop
+            for iP, P in seg[2]:        # vertical search
+
+                y = P[-1][0][0]         # y of first dert
+                _P__ = []               # list of list of potential comparands' P (there might be more than 1 in forks)
+                for yd in yd_:          # iterate through the list of comparands' yds
+                    _P_ = []            # keep a list of potential comparands' P (there might be more than 1 in forks)
+                    _iP = iP + yd       # index in Py_ based on vertical coordinate
+                    find_P(seg, _P_, _iP)  # find all potential comparands' P
+
+                for dert in P[2]:       # horizontal search
+
+                    x = dert[0]
+                    for xd, yd, _P_ in zip(xd_, yd_, _P__):  # iterate through potential comparands
+                        _x = x + xd                 # horizontal coordinate
+
+                        stop = False                # stop flag
+                        _dert = None                # _dert initialization
+                        for _P in _P_:              # iterate through potential comparands' Ps
+                            if stop:
                                 break
 
-                    if stop == True:            # if a comparand with the right coordinate is found:
+                            for _dert in _P[2]:     # iterate through potential comparands' Ps' derts
+                                if _x == _dert[1]:  # if dert's coordinates are identical with target coordinates (vertical coordinates are already matched)
+                                    _y = y + yd     # compute actual vertical coordinate
+                                    stop = True     # stop
+                                    break
 
-                        if typ == 0:        # comp_angle, will compute angle (dert[5]) if it hasn't been computed
+                        if stop == True:            # if a comparand with the right coordinate is found:
 
-                            vert = yd == -1     # indicate comp direction
-                            _i, i, dy, dx = comp_angle(dert, _dert, vert)
+                            if typ == 2:            # comp_deriv, compare g (dert[4])
+                                vert = yd == -1     # indicate comp direction
+                                dy, dx = comp_deriv(dert, _dert, vert)
 
-                        elif typ == 1:      # comp_deriv, compare g (dert[4])
-                            vert = yd == -1     # indicate comp direction
-                            _i, i, dy, dx = comp_deriv(dert, _dert, vert)
+                            elif typ == 3:          # comp_range, compare i (dert[2])
+                                dy, dx = comp_range(dert, _dert, coefs_)
 
-                        else:                   # comp_range, compare i (dert[2])
-                            _i, i, dy, dx = comp_range(dert, _dert, coefs_)
+                            new_dert_.append((y, x, dy, dx))
+                            new_dert_.append((_y, _x, dy, dx))
 
-                        new_dert__.append((y, x, i, dy, dx))
-                        new_dert__.append((_y, _x, _i, dy, dx))
+        # combine raw derts back into derts (with ncomp) and compute g:
 
-    # combine raw derts back into derts (with ncomp) and compute g:
 
-    new_new_dert_ = []
+        new_dert__.sort(key=lambda dert: dert[1])    # sorted by x coordinates
+        new_dert__.sort(key=lambda dert: dert[0])    # sorted by y coordinates
 
-    new_dert__.sort(key=lambda dert: dert[1])    # sorted by x coordinates
-    new_dert__.sort(key=lambda dert: dert[0])    # sorted by y coordinates
+        dert_buffer_ = new_dert_
 
-    i = 0
-    max_i = len(new_dert__) - 1
-    while i < max_i:   # i goes through comp results with identical y, x (summing dy, dx along)
+        new_dert_ = []
 
-        y, x, i, dy, dx, g = new_dert__[i]    # initialize dert
-        ncomp = 1                               # number of comps with current dert (at coordinates y, x)
-        while i < max_i and y == new_dert__[i + 1][0] and x == new_dert__[i + 1][1]:    # y, x axes' coordinates are identical
-            i += 1  # increment i
+        i = 0
+        max_i = len(dert_buffer_) - 1
+        while i < max_i:   # i goes through comp results with identical y, x (summing dy, dx along)
 
-            # merge derts:
-            ncomp += 1                  # +1 number of comps
-            dy += new_new_dert_[i][3]       # sum dy
-            dx += new_new_dert_[i][4]       # sum dx
+            y, x, dy, dx, g = dert_buffer_[i]    # initialize dert
+            ncomp = 1                               # number of comps with current dert (at coordinates y, x)
+            while i < max_i and y == dert_buffer_[i + 1][0] and x == dert_buffer_[i + 1][1]:    # y, x axes' coordinates are identical
+                i += 1  # increment i
 
-        g = hypot(dy, dx) - ncomp * ave # compute g with complete dy, dx
+                # merge derts:
+                ncomp += 1                  # +1 number of comps
+                dy += new_dert_[i][3]       # sum dy
+                dx += new_dert_[i][4]       # sum dx
 
-        new_new_dert_.append((y, x, i, (ncomp, dy, dx), g))     # buffer into new_new_dert_ for folding/clustering functions
+            g = hypot(dy, dx) - ncomp * ave # compute g with complete dy, dx
 
-        i += 1
+            new_new_dert_.append((y, x, ncomp, dy, dx, g))     # buffer into new_new_dert_ for folding/clustering functions
 
-    return new_new_dert_
+            i += 1
 
-    # ---------- unfold() end -----------------------------------------------------------------------------------------------
+    add_sub_blob(new_dert_, blob)
+
+    # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
 
 def find_P(seg, _P_, _iP):     # used in unfold() to find all potential comparands' Ps (_P) with given vertical coordinate (P index in Py_)
 
@@ -161,39 +163,71 @@ def find_P(seg, _P_, _iP):     # used in unfold() to find all potential comparan
 
     # ---------- find_P() end -----------------------------------------------------------------------------------------------
 
-def comp_angle(dert, _dert, vert=0):    # compute and compare angles
+def comp_angle_(a_):    # compare angles
 
-    if len(dert) < 6:           # check if angle exists in dert
-        ncomp, dy, dx = dert[3]
+    dert_ = [[0, 0, 0] for _ in range(len(a_))]   # ncomp, dy, dx
 
-        a = atan2(dy, dx)       # compute angle of dert
+    dert_.sort(key=lambda dert: dert[1])        # sort by x
+    dert_.sort(key=lambda dert: dert[0])        # sort by y, derts are now in row-major order
 
-        dert.append(a)          # buffer for comps with other derts
-    else:
-        a = dert[5]             # assign to a if angle exists in dert
+    # initialize indices:
+    i = 0       # index of main comparand
+    _iv = 0     # index of vertical comparand
+    _ih = 0     # index of horizontal comparand
 
-    if len(_dert) < 6:          # check if angle exists in _dert
-        ncomp, dy, dx = _dert[3]
+    while i < len(a_) and (_iv < len(a_) or _ih < len(a_)):  # this loop is per i
 
-        _a = atan2(dy, dx)      # compute angle of _dert
+        y, x, a = a_[i]
 
-        dert.append(_a)         # buffer for comps with other derts
-    else:
-        _a = dert[5]            # assign to _a if angle exists in dert
+        # horizontal comp:
+        xh = x + 1
 
-    da = _a - a                 # compare angles
+        while _ih < len(dert_) and dert_[_ih][0] < y:                               # search for right y coordinate
+            _ih += 1
 
-    if vert:                    # if vertical comp
-        day = -da               # vertical comp is upward so day is reversed in sign
-        dax = 0
-    else:                       # if horizontal comp
-        day = 0
-        dax = da
+        while _ih < len(dert_) and dert_[_ih][0] == y and dert_[_ih][1] < xh:       # search for right x coordinate
+            _ih += 1
 
+        if _ih < len(dert_) and dert_[_ih][0] == yx and dert_[_ih][1] == xh:        # compare if coordinates matches
 
-    return _i, i, day, dax
+            _a = a_[_ih][2]
 
-    # ---------- comp_angle() end -------------------------------------------------------------------------------------------
+            dx = _a - a         # horizontal comp
+
+            dert_[i][0] += 1    # bilateral accumulation
+            dert_[i][2] += dx
+
+            dert_[_ih][0] += 1  # bilateral accumulation
+            dert_[_ih][2] += dx
+
+        # vertical comp:
+
+        yv = y + 1          # y coordinate of vertical comparand
+
+        while _iv < len(dert_) and dert_[_iv][0] < y:                               # search for right y coordinate
+            _iv += 1
+
+        while _iv < len(dert_) and dert_[_iv][0] == yv and dert_[_iv][1] < x:       # search for right x coordinate
+            _iv += 1
+
+        if _iv < len(dert_) and dert_[_iv][0] == yx and dert_[_iv][1] == x:         # compare if coordinates matches
+
+            _a = a_[_iv][2]
+
+            dy = _a - a         # vertical comp
+
+            dert_[i][0] += 1    # bilateral accumulation
+            dert_[i][1] += dy
+
+            dert_[_iv][0] += 1  # bilateral accumulation
+            dert_[_iv][1] += dy
+
+        i += 1
+
+    full_dert_ = [(y, x, a, ncomp, dy, dx, hypot(dy, dx) // ncomp - ave) for (y, x, a), (ncomp, dy, dx) in zip(a_, dert_)]
+
+    return full_dert_
+    # ---------- comp_angle_() end ------------------------------------------------------------------------------------------
 
 def comp_deriv(dert, _dert, vert=0):    # compare g of derts
 
@@ -209,7 +243,7 @@ def comp_deriv(dert, _dert, vert=0):    # compare g of derts
         dgy = 0
         dgx = dg
 
-    return _i, i, dgy, dgx
+    return dgy, dgx
 
     # ---------- comp_deriv() end -------------------------------------------------------------------------------------------
 
@@ -225,7 +259,7 @@ def comp_range(dert, _dert, coefs):     # compare i of derts over indicated dist
     diy = int(di * coefs[0])    # vertical coefficient
     dix = int(di * coefs[1])    # horizontal coefficient
 
-    return _i, i, diy, dix
+    return diy, dix
 
     # ---------- comp_range() end -------------------------------------------------------------------------------------------
 

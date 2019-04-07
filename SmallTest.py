@@ -1,7 +1,8 @@
-import bisect
-a = [(1, 5), (2, 7), (3, 4), (5, 5)]
+a = [[0, 0] for _ in range(2)]
 
-bisect.insort(a, (4, 1))
+a[0][0] = 1
+a[0][1] = 2
+a[1][0] = 3
+a[1][1] = 4
 
 print(a)
-
