@@ -251,9 +251,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg.filters import get_filters
-
-get_filters(globals())  # import all filters at once
+ave = 20
 
 # Load inputs --------------------------------------------------------------------
 image = cv2.imread(input_path, 0).astype(int)
@@ -277,3 +275,4 @@ from frame_2D_alg.DEBUG import draw_blobs
 draw_blobs('../debug/out', frame_of_blobs, isb=-1)
 
 # ************ PROGRAM BODY END ******************************************************************************************
+`

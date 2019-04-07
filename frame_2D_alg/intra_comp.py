@@ -9,11 +9,11 @@ get_filters(globals())  # import all filters at once
 nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f sub_Derts map box add_dert rng ncomp')
 
 # ************ FUNCTIONS ************************************************************************************************
-# -master_blob()
+# -form_sub_blob()
 # -unfold()
 # -find_P()
 # -comp_angle()
-# -comp_derive()
+# -comp_gradiente()
 # -comp_range()
 # -form_P_()
 # -scan_P_()
@@ -24,7 +24,7 @@ nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f su
 ''' this module is under revision '''
 
 
-def add_sub_blob(dert_, root_blob):  # redefine blob as branch-specific master blob: local equivalent of frame
+def form_sub_blob(dert_, root_blob):  # redefine blob as branch-specific master blob: local equivalent of frame
 
     seg_ = deque()
 
@@ -41,14 +41,14 @@ def unfold_blob(blob, typ, shift_):     # perform compare while unfolding. shift
     # indicate comparands
     # if a comparand goes beyond the segment vertically, look into it's forks (recursive)
     # by convention, comparand's vertical coordinate is always smaller than that of the main comparand (yd > 0)
-    # 4 typ of operations: hypot_g, comp_angle, comp_deriv, comp_range
+    # 4 typ of operations: hypot_g, comp_angle, comp_gradient, comp_range
 
     new_dert_ = []  # buffer for results
 
     if typ == 0:            # unfold for hypot_g
         for seg in blob.seg_:
-            for y, P in enumerate(seg[2], start=seg[0]):        # y starts from y0
-                for x, i, dy, dx, g in enumerate(P[-1], start=P[1]):    # x starts from x0
+            for y, P in enumerate(seg[2], start=seg[0]):            # y starts from y0
+                for x, (i, dy, dx, g) in enumerate(P[-1], start=P[1]):      # x starts from x0
 
                     g = hypot(dy, dx) - ave
                     new_dert_.append((y, x, i, dy, dx, g))
@@ -57,14 +57,14 @@ def unfold_blob(blob, typ, shift_):     # perform compare while unfolding. shift
 
         a_ = []
         for seg in blob.seg_:
-            for y, P in enumerate(seg[2], start=seg[0]):        # y starts from y0
-                for x, i, dy, dx, g in enumerate(P[-1], start=P[1]):    # x starts from x0
+            for y, P in enumerate(seg[2], start=seg[0]):            # y starts from y0
+                for x, (i, dy, dx, g) in enumerate(P[-1], start=P[1]):      # x starts from x0
                     a = int(atan2(dy, dx) * 128 / __math__.pi) + 128
                     a_.append((y, x, a))
 
         new_dert_ = comp_angle_(a_)
 
-    else:                   # unfold for comp_deriv or comp_range
+    else:                   # unfold for comp_gradient or comp_range
         if typ == 3:            # compute coefs_ for comp_range (if typ == 2)
 
             coefs_ = []
@@ -109,9 +109,9 @@ def unfold_blob(blob, typ, shift_):     # perform compare while unfolding. shift
 
                         if stop == True:            # if a comparand with the right coordinate is found:
 
-                            if typ == 2:            # comp_deriv, compare g (dert[4])
+                            if typ == 2:            # comp_gradient, compare g (dert[4])
                                 vert = yd == -1     # indicate comp direction
-                                dy, dx = comp_deriv(dert, _dert, vert)
+                                dy, dx = comp_gradient(dert, _dert, vert)
 
                             elif typ == 3:          # comp_range, compare i (dert[2])
                                 dy, dx = comp_range(dert, _dert, coefs_)
@@ -145,11 +145,11 @@ def unfold_blob(blob, typ, shift_):     # perform compare while unfolding. shift
 
             g = hypot(dy, dx) - ncomp * ave # compute g with complete dy, dx
 
-            new_new_dert_.append((y, x, ncomp, dy, dx, g))     # buffer into new_new_dert_ for folding/clustering functions
+            new_dert_.append((y, x, ncomp, dy, dx, g))     # buffer into new_new_dert_ for folding/clustering functions
 
             i += 1
 
-    add_sub_blob(new_dert_, blob)
+    form_sub_blob(new_dert_, blob)
 
     # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
 
@@ -229,7 +229,7 @@ def comp_angle_(a_):    # compare angles
     return full_dert_
     # ---------- comp_angle_() end ------------------------------------------------------------------------------------------
 
-def comp_deriv(dert, _dert, vert=0):    # compare g of derts
+def comp_gradient(dert, _dert, vert=0):    # compare g of derts
 
     y, x, i, (ncomp, dy, dx), g = dert[:5]          # first 5 derts, exclude angle if there's one
     _y, _x, _i, (_ncomp, _dy, _dx), _g = _dert[:5]  # first 5 derts, exclude angle if there's one
@@ -245,7 +245,7 @@ def comp_deriv(dert, _dert, vert=0):    # compare g of derts
 
     return dgy, dgx
 
-    # ---------- comp_deriv() end -------------------------------------------------------------------------------------------
+    # ---------- comp_gradient() end ----------------------------------------------------------------------------------------
 
 def comp_range(dert, _dert, coefs):     # compare i of derts over indicated distance
     # comparison may include more than 2 directions: vertical, horizontal. So coefficients are needed to decompose di
