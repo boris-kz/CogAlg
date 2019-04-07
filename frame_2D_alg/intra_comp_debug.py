@@ -5,12 +5,12 @@ from collections import deque, namedtuple
 from filters import get_filters
 get_filters(globals())  # import all filters at once
 
-nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f sub_Derts root_blob map box rng')
+nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ sub_blob_ layers_f sub_Derts root_blob map box rng')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -unfold_blob()
 # -find_P()
-# -add_sub_blobs()
+# -form_sub_blobs()
 # -comp_angle()
 # -comp_gradient()
 # -comp_range()
@@ -22,21 +22,17 @@ nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f su
 
 ''' this module is under revision '''
 
-def unfold_blob(blob, offset_, comp_id):  # perform compare while unfolding. offset_ is per direction
-    # Process every segment bottom-up (spatially)
-    # indicate comparands
-    # if a comparand goes beyond the segment vertically, look into it's forks (recursive)
-    # by convention, comparand's vertical coordinate is always smaller than that of the main comparand (yd > 0)
+def unfold_blob(typ, blob, comp_typ, offset_, rdn):  # add typ, rdn, compare between Ps while unfolding, offset_ per direction?
+    # unfold segments bottom-up (with decreasing y), select _Ps contiguous with P, compute yd > 0 (always _P_y < P_y)
+    # at segment termination, unfold forks, then their segments (recursive)
 
-    comp_result_ = []  # buffer for results
+    new_dert_ = []  # buffer for results
+    if typ == 2:
 
-    if comp_id == 2:  # compute coefs_ for comp_range (if comp_id == 2)
-        coefs_ = []
-
+        coefs_ = [] # compute coefs_ for comp_range (if typ == 2)
         for yd, xd in offset_:  # compute a pair of coefficient for each comp direction
 
             denominator = hypot(yd, xd)  # common denominator for the pair of coefficients
-
             coefs_.append((yd / denominator, xd / denominator))
 
     yd_, xd_ = zip(*offset_)  # here, we assume that each offset is in the form of (yd, xd) and yd > 0
@@ -73,35 +69,37 @@ def unfold_blob(blob, offset_, comp_id):  # perform compare while unfolding. off
 
                     if stop == True:  # if a comparand with the right coordinate is found:
 
-                        if comp_id == 0:  # comp_angle, will compute angle (dert[5]) if it hasn't been computed
+                        comp_typ()
+
+                        if typ == 0:  # comp_angle, will compute angle (dert[5]) if it hasn't been computed
 
                             vert = yd == -1  # indicate comp direction
                             _i, i, dy, dx = comp_angle(dert, _dert, vert)
 
-                        elif comp_id == 1:  # comp_deriv, compare g (dert[4])
+                        elif typ == 1:  # comp_deriv, compare g (dert[4])
                             vert = yd == -1  # indicate comp direction
                             _i, i, dy, dx = comp_deriv(dert, _dert, vert)
 
                         else:  # comp_range, compare i (dert[2])
                             _i, i, dy, dx = comp_range(dert, _dert, coefs_)
 
-                        comp_result_.append((y, x, i, dy, dx))
-                        comp_result_.append((_y, _x, _i, dy, dx))
+                        new_dert_.append((y, x, i, dy, dx))
+                        new_dert_.append((_y, _x, _i, dy, dx))
 
     # combine raw derts back into derts (with ncomp) and compute g:
 
     new_dert_ = []
 
-    comp_result_.sort(key=lambda dert: dert[1])  # sorted by x coordinates
-    comp_result_.sort(key=lambda dert: dert[0])  # sorted by y coordinates
+    new_dert_.sort(key=lambda dert: dert[1])  # sorted by x coordinates
+    new_dert_.sort(key=lambda dert: dert[0])  # sorted by y coordinates
 
     i = 0
-    max_i = len(comp_result_) - 1
+    max_i = len(new_dert_) - 1
     while i < max_i:  # i goes through comp results with identical y, x (summing dy, dx along)
 
-        y, x, i, dy, dx, g = comp_result_[i]  # initialize dert
+        y, x, i, dy, dx, g = new_dert_[i]  # initialize dert
         ncomp = 1  # number of comps with current dert (at coordinates y, x)
-        while i < max_i and y == comp_result_[i + 1][0] and x == comp_result_[i + 1][1]:  # y, x axes' coordinates are identical
+        while i < max_i and y == new_dert_[i + 1][0] and x == new_dert_[i + 1][1]:  # y, x axes' coordinates are identical
             i += 1  # increment i
 
             # merge derts:
@@ -110,7 +108,6 @@ def unfold_blob(blob, offset_, comp_id):  # perform compare while unfolding. off
             dx += new_dert_[i][4]  # sum dx
 
         g = hypot(dy, dx) - ncomp * ave  # compute g with complete dy, dx
-
         new_dert_.append((y, x, i, (ncomp, dy, dx), g))  # buffer into new_dert_ for folding/clustering functions
 
         i += 1
@@ -131,7 +128,7 @@ def find_P(seg, _P_, _iP):  # used in unfold() to find all potential comparand P
     # ---------- find_P() end -----------------------------------------------------------------------------------------------
 
 
-def add_sub_blobs(blob, comp_branch, add_dert=True):  # redefine blob as branch-specific master blob: local equivalent of frame
+def form_sub_blobs(blob, comp_branch, add_dert=True):  # redefine blob as branch-specific master blob: local equivalent of frame
 
     height, width = blob.map.shape
 
