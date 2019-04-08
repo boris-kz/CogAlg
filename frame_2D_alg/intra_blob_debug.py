@@ -6,7 +6,7 @@ from comp_range import comp_range
 # from comp_P_ import comp_P_
 # from filters import get_filters
 # get_filters(globals())  # imports all filters at once
-from intra_comp_debug import unfold_blob, add_sub_blobs
+from intra_comp_debug import unfold_blob, form_sub_blobs
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
@@ -16,24 +16,17 @@ from intra_comp_debug import unfold_blob, add_sub_blobs
     where Dert params are summed params of all positive blobs per structure, with optional layer_:
     
     blob =  
-        typ,  # typ 0: primary | angle_g_blob, typ 1: angle_ga_blob, typ 2: gg_blob, typ 3: range_g_blob, formed / eval:  
-              # ga_sign? 
-              #    Ga? typ_1_blob = comp_deriv(a) 
-              #    : G * -Ga? 
-              #        typ_2_blob = comp_deriv(i) 
-              #        : G - (G * -Ga)? 
-              #            typ_3_blob = comp_range(i)  # no lateral overlap between typ blobs?
-              
+        typ,  # typ 0: primary | angle_g_blob, typ 1: angle_ga_blob, typ 2: gg_blob, typ 3: range_g_blob, formed / eval 
         sign, Ly, L,  # these are common for all Derts, higher-Derts sign is always positive, else no branching 
         
         Derts = 
-            [ Dert = I, Dx, Dy, G ],  # one Dert per current and lower layers of blob' derivation tree
+            [ Dert = I, Dx, Dy, G ],  # one Dert per current and lower layers of blob derivation tree
         seg_ = 
             [ seg_params,  # formed in frame blobs
               Py_ =  # vertical buffer of Ps per segment
                 [ P_params,
                   derts = [ dert = i|a, dx, dy, g ]]],  # one dert per current and higher (if root blob is a sub blob) layers 
-                  # for 2+ odd derts: add ncomp and blob typ instead of i?
+                  # alternating g|a layers, for 2+ odd derts: add ncomp and blob typ instead of i?
                               
         sub_blob_ # sub_blob structure is same as in root blob 
             if len( sub_blob_) > min:
@@ -44,7 +37,7 @@ from intra_comp_debug import unfold_blob, add_sub_blobs
             sub_blob_ = [(sub_Derts, sub_blob_)]  # appended by lower layers across derivation tree per root blob, flat | nested?  
             
             if len( sub_blob_) > min
-                sub_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs of referred layer and its higher layers
+                sub_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per sub_blob_s of referred layer and its higher layers
                 
         map, box, rng
               
@@ -59,16 +52,16 @@ from intra_comp_debug import unfold_blob, add_sub_blobs
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 '''
 
-def intra_blob_root(frame):  # evaluates for first 3 layers of comp: hypot_g ( comp_angle ( comp_alt:
+def intra_blob_root(frame):  # evaluates first 3 layers of comp: hypot_g ( comp_angle ( comp_alt:
 
     for blob in frame.blob_:
-        if blob.sign and blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
+        if blob.Derts[-1][-1] > ave_blob:  # ave_hypot_g, G > fixed cost_form_sub_blobs: area of noisy or directional gradient
             unfold_blob( typ=0, blob, hypot_g, rdn=0)   # redefines g as hypot(dx,dy), Dert, dert replacement, no extension
 
-            if blob.Derts[-1][-1] > ave_blob * 2:  # G > fixed costs of comp_angle
+            if blob.Derts[-1][-1] > ave_blob * 2:  # G > cost_form_sub_blobs * rdn to gblob, or rdn = 1 + ave_n_sub_blobs?
                 for gblob in blob.sub_blob_:
 
-                    if gblob.sign and gblob.Derts[-1][-1] > ave_blob * 2:  # g > ave and G > fixed costs of comp_angle
+                    if gblob.Derts[-1][-1] > ave_blob * 2:  # ave_comp_angle, G > fixed costs?
                         unfold_blob( typ=1, gblob, comp_angle, rdn=1)  # calls form_sub_blobs, no recursive_intra_blob
 
                         for ablob in blob.sub_blob_:        # ablob is defined by ga sign
@@ -86,22 +79,13 @@ def intra_blob_root(frame):  # evaluates for first 3 layers of comp: hypot_g ( c
                                 elif G - val_gradient > ave_blob:    # disoriented G: likely sign reversal and distant match
                                     unfold_blob( typ=1, ablob, comp_range, rdn)
 
-    '''     
-    comp_P_() if estimated val_PP_ > ave_comp_P: 
-    L + I + G:   proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
-    * L/ Ly/ Ly: elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
-    * Dy / Dx:   variation-per-dimension bias 
-    * Ave - Ga:  if positive angle match
-
-    g and ga are dderived, blob of min_g?  val-= branch switch cost?
-    '''
     return frame  # frame of 2D patterns is output to level 2
 
 
-def intra_blob(root_blob, rdn):  # recursive intra_blob called from form_sub_blobs if not comp_angle, eval for comp_angle ( comp_alt:
+def intra_blob(root_blob, rdn):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: eval comp_angle ( comp_alt:
 
     for blob in root_blob.sub_blob_:
-        if blob.sign and blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
+        if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
             unfold_blob( typ=0, blob, comp_angle, rdn)  # already extended Derts and derts
 
             for ablob in blob.sub_blob_:        # ablob is defined by ga sign
@@ -115,10 +99,28 @@ def intra_blob(root_blob, rdn):  # recursive intra_blob called from form_sub_blo
                 else:
                     val_gradient = ((G + Ave) / Ave) * -Ga   # relative G * - Ga: angle match, likely edge blob
                     if val_gradient > ave_blob:
-                        unfold_blob( typ=1, ablob, comp_gradient, rdn)  # calls add_sub_blobs()
+                        unfold_blob( typ=1, ablob, comp_gradient, rdn)
                     elif G - val_gradient > ave_blob:    # disoriented G: likely sign reversal and distant match
                         unfold_blob( typ=1, ablob, comp_range, rdn)
+    '''
+    exclusive comp_branch selection after comp_angle:
 
+    ga_sign? 
+       Ga? typ1 blob = comp_gradient(ga)  # variable angle blobs, -> intra_blob(ga) -> aga, etc. 
+       : G * -Ga?  
+           typ2 blob = comp_gradient(g)   # stable angle high-gradient blobs -> intra_blob(g)
+           : G - (G * -Ga)? 
+              typ3 blob = comp_range(i)   # variable angle high-gradient blobs -> intra_blob(g)
+    
+    
+    comp_P_() if estimated val_PP_ > ave_comp_P: 
+    L + I + G:   proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
+    * L/ Ly/ Ly: elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
+    * Dy / Dx:   variation-per-dimension bias 
+    * Ave - Ga:  if positive angle match
+
+    g and ga are dderived, blob of min_g?  val-= branch switch cost?
+    '''
     return root_blob
 
 
