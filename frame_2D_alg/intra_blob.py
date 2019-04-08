@@ -3,9 +3,6 @@ import numpy.ma as ma
 from comp_angle import comp_angle
 from comp_deriv import comp_deriv
 from comp_range import comp_range
-# from comp_P_ import comp_P_
-from filters import get_filters
-get_filters(globals())  # imports all filters at once
 from intra_comp import master_blob
 
 '''

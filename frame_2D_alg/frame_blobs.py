@@ -2,10 +2,6 @@ import cv2
 from time import time
 from collections import deque, namedtuple
 import numpy as np
-# Filters ------------------------------------------------------------------------
-from frame_2D_alg.filters import get_filters
-
-get_filters(globals())  # imports all filters at once
 # --------------------------------------------------------------------------------
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -275,4 +271,3 @@ from frame_2D_alg.DEBUG import draw_blobs
 draw_blobs('../debug/out', frame_of_blobs, isb=-1)
 
 # ************ PROGRAM BODY END ******************************************************************************************
-`
