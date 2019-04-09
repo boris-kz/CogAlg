@@ -1,5 +1,7 @@
-from collections import deque
+def square(x):
+    return x ** 2
 
-d = deque(maxlen=3)
+def some_func(func):
+    return func
 
-print(len(d))
+print(some_func(square(2)))

@@ -16,8 +16,7 @@ nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f su
 
 ''' this module is under revision '''
 
-
-def form_sub_blob(dert_, root_blob):  # redefine blob as branch-specific master blob: local equivalent of frame
+def form_sub_blob(root_blob, dert___):  # redefine blob as branch-specific master blob: local equivalent of frame
 
     seg_ = deque()
 
@@ -29,8 +28,42 @@ def form_sub_blob(dert_, root_blob):  # redefine blob as branch-specific master 
 
     # ---------- add_sub_blob() end -----------------------------------------------------------------------------------------
 
-def unfold_blob(blob, comp):     # unfold and compare
-    return
+def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
+
+    dert__ = []
+
+    y0, yn, x0, xn = blob.map
+    y = y0                      # iterating y (y0 -> yn - 1)
+    i = 0                       # iterating segment index
+
+    blob.seg_.sort(key=lambda seg: seg[0])  # sort by segment's y0
+
+    dert_buff_ = deque(maxlen=rng)          # buffer of incomplete derts
+
+    while y < yn and i < len(blob.seg_):
+
+        seg_ = []                           # buffer of segments containing line y
+
+        while blob.seg_[i][0] == y:
+            seg_.append(blob.seg_[i])
+
+        P_ = []                             # buffer for Ps at line y
+        for seg in seg_:
+            if y < seg[0] + seg[1][0]:      # y < y0 + Ly (y within segment):
+
+                P_.append(seg[2][y - seg[0]])   # append P at line y of seg
+            else:                           # y >= y0 + Ly (out of segment):
+                seg_.remove(seg)
+
+        # operations:
+
+        branch_comp(P_, dert_buff_, dert__)
+
+    while dert_buff_:   # add remaining dert_s in dert_buff_ into dert__
+        dert__.append(dert_buff_.pop())
+
+    form_sub_blob(blob, dert__)
+
     # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
 
 def form_P_():  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
