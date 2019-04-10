@@ -30,15 +30,13 @@ def form_sub_blob(root_blob, dert___):  # redefine blob as branch-specific maste
 
 def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
 
-    dert__ = []
+    dert___ = []
 
     y0, yn, x0, xn = blob.map
     y = y0                      # iterating y (y0 -> yn - 1)
     i = 0                       # iterating segment index
 
-    blob.seg_.sort(key=lambda seg: seg[0])  # sort by segment's y0
-
-    dert_buff_ = deque(maxlen=rng)          # buffer of incomplete derts
+    dert_buff___ = deque(maxlen=rng)        # buffer of incomplete derts
 
     while y < yn and i < len(blob.seg_):
 
@@ -52,17 +50,20 @@ def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
             if y < seg[0] + seg[1][0]:      # y < y0 + Ly (y within segment):
 
                 P_.append(seg[2][y - seg[0]])   # append P at line y of seg
-            else:                           # y >= y0 + Ly (out of segment):
+
+        for seg in seg_:
+            if not y < seg[0] + seg[1][0]:  # y >= y0 + Ly (out of segment):
+
                 seg_.remove(seg)
 
         # operations:
 
-        branch_comp(P_, dert_buff_, dert__)
+        branch_comp(P_, dert_buff___, dert___)
 
-    while dert_buff_:   # add remaining dert_s in dert_buff_ into dert__
-        dert__.append(dert_buff_.pop())
+    while dert_buff__:   # add remaining dert_s in dert_buff__ into dert__
+        dert__.append(dert_buff___.pop())
 
-    form_sub_blob(blob, dert__)
+    form_sub_blob(blob, dert___)
 
     # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
 
