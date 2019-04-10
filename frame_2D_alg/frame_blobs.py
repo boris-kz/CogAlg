@@ -259,8 +259,8 @@ start_time = time()
 nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ sub_blob_ sub_Derts layer_f map box rng')
 frame_of_blobs = image_to_blobs(image)
 
-from intra_blob_debug import intra_blob_root      # not yet functional, comment-out to run
-frame_of_blobs = intra_blob_root(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+from intra_blob_debug import intra_blob_init      # not yet functional, comment-out to run
+frame_of_blobs = intra_blob_init(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
 end_time = time() - start_time
 print(end_time)
