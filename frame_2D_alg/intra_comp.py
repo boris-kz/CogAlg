@@ -32,7 +32,7 @@ def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
 
     dert___ = []
 
-    y0, yn, x0, xn = blob.map
+    y0, yn, x0, xn = blob.box
     y = y0                      # iterating y (y0 -> yn - 1)
     i = 0                       # iterating segment index
 
