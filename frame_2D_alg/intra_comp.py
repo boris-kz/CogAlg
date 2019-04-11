@@ -3,7 +3,7 @@ from math import hypot
 from math import atan2
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'typ sign Y X Ly L Derts seg_ sub_blob_ layers_f sub_Derts map box add_dert rng ncomp')
+nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -form_sub_blob()
@@ -55,6 +55,8 @@ def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
             if not y < seg[0] + seg[1][0]:  # y >= y0 + Ly (out of segment):
 
                 seg_.remove(seg)
+
+        P_.sort(key=lambda P: P[1]) # sort by x coordinate, left -> right
 
         # operations:
 
