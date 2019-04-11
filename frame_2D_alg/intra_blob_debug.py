@@ -2,7 +2,7 @@ import numpy as np
 import numpy.ma as ma
 from comp_angle import comp_angle
 from comp_gradient import comp_gradient
-from comp_range import comp_range
+from comp_range_draft import comp_range
 # from comp_P_ import comp_P_
 from intra_comp_debug import unfold_blob, form_sub_blobs
 
@@ -50,15 +50,14 @@ from intra_comp_debug import unfold_blob, form_sub_blobs
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 '''
 
-def intra_blob_init(frame):  # evaluates for hypot_g and recursion, initial ave per hypot_g | comp_angle, or all branches?
-    for blob in frame.blob_:
+def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, initial ave per hypot_g & comp_angle, or all branches?
 
+    for blob in frame.blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost_form_sub_blobs: area of noisy or directional gradient
-            unfold_blob( typ=0, blob, hypot_g, rdn=ave_n)  # redefines g as hypot(dx,dy), full blob params replacement
+            unfold_blob( typ=0, blob, hypot_g, rdn=ave_n)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
 
             if blob.Derts[-1][-1] > ave_blob * 2:  # G > cost_form_sub_blobs * rdn to gblob
                 intra_blob(blob, rdn=ave_n)  # redundancy to higher-layers blobs += 1 + ave_n_sub_blobs per form_sub_blobs
-                # calls form_sub_blobs per comp_branch, recursive unless comp_angle
 
     return frame  # frame of 2D patterns is output to level 2
 
@@ -68,20 +67,22 @@ def intra_blob(root_blob, rdn):  # if not comp_angle, form_sub_blobs calls recur
     for blob in root_blob.sub_blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
             rdn += ave_n
-            unfold_blob( typ=0, blob, comp_angle, rdn)  # angle calc and comp (mag_angle != value), extend Derts and derts
+            unfold_blob( typ=0, blob, comp_angle, rdn)  # angle calc, immed comp (no eval by angle), extend Derts and derts
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
                 G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current and higher layers' params, no lower layers yet
-                Ga = ablob.Derts[-1][-1]  # A, Dxa, Dya, Ga; Ave = ave * ablob.L
+                Ga = ablob.Derts[-1][-1]  # I is redundant? sub-reference by dert[-1][1] = p_ref, after comp?
+                Gaf = 0   # rdn increment for G + Ga blob, prior Ga: cheaper?
 
-                if Ga > ave_blob:  # angle deviation blobs -> intra_blob(ga) -> ga, dgax, dgay, gga
-                    unfold_blob( typ=2, ablob, comp_gradient, rdn+ave_n)  # if typ==2: g=ga
+                if Ga > ave_blob:  # angle deviation sub_blobs
+                    Gaf = 1        # typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]?
+                    unfold_blob( typ=1, ablob, comp_gradient, rdn + ave_n)
 
-                elif ((G + ave * ablob.L) / ave * ablob.L) * -Ga > ave_blob ** 2:  # relative G * -Ga > 2 ** crit:
-                    unfold_blob( typ=1, ablob, comp_gradient, rdn+ave_n)  # input deviation * angle match: likely edge blob
+                elif G * -Ga > ave_blob ** 2:  # 2^crit: input deviation * angle match: likely edge blob
+                    unfold_blob( typ=2, ablob, comp_gradient, rdn + ave_n)  # Ga must be negative: stable orientation?
 
-                if G + Ga > ave_blob * 2:  # 2crit: input deviation + angle deviation: likely sign reversal and distant match
-                    unfold_blob( typ=1, ablob, comp_range, rdn+ave_n)
+                if G + Ga > ave_blob*2 + Gaf:  # 2*crit: input dev + angle dev: likely sign reversal and distant match
+                    unfold_blob( typ=3, ablob, comp_range, rdn + ave_n + Gaf)  # rdn + 1 if overlap with ga blob
 
     '''
     comp_P_() if estimated val_PP_ > ave_comp_P: 
@@ -91,7 +92,9 @@ def intra_blob(root_blob, rdn):  # if not comp_angle, form_sub_blobs calls recur
     * Ave - Ga:  if positive angle match
 
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn?
-    g and ga are dderived, blob of min_g?  val-= branch switch cost?
+    g and ga are dderived, blob of min_g?  
+    val -= branch switch cost?
+    no Ave = ave * ablob.L, (G + Ave) / Ave: always positive  
     '''
     return root_blob
 

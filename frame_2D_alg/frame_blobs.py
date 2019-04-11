@@ -250,7 +250,7 @@ ave = 20
 
 # Load inputs --------------------------------------------------------------------
 image = cv2.imread(input_path, 0).astype(int)
-# image = cv2.imread('./images/raccoon_eye.jpg', 0).astype(int)
+# image = cv2.imread('./images/raccoon.jpg', 0).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
@@ -259,8 +259,8 @@ start_time = time()
 nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ sub_blob_ sub_Derts layer_f map box rng')
 frame_of_blobs = image_to_blobs(image)
 
-from intra_blob_debug import intra_blob_init      # not yet functional, comment-out to run
-frame_of_blobs = intra_blob_init(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+from intra_blob_debug import intra_blob_hypot      # not yet functional, comment-out to run
+frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
 end_time = time() - start_time
 print(end_time)

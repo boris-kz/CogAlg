@@ -2,8 +2,6 @@ import numpy as np
 import numpy.ma as ma
 from math import hypot
 
-from filters import get_filters
-get_filters(globals())  # imports all filters at once
 
 def comp_range(blob):   # compare rng-distant pixels within blob: a component of intra_blob
 

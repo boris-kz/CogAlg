@@ -7,9 +7,62 @@ from time import time
     and form dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation of P params
     (difference | match deviation per param is summed between all compared params in P)
     comp_P is potentially micro- and macro- recursive: 
-    - resulting param derivatives are also evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
-    - resulting vertically adjacent dPPs and vPPs are also evaluated for cross-comparison, to form PPPs and so on
+    - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
+    - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+    
+    for comp_P: P) seg) blobs should be defined by dx only, in intra_P(): 
 '''
+
+def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
+
+    L, I, Dy, Dx, G, dert_ = P
+    p, dx, dy, g = _ders
+
+    if s == _s:  # sign of dx or dx deviation
+        L += 1; I += p; Dx += dx; Dy += dy; G += g  # accumulate P params
+        dert_.append((p, dy, dx, g))
+        term = 1
+    else:
+        P_.append((L, I, Dy, Dx, G, dert_))  # terminate P
+        P = 0, 0, 0, 0, 0, []
+        term = 0
+    return P_, P, term
+
+
+def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps within gradient-P, for form_seg -> comp P?
+    new_P_ = deque()
+
+    for (x0, L, I, Dy, Dx, G, dert_) in P_:
+        for (_x0, _L, _I, _Dy, _Dx, _G, _dert_) in _P_:
+
+        form_seg()
+
+    return new_P_
+
+def intra_P(seg):  # form, evaluate, align sub_Ps for vertical comp
+
+    for x0, L, I, Dy, Dx, G, dert_ in seg[-1]:
+
+        if L > 1:  # or min_L: Ps redefined by dx | ort_dx: rescan before comp, no need for initial P?
+            dP_, vP_ = deque(), deque()
+            dP, vP = (0,0,0,0,0,[]), (0,0,0,0,0,[])  # L, I, Dy, Dx, G, dert_
+            ini = 0
+            for ders in e_:  # i, dx, dy, g; e_ is preserved?
+                dx = ders[1]
+                vd = abs(dx) - ave  # v for deviation | value
+                sd = dx > 0
+                sv = vd > 0
+                if ini:
+                    dP_, dP, dterm = form_P_(dP_, dP, _ders, sd, _sd)  # direction dP ~ aP
+                    vP_, vP, vterm = form_P_(vP_, vP, _ders, sv, _sv)  # magnitude vP ~ gP
+                _ders = ders; _sd = sd; _sv = sv
+                ini = 1
+            if dterm: dP_.append(dP)
+            if vterm: dP_.append(vP)
+
+        '''
+        scan_P_ -> comp_P: strictly 1D -> 2D?
+        '''
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
     # differential Pm: all params are dderived, not pre-selected?
@@ -27,7 +80,7 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
     if xD / Ly * val_PP_ > Ave: ort = 1  # estimate params of Ps orthogonal to long axis, seg-wide for same-syntax comp_P
     else: ort = 0  # to max ave ders, or if xDd to min Pd?
 
-    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # comparable params and their derivatives, C for combined
+    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # C for combined comparable params and their derivatives
 
     mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
     dPP = 0, [], []  # per dev of D_params: abs or co-signed?
@@ -68,95 +121,18 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
 
 '''
 primary Dx comp: 1D variation, with stable direction in oriented blob,
-I comp-> refined Dy: same accuracy, more selective?
-G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?:
+G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?
+I comp -> refined Dy: same accuracy, more selective?
 
-if abs(Dx) + abs(Dy) > Ave:  # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
+if abs(Dx) + abs(Dy) > Ave: # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
 g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
 a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? 
 '''
-
-def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
-
-    L, I, Dy, Dx, G, dert_ = P
-    i, dx, dy, g = _ders
-
-    if s == _s:  # sign of dx or dx deviation
-        L += 1; I += i; Dx += dx; Dy += dy; G += g  # accumulate P params
-        dert_.append((i, dy, dx, g))
-        term = 1
-    else:
-        P_.append((L, I, Dy, Dx, G, dert_))  # terminate P
-        P = 0, 0, 0, 0, 0, []
-        term = 0
-    return P_, P, term
-
-
-def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps, to comp Ps and form PPs
-    new_P_ = deque()
-
-    for (L, I, Dy, Dx, G, dert_) in P_:
-        for (_L, _I, _Dy, _Dx, _G, _dert_) in _P_:
-
-            x0 = dert_[0][1]  # first x in P
-            xn = dert_[-1][1]  # last x in P
-            _x0 = _dert_[2][0][1]  # first x in _P
-            _xn = _dert_[2][-1][1]  # last x in _P
-
-            if P[0] == _P[0] and _x0 <= xn and x0 <= _xn:  # test for sign match and x overlap
-                seg[3] += 1
-                fork_.append(seg)  # P-connected segments are buffered into fork_
-
-            if xn < _xn:  # _P overlaps next P in P_
-                new_P_.append((P, fork_))
-                fork_ = []
-                if P_:
-                    P = P_.popleft()   # load next P
-                else:  # if no P left: terminate loop
-                    if seg[3] != 1:  # if roots != 1: terminate seg
-                        form_blob(seg, frame)
-                    stop = True
-            else:  # no next-P overlap
-                if seg[3] != 1:  # if roots != 1: terminate seg
-                    form_blob(seg, frame)
-
-                if seg_:  # load next _P
-                    seg = seg_.popleft()
-                    _P = seg[2][-1]
-                else:  # if no seg left: terminate loop
-                    new_P_.append((P, fork_))
-                    stop = True
-
-    while seg_: # sub_Ps also fork?
-        form_blob(seg_.popleft(), frame)  # roots always == 0
-    return new_P_
-
 
 def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
     (s, x0, L, I, G, Dx, Dy, e_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
     (_s, _x0, _L, _I, _G, _Dx, _Dy, _e_), _xd = _P  # + params from higher branches, S if min n_params?
-
-    if L > 1:  # or min_L: Ps redefined by dx | ort_dx: rescan before comp, no need for initial P?
-        dP_, vP_ = deque(), deque()
-        dP, vP = (0,0,0,0,0,[]), (0,0,0,0,0,[])  # L, I, Dy, Dx, G, dert_
-        ini = 0
-        for ders in e_:  # i, dx, dy, g; e_ is preserved?
-            dx = ders[1]
-            vd = abs(dx) - ave  # v for deviation | value
-            sd = dx > 0
-            sv = vd > 0
-            if ini:
-                dP_, dP, dterm = form_P_(dP_, dP, _ders, sd, _sd)  # direction dP ~ aP
-                vP_, vP, vterm = form_P_(vP_, vP, _ders, sv, _sv)  # magnitude vP ~ gP
-            _ders = ders; _sd = sd; _sv = sv
-            ini = 1
-        if dterm: dP_.append(dP)
-        if vterm: dP_.append(vP)
-
-        '''
-        scan_P_ -> comp_P: strictly 1D -> 2D?
-        '''
 
     xm = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
     if x0 > _x0: xm -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
