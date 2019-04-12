@@ -23,8 +23,8 @@ from intra_comp_debug import unfold_blob, form_sub_blobs
             [ seg_params,  # formed in frame blobs
               Py_ =  # vertical buffer of Ps per segment
                 [ P_params,
-                  derts = [ dert = i|a, dx, dy, g ]]],  # one dert per current and higher (if root blob is a sub blob) layers 
-                  # alternating g|a layers, for 2+ odd derts: add ncomp and blob typ instead of i?
+                  derts = [ dert = p|a, dx, dy, g ]]],  # one dert per current and higher (if root blob is a sub blob) layers 
+                  # alternating g|a layers, for 2+ odd derts: add ncomp and higher-dert ref (/typ) instead of p?
                               
         sub_blob_ # sub_blob structure is same as in root blob 
             if len( sub_blob_) > min:
@@ -54,47 +54,58 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, initial ave
 
     for blob in frame.blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost_form_sub_blobs: area of noisy or directional gradient
-            unfold_blob( typ=0, blob, hypot_g, rdn=ave_n)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
+            unfold_blob( typ=0, blob, hypot_g, rdn=rave_blob)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
 
             if blob.Derts[-1][-1] > ave_blob * 2:  # G > cost_form_sub_blobs * rdn to gblob
-                intra_blob(blob, rdn=ave_n)  # redundancy to higher-layers blobs += 1 + ave_n_sub_blobs per form_sub_blobs
+                intra_blob(blob, rdn=rave_blob)  # redundancy to higher layers & prior blobs is added cost per input
 
     return frame  # frame of 2D patterns is output to level 2
 
 
-def intra_blob(root_blob, rdn):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: eval comp_angle ( comp_alt:
+def intra_blob(root_blob, rdn):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: eval comp_angle ( comp_branch:
 
     for blob in root_blob.sub_blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
-            rdn += ave_n
-            unfold_blob( typ=0, blob, comp_angle, rdn)  # angle calc, immed comp (no eval by angle), extend Derts and derts
+
+            rdn += rave_blob  # += ave_blob / ave, then indiv eval? rdn += rave_blob per sub blob, else delete?
+            unfold_blob( typ=0, blob, comp_angle, rdn)  # angle calc, immed comp (no angle eval), extend Derts and derts
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
-                G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current and higher layers' params, no lower layers yet
-                Ga = ablob.Derts[-1][-1]  # I is redundant? sub-reference by dert[-1][1] = p_ref, after comp?
-                Gaf = 0   # rdn increment for G + Ga blob, prior Ga: cheaper?
+                Gaf = 0
+                G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
+                Ga = ablob.Derts[-1][-1]  # I converted per layer, not redundant to higher layers I
 
-                if Ga > ave_blob:  # angle deviation sub_blobs
-                    Gaf = 1        # typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]?
-                    unfold_blob( typ=1, ablob, comp_gradient, rdn + ave_n)
+                # sub-reference by dert[-1][1] = p_ref, after comp
+                # typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
+
+                if Ga > ave_blob:
+                    Gaf = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
+                    unfold_blob( typ=1, ablob, comp_gradient, rdn + rave_blob)  # -> angle deviation sub_blobs
 
                 elif G * -Ga > ave_blob ** 2:  # 2^crit: input deviation * angle match: likely edge blob
-                    unfold_blob( typ=2, ablob, comp_gradient, rdn + ave_n)  # Ga must be negative: stable orientation?
+                    unfold_blob( typ=2, ablob, comp_gradient, rdn + rave_blob)  # Ga must be negative: stable orientation?
 
                 if G + Ga > ave_blob*2 + Gaf:  # 2*crit: input dev + angle dev: likely sign reversal and distant match
-                    unfold_blob( typ=3, ablob, comp_range, rdn + ave_n + Gaf)  # rdn + 1 if overlap with ga blob
+                    unfold_blob( typ=3, ablob, comp_range, rdn + rave_blob + Gaf)  # rdn + ga blob cost
 
     '''
+    ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
+    g and ga are dderived, blob of min_g? val -= branch switch cost?
+    no Ave = ave * ablob.L, (G + Ave) / Ave: always positive?
+
     comp_P_() if estimated val_PP_ > ave_comp_P: 
-    L + I + G:   proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant hyp_g_P calc, comp, no indiv comp: rdn
+    L + I + G:   proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant P calc, comp, no indiv comp: rdn
     * L/ Ly/ Ly: elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
     * Dy / Dx:   variation-per-dimension bias 
     * Ave - Ga:  if positive angle match
-
-    ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn?
-    g and ga are dderived, blob of min_g?  
-    val -= branch switch cost?
-    no Ave = ave * ablob.L, (G + Ave) / Ave: always positive  
+    
+    def intra_blob_dx_g(root_blob, rdn)
+        for blob in root_blob.sub_blob_:
+            if blob.Derts[-1][-1] > ave_blob:  # val_PP_ > ave_comp_P
+                rdn *= comp_P_coef; unfold_blob( typ=0, blob, dx_g, rdn)  # ~ hypot_g, no comp
+                
+    # rdn += 1 + ave_n_sub_blobs per form_sub_blobs, if layered access & rep extension, else *=?
+    # then corrected in form_sub_blobs: rdn += len(sub_blob_) - ave_n
     '''
     return root_blob
 
@@ -113,7 +124,8 @@ def hypot_g(blob):  # redefine master blob by reduced g and increased ave * 2: v
 
 ave = 20
 ave_blob = 200
-ave_n = 4  # average number of sub_blobs per form_sub_blobs + 1
+rave_blob = ave_blob / ave
+ave_n = 4  # 1 + average number of sub_blobs per form_sub_blobs
 
 '''
 def overlap(blob, box, map):  # returns number of overlapping pixels between blob.map and map

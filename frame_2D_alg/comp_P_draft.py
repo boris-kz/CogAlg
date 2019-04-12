@@ -6,63 +6,12 @@ from time import time
     it will cross-compare vertically adjacent Ps (representing horizontally contiguous slices across a blob)
     and form dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation of P params
     (difference | match deviation per param is summed between all compared params in P)
+    
     comp_P is potentially micro- and macro- recursive: 
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-    
-    for comp_P: P) seg) blobs should be defined by dx only, in intra_P(): 
+    input seg ) blob for comp_P() is from unfold_blob(dx_g): same as in hypot_g?
 '''
-
-def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
-
-    L, I, Dy, Dx, G, dert_ = P
-    p, dx, dy, g = _ders
-
-    if s == _s:  # sign of dx or dx deviation
-        L += 1; I += p; Dx += dx; Dy += dy; G += g  # accumulate P params
-        dert_.append((p, dy, dx, g))
-        term = 1
-    else:
-        P_.append((L, I, Dy, Dx, G, dert_))  # terminate P
-        P = 0, 0, 0, 0, 0, []
-        term = 0
-    return P_, P, term
-
-
-def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps within gradient-P, for form_seg -> comp P?
-    new_P_ = deque()
-
-    for (x0, L, I, Dy, Dx, G, dert_) in P_:
-        for (_x0, _L, _I, _Dy, _Dx, _G, _dert_) in _P_:
-
-        form_seg()
-
-    return new_P_
-
-def intra_P(seg):  # form, evaluate, align sub_Ps for vertical comp
-
-    for x0, L, I, Dy, Dx, G, dert_ in seg[-1]:
-
-        if L > 1:  # or min_L: Ps redefined by dx | ort_dx: rescan before comp, no need for initial P?
-            dP_, vP_ = deque(), deque()
-            dP, vP = (0,0,0,0,0,[]), (0,0,0,0,0,[])  # L, I, Dy, Dx, G, dert_
-            ini = 0
-            for ders in e_:  # i, dx, dy, g; e_ is preserved?
-                dx = ders[1]
-                vd = abs(dx) - ave  # v for deviation | value
-                sd = dx > 0
-                sv = vd > 0
-                if ini:
-                    dP_, dP, dterm = form_P_(dP_, dP, _ders, sd, _sd)  # direction dP ~ aP
-                    vP_, vP, vterm = form_P_(vP_, vP, _ders, sv, _sv)  # magnitude vP ~ gP
-                _ders = ders; _sd = sd; _sv = sv
-                ini = 1
-            if dterm: dP_.append(dP)
-            if vterm: dP_.append(vP)
-
-        '''
-        scan_P_ -> comp_P: strictly 1D -> 2D?
-        '''
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
     # differential Pm: all params are dderived, not pre-selected?
@@ -372,7 +321,57 @@ def flip(blob):  # vertical-first run of form_P and deeper functions over blob's
     return blob
 
 flip_ave = 1000
+ave = 20
+
 '''
+def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
+
+    L, I, Dy, Dx, G, dert_ = P
+    p, dx, dy, g = _ders
+
+    if s == _s:  # sign of dx or dx deviation
+        L += 1; I += p; Dx += dx; Dy += dy; G += g  # accumulate P params
+        dert_.append((p, dy, dx, g))
+        term = 1
+    else:
+        P_.append((L, I, Dy, Dx, G, dert_))  # terminate P
+        P = 0, 0, 0, 0, 0, []
+        term = 0
+    return P_, P, term
+
+
+def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps within gradient-P, for form_seg -> comp P?
+    new_P_ = deque()
+
+    for (x0, L, I, Dy, Dx, G, dert_) in P_:
+        for (_x0, _L, _I, _Dy, _Dx, _G, _dert_) in _P_:
+
+        form_seg()
+
+    return new_P_
+
+def intra_P(seg):  # form, evaluate, align sub_Ps for vertical comp
+
+    for x0, L, I, Dy, Dx, G, dert_ in seg[-1]:
+
+        if L > 1:  # or min_L: Ps redefined by dx | ort_dx: rescan before comp, no need for initial P?
+            dP_, vP_ = deque(), deque()
+            dP, vP = (0,0,0,0,0,[]), (0,0,0,0,0,[])  # L, I, Dy, Dx, G, dert_
+            ini = 0
+            for ders in e_:  # i, dx, dy, g; e_ is preserved?
+                dx = ders[1]
+                vd = abs(dx) - ave  # v for deviation | value
+                sd = dx > 0
+                sv = vd > 0
+                if ini:
+                    dP_, dP, dterm = form_P_(dP_, dP, _ders, sd, _sd)  # direction dP ~ aP
+                    vP_, vP, vterm = form_P_(vP_, vP, _ders, sv, _sv)  # magnitude vP ~ gP
+                _ders = ders; _sd = sd; _sv = sv
+                ini = 1
+            if dterm: dP_.append(dP)
+            if vterm: dP_.append(vP)
+
+
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
