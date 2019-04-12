@@ -54,39 +54,39 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, initial ave
 
     for blob in frame.blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost_form_sub_blobs: area of noisy or directional gradient
-            unfold_blob( typ=0, blob, hypot_g, rdn=rave_blob)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
+            unfold_blob(blob, hypot_g, rave_blob, rng=1)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
 
             if blob.Derts[-1][-1] > ave_blob * 2:  # G > cost_form_sub_blobs * rdn to gblob
-                intra_blob(blob, rdn=rave_blob)  # redundancy to higher layers & prior blobs is added cost per input
+                intra_blob(blob, rave_blob, 1)  # redundancy to higher layers & prior blobs is added cost per input
 
     return frame  # frame of 2D patterns is output to level 2
 
 
-def intra_blob(root_blob, rdn):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: eval comp_angle ( comp_branch:
+def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: eval comp_angle ( comp_branch:
 
     for blob in root_blob.sub_blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
 
             rdn += rave_blob  # += ave_blob / ave, then indiv eval? rdn += rave_blob per sub blob, else delete?
-            unfold_blob( typ=0, blob, comp_angle, rdn)  # angle calc, immed comp (no angle eval), extend Derts and derts
+            unfold_blob(blob, comp_angle, rdn, 1)  # angle calc, immed comp (no angle eval), extend Derts and derts
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
-                Gaf = 0
+                Ga_rdn = 0
                 G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # I converted per layer, not redundant to higher layers I
 
-                # sub-reference by dert[-1][1] = p_ref, after comp
+                # sub-reference: dert[-1][1] = p_ref, after comp, for lower-dert p assignment, instead of typ?
                 # typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
 
                 if Ga > ave_blob:
-                    Gaf = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
-                    unfold_blob( typ=1, ablob, comp_gradient, rdn + rave_blob)  # -> angle deviation sub_blobs
+                    Ga_rdn = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
+                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, 1)  # -> angle deviation sub_blobs
 
                 elif G * -Ga > ave_blob ** 2:  # 2^crit: input deviation * angle match: likely edge blob
-                    unfold_blob( typ=2, ablob, comp_gradient, rdn + rave_blob)  # Ga must be negative: stable orientation?
+                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, 1)  # Ga must be negative: stable orientation
 
-                if G + Ga > ave_blob*2 + Gaf:  # 2*crit: input dev + angle dev: likely sign reversal and distant match
-                    unfold_blob( typ=3, ablob, comp_range, rdn + rave_blob + Gaf)  # rdn + ga blob cost
+                if G + Ga > ave_blob*2 + Ga_rdn:  # 2*crit: input dev + angle dev: likely sign reversal & distant match
+                    unfold_blob( ablob, comp_range, rdn + rave_blob + Ga_rdn, 1)  # rdn + ga_blob cost
 
     '''
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
@@ -124,8 +124,8 @@ def hypot_g(blob):  # redefine master blob by reduced g and increased ave * 2: v
 
 ave = 20
 ave_blob = 200
-rave_blob = ave_blob / ave
-ave_n = 4  # 1 + average number of sub_blobs per form_sub_blobs
+ave_root_blob = 2000
+rave_blob = ave_blob / ave_root_blob  # additive (multiplicative?) cost of converting blob to root_blob?
 
 '''
 def overlap(blob, box, map):  # returns number of overlapping pixels between blob.map and map
