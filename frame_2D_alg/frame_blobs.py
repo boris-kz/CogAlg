@@ -229,8 +229,8 @@ def form_blob(term_seg,
         for seg in seg_:
             seg.pop()  # remove references to blob
             for y, P in zip(range(seg[0], seg[0] + seg[1][0]), seg[2]):
-                x0P, L = P[1:3]
-                xnP = x0 + L
+                x0P, LP = P[1:3]
+                xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
         frame[0][0] += I
@@ -275,11 +275,17 @@ frame_of_blobs = image_to_blobs(image)
 end_time = time() - start_time
 print(end_time)
 
-# Rebuild blob -------------------------------------------------------------------
+# DEBUG --------------------------------------------------------------------------
 
-from DEBUG import draw_blobs
+# from DEBUG import draw_blobs
+# draw_blobs('./../debug/out', frame_of_blobs, -1)
 
-draw_blobs('./../debug/out', frame_of_blobs, -1)
+from intra_comp import unfold_blob, hypot_g
+from DEBUG import map_dert___
+
+for i, blob in enumerate(frame_of_blobs[1]):
+    dert___ = unfold_blob(blob, hypot_g, rdn=0)
+    map_dert___('./../debug/hypot_g' + str(i) + '.jpg', dert___)
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps

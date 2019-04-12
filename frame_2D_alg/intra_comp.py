@@ -1,6 +1,4 @@
-import numpy as np
 from math import hypot
-from math import atan2
 from collections import deque, namedtuple
 
 nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
@@ -8,6 +6,7 @@ nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_D
 # ************ FUNCTIONS ************************************************************************************************
 # -form_sub_blob()
 # -unfold_blob()
+# -hypot_g()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
@@ -16,19 +15,11 @@ nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_D
 
 ''' this module is under revision '''
 
-def form_sub_blob(root_blob, dert___):  # redefine blob as branch-specific master blob: local equivalent of frame
+def form_sub_blobs(root_blob):  # redefine blob as branch-specific master blob: local equivalent of frame
+    return
+    # ---------- form_sub_blobs() end ---------------------------------------------------------------------------------------
 
-    seg_ = deque()
-
-    while dert_:
-        P_ = form_P_()                     # horizontal clustering
-        P_ = scan_P_()       # vertical clustering
-        seg_ = form_seg_()   # vertical clustering
-    while seg_: form_blob()  # terminate last running segments
-
-    # ---------- add_sub_blob() end -----------------------------------------------------------------------------------------
-
-def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
+def unfold_blob(blob, comp_branch, rdn, rng=1):     # unfold and compare
 
     dert___ = []
 
@@ -36,38 +27,59 @@ def unfold_blob(blob, branch_comp, rng=1):     # unfold and compare
     y = y0                      # iterating y (y0 -> yn - 1)
     i = 0                       # iterating segment index
 
-    dert_buff___ = deque(maxlen=rng)        # buffer of incomplete derts
+    blob.seg_.sort(key=lambda seg: seg[0])
+
+    dert_buff___ = deque(maxlen=rng)            # buffer of incomplete derts
+
+    seg_ = []  # buffer of segments containing line y
 
     while y < yn and i < len(blob.seg_):
 
-        seg_ = []                           # buffer of segments containing line y
-
-        while blob.seg_[i][0] == y:
+        while i < len(blob.seg_) and blob.seg_[i][0] == y:
             seg_.append(blob.seg_[i])
+            i += 1
 
-        P_ = []                             # buffer for Ps at line y
+        P_ = []                                 # buffer for Ps at line y
         for seg in seg_:
-            if y < seg[0] + seg[1][0]:      # y < y0 + Ly (y within segment):
+            if y < seg[0] + seg[1][0]:          # y < y0 + Ly (y within segment):
 
                 P_.append(seg[2][y - seg[0]])   # append P at line y of seg
 
         for seg in seg_:
-            if not y < seg[0] + seg[1][0]:  # y >= y0 + Ly (out of segment):
+            if not y < seg[0] + seg[1][0]:      # y >= y0 + Ly (out of segment):
 
                 seg_.remove(seg)
 
         P_.sort(key=lambda P: P[1]) # sort by x coordinate, left -> right
 
-        # operations:
+        # operation:
 
-        branch_comp(P_, dert_buff___, dert___)
+        comp_branch(P_, dert_buff___, dert___)
 
-    while dert_buff__:   # add remaining dert_s in dert_buff__ into dert__
-        dert__.append(dert_buff___.pop())
+        y += 1
 
-    form_sub_blob(blob, dert___)
+    while dert_buff___:   # add remaining dert_s in dert_buff__ into dert__
+        dert___.append(dert_buff___.pop())
+
+    return dert___
 
     # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
+
+def hypot_g(P_, dert_buff___, dert___):
+
+    dert__ = []     # initial line dert__
+    for P in P_:
+        x0 = P[1]
+        dert_ = P[-1]
+        for index, (i, dy, dx, g) in enumerate(dert_):
+            g = hypot(dx, dy)
+
+            dert_[index] = [i, (4, dy, dx, g)]      # [i, (ncomp, dy, dx, g)]
+
+        dert__.append((x0, dert_))
+
+    dert___.append((dert__))
+    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
 def form_P_():  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
     return

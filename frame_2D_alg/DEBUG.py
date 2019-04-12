@@ -27,3 +27,19 @@ def draw_blobs(path, frame, isb=-1):
 
     cv2.imwrite(path + '.bmp', frame_img)
     # ---------- draw_blob() end ----------------------------------------------------------------------------------------
+def map_dert___(path, dert___):
+
+    Y = len(dert___)                                                            # height of frame
+    X0 = min([dert__[0][0] for dert__ in dert___])
+    Xn = max([dert__[-1][0] + len(dert__[-1][1]) for dert__ in dert___])
+    X = Xn - X0                                                                 # width of frame
+
+    image = np.array([[127] * X] * Y)
+
+    for y, dert__ in enumerate(dert___):
+        for x0, dert_ in dert__:
+            for x, [i, (ncomp, dy, dx, g)] in enumerate(dert_, start= x0 - X0):
+                image[y, x] = (g > 0) * 255
+
+    cv2.imwrite(path, image)
+    # ---------- draw_blob() end ----------------------------------------------------------------------------------------
