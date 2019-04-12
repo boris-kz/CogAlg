@@ -1,73 +1,78 @@
-import numpy as np
 from math import hypot
-from math import atan2
 from collections import deque, namedtuple
 
 nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
 
 # ************ FUNCTIONS ************************************************************************************************
-# -form_sub_blob()
 # -unfold_blob()
+# -form_sub_blobs()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
 # ***********************************************************************************************************************
 
-''' this module is under revision '''
+''' 
+unfold blob into derts, 
+perform branch-specific comparison, 
+convert blob into root_blob with new sub_blob_ 
+'''
 
-def form_sub_blobs(root_blob, dert___):  # redefine blob as branch-specific master blob: local equivalent of frame
-
-    seg_ = deque()
-
-    while dert___:
-        P_ = form_P_()                     # horizontal clustering
-        P_ = scan_P_()       # vertical clustering
-        seg_ = form_seg_()   # vertical clustering
-    while seg_: form_blob()  # terminate last running segments
-
-    # ---------- add_sub_blob() end -----------------------------------------------------------------------------------------
-
-def unfold_blob(typ, rdn, blob, comp_branch, rng=1):     # unfold and compare
-
-    dert___ = []
+def unfold_blob(blob, comp_branch, rdn, rng=1):  # unfold and compare
 
     y0, yn, x0, xn = blob.box
-    y = y0                      # iterating y (y0 -> yn - 1)
-    i = 0                       # iterating segment index
-
-    dert_buff___ = deque(maxlen=rng)        # buffer of incomplete derts
+    y = y0  # current y, from seg y0 -> yn - 1
+    i = 0   # segment index
+    blob.seg_.sort(key=lambda seg: seg[0])  # sort by y0 coordinate
+    dert___ = []   # complete derts
+    dert_buff___ = deque(maxlen=rng)  # incomplete derts
+    seg_ = []    # buffer of segments containing line y
 
     while y < yn and i < len(blob.seg_):
 
-        seg_ = []                           # buffer of segments containing line y
-
-        while blob.seg_[i][0] == y:
+        while i < len(blob.seg_) and blob.seg_[i][0] == y:
             seg_.append(blob.seg_[i])
-
-        P_ = []                             # buffer for Ps at line y
+            i += 1
+        P_ = []  # line y Ps
         for seg in seg_:
-            if y < seg[0] + seg[1][0]:      # y < y0 + Ly (y within segment):
-
+            if y < seg[0] + seg[1][0]:          # y < y0 + Ly within segment, or len(Py)?
                 P_.append(seg[2][y - seg[0]])   # append P at line y of seg
 
         for seg in seg_:
-            if not y < seg[0] + seg[1][0]:  # y >= y0 + Ly (out of segment):
-
+            if not y < seg[0] + seg[1][0]:      # y >= y0 + Ly (out of segment):
                 seg_.remove(seg)
 
-        P_.sort(key=lambda P: P[1]) # sort by x coordinate, left -> right
-
+        P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # operations:
+        comp_branch(P_, dert___, dert_buff___)  # no dert_buff___ in hypot_g or future dx_g
+        y += 1
 
-        comp_branch(P_, dert_buff___, dert___)
-
-    while dert_buff___:   # add remaining dert_s in dert_buff__ into dert__
+    while dert_buff___:   # add remaining dert_s in dert_buff__ into dert___
         dert___.append(dert_buff___.pop())
 
-    form_sub_blob(blob, dert___)
+    return dert___
 
     # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
+
+def hypot_g(P_, dert___):  # here for testing only
+    dert__ = []  # dert_ per P, dert__ per line, dert___ per blob
+
+    for P in P_:
+        x0 = P[1]
+        dert_ = P[-1]
+        for index, (i, dy, dx, g) in enumerate(dert_):
+            g = hypot(dx, dy)
+
+            dert_[index] = [(i, dy, dx, g)]  # ncomp=1: multiple of min n, specified in deeper derts only
+        dert__.append((x0, dert_))
+    dert___.append(dert__)
+
+    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
+
+
+def form_sub_blobs(root_blob):  # redefine blob as branch-specific root blob: local equivalent of frame
+    return
+    # ---------- form_sub_blobs() end ---------------------------------------------------------------------------------------
 
 def form_P_():  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
     return

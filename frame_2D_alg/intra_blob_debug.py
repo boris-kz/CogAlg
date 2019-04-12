@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.ma as ma
+from math import hypot
 from comp_angle import comp_angle
 from comp_gradient import comp_gradient
 from comp_range_draft import comp_range
@@ -50,11 +51,11 @@ from intra_comp_debug import unfold_blob, form_sub_blobs
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 '''
 
-def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, initial ave per hypot_g & comp_angle, or all branches?
+def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
 
     for blob in frame.blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost_form_sub_blobs: area of noisy or directional gradient
-            unfold_blob(blob, hypot_g, rave_blob, rng=1)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
+            unfold_blob(blob, hypot_g, rave_blob, 1)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
 
             if blob.Derts[-1][-1] > ave_blob * 2:  # G > cost_form_sub_blobs * rdn to gblob
                 intra_blob(blob, rave_blob, 1)  # redundancy to higher layers & prior blobs is added cost per input
@@ -62,28 +63,28 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, initial ave
     return frame  # frame of 2D patterns is output to level 2
 
 
-def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: eval comp_angle ( comp_branch:
+def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: comp_angle(comp_x:
 
     for blob in root_blob.sub_blob_:
         if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
 
             rdn += rave_blob  # += ave_blob / ave, then indiv eval? rdn += rave_blob per sub blob, else delete?
-            unfold_blob(blob, comp_angle, rdn, 1)  # angle calc, immed comp (no angle eval), extend Derts and derts
+            unfold_blob(blob, comp_angle, rdn, rng)  # angle calc, immed comp (no angle eval), extend Derts and derts
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
                 Ga_rdn = 0
                 G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # I converted per layer, not redundant to higher layers I
 
-                # sub-reference: dert[-1][1] = p_ref, after comp, for lower-dert p assignment, instead of typ?
+                # sub-reference: dert[-1][1] = p_ref in comp_branch: lower-dert p assignment instead of typ?
                 # typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
 
                 if Ga > ave_blob:
                     Ga_rdn = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
-                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, 1)  # -> angle deviation sub_blobs
+                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, rng)  # -> angle deviation sub_blobs
 
                 elif G * -Ga > ave_blob ** 2:  # 2^crit: input deviation * angle match: likely edge blob
-                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, 1)  # Ga must be negative: stable orientation
+                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, rng)  # Ga must be negative: stable orientation
 
                 if G + Ga > ave_blob*2 + Ga_rdn:  # 2*crit: input dev + angle dev: likely sign reversal & distant match
                     unfold_blob( ablob, comp_range, rdn + rave_blob + Ga_rdn, 1)  # rdn + ga_blob cost
@@ -99,7 +100,7 @@ def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls 
     * Dy / Dx:   variation-per-dimension bias 
     * Ave - Ga:  if positive angle match
     
-    def intra_blob_dx_g(root_blob, rdn)
+    def unfold_blob(root_blob, rdn)
         for blob in root_blob.sub_blob_:
             if blob.Derts[-1][-1] > ave_blob:  # val_PP_ > ave_comp_P
                 rdn *= comp_P_coef; unfold_blob( typ=0, blob, dx_g, rdn)  # ~ hypot_g, no comp
@@ -110,22 +111,25 @@ def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls 
     return root_blob
 
 
-def hypot_g(blob):  # redefine master blob by reduced g and increased ave * 2: variable costs of comp_angle
+def hypot_g(P_, dert___):
+    dert__ = []  # dert_ per P, dert__ per line, dert___ per blob
 
-    mask = ~blob.map[:, :, np.newaxis].repeat(4, axis=2)  # stack map 4 times to fit the shape of dert__: (width, height, number of params)
-    blob.new_dert__[0] = ma.array(blob.dert__, mask=mask)  # initialize dert__ with mask for selective comp
+    for P in P_:
+        x0 = P[1]
+        dert_ = P[-1]
+        for index, (i, dy, dx, g) in enumerate(dert_):
+            g = hypot(dx, dy)
 
-    # redefine g = hypot(dx, dy), ave * 2 assuming that added cost of angle calc = cost of hypot_g calc
-    blob.new_dert__[0][:, :, 3] = np.hypot(blob.new_dert__[0][:, :, 1], blob.new_dert__[0][:, :, 2]) - ave * 2
+            dert_[index] = [(i, dy, dx, g)]  # ncomp=1: multiple of min n, specified in deeper derts only
+        dert__.append((x0, dert_))
+    dert___.append(dert__)
 
-    return 1  # comp rng
-
-    # ---------- hypot_g() end -----------------------------------------------------------------------------------
+    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
 ave = 20
 ave_blob = 200
 ave_root_blob = 2000
-rave_blob = ave_blob / ave_root_blob  # additive (multiplicative?) cost of converting blob to root_blob?
+rave_blob = ave_blob / ave_root_blob  # additive | multiplicative cost of converting blob to root_blob
 
 '''
 def overlap(blob, box, map):  # returns number of overlapping pixels between blob.map and map
