@@ -38,7 +38,7 @@ def map_dert___(path, dert___):
 
     for y, dert__ in enumerate(dert___):
         for x0, dert_ in dert__:
-            for x, [i, (ncomp, dy, dx, g)] in enumerate(dert_, start= x0 - X0):
+            for x, [(i, dy, dx, g)] in enumerate(dert_, start= x0 - X0):
                 image[y, x] = (g > 0) * 255
 
     cv2.imwrite(path, image)

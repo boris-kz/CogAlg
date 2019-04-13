@@ -214,8 +214,7 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg,
-              frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     y0s, params, Py_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
