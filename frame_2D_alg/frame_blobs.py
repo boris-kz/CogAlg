@@ -283,7 +283,7 @@ from intra_comp import unfold_blob, hypot_g
 from DEBUG import map_dert___
 
 for i, blob in enumerate(frame_of_blobs[1]):
-    dert___ = unfold_blob(blob, hypot_g, rdn=0)
+    dert___ = unfold_blob(blob, hypot_g(), rdn=0)
     map_dert___('./../debug/hypot_g' + str(i) + '.jpg', dert___)
 
 '''
