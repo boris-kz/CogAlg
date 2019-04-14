@@ -1,7 +1,5 @@
-def square(x):
-    return x ** 2
+def st(**kwargs):
+    a = kwargs.values()
+    return a
 
-def some_func(func):
-    return func
-
-print(some_func(square(2)))
+print(st(L=1, I=4, Dy=5, Dx=-1))
