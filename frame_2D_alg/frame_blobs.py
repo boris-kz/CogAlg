@@ -36,8 +36,7 @@ import numpy as np
 # -form_blob()
 # ***********************************************************************************************************************
 
-def image_to_blobs(
-        image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
+def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], [], image.shape]  # params, blob_, shape
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
@@ -237,7 +236,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(typ=0, sign=s, Ly=Ly, L=L,
+        frame[1].append(nt_blob(sign=s, Ly=Ly, L=L,
                                 Derts=[(I, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
                                 seg_=seg_,
                                 root_blob = None,
@@ -252,7 +251,6 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-
 # ************ PROGRAM BODY *********************************************************************************************
 
 ave = 20
@@ -265,7 +263,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
@@ -276,15 +274,14 @@ print(end_time)
 
 # DEBUG --------------------------------------------------------------------------
 
-# from DEBUG import draw_blobs
-# draw_blobs('./../debug/out', frame_of_blobs, -1)
+from DEBUG import draw_blobs
+draw_blobs('./../debug/out', frame_of_blobs)
 
-from intra_comp import unfold_blob, hypot_g
-from DEBUG import map_dert___
+from intra_comp import intra_comp, hypot_g
 
 for i, blob in enumerate(frame_of_blobs[1]):
-    dert___ = unfold_blob(blob, hypot_g, rdn=0)
-    map_dert___('./../debug/hypot_g' + str(i) + '.jpg', dert___)
+    dert___ = intra_comp(blob, hypot_g, rdn=0)
+    draw_blobs('./../debug/hypot_g' + str(i), blob)
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
