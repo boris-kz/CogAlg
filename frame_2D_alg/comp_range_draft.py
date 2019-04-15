@@ -14,8 +14,7 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
     new_dert__ = []                 # initialize output
     dert_buff_ = deque(maxlen=rng)  # new dert's buffer
     max_index = rng - 1             # max_index of dert_buff_
-    _x0 = 0                         # prior x0, or x0 of previous P
-
+    _x0 = 0                         # x0 of previous P
     for P in P_:
         new_dert_ = []
         x0 = P[1]
@@ -46,7 +45,6 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
     return new_dert__
 
 def vertical_comp(dert__, dert_buff___, dert___):    # vertical and diagonal comparison
-
     # at len=maxlen, first line of derts in last element of dert_buff___ is appended to dert___
 
     dert_ = [(x,) + dert for x, dert in enumerate(dert_, start=x0) for x0, dert_ in dert__]

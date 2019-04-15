@@ -24,9 +24,10 @@ def unfold_blob(blob, comp_branch, rdn, rng=1):  # unfold and compare
     y = y0  # current y, from seg y0 -> yn - 1
     i = 0   # segment index
     blob.seg_.sort(key=lambda seg: seg[0])  # sort by y0 coordinate
-    dert___ = []   # complete derts
-    dert_buff___ = deque(maxlen=rng)  # incomplete derts
-    seg_ = []    # buffer of segments containing line y
+    dert___ = []
+    buff___ = deque(maxlen=rng)
+    seg_ = []   # buffer of segments containing line y
+    # sseg_ = []  # buffer of sub-segments
 
     while y < yn and i < len(blob.seg_):
 
@@ -44,50 +45,75 @@ def unfold_blob(blob, comp_branch, rdn, rng=1):  # unfold and compare
 
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # operations:
-        comp_branch(P_, dert___, dert_buff___)  # no dert_buff___ in hypot_g or future dx_g
+        sP_ = comp_branch(P_, dert___, buff___)     # no dert_buff___ in hypot_g or future dx_g
+        # sP_ = scan_P_(sP_, sseg_, blob)
+        # sseg_ = form_sseg_(y, sP_, blob)
+
         y += 1
 
-    while dert_buff___:   # add remaining dert_s in dert_buff__ into dert___
-        dert___.append(dert_buff___.pop())
-
-    return dert___
+    # while dert_buff___:   # from sub blobs with remaining dert_s in dert_buff__
+        # sP_ = form_P_(dert__)
+        # sP_ = scan_P_(sP_, sseg_, blob)
+        # sseg_ = form_seg_(y, sP_, blob)
 
     # ---------- unfold_blob() end ------------------------------------------------------------------------------------------
 
-def hypot_g(P_, dert___):  # here for testing only
-    dert__ = []  # dert_ per P, dert__ per line, dert___ per blob
-
+def hypot_g(P_, buff___):  # here for testing only
+    sP_ = []
     for P in P_:
         x0 = P[1]
-        dert_ = P[-1]
-        for index, (i, dy, dx, g) in enumerate(dert_):
-            g = hypot(dx, dy)
+        derts_ = P[-1]
 
-            dert_[index] = [(i, dy, dx, g)]  # ncomp=1: multiple of min n, specified in deeper derts only
-        dert__.append((x0, dert_))
-    dert___.append(dert__)
+        for index, (i, dy, dx, g) in enumerate(derts_):
+            g = hypot(dx, dy)
+            derts_[index] = [(i, 4, dy, dx, g)]  # ncomp=4: number of comparisons per i, to normalize g
+
+        sP_ += form_P_(derts_, x0, derts_index=0)
+    return sP_
 
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
+def form_P_(derts__, x_start, derts_index):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
-def form_sub_blobs(root_blob):  # redefine blob as branch-specific root blob: local equivalent of frame
-    return
-    # ---------- form_sub_blobs() end ---------------------------------------------------------------------------------------
+    P_ = []  # row of Ps
+    derts_ = [derts_[derts_index] for derts_ in derts__]
+    i, ncomp, dy, dx, g = derts_[1][0]  # first derts
+    x0, L, I, Dy, Dx, G = x_start, 1, i, g, dy // ncomp, dx // ncomp # P params
+    _s = g > 0  # sign
 
-def form_P_():  # cluster and sum horizontally consecutive pixels and their derivatives into Ps
-    return
+    for x, (i, ncomp, dy, dx, g) in enumerate(derts_[2:-1], start=x_start + 1):
+        s = g > 0
+        if s != _s:  # P is terminated and new P is initialized
+            P_.append([_s, x0, L, I, Dy, Dx, G, derts_[x0:x0 + L]])
+            x0, L, I, Dy, Dx, G = x, 0, 0, 0, 0, 0
+
+        # accumulate P params:
+        L += 1
+        I += i
+        Dy += dy // ncomp
+        Dx += dx // ncomp
+        G += g
+        _s = s  # prior sign
+
+    P_.append([_s, x0, L, I, Dy, Dx, G, derts_[x0: x0 + L]])  # last P in row
+    return P_
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-
-def scan_P_():  # this function detects connections (forks) between Ps and _Ps, to form blob segments
-    return
+def scan_P_(*arg):  # this function detects connections (forks) between Ps and _Ps, to form blob segments
+    return 0
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
-def form_seg_():  # Convert or merge every P into segment. Merge blobs
-    return
+def form_seg_(*arg):  # Convert or merge every P into segment. Merge blobs
+    return 0
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob():  # terminated segment is merged into continued or initialized blob (all connected segments)
-    return
+def form_blob(*arg):  # terminated segment is merged into continued or initialized blob (all connected segments)
+    return 0
     # ---------- form_blob() end -------------------------------------------------------------------------------------
+
+def form_sub_blobs(root_blob):  # redefine blob as branch-specific root blob: local equivalent of frame
+    return
+
+    # ---------- form_sub_blobs() end ---------------------------------------------------------------------------------------
+

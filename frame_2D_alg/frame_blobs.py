@@ -98,9 +98,7 @@ def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-
 def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
-
     new_P_ = deque()
 
     if P_ and seg_:           # if both are not empty
@@ -109,6 +107,7 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
         _P = seg[2][-1]       # last element of each segment is higher-line P
         stop = False
         fork_ = []
+
         while not stop:
             x0 = P[1]         # first x in P
             xn = x0 + P[2]    # first x in next P

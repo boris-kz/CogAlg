@@ -1,8 +1,8 @@
 import numpy as np
 import numpy.ma as ma
 from math import hypot
-from comp_angle import comp_angle
-from comp_gradient import comp_gradient
+from comp_angle_map import comp_angle
+from comp_gradient_map import comp_gradient
 from comp_range_draft import comp_range
 # from comp_P_ import comp_P_
 from intra_comp_debug import unfold_blob, form_sub_blobs
@@ -19,24 +19,24 @@ from intra_comp_debug import unfold_blob, form_sub_blobs
         sign, Ly, L,  # these are common for all Derts, higher-Derts sign is always positive, else no branching 
         
         Derts = 
-            [ Dert = I, Dx, Dy, G ],  # one Dert per current and lower layers of blob derivation tree
+            [ Dert = I, Dx, Dy, Ncomp, G ],  # one Dert per current and lower layers of blob derivation tree
         seg_ = 
             [ seg_params,  # formed in frame blobs
               Py_ =  # vertical buffer of Ps per segment
                 [ P_params,
-                  derts = [ dert = p|a, dx, dy, g ]]],  # one dert per current and higher (if root blob is a sub blob) layers 
-                  # alternating g|a layers, for 2+ odd derts: add ncomp and higher-dert ref (/typ) instead of p?
+                  derts = [ dert = p|a, dx, dy, ncomp, g]]],  # one dert per current and higher (if blob is sub blob) layers 
+                  # alternating g|a deep layers: p is replaced by a in odd derts and absent in even derts
                               
         sub_blob_ # sub_blob structure is same as in root blob 
             if len( sub_blob_) > min:
-                sub_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per positive sub_blobs and their higher layers
+                sub_Derts[:] = [(Ly, L, I, Dx, Dy, Ncomp, G)]  # one Dert per positive sub_blobs and their higher layers
                  
         if eval_layer branch call:  # multi-layer intra_blob, top derts_ structure is layer_
             layer_f = 1
-            sub_blob_ = [(sub_Derts, sub_blob_)]  # appended by lower layers across derivation tree per root blob, flat | nested?  
+            sub_blob_ = [(sub_Derts, sub_blob_)]  # appended by flat|nested lower layers across derivation tree per root blob 
             
             if len( sub_blob_) > min
-                sub_Derts[:] = [(Ly, L, I, Dx, Dy, G)]  # one Dert per sub_blob_s of referred layer and its higher layers
+                sub_Derts[:] = [(Ly, L, I, Dx, Dy, Ncomp, G)]  # one Dert per sub_blob_s of referred layer & its higher layers
                 
         map, box, rng
               
@@ -76,9 +76,6 @@ def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls 
                 G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # I converted per layer, not redundant to higher layers I
 
-                # sub-reference: dert[-1][1] = p_ref in comp_branch: lower-dert p assignment instead of typ?
-                # typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
-
                 if Ga > ave_blob:
                     Ga_rdn = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
                     unfold_blob( ablob, comp_gradient, rdn + rave_blob, rng)  # -> angle deviation sub_blobs
@@ -89,7 +86,8 @@ def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls 
                 if G + Ga > ave_blob*2 + Ga_rdn:  # 2*crit: input dev + angle dev: likely sign reversal & distant match
                     unfold_blob( ablob, comp_range, rdn + rave_blob + Ga_rdn, 1)  # rdn + ga_blob cost
 
-    '''
+    ''' typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
+
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
     g and ga are dderived, blob of min_g? val -= branch switch cost?
     no Ave = ave * ablob.L, (G + Ave) / Ave: always positive?
@@ -117,10 +115,10 @@ def hypot_g(P_, dert___):
     for P in P_:
         x0 = P[1]
         dert_ = P[-1]
-        for index, (i, dy, dx, g) in enumerate(dert_):
+        for index, (p, dy, dx, ncomp, g) in enumerate(dert_):
             g = hypot(dx, dy)
 
-            dert_[index] = [(i, dy, dx, g)]  # ncomp=1: multiple of min n, specified in deeper derts only
+            dert_[index] = [(p, dy, dx, ncomp, g)]  # p is replaced by a in even layers and absent in deeper odd layers
         dert__.append((x0, dert_))
     dert___.append(dert__)
 
@@ -130,33 +128,3 @@ ave = 20
 ave_blob = 200
 ave_root_blob = 2000
 rave_blob = ave_blob / ave_root_blob  # additive | multiplicative cost of converting blob to root_blob
-
-'''
-def overlap(blob, box, map):  # returns number of overlapping pixels between blob.map and map
-
-    y0, yn, x0, xn = blob.box
-    _y0, _yn, _x0, _xn = box
-
-    olp_y0 = max(y0, _y0)
-    olp_yn = min(yn, _yn)
-    if olp_yn - olp_y0 <= 0:  # no overlapping y coordinate span
-        return 0
-    olp_x0 = max(x0, _x0)
-    olp_xn = min(xn, _xn)
-    if olp_xn - olp_x0 <= 0:  # no overlapping x coordinate span
-        return 0
-
-    # master_blob coordinates olp_y0, olp_yn, olp_x0, olp_xn are converted to local coordinates before slicing:
-
-    map1 = box.map[(olp_y0 - y0):(olp_yn - y0), (olp_x0 - x0):(olp_xn - x0)]
-    map2 = map[(olp_y0 - _y0):(olp_yn - _y0), (olp_x0 - _x0):(olp_xn - _x0)]
-
-    olp = np.logical_and(map1, map2).sum()  # compute number of overlapping pixels
-    return olp
-
-for box, map in map_:  # of higher-value blobs in the layer, incrementally nested, with root_blobs per blob?
-
-    olp = overlap(blob, box, map)  # or no lateral overlap between xblobs?
-    rdn += 1 * (olp / blob.Derts[-1][-1])  # rdn += 1 * (olp / G):
-    # redundancy to higher and stronger-branch overlapping blobs, * specific branch cost ratio? 
-'''

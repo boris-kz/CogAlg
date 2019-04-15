@@ -10,7 +10,7 @@ from time import time
     comp_P is potentially micro- and macro- recursive: 
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-    input seg ) blob for comp_P() is from unfold_blob(dx_g): same as in hypot_g?
+    root blob for comp_P() is formed by unfold_blob(dx_g): same as in hypot_g?
 '''
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
@@ -78,33 +78,37 @@ g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
 a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? 
 '''
 
-def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
+def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    (s, x0, L, I, G, Dx, Dy, e_), xd = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
-    (_s, _x0, _L, _I, _G, _Dx, _Dy, _e_), _xd = _P  # + params from higher branches, S if min n_params?
+    s, x0, L, I, G, Dx, Dy, e_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    _s, _x0, _L, _I, _G, _Dx, _Dy, _e_, _dX = _P  # + params from higher branches, S if min n_params?
 
-    xm = (x0 + L-1) - _x0   # x olp, ave - xd -> vxP: low partial distance, or relative: olp_L / min_L (dderived)?
-    if x0 > _x0: xm -= x0 - _x0  # vx only for distant-P comp? no if mx > ave, only PP termination by comp_P?
+    xn = x0 + L-1;  _xn = _x0 + _L-1
+    offset = abs(x0 - _x0) + abs(xn - _xn)
+    overlap = min(xn, _xn) - max(x0, _x0)
 
-    xdd = xd - _xd  # for ortho eval if first-run ave_xDd * Pm: += compensated orientation change,
-    xDd += xdd  # signs of xdd and dL correlate, signs of xd (position) and dL (dimension) don't
+    mX = overlap / offset  # mX and dX are L-normalized because individual pixel x m|d is binary
+    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x;  vX = mX - ave_mX: for P inclusion or distant-P comp only?
+
+    ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated orientation change,
+    DdX += ddX  # signs of ddX and dL correlate, signs of dX (position) and dL (dimension) don't
 
     if ort:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
-        hyp = math.hypot(xd, 1)  # long axis increment = hyp / 1 (vertical distance):
+        hyp = math.hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
         L /= hyp  # est orthogonal slice is reduced P,
         I /= hyp  # for each param
         G /= hyp
         # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
-    dL = L - _L; mL = min(L, _L)  # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - ave * L    # I is not dderived, vI is signed
+    dL = L - _L; mL = min(L, _L)    # ext miss: Ddx + DL?
+    dI = I - _I; vI = dI - ave * L  # I is not dderived, vI is signed
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
 
 
-    Pd = xdd + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation
-    Pm = xm +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
+    Pd = ddX + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation
+    Pm = mX +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
@@ -114,7 +118,7 @@ def comp_P(ort, P, _P, xDd):  # forms vertical derivatives of P params, also con
         nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 
-        Pnm = xm + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
+        Pnm = mX + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
 
         if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
         else: mPP_rdn = 1; nmPP_rdn = 0
