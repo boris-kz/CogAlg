@@ -236,7 +236,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(sign=s, Ly=Ly, L=L,
+        frame[1].append(nt_blob(typ = 0, sign=s, Ly=Ly, L=L,
                                 Derts=[(I, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
                                 seg_=seg_,
                                 root_blob = None,
@@ -263,7 +263,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
