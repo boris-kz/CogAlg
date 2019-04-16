@@ -4,8 +4,7 @@ from math import hypot
 from comp_angle_map import comp_angle
 from comp_gradient_map import comp_gradient
 from comp_range_draft import comp_range
-# from comp_P_ import comp_P_
-from intra_comp_debug import unfold_blob, form_sub_blobs
+from intra_comp_debug import intra_comp
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
@@ -54,11 +53,13 @@ from intra_comp_debug import unfold_blob, form_sub_blobs
 def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
 
     for blob in frame.blob_:
-        if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost_form_sub_blobs: area of noisy or directional gradient
-            unfold_blob(blob, hypot_g, rave_blob, 1)  # redefines g=hypot(dx,dy), adds sub_blob_, replaces blob params
+        rdn = rave_blob  # projected rdn for blob evaluation, passed down only if intra_comp() is called:
 
-            if blob.Derts[-1][-1] > ave_blob * 2:  # G > cost_form_sub_blobs * rdn to gblob
-                intra_blob(blob, rave_blob, 1)  # redundancy to higher layers & prior blobs is added cost per input
+        if blob.Derts[-1][-1] > rdn:  # G > fixed cost of forming root_blob: area of noisy or directional gradient
+            intra_comp(blob, hypot_g, rdn, 1)  # redefines g=hypot(dx,dy), converts blob to root_blob
+
+            if blob.Derts[-1][-1] > ave_eval:  # root_blob G > cost of eval_sub_blobs
+                intra_blob(blob, rdn + ave_blob, 1)  # rdn includes cost lower + higher layers + prior blobs per input
 
     return frame  # frame of 2D patterns is output to level 2
 
@@ -66,25 +67,27 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per 
 def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: comp_angle(comp_x:
 
     for blob in root_blob.sub_blob_:
-        if blob.Derts[-1][-1] > ave_blob:  # G > fixed cost of sub blobs: area of noisy or directional gradient
+        rdn += rave_blob + ave_blob  # += projected cost of converting sub blob to root_blob + ablob
 
-            rdn += rave_blob  # += ave_blob / ave, then indiv eval? rdn += rave_blob per sub blob, else delete?
-            unfold_blob(blob, comp_angle, rdn, rng)  # angle calc, immed comp (no angle eval), extend Derts and derts
+        if blob.Derts[-1][-1] > rdn:  # G > fixed cost of forming new root_blob: area of noisy or directional gradient
+            intra_comp(blob, comp_angle, rdn, rng)   # angle calc, immed comp (no angle eval), extend Derts and derts
+            # rdn is not needed for comp_angle?
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
                 Ga_rdn = 0
-                G = ablob.Derts[-2][-1]   # I, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
-                Ga = ablob.Derts[-1][-1]  # I converted per layer, not redundant to higher layers I
+                rdn += rave_blob
+                G = ablob.Derts[-2][-1]   # I, Dx, Dy, N, G; Derts: current + higher-layers params, no lower layers yet
+                Ga = ablob.Derts[-1][-1]  # I is converted per layer, not redundant to higher I
 
-                if Ga > ave_blob:
+                if Ga > rdn:
                     Ga_rdn = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
-                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, rng)  # -> angle deviation sub_blobs
+                    intra_comp( ablob, comp_gradient, rdn + rave_blob, rng)  # -> angle deviation sub_blobs
 
-                elif G * -Ga > ave_blob ** 2:  # 2^crit: input deviation * angle match: likely edge blob
-                    unfold_blob( ablob, comp_gradient, rdn + rave_blob, rng)  # Ga must be negative: stable orientation
+                elif G * -Ga > rdn**2:  # 2^crit: input deviation * angle match: likely edge blob
+                    intra_comp( ablob, comp_gradient, rdn + rave_blob, rng)  # Ga must be negative: stable orientation
 
-                if G + Ga > ave_blob*2 + Ga_rdn:  # 2*crit: input dev + angle dev: likely sign reversal & distant match
-                    unfold_blob( ablob, comp_range, rdn + rave_blob + Ga_rdn, 1)  # rdn + ga_blob cost
+                if G + Ga > rdn*2 + Ga_rdn:  # 2*crit: input dev + angle dev: likely sign reversal and distant match
+                    intra_comp( ablob, comp_range, rdn + Ga_rdn, 1)  # rdn + ga_blob cost
 
     ''' typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
 
@@ -125,6 +128,8 @@ def hypot_g(P_, dert___):
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
 ave = 20
-ave_blob = 200
-ave_root_blob = 2000
-rave_blob = ave_blob / ave_root_blob  # additive | multiplicative cost of converting blob to root_blob
+ave_eval = 200  # fixed cost of evaluating sub_blobs and adding root_blob flag
+ave_blob = 500  # fixed cost of forming each blob: rdn+=1 for future eval_blob
+
+ave_root_blob = 2000  # fixed cost of intra_blob comparison, converting blob to root_blob
+rave_blob = ave_root_blob / ave_blob  # additive cost of redundant root blob structures

@@ -35,7 +35,7 @@ import numpy as np
 # -form_blob()
 # ***********************************************************************************************************************
 
-def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
+def image_to_blobs(image):  # postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], [], image.shape]  # params, blob_, shape
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
@@ -56,8 +56,8 @@ def comp_pixel(p__):  # bilateral comparison between vertically and horizontally
 
     dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
-    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): first and last column are discarded
-    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): first and last row are discarded
+    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows -> dy, (1:-1): discard first & last column
+    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns -> dx, (1:-1): discard first & last row
     g__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
 
     dert__[:, :, 0] = p__
@@ -74,7 +74,7 @@ def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their
 
     P_ = deque()  # row of Ps
     i, dy, dx, g = dert_[1]  # first dert
-    x0, L, I, Dy, Dx, G = 1, 1, i, dy, dx, g  # P params
+    x0, L, I, Dy, Dx, G = 1, 1, i, dy, dx, g  # P params initialization
     P_dert_ = [(i, dy, dx, g)]  # dert buffer
     _s = g > 0  # sign
 
@@ -205,10 +205,10 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
 
     return new_seg_
 
-    # ---------- form_seg_() end --------------------------------------------------------------------------------------------
+    # ---------- form_seg_() end -------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, frame):  # terminated segment is merged in continued or initialized blob (all connected segments)
 
     y0s, params, Py_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
@@ -236,8 +236,8 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 seg_=seg_,
                                 root_blob=[blob],
                                 sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
-                                sub_Derts=[],  # optional sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layer_f=0,   # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
+                                sub_Derts=[],  # sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
+                                layer_f=0,     # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)]
                                 box=(y0, yn, x0, xn),  # boundary box
                                 map=map,  # blob boolean map, to compute overlap
                                 rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
@@ -271,49 +271,9 @@ from DEBUG import draw_blob
 draw_blob('./debug/frame', frame_of_blobs, -1)
 
 '''
-def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
-
-    P_ = deque()  # P buffer
-    L, I, Dy, Dx, G = 0, 0, 0, 0, 0
-    Pdert_ = []
-    dert_ = dert__[y]  # row of pixels + derivatives
-    _i, _dy, _dx, _g = dert_[0]
-    _s = _g > 0
-
-    for x, (i, dy, dx, g) in enumerate(dert_[1:]):
-        s = g > 0
-        if s != _s:
-            P_.append([_s, L, I, Dy, Dx, G, Pdert_])  # P is packed into P_
-            L, I, Dy, Dx, G = 0, 0, 0, 0, 0   # new P
-            Pdert_ = []
-        L += 1
-        I += _i  # accumulate P params
-        Dy += _dy
-        Dx += _dx
-        G += _g
-        Pdert_.append((y, x-1, i, dy, dx, g))
-        _s = s; _i = i; _dy = dy; _dx = dx; _g = g  # convert dert to prior dert
-
-    return P_
-
-from filters import get_filters
-get_filters(globals())  # imports all filters at once
+alt input:
 from scipy import misc
 image = misc.face(gray=True)  # input frame of pixels
 image = image.astype(int)
-
-op = np.array([[0] * width] * height)
-for blob in frame_of_blobs[1]:
-    y0, yn, x0, xn = blob.box
-    map = blob.map
-    slice = op[y0:yn, x0:xn]
-
-    if blob.sign:
-        slice[map] = 255
-    else:
-        slice[map] = 0
-
-cv2.imwrite('./debug/frame.bmp', op)
-
 '''
 # ************ PROGRAM BODY END ******************************************************************************************
