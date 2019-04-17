@@ -1,53 +1,64 @@
 from collections import deque
 
-def comp_range(P_, dert___, dert_buff___):  # compare i param at incremented range
+def comp_range(P_, buff___, dert_index):  # compare i param at incremented range
 
     # P_: current line Ps
-    rng = dert_buff___.maxlen  # dert_buff___ per blob ( dert__ per line ( dert_ per P
+    rng = buff___.maxlen  # dert_buff___ per blob ( dert__ per line ( dert_ per P
 
-    dert__ = lateral_comp(P_, rng)                  # horizontal comparison
-    vertical_comp(dert__, dert_buff___, dert___)    # vertical and diagonal comparison
+    derts__ = lateral_comp(P_, rng)                  # horizontal comparison (return current line)
+    _derts__ = vertical_comp(derts__, buff___)    # vertical and diagonal comparison (return last line in buff___)
+
+    return _derts__
 
 
 def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance == rng
 
-    new_dert__ = []                 # initialize output
-    dert_buff_ = deque(maxlen=rng)  # new dert's buffer
+    new_derts__ = []                 # initialize output
+    buff_ = deque(maxlen=rng)  # new dert's buffer
     max_index = rng - 1             # max_index of dert_buff_
     _x0 = 0                         # prior x0, or x0 of previous P
 
     for P in P_:
-        new_dert_ = []
+        new_derts_ = []
         x0 = P[1]
+        derts_ = P[-1]
         for x in range(_x0, x0):    # through invalid coordinates
-            dert_buff_.append(None)
+            buff_.append(None)      # buffer invalid derts as None
 
-        Pdert_ = P[-1]
-        for x, (i, dy, dx, g) in enumerate(Pdert_, start=x0):
-            ncomp = 4
-            if len(dert_buff_) == rng and dert_buff_[max_index] != None:  # xd == rng and valid coordinate
+        for x, derts in enumerate(derts_, start=x0):
+            i = derts[-1][-rng+1][0]        # +1 due to this being done before new dert is appended
+            ncomp, dy, dx = derts[-1][-4:-1]
+            if len(buff_) == rng and buff_[max_index] != None:  # xd == rng and valid coordinate
 
-                _i, _ncomp, _dy, _dx = dert_buff_[max_index]
+                _derts = buff_[max_index]
+                _i = _derts[-rng][0]
+                _ncomp, _dy, _dx = _derts[-1]
+
                 d = i - _i      # lateral comparison
                 ncomp += 1      # bilateral accumulation
                 dx += d         # bilateral accumulation
                 _ncomp += 1     # bilateral accumulation
                 _dx += d        # bilateral accumulation
-                new_dert_.append((_i, _ncomp, _dy, _dx))
 
-            dert_buff_.appendleft((i, ncomp, dy, dx))
+                _derts[-1] = _ncomp, _dy, _dx   # assign back into _dert
 
-        while dert_buff_:
-            new_dert_.append(dert_buff_.pop())
+                new_derts_.append(_derts)       # buffer into line derts_
 
-        new_dert__.append((x0, new_dert_))      # each new_dert_ (span of contiguous derts) is appended into new_dert__
+            derts.append((ncomp, dy, dx))       # new dert
+
+            buff_.appendleft(derts)             # buffer for horizontal comp
+
+        while buff_:
+            new_derts_.append(buff_.pop())      # terminate last derts in line
+
+        new_derts__.append((x0, new_derts_))    # each new_derts_ (span of horizontally continuous derts) is appended into new_derts__
         _x0 = x0
 
-    return new_dert__
+    return new_derts__
 
-def vertical_comp(dert__, dert_buff___, dert___):    # vertical and diagonal comparison
+def vertical_comp(dert__, dert_buff___, dert___):    # vertical and diagonal comparison. Currently under revision
 
-    # at len=maxlen, first line of derts in last element of dert_buff___ is appended to dert___
+    # at len=maxlen, first line of derts in last element of buff___ is returned to comp_range()
 
     dert_ = [(x,) + dert for x, dert in enumerate(dert_, start=x0) for x0, dert_ in dert__]
     # flatten current line derts

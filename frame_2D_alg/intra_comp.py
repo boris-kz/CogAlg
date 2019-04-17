@@ -22,7 +22,7 @@ convert blob into root_blob with new sub_blob_
 
 def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    blob.sub_Derts.append((0, 0, 0, 0, 0))     # I, N, Dy, Dx, G
+    root_blob.sub_Derts[:] = 0, 0, 0, 0, 0, 0, 0     # Ly, L, I, N, Dy, Dx, G
 
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
@@ -55,7 +55,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         derts__ = comp_branch(P_, buff___)     # no buff___ in hypot_g or future dx_g
 
         #  form sub_structures -> sub_blobs:
-        sP_ = form_P_(derts__, 0)
+        sP_ = form_P_(derts__)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
 
@@ -90,13 +90,13 @@ def hypot_g(P_, buff___):  # recompute g
     return derts__
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
-def form_P_(derts__, dert_index):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()    # row of Ps
 
     for x_start, derts_ in derts__:     # each derts_ is a span of horizontally contiguous derts, a line might contain many of these
 
-        dert_ = [derts[dert_index] for derts in derts_] # make the list of specific tyoe of dert
+        dert_ = [derts[-1] for derts in derts_] # make the list of specific tyoe of dert
 
         i, ncomp, dy, dx, g = dert_[0]  # first dert
         x0, L, I, N, Dy, Dx, G = x_start, 1, i, ncomp, dy, dx, g # P params
@@ -253,13 +253,15 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
 
         # acumulate root_blob's sub_Derts here
 
-        Ir, Nr, Dyr, Dxr, Gr = root_blob.sub_Derts
+        if s:  # for positive sub_blobs only
+            root_blob.sub_Derts[0] += Ly
+            root_blob.sub_Derts[1] += L
 
-        Ir += I
-        Nr += N
-        Dyr += Dy
-        Dxr += Dx
-        Gr += G
+        root_blob.sub_Derts[2] += I
+        root_blob.sub_Derts[3] += N
+        root_blob.sub_Derts[4] += Dy
+        root_blob.sub_Derts[5] += Dx
+        root_blob.sub_Derts[6] += G
 
         root_blob.sub_Derts[dert_index] = Ir, Nr, Dyr, Dxr, Gr
 
