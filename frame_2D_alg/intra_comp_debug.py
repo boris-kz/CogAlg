@@ -4,7 +4,6 @@ from collections import deque, namedtuple
 
 nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
 ave = 5
-min_sub_blob_ = 5
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -51,7 +50,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):
 
         y += 1
 
-    while buff___:   # form sub blobs with remaining dert_s in dert_buff__
+    while buff___:  # form sub blobs with dert_s remaining in dert_buff__
         sP_ = form_P_(derts__)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
@@ -224,6 +223,7 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
     y0s, params, Py_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
     blob[3] += roots - 1  # number of open segments
+    root_blob.sub_Derts[:] = 0,0,0,0,0,0,0
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
 
@@ -238,7 +238,15 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        # accumulate sub_Derts here
+        if s:  # for positive sub_blobs only
+            root_blob.sub_Derts[0] += Ly
+            root_blob.sub_Derts[1] += L
+
+        root_blob.sub_Derts[2] += I
+        root_blob.sub_Derts[3] += N
+        root_blob.sub_Derts[4] += Dy
+        root_blob.sub_Derts[5] += Dx
+        root_blob.sub_Derts[6] += G
 
         root_blob.sub_blob_\
             .append(nt_blob(sign=s, typ=0, Ly=Ly, L=L,
@@ -253,8 +261,5 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
                             map=map,  # blob boolean map, to compute overlap
                             rng=1,    # for comp_range, for either typ of comparand?
                             ))
-
-    # if len(root_blob.sub_blob_) > min_sub_blob_:
-    #    root_blob.sub_Derts[:] = sub_Derts  # else discarded
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------

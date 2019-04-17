@@ -53,43 +53,54 @@ from intra_comp_debug import intra_comp
 def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
 
     for blob in frame.blob_:
-        rdn = rave_blob  # projected rdn for blob evaluation, passed down only if intra_comp() is called:
+        cost = ave_blob  # cost per input: higher layers + prior blobs + evaluated blob:
+        # rdn = cost / ave_blob?
 
-        if blob.Derts[-1][-1] > rdn:  # G > fixed cost of forming root_blob: area of noisy or directional gradient
-            intra_comp(blob, hypot_g, rdn, 1)  # redefines g=hypot(dx,dy), converts blob to root_blob
+        if blob.Derts[-1][-1] > cost: # G > fixed cost of forming root blob: area of noisy or directional gradient
+            intra_comp(blob, hypot_g, cost, 1)  # redefines g=hypot(dx,dy), converts blob to root_blob
 
-            if blob.Derts[-1][-1] > ave_eval:  # root_blob G > cost of eval_sub_blobs
-                intra_blob(blob, rdn + ave_blob, 1)  # rdn includes cost lower + higher layers + prior blobs per input
+            if blob.Derts[-1][-1] > cost + ave_eval:  # root_blob G > cost of eval_sub_blobs
+                intra_blob( blob, 2, 1)  # cost *=2: relative resulting-blob cost for evaluation, passed to intra_comp
 
     return frame  # frame of 2D patterns is output to level 2
 
 
-def intra_blob(root_blob, rdn, rng):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: comp_angle(comp_x:
+def intra_blob(root_blob, cost, rng):  # if not comp_angle, form_sub_blobs calls recursive intra_blob: comp_angle(comp_x:
 
     for blob in root_blob.sub_blob_:
-        rdn += rave_blob + ave_blob  # += projected cost of converting sub blob to root_blob + ablob
+        cost += ave_blob  # += projected cost of converting sub blob to root_blob and adding ablob?
 
-        if blob.Derts[-1][-1] > rdn:  # G > fixed cost of forming new root_blob: area of noisy or directional gradient
-            intra_comp(blob, comp_angle, rdn, rng)   # angle calc, immed comp (no angle eval), extend Derts and derts
-            # rdn is not needed for comp_angle?
+        if blob.Derts[-1][-1] > cost + ave_eval:  # G > cost of forming root_blob: area of noisy or directional gradient
+            intra_comp(blob, comp_angle, cost, rng)  # angle calc & comp (no angle eval), ga - ave*rdn, add Dert, dert
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
                 Ga_rdn = 0
-                rdn += rave_blob
+                cost += ave_blob
                 G = ablob.Derts[-2][-1]   # I, Dx, Dy, N, G; Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # I is converted per layer, not redundant to higher I
 
-                if Ga > rdn:
-                    Ga_rdn = rave_blob   # rdn increment / G+Ga blob, Ga priority: cheaper?
-                    intra_comp( ablob, comp_gradient, rdn + rave_blob, rng)  # -> angle deviation sub_blobs
+                if Ga > cost:
+                    Ga_rdn = ave_blob  # rdn increment / G+Ga blob, Ga priority: cheaper?
+                    intra_comp( ablob, comp_gradient, cost + ave_blob, rng)  # -> angle deviation sub_blobs
 
-                elif G * -Ga > rdn**2:  # 2^crit: input deviation * angle match: likely edge blob
-                    intra_comp( ablob, comp_gradient, rdn + rave_blob, rng)  # Ga must be negative: stable orientation
+                    if ablob.Derts[-1][-1] > cost + ave_eval:
+                        intra_blob( ablob, cost, rng)
 
-                if G + Ga > rdn*2 + Ga_rdn:  # 2*crit: input dev + angle dev: likely sign reversal and distant match
-                    intra_comp( ablob, comp_range, rdn + Ga_rdn, 1)  # rdn + ga_blob cost
+                elif G * -Ga > cost**2:  # 2 ^ crit: input deviation * angle match: likely edge blob
+                    intra_comp( ablob, comp_gradient, cost + ave_blob, rng)  # Ga must be negative: stable orientation
 
-    ''' typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
+                    if ablob.Derts[-1][-1] > cost + ave_eval:
+                        intra_blob( ablob, cost, rng)
+
+                if G + Ga > cost*2 + Ga_rdn:  # 2 * crit: input dev + angle dev: likely sign reversal and distant match
+                    intra_comp( ablob, comp_range, cost + ave_blob + Ga_rdn, 1)  # cost + ga_blob cost
+
+                    if ablob.Derts[-1][-1] > cost + ave_eval:
+                        intra_blob( ablob, cost, rng)
+
+    '''
+    typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]
+    no dert[0] = a|g: both could be i?
 
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
     g and ga are dderived, blob of min_g? val -= branch switch cost?
