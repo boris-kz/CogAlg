@@ -1,12 +1,14 @@
 from collections import deque
 
-def comp_range(P_, buff___, dert_index):  # compare i param at incremented range
+def comp_range(P_, buff___):  # compare i param at incremented range
 
     # P_: current line Ps
     rng = buff___.maxlen  # dert_buff___ per blob ( dert__ per line ( dert_ per P
 
-    derts__ = lateral_comp(P_, rng)                  # horizontal comparison (return current line)
-    _derts__ = vertical_comp(derts__, buff___)    # vertical and diagonal comparison (return last line in buff___)
+    derts__ = lateral_comp(P_, rng)                 # horizontal comparison (return current line)
+    _derts__ = vertical_comp(derts__, buff___)      # vertical and diagonal comparison (return last line in buff___)
+
+    buff___.appendleft(derts__)                     # buffer derts__ into buff___
 
     return _derts__
 
@@ -56,60 +58,121 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
 
     return new_derts__
 
-def vertical_comp(dert__, dert_buff___, dert___):    # vertical and diagonal comparison. Currently under revision
+def vertical_comp(derts__, buff___):    # vertical and diagonal comparison. Currently under revision
 
     # at len=maxlen, first line of derts in last element of buff___ is returned to comp_range()
 
-    dert_ = [(x,) + dert for x, dert in enumerate(dert_, start=x0) for x0, dert_ in dert__]
-    # flatten current line derts
+    for yd, _derts__ in enumerate(buff___, start=1):   # iterate through (rng - 1) upper lines
 
-    for yd, _dert__ in enumerate(dert_buff___, start=1):  # yd: vertical distance between dert_ and _dert_
+        if yd < buff___.maxlen:     # diagonal comp
 
-        _dert_ = [(_x,) + _dert for _x, _dert in enumerate(_dert_, start=_x0) for _x0, _dert_ in _dert__]
-        # flatten higher line derts
+            xd = buff___.maxlen - yd
 
-        if yd == rng:   # vertical comp
-            i = 0  # index of dert
-            _i = 0  # index of higher line dert
+            hyp = hypot(xd, yd)
+            y_coef = yd / hyp       # to decompose d into dy
+            x_coef = xd / hyp       # to decompose d into dx
 
-            while i < len(dert_) and _i < len(_dert_):  # while there's still comparison to be performed. Loop is per i
-                dert = dert_[i]
-                x = dert[0]
+            i = 0   # index of _derts_ containing upper-left derts for comparison
+            j = 0   # index of _derts_ containing upper-right derts for comparison
 
-                while _i < len(_dert_) and _dert_[_i] < x:      # search for the right coordinate
-                    _i += 1
+            _lx0, _lderts_ = _derts__[i]    # _derts_ containing upper-left derts for comparison
+            _lx0 += xd                      # upper-left comparands are shifted right horizontally for checking for overlap
+            _lxn = _lx0 + len(_lderts_)
 
-                if _i < len(_dert_) and _dert_[_i] == x:    # if coordinate is valid
-                # compare dert to _dert_[_li] here
+            _rx0, _rderts_ = _derts__[j]    # _derts_ containing upper-right derts for comparison
+            _rx0 -= xd                      # upper-right comparands are shifted left horizontally for checking for overlap
+            _rxn = _rx0 + len(_rderts_)
 
-        else:   # diagonal comp
+            for x0, derts_ in derts__:      # iterate through derts__
 
-            xd = rng - yd
-            i = 0       # index of dert
-            _li = 0     # index of upper-left dert
-            _ri = 0     # index of upper-right dert
+                xn = x0 + len(derts_)
 
-            while i < len(dert_) and (_li < len(_dert_) or _ri < len(_dert_)):  # while there is a comparand, Loop is per i
-                dert = dert_[i]
-                x = dert[0]
+                while i < len(_derts__) and _lxn < xn:      # upper-left comparisons
 
-                _lx = x - xd    # upper-left x coordinate
-                _lx = x + xd    # upper-right x coordinate
+                    while i < len(_derts__) and not (x0 < _lxn and _lx0 < xn):  # while not overlap
+                        i += 1
 
-                # upper-left comp:
+                        _lx0, _lderts_ = _derts__[i]    # _derts_ containing upper-left derts for comparison
+                        _lx0 += xd                      # upper-left comparands are shifted right horizontally for checking for overlap
+                        _lxn = _lx0 + len(_lderts_)
 
-                while _li < len(_dert_) and _dert_[_li] < _lx:  # search for the right coordinate
-                    _li += 1
+                    if i < len(_derts__):
 
-                if _li < len(_dert_) and _dert_[_li] == _lx:    # if coordinate is valid
-                # compare dert to _dert_[_li] here
+                        compare_slices(_lderts_, derts_, (_lx0, _lxn, x0, xn), (y_coef, x_coef))
 
-                # upper-right comp:
+                while j < len(_derts__) and _rxn < xn:      # upper-right comparisons, same as above
 
-                while _ri < len(_dert_) and _dert_[_ri] < _rx:  # search for the right coordinate
-                    _ri += 1
+                    while j < len(_derts__) and not (x0 < _rxn and _rx0 < xn):  # while not overlap
+                        j += 1
 
-                if _ri < len(_dert_) and _dert_[_li] == _lx:   # if coordinate is valid
-                # compare dert to _dert_[_ri] here
+                        _rx0, _rderts_ = _derts__[j]    # _derts_ containing upper-right derts for comparison
+                        _rx0 += xd                      # upper-right comparands are shifted left horizontally for checking for overlap
+                        _rxn = _rx0 + len(_rderts_)
 
-    return
+                    if j < len(_derts__):
+
+                        compare_slices(_rderts_, derts_, (_lx0, _lxn, x0, xn), (y_coef, -x_coef))
+        else:   # pure vertical_comp, same as above except for non-shifting coordinate and constant coef
+
+            i = 0   # index of _derts_
+
+            _x0, _derts_ = _derts__[i]
+            _xn = _x0 + len(_derts_)
+
+            for x0, derts_ in derts__:  # iterate through derts__
+
+                xn = x0 + len(derts_)
+
+                while i < len(_derts__) and _xn < xn:   # while not overlap
+
+                    while i < len(_derts__) and not (x0 < _xn and _x0 < xn):  # while not overlap
+                        i += 1
+
+                        _x0, _derts_ = _derts__[i]
+                        _xn = _x0 + len(_derts_)
+
+                    if i < len(_derts__):
+                        compare_slices(_derts_, derts_, (_x0, _xn, x0, xn), (1, 0))
+
+    if len(buff___) == buff___.maxlen:
+        return buff___[-1]
+    else:
+        return []
+
+def compare_slices(_derts_, derts_, packed_coord, coefs):        # utility function for comparing derts
+
+    _x0, _xn, x0, xn = packed_coord     # bounds of _derts_ and derts_
+
+    y_coef, x_coef = coefs              # for decomposition of d
+
+    olp_x0 = max(x0, _lx0)              # overlap
+    olp_xn = min(xn, _lxn)              # overlap
+
+    start = max(0, olp_x0 - x0)                         # compute indices for dert_ slicing
+    end = min(len(derts_), len(derts_) + xn - olp_xn)   # compute indices for dert_ slicing
+
+    _start = max(0, olp_x0 - _lx0)                              # compute indices for _dert_ slicing
+    _end = min(len(_derts_), len(_derts__) + _lxn - olp_xn)     # compute indices for _dert_ slicing
+
+    for _derts, derts in zip(_derts_[_start:_end], derts_[start, end]):
+
+        i = derts[-1][-rng][0]
+        ncomp, dy, dx = derts[-1]
+
+        _i = _derts[-rng][0]
+        _ncomp, _dy, _dx = _derts[-1]
+
+        d = i - _i  # difference
+
+        temp_dy = int(y_coef * d)  # decomposition into vertical difference
+        temp_dx = int(x_coef * d)  # decomposition into horizontal difference
+
+        ncomp += 1  # bilateral accumulation
+        dy += temp_dy  # bilateral accumulation
+        dx += temp_dx  # bilateral accumulation
+        _ncomp += 1  # bilateral accumulation
+        _dy += temp_dy  # bilateral accumulation
+        _dx += temp_dx  # bilateral accumulation
+
+        derts[-1] = ncomp, dy, dx  # assign back into dert
+        _derts[-1] = _ncomp, _dy, _dx  # assign back into _dert

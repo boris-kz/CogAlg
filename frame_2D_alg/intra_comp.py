@@ -54,10 +54,11 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
 
         derts__ = comp_branch(P_, buff___)     # no buff___ in hypot_g or future dx_g
 
-        #  form sub_structures -> sub_blobs:
-        sP_ = form_P_(derts__)
-        sP_ = scan_P_(sP_, sseg_, blob)
-        sseg_ = form_seg_(y, sP_, blob)
+        if derts__: # if derts__ is not empty, form sub_structures -> sub_blobs:
+
+            sP_ = form_P_(derts__)
+            sP_ = scan_P_(sP_, sseg_, blob)
+            sseg_ = form_seg_(y, sP_, blob)
 
         y += 1
 
