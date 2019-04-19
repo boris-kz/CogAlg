@@ -275,13 +275,17 @@ print(end_time)
 # DEBUG --------------------------------------------------------------------------
 
 from DEBUG import draw_blobs
-draw_blobs('./../debug/out', frame_of_blobs)
+# draw_blobs('./../debug/out', frame_of_blobs)
 
 from intra_comp import intra_comp, hypot_g
+from comp_range import comp_range
 
 for i, blob in enumerate(frame_of_blobs[1]):
-    dert___ = intra_comp(blob, hypot_g, rdn=0)
-    draw_blobs('./../debug/hypot_g' + str(i), blob)
+    intra_comp(blob, hypot_g, rdn=0)
+
+    if blob.L > 3:
+        intra_comp(blob, comp_range, rdn=0, rng=2)
+        draw_blobs('./../debug/comp_range' + str(i), blob)
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps

@@ -1,5 +1,4 @@
-def st(**kwargs):
-    a = kwargs.values()
-    return a
+a = (1, 2, 3, 4, 5)
 
-print(st(L=1, I=4, Dy=5, Dx=-1))
+a += (1,)
+print(a)

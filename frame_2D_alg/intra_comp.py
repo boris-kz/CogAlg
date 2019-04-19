@@ -8,6 +8,8 @@ min_sub_blob = 5
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
+# -hypot_g()
+# -compute_g()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
@@ -22,7 +24,7 @@ convert blob into root_blob with new sub_blob_
 
 def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    root_blob.sub_Derts[:] = 0, 0, 0, 0, 0, 0, 0     # Ly, L, I, N, Dy, Dx, G
+    blob.sub_Derts[:] = 0, 0, 0, 0, 0, 0, 0     # Ly, L, I, N, Dy, Dx, G
 
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
@@ -56,6 +58,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
 
         if derts__: # if derts__ is not empty, form sub_structures -> sub_blobs:
 
+            compute_g(derts__)
             sP_ = form_P_(derts__)
             sP_ = scan_P_(sP_, sseg_, blob)
             sseg_ = form_seg_(y, sP_, blob)
@@ -63,8 +66,10 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         y += 1
 
     while buff___:   # form sub blobs with remaining dert_s in buff__
-        dert__ = buff__.pop()
-        sP_ = form_P_(dert__)
+
+        derts__ = buff___.pop()
+        compute_g(derts__)
+        sP_ = form_P_(derts__)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
 
@@ -72,7 +77,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         form_blob(sseg_.popleft(), blob)
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def hypot_g(P_, buff___):  # recompute g
+def hypot_g(P_, buff___):  # strip g from dert, then convert dert into derts (nested)
 
     derts__ = []    # line of derts
 
@@ -82,14 +87,23 @@ def hypot_g(P_, buff___):  # recompute g
         dert_ = P[-1]   # span of horizontally contiguous derts
 
         for index, (i, dy, dx, g) in enumerate(dert_):
-            g = int(hypot(dx, dy) - ave * 4)    # recompute g
 
-            dert_[index] = [(i, 4, dy, dx, g)]  # ncomp=4: multiple of min n, specified in deeper derts only
+            dert_[index] = [(i, 4, dy, dx)]  # ncomp=4: multiple of min n, specified in deeper derts only
 
         derts__.append((x0, dert_))
 
     return derts__
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
+
+def compute_g(derts__):     # compute g
+
+    for x0, derts_ in derts__:
+        for derts in derts_:
+            ncomp, dy, dx = derts[-1][-3:]
+
+            g = int(hypot(dx, dy)) - ncomp * ave
+
+            derts[-1] += (g,)
 
 def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
@@ -99,27 +113,25 @@ def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and the
 
         dert_ = [derts[-1] for derts in derts_] # make the list of specific tyoe of dert
 
-        i, ncomp, dy, dx, g = dert_[0]  # first dert
-        x0, L, I, N, Dy, Dx, G = x_start, 1, i, ncomp, dy, dx, g # P params
-        _s = g > 0  # sign
+        x0, L = x_start, 1      # P params
+        params = list(dert_[0]) # initialize P params with first dert value
+        _s = dert_[0][-1] > 0   # first dert's sign
 
-        for x, (i, ncomp, dy, dx, g) in enumerate(dert_[1:-1], start=x_start + 1):
-            s = g > 0
+        for x, dert in enumerate(dert_[1:-1], start=x_start + 1):
+            s = dert[-1] > 0
             if s != _s:  # P is terminated and new P is initialized
-                P_.append([_s, x0, N, L, I, Dy, Dx, G, derts_[x0:x0 + L]])
-                x0, L, I, N, Dy, Dx, G = x, 0, 0, 0, 0, 0, 0
+                P_.append([_s, x0, L] + params + [derts_[x0:x0 + L]])
+
+                x0, L = x, 0                # reset params
+                params = [0] * len(params)  # reset params
 
             # accumulate P params:
             L += 1
-            I += i
-            N += ncomp
-            Dy += dy
-            Dx += dx
-            G += g
+            params = [param + der for param, der in zip(params, dert)]
 
             _s = s  # prior sign
 
-        P_.append([_s, x0, L, I, N, Dy, Dx, G, derts_[x0:x0 + L]])  # last P in row
+        P_.append([_s, x0, L] + params + [derts_[x0:x0 + L]])  # last P in row
     return P_
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
@@ -178,28 +190,28 @@ def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge
 
     while P_:
         P, fork_ = P_.popleft()
-        s, x0 = P[:2]  # s, x0
-        params = P[2:-1]  # L, I, Dx, Dy, G
-        xn = x0 + params[0]  # next-P x0 = x0 + L
+        s, x0 = P[:2]           # s, x0
+        params = P[2:-1]        # L and other params
+        params = [1] + params   # add Ly
+        xn = x0 + params[0]     # next-P x0 = x0 + L
 
         if not fork_:  # new_seg is initialized with initialized blob
-            blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]  # s, params, seg_, open_segments, box
-            new_seg = [y, [1] + params, [P], 0, fork_, blob]  # y0, params, Py_, roots, fork_, blob
+            blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box
+            new_seg = [y, params, [P], 0, fork_, blob]            # y0, params, Py_, roots, fork_, blob
             blob[2].append(new_seg)
         else:
             if len(fork_) == 1 and fork_[0][3] == 1:  # P has one fork and that fork has one root
                 new_seg = fork_[0]
-                L, I, N, Dy, Dx, G = params
-                Ly, Ls, Is, Ns, Dys, Dxs, Gs = new_seg[1]  # fork segment params, P is merged into segment:
-                new_seg[1] = [Ly + 1, Ls + L, Is + I, Ns + N, Dys + Dy, Dxs + Dx, Gs + G]
-                new_seg[2].append(P)  # Py_: vertical buffer of Ps
-                new_seg[3] = 0  # reset roots
+                params_seg = new_seg[1]     # fork segment params, P is merged into segment:
+                new_seg[1] = [param + param_seg for param, param_seg in zip(params, params_seg)]
+                new_seg[2].append(P)        # Py_: vertical buffer of Ps
+                new_seg[3] = 0              # reset roots
                 blob = new_seg[-1]
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0][5]
-                new_seg = [y, [1] + params, [P], 0, fork_, blob]  # new_seg is initialized with fork blob
-                blob[2].append(new_seg)  # segment is buffered into blob
+                new_seg = [y, params, [P], 0, fork_, blob]  # new_seg is initialized with fork blob
+                blob[2].append(new_seg)                     # segment is buffered into blob
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][3] == 1:  # if roots == 1: fork hasn't been terminated
@@ -236,14 +248,17 @@ def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge
 
 def form_blob(term_seg, root_blob):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
-    y0s, params, Py_, roots, fork_, blob = term_seg
-    blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
+    y0s, params_seg, Py_, roots, fork_, blob = term_seg
+    blob[1] = [par1 + par2 for par1, par2 in zip(params_seg, blob[1])]
     blob[3] += roots - 1  # number of open segments
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
 
-        s, [Ly, L, I, N, Dy, Dx, G], seg_, open_segs, (y0, x0, xn) = blob
-        yn = y0s + params[0]  # yn = y0 + Ly
+        s, params, seg_, open_segs, (y0, x0, xn) = blob
+
+        Ly, L = params[:2]
+
+        yn = y0s + params_seg[0]                        # yn = y0 + Ly
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
         for seg in seg_:
             seg.pop()  # remove references to blob
@@ -258,17 +273,11 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
             root_blob.sub_Derts[0] += Ly
             root_blob.sub_Derts[1] += L
 
-        root_blob.sub_Derts[2] += I
-        root_blob.sub_Derts[3] += N
-        root_blob.sub_Derts[4] += Dy
-        root_blob.sub_Derts[5] += Dx
-        root_blob.sub_Derts[6] += G
-
-        root_blob.sub_Derts[dert_index] = Ir, Nr, Dyr, Dxr, Gr
+        root_blob.sub_Derts[2:] = [par1 + par2 for par1, par2 in zip(params[2:], root_blob.sub_Derts[2:])]
 
         root_blob.sub_blob_\
-            .append(nt_blob(typ = 0, sign=s, Ly=Ly, L=L,
-                            Derts=[(I, N, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
+            .append(nt_blob(0, s, Ly, L,                # typ, s, Ly, L
+                            Derts=[(params[2:])],  # I, N, Dy, Dx, G (?). not selective to +sub_blobs as in sub_Derts
                             seg_=seg_,
                             root_blob = root_blob,
                             sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_

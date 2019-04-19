@@ -5,6 +5,7 @@ def draw_blob(blob, img, localize):
     " draw a single blob "
     s = blob.sign
     y0, x0 = localize
+
     for seg in blob.seg_:
         for y, P in zip(range(seg[0], seg[0] + seg[1][0]), seg[2]):
             x0P, L = P[1:3]
@@ -23,6 +24,7 @@ def draw_blobs(path, frame):
         height = yn - y0
         width = xn - x0
         localize = y0, x0
+        print(frame.box)
 
     frame_img = np.array([[127] * width] * height)
 
