@@ -10,7 +10,7 @@ from time import time
     comp_P is potentially micro- and macro- recursive: 
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-    root blob for comp_P() is formed by unfold_blob(dx_g): same as in hypot_g?
+    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g
 '''
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
