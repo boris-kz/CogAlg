@@ -1,5 +1,3 @@
-import numpy as np
-import numpy.ma as ma
 from math import hypot
 from comp_angle_map import comp_angle
 from comp_gradient_map import comp_gradient
@@ -23,12 +21,12 @@ from intra_comp_debug import intra_comp
         typ,  # if typ==0: comparand is dert[0]: p|a, else comparand is dert[-1]: g, within dert in derts[-rng] 
         sign, Ly, L,  # these are common for all Derts, higher-Derts sign is always positive, else no branching 
         
-        Derts = [ Dert = I, Dx, Dy, Ncomp, G ],  # Dert per current and lower layers of blob derivation tree
+        Derts = [ Dert = I, Ncomp, Dx, Dy, G ],  # Dert per current and lower layers of derivation tree per blob
         seg_ = 
             [ seg_params,  # formed in frame blobs
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,
-                    derts = [ dert = p|a, dx, dy, ncomp, g]]],  # one dert per current and higher layers 
+                    derts = [ dert = p|a, ncomp, dx, dy, g]]],  # one dert per current and higher layers 
                     # alternating sub g|a layers: p is replaced by angle in odd derts and is absent in even derts
                               
         sub_Derts = [(Ly, L, I, Dx, Dy, Ncomp, G)]  # per sub blob_, vs layer_ Derts, sub_blob_ ) layer, nested
@@ -46,70 +44,56 @@ ave_root_blob = 1000  # fixed cost of intra_comp, converting blob to root_blob
 rave = ave_root_blob / ave_blob  # relative cost of root blob, to form rdn
 ave_n_sub_blobs = 10
 
-# rdn *= rave_blob: ~ ave_n_sub_blobs, then adjusted: rdn *= len sub_blob_ / ave_n_sub_blobs
-# cost = ave_blob * rdn, per higher + evaluated layer
-# Ave = ave * rdn
+# direct filter accumulation for evaluated intra_comp, vs. rdn:
+# Ave += ave, Ave_blob *= rave
 
 def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
 
     for blob in frame.blob_:
         if blob.Derts[-1][-1] > ave_root_blob:  # G > cost of forming root blob: highly noisy or directional gradient
 
-            intra_comp(blob, hypot_g, rave, 1)  # redefines g=hypot(dx,dy), converts blob to root_blob
-            rdn = rave * (len(blob.sub_blob_) / ave_n_sub_blobs)  # adjusted for actual / average n sub_blobs
+            intra_comp(blob, hypot_g, ave, 1)  # redefines g=hypot(dx,dy), converts blob to root_blob
+            Ave_blob = ave_root_blob * (len(blob.sub_blob_) / ave_n_sub_blobs)  # adjust by actual / ave n sub_blobs
 
             if blob.Derts[-1][-1] > ave_root_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
-                intra_blob( blob, rdn, 1)
+                intra_blob( blob, Ave_blob, ave * 2, 1)  # Ave = ave * 2: filter for deeper-P formation
 
     return frame
 
+def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_branch) selection per branch per sub_blob
 
-def intra_blob(root_blob, rdn, rng):  # recursive intra_comp(comp_branch) selection per sub_blob
-
-    rdn *= rave  # potential redundancy for all sub_blobs formed by evaluated intra_comp
+    Ave_blob *= rave  # estimated cost of redundant representations per blob
+    Ave + ave         # estimated cost of redundant representations per dert
 
     for blob in root_blob.sub_blob_:
-        if blob.Derts[-1][-1] > ave_blob * rdn + ave_eval:  # G > cost of adding new layer of root_blob
 
-            rdn *= rave       # to form Ave in intra_comp, then eval sub_blobs
+        if blob.Derts[-1][-1] > Ave_blob + ave_eval:  # G > cost of adding new layer of root_blob
             blob.layer_f = 1  # sub_blob_converted to layer_: [(sub_Derts, sub_blob_)]
 
-            intra_comp(blob, comp_angle, rdn, rng)  # angle calc & comp, no angle eval, ga - ave*rdn, add Dert, dert
-            rdn *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust for actual / average n sub_blobs
+            intra_comp(blob, comp_angle, Ave_blob, Ave, rng)  # angle calc and comp, no angle eval, add Dert and dert
+            Ave_blob *= rave  # estimated cost per sub_blob, and its derts:
+            Ave + ave
 
             for ablob in blob.sub_blob_:  # ablob is defined by ga sign
                 Ga_rdn = 0
-                G = ablob.Derts[-2][-1]   # I, N, Dx, Dy, N, G; Derts: current + higher-layers params, no lower layers yet
+                G = ablob.Derts[-2][-1]   # I, N, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # I is converted per layer, not redundant to higher I
 
-                if Ga > ave_blob * rdn:
-                    rdn *= rave
-                    Ga_rdn = 1  # rdn increment for G + Ga blob, Ga priority: cheaper?
+                if Ga > Ave_blob:
+                    Ga_rdn = 1  # redundant to potential G + Ga blob, Ga priority: cheaper?
+                    intra_comp( ablob, comp_gradient, Ave_blob, Ave, rng)  # -> angle deviation sub_blobs
 
-                    intra_comp( ablob, comp_gradient, rdn, rng)  # -> angle deviation sub_blobs
-                    rdn *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust for actual / average n sub_blobs
+                elif G * -Ga > Ave_blob ** 2: # 2^crit, -> input deviation * angle match: likely edge blob
+                    intra_comp( ablob, comp_gradient, Ave_blob, Ave, rng)  # Ga must be negative: stable orientation
 
-                    if ablob.Derts[-1][-1] > ave_blob * rdn + ave_eval:
-                        intra_blob( ablob, rdn, rng)
+                if G + Ga > Ave_blob * 2 + Ga_rdn:  # 2*crit, -> i_dev + a_dev: likely sign reversal & distant match
+                    intra_comp( ablob, comp_range, Ave_blob + ave_root_blob * Ga_rdn, Ave, 1)  # + rdn of ga root_blob
 
-                elif G * -Ga > (ave_blob * rdn) ** 2: # 2 ^ crit: input deviation * angle match: likely edge blob
-                    rdn *= rave
-
-                    intra_comp( ablob, comp_gradient, rdn, rng)  # Ga must be negative: stable orientation
-                    rdn *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust for actual / average n sub_blobs
-
-                    if ablob.Derts[-1][-1] > ave_blob * rdn + ave_eval:
-                        intra_blob( ablob, rdn, rng)
-
-                if G + Ga > (ave_blob * rdn) *2 + Ga_rdn:  # 2*crit: i_dev + a_dev: likely sign reversal & distant match
-                    rdn *= rave
-
-                    intra_comp( ablob, comp_range, ave_blob * (rdn + Ga_rdn), 1)  # ga_blob may be redundant to rng_blob
-                    rdn *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust for actual / average n sub_blobs
-
-                    if ablob.Derts[-1][-1] > ave_blob * rdn + ave_eval:
-                        intra_blob( ablob, rdn+1, rng)
-
+                    # at the end of intra_comp:
+                    # Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / ave n sub_blobs
+                    # if not comp_angle:
+                    #   if ablob.Derts[-1][-1] > Ave_blob + ave_eval:
+                    #       intra_blob( ablob, Ave_blob, Ave, rng)
     '''
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
     g and ga are dderived, blob of min_g? val -= branch switch cost?

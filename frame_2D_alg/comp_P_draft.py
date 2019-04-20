@@ -12,12 +12,15 @@ from time import time
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
     root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g
 '''
+ave = 20
+div_ave = 200
+flip_ave = 1000
 
 def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursion?
     # differential Pm: all params are dderived, not pre-selected?
 
-    s, [min_x, max_x, min_y, max_y, xD, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
-    xDd = 0; Ave = ave * L
+    s, [min_x, max_x, min_y, max_y, DX, abs_xD, Ly], [L, I, G, Dx, Dy, abs_Dx, abs_Dy], root_ = blob
+    DdX = 0; Ave = ave * L
 
     if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs_Dx, abs_Dy) / min(abs_Dx, abs_Dy)) > flip_ave:
         # or (max(Dx, Dy) / min(Dx, Dy): cumulative vs extremal values?
@@ -39,11 +42,11 @@ def comp_P_(val_PP_, blob, xD, rdn):  # scan of vertical Py_ -> comp_P -> 2D mPP
 
     while Py_:  # comp_P starts from 2nd P, top-down
         P = Py_.popleft()
-        _P, _ms, _ds = comp_P(ort, P, _P, xDd)
+        _P, _ms, _ds = comp_P(ort, P, _P, DdX)
 
         while Py_:  # form_PP starts from 3rd P
             P = Py_.popleft()
-            P, ms, ds = comp_P(ort, P, _P, xDd)  # P: S_vars += S_ders in comp_P
+            P, ms, ds = comp_P(ort, P, _P, DdX)  # P: S_vars += S_ders in comp_P
             if ms == _ms:
                 mPP = form_PP(1, P, mPP)
             else:
@@ -80,30 +83,31 @@ a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a?
 
 def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    s, x0, L, I, G, Dx, Dy, e_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
-    _s, _x0, _L, _I, _G, _Dx, _Dy, _e_, _dX = _P  # + params from higher branches, S if min n_params?
+    s, x0, L, I, G, Dx, Dy, derts_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # + params from higher branches, S if min n_params?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
     offset = abs(x0 - _x0) + abs(xn - _xn)
     overlap = min(xn, _xn) - max(x0, _x0)
 
-    mX = overlap / offset  # mX and dX are L-normalized because individual pixel x m|d is binary
-    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x;  vX = mX - ave_mX: for P inclusion or distant-P comp only?
+    mX = overlap / offset  # mX is L-normalized because individual x m|d is binary
+    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x;  vX = mX - ave_mX -> P inclusion, or distant-P comp only?
 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated orientation change,
-    DdX += ddX  # signs of ddX and dL correlate, signs of dX (position) and dL (dimension) don't
+    DdX += ddX  # ddX -> Pd: signs of ddX and dL correlate, signs of dX (position) and dL (dimension) don't
 
-    if ort:  # if seg ave_xD * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
+    if ort:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
         hyp = math.hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
         L /= hyp  # est orthogonal slice is reduced P,
         I /= hyp  # for each param
+
         G /= hyp
         # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
     dL = L - _L; mL = min(L, _L)    # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - ave * L  # I is not dderived, vI is signed
+    dI = I - _I; vI = dI - ave * L  # I is not dderived, so vI is a signed deviation
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
 
 
@@ -324,8 +328,6 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
 
-flip_ave = 1000
-ave = 20
 
 '''
 def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
