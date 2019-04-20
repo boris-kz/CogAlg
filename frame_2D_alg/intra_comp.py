@@ -36,7 +36,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
     buff___ = deque(maxlen=rng)
     sseg_ = deque() # buffer of sub-segments
 
-    while y < yn and i < len(blob.seg_):    # unfold blob into Ps for extended comp
+    while y < yn:    # unfold blob into Ps for extended comp
 
         while i < len(blob.seg_) and blob.seg_[i][0] == y:
             seg_.append(blob.seg_[i])
@@ -61,9 +61,11 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
             compute_g(derts__)
             sP_ = form_P_(derts__)
             sP_ = scan_P_(sP_, sseg_, blob)
-            sseg_ = form_seg_(y, sP_, blob)
+            sseg_ = form_seg_(y - rng, sP_, blob)
 
         y += 1
+
+    y -= len(buff___)
 
     while buff___:   # form sub blobs with remaining dert_s in buff__
 
@@ -72,6 +74,8 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         sP_ = form_P_(derts__)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
+
+        y += 1
 
     while sseg_:    # terminate last line
         form_blob(sseg_.popleft(), blob)
@@ -117,10 +121,10 @@ def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and the
         params = list(dert_[0]) # initialize P params with first dert value
         _s = dert_[0][-1] > 0   # first dert's sign
 
-        for x, dert in enumerate(dert_[1:-1], start=x_start + 1):
+        for x, dert in enumerate(dert_[1:], start=x_start + 1):
             s = dert[-1] > 0
             if s != _s:  # P is terminated and new P is initialized
-                P_.append([_s, x0, L] + params + [derts_[x0:x0 + L]])
+                P_.append([_s, x0, L] + params + [derts_[x0 - x_start : x0 - x_start + L]])
 
                 x0, L = x, 0                # reset params
                 params = [0] * len(params)  # reset params
@@ -131,7 +135,7 @@ def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and the
 
             _s = s  # prior sign
 
-        P_.append([_s, x0, L] + params + [derts_[x0:x0 + L]])  # last P in row
+        P_.append([_s, x0, L] + params + [derts_[x0 - x_start : x0 - x_start + L]])  # last P in row
     return P_
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
@@ -192,8 +196,8 @@ def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge
         P, fork_ = P_.popleft()
         s, x0 = P[:2]           # s, x0
         params = P[2:-1]        # L and other params
-        params = [1] + params   # add Ly
         xn = x0 + params[0]     # next-P x0 = x0 + L
+        params = [1] + params   # add Ly
 
         if not fork_:  # new_seg is initialized with initialized blob
             blob = [s, [0] * (len(params) + 1), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box

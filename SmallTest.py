@@ -1,4 +1,5 @@
-a = (1, 2, 3, 4, 5)
 
-a += (1,)
-print(a)
+if None:
+    print(0)
+if not None:
+    print(1)
