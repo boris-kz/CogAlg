@@ -1,5 +1,5 @@
 from collections import deque
-import math as math
+from math import hypot
 from time import time
 '''
     comp_P_ is a component of intra_blob, currently a draft
@@ -10,7 +10,8 @@ from time import time
     comp_P is potentially micro- and macro- recursive: 
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g
+
+    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g but no g compute
 '''
 ave = 20
 div_ave = 200
@@ -91,20 +92,20 @@ def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also con
     overlap = min(xn, _xn) - max(x0, _x0)
 
     mX = overlap / offset  # mX is L-normalized because individual x m|d is binary
-    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x;  vX = mX - ave_mX -> P inclusion, or distant-P comp only?
+    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, vX = mX - ave_mX -> P inclusion, or distant-P comp only?
 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated orientation change,
     DdX += ddX  # ddX -> Pd: signs of ddX and dL correlate, signs of dX (position) and dL (dimension) don't
 
     if ort:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
-        hyp = math.hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
-        L /= hyp  # est orthogonal slice is reduced P,
-        I /= hyp  # for each param
+        hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
+        L /= hyp  # est orthogonal slice is reduced P, for each param:
+        I /= hyp
+        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
+        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
-        G /= hyp
-        # Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
-        # Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
+    G = hypot(Dy, Dx)  # or in 2D structures only, and no input G?
 
     dL = L - _L; mL = min(L, _L)    # ext miss: Ddx + DL?
     dI = I - _I; vI = dI - ave * L  # I is not dderived, so vI is a signed deviation

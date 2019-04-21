@@ -231,13 +231,11 @@ def form_blob(term_seg, frame):  # terminated segment is merged in continued or 
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(typ=0, sign=s, Ly=Ly, L=L,
-                                Derts=[(I, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
+        frame[1].append(nt_blob( Derts=[(0, s, Ly, L, I, Dy, Dx, G, [])],  # typ=0, sign: positive for sub_blob_ > 0?
+                                # last term is sub_blob_ of nesting depth = Derts[index]
+                                # top Dert only:
                                 seg_=seg_,
                                 root_blob=[blob],
-                                sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
-                                sub_Derts=[],  # sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layer_f=0,     # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)]
                                 box=(y0, yn, x0, xn),  # boundary box
                                 map=map,  # blob boolean map, to compute overlap
                                 rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
@@ -256,7 +254,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'Derts seg_ root_blob map box rng')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_hypot      # not yet functional, comment-out to run

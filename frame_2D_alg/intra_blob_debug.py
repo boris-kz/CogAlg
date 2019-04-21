@@ -15,24 +15,23 @@ from intra_comp_debug import intra_comp
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 
     Recursive intra_blob comp_branch() calls add a layer of sub_blobs, new dert to derts and Dert to Derts, in each blob.
-    Dert params are summed params of selected sub_blobs, grouped in layers of layer_ derivation tree:
+    Dert params are summed params of selected sub_blobs, grouped in layers of derivation tree:
     
     blob =  
         typ,  # if typ==0: comparand is dert[0]: p|a, else comparand is dert[-1]: g, within dert in derts[-rng] 
-        sign, Ly, L,  # these are common for all Derts, higher-Derts sign is always positive, else no branching 
+        sign, # these are common for all Derts, higher-Derts sign is always positive, else no branching 
         
-        Derts = [ Dert = I, Ncomp, Dx, Dy, G ],  # Dert per current and lower layers of derivation tree per blob
+        Derts = [ Dert = I, N, Dx, Dy, G, sub_blob_],  # Dert per current and lower layers of derivation tree per blob
+            
+            sub_Derts in sub_blob_[index] = [ Dert = I, N, Dx, Dy, G, sub_blob_]  # lower layers have nested sub_blob_,
+            # same as Derts, with nesting depth = Derts[index]
+        
         seg_ = 
             [ seg_params,  # formed in frame blobs
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,
                     derts = [ dert = p|a, ncomp, dx, dy, g]]],  # one dert per current and higher layers 
                     # alternating sub g|a layers: p is replaced by angle in odd derts and is absent in even derts
-                              
-        sub_Derts = [(Ly, L, I, Dx, Dy, Ncomp, G)]  # per sub blob_, vs layer_ Derts, sub_blob_ ) layer, nested
-        sub_blob_ # sub_blob structure is same as in root blob 
-        
-        if layer_f == 1: sub_blob_ = [(sub_Derts, sub_blob_)]  # converted to layer_: dim-reduced derivation tree
         map, box, rng  
         '''
 
@@ -44,8 +43,9 @@ ave_root_blob = 1000  # fixed cost of intra_comp, converting blob to root_blob
 rave = ave_root_blob / ave_blob  # relative cost of root blob, to form rdn
 ave_n_sub_blobs = 10
 
-# direct filter accumulation for evaluated intra_comp, vs. rdn:
-# Ave += ave, Ave_blob *= rave
+# direct filter accumulation for evaluated intra_comp, with rdn represented as len(derts_)
+# Ave += ave: cost per next-layer dert, linear for fixed comp grain
+# Ave_blob *= rave: cost per next root blob
 
 def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
 
@@ -56,6 +56,8 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per 
             Ave_blob = ave_root_blob * (len(blob.sub_blob_) / ave_n_sub_blobs)  # adjust by actual / ave n sub_blobs
 
             if blob.Derts[-1][-1] > ave_root_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
+
+                blob.layer_f = 1  # sub_blob_converted to layer_: [(sub_Derts, sub_blob_)]
                 intra_blob( blob, Ave_blob, ave * 2, 1)  # Ave = ave * 2: filter for deeper-P formation
 
     return frame
@@ -67,26 +69,25 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
 
     for blob in root_blob.sub_blob_:
 
-        if blob.Derts[-1][-1] > Ave_blob + ave_eval:  # G > cost of adding new layer of root_blob
-            blob.layer_f = 1  # sub_blob_converted to layer_: [(sub_Derts, sub_blob_)]
-
+        if blob.Derts[-1][-1] > Ave_blob + ave_eval:  # G (summed gradient) > cost of adding new layer of root_blob
             intra_comp(blob, comp_angle, Ave_blob, Ave, rng)  # angle calc and comp, no angle eval, add Dert and dert
+
             Ave_blob *= rave  # estimated cost per sub_blob, and its derts:
             Ave + ave
 
-            for ablob in blob.sub_blob_:  # ablob is defined by ga sign
+            for ablob in blob.sub_blob_:  # ablobs are defined by the sign of ga: gradient of angle
                 Ga_rdn = 0
                 G = ablob.Derts[-2][-1]   # I, N, Dx, Dy, G; Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # I is converted per layer, not redundant to higher I
 
                 if Ga > Ave_blob:
-                    Ga_rdn = 1  # redundant to potential G + Ga blob, Ga priority: cheaper?
+                    Ga_rdn = 1  # redundant to potential G + Ga blob, Ga priority: cheaper
                     intra_comp( ablob, comp_gradient, Ave_blob, Ave, rng)  # -> angle deviation sub_blobs
 
-                elif G * -Ga > Ave_blob ** 2: # 2^crit, -> input deviation * angle match: likely edge blob
+                elif G * -Ga > Ave_blob ** 2: # 2 ** crit, -> input deviation * angle match: likely edge blob
                     intra_comp( ablob, comp_gradient, Ave_blob, Ave, rng)  # Ga must be negative: stable orientation
 
-                if G + Ga > Ave_blob * 2 + Ga_rdn:  # 2*crit, -> i_dev + a_dev: likely sign reversal & distant match
+                if G + Ga > Ave_blob * 2 + Ga_rdn:  # 2 * crit, -> i_dev + a_dev: likely sign reversal & distant match
                     intra_comp( ablob, comp_range, Ave_blob + ave_root_blob * Ga_rdn, Ave, 1)  # + rdn of ga root_blob
 
                     # at the end of intra_comp:
@@ -99,8 +100,9 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
     g and ga are dderived, blob of min_g? val -= branch switch cost?
     no Ave = ave * ablob.L, (G + Ave) / Ave: always positive?
 
-    comp_P_() if estimated val_PP_ > ave_comp_P: 
-    L + I + G:   proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant P calc, comp, no indiv comp: rdn
+    comp_P_() if estimated val_PP_ > ave_comp_P:
+     
+    L + I + Dx + Dy:  proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant P calc, comp, no indiv comp: rdn
     * L/ Ly/ Ly: elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
     * Dy / Dx:   variation-per-dimension bias 
     * Ave - Ga:  if positive angle match
@@ -113,7 +115,7 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
     # rdn += 1 + ave_n_sub_blobs per form_sub_blobs, if layered access & rep extension, else *=?
     # then corrected in form_sub_blobs: rdn += len(sub_blob_) - ave_n
     
-    ! typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]; ! dert[0] = a|g: both poss i?
+    no typ1 p = ga: derts[-1][-1], typ2 p = g: derts[-2][-1], typ3 p = rng p: derts[-rng][1]; ! dert[0] = a|g: both poss i?
     '''
     return root_blob
 

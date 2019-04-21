@@ -1,45 +1,89 @@
 import cv2
 import numpy as np
 
-def draw_blob(blob, img, globalize_coords = (0, 0)):
-    " draw a single blob "
-    s = blob.sign
-    y0, x0 = globalize_coords
+def draw(path, image):
+    " output image file "
+
+    cv2.imwrite(path + '.bmp', image)
+
+    # ---------- draw() end ---------------------------------------------------------------------------------------------
+
+def map_blobs(frame):
+    " decode blobs into image "
+
+    if type(frame) == list:
+        blob_, (height, width) = frame[-2:]
+        y0, yn, x0, xn = 0, height, 0, width
+    else:
+        blob_ = frame.sub_blob_
+        y0, yn, x0, xn = frame.box
+
+    frame_img = empty_map((y0, yn, x0, xn))
+
+    for i, blob in enumerate(blob_):
+        y0s, yns, x0s, xns = blob.box
+        blob_map = map_blob(blob)
+
+        over_draw(frame_img, blob_map, (y0s - y0, yns - y0, x0s - x0, xns - x0))
+
+    return frame_img
+
+    # ---------- map_blobs() end ----------------------------------------------------------------------------------------
+
+def map_blob(blob):
+    " map derts to a blob "
+
+    blob_img = empty_map(blob.box)
+    y0, yn, x0, xn = blob.box
+
     for seg in blob.seg_:
-        for y, P in zip(range(seg[0], seg[0] + seg[1][0]), seg[2]):
-            x0P, L = P[1:3]
-            for x in range(x0P, x0P + L):
-                img[y+y0, x+x0] = 255 if s else 0
 
-def draw_blobs(path, frame, isb=-1):
-    " Rebuilt data of blobs into an image "
+        y0s = seg[0]
+        yns = y0s + seg[1][0]
+        x0s = min([P[1] for P in seg[2]])
+        xns = max([P[1] + P[2] for P in seg[2]])
 
-    height, width = frame[-1]
-    frame_img = np.array([[127] * width] * height)
+        seg_map = map_segment(seg, (y0s, yns, x0s, xns))
 
-    for i, blob in enumerate(frame[1]):
-        if isb < 0:
-            draw_blob(blob, frame_img)
-        elif blob.sign:
-            y0, yn, x0, xn = blob.box
-            for sub_blob in blob.sub_blob_[isb]:
-                draw_blob(sub_blob, frame_img, (y0, x0))
+        over_draw(blob_img, seg_map, (y0s - y0, yns - y0, x0s - x0, xns - x0))
 
-    cv2.imwrite(path + '.bmp', frame_img)
-    # ---------- draw_blob() end ----------------------------------------------------------------------------------------
-def map_dert___(path, dert___):
+    return blob_img
 
-    Y = len(dert___)                                                            # height of frame
-    X0 = min([dert__[0][0] for dert__ in dert___])
-    Xn = max([dert__[-1][0] + len(dert__[-1][1]) for dert__ in dert___])
-    X = Xn - X0                                                                 # width of frame
+    # ---------- map_blob() end -----------------------------------------------------------------------------------------
 
-    image = np.array([[127] * X] * Y)
+def map_segment(seg, box):
+    " map derts to a segment "
 
-    for y, dert__ in enumerate(dert___):
-        for x0, dert_ in dert__:
-            for x, [(p, ncomp, dy, dx, g)] in enumerate(dert_, start= x0 - X0):
-                image[y, x] = (g > 0) * 255
+    seg_img = empty_map(box)
+    y0, yn, x0, xn = box
 
-    cv2.imwrite(path, image)
-    # ---------- draw_blob() end ----------------------------------------------------------------------------------------
+    for y, P in enumerate(seg[2], start= seg[0] - y0):
+        x0P, L = P[1:3]
+        x0P -= x0
+        for x in range(x0P, x0P + L):
+            seg_img[y, x] = 255 if P[0] else 0
+
+    return seg_img
+
+    # ---------- map_segment() end --------------------------------------------------------------------------------------
+
+def over_draw(map, sub_map, box, opacity_val = 127):
+    " overwrite slice of an image "
+
+    y0, yn, x0, xn = box
+    map[y0:yn, x0:xn][sub_map != opacity_val] = sub_map[sub_map != opacity_val]
+    return map
+
+    # ---------- over_draw() end ----------------------------------------------------------------------------------------
+
+def empty_map(shape):
+    " create gray map with predefined shape "
+
+    if len(shape) == 2:
+        height, width = shape
+    else:
+        y0, yn, x0, xn = shape
+        height = yn - y0
+        width = xn - x0
+
+    return np.array([[127] * width] * height)
