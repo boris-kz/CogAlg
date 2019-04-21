@@ -2,7 +2,7 @@ import numpy as np
 from math import hypot
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'Derts seg_ root_blob map box rng')
 ave = 5
 min_sub_blob = 5
 
@@ -51,12 +51,10 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
                 seg_.remove(seg)
 
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
-
         # core operations:
 
         derts__ = comp_branch(P_, buff___)     # no buff___ in hypot_g or future dx_g
-
-        if derts__: # if derts__ is not empty, form sub_structures -> sub_blobs:
+        if derts__: # form sub_blobs:
 
             compute_g(derts__)
             sP_ = form_P_(derts__)
@@ -64,39 +62,35 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
             sseg_ = form_seg_(y - rng, sP_, blob)
 
         y += 1
-
     y -= len(buff___)
 
-    while buff___:   # form sub blobs with remaining dert_s in buff__
+    while buff___:   # form sub blobs with dert_s remaining in buff__
 
         derts__ = buff___.pop()
         compute_g(derts__)
         sP_ = form_P_(derts__)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
-
         y += 1
 
     while sseg_:    # terminate last line
         form_blob(sseg_.popleft(), blob)
+
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def hypot_g(P_, buff___):  # strip g from dert, then convert dert into derts (nested)
-
+def hypot_g(P_, buff___):  # strip g from dert, convert dert into nested derts
     derts__ = []    # line of derts
 
-    for P in P_:    # iterate through line of root_blob's Ps
-
-        x0 = P[1]       # coordinate of first dert in a span of horizontally contiguous derts
-        dert_ = P[-1]   # span of horizontally contiguous derts
+    for P in P_:       # iterate through line of root_blob's Ps
+        x0 = P[1]      # coordinate of first dert in a span of horizontally contiguous derts
+        dert_ = P[-1]  # span of horizontally contiguous derts
 
         for index, (i, dy, dx, g) in enumerate(dert_):
-
             dert_[index] = [(i, 4, dy, dx)]  # ncomp=4: multiple of min n, specified in deeper derts only
 
         derts__.append((x0, dert_))
-
     return derts__
+
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
 def compute_g(derts__):     # compute g
@@ -106,7 +100,6 @@ def compute_g(derts__):     # compute g
             ncomp, dy, dx = derts[-1][-3:]
 
             g = int(hypot(dx, dy)) - ncomp * ave
-
             derts[-1] += (g,)
 
 def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
@@ -132,11 +125,12 @@ def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and the
             # accumulate P params:
             L += 1
             params = [param + der for param, der in zip(params, dert)]
-
             _s = s  # prior sign
 
         P_.append([_s, x0, L] + params + [derts_[x0 - x_start : x0 - x_start + L]])  # last P in row
+
     return P_
+
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
 def scan_P_(P_, seg_, root_blob):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
@@ -259,11 +253,10 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
 
         s, params, seg_, open_segs, (y0, x0, xn) = blob
-
         Ly, L = params[:2]
-
         yn = y0s + params_seg[0]                        # yn = y0 + Ly
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
+
         for seg in seg_:
             seg.pop()  # remove references to blob
             for y, P in zip(range(seg[0], seg[0] + seg[1][0]), seg[2]):
@@ -271,7 +264,7 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        # acumulate root_blob's sub_Derts here
+        # accumulate root_blob.sub_Derts:
 
         if s:  # for positive sub_blobs only
             root_blob.sub_Derts[0] += Ly
@@ -279,18 +272,17 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
 
         root_blob.sub_Derts[2:] = [par1 + par2 for par1, par2 in zip(params[2:], root_blob.sub_Derts[2:])]
 
-        root_blob.sub_blob_\
-            .append(nt_blob(0, s, Ly, L,                # typ, s, Ly, L
-                            Derts=[(params[2:])],  # I, N, Dy, Dx, G (?). not selective to +sub_blobs as in sub_Derts
+        root_blob.sub_Derts[-1] \
+            .append(nt_blob( Derts=[(0, s, params, [])],  # typ=0, sign: positive for sub_blob_ > 0?
+                            # last term is sub_blob_ of nesting depth = Derts[index]
+                            # top Dert only: (?)
                             seg_=seg_,
-                            root_blob = root_blob,
-                            sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
-                            sub_Derts=[],
-                            # optional sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                            layer_f=0,
-                            # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
+                            root_blob=[blob],
                             box=(y0, yn, x0, xn),  # boundary box
                             map=map,  # blob boolean map, to compute overlap
                             rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
+
+                            # also typ: lower Derts are angle or mixed-typ?
                             ) )
+
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
