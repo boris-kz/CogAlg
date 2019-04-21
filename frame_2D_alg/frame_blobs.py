@@ -236,18 +236,12 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(typ = 0, sign=s, Ly=Ly, L=L,
-                                Derts=[(I, Dy, Dx, G)],  # not selective to +sub_blobs as in sub_Derts
-                                seg_=seg_,
-                                root_blob = None,
-                                sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
-                                sub_Derts=[],
-                                # optional sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                                layer_f=0,
-                                # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
+        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G, [])],  # not selective to +sub_blobs as in sub_Derts
+                                typ=0, rng = 1, sign=s,
                                 box=(y0, yn, x0, xn),  # boundary box
                                 map=map,  # blob boolean map, to compute overlap
-                                rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
+                                root_blob=None,
+                                seg_=seg_,
                                 ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
@@ -257,13 +251,13 @@ ave = 20
 
 
 # Load inputs --------------------------------------------------------------------
-image = cv2.imread('./../images/raccoon_eye.jpg', 0).astype(int)
+image = cv2.imread('./../images/raccoon.jpg', 0).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'Derts typ rng sign box map root_blob seg_')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
@@ -285,7 +279,7 @@ for i, blob in enumerate(frame_of_blobs[1]):
     intra_comp(blob, hypot_g, rdn=0, rng=0)
     # draw('./../debug/blob' + str(i), map_blobs(blob))
 
-    if blob.L > 3:
+    if blob.L > 20:
         intra_comp(blob, comp_range, rdn=0, rng=2)
         draw('./../debug/blob' + str(i), map_blobs(blob))
 

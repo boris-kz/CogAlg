@@ -1,5 +1,3 @@
+a = 0, 1, 2, 3, 4
 
-if None:
-    print(0)
-if not None:
-    print(1)
+print(*a)

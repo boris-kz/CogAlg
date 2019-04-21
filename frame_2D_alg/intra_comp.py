@@ -2,7 +2,7 @@ import numpy as np
 from math import hypot
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'Derts typ rng sign box map root_blob seg_')
 ave = 5
 min_sub_blob = 5
 
@@ -67,7 +67,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
 
     y -= len(buff___)
 
-    while buff___:   # form sub blobs with remaining dert_s in buff__
+    while buff___:   # form sub blobs with dert_s remaining in buff__
 
         derts__ = buff___.pop()
         compute_g(derts__)
@@ -81,17 +81,14 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         form_blob(sseg_.popleft(), blob)
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def hypot_g(P_, buff___):  # strip g from dert, then convert dert into derts (nested)
-
+def hypot_g(P_, buff___):  # strip g from dert, convert dert into nested derts
     derts__ = []    # line of derts
 
-    for P in P_:    # iterate through line of root_blob's Ps
-
+    for P in P_:        # iterate through line of root_blob's Ps
         x0 = P[1]       # coordinate of first dert in a span of horizontally contiguous derts
         dert_ = P[-1]   # span of horizontally contiguous derts
 
         for index, (i, dy, dx, g) in enumerate(dert_):
-
             dert_[index] = [(i, 4, dy, dx)]  # ncomp=4: multiple of min n, specified in deeper derts only
 
         derts__.append((x0, dert_))
@@ -103,6 +100,7 @@ def compute_g(derts__):     # compute g
 
     for x0, derts_ in derts__:
         for derts in derts_:
+
             ncomp, dy, dx = derts[-1][-3:]
 
             g = int(hypot(dx, dy)) - ncomp * ave
@@ -271,26 +269,20 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        # acumulate root_blob's sub_Derts here
+                # accumulate root_blob.sub_Derts:
 
         if s:  # for positive sub_blobs only
             root_blob.sub_Derts[0] += Ly
             root_blob.sub_Derts[1] += L
 
-        root_blob.sub_Derts[2:] = [par1 + par2 for par1, par2 in zip(params[2:], root_blob.sub_Derts[2:])]
+        root_blob.sub_Derts[2:-1] = [par1 + par2 for par1, par2 in zip(params[2:], root_blob.sub_Derts[2:-1])]
 
         root_blob.sub_blob_\
-            .append(nt_blob(0, s, Ly, L,                # typ, s, Ly, L
-                            Derts=[(params[2:])],  # I, N, Dy, Dx, G (?). not selective to +sub_blobs as in sub_Derts
-                            seg_=seg_,
-                            root_blob = root_blob,
-                            sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
-                            sub_Derts=[],
-                            # optional sub_blob_ Derts[:] = [(Ly, L, I, Dy, Dx, G)] if len(sub_blob_) > min
-                            layer_f=0,
-                            # if 1: sub_Derts = layer_Derts, sub_blob_= [(sub_Derts, derts_)], +=/ eval_layer
+            .append(nt_blob(Derts=[(params + ([],))],       # I, N, Dy, Dx, G (?). not selective to +sub_blobs as in sub_Derts
+                            typ=0, rng=1, sign=s,
                             box=(y0, yn, x0, xn),  # boundary box
                             map=map,  # blob boolean map, to compute overlap
-                            rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
+                            root_blob=None,
+                            seg_=seg_,
                             ) )
     # ---------- form_blob() end ----------------------------------------------------------------------------------------

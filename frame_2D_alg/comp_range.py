@@ -161,8 +161,8 @@ def compare_slices(_derts_, derts_, packed_coord, coefs, comparand_index=-1):   
     start = max(0, olp_x0 - x0)                         # compute indices for dert_ slicing
     end = min(len(derts_), len(derts_) + olp_xn - xn)   # compute indices for dert_ slicing
 
-    _start = max(0, olp_x0 - _x0)                              # compute indices for _dert_ slicing
-    _end = min(len(_derts_), len(_derts_) + olp_xn - _xn)     # compute indices for _dert_ slicing
+    _start = max(0, olp_x0 - _x0)                               # compute indices for _dert_ slicing
+    _end = min(len(_derts_), len(_derts_) + olp_xn - _xn)       # compute indices for _dert_ slicing
 
     for _derts, derts in zip(_derts_[_start:_end], derts_[start:end]):
 
@@ -177,10 +177,10 @@ def compare_slices(_derts_, derts_, packed_coord, coefs, comparand_index=-1):   
         temp_dy = int(y_coef * d)  # decomposition into vertical difference
         temp_dx = int(x_coef * d)  # decomposition into horizontal difference
 
-        ncomp += 1  # bilateral accumulation
-        dy += temp_dy  # bilateral accumulation
-        dx += temp_dx  # bilateral accumulation
-        _ncomp += 1  # bilateral accumulation
+        ncomp += 1      # bilateral accumulation
+        dy += temp_dy   # bilateral accumulation
+        dx += temp_dx   # bilateral accumulation
+        _ncomp += 1     # bilateral accumulation
         _dy += temp_dy  # bilateral accumulation
         _dx += temp_dx  # bilateral accumulation
 
