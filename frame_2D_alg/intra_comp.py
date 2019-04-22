@@ -19,12 +19,12 @@ min_sub_blob = 5
 ''' 
 unfold blob into derts, 
 perform branch-specific comparison, 
-convert blob into root_blob with new sub_blob_ 
+convert blob into root_blob with new sub_blob_
 '''
 
 def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    blob.sub_Derts[:] = 0, 0, 0, 0, 0, 0, 0     # Ly, L, I, N, Dy, Dx, G
+    blob.Derts.append((0, 0, 0, 0, 0, 0, 0, []))    # Ly, L, I, N, Dy, Dx, G
 
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
@@ -57,7 +57,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         if derts__: # form sub_blobs:
 
             compute_g(derts__)
-            sP_ = form_P_(derts__)
+            sP_ = form_P_(derts__, comparand_index = -rng)
             sP_ = scan_P_(sP_, sseg_, blob)
             sseg_ = form_seg_(y - rng, sP_, blob)
 
@@ -68,7 +68,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
 
         derts__ = buff___.pop()
         compute_g(derts__)
-        sP_ = form_P_(derts__)
+        sP_ = form_P_(derts__, comparand_index = -rng)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
         y += 1
@@ -102,13 +102,13 @@ def compute_g(derts__):     # compute g
             g = int(hypot(dx, dy)) - ncomp * ave
             derts[-1] += (g,)
 
-def form_P_(derts__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(derts__, comparand_index):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()    # row of Ps
 
     for x_start, derts_ in derts__:     # each derts_ is a span of horizontally contiguous derts, a line might contain many of these
 
-        dert_ = [derts[-1] for derts in derts_] # make the list of specific tyoe of dert
+        dert_ = [derts[comparand_index][0:1] + derts[-1][-4:] for derts in derts_] # make the list of specific tyoe of dert
 
         x0, L = x_start, 1      # P params
         params = list(dert_[0]) # initialize P params with first dert value
@@ -246,15 +246,14 @@ def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge
 
 def form_blob(term_seg, root_blob):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
-    y0s, params_seg, Py_, roots, fork_, blob = term_seg
-    blob[1] = [par1 + par2 for par1, par2 in zip(params_seg, blob[1])]
+    y0s, params, Py_, roots, fork_, blob = term_seg
+    blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
     blob[3] += roots - 1  # number of open segments
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
 
-        s, params, seg_, open_segs, (y0, x0, xn) = blob
-        Ly, L = params[:2]
-        yn = y0s + params_seg[0]                        # yn = y0 + Ly
+        s, [Ly, L, I, N, Dy, Dx, G], seg_, open_segs, (y0, x0, xn) = blob
+        yn = y0s + params[0]            # yn = y0 + Ly (segment's)
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
 
         for seg in seg_:
@@ -266,20 +265,25 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
 
         # accumulate root_blob.sub_Derts:
 
+        Lyr, Lr, Ir, Nr, Dyr, Dxr, Gr, sub_blob_ = root_blob.Derts[-1]
+
         if s:  # for positive sub_blobs only
-            root_blob.sub_Derts[0] += Ly
-            root_blob.sub_Derts[1] += L
+            Lyr += Ly
+            Lr += L
 
-        root_blob.Derts[2:-1] = [par1 + par2 for par1, par2 in zip(params[2:], root_blob.sub_Derts[2:-1])]
+        Ir += I
+        Nr += N
+        Dyr += Dy
+        Dxr += Dx
+        Gr += G
 
-        root_blob.sub_blob_\
-            .append(nt_blob(Derts=[(params + ([],))],       # [] is nested sub_blob_ of depth = Derts[index]
-                            typ=0,      # top Dert only
-                            rng=1,      # for comp_range per blob
-                            sign=s,
-                            box=(y0, yn, x0, xn),  # boundary box
-                            map=map,  # blob boolean map, to compute overlap
-                            root_blob=None,
-                            seg_=seg_,
-                            ) )
+        sub_blob_.append(nt_blob(Derts=[tuple(params) + ([],)],       # [] is nested sub_blob_ of depth = Derts[index]
+                                 typ=0,      # top Dert only
+                                 rng=1,      # for comp_range per blob
+                                 sign=s,
+                                 box=(y0, yn, x0, xn),  # boundary box
+                                 map=map,  # blob boolean map, to compute overlap
+                                 root_blob=None,
+                                 seg_=seg_,
+                                 ) )
     # ---------- form_blob() end ----------------------------------------------------------------------------------------

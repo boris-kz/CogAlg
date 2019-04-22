@@ -14,7 +14,7 @@ def map_blobs(frame):
         blob_, (height, width) = frame[-2:]
         y0, yn, x0, xn = 0, height, 0, width
     else:
-        blob_ = frame.sub_blob_
+        blob_ = frame.Derts[-1][-1]      # sub_blob_
         y0, yn, x0, xn = frame.box
 
     frame_img = empty_map((y0, yn, x0, xn))

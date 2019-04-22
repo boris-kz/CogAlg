@@ -236,7 +236,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G, [])],  # [] is sub_blob_ of nesting depth = Derts[index]
+        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G)],  # sub_blob_ is appended per layer together with summed
                                 typ=0,      # top Dert only
                                 rng = 1,    # for comp_range per blob
                                 sign=s,
@@ -253,7 +253,7 @@ ave = 20
 
 
 # Load inputs --------------------------------------------------------------------
-image = cv2.imread('./../images/raccoon.jpg', 0).astype(int)
+image = cv2.imread('./../images/raccoon_eye.jpg', 0).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
@@ -271,7 +271,7 @@ print(end_time)
 # DEBUG --------------------------------------------------------------------------
 
 from DEBUG import draw, over_draw, map_blobs, map_blob, empty_map
-draw('./../debug/out', map_blobs(frame_of_blobs))
+# draw('./../debug/root_blobs', map_blobs(frame_of_blobs))
 
 from intra_comp import intra_comp, hypot_g
 from comp_range import comp_range
@@ -280,8 +280,7 @@ for i, blob in enumerate(frame_of_blobs[1]):
 
     intra_comp(blob, hypot_g, rdn=0, rng=0)
     # draw('./../debug/blob' + str(i), map_blobs(blob))
-
-    if blob.L > 20:
+    if blob.Derts[0][1] > 20:
         intra_comp(blob, comp_range, rdn=0, rng=2)
         draw('./../debug/blob' + str(i), map_blobs(blob))
 
