@@ -15,28 +15,27 @@ from intra_comp_debug import intra_comp
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 
     Recursive intra_blob comp_branch() calls add a layer of sub_blobs, new dert to derts and Dert to Derts, in each blob.
-    Dert params are summed params of selected sub_blobs, grouped in layers of derivation tree,
+    Dert params are summed params of selected sub_blobs, grouped in layers of derivation tree.
     Blob structure:
-     
-        Derts = [ Dert = Ly, L, I, N, Dx, Dy, G, sub_blob],  # Dert per current and lower layers of blob derivation tree
+    
+        Derts = [ Dert = Ly, L, I, N, Dx, Dy, G, sub_blob_],    
+        # Dert per current & lower layers of derivation tree for Dert-parallel comp, 
+        # sub_blob_ per Dert, nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access
         
-        # sub_blob_ is nested to depth = Derts[index], for parallel Derts comp, but sequential blob -> sub_blob access?
-        
+        sign, # lower Derts are sign-mixed at depth > 0, typ-mixed at depth > 1, rng-mixed at depth > 2:
         typ,  # if typ==0: i = p|a in dert[0], else i = g in dert[-1], in derts[-rng] 
         rng,  # compared i = derts [-rng] [typ], 0 for hypot_g, 1 for comp_gradient, > 1 for comp_range  
-        sign, # lower Derts are sign-mixed at depth >0, typ,rng- mixed at depth >1
         
         map,  # boolean map of blob, to compute overlap; lower Derts have same map and box as top Dert?
         box,  # boundary box: y0, yn, x0, xn
-        root_blob  # reference to return summed blob params
+        root_blob,  # reference, to return summed blob params
         
         seg_ =  # seg_s of lower Derts are packed in their sub_blobs
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
-                  [ P_params,
-                  
-                    derts = [ dert = p|a, ncomp, dx, dy, g]]],  # one dert per current and higher layers 
-                    # alternating p|a type of dert in derts: 
+                  [ P_params,        
+                    derts_ [ derts [ dert = p|a, ncomp, dx, dy, g ]]]  
+                    # one dert per current and higher layers, with alternating p|a type of dert in derts: 
                     # derts [even][0] = p if top dert, else none or ncomp 
                     # derts [odd] [0] = angle
                     '''
