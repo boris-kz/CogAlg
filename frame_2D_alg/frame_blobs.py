@@ -236,8 +236,10 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G, [])],  # not selective to +sub_blobs as in sub_Derts
-                                typ=0, rng = 1, sign=s,
+        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G, [])],  # [] is sub_blob_ of nesting depth = Derts[index]
+                                typ=0,      # top Dert only
+                                rng = 1,    # for comp_range per blob
+                                sign=s,
                                 box=(y0, yn, x0, xn),  # boundary box
                                 map=map,  # blob boolean map, to compute overlap
                                 root_blob=None,
