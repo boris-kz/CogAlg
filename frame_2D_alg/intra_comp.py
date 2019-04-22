@@ -24,17 +24,17 @@ convert blob into root_blob with new sub_blob_
 
 def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    blob.Derts.append((0, 0, 0, 0, 0, 0, 0, []))    # Ly, L, I, N, Dy, Dx, G
-
-    y0, yn, x0, xn = blob.box
-    y = y0  # current y, from seg y0 -> yn - 1
-    i = 0   # segment index
-
     blob.seg_.sort(key=lambda seg: seg[0])  # sort by y0 coordinate
+
+    blob.Derts.append((0, 0, 0, 0, 0, 0, 0, []))  # Ly, L, I, N, Dy, Dx, G
 
     seg_ = []       # buffer of segments containing line y
     buff___ = deque(maxlen=rng)
     sseg_ = deque() # buffer of sub-segments
+
+    y0, yn, x0, xn = blob.box
+    y = y0  # current y, from seg y0 -> yn - 1
+    i = 0  # segment index
 
     while y < yn:    # unfold blob into Ps for extended comp
 
@@ -277,7 +277,7 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
         Dxr += Dx
         Gr += G
 
-        sub_blob_.append(nt_blob(Derts=[tuple(params) + ([],)],       # [] is nested sub_blob_ of depth = Derts[index]
+        sub_blob_.append(nt_blob(Derts=[(Ly, L, I, N, Dy, Dx, G, [])],       # [] is nested sub_blob_ of depth = Derts[index]
                                  typ=0,      # top Dert only
                                  rng=1,      # for comp_range per blob
                                  sign=s,
@@ -286,4 +286,6 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
                                  root_blob=None,
                                  seg_=seg_,
                                  ) )
+
+        root_blob.Derts[-1] = Lyr, Lr, Ir, Nr, Dyr, Dxr, Gr, sub_blob_
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
