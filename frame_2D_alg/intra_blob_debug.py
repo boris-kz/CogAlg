@@ -15,26 +15,31 @@ from intra_comp_debug import intra_comp
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 
     Recursive intra_blob comp_branch() calls add a layer of sub_blobs, new dert to derts and Dert to Derts, in each blob.
-    Dert params are summed params of selected sub_blobs, grouped in layers of derivation tree:
-    
-    blob =  
-        typ,  # if typ==0: comparand is dert[0]: p|a, else comparand is dert[-1]: g, within dert in derts[-rng] 
-        sign, # these are common for all Derts, higher-Derts sign is always positive, else no branching 
+    Dert params are summed params of selected sub_blobs, grouped in layers of derivation tree,
+    Blob structure:
+     
+        Derts = [ Dert = Ly, L, I, N, Dx, Dy, G, sub_blob],  # Dert per current and lower layers of blob derivation tree
         
-        Derts = [ Dert = I, N, Dx, Dy, G, sub_blob_],  # Dert per current and lower layers of derivation tree per blob
-            
-            sub_Derts in sub_blob_[index] = [ Dert = I, N, Dx, Dy, G, sub_blob_]  # lower layers have nested sub_blob_,
-            # same as Derts, with nesting depth = Derts[index]
+        # sub_blob_ is nested to depth = Derts[index], for parallel Derts comp, but sequential blob -> sub_blob access?
         
-        seg_ = 
-            [ seg_params,  # formed in frame blobs
+        typ,  # if typ==0: i = p|a in dert[0], else i = g in dert[-1], in derts[-rng] 
+        rng,  # compared i = derts [-rng] [typ], 0 for hypot_g, 1 for comp_gradient, > 1 for comp_range  
+        sign, # lower Derts are sign-mixed at depth >0, typ,rng- mixed at depth >1
+        
+        map,  # boolean map of blob, to compute overlap; lower Derts have same map and box as top Dert?
+        box,  # boundary box: y0, yn, x0, xn
+        root_blob  # reference to return summed blob params
+        
+        seg_ =  # seg_s of lower Derts are packed in their sub_blobs
+            [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,
+                  
                     derts = [ dert = p|a, ncomp, dx, dy, g]]],  # one dert per current and higher layers 
-                    # alternating sub g|a layers: p is replaced by angle in odd derts and is absent in even derts
-        map, box, rng  
-        '''
-
+                    # alternating p|a type of dert in derts: 
+                    # derts [even][0] = p if top dert, else none or ncomp 
+                    # derts [odd] [0] = angle
+                    '''
 ave = 20
 ave_eval = 100  # fixed cost of evaluating sub_blobs and adding root_blob flag
 ave_blob = 200  # fixed cost per blob, not evaluated directly
@@ -56,8 +61,6 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per 
             Ave_blob = ave_root_blob * (len(blob.sub_blob_) / ave_n_sub_blobs)  # adjust by actual / ave n sub_blobs
 
             if blob.Derts[-1][-1] > ave_root_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
-
-                blob.layer_f = 1  # sub_blob_converted to layer_: [(sub_Derts, sub_blob_)]
                 intra_blob( blob, Ave_blob, ave * 2, 1)  # Ave = ave * 2: filter for deeper-P formation
 
     return frame
@@ -90,7 +93,7 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
                 if G + Ga > Ave_blob * 2 + Ga_rdn:  # 2 * crit, -> i_dev + a_dev: likely sign reversal & distant match
                     intra_comp( ablob, comp_range, Ave_blob + ave_root_blob * Ga_rdn, Ave, 1)  # + rdn of ga root_blob
 
-                    # at the end of intra_comp:
+                    # at the end of intra_comp, add:
                     # Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / ave n sub_blobs
                     # if not comp_angle:
                     #   if ablob.Derts[-1][-1] > Ave_blob + ave_eval:

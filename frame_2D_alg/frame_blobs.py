@@ -231,15 +231,16 @@ def form_blob(term_seg, frame):  # terminated segment is merged in continued or 
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob( Derts=[(0, s, Ly, L, I, Dy, Dx, G, [])],  # typ=0, sign: positive for sub_blob_ > 0?
-                                # last term is sub_blob_ of nesting depth = Derts[index]
-                                # top Dert only:
-                                seg_=seg_,
-                                root_blob=[blob],
+        frame[1].append(nt_blob(
+                                Derts=[(Ly, L, I, Dy, Dx, G, [])],  # [] is sub_blob_ of nesting depth = Derts[index]
+                                typ=0, # top Dert only:
+                                rng=1, # for comp_range per blob
+                                sign=s,
                                 box=(y0, yn, x0, xn),  # boundary box
                                 map=map,  # blob boolean map, to compute overlap
-                                rng=1,  # for comp_range per blob,  # ncomp=1: for comp_range per dert, not here
-                                ))
+                                root_blob=[blob],
+                                seg_=seg_,
+                                ) )
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 # ************ PROGRAM BODY *********************************************************************************************
@@ -254,7 +255,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'Derts seg_ root_blob map box rng')
+nt_blob = namedtuple('blob', 'Derts typ rng sign map box root_blob seg_')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob_debug import intra_blob_hypot      # not yet functional, comment-out to run
@@ -265,8 +266,8 @@ print(end_time)
 
 # Rebuild blob -------------------------------------------------------------------
 
-from DEBUG import draw_blob
-draw_blob('./debug/frame', frame_of_blobs, -1)
+from DEBUG import map_blobs
+map_blobs('./debug/frame')
 
 '''
 alt input:

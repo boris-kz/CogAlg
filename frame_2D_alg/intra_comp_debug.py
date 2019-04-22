@@ -2,7 +2,7 @@ import numpy as np
 from math import hypot
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'typ sign Ly L Derts seg_ root_blob sub_blob_ sub_Derts layer_f map box rng')
+nt_blob = namedtuple('blob', 'Derts typ rng sign map box root_blob seg_')
 ave = 5
 
 # ************ FUNCTIONS ************************************************************************************************
@@ -239,27 +239,23 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
                 map[y - y0, x0P - x0:xnP - x0] = True
 
         if s:  # for positive sub_blobs only
-            root_blob.sub_Derts[0] += Ly
-            root_blob.sub_Derts[1] += L
+            root_blob.Derts[-1][0] += Ly
+            root_blob.Derts[-1][1] += L
 
-        root_blob.sub_Derts[2] += I
-        root_blob.sub_Derts[3] += N
-        root_blob.sub_Derts[4] += Dy
-        root_blob.sub_Derts[5] += Dx
-        root_blob.sub_Derts[6] += G
+        root_blob.Derts[-1][2] += I
+        root_blob.Derts[-1][3] += N
+        root_blob.Derts[-1][4] += Dy
+        root_blob.Derts[-1][5] += Dx
+        root_blob.Derts[-1][6] += G
 
-        root_blob.sub_blob_\
-            .append(nt_blob(sign=s, typ=0, Ly=Ly, L=L,
-                            Derts=[(I, Dy, Dx, N, G)],  # not selective to +sub_blobs as in sub_Derts
-                            # for hypot_g only, Derts += [(I, Dy, Dx, N, G)] for deeper branches
-                            seg_=seg_,
-                            root_blob = root_blob,
-                            sub_blob_=[],  # top layer, blob derts_ -> sub_blob derts_
-                            sub_Derts=[],  # sub_blob_ Derts = [(Ly, L, I, Dy, Dx, N, G)] if len(sub_blob_) > min
-                            layer_f=0,     # if 1: sub_Derts = layer_Derts, sub_blob_ = [(sub_Derts, derts_)]
-                            box=(y0, yn, x0, xn),  # boundary box
-                            map=map,  # blob boolean map, to compute overlap
-                            rng=1,    # for comp_range, for either typ of comparand?
-                            ))
-
+        root_blob.Derts[-1][7].append(nt_blob(
+                  Derts=[(Ly, L, I, N, Dy, Dx, G, [])],  # [] is nested sub_blob_ of depth = Derts[index]
+                  typ=0,  # top Dert only:
+                  rng=1,  # for comp_range per blob
+                  sign=s,
+                  box=(y0, yn, x0, xn),  # boundary box
+                  map=map,  # blob boolean map, to compute overlap
+                  root_blob=[blob],
+                  seg_=seg_,
+                  ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
