@@ -13,7 +13,7 @@ ave = 5
 # -form_blob()
 # ***********************************************************************************************************************
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave, input, rng=1):
+def intra_comp(blob, comp_branch, Ave_blob, Ave, inp, rng=1):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
