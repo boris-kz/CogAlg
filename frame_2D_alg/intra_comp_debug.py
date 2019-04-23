@@ -13,7 +13,7 @@ ave = 5
 # -form_blob()
 # ***********************************************************************************************************************
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave, rng=1):
+def intra_comp(blob, comp_branch, Ave_blob, Ave, input, rng=1):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
@@ -223,7 +223,7 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
     y0s, params, Py_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
     blob[3] += roots - 1  # number of open segments
-    root_blob.sub_Derts[:] = 0,0,0,0,0,0,0
+    root_blob.Derts.append([0,0,0,0,0,0,0,[]])
 
     if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
 
@@ -238,10 +238,8 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        if s:  # for positive sub_blobs only
-            root_blob.Derts[-1][0] += Ly
-            root_blob.Derts[-1][1] += L
-
+        root_blob.Derts[-1][0] += Ly
+        root_blob.Derts[-1][1] += L
         root_blob.Derts[-1][2] += I
         root_blob.Derts[-1][3] += N
         root_blob.Derts[-1][4] += Dy
