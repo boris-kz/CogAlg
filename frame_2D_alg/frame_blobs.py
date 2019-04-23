@@ -253,7 +253,7 @@ ave = 20
 
 
 # Load inputs --------------------------------------------------------------------
-image = cv2.imread('./../images/raccoon_eye.jpg', 0).astype(int)
+image = cv2.imread('./../images/raccoon.jpg', 0).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
@@ -275,14 +275,15 @@ from DEBUG import draw, over_draw, map_blobs, map_blob, empty_map
 
 from intra_comp import intra_comp, hypot_g
 from comp_range import comp_range
+from comp_angle import comp_angle
 
 for i, blob in enumerate(frame_of_blobs[1]):
 
     intra_comp(blob, hypot_g, rdn=0, rng=0)
-    # draw('./../debug/blob' + str(i), map_blobs(blob))
-    if blob.Derts[0][1] > 20:
-        intra_comp(blob, comp_range, rdn=0, rng=2)
-        draw('./../debug/blob' + str(i), map_blobs(blob))
+    if blob.Derts[0][1] > 500:   # L > 20
+        # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
+        intra_comp(blob, comp_angle, rdn=0, rng=1)
+        draw('./../debug/comp_angle' + str(i), map_blobs(blob))
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps

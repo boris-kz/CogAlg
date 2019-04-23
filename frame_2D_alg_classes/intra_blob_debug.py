@@ -2,7 +2,7 @@ from time import time
 import numpy as np
 # Recursion branches -------------------------------------------------------------
 from frame_2D_alg_classes.angle_blobs import blob_to_ablobs
-from frame_2D_alg.comp_deriv import inc_deriv
+from frame_2D_alg.comp_angle import inc_deriv
 from frame_2D_alg.comp_range import inc_range
 # from comp_P_ import comp_P_
 

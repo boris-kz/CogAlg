@@ -1,6 +1,8 @@
 import numpy as np
 from math import hypot
 from collections import deque, namedtuple
+from comp_range import comp_range
+from comp_angle import comp_angle
 
 nt_blob = namedtuple('blob', 'Derts typ rng sign box map root_blob seg_')
 ave = 5
@@ -23,6 +25,15 @@ convert blob into root_blob with new sub_blob_
 '''
 
 def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
+
+    if comp_branch == hypot_g:
+        i_indices = (0, 0)
+    elif comp_branch == comp_range:
+        i_indices = (-rng, 0)
+    elif comp_branch == comp_angle:
+        i_indices = (-1, 0)
+    else:   # comp_deriv
+        i_indices = (0, -1)     # -1 for g?
 
     blob.seg_.sort(key=lambda seg: seg[0])  # sort by y0 coordinate
 
@@ -57,7 +68,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
         if derts__: # form sub_blobs:
 
             compute_g(derts__)
-            sP_ = form_P_(derts__, comparand_index = -rng)
+            sP_ = form_P_(derts__, i_indices)
             sP_ = scan_P_(sP_, sseg_, blob)
             sseg_ = form_seg_(y - rng, sP_, blob)
 
@@ -68,7 +79,7 @@ def intra_comp(blob, comp_branch, rdn, rng=1):  # unfold blob into derts, perfor
 
         derts__ = buff___.pop()
         compute_g(derts__)
-        sP_ = form_P_(derts__, comparand_index = -rng)
+        sP_ = form_P_(derts__, i_indices)
         sP_ = scan_P_(sP_, sseg_, blob)
         sseg_ = form_seg_(y, sP_, blob)
         y += 1
@@ -89,7 +100,7 @@ def hypot_g(P_, buff___):  # strip g from dert, convert dert into nested derts
             dert_[index] = [(i, 4, dy, dx)]  # ncomp=4: multiple of min n, specified in deeper derts only
 
         derts__.append((x0, dert_))
-    return derts__
+    return derts__  # return i indices and derts__
 
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
@@ -102,13 +113,14 @@ def compute_g(derts__):     # compute g
             g = int(hypot(dx, dy)) - ncomp * ave
             derts[-1] += (g,)
 
-def form_P_(derts__, comparand_index):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(derts__, i_indices):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+    i1, i2 = i_indices
 
     P_ = deque()    # row of Ps
 
     for x_start, derts_ in derts__:     # each derts_ is a span of horizontally contiguous derts, a line might contain many of these
 
-        dert_ = [derts[comparand_index][0:1] + derts[-1][-4:] for derts in derts_] # make the list of specific tyoe of dert
+        dert_ = [(derts[i1][i2],) + derts[-1][-4:] for derts in derts_] # make the list of specific tyoe of dert
 
         x0, L = x_start, 1      # P params
         params = list(dert_[0]) # initialize P params with first dert value
