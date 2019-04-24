@@ -265,9 +265,6 @@ frame_of_blobs = image_to_blobs(image)
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
 # frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
-end_time = time() - start_time
-print(end_time)
-
 # DEBUG --------------------------------------------------------------------------
 
 from DEBUG import draw, over_draw, map_blobs, map_blob, empty_map
@@ -278,12 +275,18 @@ from comp_range import comp_range
 from comp_angle import comp_angle
 
 for i, blob in enumerate(frame_of_blobs[1]):
+    if blob.Derts[0][1] > 500:  # L > 20
+        intra_comp(blob, hypot_g, 0, 5, 0, 0, rng=0)
 
-    intra_comp(blob, hypot_g, rdn=0, rng=0)
-    if blob.Derts[0][1] > 500:   # L > 20
-        # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
-        intra_comp(blob, comp_angle, rdn=0, rng=1)
-        draw('./../debug/comp_angle' + str(i), map_blobs(blob))
+Aaves = [5, 10, 15, 20, 25]
+for Aave in Aaves:
+    for i, blob in enumerate(frame_of_blobs[1]):
+        if blob.Derts[0][1] > 500:  # L > 20
+            # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
+            # intra_comp(blob, comp_range, 0, 5, 0, 0, rng=2)
+            # draw('./../debug/comp_range' + str(i), map_blobs(blob))
+            intra_comp(blob, comp_angle, 0, Aave, 0, -1, rng=1)
+            draw('./../debug/comp_angle_' + str(i) + '_with_ave_' + str(Aave), map_blobs(blob))
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
@@ -331,4 +334,9 @@ for blob in frame_of_blobs[1]:
 cv2.imwrite('./debug/frame.bmp', op)
 
 '''
+
+# END TIME -----------------------------------------------------------------------
+
+end_time = time() - start_time
+print(end_time)
 # ************ PROGRAM BODY END ******************************************************************************************

@@ -20,7 +20,7 @@ def comp_range(P_, buff___):    # comp i at incremented range, dert_buff___ in b
 
 def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance == rng
 
-    new_derts__ = []
+    derts__ = []
     buff_ = deque(maxlen=rng)       # new dert's buffer
     max_index = rng - 1             # max_index in dert_buff_
     _x0 = 0                         # x0 of previous P
@@ -28,7 +28,6 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
     for P in P_:
         x0 = P[1]
         derts_ = P[-1]
-        new_derts_ = []
 
         for x in range(_x0, x0):    # coordinates in gaps between Ps
             buff_.append(None)      # buffer gap coords as None
@@ -51,20 +50,14 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
                 _dx += d        # bilateral accumulation
 
                 _derts[-1] = _ncomp, _dy, _dx   # return
-                new_derts_.append(_derts)       # next-line derts_
 
             derts.append((ncomp, dy, dx))       # new-layer dert
             buff_.appendleft(derts)             # for horizontal comp
 
-        while buff_:                            # terminate last derts in line
-            derts = buff_.pop()
-            if derts is not None:               # derts are within Ps, not gaps
-                new_derts_.append(derts)
-
-        new_derts__.append((x0, new_derts_))    # new line of P derts_ appended with new_derts_
+        derts__.append((x0, derts_))        # new line of P derts_ appended with new_derts_
         _x0 = x0
 
-    return new_derts__
+    return derts__
 
     # ---------- lateral_comp() end -----------------------------------------------------------------------------------------
 
@@ -101,10 +94,10 @@ def vertical_comp(derts__, buff___, rng):    # vertical and diagonal comparison
 
     # ---------- vertical_comp() end ----------------------------------------------------------------------------------------
 
-def scan_slice_(_derts__, derts__, i_index, shift = 0, coefs = (1, 0)):  # unit of vertical comp
+def scan_slice_(_derts__, derts__, i_index, shift = 0, coefs = (1, 0), fangle=True):  # unit of vertical comp
 
-    y_coef, x_coef = coefs   # to decompose d
-    i_dert, i_param = i_index  # two-level index of compared parameter in derts
+    y_coef, x_coef = coefs      # to decompose d
+    i_dert, i_param = i_index   # two-level index of compared parameter in derts
 
     index = 0     # index of _derts_
     _x0, _derts_ = _derts__[index]
@@ -146,6 +139,11 @@ def scan_slice_(_derts__, derts__, i_index, shift = 0, coefs = (1, 0)):  # unit 
                     _ncomp, _dy, _dx = _derts[-1][-3:] # derivatives accumulated over current-rng comps
 
                     d = i - _i
+                    if fangle:          # correct angle diff:
+                        if d > 127:
+                            d -= 255
+                        elif d < -127:
+                            d += 255
                     # decomposition into vertical and horizontal differences:
 
                     partial_dy = int(y_coef * d)
