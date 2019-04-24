@@ -1,7 +1,7 @@
 from math import hypot
 from comp_angle_map import comp_angle
 from comp_gradient_map import comp_gradient
-from comp_range_draft import comp_range
+from comp_range import comp_range
 from intra_comp_debug import intra_comp
 
 '''
