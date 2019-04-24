@@ -28,13 +28,17 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
     for P in P_:
         x0 = P[1]
         derts_ = P[-1]
+        new_derts_ = []
+
         for x in range(_x0, x0):    # coordinates in gaps between Ps
             buff_.append(None)      # buffer gap coords as None
 
         for derts in derts_:
-            i = derts[-rng+1][0]        # +1 for future derts.append(new_dert)
+            i = derts[-rng+1][0]    # +1 for future derts.append(new_dert)
             ncomp, dy, dx = derts[-1][-4:-1]
-            if len(buff_) == rng and buff_[max_index] != None:  # xd == rng and coordinate is within P, not gaps
+
+            if len(buff_) == rng and buff_[max_index] is not None:
+                # xd == rng and coordinate is within P vs. gap
 
                 _derts = buff_[max_index]
                 _i = _derts[-rng][0]
@@ -52,9 +56,9 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
             derts.append((ncomp, dy, dx))       # new-layer dert
             buff_.appendleft(derts)             # for horizontal comp
 
-        while buff_:            # terminate last derts in line
+        while buff_:                            # terminate last derts in line
             derts = buff_.pop()
-            if derts != None:                       # derts are within Ps, not gaps
+            if derts is not None:               # derts are within Ps, not gaps
                 new_derts_.append(derts)
 
         new_derts__.append((x0, new_derts_))    # new line of P derts_ appended with new_derts_
@@ -66,26 +70,25 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
 
 def vertical_comp(derts__, buff___, rng):    # vertical and diagonal comparison
 
-    # at len = maxlen(rng), first line of derts in last element of buff___ is returned to comp_range()
+    # first line of derts in last element of buff___ is returned to comp_range() at len = maxlen(rng)
 
-    for yd, _derts__ in enumerate(buff___, start=1):    # iterate through (rng - 1) higher lines
+    for yd, _derts__ in enumerate(buff___, start=1):  # iterate through (rng - 1) higher lines
 
-        if yd < rng:     # diagonal comp
-
+        if yd < rng:  # diagonal comp
             xd = rng - yd
 
             hyp = hypot(xd, yd)
-            y_coef = yd / hyp       # to decompose d into dy. Whole computation could be replaced with a look-up table instead?
-            x_coef = xd / hyp       # to decompose d into dx. Whole computation could be replaced with a look-up table instead?
+            y_coef = yd / hyp       # to decompose d into dy, replace with look-up table?
+            x_coef = xd / hyp       # to decompose d into dx, replace with look-up table?
 
             # upper-left comparisons:
-            find_and_comp_slice_(_derts__, derts__, comparand_indices=(-rng, 0), shift = -xd, coefs = (y_coef, x_coef))
+            scan_slice_(_derts__, derts__, i_index=(-rng, 0), shift = -xd, coefs = (y_coef, x_coef))
 
             # upper-right comparisons:
-            find_and_comp_slice_(_derts__, derts__, comparand_indices=(-rng, 0), shift = xd, coefs = (y_coef, -x_coef))
+            scan_slice_(_derts__, derts__, i_index=(-rng, 0), shift = xd, coefs = (y_coef, -x_coef))
 
-        else:   # vertical_comp, as above but without shifting and with constant coef
-            find_and_comp_slice_(_derts__, derts__, comparand_indices = (-rng, 0))
+        else:
+            scan_slice_(_derts__, derts__, i_index=(-rng, 0))  # pure vertical: no shift, fixed coef
 
     if len(buff___) == rng:
         _derts__ = buff___[-1]
@@ -98,65 +101,64 @@ def vertical_comp(derts__, buff___, rng):    # vertical and diagonal comparison
 
     # ---------- vertical_comp() end ----------------------------------------------------------------------------------------
 
-def find_and_comp_slice_(_derts__, derts__, comparand_indices, shift = 0, coefs = (1, 0)):        # utility function for comparing derts
-    y_coef, x_coef = coefs      # to decompose d
-    i1, i2 = comparand_indices
+def scan_slice_(_derts__, derts__, i_index, shift = 0, coefs = (1, 0)):  # unit of vertical comp
 
-    index = 0   # index of _derts_
+    y_coef, x_coef = coefs   # to decompose d
+    i_dert, i_param = i_index  # two-level index of compared parameter in derts
 
+    index = 0     # index of _derts_
     _x0, _derts_ = _derts__[index]
 
-    _x0 += shift    # optional, for diagonal comparisons only
+    _x0 += shift  # for diagonal comparisons only
     _xn = _x0 + len(_derts_)
 
     for x0, derts_ in derts__:  # iterate through derts__
-
         xn = x0 + len(derts_)
 
-        while index < len(_derts__) and _xn < xn:  # while not overlap
+        while index < len(_derts__) and _xn < xn:  # while no overlap
 
-            while index < len(_derts__) and not (x0 < _xn and _x0 < xn):  # while not overlap
+            while index < len(_derts__) and not (x0 < _xn and _x0 < xn):  # while no overlap
                 index += 1
-
                 if index < len(_derts__):
-                    _x0, _derts_ = _derts__[index]
 
-                    _x0 += shift  # optional, for diagonal comparisons only
+                    _x0, _derts_ = _derts__[index]
+                    _x0 += shift  # for diagonal comparisons only
                     _xn = _x0 + len(_derts_)
 
-            if index < len(_derts__):
+            if index < len(_derts__):   # compare slice:
                 index += 1
 
-                # compare slices:
+                olp_x0 = max(x0, _x0)   # left overlap
+                olp_xn = min(xn, _xn)   # right overlap
 
-                olp_x0 = max(x0, _x0)               # left overlap
-                olp_xn = min(xn, _xn)               # right overlap
-                start = max(0, olp_x0 - x0)                         # indices for dert_ slicing
+                start = max(0, olp_x0 - x0)    # indices of slice derts_
                 end = min(len(derts_), len(derts_) + olp_xn - xn)
-                _start = max(0, olp_x0 - _x0)                       # indices for dert_ slicing
+
+                _start = max(0, olp_x0 - _x0)  # indices of slice _derts_
                 _end = min(len(_derts_), len(_derts_) + olp_xn - _xn)
 
                 for _derts, derts in zip(_derts_[_start:_end], derts_[start:end]):
 
-                    i = derts[i1][i2]
-                    ncomp, dy, dx = derts[-1][-3:]
+                    i = derts[i_dert][i_param]         # input
+                    ncomp, dy, dx = derts[-1][-3:]     # derivatives accumulated over current-rng comps
 
-                    _i = _derts[i1][i2]
-                    _ncomp, _dy, _dx = _derts[-1][-3:]
+                    _i = _derts[i_dert][i_param]       # template
+                    _ncomp, _dy, _dx = _derts[-1][-3:] # derivatives accumulated over current-rng comps
 
-                    d = i - _i  # difference
+                    d = i - _i
+                    # decomposition into vertical and horizontal differences:
 
-                    # decomposition into vertical and horizontal difference:
-                    temp_dy = int(y_coef * d)
-                    temp_dx = int(x_coef * d)
+                    partial_dy = int(y_coef * d)
+                    partial_dx = int(x_coef * d)
 
                     # bilateral accumulation:
+
                     ncomp += 1
-                    dy += temp_dy
-                    dx += temp_dx
+                    dy += partial_dy
+                    dx += partial_dx
                     _ncomp += 1
-                    _dy += temp_dy
-                    _dx += temp_dx
+                    _dy += partial_dy
+                    _dx += partial_dx
 
                     # return:
                     derts[-1] = ncomp, dy, dx
