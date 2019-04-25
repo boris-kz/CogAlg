@@ -105,12 +105,14 @@ def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also con
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
-    G = hypot(Dy, Dx)  # or in 2D structures only, and no input G?
+    G = hypot(Dy, Dx)  # or no comp, in 2D structures only?
 
-    dL = L - _L; mL = min(L, _L)    # ext miss: Ddx + DL?
-    dI = I - _I; vI = dI - ave * L  # I is not dderived, so vI is a signed deviation
+    dL = L - _L
+    mL = min(L, _L)    # ext miss: Ddx + DL?
+    dI = I - _I
+    vI = dI - ave * L  # I is not dderived, so vI is a signed deviation
+
     dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
-
 
     Pd = ddX + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation
     Pm = mX +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
@@ -128,7 +130,7 @@ def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also con
         if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
         else: mPP_rdn = 1; nmPP_rdn = 0
 
-        Pnd = xdd + ndI + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
+        Pnd = ddX + ndI + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
 
         if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
         else: dPP_rdn = 1; ndPP_rdn = 0

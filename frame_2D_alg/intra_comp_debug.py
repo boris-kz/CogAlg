@@ -13,7 +13,7 @@ ave = 5
 # -form_blob()
 # ***********************************************************************************************************************
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave, inp, rng=1):
+def intra_comp(blob, comp_branch, Ave_blob, Ave, i_param, i_dert, rng):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
@@ -237,6 +237,27 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
                 x0P, LP = P[1:3]
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
+
+        # accumulate root_blob.sub_Derts:
+
+        Lyr, Lr, Ir, Nr, Dyr, Dxr, Gr, sub_blob_ = root_blob.Derts[-1]
+        Lyr += Ly
+        Lr += L
+        Ir += I
+        Nr += N
+        Dyr += Dy
+        Dxr += Dx
+        Gr += G
+        sub_blob_.append(nt_blob(Derts=[(Ly, L, I, N, Dy, Dx, G, [])],  # []: sub_blob_ nested to depth = Derts[index]
+                                 typ=0,      # top Dert only
+                                 rng=1,      # for comp_range per blob
+                                 sign=s,
+                                 box=(y0, yn, x0, xn),  # boundary box
+                                 map=map,  # blob boolean map, to compute overlap
+                                 root_blob=None,
+                                 seg_=seg_,
+                                 ) )
+        root_blob.Derts[-1] = Lyr, Lr, Ir, Nr, Dyr, Dxr, Gr, sub_blob_
 
         root_blob.Derts[-1][0] += Ly
         root_blob.Derts[-1][1] += L
