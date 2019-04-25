@@ -108,18 +108,16 @@ def scan_slice_(_derts__, derts__, i_index, shift = 0, coefs = (1, 0), fangle=Tr
     for x0, derts_ in derts__:  # iterate through derts__
         xn = x0 + len(derts_)
 
-        while index < len(_derts__) and _xn < xn:  # while no overlap
+        while index < len(_derts__):
 
-            while index < len(_derts__) and not (x0 < _xn and _x0 < xn):  # while no overlap
+            while index < len(_derts__) and _xn <= x0:  # while no overlap
                 index += 1
                 if index < len(_derts__):
-
                     _x0, _derts_ = _derts__[index]
                     _x0 += shift  # for diagonal comparisons only
                     _xn = _x0 + len(_derts_)
 
-            if index < len(_derts__):   # compare slice:
-                index += 1
+            if index < len(_derts__) and  _x0 < xn:   # if overlap, compare slice:
 
                 olp_x0 = max(x0, _x0)   # left overlap
                 olp_xn = min(xn, _xn)   # right overlap
@@ -159,7 +157,16 @@ def scan_slice_(_derts__, derts__, i_index, shift = 0, coefs = (1, 0), fangle=Tr
                     _dx += partial_dx
 
                     # return:
-                    derts[-1] = ncomp, dy, dx
-                    _derts[-1] = _ncomp, _dy, _dx
+                    derts[-1] = derts[-1][:-3] + (ncomp, dy, dx)
+                    _derts[-1] = _derts[-1][:-3] + (_ncomp, _dy, _dx)
+
+            if _xn > xn:  # save _derts_ for next dert
+                break
+
+            index += 1  # next _derts
+            if index < len(_derts__):
+                _x0, _derts_ = _derts__[index]
+                _x0 += shift  # for diagonal comparisons only
+                _xn = _x0 + len(_derts_)
 
     # ---------- find_and_comp_slice_() end ---------------------------------------------------------------------------------

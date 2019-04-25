@@ -14,8 +14,6 @@ def comp_angle(P_, buff___):    # comp i at incremented range, dert_buff___ in b
     derts__ = lateral_comp(P_)                     # horizontal comparison (return current line)
     _derts__ = vertical_comp(derts__, buff___)     # vertical and diagonal comparison (return last line in buff___)
 
-    buff___.appendleft(derts__)                         # buffer derts__ into buff___, after vertical_comp to preserve last derts__ in buff___
-
     return _derts__  # return i indices and derts__
 
     # ---------- comp_angle() end -------------------------------------------------------------------------------------------
@@ -33,7 +31,7 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
         _a = int(atan2(idy, idx) * angle_coef) + 128    # angle: 0 -> 255
         _ncomp, _dx = 0, 0                              # init ncomp, dx buffers
 
-        for derts in derts_:
+        for derts in derts_[1:]:
             # compute angle:
             idx, idy = derts[0][-3:-1]
             a = int(atan2(idy, idx) * angle_coef) + 128     # angle: 0 -> 255
@@ -51,7 +49,7 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
             _derts.append((_a, _ncomp, 0, _dx))     # return, with _dy = 0
 
             _derts = derts          # buffer last derts
-            _ncomp, _dx = 1, dx     # buffer last ncomp and dx
+            _a, _ncomp, _dx = a, 1, dx     # buffer last ncomp and dx
 
 
         _derts.append((_a, _ncomp, 0, _dx))  # return last one
@@ -70,6 +68,8 @@ def vertical_comp(derts__, buff___):    # vertical comparison
         _derts__ = buff___[0]
 
         scan_slice_(_derts__, derts__, i_index=(-1, 0), fangle=True)
+
+    buff___.appendleft(derts__)
 
     return _derts__
 

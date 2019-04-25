@@ -1,4 +1,4 @@
-import cv2
+from scipy import misc
 from time import time
 from collections import deque, namedtuple
 import numpy as np
@@ -253,7 +253,7 @@ ave = 20
 
 
 # Load inputs --------------------------------------------------------------------
-image = cv2.imread('./../images/raccoon.jpg', 0).astype(int)
+image = misc.imread('./../images/soyuz.jpg', flatten=True).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
@@ -277,14 +277,15 @@ from comp_angle import comp_angle
 for i, blob in enumerate(frame_of_blobs[1]):
     if blob.Derts[0][1] > 500:  # L > 20
         intra_comp(blob, hypot_g, 0, 5, 0, 0, rng=0)
+        # if blob.Derts[0][1] > 500:  # L > 20
+            # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
+            # intra_comp(blob, comp_range, 0, 5, 0, 0, rng=2)
+            # draw('./../debug/comp_range' + str(i), map_blobs(blob))
 
 Aaves = [5, 10, 15, 20, 25]
 for Aave in Aaves:
     for i, blob in enumerate(frame_of_blobs[1]):
         if blob.Derts[0][1] > 500:  # L > 20
-            # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
-            # intra_comp(blob, comp_range, 0, 5, 0, 0, rng=2)
-            # draw('./../debug/comp_range' + str(i), map_blobs(blob))
             intra_comp(blob, comp_angle, 0, Aave, 0, -1, rng=1)
             draw('./../debug/comp_angle_' + str(i) + '_with_ave_' + str(Aave), map_blobs(blob))
 

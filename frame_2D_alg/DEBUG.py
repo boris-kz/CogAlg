@@ -1,10 +1,10 @@
-import cv2
+from scipy import misc
 import numpy as np
 
 def draw(path, image):
     " output into image file "
 
-    cv2.imwrite(path + '.bmp', image)
+    misc.imsave(path + '.bmp', image)
     # ---------- draw() end ---------------------------------------------------------------------------------------------
 
 def map_blobs(frame):
@@ -62,7 +62,8 @@ def map_segment(seg, box):
         x0P -= x0
         for x in range(x0P, x0P + L):
             seg_img[y, x] = 255 if P[0] else 0
-
+        # for x, derts in enumerate(P[-1], start=x0P):
+        #     seg_img[y, x] = derts[-1][-1]
     return seg_img
     # ---------- map_segment() end --------------------------------------------------------------------------------------
 
