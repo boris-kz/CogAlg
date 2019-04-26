@@ -14,8 +14,6 @@ def comp_angle(P_, buff___):    # comp i at incremented range, dert_buff___ in b
     derts__ = lateral_comp(P_)                     # horizontal comparison (return current line)
     _derts__ = vertical_comp(derts__, buff___)     # vertical and diagonal comparison (return last line in buff___)
 
-    buff___.appendleft(derts__)                         # buffer derts__ into buff___, after vertical_comp to preserve last derts__ in buff___
-
     return _derts__  # return i indices and derts__
 
     # ---------- comp_angle() end -------------------------------------------------------------------------------------------
@@ -33,27 +31,29 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
         _a = int(atan2(idy, idx) * angle_coef) + 128    # angle: 0 -> 255
         _ncomp, _dx = 0, 0                              # buffer ncomp, dx
 
-        for derts in derts_:
+        for derts in derts_[1:]:
             # compute angle:
             idx, idy = derts[0][-3:-1]
-            a = int(atan2(idy, idx) * angle_coef) + 128  # angle: 0 -> 255
+            a = int(atan2(idy, idx) * angle_coef) + 128   # angle: 0 -> 255
 
-            d = a - _a      # lateral comparison
+            d = a - _a  # d_angle
             # correct d_angle:
+
             if d > 127:
                 d -= 255
             elif d < -127:
                 d += 255
-            dx = d          # dx
+            dx = d
             _ncomp += 1     # bilateral accumulation
             _dx += d        # bilateral accumulation
 
-            _derts.append((_a, _ncomp, 0, _dx))     # return, with _dy = 0
-            _derts = derts          # buffer last derts
-            _ncomp, _dx = 1, dx     # buffer last ncomp and dx
+            _derts.append((_a, _ncomp, 0, _dx))     # return, _dy = 0
 
-        _derts.append((_a, _ncomp, 0, _dx))  # return last dert
-        derts__.append((x0, derts_))   # new line of P derts_ appended with new_derts_
+            _derts = derts          # buffer last derts
+            _a, _ncomp, _dx = a, 1, dx     # buffer last ncomp and dx
+
+        _derts.append((_a, _ncomp, 0, _dx))  # return last one
+        derts__.append((x0, derts_))    # new line of P derts_ appended with new_derts_
 
     return derts__
 
@@ -61,11 +61,14 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
 
 def vertical_comp(derts__, buff___):    # vertical comparison
 
-    if not buff___:  # first line buff___ is empty
+    if not buff___:     # buff___ is empty on the first line
         _derts__ = []
-    else:
+    else:               # not the first line
         _derts__ = buff___[0]
+
         scan_slice_(_derts__, derts__, i_index=(-1, 0), fangle=True)
+
+    buff___.appendleft(derts__)
 
     return _derts__
 

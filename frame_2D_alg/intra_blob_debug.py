@@ -1,6 +1,6 @@
 from math import hypot
 from comp_angle import comp_angle
-from comp_gradient_map import comp_gradient
+from comp_gradient import comp_gradient
 from comp_range import comp_range
 from intra_comp_debug import intra_comp
 
@@ -25,8 +25,9 @@ from intra_comp_debug import intra_comp
         # sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access
         
         sign, # lower Derts are sign-mixed at depth > 0, inp-mixed at depth > 1, rng-mixed at depth > 2:
-        inp,  # if inp==0: i = p|a in dert[0], else i = g in dert[-1], in derts[-rng] 
-        rng,  # compared i = derts[-rng][inp], 0 if hypot_g, 1 if comp_gradient, > 1 if comp_range  
+        inp,  # i_dert: -(rng*2+1) if comp_range, -1 if comp_angle, -2 if comp_gradient
+              # i_param: 0: i = p|a in dert[0], | -1: i = g in dert[-1];  for i = derts[i_dert][i_param]
+        rng,  # 0 if hypot_g, 1 if comp_gradient, >1 if comp_range  
         
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn
@@ -37,7 +38,7 @@ from intra_comp_debug import intra_comp
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,        
                   
-                    derts_ [ derts [ dert = (p|none | a), ncomp, dx, dy, g ]]]  
+                    derts_ [ derts [ dert = (p|None | a), ncomp, dx, dy, g ]]]  
                     # one dert per current and higher layers, with alternating p|a type of dert in derts: 
                     # derts [even][0] = p if top dert, else none or ncomp 
                     # derts [odd] [0] = angle
@@ -59,8 +60,9 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per 
 
     for blob in frame.blob_:
         if blob.Derts[-1][-1] > ave_root_blob:  # G > root blob conversion cost
-            intra_comp(blob, hypot_g, ave_root_blob, ave, i_param=None, i_dert=None, rng=None)
-            # redefines g as hypot(dy, dx), calls intra_blob
+
+            blob.inp = None  # no comp redefines g as hypot(dy, dx), adds Dert & sub_blob_, calls recursive intra_blob
+            intra_comp(blob, hypot_g, ave_root_blob, ave)
 
     return frame
 
@@ -70,39 +72,63 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
     Ave + ave         # estimated cost of redundant representations per dert
 
     for blob in root_blob.sub_blob_:
-
         if blob.Derts[-1][-1] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
-            Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave, i_param=0, i_dert=-1, rng=None)
 
-            # angle calc & comp, no eval, Ave_blob return, else intra_blob call
+            blob.inp = None  # no i comp, angle calc & comp, no eval, Ave_blob return, else intra_blob call
+            blob.rng = 1
+            Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave)
+
             Ave_blob *= rave   # estimated cost per next sub_blob
             Ave + ave   # estimated cost per next comp
 
             for ablob in blob.sub_blob_:  # ablobs are defined by the sign of ga: gradient of angle
-                Ga_rdn = 0
+                rdn = 1
                 G = ablob.Derts[-2][-1]   # Derts: current + higher-layers params, no lower layers yet
                 Ga = ablob.Derts[-1][-1]  # different I per layer, not redundant to higher I
 
-                if Ga > Ave_blob:  # forms angle deviation sub_blobs
-                    Ga_rdn = 1  # redundant to G + Ga rng_blob, cheaper Ga priority
-                    intra_comp( ablob, comp_gradient, Ave_blob, Ave, i_param=-1, i_dert=-1, rng=1)
+                val_ga = G       # value of forming gradient_of_angle deviation sub_blobs
+                val_gg = G - Ga  # value of forming gradient_of_gradient deviation sub_blobs
+                val_gr = G + Ga  # value of forming extended-range gradient deviation sub_blobs
 
-                elif G - Ga > Ave_blob * 2:  # 2 * crit, -> i_dev - a_dev: likely edge blob, forms gg deviation sub_blobs
-                    intra_comp( ablob, comp_gradient, Ave_blob, Ave, i_param=-1, i_dert=-2, rng=1)
+                vals = sorted((
+                    (val_ga, Ave_blob,   comp_gradient, (-1,-1), 1),  # [-2]: inp(i_param, i_dert), [-1]: rng
+                    (val_gg, Ave_blob*2, comp_gradient, (-1,-2), 1),
+                    (val_gr, Ave_blob*2, comp_range), (-1, -(rng*2+1)), rng), key=lambda: [0], reverse=True)
 
-                    # if stable orientation: -Ga, | G - Ga: orientation is only an estimate?
+                for val, threshold, comp_branch, inp, rng in vals:
 
-                if G + Ga > Ave_blob * (2 + Ga_rdn):  # 2 * crit, -> i_dev + a_dev: likely sign reversal & distant match
-                    intra_comp( ablob, comp_range, Ave_blob + ave_root_blob * Ga_rdn, Ave, i_param=0, i_dert=-(rng*2+1), rng=rng)
+                    if val > threshold * rdn:
+                        rdn += 1
+                        blob.inp = inp
+                        blob.rng = rng
+                        intra_comp(ablob, comp_branch, Ave_blob, Ave)  # adjusts Ave_blob, evaluates for intra_blob
+                    else:
+                        break
+    ''' 
+    the above expanded:
+    
+    if Ga > Ave_blob:
+       blob.inp = (-1,-1)  # i_param=-1, i_dert=-1
+       blob.rng = 1
+       intra_comp( ablob, comp_gradient, Ave_blob, Ave)  # forms g_angle deviation sub_blobs
 
-                    # forms extended-range-g deviation sub_blobs
-    '''
+    if G - Ga > Ave_blob * 2:  # 2 * crit, -> i_dev - a_dev (stable-orientation G): likely edge blob
+       blob.inp = (-1,-2)  # i_param=-1, i_dert=-2   # not if -Ga: orientation is only an estimate
+       blob.rng = 1
+       intra_comp( ablob, comp_gradient, Ave_blob, Ave)  # forms gg deviation sub_blobs
+
+    if G + Ga > Ave_blob * (2 + rdn):  # 2 * crit, -> i_dev + a_dev: likely sign reversal & distant match
+       blob.inp = (-1, -(rng*2+1))  # i_param=-1, i_dert=-(rng*2+1)
+       blob.rng = rng
+       intra_comp( ablob, comp_range, Ave_blob, Ave)  # forms extended-range-g deviation sub_blobs
+    
     intra_comp calls intra_blob:
     Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
     
     if not comp_angle:
        if blob.Derts[-1][-1] > Ave_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
           intra_blob( ablob, Ave_blob, Ave, rng)     # Ave: filter for deeper comp
+
     
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
     g and ga are dderived, blob of min_g? val -= branch switch cost?
