@@ -11,7 +11,7 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g but no g compute
+    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g without g compute
 '''
 ave = 20
 div_ave = 200
@@ -82,7 +82,7 @@ g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
 a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? 
 '''
 
-def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
+def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
     s, x0, L, I, G, Dx, Dy, derts_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
     _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # + params from higher branches, S if min n_params?
@@ -97,15 +97,14 @@ def comp_P(ort, P, _P, DdX):  # forms vertical derivatives of P params, also con
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated orientation change,
     DdX += ddX  # ddX -> Pd: signs of ddX and dL correlate, signs of dX (position) and dL (dimension) don't
 
-    if ort:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
+    if orthog:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
         hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
         L /= hyp  # est orthogonal slice is reduced P, for each param:
         I /= hyp
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
-
-    G = hypot(Dy, Dx)  # or no comp, in 2D structures only?
+        # G = hypot(Dy, Dx): comp in 2D structures only?
 
     dL = L - _L
     mL = min(L, _L)    # ext miss: Ddx + DL?

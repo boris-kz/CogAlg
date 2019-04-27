@@ -9,12 +9,12 @@ angle_coef = 128 / pi   # to scale angle into (-128, 128)
 # -vertical_comp()
 # ***********************************************************************************************************************
 
-def comp_angle(P_, buff___):    # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
+def comp_angle(P_, buff___):    # compute, compare angle
 
     derts__ = lateral_comp(P_)                     # horizontal comparison (return current line)
     _derts__ = vertical_comp(derts__, buff___)     # vertical and diagonal comparison (return last line in buff___)
 
-    return _derts__  # return i indices and derts__
+    return _derts__
 
     # ---------- comp_angle() end -------------------------------------------------------------------------------------------
 
@@ -29,16 +29,15 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
         _derts = derts_[0]
         idx, idy = _derts[0][-3:-1]
         _a = int(atan2(idy, idx) * angle_coef) + 128    # angle: 0 -> 255
-        _ncomp, _dx = 0, 0                              # buffer ncomp, dx
+        _ncomp, _dx = 0, 0                              # init ncomp, dx buffers
 
         for derts in derts_[1:]:
             # compute angle:
             idx, idy = derts[0][-3:-1]
-            a = int(atan2(idy, idx) * angle_coef) + 128   # angle: 0 -> 255
+            a = int(atan2(idy, idx) * angle_coef) + 128     # angle: 0 -> 255
 
-            d = a - _a  # d_angle
-            # correct d_angle:
-
+            d = a - _a      # lateral comparison
+            # correct angle diff:
             if d > 127:
                 d -= 255
             elif d < -127:
@@ -47,9 +46,8 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
             _ncomp += 1     # bilateral accumulation
             _dx += d        # bilateral accumulation
 
-            _derts.append((_a, _ncomp, 0, _dx))     # return, _dy = 0
-
-            _derts = derts          # buffer last derts
+            _derts.append((_a, _ncomp, 0, _dx))   # _dy = 0, mutates derts_[i]
+            _derts = derts  # buffer last derts  # not needed?
             _a, _ncomp, _dx = a, 1, dx     # buffer last ncomp and dx
 
         _derts.append((_a, _ncomp, 0, _dx))  # return last one

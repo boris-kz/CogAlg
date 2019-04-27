@@ -2,7 +2,7 @@ import numpy as np
 from math import hypot
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'Derts typ rng sign map box root_blob seg_')
+nt_blob = namedtuple('blob', 'Derts sign inp rng sign map box root_blob seg_')
 ave = 5
 
 # ************ FUNCTIONS ************************************************************************************************
@@ -13,15 +13,17 @@ ave = 5
 # -form_blob()
 # ***********************************************************************************************************************
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave, i_param, i_dert, rng):
+def intra_comp(blob, comp_branch, Ave_blob, Ave):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
+    blob.Derts.append([0,0,0,0,0,0,[]])  # init for form_blob
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
     i = 0   # segment index
+
     blob.seg_.sort(key=lambda seg: seg[0])  # sort by y0 coordinate
-    buff___ = deque(maxlen=rng)
+    buff___ = deque(maxlen=blob.rng)
     seg_ = []       # buffer of segments containing line y
     sseg_ = deque() # buffer of sub-segments
 
@@ -248,8 +250,10 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
         Dyr += Dy
         Dxr += Dx
         Gr += G
-        sub_blob_.append(nt_blob(Derts=[(Ly, L, I, N, Dy, Dx, G, [])],  # []: sub_blob_ nested to depth = Derts[index]
-                                 typ=0,      # top Dert only
+        sub_blob_.append(nt_blob(Derts=[[(Ly, L, I, N, Dy, Dx, G, [])]],
+                                 # last element is sub_blob_, nested to depth = Derts[index]
+                                 # top Dert only:
+                                 inp=0,
                                  rng=1,      # for comp_range per blob
                                  sign=s,
                                  box=(y0, yn, x0, xn),  # boundary box
@@ -259,22 +263,6 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
                                  ) )
         root_blob.Derts[-1] = Lyr, Lr, Ir, Nr, Dyr, Dxr, Gr, sub_blob_
 
-        root_blob.Derts[-1][0] += Ly
-        root_blob.Derts[-1][1] += L
-        root_blob.Derts[-1][2] += I
-        root_blob.Derts[-1][3] += N
-        root_blob.Derts[-1][4] += Dy
-        root_blob.Derts[-1][5] += Dx
-        root_blob.Derts[-1][6] += G
+        # initialized Derts[-1] is added at intra_comp call
 
-        root_blob.Derts[-1][7].append(nt_blob(
-                  Derts=[(Ly, L, I, N, Dy, Dx, G, [])],  # [] is nested sub_blob_ of depth = Derts[index]
-                  typ=0,  # top Dert only:
-                  rng=1,  # for comp_range per blob
-                  sign=s,
-                  box=(y0, yn, x0, xn),  # boundary box
-                  map=map,  # blob boolean map, to compute overlap
-                  root_blob=[blob],
-                  seg_=seg_,
-                  ))
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
