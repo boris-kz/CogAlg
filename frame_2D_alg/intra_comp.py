@@ -111,24 +111,28 @@ def form_P_(derts__, i_param, i_dert):  # horizontally cluster and sum consecuti
 
         dert_ = [(derts[i_dert][i_param],) + derts[-1][-4:] for derts in derts_] # make the list of specific tyoe of dert
 
-        x0, L = x_start, 1      # P params
-        params = list(dert_[0]) # initialize P params with first dert value
-        _s = dert_[0][-1] > 0   # first dert's sign
+        i, ncomp, dy, dx, g = dert_[0]
+        x0, L, I, N, Dy, Dx, G = x_start, 1, i, ncomp, dy, dx, g    # initialize P params with first dert value
+        _s = g > 0                                                  # first dert's sign
 
-        for x, dert in enumerate(dert_[1:], start=x_start + 1):
-            s = dert[-1] > 0
+        for x, (i, ncomp, dy, dx, g) in enumerate(dert_[1:], start=x_start + 1):
+            s = g > 0
             if s != _s:  # P is terminated and new P is initialized
-                P_.append([_s, x0, L] + params + [derts_[x0 - x_start : x0 - x_start + L]])
+                P_.append([_s, x0, L, I, N, Dy, Dx, G, derts_[x0 - x_start : x0 - x_start + L]])
 
-                x0, L = x, 0                # reset params
-                params = [0] * len(params)  # reset params
+                x0, L, I, N, Dy, Dx, G = x, 0, 0, 0, 0, 0, 0    # reset params
 
             # accumulate P params:
             L += 1
-            params = [param + der for param, der in zip(params, dert)]
+            I += i
+            N += ncomp
+            Dy += dy
+            Dx += dx
+            G += g
+
             _s = s  # prior sign
 
-        P_.append([_s, x0, L] + params + [derts_[x0 - x_start : x0 - x_start + L]])  # last P in row
+            P_.append([_s, x0, L, I, N, Dy, Dx, G, derts_[x0 - x_start: x0 - x_start + L]])  # last P in row
 
     return P_
 

@@ -253,7 +253,7 @@ ave = 20
 
 
 # Load inputs --------------------------------------------------------------------
-image = misc.imread('./../images/soyuz.jpg', flatten=True).astype(int)
+image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)
 height, width = image.shape
 
 # Main ---------------------------------------------------------------------------
@@ -273,22 +273,19 @@ from DEBUG import draw, over_draw, map_blobs, map_blob, empty_map
 from intra_comp import intra_comp, hypot_g
 from comp_range import comp_range
 from comp_angle import comp_angle
+from comp_gradient import comp_gradient
 
 for i, blob in enumerate(frame_of_blobs[1]):
     if blob.Derts[0][1] > 500:  # L > 20
         intra_comp(blob, hypot_g, 0, 5, 0, 0, rng=0)
-        # if blob.Derts[0][1] > 500:  # L > 20
+        if blob.Derts[0][1] > 500:  # L > 20
             # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
             # intra_comp(blob, comp_range, 0, 5, 0, 0, rng=2)
             # draw('./../debug/comp_range' + str(i), map_blobs(blob))
-
-# Aaves = [5, 10, 15, 20, 25]
-Aaves = [25]
-for Aave in Aaves:
-    for i, blob in enumerate(frame_of_blobs[1]):
-        if blob.Derts[0][1] > 500:  # L > 20
-            intra_comp(blob, comp_angle, 0, Aave, 0, -1, rng=1)
-            draw('./../debug/comp_angle_' + str(i) + '_with_ave_' + str(Aave), map_blobs(blob, original=True))
+            intra_comp(blob, comp_angle, 0, 25, 0, -1, rng=1)
+            draw('./../debug/comp_angle_' + str(i), map_blobs(blob))
+            # intra_comp(blob, comp_gradient, 0, 5, -1, 0, rng=1)
+            # draw('./../debug/comp_gradient_' + str(i), map_blobs(blob))
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps

@@ -7,7 +7,7 @@ from comp_range import scan_slice_
 # -vertical_comp()
 # ***********************************************************************************************************************
 
-def comp_angle(P_, buff___):    # compare g in blob ( dert__ in P_ line ( dert_ in P
+def comp_gradient(P_, buff___):    # compare g in blob ( dert__ in P_ line ( dert_ in P
 
     derts__ = lateral_comp(P_)                     # horizontal comparison (return current line)
     _derts__ = vertical_comp(derts__, buff___)     # vertical and diagonal comparison (return last line in buff___)
@@ -44,9 +44,9 @@ def lateral_comp(P_):  # horizontal comparison
             _g, _ncomp, _dx = g, 1, dx      # buffer last ncomp and dx
 
 
-        _derts.append((_ncomp, 0, _dx))  # return last one
+        _derts.append((_ncomp, 0, _dx))     # return last one
 
-        derts__.append((x0, derts_))    # new line of P derts_ appended with new_derts_
+        derts__.append((x0, derts_))        # new line of P derts_ appended with new_derts_
 
     return derts__
 
