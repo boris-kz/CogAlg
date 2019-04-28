@@ -3,8 +3,9 @@ from math import hypot
 from collections import deque, namedtuple
 from comp_range import comp_range
 from comp_angle import comp_angle
+from comp_gradient import comp_gradient
 
-nt_blob = namedtuple('blob', 'Derts typ rng sign box map root_blob seg_')
+nt_blob = namedtuple('blob', 'Derts I dert_index sign alt rng map box root_blob seg_')
 min_sub_blob = 5
 
 # ************ FUNCTIONS ************************************************************************************************
@@ -23,8 +24,29 @@ perform branch-specific comparison,
 convert blob into root_blob with new sub_blob_
 '''
 
-def intra_comp(blob, comp_branch, Ave_blob, ave, i_param, i_dert, rng):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
+def intra_comp(blob, comp_branch, Ave_blob, ave):  # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
+    # determine branch-specific variables:
+    derts = blob.seg_[0][2][0][-1][0]               # a sample of derts to get it's size
+    dert_index = len(derts)
+    if comp_branch == hypot_g:
+        rng = 0
+        comp_index = -1                             # no comp_index for hypot_g
+        indices = 0, 0, 0                           # i_dert, i_param, dert_index
+    elif comp_branch == comp_angle:
+        rng = 1
+        comp_index = blob.dert_index                # comp_index used to locate dy, dx for computing angle
+        indices = dert_index, 0, dert_index         # i_dert, i_param, dert_index
+    elif comp_branch == comp_range:
+        rng = blob.rng + 1
+        comp_index = blob.I[0], blob.dert_index     # comp_index used to locate accumulated dy, dx and i for comparing
+        indices = blob.I + (dert_index,)            # i_dert, i_param, dert_index
+    else:   # comp_branch == comp_gradient:
+        rng = 1
+        comp_index = blob.dert_index                # comp_index used to locate g for comparing
+        indices = blob.dert_index, -1, dert_index   # i_dert, i_param, dert_index
+
+    # prepare to unfold:
     blob.seg_.sort(key=lambda seg: seg[0])  # sort by y0 coordinate
 
     blob.Derts.append((0, 0, 0, 0, 0, 0, 0, []))  # Ly, L, I, N, Dy, Dx, G
@@ -54,13 +76,13 @@ def intra_comp(blob, comp_branch, Ave_blob, ave, i_param, i_dert, rng):  # unfol
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = comp_branch(P_, buff___)     # no buff___ in hypot_g or future dx_g
+        derts__ = comp_branch(P_, buff___, comp_index)     # no buff___ in hypot_g or future dx_g
         if derts__: # form sub_blobs:
 
             compute_g(derts__, ave)
-            sP_ = form_P_(derts__, i_param, i_dert)
-            sP_ = scan_P_(sP_, sseg_, blob)
-            sseg_ = form_seg_(y - rng, sP_, blob)
+            sP_ = form_P_(derts__, indices)
+            sP_ = scan_P_(sP_, sseg_, blob, indices)
+            sseg_ = form_seg_(y - rng, sP_, blob, indices)
 
         y += 1
     y -= len(buff___)
@@ -69,17 +91,17 @@ def intra_comp(blob, comp_branch, Ave_blob, ave, i_param, i_dert, rng):  # unfol
 
         derts__ = buff___.pop()
         compute_g(derts__, ave)
-        sP_ = form_P_(derts__, i_param, i_dert)
-        sP_ = scan_P_(sP_, sseg_, blob)
-        sseg_ = form_seg_(y, sP_, blob)
+        sP_ = form_P_(derts__, indices)
+        sP_ = scan_P_(sP_, sseg_, blob, indices)
+        sseg_ = form_seg_(y, sP_, blob, indices)
         y += 1
 
     while sseg_:    # terminate last line
-        form_blob(sseg_.popleft(), blob)
+        form_blob(sseg_.popleft(), blob, indices)
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def hypot_g(P_, buff___):  # strip g from dert, convert dert into nested derts
+def hypot_g(P_, buff___, comp_index):  # strip g from dert, convert dert into nested derts
     derts__ = []    # line of derts
 
     for P in P_:       # iterate through line of root_blob's Ps
@@ -103,13 +125,14 @@ def compute_g(derts__, ave):     # compute g
             g = int(hypot(dx, dy)) - ncomp * ave
             derts[-1] += (g,)
 
-def form_P_(derts__, i_param, i_dert):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(derts__, indices):      # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+    i_dert, i_param, dert_index = indices
 
     P_ = deque()    # row of Ps
 
     for x_start, derts_ in derts__:     # each derts_ is a span of horizontally contiguous derts, a line might contain many of these
 
-        dert_ = [(derts[i_dert][i_param],) + derts[-1][-4:] for derts in derts_] # make the list of specific tyoe of dert
+        dert_ = [(derts[i_dert][i_param],) + derts[dert_index][-4:] for derts in derts_]    # make the list of specific branch dert_
 
         i, ncomp, dy, dx, g = dert_[0]
         x0, L, I, N, Dy, Dx, G = x_start, 1, i, ncomp, dy, dx, g    # initialize P params with first dert value
@@ -138,7 +161,7 @@ def form_P_(derts__, i_param, i_dert):  # horizontally cluster and sum consecuti
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-def scan_P_(P_, seg_, root_blob):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
+def scan_P_(P_, seg_, root_blob, indices):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
 
     new_P_ = deque()
 
@@ -165,11 +188,11 @@ def scan_P_(P_, seg_, root_blob):  # integrate x overlaps (forks) between same-s
                     P = P_.popleft()  # load next P
                 else:  # if no P left: terminate loop
                     if seg[3] != 1:  # if roots != 1: terminate seg
-                        form_blob(seg, root_blob)
+                        form_blob(seg, root_blob, indices)
                     stop = True
             else:  # no next-P overlap
                 if seg[3] != 1:  # if roots != 1: terminate seg
-                    form_blob(seg, root_blob)
+                    form_blob(seg, root_blob, indices)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
@@ -181,14 +204,14 @@ def scan_P_(P_, seg_, root_blob):  # integrate x overlaps (forks) between same-s
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob(seg_.popleft(), root_blob)  # roots always == 0
+        form_blob(seg_.popleft(), root_blob, indices)  # roots always == 0
 
     return new_P_
 
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
 
-def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge blobs
+def form_seg_(y, P_, root_blob, indices):  # convert or merge every P into segment, merge blobs
     new_seg_ = deque()
 
     while P_:
@@ -218,11 +241,11 @@ def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][3] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob(fork_[0], root_blob)  # merge seg of 1st fork into its blob
+                        form_blob(fork_[0], root_blob, indices)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork[3] == 1:
-                            form_blob(fork, root_blob)
+                            form_blob(fork, root_blob, indices)
 
                         if not fork[5] is blob:
                             params, seg_, open_segs, box = fork[5][1:]  # merged blob, omit sign
@@ -249,7 +272,7 @@ def form_seg_(y, P_, root_blob):  # convert or merge every P into segment, merge
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg, root_blob):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, root_blob, indices):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     y0s, params, Py_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
@@ -282,12 +305,15 @@ def form_blob(term_seg, root_blob):  # terminated segment is merged into continu
         Dxr += Dx
         Gr += G
 
+        i_dert, i_param, dert_index = indices   # unpack indices
         sub_blob_.append(nt_blob(Derts=[(Ly, L, I, N, Dy, Dx, G, [])],       # [] is nested sub_blob_ of depth = Derts[index]
-                                 typ=0,      # top Dert only
-                                 rng=1,      # for comp_range per blob
+                                 I=(i_dert, i_param),
+                                 dert_index=dert_index,
                                  sign=s,
-                                 box=(y0, yn, x0, xn),  # boundary box
+                                 alt=0,
+                                 rng=1,  # for comp_range per blob
                                  map=map,  # blob boolean map, to compute overlap
+                                 box=(y0, yn, x0, xn),  # boundary box
                                  root_blob=None,
                                  seg_=seg_,
                                  ) )

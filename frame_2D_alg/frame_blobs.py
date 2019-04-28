@@ -236,12 +236,14 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G)],  # sub_blob_ is appended per layer together with summed
-                                typ=0,      # top Dert only
-                                rng = 1,    # for comp_range per blob
+        frame[1].append(nt_blob(Derts=[(Ly, L, I, Dy, Dx, G, [])],  # sub_blob_ is appended per layer together with summed
+                                I=(0, 0),
+                                dert_index = 0,
                                 sign=s,
+                                alt=0,
+                                rng = 1,                # for comp_range per blob
+                                map=map,                # blob boolean map, to compute overlap
                                 box=(y0, yn, x0, xn),  # boundary box
-                                map=map,  # blob boolean map, to compute overlap
                                 root_blob=None,
                                 seg_=seg_,
                                 ))
@@ -259,7 +261,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'Derts typ rng sign box map root_blob seg_')
+nt_blob = namedtuple('blob', 'Derts I dert_index sign alt rng map box root_blob seg_')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
@@ -277,15 +279,15 @@ from comp_gradient import comp_gradient
 
 for i, blob in enumerate(frame_of_blobs[1]):
     if blob.Derts[0][1] > 500:  # L > 20
-        intra_comp(blob, hypot_g, 0, 5, 0, 0, rng=0)
+        intra_comp(blob, hypot_g, 0, 5)
         if blob.Derts[0][1] > 500:  # L > 20
             # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
-            # intra_comp(blob, comp_range, 0, 5, 0, 0, rng=2)
+            # intra_comp(blob, comp_range, 0, 5)
             # draw('./../debug/comp_range' + str(i), map_blobs(blob))
-            intra_comp(blob, comp_angle, 0, 25, 0, -1, rng=1)
-            draw('./../debug/comp_angle_' + str(i), map_blobs(blob))
-            # intra_comp(blob, comp_gradient, 0, 5, -1, 0, rng=1)
-            # draw('./../debug/comp_gradient_' + str(i), map_blobs(blob))
+            # intra_comp(blob, comp_angle, 0, 25)
+            # draw('./../debug/comp_angle_' + str(i), map_blobs(blob))
+            intra_comp(blob, comp_gradient, 0, 5)
+            draw('./../debug/comp_gradient_' + str(i), map_blobs(blob))
 
 '''
 def alt_form_P_(y, dert__):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps

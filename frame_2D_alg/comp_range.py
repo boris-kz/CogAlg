@@ -8,17 +8,18 @@ from math import hypot
 # -find_and_comp_slice_()
 # ***********************************************************************************************************************
 
-def comp_range(P_, buff___):    # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
+def comp_range(P_, buff___, comp_indices):    # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
     rng = buff___.maxlen
 
-    derts__ = lateral_comp(P_, rng)                     # horizontal comparison (return current line)
-    _derts__ = vertical_comp(derts__, buff___, rng)     # vertical and diagonal comparison (return last line in buff___)
+    derts__ = lateral_comp(P_, rng, comp_indices)                     # horizontal comparison (return current line)
+    _derts__ = vertical_comp(derts__, buff___, rng, comp_indices)     # vertical and diagonal comparison (return last line in buff___)
 
     return _derts__
 
     # ---------- comp_range() end -------------------------------------------------------------------------------------------
 
-def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance == rng
+def lateral_comp(P_, rng, comp_indices):  # horizontal comparison between pixels at distance == rng
+    i_dert, d_dert = comp_indices
 
     derts__ = []
     buff_ = deque(maxlen=rng)       # new dert's buffer
@@ -33,15 +34,15 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
             buff_.append(None)      # buffer gap coords as None
 
         for derts in derts_:
-            i = derts[-rng+1][0]    # +1 for future derts.append(new_dert)
-            ncomp, dy, dx = derts[-1][-4:-1]
+            i = derts[i_dert][0]    # draw i out from specified dert
+            ncomp, dy, dx = derts[d_dert][-4:-1]    # draw accumulated dy, dx from specified dert
 
             if len(buff_) == rng and buff_[max_index] is not None:
                 # xd == rng and coordinate is within P vs. gap
 
-                _derts = buff_[max_index]
-                _i = _derts[-rng][0]
-                _ncomp, _dy, _dx = _derts[-1]
+                _derts = buff_[max_index]       # rng-spaced dert, or dert at the end of deque with maxlen=rng
+                _i = _derts[i_dert][0]          # i from specified dert
+                _ncomp, _dy, _dx = _derts[-1]   # accumulated dy, dx from freshly appended dert (in the code below)
 
                 d = i - _i      # lateral comparison
                 ncomp += 1      # bilateral accumulation
@@ -51,7 +52,7 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
 
                 _derts[-1] = _ncomp, _dy, _dx   # return
 
-            derts.append((ncomp, dy, dx))       # new-layer dert
+            derts.append((ncomp, dy, dx))       # append new accumulated dy, dx
             buff_.appendleft(derts)             # for horizontal comp
 
         derts__.append((x0, derts_))        # new line of P derts_ appended with new_derts_
@@ -61,7 +62,8 @@ def lateral_comp(P_, rng):  # horizontal comparison between pixels at distance =
 
     # ---------- lateral_comp() end -----------------------------------------------------------------------------------------
 
-def vertical_comp(derts__, buff___, rng):    # vertical and diagonal comparison
+def vertical_comp(derts__, buff___, rng, comp_indices):    # vertical and diagonal comparison
+    i_dert, _ = comp_indices    # i_dert and unused d_dert
 
     # first line of derts in last element of buff___ is returned to comp_range() at len = maxlen(rng)
 
@@ -75,13 +77,13 @@ def vertical_comp(derts__, buff___, rng):    # vertical and diagonal comparison
             x_coef = xd / hyp       # to decompose d into dx, replace with look-up table?
 
             # upper-left comparisons:
-            scan_diag_slice_(_derts__, derts__, i_index=(-rng, 0), shift = -xd, coefs = (y_coef, x_coef))
+            scan_diag_slice_(_derts__, derts__, i_index=(i_dert, 0), shift = -xd, coefs = (y_coef, x_coef))
 
             # upper-right comparisons:
-            scan_diag_slice_(_derts__, derts__, i_index=(-rng, 0), shift = xd, coefs = (y_coef, -x_coef))
+            scan_diag_slice_(_derts__, derts__, i_index=(i_dert, 0), shift = xd, coefs = (y_coef, -x_coef))
 
         else:
-            scan_slice_(_derts__, derts__, i_index=(-rng, 0))  # pure vertical: no shift, fixed coef
+            scan_slice_(_derts__, derts__, i_index=(i_dert, 0))  # pure vertical: no shift, fixed coef
 
     if len(buff___) == rng:
         _derts__ = buff___[-1]
