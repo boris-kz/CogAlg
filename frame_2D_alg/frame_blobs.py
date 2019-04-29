@@ -231,9 +231,8 @@ def form_blob(term_seg, frame):  # terminated segment is merged in continued or 
         frame[0][2] += Dx
         frame[0][3] += G
 
-        frame[1].append(nt_blob(
-                                Derts=[(Ly, L, Dy, Dx, G, [])],  #[]: nested sub_blob_, depth = Derts[index]
-                                I=I,  # top Dert
+        frame[1].append(nt_blob(I=I,  # top Dert
+                                Derts=[(Ly, L, G, Dy, Dx, [])],  #[]: nested sub_blob_, depth = Derts[index]
                                 sign=s,
                                 alt= None,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
                                 rng= None,  # for comp_range only, i_dert = -rng*2 + inp
@@ -242,6 +241,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged in continued or 
                                 root_blob=[blob],
                                 seg_=seg_,
                                 ) )
+
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 # ************ PROGRAM BODY *********************************************************************************************

@@ -91,7 +91,7 @@ def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also 
     offset = abs(x0 - _x0) + abs(xn - _xn)
     overlap = min(xn, _xn) - max(x0, _x0)
 
-    mX = overlap / offset  # mX is L-normalized because individual x m|d is binary
+    mX = overlap / offset  # mX is L-normalized, individual x m|d is binary
     dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, vX = mX - ave_mX -> P inclusion, or distant-P comp only?
 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated orientation change,
@@ -104,17 +104,20 @@ def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also 
         I /= hyp
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
+
         # G = hypot(Dy, Dx): comp in 2D structures only?
+        # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
 
-    dL = L - _L
-    mL = min(L, _L)    # ext miss: Ddx + DL?
-    dI = I - _I
-    vI = dI - ave * L  # I is not dderived, so vI is a signed deviation
+    dI = I - _I; vI = dI - ave * L  # not dderived: vI is a deviation, alone is not significant, comp with Derts[1]:
+    dL = L - _L;  mL = min(L, _L)   # abs match: dderived rep value is proportional to magnitude
+    dDx = Dx - _Dx; mDx = min(Dx, _Dx)
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)
 
-    dG = G - _G; mG = min(G, _G)  # or Dx + Dy -> G: global direction and reduced variation (vs abs g), restorable from ave_a?
+    Pd = ddX + dL + dI + dDx + dDy  # -> signed dPP, intra_PP if abs PD?  !dX: ddX / dS correlation?
+    Pm = mX +  mL + vI + mDx + mDy  # -> compl. vPP, rdn: stronger Pd|Pm rolp?
 
-    Pd = ddX + dL + dI + dG  # defines dPP, abs D for comp dPP? no dS-to-xd correlation
-    Pm = mX +  mL + vI + mG  # defines mPP; comb rep value = Pm * 2 + Pd?
+    # variation only: multi-par ~ multi-dir, but correlated vs anti-correlated, except for dDs?
+    # comb rep value = PI | Pm + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
