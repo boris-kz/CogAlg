@@ -5,7 +5,7 @@ from comp_range import comp_range
 from comp_angle import comp_angle
 from comp_gradient import comp_gradient
 
-nt_blob = namedtuple('blob', 'Derts I dert_index sign alt rng map box root_blob seg_')
+nt_blob = namedtuple('blob', 'I Derts sign alt rng box map root_blob seg_')
 min_sub_blob = 5
 
 # ************ FUNCTIONS ************************************************************************************************
@@ -272,7 +272,7 @@ def form_seg_(y, P_, root_blob, indices):  # convert or merge every P into segme
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg, root_blob, indices):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, root_blob):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     y0s, params, Py_, roots, fork_, blob = term_seg
     blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
@@ -305,15 +305,13 @@ def form_blob(term_seg, root_blob, indices):  # terminated segment is merged int
         Dxr += Dx
         Gr += G
 
-        i_dert, i_param, dert_index = indices   # unpack indices
-        sub_blob_.append(nt_blob(Derts=[(Ly, L, I, N, Dy, Dx, G, [])],       # [] is nested sub_blob_ of depth = Derts[index]
-                                 I=(i_dert, i_param),
-                                 dert_index=dert_index,
+        sub_blob_.append(nt_blob(I=I,
+                                 Derts=[(G, N, Dy, Dx, L, Ly, [])],       # [] is nested sub_blob_ of depth = Derts[index]
                                  sign=s,
                                  alt=0,
-                                 rng=1,  # for comp_range per blob
-                                 map=map,  # blob boolean map, to compute overlap
+                                 rng=1,                 # for comp_range per blob
                                  box=(y0, yn, x0, xn),  # boundary box
+                                 map=map,               # blob boolean map, to compute overlap
                                  root_blob=None,
                                  seg_=seg_,
                                  ) )
