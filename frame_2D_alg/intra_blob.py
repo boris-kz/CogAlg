@@ -18,16 +18,16 @@ from intra_comp_debug import intra_comp
     Dert params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
-        I,  # top Dert: brightness
-        Derts = [ layer_Derts = [Dert = Ly, L, G, Dx, Dy, N, sub_blob_]],     
+        I,  # top Dert
+        Derts = [ layer_Derts = [Dert = G, Dx, Dy, N, L, Ly, sub_blob_]],     
         
-        # Dert per current & lower layers of derivation tree for Dert-parallel comp, 
+        # Dert per current & lower layers of derivation tree for Dert-parallel comp_blob, 
         # len layer_Derts = comp_branch rdn, same-syntax cross-branch summation in deeper Derts,  
         # sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access
         
-        sign, # lower Derts are sign-mixed at depth > 0, inp-mixed at depth > 1, rng-mixed at depth > 2:
-        alt,  # indicates alternating layer: -1 for ga or -2 for g 
-        rng,  # starts from 0, only for comp_range: i_dert = derts[ -rng*2 + alt]
+        sign, # lower Derts are sign-mixed at depth > 0, alt-mixed at depth > 1, rng-mixed at depth > 2:
+        alt,  # alternating layer index: -1 for ga or -2 for g 
+        rng,  # and as comp_range index: i_dert = derts[-(rng-1)*2 + alt]
         
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn
@@ -42,7 +42,7 @@ from intra_comp_debug import intra_comp
     input for:
         comp_angle: dx, dy = derts[-1][1,2]   # no need for alt and rng  
         comp_gradi: ga = derts[-1][0] | g = derts[-2][0]  # alt, no rng
-        comp_range: p| g | ga = derts[ -rng*2 + alt)][0]  
+        comp_range: p| g | ga = derts[ -(rng-1)*2 + alt)][0]  
 '''
 ave = 20
 ave_eval = 100  # fixed cost of evaluating sub_blobs and adding root_blob flag
@@ -60,7 +60,7 @@ ave_n_sub_blobs = 10
 def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
 
     for blob in frame.blob_:
-        if blob.Derts[-1][-2] > ave_root_blob:  # G > root blob cost
+        if blob.Derts[-1][0] > ave_root_blob:  # G > root blob cost
             intra_comp(blob, hypot_g, ave_root_blob, ave)  # g = hypot(dy, dx), adds Dert & sub_blob_, calls intra_blob
 
     return frame
@@ -71,10 +71,10 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
     Ave + ave         # estimated cost of redundant representations per dert
 
     for blob in root_blob.sub_blob_:
-        if blob.Derts[-1][-2] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
+        if blob.Derts[-1][0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
 
             blob.alt = None  # no i comp, angle calc & comp (no a eval), no intra_blob call from comp_angle
-            blob.rng = 0
+            blob.rng = None
             Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave)  # Ave_blob return from comp_angle only
 
             Ave_blob *= rave   # estimated cost per next sub_blob
@@ -82,8 +82,8 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
 
             for ablob in blob.sub_blob_:  # ablobs are defined by the sign of ga: gradient of angle
                 rdn = 1
-                G = ablob.Derts[-2][-2]   # Derts: current + higher-layers params, no lower layers yet
-                Ga = ablob.Derts[-1][-2]  # different I per layer, not redundant to higher I
+                G = ablob.Derts[-2][0]   # Derts: current + higher-layers params, no lower layers yet
+                Ga = ablob.Derts[-1][0]  # different I per layer, not redundant to higher I
 
                 val_ga = G       # value of forming gradient_of_angle deviation sub_blobs
                 val_gg = G - Ga  # value of forming gradient_of_gradient deviation sub_blobs
@@ -92,7 +92,8 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
                 vals = sorted((
                     (val_ga, Ave_blob,   comp_gradient, -2, None),  # alt = -2, no rng accumulation
                     (val_gg, Ave_blob*2, comp_gradient, -1, None),
-                    (val_gr, Ave_blob*2, comp_range), rng), key=lambda val: val[0], reverse=True)
+                    (val_gr, Ave_blob*2, comp_range, blob.alt, rng+1)  # alt is from initial comp_grad
+                    ), key=lambda val: val[0], reverse=True)
 
                 for val, threshold, comp_branch, alt, rng in vals:
 
@@ -101,8 +102,7 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
                         ablob.rng = rng
                         rdn += 1
                         intra_comp(ablob, comp_branch, Ave_blob + ave_root_blob * rdn, Ave + ave * rdn)
-                        # root_blob.Derts += rdn Derts, derts += dert: higher-layers rep
-                        # evaluates calling intra_blob
+                        # root_blob.Derts += rdn Derts, derts += dert, intra_blob call eval
                     else:
                         break
     ''' 
@@ -119,7 +119,7 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
     Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
     
     if not comp_angle:
-       if blob.Derts[-1][-1] > Ave_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
+       if blob.Derts[-1][0] > Ave_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
           intra_blob( ablob, Ave_blob, Ave, rng)     
 
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
@@ -128,10 +128,10 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
 
     comp_P_() if estimated val_PP_ > ave_comp_P, for blob in root_blob.sub_blob_: defined by dx_g:
      
-    L + I + Dx + Dy:  proj P match Pm; Dx, Dy, abs_Dx, abs_Dy for scan-invariant P calc, comp, no indiv comp: rdn
-    * L/ Ly/ Ly: elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
+    L + I + |Dx| + |Dy|: P params sum is a superset of their match Pm, 
+    * L/ Ly/ Ly: elongation: >ave Pm? ~ box (xn - x0) / (yn - y0), 
     * Dy / Dx:   variation-per-dimension bias 
-    * Ave - Ga:  if positive angle match
+    * Ave / Ga:  angle match rate?
     '''
 
     return root_blob

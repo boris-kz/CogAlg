@@ -11,7 +11,13 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g without g compute
+    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g without g compute,
+    val_PP:
+    
+    L + I + |Dx| + |Dy|: params sum is a superset of their match Pm, no abs_Dx, abs_Dy for comp_dert eval: high rdn?  
+    * L/ Ly/ Ly: elongation: >ave Pm? ~ box elong: (xn - x0) / (yn - y0)? 
+    * Dy / Dx:   variation-per-dimension bias 
+    * Ave / Ga:  angle match rate?
 '''
 ave = 20
 div_ave = 200
@@ -108,16 +114,16 @@ def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also 
         # G = hypot(Dy, Dx): comp in 2D structures only?
         # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
 
-    dI = I - _I; vI = dI - ave * L  # not dderived: vI is a deviation, alone is not significant, comp with Derts[1]:
-    dL = L - _L;  mL = min(L, _L)   # abs match: dderived rep value is proportional to magnitude
+    dI = I - _I;  vI = dI - ave * L  # not dderived: vI is a deviation, alone is not significant, comp with Derts[1]:
+    dL = L - _L;  mL = min(L, _L)    # abs match: dderived rep value is magnitude-proportional, as is d?
     dDx = Dx - _Dx; mDx = min(Dx, _Dx)
     dDy = Dy - _Dy; mDy = min(Dy, _Dy)
 
-    Pd = ddX + dL + dI + dDx + dDy  # -> signed dPP, intra_PP if abs PD?  !dX: ddX / dS correlation?
-    Pm = mX +  mL + vI + mDx + mDy  # -> compl. vPP, rdn: stronger Pd|Pm rolp?
+    Pd = ddX + dL + dI + dDx + dDy  #-> signed dPP, intra_PP if abs PD?  !dX: ddX / dS correlation?
+    Pm = mX +  mL + vI + mDx + mDy  #-> compl. vPP, rdn: stronger Pd|Pm rolp?
 
-    # variation only: multi-par ~ multi-dir, but correlated vs anti-correlated, except for dDs?
-    # comb rep value = PI | Pm + Pd?
+    # or variation only: multi-par ~ dir, but correlated dI, dX, dDx (der), dL (int);  also compared dDy & ddX?
+    # vs anti-correlated multi-dir ds; comb rep value = PI | Pm + Pd?
 
     if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
