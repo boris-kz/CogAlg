@@ -239,8 +239,8 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[1].append(nt_blob(I=I,
                                 Derts=[(G, Dy, Dx, L, Ly)],  # sub_blob_ is appended per layer together with summed
                                 sign=s,
-                                alt=None,
-                                rng = None,                 # for comp_range per blob
+                                alt=-1,
+                                rng = 1,                 # for comp_range per blob
                                 box=(y0, yn, x0, xn),       # boundary box
                                 map=map,                    # blob boolean map, to compute overlap
                                 root_blob=None,
