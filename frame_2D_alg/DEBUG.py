@@ -22,10 +22,10 @@ def map_blobs(frame, original=False):
     frame_img = empty_map(box)
 
     for i, blob in enumerate(blob_):
-        boxs = blob.box
+        boxes = blob.box
         blob_map = map_blob(blob, original)
 
-        over_draw(frame_img, blob_map, boxs, box)
+        over_draw(frame_img, blob_map, boxes, box)
 
     return frame_img
     # ---------- map_blobs() end ----------------------------------------------------------------------------------------
@@ -43,11 +43,11 @@ def map_blob(blob, original=False):
         x0s = min([P[1] for P in seg[2]])
         xns = max([P[1] + P[-2] for P in seg[2]])
 
-        boxs = (y0s, yns, x0s, xns)
+        boxes = (y0s, yns, x0s, xns)
 
-        seg_map = map_segment(seg, boxs, original)
+        seg_map = map_segment(seg, boxes, original)
 
-        over_draw(blob_img, seg_map, boxs, blob.box)
+        over_draw(blob_img, seg_map, boxes, blob.box)
 
     return blob_img
     # ---------- map_blob() end -----------------------------------------------------------------------------------------
@@ -77,10 +77,10 @@ def map_segment(seg, box, original=False):
 
     # ---------- map_segment() end --------------------------------------------------------------------------------------
 
-def over_draw(map, sub_map, boxs, box = (0, 0, 0, 0)):
+def over_draw(map, sub_map, boxes, box = (0, 0, 0, 0)):
     " over-write a slice of an image "
     y0, yn, x0, xn = box
-    y0s, yns, x0s, xns = boxs
+    y0s, yns, x0s, xns = boxes
     y0, yn, x0, xn = y0s - y0, yns - y0, x0s - x0, xns - x0
     map[y0:yn, x0:xn][sub_map != opacity_val] = sub_map[sub_map != opacity_val]
     return map
