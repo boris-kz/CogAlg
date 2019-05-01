@@ -1,6 +1,8 @@
 from scipy import misc
 import numpy as np
 
+opacity_val = 127
+
 def draw(path, image):
     " output into image file "
 
@@ -12,18 +14,18 @@ def map_blobs(frame, original=False):
 
     if type(frame) == list:
         blob_, (height, width) = frame[-2:]
-        y0, yn, x0, xn = 0, height, 0, width
+        box = 0, height, 0, width
     else:
         blob_ = frame.Derts[-1][-1]      # sub_blob_
-        y0, yn, x0, xn = frame.box
+        box = frame.box
 
-    frame_img = empty_map((y0, yn, x0, xn))
+    frame_img = empty_map(box)
 
     for i, blob in enumerate(blob_):
-        y0s, yns, x0s, xns = blob.box
+        boxs = blob.box
         blob_map = map_blob(blob, original)
 
-        over_draw(frame_img, blob_map, (y0s - y0, yns - y0, x0s - x0, xns - x0))
+        over_draw(frame_img, blob_map, boxs, box)
 
     return frame_img
     # ---------- map_blobs() end ----------------------------------------------------------------------------------------
@@ -33,19 +35,19 @@ def map_blob(blob, original=False):
 
     blob_img = empty_map(blob.box)
 
-    y0, yn, x0, xn = blob.box
-
     for seg in blob.seg_:
 
 
         y0s = seg[0]
-        yns = y0s + seg[1][0]
+        yns = y0s + seg[1][-1]
         x0s = min([P[1] for P in seg[2]])
-        xns = max([P[1] + P[2] for P in seg[2]])
+        xns = max([P[1] + P[-2] for P in seg[2]])
 
-        seg_map = map_segment(seg, (y0s, yns, x0s, xns), original)
+        boxs = (y0s, yns, x0s, xns)
 
-        over_draw(blob_img, seg_map, (y0s - y0, yns - y0, x0s - x0, xns - x0))
+        seg_map = map_segment(seg, boxs, original)
+
+        over_draw(blob_img, seg_map, boxs, blob.box)
 
     return blob_img
     # ---------- map_blob() end -----------------------------------------------------------------------------------------
@@ -58,23 +60,28 @@ def map_segment(seg, box, original=False):
     y0, yn, x0, xn = box
 
     for y, P in enumerate(seg[2], start= seg[0] - y0):
-        x0P, L = P[1:3]
+        x0P= P[1]
         x0P -= x0
         derts_ = P[-1]
         for x, derts in enumerate(derts_, start=x0P):
             if original:
                 seg_img[y, x] = derts[0][0]
             else:
-                seg_img[y, x] = 255 if P[0] else 0
+                if P[0]:
+                    seg_img[y, x] = 255
+                else:
+                    seg_img[y, x] = 0
 
 
     return seg_img
 
     # ---------- map_segment() end --------------------------------------------------------------------------------------
 
-def over_draw(map, sub_map, box, opacity_val = 127):
+def over_draw(map, sub_map, boxs, box = (0, 0, 0, 0)):
     " over-write a slice of an image "
     y0, yn, x0, xn = box
+    y0s, yns, x0s, xns = boxs
+    y0, yn, x0, xn = y0s - y0, yns - y0, x0s - x0, xns - x0
     map[y0:yn, x0:xn][sub_map != opacity_val] = sub_map[sub_map != opacity_val]
     return map
     # ---------- over_draw() end ----------------------------------------------------------------------------------------
@@ -89,4 +96,4 @@ def empty_map(shape):
         height = yn - y0
         width = xn - x0
 
-    return np.array([[127] * width] * height)
+    return np.array([[opacity_val] * width] * height)
