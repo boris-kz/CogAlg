@@ -227,15 +227,14 @@ def form_blob(term_seg, frame):  # terminated segment is merged in continued or 
                 map[y - y0, x0P - x0:xnP - x0] = True
 
         frame[0][0] += I
+        frame[0][3] += G
         frame[0][1] += Dy
         frame[0][2] += Dx
-        frame[0][3] += G
-
         frame[1].append(nt_blob(I=I,  # top Dert
-                                Derts=[(Ly, L, G, Dy, Dx, [])],  #[]: nested sub_blob_, depth = Derts[index]
+                                Derts=[(G, Dy, Dx, L, Ly, [])],  #[]: nested sub_blob_, depth = Derts[index]
                                 sign=s,
-                                alt= None,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
-                                rng= None,  # for comp_range only, i_dert = -rng*2 + inp
+                                alt= None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
+                                rng= 1,  # for comp_range only, i_dert = alt - (rng-1) *2
                                 box= (y0, yn, x0, xn),  # boundary box
                                 map= map,   # blob boolean map, to compute overlap
                                 root_blob=[blob],
@@ -256,7 +255,7 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-nt_blob = namedtuple('blob', 'Derts I sign alt rng map box root_blob seg_')
+nt_blob = namedtuple('blob', 'I Derts sign alt rng map box root_blob seg_')
 frame_of_blobs = image_to_blobs(image)
 
 from intra_blob import intra_blob_hypot      # not yet functional, comment-out to run

@@ -36,6 +36,6 @@ Khanh Nguyen, $2700, a lead programmer of this project starting December 2018.
 
 Stephan Verbeeck, $1000 for insistence on using gradient vs. dx and dy, as well as his perspective on colors and contour tracing, January
 
-Khanh Nguyen, $4000, a lead programmer of this project, January-March
+Khanh Nguyen, $5500, a lead programmer of this project, January-April
 
-Todor Arnaudov, $500, regular contributor, March
+Todor Arnaudov, $1100, regular contributor, March-April

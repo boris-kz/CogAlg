@@ -27,7 +27,7 @@ from intra_comp_debug import intra_comp
         
         sign, # lower Derts are sign-mixed at depth > 0, alt-mixed at depth > 1, rng-mixed at depth > 2:
         alt,  # alternating layer index: -1 for ga or -2 for g 
-        rng,  # and as comp_range index: i_dert = derts[-(rng-1)*2 + alt]
+        rng,  # and as comp_range index: i_dert = derts[alt -(rng-1)*2]
         
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn
@@ -65,7 +65,7 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per 
 
     return frame
 
-def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_branch) selection per branch per sub_blob
+def intra_blob(root_blob, Ave_blob, Ave):  # recursive intra_comp(comp_branch) selection per branch per sub_blob
 
     Ave_blob *= rave  # estimated cost of redundant representations per blob
     Ave + ave         # estimated cost of redundant representations per dert
@@ -74,7 +74,7 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
         if blob.Derts[-1][0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
 
             blob.alt = None  # no i comp, angle calc & comp (no a eval), no intra_blob call from comp_angle
-            blob.rng = None
+            blob.rng = root_blob.rng
             Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave)  # Ave_blob return from comp_angle only
 
             Ave_blob *= rave   # estimated cost per next sub_blob
@@ -90,9 +90,9 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
                 val_gr = G + Ga  # value of forming extended-range gradient deviation sub_blobs
 
                 vals = sorted((
-                    (val_ga, Ave_blob,   comp_gradient, -2, None),  # alt = -2, no rng accumulation
-                    (val_gg, Ave_blob*2, comp_gradient, -1, None),
-                    (val_gr, Ave_blob*2, comp_range, blob.alt, rng+1)  # alt is from initial comp_grad
+                    (val_ga, Ave_blob,   comp_gradient, -2, 1),  # alt = -2, no rng accumulation
+                    (val_gg, Ave_blob*2, comp_gradient, -1, 1),
+                    (val_gr, Ave_blob*2, comp_range, blob.alt, blob.rng+1)  # alt is from initial comp_grad
                     ), key=lambda val: val[0], reverse=True)
 
                 for val, threshold, comp_branch, alt, rng in vals:
@@ -102,7 +102,7 @@ def intra_blob(root_blob, Ave_blob, Ave, rng):  # recursive intra_comp(comp_bran
                         ablob.rng = rng
                         rdn += 1
                         intra_comp(ablob, comp_branch, Ave_blob + ave_root_blob * rdn, Ave + ave * rdn)
-                        # root_blob.Derts += rdn Derts, derts += dert, intra_blob call eval
+                        # root_blob.Derts[-1] += Derts, derts += dert, intra_blob call eval
                     else:
                         break
     ''' 

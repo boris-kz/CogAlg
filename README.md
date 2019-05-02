@@ -3,8 +3,7 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-Intelligence is ability to predict and plan (self-predict), which can only be done by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test.
-But there is no general and at the same time constructive definition of either pattern or recognition (quantified similarity) So, I came up with my own definitions, which directly translate into algorithm proposed below.
+General intelligence is a cognitive ability, which can be reduced to prediction and planning (self-prediction). And the only way to predict is by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test. But there is no general and constructive definition of either pattern or recognition (quantified similarity). So, I came up with my own definitions, which directly translate into algorithm proposed below.
 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering. Current code is explained in  [WIKI](https://github.com/boris-kz/CogAlg/wiki).

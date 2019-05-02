@@ -2,8 +2,8 @@ import numpy as np
 from math import hypot
 from collections import deque, namedtuple
 
-nt_blob = namedtuple('blob', 'Derts sign inp rng sign map box root_blob seg_')
-ave = 5
+nt_blob = namedtuple('blob', 'I Derts sign alt rng box map root_blob seg_')
+ave = 20
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -17,7 +17,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    blob.Derts.append([0,0,0,0,0,0,[]])  # init for form_blob
+    blob.Derts.append([0,0,0,0,0,0,[]])  # G, Dy, Dx, Ly, L, sub_blob_ init for form_blob
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
     i = 0   # segment index
@@ -250,15 +250,14 @@ def form_blob(term_seg, root_blob):  # merge terminated segment into continued o
         Dyr += Dy
         Dxr += Dx
         Gr += G
-        sub_blob_.append(nt_blob(Derts=[[(Ly, L, I, N, Dy, Dx, G, [])]],
-                                 # last element is sub_blob_, nested to depth = Derts[index]
-                                 # top Dert only:
-                                 inp=0,
-                                 rng=1,      # for comp_range per blob
+        sub_blob_.append(nt_blob(I=I,  # top Dert
+                                 Derts=[(G, Dy, Dx, Ly, L, [])],  #[]: nested sub_blob_, depth = Derts[index]
                                  sign=s,
-                                 box=(y0, yn, x0, xn),  # boundary box
-                                 map=map,  # blob boolean map, to compute overlap
-                                 root_blob=None,
+                                 alt= None,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
+                                 rng= 1,  # for comp_range only, i_dert = -(rng-1)*2 + alt
+                                 box= (y0, yn, x0, xn),  # boundary box
+                                 map= map,   # blob boolean map, to compute overlap
+                                 root_blob=[blob],
                                  seg_=seg_,
                                  ) )
         root_blob.Derts[-1] = Lyr, Lr, Ir, Nr, Dyr, Dxr, Gr, sub_blob_
