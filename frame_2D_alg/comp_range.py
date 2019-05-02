@@ -77,10 +77,10 @@ def vertical_comp(derts__, buff___, rng, comp_indices):    # vertical and diagon
             x_coef = xd / hyp       # to decompose d into dx, replace with look-up table?
 
             # upper-left comparisons:
-            scan_diag_slice_(_derts__, derts__, i_index=(i_dert, 0), shift = -xd, coefs = (y_coef, x_coef))
+            scan_slice_diag(_derts__, derts__, i_index=(-rng, 0), shift = -xd, coefs = (y_coef, x_coef))
 
             # upper-right comparisons:
-            scan_diag_slice_(_derts__, derts__, i_index=(i_dert, 0), shift = xd, coefs = (y_coef, -x_coef))
+            scan_slice_diag(_derts__, derts__, i_index=(-rng, 0), shift = xd, coefs = (y_coef, -x_coef))
 
         else:
             scan_slice_(_derts__, derts__, i_index=(i_dert, 0))  # pure vertical: no shift, fixed coef
@@ -99,22 +99,22 @@ def vertical_comp(derts__, buff___, rng, comp_indices):    # vertical and diagon
 def scan_slice_(_derts__, derts__, i_index, fangle=False):  # unit of vertical comp
     i_dert, i_param = i_index   # two-level index of compared parameter in derts
 
-    index = 0     # index of _derts_
-    _x0, _derts_ = _derts__[index]
+    i_derts_ = 0     # index of _derts_
+    _x0, _derts_ = _derts__[i_derts_]
     _xn = _x0 + len(_derts_)
 
     for x0, derts_ in derts__:  # iterate through derts__
         xn = x0 + len(derts_)
 
-        while index < len(_derts__):
+        while i_derts_ < len(_derts__):
 
-            while index < len(_derts__) and _xn <= x0:  # while no overlap
-                index += 1
-                if index < len(_derts__):
-                    _x0, _derts_ = _derts__[index]
+            while i_derts_ < len(_derts__) and _xn <= x0:  # while no overlap
+                i_derts_ += 1
+                if i_derts_ < len(_derts__):
+                    _x0, _derts_ = _derts__[i_derts_]
                     _xn = _x0 + len(_derts_)
 
-            if index < len(_derts__) and  _x0 < xn:   # if overlap, compare slice:
+            if i_derts_ < len(_derts__) and  _x0 < xn:   # if overlap, compare slice:
 
                 olp_x0 = max(x0, _x0)   # left overlap
                 olp_xn = min(xn, _xn)   # right overlap
@@ -154,20 +154,20 @@ def scan_slice_(_derts__, derts__, i_index, fangle=False):  # unit of vertical c
             if _xn > xn:  # save _derts_ for next dert
                 break
 
-            index += 1  # next _derts
-            if index < len(_derts__):
-                _x0, _derts_ = _derts__[index]
+            i_derts_ += 1  # next _derts_
+            if i_derts_ < len(_derts__):
+                _x0, _derts_ = _derts__[i_derts_]
                 _xn = _x0 + len(_derts_)
 
     # ---------- scan_slice_() end ------------------------------------------------------------------------------------------
 
-def scan_diag_slice_(_derts__, derts__, i_index, shift, coefs):  # unit of diagonal comp
+def scan_slice_diag(_derts__, derts__, i_index, shift, coefs, fangle=False):  # unit of diagonal comp
 
     y_coef, x_coef = coefs      # to decompose d
     i_dert, i_param = i_index   # two-level index of compared parameter in derts
 
-    index = 0   # index of _derts_
-    _x0, _derts_ = _derts__[index]
+    i_derts_ = 0  # index of _derts_
+    _x0, _derts_ = _derts__[i_derts_]
 
     _x0 += shift  # for diagonal comparisons only
     _xn = _x0 + len(_derts_)
@@ -175,16 +175,16 @@ def scan_diag_slice_(_derts__, derts__, i_index, shift, coefs):  # unit of diago
     for x0, derts_ in derts__:  # iterate through derts__
         xn = x0 + len(derts_)
 
-        while index < len(_derts__):
+        while i_derts_ < len(_derts__):
 
-            while index < len(_derts__) and _xn <= x0:  # while no overlap
-                index += 1
-                if index < len(_derts__):
-                    _x0, _derts_ = _derts__[index]
+            while i_derts_ < len(_derts__) and _xn <= x0:  # while no overlap
+                i_derts_ += 1
+                if i_derts_ < len(_derts__):
+                    _x0, _derts_ = _derts__[i_derts_]
                     _x0 += shift  # for diagonal comparisons only
                     _xn = _x0 + len(_derts_)
 
-            if index < len(_derts__) and _x0 < xn:  # if overlap, compare slice:
+            if i_derts_ < len(_derts__) and _x0 < xn:  # if overlap, compare slice:
 
                 olp_x0 = max(x0, _x0)  # left overlap
                 olp_xn = min(xn, _xn)  # right overlap
@@ -225,13 +225,10 @@ def scan_diag_slice_(_derts__, derts__, i_index, shift, coefs):  # unit of diago
             if _xn > xn:  # save _derts_ for next dert
                 break
 
-            index += 1  # next _derts
-            if index < len(_derts__):
-                _x0, _derts_ = _derts__[index]
-                _x0 += shift  # for diagonal comparisons only
-                _xn = _x0 + len(_derts_)
+                i_derts_ += 1  # next _derts
+                if i_derts_ < len(_derts__):
+                    _x0, _derts_ = _derts__[i_derts_]
+                    _x0 += shift  # for diagonal comparisons only
+                    _xn = _x0 + len(_derts_)
 
-    # ---------- scan_diag_slice_() end -------------------------------------------------------------------------------------
-
-def subtraction(i1, i2):    # return difference between i1 and i2
-    return i2 - i1
+    # ---------- scan_slice_diag() end -------------------------------------------------------------------------------------
