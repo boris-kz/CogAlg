@@ -7,16 +7,16 @@ from comp_range import scan_slice_
 # -vertical_comp()
 # ***********************************************************************************************************************
 
-def comp_angle(P_, buff___):    # compare g in blob ( dert__ in P_ line ( dert_ in P
+def comp_gradient(P_, buff___, i_dert):    # compare g in blob ( dert__ in P_ line ( dert_ in P
 
-    derts__ = lateral_comp(P_)                     # horizontal comparison (return current line)
-    _derts__ = vertical_comp(derts__, buff___)     # vertical and diagonal comparison (return last line in buff___)
+    derts__ = lateral_comp(P_, i_dert)                     # horizontal comparison (return current line)
+    _derts__ = vertical_comp(derts__, buff___, i_dert)     # vertical and diagonal comparison (return last line in buff___)
 
     return _derts__
 
     # ---------- comp_gradient() end ----------------------------------------------------------------------------------------
 
-def lateral_comp(P_):  # horizontal comparison
+def lateral_comp(P_, i_dert):  # horizontal comparison
 
     derts__ = []
 
@@ -25,12 +25,12 @@ def lateral_comp(P_):  # horizontal comparison
         derts_ = P[-1]
 
         _derts = derts_[0]
-        _g = _derts[0][-1]
-        _ncomp, _dx = 0, 0                              # init ncomp, dx buffers
+        _g = _derts[i_dert][-1]     # take g from indicated dert
+        _ncomp, _dx = 0, 0          # init ncomp, dx buffers
 
         for derts in derts_[1:]:
             # compute angle:
-            g = derts[0][-1]
+            g = derts[i_dert][-1]   # take g from indicated dert
 
             d = g - _g      # lateral comparison
 
@@ -44,22 +44,22 @@ def lateral_comp(P_):  # horizontal comparison
             _g, _ncomp, _dx = g, 1, dx      # buffer last ncomp and dx
 
 
-        _derts.append((_ncomp, 0, _dx))  # return last one
+        _derts.append((_ncomp, 0, _dx))     # return last one
 
-        derts__.append((x0, derts_))    # new line of P derts_ appended with new_derts_
+        derts__.append((x0, derts_))        # new line of P derts_ appended with new_derts_
 
     return derts__
 
     # ---------- lateral_comp() end -----------------------------------------------------------------------------------------
 
-def vertical_comp(derts__, buff___):    # vertical comparison
+def vertical_comp(derts__, buff___, i_dert):    # vertical comparison
 
     if not buff___:     # buff___ is empty on the first line
         _derts__ = []
     else:               # not the first line
         _derts__ = buff___[0]
 
-        scan_slice_(_derts__, derts__, i_index=(0, -1))
+        scan_slice_(_derts__, derts__, i_index=(i_dert, -1))
 
     buff___.appendleft(derts__)
 

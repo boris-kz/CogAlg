@@ -9,16 +9,16 @@ angle_coef = 128 / pi   # to scale angle into (-128, 128)
 # -vertical_comp()
 # ***********************************************************************************************************************
 
-def comp_angle(P_, buff___):    # compute, compare angle
+def comp_angle(P_, buff___, i_dert):    # compute, compare angle
 
-    derts__ = lateral_comp(P_)                     # horizontal comparison (return current line)
-    _derts__ = vertical_comp(derts__, buff___)     # vertical and diagonal comparison (return last line in buff___)
+    derts__ = lateral_comp(P_, i_dert)              # horizontal comparison (return current line)
+    _derts__ = vertical_comp(derts__, buff___)      # vertical and diagonal comparison (return last line in buff___)
 
     return _derts__
 
     # ---------- comp_angle() end -------------------------------------------------------------------------------------------
 
-def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
+def lateral_comp(P_, i_dert):  # horizontal comparison between pixels at distance == rng
 
     derts__ = []
 
@@ -27,13 +27,13 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
         derts_ = P[-1]
 
         _derts = derts_[0]
-        idx, idy = _derts[0][-3:-1]
+        idx, idy = _derts[i_dert][-3:-1]                # take dy, dx from pre-indicated dert
         _a = int(atan2(idy, idx) * angle_coef) + 128    # angle: 0 -> 255
         _ncomp, _dx = 0, 0                              # init ncomp, dx buffers
 
         for derts in derts_[1:]:
             # compute angle:
-            idx, idy = derts[0][-3:-1]
+            idx, idy = derts[i_dert][-3:-1]             # take dy, dx from pre-indicated dert
             a = int(atan2(idy, idx) * angle_coef) + 128     # angle: 0 -> 255
 
             d = a - _a      # lateral comparison
@@ -67,7 +67,7 @@ def vertical_comp(derts__, buff___):    # vertical comparison
     else:               # not the first line
         _derts__ = buff___[0]
 
-        scan_slice_(_derts__, derts__, i_index=(-1, 0), fangle=True)
+        scan_slice_(_derts__, derts__, i_index=(-1, 0), fangle=True)    # unlike other branches, i_dert in comp_angle is always -1
 
     buff___.appendleft(derts__)
 
