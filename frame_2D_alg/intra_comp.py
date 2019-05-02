@@ -110,7 +110,7 @@ def compute_g(derts__, ave):     # compute g
 
     for x0, derts_ in derts__:
         for derts in derts_:
-            dy, dx, ncomp = derts[-1][-3:]
+            dy, dx, ncomp = derts[-1]
 
             g = int(hypot(dx, dy)) - ncomp * ave
             derts[-1] = (g,) + derts[-1]
