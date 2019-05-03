@@ -11,30 +11,105 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g without g compute,
-    val_PP_ = 
-    L + I + |Dx| + |Dy|  # a superset of Pm, no abs_Dx, abs_Dy for comp_dert eval: high rdn?  
-    * L / Ly / Ly        # elongation -> Pm incr? ~ box elongation: (xn - x0) / (yn - y0)? 
-    * Dy / Dx            # lateral variation bias = vertical match bias
-    * Ave / Ga           # angle match rate
+    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g without g compute, 
+    select by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
+    intra_comp(dx_g) eval by val_PP_ = 
+    
+    L + I + |Dx| + |Dy|  # sum is a superset of Pm, no abs_Dx, abs_Dy for comp_dert eval: high rdn?  
+    * max( ave_Lx, Ly) / min(ave_Lx, Ly)   # elongation increases estimated Pm, as do D bias and angle match:  
+    * max( Dy, Dx) / min( Dy, Dx)          # lateral variation bias = vertical match bias
+    * Ave_blob / Ga                        # angle match rate
+    
+    eval per blob, too expensive for seg? 
 '''
 ave = 20
 div_ave = 200
 flip_ave = 1000
 
+
+def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
+
+    s, x0, L, I, G, Dx, Dy, derts_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # + params from higher branches, S if min n_params?
+
+    xn = x0 + L-1;  _xn = _x0 + _L-1
+    offset = abs(x0 - _x0) + abs(xn - _xn)
+    overlap = min(xn, _xn) - max(x0, _x0)
+
+    mX = overlap / offset  # mX is L-normalized, individual x m|d is binary
+    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, vX = mX - ave_mX -> P inclusion, or distant-P comp only?
+
+    ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
+    DdX += ddX  # ddX -> Pd, mag correlation: dX -> I,L, ddX -> dI,dL, neutral to Dx: mixed with anti-correlated Dy?
+
+    if orthog:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
+
+        hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
+        L /= hyp  # est orthogonal slice is reduced P, for each param:
+        I /= hyp
+        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
+        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
+
+        # G = hypot(Dy, Dx): comp in 2D structures only?
+        # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
+
+    dI = I - _I;  vI = dI - ave * L  # not dderived: vI is a deviation, alone is not significant, comp with Derts[1]:
+    dL = L - _L;  mL = min(L, _L)    # abs match: dderived rep value is magnitude-proportional, as is d?
+    dDx = Dx - _Dx; mDx = min(Dx, _Dx)
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # dDx- anti-correlated if orthog?
+
+    Pd = ddX + dL + dI + dDx + dDy  #-> signed dPP, correlation: dX -> I,L,oDy,!oDx, ddX -> dI,dL,odDy,!odDx?
+    Pm = mX  + dL + vI + mDx + mDy  #-> complem vPP, rdn: stronger Pd|Pm rolp?
+
+    # or variation only: multi-par ~ dir, but correlated inp,intg params? inp: dI, dX, ddX, intg: dL, diff: dDx, dDy?
+    # vs anti-correlated multi-dir ds; comb rep value = PI | Pm + Pd?  intra_PP if abs PD?
+
+    if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
+
+        rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+        nI = I * rL; ndI = nI - _I; nmI = min(nI, _I)  # vs. nI = dI * nrL or aI = I / L?
+
+        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)
+        nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
+
+        Pnm = mX + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
+
+        if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
+        else: mPP_rdn = 1; nmPP_rdn = 0
+
+        Pnd = ddX + ndI + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
+
+        if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
+        else: dPP_rdn = 1; ndPP_rdn = 0
+
+        div_f = 1
+        nvars = Pnm, nmI, nmDx, nmDy, mPP_rdn, nmPP_rdn, \
+            Pnd, ndI, ndDx, ndDy, dPP_rdn, ndPP_rdn
+
+    else:
+        div_f = 0  # DIV comp flag
+        nvars = 0  # DIV + norm derivatives
+
+    P_ders = Pm, Pd, mx, xd, mL, dL, mI, dI, mDx, dDx, mDy, dDy, div_f, nvars
+
+    vs = 1 if Pm > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
+    ds = 1 if Pd > 0 else 0
+
+    return (P, P_ders), vs, ds
+
+
 def comp_P_(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursive?
 
     # differential Pm -> vPP: dderived params magnitude is the only proxy to predictive value
 
-    G, Dy, Dx, N, L, Ly, sub_ = blob.Dert[0]
+    G, Dy, Dx, N, L, Ly, sub_ = blob.Dert[0]  # G will be redefined from Dx, Dy, or only per blob for 2D comp?
     max_y, min_y, max_x, min_x = blob.box
     DdX = 0
 
     if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs(Dx), abs(Dy)) / min(abs(Dx), abs(Dy))) > flip_ave:
-        flip(blob)  # vertical blob rescan -> comp_Px_
-
-    # flip if PM gain projected by D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
-    # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
+        flip(blob)
+        # vertical blob rescan -> comp_Px_ if PM gain: D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
+        # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
 
     if xD / Ly * val_PP_ > Ave: ort = 1  # estimate params of Ps orthogonal to long axis, seg-wide for same-syntax comp_P
     else: ort = 0  # to max ave ders, or if xDd to min Pd?
@@ -79,98 +154,11 @@ def comp_P_(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D mPP
     return blob, CmPP_, mPP_, CdPP_, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 
-def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
-
-    s, x0, L, I, G, Dx, Dy, derts_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
-    _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # + params from higher branches, S if min n_params?
-
-    xn = x0 + L-1;  _xn = _x0 + _L-1
-    offset = abs(x0 - _x0) + abs(xn - _xn)
-    overlap = min(xn, _xn) - max(x0, _x0)
-
-    mX = overlap / offset  # mX is L-normalized, individual x m|d is binary
-    dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, vX = mX - ave_mX -> P inclusion, or distant-P comp only?
-
-    ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
-    DdX += ddX  # ddX -> Pd, mag correlation: dX -> I,L, ddX -> dI,dL, neutral to Dx: mixed with anti-correlated Dy?
-
-    if orthog:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
-
-        hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
-        L /= hyp  # est orthogonal slice is reduced P, for each param:
-        I /= hyp
-        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
-        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
-
-        # G = hypot(Dy, Dx): comp in 2D structures only?
-        # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
-
-    dI = I - _I;  vI = dI - ave * L  # not dderived: vI is a deviation, alone is not significant, comp with Derts[1]:
-    dL = L - _L;  mL = min(L, _L)    # abs match: dderived rep value is magnitude-proportional, as is d?
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # dDx- anti-correlated if orthog?
-
-    Pd = ddX + dL + dI + dDx + dDy  #-> signed dPP, correlation: dX -> I,L,oDy,!oDx, ddX -> dI,dL,odDy,!odDx?
-    Pm = mX  + dL + vI + mDx + mDy  #-> complem vPP, rdn: stronger Pd|Pm rolp?
-
-    # or variation only: multi-par ~ dir, but correlated inp,intg params? inp: dI, dX, ddX, intg: dL, diff: dDx, dDy?
-    # vs anti-correlated multi-dir ds; comb rep value = PI | Pm + Pd?  intra_PP if abs PD?
-
-    if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
-
-        rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
-        nI = I * rL; ndI = nI - _I; nmI = min(nI, _I)  # vs. nI = dI * nrL?
-
-        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)
-        nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
-
-        Pnm = mX + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
-
-        if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
-        else: mPP_rdn = 1; nmPP_rdn = 0
-
-        Pnd = ddX + ndI + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
-
-        if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
-        else: dPP_rdn = 1; ndPP_rdn = 0
-
-        div_f = 1
-        nvars = Pnm, nmI, nmDx, nmDy, mPP_rdn, nmPP_rdn, \
-            Pnd, ndI, ndDx, ndDy, dPP_rdn, ndPP_rdn
-
-    else:
-        div_f = 0  # DIV comp flag
-        nvars = 0  # DIV + norm derivatives
-
-    P_ders = Pm, Pd, mx, xd, mL, dL, mI, dI, mDx, dDx, mDy, dDy, div_f, nvars
-
-    vs = 1 if Pm > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
-    ds = 1 if Pd > 0 else 0
-
-    return (P, P_ders), vs, ds
-
 '''
-    primary Dx comp: 1D variation, with stable direction in oriented blob,
-    G redefine by Dx, Dy for alt comp, or only per blob for 2D comp?
+    selection by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
+    G redefined by Dx, Dy for alt comp, or only per blob for 2D comp?
 
-    if abs(Dx) + abs(Dy) > Ave: # rough g_P, vs. lower-struct deviation vG = abs((abs_Dx - Dx)) + abs((abs_Dy - Dy))
-    g_P = math.hypot(Dy, Dx)  # P | seg | blob - wide variation params are G and Ga:
-    a_P = math.atan2(Dy, Dx)  # ~ cost / gain for g and a? 
-
-    recursive 1D alg -> nested Ps?
-    
-    no comp_q_(q_, _q_, yP_): vert comp by ycomp, ortho P by orientation?
-    comp_P is not fuzzy: x, y vars are already fuzzy?
-    
-    no DIV comp(L): match is insignificant and redundant to mS, mLPs and dLPs only?:
-
-    if dL: nL = len(q_) // len(_q_)  # L match = min L mult
-    else: nL = len(_q_) // len(q_)
-    fL = len(q_) % len(_q_)  # miss = remainder 
-
-    no comp aS: m_aS * rL cost, minor cpr / nL? no DIV S: weak nS = S // _S; fS = rS - nS  
-    or aS if positive eV (not qD?) = mx + mL -ave:
-
+    aS compute if positive eV (not qD?) = mx + mL -ave? :
     aI = I / L; dI = aI - _aI; mI = min(aI, _aI)  
     aD = D / L; dD = aD - _aD; mD = min(aD, _aD)  
     aM = M / L; dM = aM - _aM; mM = min(aM, _aM)

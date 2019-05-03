@@ -2,7 +2,7 @@ from math import hypot
 from comp_angle import comp_angle
 from comp_gradient import comp_gradient
 from comp_range import comp_range
-from intra_comp_debug import intra_comp
+from intra_comp import intra_comp
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
