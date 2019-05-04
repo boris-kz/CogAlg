@@ -8,8 +8,8 @@ from comp_range import scan_slice_
 
 def comp_gradient(P_, buff___, alt):    # compare g in blob ( dert__ in P_ line ( dert_ in P
 
-    derts__ = lateral_comp(P_)                          # horizontal comparison (return current line)
-    _derts__ = vertical_comp(derts__, buff___)          # vertical and diagonal comparison (return last line in buff___)
+    derts__ = lateral_comp(P_)                            # horizontal comparison (return current line)
+    _derts__ = vertical_comp(derts__, buff___, i_dert=0)  # vertical and diagonal comparison (return last line in buff___)
 
     return _derts__
 
@@ -42,8 +42,7 @@ def lateral_comp(P_):  # horizontal comparison
 
             _derts = derts                  # buffer last derts
             _g, _dx, _ncomp = g, dx, 1      # buffer last ncomp and dx
-
-            new_derts_.append(_derts + [(0, _dx, _ncomp)])     # return last one
+            new_derts_.append(_derts + [(0, _dx, _ncomp)])    # return last derts
 
         derts__.append((x0, new_derts_))    # new line of P derts_ appended with new_derts_
 
@@ -57,7 +56,6 @@ def vertical_comp(derts__, buff___, i_dert):    # vertical comparison
         _derts__ = []
     else:               # not the first line
         _derts__ = buff___[0]
-
         scan_slice_(_derts__, derts__, i_index=(i_dert, -1))
 
     buff___.appendleft(derts__)
