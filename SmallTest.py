@@ -1,5 +1,4 @@
-import sys
+def ne(x):
+    return (~x + 1) & 255
 
-x = 1.1
-
-print(sys.getsizeof(x), x)
+print(1 << 8)
