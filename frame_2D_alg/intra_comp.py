@@ -28,7 +28,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave):
     elif comp_branch == hypot_g:
         rng = 0
         alt = -1
-    else:       # if comp gradient or or comp_angle
+    else:       # if comp gradient or comp_angle
         rng = 1
         alt = -1 if comp_branch == comp_gradient else -2
 

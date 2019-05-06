@@ -3,7 +3,7 @@ CogAlg
 
 Full introduction: www.cognitivealgorithm.info
 
-General intelligence is a cognitive ability, which can be reduced to prediction and planning (self-prediction). And the only way to predict is by discovering and projecting patterns. This perspective is well established: pattern recognition is a core of any IQ test. But there is no general and constructive definition of either pattern or recognition (quantified similarity). So, I came up with my own definitions, which directly translate into algorithm proposed below.
+Intelligence is a general cognitive ability, ultimately instrumental for prediction and planning: self-prediction. And the only way to predict is by discovering and projecting patterns. This perspective is well established, pattern recognition is a core of any IQ test. But there is no general and constructive definition of pattern or recognition (quantified similarity). I define pattern as a span of inputs or lower patterns with above-average consecutive match, and design algorithm to search for above-average incrementally complex patterns.
 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
 Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock, still work-in-progress, and depend on layers of CNN. Neither CNN nor CapsNet is theoretically derived. I outline my approach below, then compare it to ANN, biological NN, CapsNet and clustering. Current code is explained in  [WIKI](https://github.com/boris-kz/CogAlg/wiki).
@@ -47,48 +47,25 @@ Such raw inputs have modality-specific properties and comparison should be adjus
 
 
 
-### Quantifying match and miss between variables
-
-
-
-The purpose is prediction, and predictive value is usually defined as [compressibility](https://en.wikipedia.org/wiki/Algorithmic_information_theory). Which is perfectly fine, but existing methods only compute compression per sequence of inputs. To enable more incremental selection and scalable search, I quantify partial match between atomic inputs, vs. binary same | different choice for inputs within sequences. This is similar to the way Bayesian inference improved on classical logic, by quantifying probability vs. binary true | false values.
-
-I define match as a complementary of miss. That means match is potential compression of larger comparand’s magnitude by replacing it with its miss (initially difference) relative to smaller comparand. Ultimate criterion is recorded magnitude, rather than bits of memory it occupies, because the former represents physical impact that we want to predict. The volume of memory used to record that magnitude depends on prior compression, which is not an objective parameter.
-
-This is tautological: smaller input is a common subset of both inputs, = sum of AND between their uncompressed (unary code) representations. Some may object that match includes the case when both inputs equal zero, but then match also equals zero. Prediction is representational equivalent of physical momentum. Ultimately, we predict some potential impact on observer, represented by input. Zero input means zero impact, which has no conservable inertia, thus no intrinsic predictive value.
-
-With incremental complexity, initial inputs have binary resolution and implicit shared coordinate (being a macro-parameter, resolution of coordinate lags that of an input). Compression of bit inputs by AND is well known as digitization: substitution of two lower 1 bits with one higher 1 bit. Resolution of coordinate (input summation span) is adjusted by feedback to form integers that are large enough to produce above-average match.
-
-Next-order compression can be achieved by comparison between consecutive integers, distinguished by binary (before | after) coordinate. Basic comparison is inverse arithmetic operation of incremental power: AND, subtraction, division, logarithm, and so on. Additive match is achieved by comparison of a higher power than that which produced comparands: comparison by AND will not further compress integers previously digitized by AND.
-
-Rather, initial comparison between integers is by subtraction, resulting difference is miss, and absolute match is a smaller input. For example, if inputs are 4 and 7, then miss is 3, and their match or common subset is 4. Difference is smaller than XOR (non-zero complementary of AND) because XOR may include opposite-sign (opposite-direction) bit pairs 0, 1 and 1, 0, which are cancelled-out by subtraction.
-
-Comparison by division forms ratio, which is a magnitude-compressed difference. This compression is explicit in long division: match is accumulated over iterative subtraction of smaller comparand from remaining difference. In other words, this is also a comparison by subtraction, but between different orders of derivation. Resulting match is smaller comparand * integer part of ratio, and miss is final reminder or fractional part of ratio.
-
-Ratio can be further compressed by converting to radix | logarithm, and so on. But computational costs may grow even faster. Thus, power of comparison should increase only for inputs sufficiently compressed by lower power: AND for bit inputs, SUB for integer inputs, DIV for pattern inputs, etc. Actual compression depends on input and on resolution of its coordinate: input | derivative summation span. We can’t control the input, so average match is adjusted via resolution of coordinate.
-
-To filter future inputs, this absolute match should be projected: recombined with co-derived miss projected for a target distance. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative predictive value pattern.
-
-Separate filters are formed for each type of compared variable. For example, brightness of original input pixels may not be very predictive, partly because almost all perceived light is reflected rather than emitted. Then its filter will increase, reducing total span (cost) of value patterns, potentially down to 1. On the other hand, if differences or ratios between pixels are more predictive than pixels themselves, then filter for forming positive difference- or ratio- value patterns will be reduced.
-
-
-
 ## Comparison to Artificial and Biological Neural Networks
 
 
 
-ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at synapses, then summed and thresholded into output. Final output also back- propagates to synapses and is combined with their last input to adjust the weights. This weight adjustment is learning. But prior summation degrades resolution of inputs, precluding any comparison between them (original inputs are recoverable, but why degrade and then spend a ton of computation restoring them).
+ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at “synapses”, then summed and thresholded into input to next hidden layer.
+Output of last hidden layer is compared to top-layer template, forming an error. That error backpropagates to train initially random weights into meaningful values by Stochastic Gradient Descent. It is a form of learning, but I see several fundamental problems with this process, hopefully resolved in my approach:
 
-This is a statistical method: inputs are summed within samples defined by initially random weights. Weighted inputs propagate through hidden layers of ANN, then are compared to top-layer template forming an error. That error then backpropagates to train weights into meaningful values by Stochastic Gradient Descent. So, this process is comparison-last, vs. my comparison-first. Which makes it too coarse to scale without supervision or task-specific reinforcement, and it gets exponentially more coarse as ANNs become deeper. And this cycle must be repeated thousands of times because intermediate summation is horribly lossy. 
+- ANN is comparison-last, vs. my comparison-first. Due to summation (loss of resolution) of weighted inputs, training process becomes exponentially more coarse with each added hidden layer. Which means that forward and feedback cycle must be repeated tens of thousands of times to achieve good results. That makes it too expensive to scale without supervision or task-specific reinforcement. Patterns produced by my comparisons are immediately meaningful, although initially tentative, and they may send feedback from every level.
 
-More basic problem is that SGD minimizes error (miss), which doesn’t directly correlate with maximizing match. Cognition is building a predictive model of environment, thus value of representations must be positive. Error is primarily negative, the value of reducing it can’t be directly combined with the value of increasing training scope. In CogAlg, compression increases representational capacity of a system. Nothing is randomized and resulting patterns are immediately meaningful, if tentative.
+- Both initial weights and sampling that feeds SGD are randomized, which is a form of directionless search. It makes sense for a zero-knowledge start, but we do have prior knowledge for any raw data in real space-time: proximity is a good predictor of similarity. Thus, search should proceed with incremental distance and input composition. Also driven by random variation are generative methods, such as RBM. I believe generative side of learning should be a feedback from perceptual feedforward, and see no justification for anything random.  
 
-Inspiration by the brain kept ANN research going for decades before they became useful. But their “neurons” are mere stick figures for real ones. Of course, most of complexity in a neuron is due to constraints of biology. Ironically, weighted summation in ANN may also be a no-longer needed compensation for such constraint: neural memory requires dedicated connections (synapses), which makes individual comparison very expensive. But not anymore, we now have dirt-cheap random-access memory.
+- SGD minimizes error: miss to some specific template, which is bounded by 0 and doesn’t directly correlate with maximizing match. For the purpose of building predictive model of environment, value of representations must be positive. But the value of reducing error is an inverse negative, it can’t be directly combined with the value of extended training. CogAlg is being designed to maximize match (compression) over all accumulated and projected input, not any cherry-picked target. That’s a direct measure of system’s predictive power.
 
-Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. 
-Another likely reason for the prevalence of summation in neurons is to reduce noise, because they often fire at random. That’s probably how they initially connect in the womb, and then temporarily maintain latent connections. But none of that is relevant for electronic circuits. 
+- I think network-centric mindset itself is a problem. Physical network or imitation thereof is only justifiable if nodes are complex and semantically isolated enough to bear the cost of connections. Such nodes are patterns: sets of co-occurring parameter values, especially “what” and “where” parameters. They should be compared as a unit, thus encapsulated and stored in local memory. This is similar to neural ensemble, but the brain has no substrate for local memory. So, it must distribute such parameters across some network, with huge associated delays and connection costs. But in computers, parallelization is just a matter of speed-up vs. efficiency. 
 
-In general, distribution of computation across physical network is only justifiable for nodes that are complex enough for the cost of connections. Simpler constructs should be in local memory, which computers have but brain doesn’t. Cognitive function is a search for patterns, so parameters that characterize patterns should be stored locally. Increasing speed by parallelized cross-comparison among patterns is a secondary matter. 
+Inspiration by the brain kept ANN research going for decades before they became useful. But their “neurons” are mere stick figures for real ones. Of course, most of complexity in a neuron is due to constraints of biology. Ironically, weighted summation in ANN may also be a no-longer needed compensation for such constraint:
+neural memory requires dedicated connections (synapses), which makes individual input comparison very expensive. But not anymore, we now have dirt-cheap random-access memory.
+
+Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. slower one-to-one comparison), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Summation also reduces noise, very important because neurons often fire at random, to initiate and maintain latent connections. But that’s irrelevant for electronic circuits.
 
 
 
@@ -128,6 +105,32 @@ My approach is a form of hierarchical clustering, but match in conventional clus
 This distinction is not apparent in modalities where signal carrier is “light” and reflected, such as visual input. There, magnitude (brightness) of input parameter or its match (compression of input magnitude) has low correlation with predictive value. This is true for most raw information sources, but match is a key higher-order parameter. That is, match of parameters that do represent predictive value (such as inverted distance), should be a criterion / metrics for higher-level clustering of patterns that contain / encapsulate them.
 
 Again, main feature of my approach is incrementally deep hierarchical syntax (encapsulated parameters) of my patterns. Which means that metrics will change with elevation: criterion of higher-level clustering will be derived from comparison of lower-level parameters between their patterns. I can’t find an analogue to this evolving hierarchical nature of both elements and metrics in any other clustering technique.
+
+
+
+## Quantifying match and miss between variables
+
+
+
+The purpose is prediction, and predictive value is usually defined as [compressibility](https://en.wikipedia.org/wiki/Algorithmic_information_theory). Which is perfectly fine, but existing methods only compute compression per sequence of inputs. To enable more incremental selection and scalable search, I quantify partial match between atomic inputs, vs. binary same | different choice for inputs within sequences. This is similar to the way Bayesian inference improved on classical logic, by quantifying probability vs. binary true | false values.
+
+I define match as a complementary of miss. That means match is potential compression of larger comparand’s magnitude by replacing it with its miss (initially difference) relative to smaller comparand. Ultimate criterion is recorded magnitude, rather than bits of memory it occupies, because the former represents physical impact that we want to predict. The volume of memory used to record that magnitude depends on prior compression, which is not an objective parameter.
+
+This is tautological: smaller input is a common subset of both inputs, = sum of AND between their uncompressed (unary code) representations. Some may object that match includes the case when both inputs equal zero, but then match also equals zero. Prediction is representational equivalent of physical momentum. Ultimately, we predict some potential impact on observer, represented by input. Zero input means zero impact, which has no conservable inertia, thus no intrinsic predictive value.
+
+With incremental complexity, initial inputs have binary resolution and implicit shared coordinate (being a macro-parameter, resolution of coordinate lags that of an input). Compression of bit inputs by AND is well known as digitization: substitution of two lower 1 bits with one higher 1 bit. Resolution of coordinate (input summation span) is adjusted by feedback to form integers that are large enough to produce above-average match.
+
+Next-order compression can be achieved by comparison between consecutive integers, distinguished by binary (before | after) coordinate. Basic comparison is inverse arithmetic operation of incremental power: AND, subtraction, division, logarithm, and so on. Additive match is achieved by comparison of a higher power than that which produced comparands: comparison by AND will not further compress integers previously digitized by AND.
+
+Rather, initial comparison between integers is by subtraction, resulting difference is miss, and absolute match is a smaller input. For example, if inputs are 4 and 7, then miss is 3, and their match or common subset is 4. Difference is smaller than XOR (non-zero complementary of AND) because XOR may include opposite-sign (opposite-direction) bit pairs 0, 1 and 1, 0, which are cancelled-out by subtraction.
+
+Comparison by division forms ratio, which is a magnitude-compressed difference. This compression is explicit in long division: match is accumulated over iterative subtraction of smaller comparand from remaining difference. In other words, this is also a comparison by subtraction, but between different orders of derivation. Resulting match is smaller comparand * integer part of ratio, and miss is final reminder or fractional part of ratio.
+
+Ratio can be further compressed by converting to radix | logarithm, and so on. But computational costs may grow even faster. Thus, power of comparison should increase only for inputs sufficiently compressed by lower power: AND for bit inputs, SUB for integer inputs, DIV for pattern inputs, etc. Actual compression depends on input and on resolution of its coordinate: input | derivative summation span. We can’t control the input, so average match is adjusted via resolution of coordinate.
+
+To filter future inputs, this absolute match should be projected: recombined with co-derived miss projected for a target distance. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative predictive value pattern.
+
+Separate filters are formed for each type of compared variable. For example, brightness of original input pixels may not be very predictive, partly because almost all perceived light is reflected rather than emitted. Then its filter will increase, reducing total span (cost) of value patterns, potentially down to 1. On the other hand, if differences or ratios between pixels are more predictive than pixels themselves, then filter for forming positive difference- or ratio- value patterns will be reduced.
 
 
 

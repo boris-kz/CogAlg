@@ -15,8 +15,8 @@ from time import time
     select by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
     intra_comp(dx_g) eval by val_PP_ = 
     
-    L + I + |Dx| + |Dy|  # sum is a superset of Pm, no abs_Dx, abs_Dy for comp_dert eval: high rdn?  
-    * max( ave_Lx, Ly) / min(ave_Lx, Ly)   # elongation increases estimated Pm, as do D bias and angle match:  
+    L + I + |Dx| + |Dy|  # sum is a superset of Pm, no abs_Dx, abs_Dy for comp_dert eval: mostly redundant?  
+    * max( ave_Lx, Ly) / min(ave_Lx, Ly)   # elongation increases estimated Pm, as do D-bias & angle match:  
     * max( Dy, Dx) / min( Dy, Dx)          # lateral variation bias = vertical match bias
     * Ave_blob / Ga                        # angle match rate
     
@@ -27,7 +27,7 @@ div_ave = 200
 flip_ave = 1000
 
 
-def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
+def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
     s, x0, L, I, G, Dx, Dy, derts_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
     _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # + params from higher branches, S if min n_params?
@@ -42,29 +42,27 @@ def comp_P(orthog, P, _P, DdX):  # forms vertical derivatives of P params, also 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
     DdX += ddX  # ddX -> Pd, mag correlation: dX -> I,L, ddX -> dI,dL, neutral to Dx: mixed with anti-correlated Dy?
 
-    if orthog:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
+    if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
-        hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance):
-        L /= hyp  # est orthogonal slice is reduced P, for each param:
-        I /= hyp
+        hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance), to estimate params of orthogonal slice:
+        L /= hyp
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
         # G = hypot(Dy, Dx): comp in 2D structures only?
         # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
 
-    dI = I - _I;  vI = dI - ave * L  # not dderived: vI is a deviation, alone is not significant, comp with Derts[1]:
-    dL = L - _L;  mL = min(L, _L)    # abs match: dderived rep value is magnitude-proportional, as is d?
+    dL = L - _L;  mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
     dDx = Dx - _Dx; mDx = min(Dx, _Dx)
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # dDx- anti-correlated if orthog?
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy is a higher-precision dI: no need for comp I? anti-correlated to ortho dDx?
 
-    Pd = ddX + dL + dI + dDx + dDy  #-> signed dPP, correlation: dX -> I,L,oDy,!oDx, ddX -> dI,dL,odDy,!odDx?
-    Pm = mX  + dL + vI + mDx + mDy  #-> complem vPP, rdn: stronger Pd|Pm rolp?
+    Pd = ddX + dL + dDx + dDy  #-> signed dPP, correlation: dX -> L,oDy,!oDx, ddX -> dL,odDy,!odDx?
+    Pm = mX  + mL + mDx + mDy  #-> complem vPP, rdn: stronger Pd|Pm rolp?
 
-    # or variation only: multi-par ~ dir, but correlated inp,intg params? inp: dI, dX, ddX, intg: dL, diff: dDx, dDy?
-    # vs anti-correlated multi-dir ds; comb rep value = PI | Pm + Pd?  intra_PP if abs PD?
+    # not variation only: params are dderived and correlated? inp: dI, dX, ddX, intg: dL, diff: dDx, dDy?
+    # vs. anti-correlated multi-dir ds; comb rep value = PI | Pm + Pd?  intra_PP if abs PD?
 
-    if dI * dL > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
+    if dL * Pm > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
         rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
         nI = I * rL; ndI = nI - _I; nmI = min(nI, _I)  # vs. nI = dI * nrL or aI = I / L?
