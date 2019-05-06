@@ -1,4 +1,6 @@
-def ne(x):
-    return (~x + 1) & 255
+import cmath
+from math import hypot
 
-print(1 << 8)
+a = complex(-1, -1)
+
+print(cmath.phase(a))

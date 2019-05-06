@@ -236,7 +236,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += Dy
         frame[0][2] += Dx
         frame[1].append(nt_blob(I=I,  # top Dert
-                                Derts=[(G, Dy, Dx, L, Ly, [])],  # []: nested sub_blob_, depth = Derts[index]
+                                Derts=[(G, Dy, Dx, L, Ly)],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
                                 alt= None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
                                 rng= 1,  # for comp_range only, i_dert = alt - (rng-1) *2
@@ -272,19 +272,20 @@ from DEBUG import draw, over_draw, map_blobs, map_blob, map_segment, empty_map
 
 from intra_comp import intra_comp, hypot_g
 from comp_range import comp_range
-from comp_angle import comp_angle
+from comp_angle import comp_angle, ga_from_da
 from comp_gradient import comp_gradient
 
 for i, blob in enumerate(frame_of_blobs[1]):
-    if blob.Derts[0][-2] > 500:  # L > 20
+    if blob.Derts[0][-3] > 500:  # L > 20
         intra_comp(blob, hypot_g, 0, 5)
-        draw('./../debug/hypot_g' + str(i), map_blobs(blob))
-        # intra_comp(blob, comp_range, 0, 5)
-        # draw('./../debug/comp_range' + str(i), map_blobs(blob))
-        # intra_comp(blob, comp_angle, 0, 25)
-        # draw('./../debug/comp_angle_' + str(i), map_blobs(blob))
-        # intra_comp(blob, comp_gradient, 0, 5)
-        # draw('./../debug/comp_gradient_' + str(i), map_blobs(blob))
+        # draw('./../debug/hypot_g' + str(i), map_blobs(blob))
+        for j, sub_blob in enumerate(blob.Derts[-1][-1]):
+            # intra_comp(blob, comp_range, 0, 5)
+            # draw('./../debug/comp_range' + str(i), map_blobs(blob))
+            intra_comp(sub_blob, comp_angle, 0, 25, cal_g=ga_from_da)
+            draw('./../debug/hypot_%d_angle_%d' % (i, j), map_blobs(sub_blob))
+            # intra_comp(blob, comp_gradient, 0, 5)
+            # draw('./../debug/comp_gradient_' + str(i), map_blobs(blob))
 
 # END DEBUG -----------------------------------------------------------------------
 

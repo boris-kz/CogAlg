@@ -10,14 +10,15 @@ nt_blob = namedtuple('blob', 'I Derts sign alt rng box map root_blob seg_')
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
 # -hypot_g()
-# -compute_g()
+# -compute_g_()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
 # -form_blob()
 # ***********************************************************************************************************************
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave):
+def intra_comp(blob, comp_branch, Ave_blob, Ave,
+               cal_g = (lambda dx, dy, ncomp, Ave: int(hypot(dx, dy)) - Ave * ncomp)):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
     # for testing only, else set in intra_blob:
@@ -61,9 +62,9 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave):
         # core operations:
 
         derts__ = comp_branch(P_, buff___, alt)   # no buff___ or alt in hypot_g or future dx_g
-        if derts__: # form sub_blobs:
+        if derts__:     # form sub_blobs:
 
-            compute_g(derts__, Ave)
+            compute_g_(derts__, Ave, cal_g)
             sP_ = form_P_(derts__, alt, rng)
             sP_ = scan_P_(sP_, sseg_, blob, alt, rng)
             sseg_ = form_seg_(y - rng, sP_, blob, alt, rng)
@@ -74,7 +75,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave):
     while buff___:   # form sub blobs with dert_s remaining in buff__
 
         derts__ = buff___.pop()
-        compute_g(derts__, Ave)
+        compute_g_(derts__, Ave, cal_g)
         sP_ = form_P_(derts__, alt, rng)
         sP_ = scan_P_(sP_, sseg_, blob, alt, rng)
         sseg_ = form_seg_(y, sP_, blob, alt, rng)
@@ -100,13 +101,13 @@ def hypot_g(P_, buff___, alt):  # strip g from dert, convert dert into nested de
 
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
-def compute_g(derts__, ave):     # compute g
+def compute_g_(derts__, Ave, cal_g):        # compute g
 
     for x0, derts_ in derts__:
         for derts in derts_:
             dy, dx, ncomp = derts[-1]
 
-            g = int(hypot(dx, dy)) - ncomp * ave
+            g = cal_g(dx, dy, ncomp, Ave)   # cal_g is hypot() or
             derts[-1] = (g,) + derts[-1]
 
 
@@ -116,7 +117,7 @@ def form_P_(derts__, alt, rng):      # horizontally cluster and sum consecutive 
 
     for x_start, derts_ in derts__:     # each derts_ is a span of horizontally contiguous derts, a line might contain many of these
 
-        dert_ = [derts[alt - rng][0:1] + derts[-1] for derts in derts_]    # make the list of specific branch dert_: (i, g, ncomp, dy, dx)
+        dert_ = [derts[-1 - rng][0:1] + derts[-1] for derts in derts_]    # make the list of specific branch dert_: (i, g, ncomp, dy, dx)
 
         i, g, dy, dx, ncomp = dert_[0]
         x0, I, G, Dy, Dx, N, L = x_start, i, g, dy, dx, ncomp, 1    # initialize P params with first dert value
@@ -284,13 +285,13 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
         Lr += L
         Lyr += Ly
         sub_blob_.append(nt_blob(I=I,  # top Dert is I only
-                                 Derts=[(G, Dy, Dx, N, L, Ly, [])],  #[]: nested sub_blob_ of depth = Derts[index]
+                                 Derts=[(G, Dy, Dx, N, L, Ly)],  #[]: nested sub_blob_ of depth = Derts[index]
                                  sign=s,
-                                 alt= None,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
-                                 rng= 1,  # for comp_range only, i_dert = -(rng-1)*2 + alt
+                                 alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
+                                 rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt
                                  box= (y0, yn, x0, xn),  # boundary box
                                  map= map,   # blob boolean map, to compute overlap
-                                 root_blob=[blob],
+                                 root_blob=root_blob,
                                  seg_=seg_,
                                  ) )
         root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_

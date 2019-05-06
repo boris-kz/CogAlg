@@ -1,5 +1,6 @@
 from collections import deque
 from math import hypot
+from cmath import rect
 
 # ************ FUNCTIONS ************************************************************************************************
 # -comp_range()
@@ -102,10 +103,10 @@ def vertical_comp(derts__, buff___, rng, alt):    # vertical and diagonal compar
 
     # ---------- vertical_comp() end ----------------------------------------------------------------------------------------
 
-def scan_slice_(_derts__, derts__, i_index, fangle=False):  # unit of vertical comp
+def scan_slice_(_derts__, derts__, i_index, fangle=False):     # unit of vertical comp
     i_dert, i_param = i_index   # two-level index of compared parameter in derts
 
-    i_derts_ = 0     # index of _derts_
+    i_derts_ = 0     # index of _derts_ for scanning
     _x0, _derts_ = _derts__[i_derts_]
     _xn = _x0 + len(_derts_)
 
@@ -140,11 +141,9 @@ def scan_slice_(_derts__, derts__, i_index, fangle=False):  # unit of vertical c
                     _dy, _dx, _ncomp = _derts[-1]       # derivatives accumulated over current-rng comps
 
                     d = i - _i
-                    if fangle:          # correct angle diff:
-                        if d > 127:
-                            d -= 255
-                        elif d < -127:
-                            d += 255
+
+                    if fangle:          # convert angle into complex number
+                        d = rect(1, d)
 
                     # bilateral accumulation:
 
@@ -210,6 +209,8 @@ def scan_slice_diag(_derts__, derts__, i_index, shift, coefs, fangle=False):  # 
                     _dy, _dx, _ncomp = _derts[-1]   # derivatives accumulated over current-rng comps
 
                     d = i - _i
+                    if fangle:                      # convert angle into complex number
+                        d = rect(1, d)
                     # decomposition into vertical and horizontal differences:
 
                     partial_dy = int(y_coef * d)
