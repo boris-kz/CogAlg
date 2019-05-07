@@ -75,15 +75,16 @@ def vertical_comp(derts__, buff___):    # vertical comparison
 
     # ---------- vertical_comp() end ----------------------------------------------------------------------------------------
 
-def ga_from_da(da_x, da_y, ncomp, Ave):
+def ga_from_da(*args):
     " convert dx, dy to angular value then compute g"
+    da_x, da_y, _ = args
     da_x = phase(da_x)
     da_y = phase(da_y)
 
     ga = hypot(da_x, da_y)
     if ga > pi: ga = two_pi - ga        # translate ga's scope into [0, pi) (g is unsigned)
 
-    return int(ga * angle_coef) - Ave
+    return int(ga * angle_coef)
 
 def clamp_angle(angle, lower=-pi, upper=pi):    # keep angle between in scope [lower, upper). Not used
     span = upper - lower

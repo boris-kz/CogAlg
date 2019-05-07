@@ -5,11 +5,13 @@ import numpy as np
 # -draw(): output numpy array of pixel as image file.
 # -map_sub_blobs(): given a blob and a traversing path, map all sub blobs of a specific branch belongs to that blob
 # into a numpy array.
-# -map_blobs(): map all blobs in blob_ into a numpy array
-# -map_blob(): map all segments in blob.seg_ into a numpy array
-# -map_segment(): map all Ps of a segment into a numpy array
-# -over_draw(): used to draw sub-structure's map onto to current level structure
-# -empty_map(): create a numpy array representing blobs' map
+# -map_blobs(): map all blobs in blob_ into a numpy array.
+# -map_blob(): map all segments in blob.seg_ into a numpy array.
+# -map_segment(): map all Ps of a segment into a numpy array.
+# -over_draw(): used to draw sub-structure's map onto to current level structure.
+# -empty_map(): create a numpy array representing blobs' map.
+# -segment_box(): find bounding box of given segment(sub-composite structure that is building block of blob).
+# -localize(): translate bounding box against a reference.
 # ***********************************************************************************************************************
 
 transparent_val = 127   # a pixel at this value is considered transparent
@@ -31,11 +33,27 @@ def map_sub_blobs(blob, traverse_path):
         Arguments:
         - blob: contain all mapped sub-blobs.
         - traverse_path: list of values determine the derivation sequence of target sub-blobs.
-        Return: numpy array of image's pixel '''
+            + 0 for hypot_g/comp_gradient
+            + 1 for comp_angle
+            + 2 for comp_range
+        Return: numpy array of image's pixel
+    '''
 
-    image = empty_map(blob.box)
+    image = object()    # declare the output. For clarification purpose
 
-    return image
+    if traverse_path:   # if traverse_path is NOT empty, fill blob's image with sub_blobs'
+        image = empty_map(blob.box)
+        branch_id = traverse_path[0]            # next branch's id,
+        sub_blob_ = blob.Derts[branch_id][-1]   # ...also function as index to corresponding branch in blob.Derts
+
+        for sub_blob in sub_blob_:
+            sub_blob_map = map_sub_blobs(sub_blob, traverse_path[1:])   # recursive operation to draw deeper derived blob
+            over_draw(image, sub_blob_map, sub_blob.box, blob.box)      # map sub_blob onto blob
+
+    else:   # if traverse_path is empty, fill blob's image with sub-structures (segments and below)
+        image = map_blob(blob)
+
+    return image    # return filled image
     # ---------- map_sub_blobs() end ------------------------------------------------------------------------------------
 
 def map_frame(frame):
@@ -61,19 +79,14 @@ def map_blob(blob, original=False):
         Argument:
         - blob: the input blob.
         - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
-        Return: numpy array of image's pixel '''
+        Return: numpy array of image's pixel
+    '''
 
     blob_img = empty_map(blob.box)
 
     for seg in blob.seg_:
 
-
-        y0s = seg[0]
-        yns = y0s + seg[1][-1]
-        x0s = min([P[1] for P in seg[2]])
-        xns = max([P[1] + P[-2] for P in seg[2]])
-
-        sub_box = (y0s, yns, x0s, xns)
+        sub_box = segment_box(seg)
 
         seg_map = map_segment(seg, sub_box, original)
 
@@ -115,11 +128,10 @@ def over_draw(map, sub_map, sub_box, box = (0, 0, 0, 0)):
         - sub_map: map of sub-structure.
         - sub_box: bounding box of sub-structure.
         - box: bounding box of parent-structure, for computing local coordinate of sub-structure.
-        Return: over-written map of parent-structure '''
+        Return: over-written map of parent-structure
+    '''
 
-    y0, yn, x0, xn = box
-    y0s, yns, x0s, xns = sub_box
-    y0, yn, x0, xn = y0s - y0, yns - y0, x0s - x0, xns - x0
+    y0, yn, x0, xn = localize(sub_box, box)
     map[y0:yn, x0:xn][sub_map != transparent_val] = sub_map[sub_map != transparent_val]
     return map
     # ---------- over_draw() end ----------------------------------------------------------------------------------------
@@ -128,7 +140,8 @@ def empty_map(shape):
     ''' Create an empty numpy array of desired shape.
         Argument:
         - shape: desired shape of the output.
-        Return: over-written map of parent-structure '''
+        Return: over-written map of parent-structure
+    '''
 
     if len(shape) == 2:
         height, width = shape
@@ -138,3 +151,24 @@ def empty_map(shape):
         width = xn - x0
 
     return np.array([[transparent_val] * width] * height)
+
+def segment_box(seg):
+    y0s = seg[0]
+    yns = y0s + seg[1][-1]
+    x0s = min([P[1] for P in seg[2]])
+    xns = max([P[1] + P[-2] for P in seg[2]])
+    return y0s, yns, x0s, xns
+
+def localize(box, global_box):
+    ''' Compute local coordinates for given bounding box.
+        Used for overwriting map of parent structure with
+        maps of sub-structure, or other similar purposes.
+        Arguments:
+        - box: bounding box need to be localized.
+        - global_box: reference to which box is localized.
+        Return: box localized with localized coordinates
+    '''
+    y0s, yns, x0s, xns = box
+    y0, yn, x0, xn = global_box
+
+    return y0s - y0, yns - y0, x0s - x0, xns - xn

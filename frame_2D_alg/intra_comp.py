@@ -87,7 +87,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp:
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def hypot_g(P_, buff___, alt):  # strip g from dert, convert dert into nested derts
+def hypot_g(P_, *args):     # strip g from dert, convert dert into nested derts
     derts__ = []    # line of derts
 
     for P in P_:       # iterate through line of root_blob's Ps
