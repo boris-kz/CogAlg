@@ -93,11 +93,10 @@ def hypot_g(P_, *args):     # strip g from dert, convert dert into nested derts
     for P in P_:       # iterate through line of root_blob's Ps
         x0 = P[1]      # coordinate of first dert in a span of horizontally contiguous derts
         dert_ = P[-1]  # span of horizontally contiguous derts
-        new_derts_ = []
-        for i, g, dy, dx in dert_:
-            new_derts_.append([(i,), (dy, dx, 4)])    # ncomp=4, specified in deeper derts only
+        for index, (i, g, dy, dx) in enumerate(dert_):
+            dert_[index]= [(i,), (dy, dx, 4)]    # ncomp=4, specified in deeper derts only
 
-        derts__.append((x0, new_derts_))
+        derts__.append((x0, dert_))
     return derts__  # return i indices and derts__
 
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
@@ -288,7 +287,7 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
         Lr += L
         Lyr += Ly
         sub_blob_.append(nt_blob(I=I,  # top Dert is I only
-                                 Derts=[],  #(G, Dy, Dx, N, L, Ly, []), with nested sub_blob_ of depth = Derts[index]
+                                 Derts=[(G, Dy, Dx, N, L, Ly)],  #(G, Dy, Dx, N, L, Ly, []), with nested sub_blob_ of depth = Derts[index]
                                  sign=s,
                                  alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
                                  rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt

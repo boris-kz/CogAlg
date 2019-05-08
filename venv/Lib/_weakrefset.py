@@ -60,19 +60,13 @@ class WeakSet(object):
             for itemref in self.data:
                 item = itemref()
                 if item is not None:
-                    # Caveat: the iterator will keep a strong reference to
-                    # `item` until it is resumed or closed.
                     yield item
 
     def __len__(self):
-        return len(self.data) - len(self._pending_removals)
+        return sum(x() is not None for x in self.data)
 
     def __contains__(self, item):
-        try:
-            wr = ref(item)
-        except TypeError:
-            return False
-        return wr in self.data
+        return ref(item) in self.data
 
     def __reduce__(self):
         return (self.__class__, (list(self),),
@@ -118,21 +112,36 @@ class WeakSet(object):
     def update(self, other):
         if self._pending_removals:
             self._commit_removals()
-        for element in other:
-            self.add(element)
+        if isinstance(other, self.__class__):
+            self.data.update(other.data)
+        else:
+            for element in other:
+                self.add(element)
 
     def __ior__(self, other):
         self.update(other)
         return self
 
-    def difference(self, other):
-        newset = self.copy()
-        newset.difference_update(other)
+    # Helper functions for simple delegating methods.
+    def _apply(self, other, method):
+        if not isinstance(other, self.__class__):
+            other = self.__class__(other)
+        newdata = method(other.data)
+        newset = self.__class__()
+        newset.data = newdata
         return newset
+
+    def difference(self, other):
+        return self._apply(other, self.data.difference)
     __sub__ = difference
 
     def difference_update(self, other):
-        self.__isub__(other)
+        if self._pending_removals:
+            self._commit_removals()
+        if self is other:
+            self.data.clear()
+        else:
+            self.data.difference_update(ref(item) for item in other)
     def __isub__(self, other):
         if self._pending_removals:
             self._commit_removals()
@@ -143,11 +152,13 @@ class WeakSet(object):
         return self
 
     def intersection(self, other):
-        return self.__class__(item for item in other if item in self)
+        return self._apply(other, self.data.intersection)
     __and__ = intersection
 
     def intersection_update(self, other):
-        self.__iand__(other)
+        if self._pending_removals:
+            self._commit_removals()
+        self.data.intersection_update(ref(item) for item in other)
     def __iand__(self, other):
         if self._pending_removals:
             self._commit_removals()
@@ -156,48 +167,45 @@ class WeakSet(object):
 
     def issubset(self, other):
         return self.data.issubset(ref(item) for item in other)
-    __le__ = issubset
+    __lt__ = issubset
 
-    def __lt__(self, other):
-        return self.data < set(ref(item) for item in other)
+    def __le__(self, other):
+        return self.data <= set(ref(item) for item in other)
 
     def issuperset(self, other):
         return self.data.issuperset(ref(item) for item in other)
-    __ge__ = issuperset
+    __gt__ = issuperset
 
-    def __gt__(self, other):
-        return self.data > set(ref(item) for item in other)
+    def __ge__(self, other):
+        return self.data >= set(ref(item) for item in other)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
             return NotImplemented
         return self.data == set(ref(item) for item in other)
 
-    def __ne__(self, other):
-        opposite = self.__eq__(other)
-        if opposite is NotImplemented:
-            return NotImplemented
-        return not opposite
-
     def symmetric_difference(self, other):
-        newset = self.copy()
-        newset.symmetric_difference_update(other)
-        return newset
+        return self._apply(other, self.data.symmetric_difference)
     __xor__ = symmetric_difference
 
     def symmetric_difference_update(self, other):
-        self.__ixor__(other)
+        if self._pending_removals:
+            self._commit_removals()
+        if self is other:
+            self.data.clear()
+        else:
+            self.data.symmetric_difference_update(ref(item) for item in other)
     def __ixor__(self, other):
         if self._pending_removals:
             self._commit_removals()
         if self is other:
             self.data.clear()
         else:
-            self.data.symmetric_difference_update(ref(item, self._remove) for item in other)
+            self.data.symmetric_difference_update(ref(item) for item in other)
         return self
 
     def union(self, other):
-        return self.__class__(e for s in (self, other) for e in s)
+        return self._apply(other, self.data.union)
     __or__ = union
 
     def isdisjoint(self, other):
