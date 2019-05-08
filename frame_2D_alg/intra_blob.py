@@ -19,7 +19,7 @@ from intra_comp import intra_comp
     Blob structure:
         
         I,  # top Dert
-        Derts = [ layer_Derts = [Dert = G, Dx, Dy, N, L, Ly, sub_blob_]],     
+        Derts = [ layer_Derts = [Dert = G, Dx, Dy, N, L, Ly, types, sub_blob_]],     
         
         # Dert per current & lower layers of derivation tree for Dert-parallel comp_blob, 
         # len layer_Derts = comp_branch rdn, same-syntax cross-branch summation in deeper Derts,  
@@ -37,12 +37,16 @@ from intra_comp import intra_comp
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
-                    derts_ [ p or derts [ dert = g, dx, dy, ncomp ]]]   
-                    # p: top dert, alternating g | ga lower derts per current and higher derivation layers
+                    derts_ [ derts [ dert = p | a | (g, dx, dy, ncomp) ]]] 
+                    # top dert: p, then g dert, then a, ga, gg dert cycles, per current and higher derivation layers
     input for:
         comp_angle: dx, dy = derts[-1][1,2]   # no need for alt and rng  
         comp_gradi: ga = derts[-1][0] | g = derts[-2][0]  # alt, no rng
-        comp_range: p| g | ga = derts[ -(rng-1)*2 + alt)][0]  
+        comp_range: p| a | g | ga = derts[ -(rng-1)*2 + alt)][0]  # for i params in rng_: open root Derts? 
+        
+        types / Dert: location of input dert /3: skip alt-type (g | a | ga) layers? 
+        open derts per blob: all blob layers with rng = next layer - 1? 
+        arg i_dert_(i_alt, rng), vs. input blob.rng?    
 '''
 ave = 20
 ave_eval = 100  # fixed cost of evaluating sub_blobs and adding root_blob flag

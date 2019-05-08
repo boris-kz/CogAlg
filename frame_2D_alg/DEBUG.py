@@ -1,37 +1,67 @@
 from scipy import misc
 import numpy as np
 
-opacity_val = 127
+# ************ MAIN FUNCTIONS *******************************************************************************************
+# -draw(): output numpy array of pixel as image file.
+# -map_sub_blobs(): given a blob and a traversing path, map all sub blobs of a specific branch belongs to that blob
+# into a numpy array.
+# -map_blobs(): map all blobs in blob_ into a numpy array
+# -map_blob(): map all segments in blob.seg_ into a numpy array
+# -map_segment(): map all Ps of a segment into a numpy array
+# -over_draw(): used to draw sub-structure's map onto to current level structure
+# -empty_map(): create a numpy array representing blobs' map
+# ***********************************************************************************************************************
 
-def draw(path, image):
-    " output into image file "
+transparent_val = 127   # a pixel at this value is considered transparent
 
-    misc.imsave(path + '.bmp', image)
+def draw(path, image, extension='.bmp'):
+    ''' Output into an image file.
+        Arguments:
+        - path: path for saving image file.
+        - image: input as numpy array.
+        - extension: determine file-type of output image.
+        Return: None '''
+
+    misc.imsave(path + extension, image)
     # ---------- draw() end ---------------------------------------------------------------------------------------------
 
-def map_blobs(frame, original=False):
-    " Rebuilt data of blobs into an image "
+def map_sub_blobs(blob, traverse_path):
+    ''' Given a blob and a traversing path, map image of all sub-blobs of a specific branch
+        belonging to that blob into a numpy array.
+        Arguments:
+        - blob: contain all mapped sub-blobs.
+        - traverse_path: list of values determine the derivation sequence of target sub-blobs.
+        Return: numpy array of image's pixel '''
 
-    if type(frame) == list:
-        blob_, (height, width) = frame[-2:]
-        box = 0, height, 0, width
-    else:
-        blob_ = frame.Derts[-1][-1]      # sub_blob_
-        box = frame.box
+    image = empty_map(blob.box)
 
-    frame_img = empty_map(box)
+    return image
+    # ---------- map_sub_blobs() end ------------------------------------------------------------------------------------
+
+def map_frame(frame):
+    ''' Map the whole frame of original image as computed blobs.
+        Argument:
+        - frame: frame object input (as a list).
+        Return: numpy array of image's pixel '''
+
+    blob_, (height, width) = frame[-2:]
+    box = (0, height, 0, width)
+    image = empty_map(box)
 
     for i, blob in enumerate(blob_):
-        boxes = blob.box
         blob_map = map_blob(blob, original)
 
-        over_draw(frame_img, blob_map, boxes, box)
+        over_draw(image, blob_map, blob.box, box)
 
-    return frame_img
-    # ---------- map_blobs() end ----------------------------------------------------------------------------------------
+    return image
+    # ---------- map_frame() end ----------------------------------------------------------------------------------------
 
 def map_blob(blob, original=False):
-    " map derts into a single blob "
+    ''' Map a single blob into an image.
+        Argument:
+        - blob: the input blob.
+        - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
+        Return: numpy array of image's pixel '''
 
     blob_img = empty_map(blob.box)
 
@@ -43,17 +73,22 @@ def map_blob(blob, original=False):
         x0s = min([P[1] for P in seg[2]])
         xns = max([P[1] + P[-2] for P in seg[2]])
 
-        boxes = (y0s, yns, x0s, xns)
+        sub_box = (y0s, yns, x0s, xns)
 
-        seg_map = map_segment(seg, boxes, original)
+        seg_map = map_segment(seg, sub_box, original)
 
-        over_draw(blob_img, seg_map, boxes, blob.box)
+        over_draw(blob_img, seg_map, sub_box, blob.box)
 
     return blob_img
     # ---------- map_blob() end -----------------------------------------------------------------------------------------
 
 def map_segment(seg, box, original=False):
-    " map derts into a single segment "
+    ''' Map a single segment of a blob into an image.
+        Argument:
+        - seg: the input segment.
+        - box: the input segment's bounding box.
+        - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
+        Return: numpy array of image's pixel '''
 
     seg_img = empty_map(box)
 
@@ -67,27 +102,33 @@ def map_segment(seg, box, original=False):
             if original:
                 seg_img[y, x] = derts[0][0]
             else:
-                if P[0]:
-                    seg_img[y, x] = 255
-                else:
-                    seg_img[y, x] = 0
-
+                seg_img[y, x] = 255 if P[0] else 0
 
     return seg_img
 
     # ---------- map_segment() end --------------------------------------------------------------------------------------
 
-def over_draw(map, sub_map, boxes, box = (0, 0, 0, 0)):
-    " over-write a slice of an image "
+def over_draw(map, sub_map, sub_box, box = (0, 0, 0, 0)):
+    ''' Over-write map of sub-structure onto map of parent-structure.
+        Argument:
+        - map: map of parent-structure.
+        - sub_map: map of sub-structure.
+        - sub_box: bounding box of sub-structure.
+        - box: bounding box of parent-structure, for computing local coordinate of sub-structure.
+        Return: over-written map of parent-structure '''
+
     y0, yn, x0, xn = box
-    y0s, yns, x0s, xns = boxes
+    y0s, yns, x0s, xns = sub_box
     y0, yn, x0, xn = y0s - y0, yns - y0, x0s - x0, xns - x0
-    map[y0:yn, x0:xn][sub_map != opacity_val] = sub_map[sub_map != opacity_val]
+    map[y0:yn, x0:xn][sub_map != transparent_val] = sub_map[sub_map != transparent_val]
     return map
     # ---------- over_draw() end ----------------------------------------------------------------------------------------
 
 def empty_map(shape):
-    " create a gray map with predefined shape "
+    ''' Create an empty numpy array of desired shape.
+        Argument:
+        - shape: desired shape of the output.
+        Return: over-written map of parent-structure '''
 
     if len(shape) == 2:
         height, width = shape
@@ -96,4 +137,4 @@ def empty_map(shape):
         height = yn - y0
         width = xn - x0
 
-    return np.array([[opacity_val] * width] * height)
+    return np.array([[transparent_val] * width] * height)
