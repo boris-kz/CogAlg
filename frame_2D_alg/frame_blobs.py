@@ -273,24 +273,6 @@ frame_of_blobs = image_to_blobs(image)
 from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
 draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-from intra_comp import intra_comp, hypot_g
-from comp_range import comp_range
-from comp_angle import comp_angle, ga_from_da
-from comp_gradient import comp_gradient
-
-# for i, blob in enumerate(frame_of_blobs[1]):
-#     if blob.Derts[0][-3] > 200:  # L > 20
-#         intra_comp(blob, hypot_g, 0, 5)
-#         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
-        # for sub_blob in blob.Derts[-1][-1]:
-            # intra_comp(sub_blob, comp_range, 0, 5)
-            # intra_comp(sub_blob, comp_angle, 0, 25, calc_g=ga_from_da)
-            # intra_comp(sub_blob, comp_gradient, 0, 5)
-
-        # draw('./../debug/comp_range' + str(i), map_sub_blobs(blob))
-        # draw('./../debug/comp_angle_' + str(i), map_sub_blobs(blob, [0, 1]))
-        # draw('./../debug/comp_gradient_' + str(i), map_sub_blobs(blob))
-
 # END DEBUG -----------------------------------------------------------------------
 
 end_time = time() - start_time

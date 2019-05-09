@@ -40,7 +40,7 @@ def draw(path, image, extension='.bmp'):
     return
     # ---------- draw() end ---------------------------------------------------------------------------------------------
 
-def map_sub_blobs(blob, traverse_path=[]):
+def map_sub_blobs(blob, traverse_path=[]):  # under revision
     ''' Given a blob and a traversing path, map image of all sub-blobs of a specific branch
         belonging to that blob into a numpy array.
         Arguments:
@@ -51,20 +51,6 @@ def map_sub_blobs(blob, traverse_path=[]):
             + 2 for comp_range
         Return: numpy array of image's pixel
     '''
-
-    image = object()    # declare the output. For clarification purpose
-
-    if traverse_path:   # if traverse_path is NOT empty, fill blob's image with sub_blobs'
-        image = empty_map(blob.box)
-        branch_id = traverse_path[0]            # next branch's id,
-        sub_blob_ = blob.Derts[branch_id][-1]   # ...also function as index to corresponding branch in blob.Derts
-
-        for sub_blob in sub_blob_:
-            sub_blob_map = map_sub_blobs(sub_blob, traverse_path[1:])   # recursive operation to draw deeper derived blob
-            over_draw(image, sub_blob_map, sub_blob.box, blob.box)      # map sub_blob onto blob
-
-    else:   # if traverse_path is empty, fill blob's image with sub-structures (segments and below)
-        image = map_blob(blob)
 
     return image    # return filled image
     # ---------- map_sub_blobs() end ------------------------------------------------------------------------------------

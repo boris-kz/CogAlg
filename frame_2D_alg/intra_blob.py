@@ -33,20 +33,20 @@ from intra_comp import intra_comp
         box,  # boundary box: y0, yn, x0, xn
         root_blob,  # reference, to return summed blob params
 
+        comp_range_eval_ = [(alt, rng)],  # from input blobs to prior intra_blob' comp_branches, 
+        # new_comp_range_eval_ = [] at intra_blob start 
+
         seg_ =  # seg_s of lower Derts are packed in their sub_blobs
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
                     derts_ [ derts [ dert = p | a | (g, dx, dy, ncomp) ]]] 
-                    # top dert: p, then g dert, then a, ga, gg dert cycles, per current and higher derivation layers
+                    # derts order: p, g dert, (a, ga, gg) dert cycles, per current and higher derivation layers
     input for:
         comp_angle: dx, dy = derts[-1][1,2]   # no need for alt and rng  
         comp_gradi: ga = derts[-1][0] | g = derts[-2][0]  # alt, no rng
-        comp_range: p| a | g | ga = derts[ -(rng-1)*2 + alt)][0]  # for i params in rng_: open root Derts? 
+        comp_range: p| a | g | ga = derts[ -(rng-1)*3 + alt)][0]: select from blob.comp_range_eval_ 
 
-        types / Dert: location of input dert /3: skip alt-type (g | a | ga) layers? 
-        open derts per blob: all blob layers with rng = next layer - 1? 
-        arg i_dert_(i_alt, rng), vs. input blob.rng?    
 '''
 ave = 20
 ave_eval = 100  # fixed cost of evaluating sub_blobs and adding root_blob flag
@@ -75,13 +75,14 @@ def intra_blob(root_blob, Ave_blob, Ave):  # recursive intra_comp(comp_branch) s
 
     Ave_blob *= rave  # estimated cost of redundant representations per blob
     Ave + ave  # estimated cost of redundant representations per dert
+    new_comp_range_eval_ = []  # for next intra_blob
 
     for blob in root_blob.sub_blob_:
         if blob.Derts[-1][0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
 
             blob.alt = None  # no i comp, angle calc & comp (no a eval), no intra_blob call from comp_angle
             blob.rng = root_blob.rng
-            Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave)  # Ave_blob return from comp_angle only
+            Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave)  # adjusted Ave_blob return, comp_angle only
 
             Ave_blob *= rave  # estimated cost per next sub_blob
             Ave + ave  # estimated cost per next comp
