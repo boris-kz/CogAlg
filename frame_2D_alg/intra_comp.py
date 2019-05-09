@@ -20,7 +20,7 @@ nt_blob = namedtuple('blob', 'I Derts sign alt rng box map root_blob seg_')
 
 def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp: int(hypot(dx, dy)))):
 
-    # calculate g = hypot(dx,dy) / ncomp,
+    # calculate g = hypot(dx,dy),
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
     # for testing only, else set in intra_blob:
@@ -40,7 +40,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp:
     sseg_ = deque()  # buffer of sub-segments
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
-    i = 0  # segment index
+    i = 0   # segment index
 
     while y < yn:  # unfold blob into Ps for extended comp
 
@@ -274,34 +274,45 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        # accumulate root_blob.Derts[-1] (I is not changed),
-        # add recursive accum_root_blob(): while root_blob.root_blob: blob = root_blob...
+        while root_blob:  # recursive accumulation of root_blob.Derts[-1] (I is not changed):
 
-        Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = root_blob.Derts[-1]
-        Dyr += Dy
-        Dxr += Dx
-        Gr += G
-        Nr += N
-        Lr += L
-        Lyr += Ly
-        # types?
-        sub_blob_.append(nt_blob(I=I,  # top Dert is I only
-                                 Derts=[],  # for [G, Dy, Dx, N, L, Ly, []: nested to depth = Derts[index]]
-                                 sign=s,
-                                 alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
-                                 rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt
-                                 box= (y0, yn, x0, xn),  # boundary box
-                                 map= map,   # blob boolean map, to compute overlap
-                                 root_blob=blob,
-                                 seg_=seg_,
-                                 ) )
-        root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
+            # if root_blob.new_layer:  # only once per layer: =1 if ==0 and comp_branch(corresponding-layer sub_blob)?
+            #    root_blob.new_layer = 0  # flag, stays 0 till first sub_blob call, above
+            #    root_blob.Derts += [(0, 0, 0, 0, 0, 0, [])]
 
-        # convert blob to nt_blob, as above but init vs. accum,
+            # for _alt, _rng in type_Derts[0]:   # select same-type Dert by Dert[0]:
+            #     if alt ==_alt and rng ==_rng:  # same-sub_blob-type Dert, for comparison?
+            #        same_type = 1
+            #        accum_Dert()
+            # if same_type == 0:
+            #    type_Derts += ((alt, rng),((0, 0, 0, 0, 0, 0, [])  # initialize new type_Dert
+            #    accum_Dert()
 
-        # nt_blob.Derts.append((0, 0, 0, 0, 0, 0, []))  # G, Dy, Dx, N, L, Ly, sub_blob_:
-        # to accumulate sub_blob feedback, same as blob -> root_blob above
-        # types: (alt, rng) per sub_blob type, >=1?
+            Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = root_blob.Derts[-1][1]
+            Dyr += Dy
+            Dxr += Dx
+            Gr += G
+            Nr += N
+            Lr += L
+            Lyr += Ly
+            # + nblobs per type, for nested sub_blob_ in deeper layers?
+
+            sub_blob_.append(nt_blob(I=I,  # top Dert is I only
+                                     Derts=[(G, Dy, Dx, N, L, Ly, [])],  # 1st Dert is single-blob: no alt, rng?
+                                     sign=s,
+                                     alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
+                                     rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt
+                                     box= (y0, yn, x0, xn),  # boundary box
+                                     map= map,   # blob boolean map, to compute overlap
+                                     root_blob=blob,
+                                     # comp_range_eval_ = new_comp_range_eval_ # [(alt, rng, blob)],
+                                     # input blobs to prior intra_blob' comp_branches are evaluated for comp_range
+                                     # from root_blob: after all comp_branches are evaluated? or delayed branch calls?
+                                     seg_=seg_,
+                                     ) )
+            root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
+
+            root_blob = root_blob.root_blob
 
         # add Ave_blob return if fangle,
         # add eval intra_blob call if not fangle
