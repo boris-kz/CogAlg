@@ -25,24 +25,18 @@ def decode(input, errors='strict'):
 class IncrementalEncoder(codecs.IncrementalEncoder):
     def __init__(self, errors='strict'):
         codecs.IncrementalEncoder.__init__(self, errors)
-        self.first = 1
+        self.first = True
 
     def encode(self, input, final=False):
         if self.first:
-            self.first = 0
+            self.first = False
             return codecs.BOM_UTF8 + codecs.utf_8_encode(input, self.errors)[0]
         else:
             return codecs.utf_8_encode(input, self.errors)[0]
 
     def reset(self):
         codecs.IncrementalEncoder.reset(self)
-        self.first = 1
-
-    def getstate(self):
-        return self.first
-
-    def setstate(self, state):
-        self.first = state
+        self.first = True
 
 class IncrementalDecoder(codecs.BufferedIncrementalDecoder):
     def __init__(self, errors='strict'):
