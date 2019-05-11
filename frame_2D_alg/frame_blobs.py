@@ -236,7 +236,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += Dy
         frame[0][2] += Dx
         frame[1].append(nt_blob(I=I,  # top Dert
-                                Derts=[(G, Dy, Dx, L, Ly, [])],  # []: nested sub_blob_, depth = Derts[index]
+                                Derts=[[(G, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
                                 alt= None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
                                 rng= 1,  # for comp_range only, i_dert = alt - (rng-1) *2

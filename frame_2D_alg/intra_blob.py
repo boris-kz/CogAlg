@@ -19,7 +19,7 @@ from intra_comp import intra_comp
     Blob structure:
         
         I,  # top Dert
-        Derts = [ layer_Derts = [Dert = G, Dx, Dy, N, L, Ly, types, sub_blob_]],     
+        Derts = [ type_Derts = [Dert = (alt, rng), (G, Dx, Dy, N, L, Ly, sub_blob_)]],     
         
         # Dert per current & lower layers of derivation tree for Dert-parallel comp_blob, 
         # len layer_Derts = comp_branch rdn, same-syntax cross-branch summation in deeper Derts,  
@@ -33,19 +33,19 @@ from intra_comp import intra_comp
         box,  # boundary box: y0, yn, x0, xn
         root_blob,  # reference, to return summed blob params
         
-        comp_range_eval_ = [(alt, rng)],  # from input blobs to prior intra_blob' comp_branches, 
-        # new_comp_range_eval_ = [] at intra_blob start 
+        comp_range_input_ = [(alt, rng)],  # from input blobs to prior intra_blob' comp_branches, 
+        # new_comp_range_input_ = [] at intra_blob start 
 
         seg_ =  # seg_s of lower Derts are packed in their sub_blobs
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
                     derts_ [ derts [ dert = p | a | (g, dx, dy, ncomp) ]]] 
-                    # derts order: p, g dert, (a, ga, gg) dert cycles, per current and higher derivation layers
+                    # derts order: p, g dert, (a, ga, gg) dert cycles / current and higher derivation layers
     input for:
         comp_angle: dx, dy = derts[-1][1,2]   # no need for alt and rng  
         comp_gradi: ga = derts[-1][0] | g = derts[-2][0]  # alt, no rng
-        comp_range: p| a | g | ga = derts[ -(rng-1)*3 + alt)][0]: select from blob.comp_range_eval_ 
+        comp_range: p| a | g | ga = derts[ -(rng-1)*3 + alt)][0]: select from blob.comp_range_input_ 
          
 '''
 ave = 20
@@ -69,11 +69,11 @@ def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per 
 
     return frame
 
-def intra_blob(root_blob, Ave_blob, Ave):  # recursive intra_comp(comp_branch) selection per branch per sub_blob
+def intra_blob(root_blob, comp_range_input_, Ave_blob, Ave):  # intra_comp(comp_branch) selection per branch per sub_blob
 
     Ave_blob *= rave  # estimated cost of redundant representations per blob
     Ave + ave         # estimated cost of redundant representations per dert
-    new_comp_range_eval_ = []  # for next intra_blob
+    new_comp_range_input_ = []  # for next intra_blob
 
     for blob in root_blob.sub_blob_:
         if blob.Derts[-1][0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
@@ -85,28 +85,31 @@ def intra_blob(root_blob, Ave_blob, Ave):  # recursive intra_comp(comp_branch) s
             Ave_blob *= rave   # estimated cost per next sub_blob
             Ave + ave   # estimated cost per next comp
 
-            for ablob in blob.sub_blob_:  # ablobs are defined by the sign of ga: gradient of angle
+            for ga_blob in blob.sub_blob_:  # ga_blobs are defined by the sign of ga: gradient of angle
                 rdn = 1
-                G = ablob.Derts[-2][0]   # Derts: current + higher-layers params, no lower layers yet
-                Ga = ablob.Derts[-1][0]  # different I per layer, not redundant to higher I
+                G = ga_blob.Derts[-2][0]   # Derts: current + higher-layers params, no lower layers yet
+                Ga = ga_blob.Derts[-1][0]  # different I per layer, not redundant to higher I
 
-                val_ga = G       # value of forming gradient_of_angle deviation sub_blobs
+                val_ga = G       # value of forming gradient_of_gradient_of_angle deviation sub_blobs
                 val_gg = G - Ga  # value of forming gradient_of_gradient deviation sub_blobs
-                val_gr = G + Ga  # value of forming extended-range gradient deviation sub_blobs
+                val_ = []        # val_gr = Gr + Ga: values of forming extended-range gradient deviation sub_blobs:
 
-                vals = sorted((
-                    (val_ga, Ave_blob,   comp_gradient, -2, 1),  # alt = -2, no rng accumulation
-                    (val_gg, Ave_blob*2, comp_gradient, -1, 1),
-                    (val_gr, Ave_blob*2, comp_range, blob.alt, blob.rng+1)  # alt is from initial comp_grad
-                    ), key=lambda val: val[0], reverse=True)
+                for typ, alt, rng in comp_range_input_:  # composite index of a root Dert:
+                    Gr = blob.Derts[rng][alt][typ][0]
+                    val_ += \
+                        [((Gr + Ga), Ave_blob*2, comp_range, blob.alt, blob.rng+1)]  # alt of initial comp_grad
 
-                for val, threshold, comp_branch, alt, rng in vals:
+                val_ += [(val_ga, Ave_blob,   comp_gradient, -2, 1),  # alt = -2, no rng accumulation
+                         (val_gg, Ave_blob*2, comp_gradient, -1, 1)]  # alt = -1
+
+                sorted(val_, key=lambda val: val[0], reverse=True)
+                for val, threshold, comp_branch, alt, rng in val_:
 
                     if val > threshold * rdn:
-                        ablob.alt = alt
-                        ablob.rng = rng
+                        ga_blob.alt = alt
+                        ga_blob.rng = rng
                         rdn += 1
-                        intra_comp(ablob, comp_branch, Ave_blob + ave_root_blob * rdn, Ave + ave * rdn)
+                        intra_comp(ga_blob, comp_branch, Ave_blob + ave_root_blob * rdn, Ave + ave * rdn)
                         # root_blob.Derts[-1] += Derts, derts += dert, intra_blob call eval
                     else:
                         break
