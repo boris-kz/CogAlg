@@ -271,7 +271,14 @@ frame_of_blobs = image_to_blobs(image)
 # DEBUG --------------------------------------------------------------------------
 
 from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
-draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+# draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+
+# from intra_comp import intra_comp, hypot_g
+
+# for i, blob in enumerate(frame_of_blobs[2]):
+#     if blob.Derts[0][0] > 500:
+#         intra_comp(blob, hypot_g, 0, 8)
+#         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
 
 # END DEBUG -----------------------------------------------------------------------
 

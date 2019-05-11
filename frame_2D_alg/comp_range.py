@@ -142,8 +142,8 @@ def scan_slice_(_derts__, derts__, i_index, fangle=False):     # unit of vertica
 
                     d = i - _i
 
-                    if fangle:          # convert angle into complex number
-                        d = rect(1, d)
+                    if fangle:              # if i and _i are angular values:
+                        d = rect(1, d)      # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
 
                     # bilateral accumulation:
 
@@ -153,7 +153,7 @@ def scan_slice_(_derts__, derts__, i_index, fangle=False):     # unit of vertica
                     _ncomp += 1
 
                     # return:
-                    derts[-1] = dy, dx, ncomp       # pack back
+                    derts[-1] = dy, dx, ncomp           # pack dy, dx, ncomp back into derts
                     _derts[-1] = _dy, _dx, _ncomp
 
             if _xn > xn:  # save _derts_ for next dert
@@ -209,8 +209,8 @@ def scan_slice_diag(_derts__, derts__, i_index, shift, coefs, fangle=False):  # 
                     _dy, _dx, _ncomp = _derts[-1]   # derivatives accumulated over current-rng comps
 
                     d = i - _i
-                    if fangle:                      # convert angle into complex number
-                        d = rect(1, d)
+                    if fangle:              # if i and _i are angular values:
+                        d = rect(1, d)      # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
                     # decomposition into vertical and horizontal differences:
 
                     partial_dy = int(y_coef * d)

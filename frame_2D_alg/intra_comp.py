@@ -20,24 +20,13 @@ nt_blob = namedtuple('blob', 'I Derts sign alt rng box map root_blob seg_')
 
 def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp: int(hypot(dx, dy)))):
 
-    # calculate g = hypot(dx,dy),
+    # calculate g = hypot(dx, dy),
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    # for testing only, else set in intra_blob:
-    if comp_branch == comp_range:
-        rng = blob.rng + 1      # increment rng
-        alt = blob.alt          # same sub_blobs
-    elif comp_branch == hypot_g:
-        rng = 0
-        alt = -1
-    else:       # if comp gradient or or comp_angle
-        rng = 1
-        alt = -1 if comp_branch == comp_gradient else -2
-
     blob.seg_.sort(key=lambda seg: seg[0])   # sort by y0 coordinate for unfolding
-    seg_ = []  # buffer of segments containing line y
+    seg_ = []           # buffer of segments containing line y
     buff___ = deque(maxlen=rng)
-    sseg_ = deque()  # buffer of sub-segments
+    sseg_ = deque()     # buffer of sub-segments
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
     i = 0   # segment index
@@ -59,7 +48,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp:
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = comp_branch(P_, buff___, alt)   # no buff___ or alt in hypot_g or future dx_g
+        derts__ = comp_branch(P_, buff___)   # no buff___ or alt in hypot_g or future dx_g
         if derts__:     # form sub_blobs:
 
             compute_g_(derts__, calc_g)
