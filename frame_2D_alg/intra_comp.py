@@ -268,6 +268,8 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
             # if root_blob.new_layer:  # only once per layer: =1 if ==0 and comp_branch(corresponding-layer sub_blob)?
             #    root_blob.new_layer = 0  # flag, stays 0 till first sub_blob call, above
             #    root_blob.Derts += [(0, 0, 0, 0, 0, 0, [])]
+            # accumulate root_blob.Derts[-1] (I is not changed),
+            # add recursive accum_root_blob(): while root_blob.root_blob: blob = root_blob...
 
             # for _alt, _rng in type_Derts[0]:   # select same-type Dert by Dert[0]:
             #     if alt ==_alt and rng ==_rng:  # same-sub_blob-type Dert, for comparison?
@@ -300,8 +302,34 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
                                      seg_=seg_,
                                      ) )
             root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
+        Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = root_blob.Derts[-1]
+        Dyr += Dy
+        Dxr += Dx
+        Gr += G
+        Nr += N
+        Lr += L
+        Lyr += Ly
+        # types?
+        sub_blob_.append(nt_blob(I=I,  # top Dert is I only
+                         Derts=[],  # for [G, Dy, Dx, N, L, Ly, []: nested to depth = Derts[index]]
+                         sign=s,
+                         alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
+                         rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt
+                         box= (y0, yn, x0, xn),  # boundary box
+                         map= map,   # blob boolean map, to compute overlap
+                         root_blob=blob,
+                         seg_=seg_,
+                                 ) )
+        root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
 
             root_blob = root_blob.root_blob
+        # convert blob to nt_blob, as above but init vs. accum,
+
+        # add Ave_blob return if fangle,
+        # add eval intra_blob call if not fangle
+        # nt_blob.Derts.append((0, 0, 0, 0, 0, 0, []))  # G, Dy, Dx, N, L, Ly, sub_blob_:
+        # to accumulate sub_blob feedback, same as blob -> root_blob above
+        # types: (alt, rng) per sub_blob type, >=1?
 
         # add Ave_blob return if fangle,
         # add eval intra_blob call if not fangle
