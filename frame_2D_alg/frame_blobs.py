@@ -56,19 +56,45 @@ def comp_pixel(p__):  # bilateral comparison between vertically and horizontally
 
     dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
-    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows, first and last column are discarded
-    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns, first and last row are discarded
-    g__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
+    dy__ = p__[:, 1:-1] - p__[:, 1:-1]  # vertical comp between rows, first and last column are discarded
+    dx__ = p__[1:-1, :] - p__[1:-1, :]  # lateral comp between columns, first and last row are discarded
 
     dert__[:, :, 0] = p__
-    dert__[1:-1, 1:-1, 1] = g__
-    dert__[1:-1, 1:-1, 2] = dy__  # first row, last row, first column and last-column are discarded
-    dert__[1:-1, 1:-1, 3] = dx__
+    dert__[1:-1, :, 2] = dy__           # indexing is according to shape of dy__
+    dert__[:, 1:-1, 3] = dx__           # indexing is according to shape of dy__
+
+    # deviation of gradient, initially approximated as g = |dy| + |dx| - ave:
+    dert__[:, :, 1] = abs(dert__[:, :, 2]) + abs(dert__[:, :, 3]) - ave
 
     return dert__
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
+def marginal(dert__):   # create 2 marginal maps for positive and negative patterns
+
+    map = dert__[:, :, 1] > 0               # map of derts' g's sign: True: positive. False: negative
+
+    neg_map = np.array(map)                 # marginal map for negative patterns
+    pos_map = np.array(map)                 # marginal map for positive patterns
+
+    # Make margin of negative patterns become False: (True & False == False)
+    neg_map[1:, :] &= neg_map[:-1, :]       # up
+    neg_map[:, :-1] &= neg_map[:, 1:]       # right
+    neg_map[:-1, :] &= neg_map[1:, :]       # down
+    neg_map[:, 1:] &= neg_map[:, :-1]       # left
+
+    # Make margin of positive patterns become True: (True | False == True)
+    pos_map[1:, :] &= pos_map[:-1, :]       # up
+    pos_map[:, :-1] &= pos_map[:, 1:]       # right
+    pos_map[:-1, :] &= pos_map[1:, :]       # down
+    pos_map[:, 1:] &= pos_map[:, :-1]       # left
+
+    # merge them into a 3-D array:
+    marginal_map = np.concatenate((neg_map.reshape(neg_map.shape + (1,)),       # reshape into 3-D: Y, X, 1
+                                   neg_map.reshape(neg_map.shape + (1,))),      # reshape into 3-D: Y, X, 1
+                                  axis=2)                                       # merge by 3rd axis -> shape = (Y, X, 2)
+
+    return marginal_map     # marginal blobs' maps, with marginal_map[0] for negative sign blobs and marginal_map[1] for positive sign blobs
 
 def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 

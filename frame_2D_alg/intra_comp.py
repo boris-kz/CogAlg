@@ -243,33 +243,33 @@ def form_seg_(y, P_, root_blob, alt, rng):  # convert or merge every P into segm
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, blob, alt, rng):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
-    y0s, params, Py_, roots, fork_, blob = term_seg
-    blob[1] = [par1 + par2 for par1, par2 in zip(params, blob[1])]
-    blob[3] += roots - 1  # number of open segments
+    y0s, params, Py_, roots, fork_, sub_blob = term_seg
+    sub_blob[1] = [par1 + par2 for par1, par2 in zip(params, sub_blob[1])]
+    sub_blob[3] += roots - 1  # number of open segments
 
-    if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
+    if not sub_blob[3]:  # if open_segments == 0: sub_blob is terminated and packed in frame
 
-        s, [I, G, Dy, Dx, N, L, Ly], seg_, open_segs, (y0, x0, xn) = blob
+        s, [I, G, Dy, Dx, N, L, Ly], seg_, open_segs, (y0, x0, xn) = sub_blob
         yn = y0s + params[-1]            # yn = y0 + Ly (segment's)
-        map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
+        map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of sub_blob
 
         for seg in seg_:
-            seg.pop()  # remove references to blob
+            seg.pop()  # remove references to sub_blob
             for y, P in enumerate(seg[2], start=seg[0]):
                 x0P = P[1]
                 LP = P[-2]
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        while root_blob:  # recursive accumulation of root_blob.Derts[-1] (I is not changed):
+        while blob:  # recursive accumulation of blob.Derts[-1] (I is not changed):
 
-            # if root_blob.new_layer:  # only once per layer: =1 if ==0 and comp_branch(corresponding-layer sub_blob)?
-            #    root_blob.new_layer = 0  # flag, stays 0 till first sub_blob call, above
-            #    root_blob.Derts += [(0, 0, 0, 0, 0, 0, [])]
-            # accumulate root_blob.Derts[-1] (I is not changed),
-            # add recursive accum_root_blob(): while root_blob.root_blob: blob = root_blob...
+            # if blob.new_layer:  # only once per layer: =1 if ==0 and comp_branch(corresponding-layer sub_blob)?
+            #    blob.new_layer = 0  # flag, stays 0 till first sub_blob call, above
+            #    blob.Derts += [(0, 0, 0, 0, 0, 0, [])]
+            # accumulate blob.Derts[-1] (I is not changed),
+            # add recursive accum_blob(): while blob.blob: blob = blob...
 
             # for _alt, _rng in type_Derts[0]:   # select same-type Dert by Dert[0]:
             #     if alt ==_alt and rng ==_rng:  # same-sub_blob-type Dert, for comparison?
@@ -279,7 +279,7 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
             #    type_Derts += ((alt, rng),((0, 0, 0, 0, 0, 0, [])  # initialize new type_Dert
             #    accum_Dert()
 
-            Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = root_blob.Derts[-1][1]
+            Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = blob.Derts[-1][1]
             Dyr += Dy
             Dxr += Dx
             Gr += G
@@ -294,15 +294,15 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
                                      alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
                                      rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt
                                      box= (y0, yn, x0, xn),  # boundary box
-                                     map= map,   # blob boolean map, to compute overlap
-                                     root_blob=blob,
-                                     # comp_range_eval_ = new_comp_range_eval_ # [(alt, rng, blob)],
+                                     map= map,   # sub_blob boolean map, to compute overlap
+                                     root_blob=sub_blob,
+                                     # comp_range_eval_ = new_comp_range_eval_ # [(alt, rng, sub_blob)],
                                      # input blobs to prior intra_blob' comp_branches are evaluated for comp_range
-                                     # from root_blob: after all comp_branches are evaluated? or delayed branch calls?
+                                     # from blob: after all comp_branches are evaluated? or delayed branch calls?
                                      seg_=seg_,
                                      ) )
-            root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
-        Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = root_blob.Derts[-1]
+            blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
+        Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = blob.Derts[-1]
         Dyr += Dy
         Dxr += Dx
         Gr += G
@@ -316,13 +316,13 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
                          alt= alt,  # alt layer index: -1 for ga | -2 for g, none for hypot_g
                          rng= rng,  # for comp_range only, i_dert = -(rng-1)*2 + alt
                          box= (y0, yn, x0, xn),  # boundary box
-                         map= map,   # blob boolean map, to compute overlap
-                         root_blob=blob,
+                         map= map,   # sub_blob boolean map, to compute overlap
+                         root_blob=sub_blob,
                          seg_=seg_,
                                  ) )
-        root_blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
+        blob.Derts[-1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
 
-            root_blob = root_blob.root_blob
+        blob = blob.root_blob
         # convert blob to nt_blob, as above but init vs. accum,
 
         # add Ave_blob return if fangle,
