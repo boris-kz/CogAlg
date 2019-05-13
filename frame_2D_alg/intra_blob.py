@@ -19,34 +19,38 @@ from intra_comp import intra_comp
     Blob structure:
         
         I,  # top Dert
-        Derts = [ type_Derts = [Dert = (alt, rng), (G, Dx, Dy, N, L, Ly, sub_blob_)]],     
+        Derts[ alt_Derts[ A, Ga, typ_Derts[ Dert: (alt, rng), (G, Dx, Dy, N, L, Ly, sub_blob_)]],     
         
         # Dert per current & lower layers of derivation tree for Dert-parallel comp_blob, 
         # len layer_Derts = comp_branch rdn, same-syntax cross-branch summation in deeper Derts,  
         # sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access
         
         sign, # lower Derts are sign-mixed at depth > 0, alt-mixed at depth > 1, rng-mixed at depth > 2:
-        alt,  # alternating layer index: -1 for ga or -2 for g 
-        rng,  # and as comp_range index: i_dert = derts[alt -(rng-1)*2]
+        alt,  # alternating layer index: -1 for ga, -2 for a, -3 for g
+        #  or blob.input = (cyc, alt, typ), typ is nested input?
+        rng,  # for comp_range only  
         
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn
-        root_blob,  # reference, to return summed blob params
         
-        comp_range_input_ = [(alt, rng)],  # from input blobs to prior intra_blob' comp_branches, 
-        # new_comp_range_input_ = [] at intra_blob start 
+        root_blob,  # reference, to return summed blob params
+        range_input_ = [cyc][alt][typ],  # input derts of prior intra_blob comp_branches, ini at intra_blob 
 
         seg_ =  # seg_s of lower Derts are packed in their sub_blobs
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
-                    derts_ [ derts [ dert = p | a | (g, dx, dy, ncomp) ]]] 
-                    # derts order: p, g dert, (a, ga, gg) dert cycles / current and higher derivation layers
+                  
+                    derts_ [ derts [ alt_derts [ typ_derts [ dert = (g, dx, dy) | a | p:   
+                    # dert / current and higher derivation layers,
+                    # typ: p, g_dert, intra_blob_-> cyc_dert_: [(a, ga_dert, (gg_dert, gga_dert, gr_dert_))]
+                    
     input for:
-        comp_angle: dx, dy = derts[-1][1,2]   # no need for alt and rng  
-        comp_gradi: ga = derts[-1][0] | g = derts[-2][0]  # alt, no rng
-        comp_range: p| a | g | ga = derts[ -(rng-1)*3 + alt)][0]: select from blob.comp_range_input_ 
-         
+        comp_angle: dx, dy = derts[-1][-1][-1][1,2]  # full index necessary?  
+        comp_grad: ga = derts[-1][-1][-1][0] or g = derts[-2][-1][0][0]  # g of higher cycle, last typ dert 
+        
+        comp_range: p| a | g | ga = derts [cyc][alt][typ], buffered in range_input_
+        # index: += cyc / intra_blob [ += alt / sequential comp_branch [ += typ / parallel comp_branch                            
 '''
 ave = 20
 ave_eval = 100  # fixed cost of evaluating sub_blobs and adding root_blob flag
@@ -92,15 +96,15 @@ def intra_blob(root_blob, comp_range_input_, Ave_blob, Ave):  # intra_comp(comp_
 
                 val_ga = G       # value of forming gradient_of_gradient_of_angle deviation sub_blobs
                 val_gg = G - Ga  # value of forming gradient_of_gradient deviation sub_blobs
-                val_ = []        # val_gr = Gr + Ga: values of forming extended-range gradient deviation sub_blobs:
+                val_ = []  # + val_gr = Gr + Ga: value of forming extended-range gradient deviation sub_blobs:
 
                 for typ, alt, rng in comp_range_input_:  # composite index of a root Dert:
                     Gr = blob.Derts[rng][alt][typ][0]
                     val_ += \
                         [((Gr + Ga), Ave_blob*2, comp_range, blob.alt, blob.rng+1)]  # alt of initial comp_grad
 
-                val_ += [(val_ga, Ave_blob,   comp_gradient, -2, 1),  # alt = -2, no rng accumulation
-                         (val_gg, Ave_blob*2, comp_gradient, -1, 1)]  # alt = -1
+                val_ += [(val_ga, Ave_blob,   comp_gradient, (-1,-1), 1),  # current cyc and alt, no rng accumulation
+                         (val_gg, Ave_blob*2, comp_gradient, (-2,-1), 1)]  # current cyc and alt, from typ
 
                 sorted(val_, key=lambda val: val[0], reverse=True)
                 for val, threshold, comp_branch, alt, rng in val_:
