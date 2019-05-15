@@ -263,7 +263,7 @@ nt_blob = namedtuple('blob', 'I Derts sign alt rng box map root_blob seg_')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
-# frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+# frame_of_blobs = intra_blob(hypot_g, frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
 # DEBUG --------------------------------------------------------------------------
 
