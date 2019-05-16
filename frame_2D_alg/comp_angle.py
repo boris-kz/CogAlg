@@ -33,7 +33,7 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
         gd, dx, dy, _ = _derts[-1]         # comp_angle always follows comp_gradient or hypot_g
         _a = complex(dx, dy)               # to complex number: _a = dx + dyj
         _a /= abs(_a)                      # normalize _a so that abs(_a) == 1 (hypot() from real and imaginary part of _a == 1)
-        _a_radiant = phase(_a)             # angular value of _a in radiant: _a_radiant in (-pi, pi)
+        _a_radian = phase(_a)             # angular value of _a in radian: _a_radian in (-pi, pi)
         _dax, _ncomp = 0j, 0               # init ncomp, dx(complex) buffers
 
         for derts in derts_[1:]:
@@ -41,19 +41,19 @@ def lateral_comp(P_):  # horizontal comparison between pixels at distance == rng
             g, dx, dy, _ = derts[-1]       # derts_ and new_derts_ are separate
             a = complex(dx, dy)            # to complex number: a = dx + dyj
             a /= abs(a)                    # normalize a so that abs(a) == 1 (hypot() from real and imaginary part of a == 1)
-            a_radiant = phase(a)           # angular value of a in radiant: aa in (-pi, pi)
+            a_radian = phase(a)           # angular value of a in radian: aa in (-pi, pi)
 
-            da = rect(1, a_radiant - _a_radiant)   # convert bearing difference into complex form (rectangular coordinate)
+            da = rect(1, a_radian - _a_radian)   # convert bearing difference into complex form (rectangular coordinate)
             # complex d doesn't need to correct angle diff: if d > pi: d -= 255; elif d < -127: d += 255
             dx = da
             _dax += da      # bilateral accumulation
             _ncomp += 1     # bilateral accumulation
 
-            new_derts_.append(_derts + [(_a, _a_radiant), (0j, _dax, _ncomp)])  # return a and _dy = 0 + 0j in separate tuples
+            new_derts_.append(_derts + [(_a, _a_radian), (0j, _dax, _ncomp)])  # return a and _dy = 0 + 0j in separate tuples
             _derts = derts                         # buffer derts
-            _a, _aa, _dx, _ncomp = a, a_radiant, dx, 1    # buffer last ncomp and dx
+            _a, _aa, _dx, _ncomp = a, a_radian, dx, 1    # buffer last ncomp and dx
 
-        new_derts_.append(_derts + [(_a, _a_radiant), (0j, _dax, _ncomp)]) # return last derts
+        new_derts_.append(_derts + [(_a, _a_radian), (0j, _dax, _ncomp)]) # return last derts
 
         derts__.append((x0, new_derts_))    # new line of P derts_ appended with new_derts_
 

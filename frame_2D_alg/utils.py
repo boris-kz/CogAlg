@@ -40,7 +40,7 @@ def draw(path, image, extension='.bmp'):
     return
     # ---------- draw() end ---------------------------------------------------------------------------------------------
 
-def map_sub_blobs(blob, traverse_path=[]):  # under revision
+def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     ''' Given a blob and a traversing path, map image of all sub-blobs of a specific branch
         belonging to that blob into a numpy array.
         Arguments:
@@ -51,6 +51,8 @@ def map_sub_blobs(blob, traverse_path=[]):  # under revision
             + 2 for comp_range
         Return: numpy array of image's pixel
     '''
+
+    image = empty_map(blob.box)
 
     return image    # return filled image
     # ---------- map_sub_blobs() end ------------------------------------------------------------------------------------

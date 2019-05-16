@@ -5,26 +5,27 @@ import numpy as np
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
     as |dx| + |dy|, then selectively and more precisely as hypot(dx, dy), from cross-comparison among adjacent pixels.
-    
+
     Complemented by intra_blob (recursive search within blobs), it will be a 2D version of first-level core algorithm.
     frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
-    
+
     1Le, line y:   comp_pixel (lateral and vertical comp) -> pixel + derivatives tuple: dert ) frame of derts: dert__ 
     2Le, line y-1: form_P(dert2) -> 1D pattern P
     3Le, line y-2: scan_P_(P, hP)-> hP, roots: down-connections, fork_: up-connections between Ps 
     4Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     5Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively  
-    
+
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, convert elements of 
     lower line into elements of new higher line, then displace elements of old higher line into higher function.
-    
+
     Higher-line elements include additional variables, derived while they were lower-line elements.
     Processing is mostly sequential because blobs are irregular and very difficult to map to matrices.
-    
+
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
+
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
@@ -35,7 +36,8 @@ import numpy as np
 # -form_blob()
 # ***********************************************************************************************************************
 
-def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
+def image_to_blobs(
+        image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], [], image.shape]  # params, blob_, shape
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
@@ -56,45 +58,19 @@ def comp_pixel(p__):  # bilateral comparison between vertically and horizontally
 
     dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
 
-    dy__ = p__[:, 1:-1] - p__[:, 1:-1]  # vertical comp between rows, first and last column are discarded
-    dx__ = p__[1:-1, :] - p__[1:-1, :]  # lateral comp between columns, first and last row are discarded
+    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows, first and last column are discarded
+    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns, first and last row are discarded
+    g__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
 
     dert__[:, :, 0] = p__
-    dert__[1:-1, :, 2] = dy__           # indexing is according to shape of dy__
-    dert__[:, 1:-1, 3] = dx__           # indexing is according to shape of dy__
-
-    # deviation of gradient, initially approximated as g = |dy| + |dx| - ave:
-    dert__[:, :, 1] = abs(dert__[:, :, 2]) + abs(dert__[:, :, 3]) - ave
+    dert__[1:-1, 1:-1, 1] = g__
+    dert__[1:-1, 1:-1, 2] = dy__  # first row, last row, first column and last-column are discarded
+    dert__[1:-1, 1:-1, 3] = dx__
 
     return dert__
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
-def marginal(dert__):   # create 2 marginal maps for positive and negative patterns
-
-    map = dert__[:, :, 1] > 0               # map of derts' g's sign: True: positive. False: negative
-
-    neg_map = np.array(map)                 # marginal map for negative patterns
-    pos_map = np.array(map)                 # marginal map for positive patterns
-
-    # Make margin of negative patterns become False: (True & False == False)
-    neg_map[1:, :] &= neg_map[:-1, :]       # up
-    neg_map[:, :-1] &= neg_map[:, 1:]       # right
-    neg_map[:-1, :] &= neg_map[1:, :]       # down
-    neg_map[:, 1:] &= neg_map[:, :-1]       # left
-
-    # Make margin of positive patterns become True: (True | False == True)
-    pos_map[1:, :] &= pos_map[:-1, :]       # up
-    pos_map[:, :-1] &= pos_map[:, 1:]       # right
-    pos_map[:-1, :] &= pos_map[1:, :]       # down
-    pos_map[:, 1:] &= pos_map[:, :-1]       # left
-
-    # merge them into a 3-D array:
-    marginal_map = np.concatenate((neg_map.reshape(neg_map.shape + (1,)),       # reshape into 3-D: Y, X, 1
-                                   neg_map.reshape(neg_map.shape + (1,))),      # reshape into 3-D: Y, X, 1
-                                  axis=2)                                       # merge by 3rd axis -> shape = (Y, X, 2)
-
-    return marginal_map     # marginal blobs' maps, with marginal_map[0] for negative sign blobs and marginal_map[1] for positive sign blobs
 
 def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
@@ -129,22 +105,22 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
 
     new_P_ = deque()
 
-    if P_ and seg_:            # if both are not empty
-        P = P_.popleft()       # input-line Ps
-        seg = seg_.popleft()   # higher-line segments,
-        _P = seg[-3][-1]       # last element of each segment is higher-line P
+    if P_ and seg_:  # if both are not empty
+        P = P_.popleft()  # input-line Ps
+        seg = seg_.popleft()  # higher-line segments,
+        _P = seg[-3][-1]  # last element of each segment is higher-line P
         stop = False
         fork_ = []
-        
+
         while not stop:
-            x0 = P[1]          # first x in P
-            xn = x0 + P[-2]    # first x in next P
-            _x0 = _P[1]        # first x in _P
-            _xn = _x0 +_P[-2]  # first x in next _P
+            x0 = P[1]  # first x in P
+            xn = x0 + P[-2]  # first x in next P
+            _x0 = _P[1]  # first x in _P
+            _xn = _x0 + _P[-2]  # first x in next _P
 
             if P[0] == _P[0] and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
-                seg[-1] += 1        # roots
-                fork_.append(seg)   # P-connected segments are buffered into fork_
+                seg[-1] += 1  # roots
+                fork_.append(seg)  # P-connected segments are buffered into fork_
 
             if xn < _xn:  # _P overlaps next P in P_
                 new_P_.append((P, fork_))
@@ -167,9 +143,9 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                     stop = True
 
     while P_:  # terminate Ps and segs that continue at line's end
-        new_P_.append((P_.popleft(), []))   # no fork
+        new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob(seg_.popleft(), frame)    # roots always == 0
+        form_blob(seg_.popleft(), frame)  # roots always == 0
 
     return new_P_
 
@@ -182,9 +158,9 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
     while P_:
         P, fork_ = P_.popleft()
         s, x0 = P[:2]
-        params = P[2:-1]      # I, G, Dy, Dx, L, Ly
+        params = P[2:-1]  # I, G, Dy, Dx, L, Ly
         xn = x0 + params[-1]  # next-P x0 = x0 + L
-        params.append(1)      # add Ly
+        params.append(1)  # add Ly
 
         if not fork_:  # new_seg is initialized with initialized blob
             blob = [s, [0] * (len(params)), [], 1, [y, x0, xn]]  # s, params, seg_, open_segments, box
@@ -197,15 +173,15 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
                 Is, Gs, Dys, Dxs, Ls, Lys = new_seg[1:-3]  # fork segment params, P is merged into segment:
                 new_seg[1:-3] = [Is + I, Gs + G, Dys + Dy, Dxs + Dx, Ls + L, Lys + Ly]
                 new_seg[-3].append(P)  # Py_: vertical buffer of Ps
-                new_seg[-1] = 0        # reset roots
+                new_seg[-1] = 0  # reset roots
                 blob = new_seg[-2]
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0][-2]
                 new_seg = [y] + params + [[P]] + [blob, 0]  # new_seg is initialized with fork blob
-                blob[2].append(new_seg)   # segment is buffered into blob
+                blob[2].append(new_seg)  # segment is buffered into blob
 
-                if len(fork_) > 1:        # merge blobs of all forks
+                if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][-1] == 1:  # if roots == 1: fork hasn't been terminated
                         form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
 
@@ -237,20 +213,21 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg,
+              frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg
     I, G, Dy, Dx, L, Ly = blob[1]
     blob[1] = [I + Is, G + Gs, Dy + Dys, Dx + Dxs, L + Ls, Ly + Lys]
-    blob[-2] += roots - 1       # number of open segments
+    blob[-2] += roots - 1  # number of open segments
 
-    if blob[-2] == 0:           # if open_segments == 0: blob is terminated and packed in frame
+    if blob[-2] == 0:  # if open_segments == 0: blob is terminated and packed in frame
         s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, [y0, x0, xn] = blob
-        yn = y0s + Lys      # yn from last segment
+        yn = y0s + Lys  # yn from last segment
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
         for seg in seg_:
-            seg.pop()       # remove roots counter
-            seg.pop()       # remove references to blob
+            seg.pop()  # remove roots counter
+            seg.pop()  # remove references to blob
             for y, P in enumerate(seg[-1], start=seg[0]):
                 x0P = P[1]
                 LP = P[-2]
@@ -264,16 +241,17 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[1].append(nt_blob(I=I,  # top Dert
                                 Derts=[(G, Dy, Dx, L, Ly)],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
-                                alt= None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
-                                rng= 1,  # for comp_range only, i_dert = alt - (rng-1) *2
-                                box= (y0, yn, x0, xn),  # boundary box
-                                map= map,  # blob boolean map, to compute overlap
+                                alt=None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
+                                rng=1,  # for comp_range only, i_dert = alt - (rng-1) *2
+                                box=(y0, yn, x0, xn),  # boundary box
+                                map=map,  # blob boolean map, to compute overlap
                                 root_blob=[blob],
                                 seg_=seg_,
                                 ))
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
+
 
 # ************ PROGRAM BODY *********************************************************************************************
 
@@ -282,6 +260,7 @@ ave = 20
 # Load inputs --------------------------------------------------------------------
 # image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
 from utils import imread
+
 image = imread('./../images/raccoon_eye.jpg').astype(int)
 height, width = image.shape
 
@@ -297,13 +276,13 @@ frame_of_blobs = image_to_blobs(image)
 # DEBUG --------------------------------------------------------------------------
 
 from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
-# draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-# from intra_comp import intra_comp, hypot_g
+from intra_comp import intra_comp, hypot_g
 
-# for i, blob in enumerate(frame_of_blobs[2]):
-#     if blob.Derts[0][0] > 500:
-#         intra_comp(blob, hypot_g, 0, 8)
+for i, blob in enumerate(frame_of_blobs[2]):
+    if blob.Derts[0][0] > 500:
+        intra_comp(blob, hypot_g, 0, 8)
 #         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
 
 # END DEBUG -----------------------------------------------------------------------

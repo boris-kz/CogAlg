@@ -18,35 +18,33 @@ from intra_comp import intra_comp
     Dert params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
 
-        I,  # top Dert
-        Derts = [ layer_Derts = [Dert = G, Dx, Dy, N, L, Ly, types, sub_blob_]],     
+        I,   # top Dert
+        Derts[ par_Derts[ (typ_Derts: G, A, Ga)[ Dert: (i_cyc, i_typ), (G, Dx, Dy, N, L, Ly, sub_blob_)]],     
 
-        # Dert per current & lower layers of derivation tree for Dert-parallel comp_blob, 
-        # len layer_Derts = comp_branch rdn, same-syntax cross-branch summation in deeper Derts,  
+        # Dert per current and lower layers of derivaticon tree for Dert-parallel comp_blob, 
+        # Dert rdn = par: parallel branch index, same-syntax cross-branch summation in deeper Derts  
         # sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access
 
-        sign, # lower Derts are sign-mixed at depth > 0, alt-mixed at depth > 1, rng-mixed at depth > 2:
-        alt,  # alternating layer index: -1 for ga or -2 for g 
-        rng,  # and as comp_range index: i_dert = derts[alt -(rng-1)*2]
-
+        sign, # lower Derts are sign-mixed at depth > 0, typ-mixed at depth > 1, rng-mixed at depth > 2:
+        rng,  # for comp_range 
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn
+
         root_blob,  # reference, to return summed blob params
 
-        comp_range_eval_ = [(alt, rng)],  # from input blobs to prior intra_blob' comp_branches, 
-        # new_comp_range_eval_ = [] at intra_blob start 
+        eval_fork_ = [(i_cyc, i_typ)],  # derts evaluated for der+ and rng+ comp:
+        # init eval: g, ga for der+ and p, a for rng+, local?
+        # eval_fork_ += [selected forks], each eval / der+ and rng+? 
+
+        comp_grad: ga = derts[-1][-1][0] or g = derts[-2][0][0]  # g of higher cycle, last typ dert     
+        comp_rang: p|a|g|ga = derts [cyc][typ]: cyc+/ intra_blob ( typ+/ intra_comp?
 
         seg_ =  # seg_s of lower Derts are packed in their sub_blobs
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
-                    derts_ [ derts [ dert = p | a | (g, dx, dy, ncomp) ]]] 
-                    # derts order: p, g dert, (a, ga, gg) dert cycles, per current and higher derivation layers
-    input for:
-        comp_angle: dx, dy = derts[-1][1,2]   # no need for alt and rng  
-        comp_gradi: ga = derts[-1][0] | g = derts[-2][0]  # alt, no rng
-        comp_range: p| a | g | ga = derts[ -(rng-1)*3 + alt)][0]: select from blob.comp_range_eval_ 
-
+                    derts_ [ cyc_derts [ typ_derts [ dert = (p|a|g, ?(dx, dy)):  
+                    # dert / current and higher derivation layer: p, cyc_dert_: [(g_dert, a, ga_dert)]
 '''
 ave = 20
 ave_eval = 100  # fixed cost of evaluating sub_blobs and adding root_blob flag
@@ -61,57 +59,62 @@ ave_n_sub_blobs = 10
 # Ave += ave: cost per next-layer dert, fixed comp grain: pixel
 # Ave_blob *= rave: cost per next root blob, variable len sub_blob_
 
+def intra_blob(root_blob, comp_branch, eval_fork_, Ave_blob, Ave):  # intra_comp(comp_branch) eval per sub_blob:
 
-def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
+    new_eval_fork_ = []  # for next intra_blob, or two only?
 
-    for blob in frame.blob_:
-        if blob.Derts[-1][0] > ave_root_blob:  # G > root blob cost
-            intra_comp(blob, hypot_g, ave_root_blob, ave)  # g = hypot(dy, dx), adds Dert & sub_blob_, calls intra_blob
+    for blob in root_blob.Derts[-1][-1]:  # sub_blobs are evaluated for comp_branch
+        if blob.Derts[-1][
+            0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion + sub_blob eval cost
 
-    return frame
+            Ave_blob = intra_comp(blob, comp_branch, Ave_blob, Ave)  # Ave_blob adjusted by actual n_sub_blobs
+            Ave_blob *= rave  # estimated cost of redundant representations per blob
+            Ave += ave  # estimated cost per dert
 
+            for sub_blob in blob.Derts[-1][-1]:  # sub_sub_blobs are evaluated for angle calc and default comp
+                if sub_blob.Derts[-1][0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
 
-def intra_blob(root_blob, Ave_blob, Ave):  # recursive intra_comp(comp_branch) selection per branch per sub_blob
+                    Ave_blob = intra_comp(sub_blob, comp_angle, (-1, -1), Ave_blob, Ave)  # adjust blob cyc, rng?
+                    Ave_blob *= rave
+                    Ave += ave
 
-    Ave_blob *= rave  # estimated cost of redundant representations per blob
-    Ave + ave  # estimated cost of redundant representations per dert
-    new_comp_range_eval_ = []  # for next intra_blob
+                    for ga_blob in sub_blob.Derts[-1][-1]:  # ga_blobs are defined by the sign of ga: gradient of angle
+                        rdn = 1
+                        G = ga_blob.Derts[-1][-3][0]  # Derts: current + higher-layers params, no lower layers yet
+                        Ga = ga_blob.Derts[-1][-1][0]  # different I per layer, not redundant to higher I
 
-    for blob in root_blob.sub_blob_:
-        if blob.Derts[-1][0] > Ave_blob + ave_eval:  # noisy or directional G: > root blob conversion cost
+                        val_gg = G - Ga  # value of gradient_of_gradient deviation
+                        val_gga = G  # value of gradient_of_gradient_of_angle deviation
+                        val_gr = G + Ga  # value of extended-range gradient deviation
+                        val_gar = G - Ga  # value of extended-range angle gradient deviation, same as val_gg?
 
-            blob.alt = None  # no i comp, angle calc & comp (no a eval), no intra_blob call from comp_angle
-            blob.rng = root_blob.rng
-            Ave_blob = intra_comp(blob, comp_angle, Ave_blob, Ave)  # adjusted Ave_blob return, comp_angle only
+                        eval_fork_ += [  # sort while appending?
+                            (val_gga, Ave_blob, comp_gradient, -1, -1, 0),  # current cyc and typ, rng = 1
+                            (val_gg, Ave_blob * 2, comp_gradient, -1, -3, 0),  # current cyc, higher typ, rng = 1
+                            (val_gr, Ave_blob * 2, comp_range, -2, -3, 1),  # higher cyc and typ, rng = 2
+                            (val_gar, Ave_blob * 2, comp_range, -1, -2, 1)  # current cyc, higher typ, rng = 2
+                        ]
 
-            Ave_blob *= rave  # estimated cost per next sub_blob
-            Ave + ave  # estimated cost per next comp
+                        sorted(eval_fork_, key=lambda val: val[0], reverse=True)
+                        for val, threshold, comp_branch, cyc, typ, rng in eval_fork_:
 
-            for ablob in blob.sub_blob_:  # ablobs are defined by the sign of ga: gradient of angle
-                rdn = 1
-                G = ablob.Derts[-2][0]  # Derts: current + higher-layers params, no lower layers yet
-                Ga = ablob.Derts[-1][0]  # different I per layer, not redundant to higher I
+                            threshold *= rdn
+                            if val > threshold:
+                                rdn += 1
+                                cyc -= 1
+                                ga_blob.cyc = cyc
+                                ga_blob.typ = typ
+                                if comp_branch == comp_range: rng += 1  # only for old forks?
+                                ga_blob.rng = rng
+                                Ave_blob += ave_root_blob * rdn
+                                Ave += ave * rdn
+                                new_eval_fork_ += [
+                                    (val, threshold, comp_branch, cyc, typ, rng)]  # copy to all select branches?
 
-                val_ga = G  # value of forming gradient_of_angle deviation sub_blobs
-                val_gg = G - Ga  # value of forming gradient_of_gradient deviation sub_blobs
-                val_gr = G + Ga  # value of forming extended-range gradient deviation sub_blobs
-
-                vals = sorted((
-                    (val_ga, Ave_blob, comp_gradient, -2, 1),  # alt = -2, no rng accumulation
-                    (val_gg, Ave_blob * 2, comp_gradient, -1, 1),
-                    (val_gr, Ave_blob * 2, comp_range, blob.alt, blob.rng + 1)  # alt is from initial comp_grad
-                ), key=lambda val: val[0], reverse=True)
-
-                for val, threshold, comp_branch, alt, rng in vals:
-
-                    if val > threshold * rdn:
-                        ablob.alt = alt
-                        ablob.rng = rng
-                        rdn += 1
-                        intra_comp(ablob, comp_branch, Ave_blob + ave_root_blob * rdn, Ave + ave * rdn)
-                        # root_blob.Derts[-1] += Derts, derts += dert, intra_blob call eval
-                    else:
-                        break
+                                intra_blob(ga_blob, comp_branch, new_eval_fork_, index, Ave_blob, Ave)
+                                # root_blob.Derts[-1] += Derts, derts += dert
+                            else:
+                                break
     ''' 
     if Ga > Ave_blob: 
        intra_comp( ablob, comp_gradient, Ave_blob, Ave)  # forms g_angle deviation sub_blobs
@@ -132,6 +135,13 @@ def intra_blob(root_blob, Ave_blob, Ave):  # recursive intra_comp(comp_branch) s
     ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
     g and ga are dderived, blob of min_g? val -= branch switch cost?
     no Ave = ave * ablob.L, (G + Ave) / Ave: always positive?
+
+    def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
+
+        for blob in frame.blob_:
+            if blob.Derts[-1][0] > ave_root_blob:  # G > root blob cost
+                intra_blob(blob, hypot_g, ave_root_blob, ave)  # g = hypot(dy, dx), adds Dert & sub_blob_, calls intra_blob
+    return frame
 
     comp_P_() if estimated val_PP_ > ave_comp_P, for blob in root_blob.sub_blob_: defined by dx_g:
 
