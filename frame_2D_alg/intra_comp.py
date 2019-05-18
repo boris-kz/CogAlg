@@ -280,39 +280,38 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
 
 def feedback_draft(root_blob, blob, rng):
 
-    s, [I, G, Dy, Dx, N, L, Ly], seg_, open_segs, box = blob
+    s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, box = blob
 
     while root_blob:  # accumulate same- cycle( alt( type Dert in recursively higher root_blob, typ for alt -1 only?
 
-        cyc = blob.cyc; alt = blob.alt; typ = blob.typ
-        type_Derts = root_blob.Derts[cyc][alt][typ]
+        cyc = blob.cyc; typ = blob.typ
+        fork_Derts = root_blob.Derts[cyc][typ]
         same_type = 0
 
         if blob.cyc > len(root_blob.Derts):  # cycle( alt( type Dert
             root_blob.Derts += []  # Dert[ alt_Derts[ typ_Dert ]]] may be initialized by any comp_branch
 
-        for i, (_cyc, _alt, _typ) in enumerate( type_Derts[0]):  # select same-type Dert by alt & rng:
-            if cyc == _cyc and alt == _alt and typ == _typ:  # same-sub_blob-type Dert
+        for i, (_cyc, _typ) in enumerate( fork_Derts[5:6]):  # select same-type Dert by typ & rng:
+            if cyc == _cyc and typ == _typ:  # same-sub_blob-type Dert
                 same_type = 1
-                same_Dert = type_Derts[i]
+                same_Dert = fork_Derts[i]
                 break
         if same_type == 0:
-            type_Derts += ((blob.cyc, blob.alt, blob.typ), (0, 0, 0, 0, 0, 0, []))  # initialize new type_Dert
-            same_Dert = type_Derts[-1]
+            fork_Derts += [(0, 0, 0, 0, 0, cyc, typ, [])]  # initialize new type_Dert
+            same_Dert = fork_Derts[-1]
 
-        Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_ = same_Dert[1]  # I is not changed
+        Gr, Dyr, Dxr, Lr, Lyr, sub_blob_ = same_Dert  # I is not changed
         Dyr += Dy
         Dxr += Dx
         Gr += G
-        Nr += N
         Lr += L
         Lyr += Ly
         # + nblobs per type, for nested sub_blob_ in deeper layers?
 
         sub_blob_.append(nt_blob(I=I,  # 0th Dert is I only
-                                 Derts=[[ (cyc, alt, typ), (G, Dy, Dx, N, L, Ly, []) ]],  # 1st Dert is single-blob
-                                 # alt: sub_layer index: -1 ga | -3 g, default -2 a if rng==1, none for hypot_g
-                                 # rng: dert cycle index for comp_range only: i_dert = -(rng-1)*3 + alt
+                                 Derts=[[ (G, Dy, Dx, L, Ly, cyc, typ, []) ]],  # 1st Dert is single-blob
+                                 # typ: sub_layer index: 0 g | 2 g2, default 1 a if rng==1, none for hypot_g
+                                 # rng: dert cycle index for comp_range only: i_dert = -(rng-1)*3 + typ
                                  sign = s,
                                  box= box,  # same boundary box
                                  map= map,  # blob boolean map, to compute overlap
@@ -321,10 +320,9 @@ def feedback_draft(root_blob, blob, rng):
                                  # Dert @ prior intra_blob comp_branch input blob is evaluated for comp_range
                                  seg_=seg_,
                                  ) )
-        root_blob.Derts[-1][1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
+        root_blob.Derts[-1][-1] = Gr, Dyr, Dxr, Lr, Lyr, cyc, typ, sub_blob_
 
         root_blob = root_blob.root_blob
 
-    # add Ave_blob return if fangle,
-    # add eval intra_blob call if not fangle
+    # add Ave_blob return?
 

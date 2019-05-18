@@ -15,12 +15,12 @@ from time import time
     select by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
     intra_comp(dx_g) eval by val_PP_ = 
     
-    L + I + |Dx| + |Dy|  # sum is a superset of Pm, no abs_Dx, abs_Dy for comp_dert eval: mostly redundant?  
-    * max( ave_Lx, Ly) / min(ave_Lx, Ly)   # elongation increases estimated Pm, as do D-bias & angle match:  
-    * max( Dy, Dx) / min( Dy, Dx)          # lateral variation bias = vertical match bias
-    * Ave_blob / Ga                        # angle match rate
+    L + |Dx| + |Dy|  # = max Pm, * orientation coefs: 
+    * max((ave_Lx, Ly) / min(ave_Lx, Ly))  # length bias = g stability and comp_P range?    
+    * max((Dy, Dx) / min(Dy, Dx))          # variation bias, if same min, max Ds?
+    * Ave_blob / Ga                        # angle match rate: stability of direction (min, max), thus oriented match?   
     
-    eval per blob, too expensive for seg? 
+    eval per blob, too expensive for seg?  no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
 '''
 ave = 20
 div_ave = 200
@@ -29,8 +29,8 @@ flip_ave = 1000
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    s, x0, L, I, G, Dx, Dy, derts_ = P  # comparands: L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
-    _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # + params from higher branches, S if min n_params?
+    s, x0, L, I, G, Dx, Dy, _derts_ = P               # L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
     offset = abs(x0 - _x0) + abs(xn - _xn)
@@ -52,15 +52,15 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         # G = hypot(Dy, Dx): comp in 2D structures only?
         # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
 
-    dL = L - _L;  mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
+    dL = L - _L;    mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
     dDx = Dx - _Dx; mDx = min(Dx, _Dx)
     dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy is a higher-precision dI: no need for comp I? anti-correlated to ortho dDx?
 
-    Pd = ddX + dL + dDx + dDy  #-> signed dPP, correlation: dX -> L,oDy,!oDx, ddX -> dL,odDy,!odDx?
-    Pm = mX  + mL + mDx + mDy  #-> complem vPP, rdn: stronger Pd|Pm rolp?
+    Pd = ddX + dL + abs(dDx) + abs(dDy)  # -> signed dPP,
+    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy, !odDx?
 
-    # not variation only: params are dderived and correlated? inp: dI, dX, ddX, intg: dL, diff: dDx, dDy?
-    # vs. anti-correlated multi-dir ds; comb rep value = PI | Pm + Pd?  intra_PP if abs PD?
+    Pm = mX + mL + mDx + mDy  # -> complementary vPP / dderived params
+    # rdn *= greater Pd | Pm rolp? comb rep value = PI | Pm+Pd?
 
     if dL * Pm > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
 
