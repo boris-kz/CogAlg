@@ -40,7 +40,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
     dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, vX = mX - ave_mX -> P inclusion, or distant-P comp only?
 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
-    DdX += ddX  # ddX -> Pd, mag correlation: dX -> I,L, ddX -> dI,dL, neutral to Dx: mixed with anti-correlated Dy?
+    DdX += ddX  # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
 
     if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
 
@@ -53,36 +53,32 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
 
     dL = L - _L;    mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy is a higher-precision dI: no need for comp I? anti-correlated to ortho dDx?
+    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # no comp I: Dy is higher-precision dI
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)
 
-    Pd = ddX + dL + abs(dDx) + abs(dDy)  # -> signed dPP,
-    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy, !odDx?
+    Pd = ddX + dL + abs(dDx) + abs(dDy)  # -> signed dPP, correlation: dX-> L, oDy !oDx, ddX-> dL, odDy !odDx?
+    Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= > Pd | Pm rolp?
 
-    Pm = mX + mL + mDx + mDy  # -> complementary vPP / dderived params
-    # rdn *= greater Pd | Pm rolp? comb rep value = PI | Pm+Pd?
-
-    if dL * Pm > div_ave:  # L defines P, I indicates potential ratio vs diff compression, compared after div_comp
+    if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
 
         rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
-        nI = I * rL; ndI = nI - _I; nmI = min(nI, _I)  # vs. nI = dI * nrL or aI = I / L?
 
-        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)
+        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 
-        Pnm = mX + nmI + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
+        Pnm = mX + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
 
         if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
         else: mPP_rdn = 1; nmPP_rdn = 0
 
-        Pnd = ddX + ndI + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
+        Pnd = ddX + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
 
         if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
         else: dPP_rdn = 1; ndPP_rdn = 0
 
         div_f = 1
-        nvars = Pnm, nmI, nmDx, nmDy, mPP_rdn, nmPP_rdn, \
-            Pnd, ndI, ndDx, ndDy, dPP_rdn, ndPP_rdn
+        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn, \
+            Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
 
     else:
         div_f = 0  # DIV comp flag
