@@ -33,8 +33,8 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
     _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
-    offset = abs(x0 - _x0) + abs(xn - _xn)
     overlap = min(xn, _xn) - max(x0, _x0)
+    offset = abs(x0 - _x0) + abs(xn - _xn)
 
     mX = overlap / offset  # mX is L-normalized, individual x m|d is binary
     dX = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, vX = mX - ave_mX -> P inclusion, or distant-P comp only?
@@ -46,23 +46,20 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
 
         hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance), to estimate params of orthogonal slice:
         L /= hyp
-        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp  # for norm' comp_P_ eval, not worth it?  no alt comp: secondary to axis?
+        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
-
-        # G = hypot(Dy, Dx): comp in 2D structures only?
-        # dG = G - _G; mG = min(G, _G)  # global direction and reduced variation (vs abs g), restorable from ave_a?
 
     dL = L - _L;    mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
     dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # no comp I: Dy is higher-precision dI
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # G = hypot(Dy, Dx): comp in 2D structures only?
 
-    Pd = ddX + dL + abs(dDx) + abs(dDy)  # -> signed dPP, correlation: dX-> L, oDy !oDx, ddX-> dL, odDy !odDx?
+    Pd = ddX + dL + dDx + dDy  # -> direction-combined dPP, x sign cancel?
+    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy, !odDx?
     Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= > Pd | Pm rolp?
 
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
 
-        rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
-
+        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
         nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 
@@ -84,7 +81,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         div_f = 0  # DIV comp flag
         nvars = 0  # DIV + norm derivatives
 
-    P_ders = Pm, Pd, mx, xd, mL, dL, mI, dI, mDx, dDx, mDy, dDy, div_f, nvars
+    P_ders = Pm, Pd, mX, dX, mL, dL, mDx, dDx, mDy, dDy, div_f, nvars
 
     vs = 1 if Pm > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
     ds = 1 if Pd > 0 else 0
@@ -94,7 +91,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
 
 def comp_P_(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursive?
 
-    # differential Pm -> vPP: dderived params magnitude is the only proxy to predictive value
+    # differential Pd -> dPP and Pm -> vPP: dderived params magnitude is the only proxy to predictive value
 
     G, Dy, Dx, N, L, Ly, sub_ = blob.Dert[0]  # G will be redefined from Dx, Dy, or only per blob for 2D comp?
     max_y, min_y, max_x, min_x = blob.box
@@ -322,56 +319,7 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
 def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     return blob
 
-
 '''
-def form_P_(P_, P, _ders, s, _s):  # forms sub_Ps defined by sign of dx | vdx, inside Ps defined by deviation of g
-
-    L, I, Dy, Dx, G, dert_ = P
-    p, dx, dy, g = _ders
-
-    if s == _s:  # sign of dx or dx deviation
-        L += 1; I += p; Dx += dx; Dy += dy; G += g  # accumulate P params
-        dert_.append((p, dy, dx, g))
-        term = 1
-    else:
-        P_.append((L, I, Dy, Dx, G, dert_))  # terminate P
-        P = 0, 0, 0, 0, 0, []
-        term = 0
-    return P_, P, term
-
-
-def scan_P_(P_, _P_, PP):  # detects overlaps between same-sign Ps and _Ps within gradient-P, for form_seg -> comp P?
-    new_P_ = deque()
-
-    for (x0, L, I, Dy, Dx, G, dert_) in P_:
-        for (_x0, _L, _I, _Dy, _Dx, _G, _dert_) in _P_:
-
-        form_seg()
-
-    return new_P_
-
-def intra_P(seg):  # form, evaluate, align sub_Ps for vertical comp
-
-    for x0, L, I, Dy, Dx, G, dert_ in seg[-1]:
-
-        if L > 1:  # or min_L: Ps redefined by dx | ort_dx: rescan before comp, no need for initial P?
-            dP_, vP_ = deque(), deque()
-            dP, vP = (0,0,0,0,0,[]), (0,0,0,0,0,[])  # L, I, Dy, Dx, G, dert_
-            ini = 0
-            for ders in e_:  # i, dx, dy, g; e_ is preserved?
-                dx = ders[1]
-                vd = abs(dx) - ave  # v for deviation | value
-                sd = dx > 0
-                sv = vd > 0
-                if ini:
-                    dP_, dP, dterm = form_P_(dP_, dP, _ders, sd, _sd)  # direction dP ~ aP
-                    vP_, vP, vterm = form_P_(vP_, vP, _ders, sv, _sv)  # magnitude vP ~ gP
-                _ders = ders; _sd = sd; _sv = sv
-                ini = 1
-            if dterm: dP_.append(dP)
-            if vterm: dP_.append(vP)
-
-
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation?
