@@ -10,7 +10,6 @@ nt_blob = namedtuple('blob', 'I Derts sign box map root_blob seg_')
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
 # -hypot_g()
-# -compute_g_()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
@@ -18,9 +17,8 @@ nt_blob = namedtuple('blob', 'I Derts sign box map root_blob seg_')
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp: int(hypot(dx, dy)))):
+def intra_comp(blob, comp_branch, Ave_blob, Ave):
 
-    # calculate g = hypot(dx,dy),
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
     # for testing only, else set in intra_blob:
@@ -59,31 +57,20 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave, calc_g = (lambda dx, dy, ncomp:
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = comp_branch(P_, buff___, alt)   # no buff___ or alt in hypot_g or future dx_g
+        derts__ = comp_branch(P_, buff___, '''index''', Ave, alt)   # no buff___ or alt in hypot_g or future dx_g
         if derts__:     # form sub_blobs:
 
-            compute_g_(derts__, calc_g)
             sP_ = form_P_(derts__, alt, Ave, rng)
             sP_ = scan_P_(sP_, sseg_, blob, alt, rng)
             sseg_ = form_seg_(y - rng, sP_, blob, alt, rng)
 
-        y += 1
-    y -= len(buff___)
-
-    while buff___:   # form sub blobs with dert_s remaining in buff__
-
-        derts__ = buff___.pop()
-        compute_g_(derts__, calc_g)
-        sP_ = form_P_(derts__, alt, Ave, rng)
-        sP_ = scan_P_(sP_, sseg_, blob, alt, rng)
-        sseg_ = form_seg_(y, sP_, blob, alt, rng)
         y += 1
 
     while sseg_:    # terminate last line
         form_blob(sseg_.popleft(), blob, alt, rng)
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
-
+'''
 def hypot_g(P_, buff___, alt):  # strip g from dert, convert dert into nested derts
     derts__ = []    # line of derts
 
@@ -98,46 +85,35 @@ def hypot_g(P_, buff___, alt):  # strip g from dert, convert dert into nested de
     return derts__  # return i indices and derts__
 
     # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
-
-def compute_g_(derts__, calc_g):
-
-    for x0, derts_ in derts__:
-        for derts in derts_:
-            dy, dx, ncomp = derts[-1]
-
-            g = calc_g(dx, dy, ncomp)   # calculate g as hypot(dx,dy) / ncomp
-            derts[-1] = (g,) + derts[-1]
-
-
+'''
 def form_P_(derts__, alt, Ave, rng):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
     for x_start, derts_ in derts__:   # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
-        dert_ = [derts[-1 - rng][0:1] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
-        i, g, dy, dx, ncomp = dert_[0]
+        dert_ = [derts['''index'''] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
+        i, g, dy, dx = dert_[0]
 
-        _vg = g - Ave * ncomp
+        _vg = g - Ave
         _s = _vg > 0  # sign of first dert
-        x0, I, G, Dy, Dx, N, L = x_start, i, _vg, dy, dx, ncomp, 1    # initialize P params with first dert
+        x0, I, G, Dy, Dx, L = x_start, i, _vg, dy, dx, 1    # initialize P params with first dert
 
-        for x, (i, g, dy, dx, ncomp) in enumerate(dert_[1:], start=x_start + 1):
-            vg = g - Ave * ncomp
+        for x, (i, g, dy, dx) in enumerate(dert_[1:], start=x_start + 1):
+            vg = g - Ave
             s = vg > 0
             if s != _s:  # P is terminated and new P is initialized:
 
-                P_.append([_s, x0, I, G, Dy, Dx, N, L, derts_[x0 - x_start : x0 - x_start + L]])  # derts is appended in comp_branch
-                x0, I, G, Dy, Dx, N, L = x, 0, 0, 0, 0, 0, 0    # reset params
+                P_.append([_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start : x0 - x_start + L]])  # derts is appended in comp_branch
+                x0, I, G, Dy, Dx, L = x, 0, 0, 0, 0, 0    # reset params
 
             I += i  # accumulate P params
             G += vg
             Dy += dy
             Dx += dx
-            N += ncomp
             L += 1
             _s = s  # prior sign
 
-            P_.append([_s, x0, I, G, Dy, Dx, N, L, derts_[x0 - x_start: x0 - x_start + L]])  # last P in row
+            P_.append([_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start: x0 - x_start + L]])  # last P in row
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------

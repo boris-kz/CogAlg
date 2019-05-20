@@ -1,19 +1,26 @@
 from collections import deque
-from math import hypot
+from math import hypot, pi
 from cmath import rect
+
+# constrains:
+two_pi = 2 * pi
+angle_coef = 256 / pi   # to scale angle into (-128, 128)
 
 # ************ FUNCTIONS ************************************************************************************************
 # -compare()
 # -lateral_comp()
 # -vertical_comp()
-# -find_and_comp_slice_()
+# -scan_slice()
+# -scan_slice_diag()
+# -compute_g()
 # ***********************************************************************************************************************
 
-def compare(P_, buff___, '''index''', fa=0):      # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
+def compare(P_, buff___, '''index''', Ave, fa=0):      # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
     rng = buff___.maxlen
 
     derts__ = lateral_comp(P_, rng, '''index''', fa)                  # horizontal comparison (return current line)
     _derts__ = vertical_comp(derts__, buff___, rng, '''index''', fa)  # vertical and diagonal comparison (return last line in buff___)
+    compute_g(_derts__, Ave, fa)
 
     return _derts__
     # ---------- compare() end ----------------------------------------------------------------------------------------------
@@ -305,3 +312,26 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
 
     return _new_derts__, new_derts__
     # ---------- scan_slice_diag() end -------------------------------------------------------------------------------------
+
+def compute_g(derts__, fa=0):   # compute g from dx, dy
+    if not fa:
+        for x0, derts_ in derts__:
+            for derts in derts_:
+                dy, dx = derts[-1][:2]
+                g = hypot(dy, dx)
+
+                derts[-1] = (g,) + derts[-1]
+    else:
+        for x0, derts_ in derts__:
+            for derts in derts_:
+                dy, dx = derts[-1][:2]
+
+                ga = hypot(phase(dy), phase(dx))
+
+                if ga > pi: ga = two_pi - ga        # translate ga's scope into [0, pi) (g is unsigned)
+
+                g = int(ga * angle_coef)    # transform to fit in scope [-128, 127)
+
+                derts[-1] = (g,) + derts[-1]
+
+    # ---------- compute_g() end -------------------------------------------------------------------------------------------
