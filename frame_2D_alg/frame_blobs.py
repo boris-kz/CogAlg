@@ -213,8 +213,7 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg,
-              frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg
     I, G, Dy, Dx, L, Ly = blob[1]
@@ -223,6 +222,7 @@ def form_blob(term_seg,
 
     if blob[-2] == 0:  # if open_segments == 0: blob is terminated and packed in frame
         s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, [y0, x0, xn] = blob
+
         yn = y0s + Lys  # yn from last segment
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
         for seg in seg_:

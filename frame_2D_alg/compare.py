@@ -314,24 +314,22 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
     # ---------- scan_slice_diag() end -------------------------------------------------------------------------------------
 
 def compute_g(derts__, fa=0):   # compute g from dx, dy
-    if not fa:
-        for x0, derts_ in derts__:
-            for derts in derts_:
-                dy, dx = derts[-1][:2]
+
+    for x0, derts_ in derts__:
+        for derts in derts_:
+            dy, dx = derts[-1][:2]
+
+            if not fa:
                 g = hypot(dy, dx)
 
-                derts[-1] = (g,) + derts[-1]
-    else:
-        for x0, derts_ in derts__:
-            for derts in derts_:
-                dy, dx = derts[-1][:2]
-
+            else:
                 ga = hypot(phase(dy), phase(dx))
 
-                if ga > pi: ga = two_pi - ga        # translate ga's scope into [0, pi) (g is unsigned)
+                if ga > pi: ga = two_pi - ga  # translate ga's scope into [0, pi) (g is unsigned)
 
-                g = int(ga * angle_coef)    # transform to fit in scope [-128, 127)
+                g = int(ga * angle_coef)  # transform to fit in scope [-128, 127)
 
-                derts[-1] = (g,) + derts[-1]
+
+            derts[-1] = (g,) + derts[-1]    # return
 
     # ---------- compute_g() end -------------------------------------------------------------------------------------------

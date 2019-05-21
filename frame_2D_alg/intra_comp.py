@@ -125,7 +125,7 @@ def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) betw
     if P_ and seg_:  # if both are not empty
         P = P_.popleft()  # input-line Ps
         seg = seg_.popleft()  # higher-line segments,
-        _P = seg[2][-1]  # last element of each segment is higher-line P
+        _P = seg[-3][-1]  # last element of each segment is higher-line P
         stop = False
         fork_ = []
 
@@ -136,8 +136,8 @@ def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) betw
             _xn = _x0 + _P[-2]  # first x in next _P
 
             if P[0] == _P[0] and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
-                seg[3] += 1
-                fork_.append(seg)  # P-connected segments are buffered into fork_
+                seg[-1] += 1        # roots += 1
+                fork_.append(seg)   # P-connected segments are buffered into fork_
 
             if xn < _xn:  # _P overlaps next P in P_
                 new_P_.append((P, fork_))
@@ -145,16 +145,16 @@ def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) betw
                 if P_:
                     P = P_.popleft()  # load next P
                 else:  # if no P left: terminate loop
-                    if seg[3] != 1:  # if roots != 1: terminate seg
+                    if seg[-1] != 1:  # if roots != 1: terminate seg
                         form_blob(seg, root_blob, alt, rng)
                     stop = True
             else:  # no next-P overlap
-                if seg[3] != 1:  # if roots != 1: terminate seg
+                if seg[-1] != 1:  # if roots != 1: terminate seg
                     form_blob(seg, root_blob, alt, rng)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
-                    _P = seg[2][-1]
+                    _P = seg[-3][-1]
                 else:  # if no seg left: terminate loop
                     new_P_.append((P, fork_))
                     stop = True
@@ -180,44 +180,44 @@ def form_seg_(y, P_, root_blob, alt, rng):  # convert or merge every P into segm
         params.append(1)        # add Ly
 
         if not fork_:  # new_seg is initialized with initialized blob
-            blob = [s, [0] * (len(params)), [], 1, [y, x0, xn]]   # s, params, seg_, open_segments, box
-            new_seg = [y, params, [P], 0, fork_, blob]            # y0, params, Py_, roots, fork_, blob
+            blob = [s, [0] * (len(params)), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box
+            new_seg = [y] + params + [[P]] + [blob, 0]              # y0, I, G, Dy, Dx, N, L, Ly, Py_, blob, roots
             blob[2].append(new_seg)
         else:
             if len(fork_) == 1 and fork_[0][3] == 1:  # P has one fork and that fork has one root
                 new_seg = fork_[0]
-                params_seg = new_seg[1]     # fork segment params, P is merged into segment:
-                new_seg[1] = [param + param_seg for param, param_seg in zip(params, params_seg)]
-                new_seg[2].append(P)        # Py_: vertical buffer of Ps
-                new_seg[3] = 0              # reset roots
-                blob = new_seg[-1]
+                I, G, Dy, Dx, L, Ly = params
+                Is, Gs, Dys, Dxs, Ls, Lys = new_seg[1:-3]  # fork segment params, P is merged into segment:
+                new_seg[1:-3] = [Is + I, Gs + G, Dys + Dy, Dxs + Dx, Ls + L, Lys + Ly]
+                new_seg[-3].append(P)  # Py_: vertical buffer of Ps
+                new_seg[-1] = 0  # reset roots
+                blob = new_seg[-2]
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
-                blob = fork_[0][5]
-                new_seg = [y, params, [P], 0, fork_, blob]  # new_seg is initialized with fork blob
+                blob = fork_[0][-2]
+                new_seg = [y] + params + [[P]] + [blob, 0]  # new_seg is initialized with fork blob
                 blob[2].append(new_seg)                     # segment is buffered into blob
 
                 if len(fork_) > 1:  # merge blobs of all forks
-                    if fork_[0][3] == 1:  # if roots == 1: fork hasn't been terminated
+                    if fork_[0][-1] == 1:  # if roots == 1: fork hasn't been terminated
                         form_blob(fork_[0], root_blob, alt, rng)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
-                        if fork[3] == 1:
+                        if fork[-1] == 1:
                             form_blob(fork, root_blob, alt, rng)
 
-                        if not fork[5] is blob:
-                            params, seg_, open_segs, box = fork[5][1:]  # merged blob, omit sign
-                            blob[1] = [par1 + par2 for par1, par2 in
-                                       zip(blob[1], params)]  # sum params of merging blobs
+                        if not fork[-2] is blob:
+                            params, seg_, open_segs, box = fork[-2][1:]  # merged blob, omit sign
+                            blob[1] = [par1 + par2 for par1, par2 in zip(blob[1], params)]  # sum params of merging blobs
                             blob[3] += open_segs
                             blob[4][0] = min(blob[4][0], box[0])  # extend box y0
                             blob[4][1] = min(blob[4][1], box[1])  # extend box x0
                             blob[4][2] = max(blob[4][2], box[2])  # extend box xn
                             for seg in seg_:
                                 if not seg is fork:
-                                    seg[5] = blob  # blobs in other forks are references to blob in the first fork
+                                    seg[-2] = blob  # blobs in other forks are references to blob in the first fork
                                     blob[2].append(seg)  # buffer of merged root segments
-                            fork[5] = blob
+                            fork[-2] = blob
                             blob[2].append(fork)
                         blob[3] -= 1  # open_segments -= 1: shared with merged blob
 
@@ -232,19 +232,20 @@ def form_seg_(y, P_, root_blob, alt, rng):  # convert or merge every P into segm
 
 def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
-    y0s, params, Py_, roots, fork_, blob = term_seg
-    blob[1] = [params1 + params2 for params1, params2 in zip(params, blob[1])]
-    blob[3] += roots - 1  # number of open segments
+    y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg
+    I, G, Dy, Dx, L, Ly = blob[1]
+    blob[1] = [I + Is, G + Gs, Dy + Dys, Dx + Dxs, L + Ls, Ly + Lys]
+    blob[-2] += roots - 1  # number of open segments
 
-    if not blob[3]:  # if open_segments == 0: blob is terminated and packed in frame
+    if blob[-2] == 0:  # if open_segments == 0: blob is terminated and packed in frame
+        s, _, seg_, open_segs, [y0, x0, xn] = blob
 
-        s, _, seg_, open_segs, (y0, x0, xn) = blob
-        yn = y0s + params[-1]         # yn = y0 + Ly (segment's)
+        yn = y0s + Lys  # yn from last segment
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
-
         for seg in seg_:
+            seg.pop()  # remove roots counter
             seg.pop()  # remove references to blob
-            for y, P in enumerate(seg[2], start=seg[0]):
+            for y, P in enumerate(seg[-1], start=seg[0]):
                 x0P = P[1]
                 LP = P[-2]
                 xnP = x0P + LP
@@ -252,6 +253,7 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
 
         feedback_draft(root_blob, blob, rng)
 
+        del blob
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 def feedback_draft(root_blob, blob, rng):
