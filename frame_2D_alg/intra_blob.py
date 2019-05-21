@@ -73,8 +73,8 @@ def intra_blob(root_blob, comp_branch, eval_fork_, fa, Ave_blob, Ave):  # fa (fl
                     Ga = sub_blob.Derts[-1][-1][1][0]  # sub_blob eval / intra_blob fork: Derts+, ablobs eval / intra_comp:
 
                     val_gg  = G - Ga  # value of gradient_of_gradient deviation: directional variation
-                    val_gga = Ga      # value of gradient_of_angle_gradient deviation, no ga direction yet
-                    val_rg  = G + Ga  # value of rng=2 gradient deviation: non-directional variation
+                    val_gga = Ga      # value of gradient_of_angle_gradient deviation, no ga angle yet
+                    val_rg  = G + Ga  # value of rng=2 gradient deviation:  non-directional variation
                     val_rga = G + Ga  # value of rng=2 angle gradient deviation, with comp_angle
 
                     eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? comp i = derts[-1] if fa

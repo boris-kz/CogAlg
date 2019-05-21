@@ -29,7 +29,7 @@ flip_ave = 1000
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    s, x0, L, I, G, Dx, Dy, _derts_ = P               # L int, I, dif G, intermediate: abs_Dx, abs_Dy, Dx, Dy
+    s, x0, L, I, G, Dx, Dy, _derts_ = P  # ext: X, new: L, inp: I, dif: Dx, Dy -> G
     _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
@@ -53,13 +53,14 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
     dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # no comp I: Dy is higher-precision dI
     dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # G = hypot(Dy, Dx): comp in 2D structures only?
 
-    Pd = ddX + dL + dDx + dDy  # -> direction-combined dPP, x sign cancel?
+    Pd = ddX + dL + dDx + dDy  # -> combined-sign dPP, regardless of param? or comb vPP only: no x-sign?
+    # dL -> dDs corr by dDy only, abs dDs: variation vs. direction?
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy, !odDx?
     Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= > Pd | Pm rolp?
 
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
 
-        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+        rL  = L / _L   # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
         nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 
@@ -74,8 +75,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         else: dPP_rdn = 1; ndPP_rdn = 0
 
         div_f = 1
-        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn, \
-            Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
+        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn,  Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
 
     else:
         div_f = 0  # DIV comp flag
