@@ -91,7 +91,7 @@ def form_P_(derts__, alt, Ave, rng):  # horizontally cluster and sum consecutive
     P_ = deque()    # row of Ps
     for x_start, derts_ in derts__:   # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
-        dert_ = [derts['''index'''] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
+        dert_ = [derts['''index'''][-fa] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
         i, g, dy, dx = dert_[0]
 
         _vg = g - Ave
