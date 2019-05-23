@@ -256,6 +256,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 # ************ PROGRAM BODY *********************************************************************************************
 
 ave = 20
+DEBUG = True
 
 # Load inputs --------------------------------------------------------------------
 # image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
@@ -274,17 +275,16 @@ frame_of_blobs = image_to_blobs(image)
 # frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
 # DEBUG --------------------------------------------------------------------------
-
-from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
-draw('./../debug/root_blobs', map_frame(frame_of_blobs))
-
-from intra_comp import intra_comp, hypot_g
-
-for i, blob in enumerate(frame_of_blobs[2]):
-    if blob.Derts[0][0] > 500:
-        intra_comp(blob, hypot_g, 0, 8)
-#         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
-
+if DEBUG:
+    from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
+    draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+    #
+    # from intra_comp import intra_comp, hypot_g
+    #
+    # for i, blob in enumerate(frame_of_blobs[2]):
+    #     if blob.Derts[0][0] > 500:
+    #         intra_comp(blob, hypot_g, 0, 8)
+    #         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
 # END DEBUG -----------------------------------------------------------------------
 
 end_time = time() - start_time
