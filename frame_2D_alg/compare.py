@@ -7,7 +7,7 @@ two_pi = 2 * pi
 angle_coef = 256 / pi   # to scale angle into (-128, 128)
 
 # ************ FUNCTIONS ************************************************************************************************
-# -compare()
+# -compare_derts()
 # -hypot_g()
 # -compute_a()
 # -lateral_comp()
@@ -17,7 +17,7 @@ angle_coef = 256 / pi   # to scale angle into (-128, 128)
 # -compute_g()
 # ***********************************************************************************************************************
 
-def compare(P_, buff___, '''index''', Ave, fa=0, hg=0):      # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
+def compare_derts(P_, buff___, '''index''', Ave, fa=0, hg=0):      # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
 
     if hg:
         _derts__ = hypot_g(P_)
@@ -32,7 +32,8 @@ def compare(P_, buff___, '''index''', Ave, fa=0, hg=0):      # comp i at increme
         compute_g(_derts__, Ave, fa)
 
     return _derts__
-    # ---------- compare() end ----------------------------------------------------------------------------------------------
+    # ---------- compare_derts() end ----------------------------------------------------------------------------------------
+
 def hypot_g(P_):      # compute g with math.hypot(), convert dert into derts
     derts__ = []
     for P in P_:
@@ -105,7 +106,7 @@ def vertical_comp(derts__, buff___, '''index''', fa):    # vertical and diagonal
     yd = 1
     for index, _derts__ in enumerate(buff___):  # iterate through (rng - 1) higher lines
 
-        if yd < rng:  # diagonal comp
+        if yd < rng:  # diagonal comp, if rng == 1, this returns False
 
             xd = rng - yd
 

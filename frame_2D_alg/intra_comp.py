@@ -1,15 +1,12 @@
 import numpy as np
 from math import hypot
 from collections import deque, namedtuple
-from comp_range import comp_range
-from comp_angle import comp_angle
-from comp_gradient import comp_gradient
+from compare import compare_derts
 
 nt_blob = namedtuple('blob', 'I Derts sign box map root_blob seg_')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
-# -hypot_g()
 # -form_P_()
 # -scan_P_()
 # -form_seg_()
@@ -17,7 +14,7 @@ nt_blob = namedtuple('blob', 'I Derts sign box map root_blob seg_')
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, comp_branch, Ave_blob, Ave):
+def intra_comp(blob, '''index''', fa, Ave_blob, Ave):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
@@ -57,7 +54,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave):
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = comp_branch(P_, buff___, '''index''', Ave, alt)   # no buff___ or alt in hypot_g or future dx_g
+        derts__ = compare_derts(P_, buff___, '''index''', fa)   # no buff___ or alt in hypot_g or future dx_g
         if derts__:     # form sub_blobs:
 
             sP_ = form_P_(derts__, alt, Ave, rng)
@@ -70,22 +67,7 @@ def intra_comp(blob, comp_branch, Ave_blob, Ave):
         form_blob(sseg_.popleft(), blob, alt, rng)
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
-'''
-def hypot_g(P_, buff___, alt):  # strip g from dert, convert dert into nested derts
-    derts__ = []    # line of derts
 
-    for P in P_:       # iterate through line of root_blob's Ps
-        x0 = P[1]      # coordinate of first dert in a span of horizontally contiguous derts
-        dert_ = P[-1]  # span of horizontally contiguous derts
-        new_derts_ = []
-        for i, g, dy, dx in dert_:
-            new_derts_.append([(i,), (dy, dx, 4)])    # ncomp=4, specified in deeper derts only
-
-        derts__.append((x0, new_derts_))
-    return derts__  # return i indices and derts__
-
-    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
-'''
 def form_P_(derts__, alt, Ave, rng):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
