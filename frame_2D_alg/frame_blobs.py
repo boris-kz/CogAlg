@@ -268,13 +268,10 @@ frame_of_blobs = image_to_blobs(image)
 
 # DEBUG --------------------------------------------------------------------------
 
-from DEBUG import draw, over_draw, map_blobs, map_blob, map_segment, empty_map
+from DEBUG import draw, map_blobs
 # draw('./../debug/root_blobs', map_blobs(frame_of_blobs))
 
 from intra_comp import intra_comp, hypot_g
-from comp_range import comp_range
-from comp_angle import comp_angle
-from comp_gradient import comp_gradient
 
 for i, blob in enumerate(frame_of_blobs[1]):
     if blob.Derts[0][-2] > 500:  # L > 20

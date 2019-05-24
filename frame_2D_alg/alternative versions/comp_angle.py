@@ -1,6 +1,6 @@
 from cmath import phase, rect
 from math import hypot, pi
-from comp_range import scan_slice_
+from frame_2D_alg.comp_range import scan_slice_
 
 two_pi = 2 * pi
 angle_coef = 256 / pi   # to scale angle into (-128, 128)

@@ -1,4 +1,4 @@
-from comp_range import scan_slice_
+from frame_2D_alg.comp_range import scan_slice_
 
 # ************ FUNCTIONS ************************************************************************************************
 # -comp_gradient()

@@ -1,7 +1,4 @@
 from math import hypot
-from comp_angle import comp_angle
-from comp_gradient import comp_gradient
-from comp_range import comp_range
 from intra_comp import intra_comp
 
 '''
@@ -68,8 +65,8 @@ def intra_blob(root_blob, rng, fa, eval_fork_, Ave_blob, Ave):  # rng->cyc and f
                     Ave_blob *= rave
                     Ave += ave
                     rdn = 1
-                    G =  sub_blob.Derts[-1][-1][0][0]  # Derts: current + higher-layers params, no lower layers yet
-                    Ga = sub_blob.Derts[-1][-1][1][0]  # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp:
+                    G =  sub_blob.Derts[-1][-1][-1][0][0]  # Derts: current + higher-layers params, no lower layers yet
+                    Ga = sub_blob.Derts[-1][-1][-1][1][0]  # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp:
 
                     val_gg  = G - Ga  # value of gradient_of_gradient deviation: directional variation
                     val_gga = Ga      # value of gradient_of_angle_gradient deviation, no ga angle yet
@@ -77,10 +74,10 @@ def intra_blob(root_blob, rng, fa, eval_fork_, Ave_blob, Ave):  # rng->cyc and f
                     val_rga = G + Ga  # value of rng=2 angle gradient deviation, with comp_angle
 
                     eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? comp i = derts[-1] if fa
-                        (val_gg,  Ave_blob * 2, 0, 0, 1),  # rng=1, fa=0,
-                        (val_rg,  Ave_blob * 2, 0, 0, 2),  # rng=2, fa=0,
+                        (val_gg,  Ave_blob * 2, 0, 1, 0),  # rng=1, fa=0,
+                        (val_rg,  Ave_blob * 2, 0, 2, 0),  # rng=2, fa=0,
                         (val_gga, Ave_blob,     0, 1, 1),  # rng=1, fa=1,
-                        (val_rga, Ave_blob * 2, 0, 1, 2)   # rng=2, fa=1;  cyc = -rng; if rng > 1: cyc -= fa
+                        (val_rga, Ave_blob * 2, 0, 2, 1)   # rng=2, fa=1;  cyc = -rng; if rng > 1: cyc -= fa
                         ]
 
                     sorted(eval_fork_, key=lambda val: val[0], reverse=True)
