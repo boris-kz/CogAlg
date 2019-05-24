@@ -16,9 +16,9 @@ angle_coef = 256 / pi   # to scale angle into (-128, 128)
 # -compute_a()
 # ***********************************************************************************************************************
 
-def comp_dert(P_, buff___, Ave, rng, fa=0, hg=0):  
-    # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P; range = rng in intra_comp, no rng = buff___.maxlen
-    
+def comp_dert(P_, buff___, Ave, rng, fa=0, hg=0):    # comparison of input param between derts at range = rng
+    # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
+
     if hg:
         _derts__ = hypot_g(P_)
     else:
@@ -38,8 +38,8 @@ def lateral_comp(P_, rng, fa=0):  # horizontal comparison between pixels at dist
     derts__ = []
     max_index = rng - 1           # max_index in dert_buff_
 
-    if fa: cyc = -rng - 2  # cyc and rng are cross-convertable?
-    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert
+    if fa: cyc = -rng - 2  # cyc and rng are cross-convertible
+    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert_forks
 
     for P in P_:
         x0 = P[1] + rng          # sub-P recedes
@@ -49,21 +49,20 @@ def lateral_comp(P_, rng, fa=0):  # horizontal comparison between pixels at dist
 
         for derts in derts_:
             i = derts[cyc][-fa]          # if fa, use angle in radian (index 1)
-            dy, dx = derts[cyc][-fa]         # draw accumulated dy, dx from specified dert
+            dy, dx = derts[cyc][-fa]     # draw accumulated dy, dx from specified dert
 
             if len(buff_) == rng:
                 # xd == rng and coordinate is within P vs. gap
 
-                _derts = buff_[max_index]           # rng-spaced dert, or dert at the end of deque with maxlen=rng
-                _i = _derts[cyc][-fa]  # i from specified dert
-                _dy, _dx = _derts[-1]               # accumulated dy, dx from freshly appended dert (in the code below)
+                _derts = buff_[max_index]  # rng-spaced dert, or dert at the end of deque with maxlen=rng
+                _i = _derts[cyc][-fa]      # i from specified dert
+                _dy, _dx = _derts[-1]      # accumulated dy, dx from freshly appended dert (in the code below)
 
                 d = i - _i      # lateral comparison
                 dx += d         # bilateral accumulation
                 _dx += d        # bilateral accumulation
 
                 _derts[-1] = _dy, _dx       # return
-
                 new_derts_.append(_derts)
 
             buff_.appendleft(derts + [(dy, dx)])     # append new accumulated dy, dx for horizontal comp
@@ -73,40 +72,40 @@ def lateral_comp(P_, rng, fa=0):  # horizontal comparison between pixels at dist
 
     return derts__
 
-    # ---------- lateral_comp() end -----------------------------------------------------------------------------------------
+    # ---------- lateral_comp() end ---------------------------------------------------------------------------------------
 
 def vertical_comp(derts__, buff___, rng, fa):    # vertical and diagonal comparison
 
     out_derts__ = []     # initialize output
-    # first line of derts in last element of buff___ is returned to compare() at len = maxlen(rng)
+    # first line of derts in last element of buff___ is returned to comp_dert() at len = maxlen(rng)
     yd = 1
-    
-    if fa: cyc = -rng - 2  # cyc and rng are cross-convertable?
-    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert
+
+    if fa: cyc = -rng - 2  # cyc and rng are cross-convertible
+    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert_forks
 
     for index, _derts__ in enumerate(buff___):  # iterate through (rng - 1) higher lines
-
         if yd < rng:  # diagonal comp, if rng == 1, this returns False
 
             xd = rng - yd
             hyp = hypot(xd, yd)
             y_coef = yd / hyp       # to decompose d into dy, replace with look-up table?
             x_coef = xd / hyp       # to decompose d into dx, replace with look-up table?
+            coefs = (y_coef, x_coef)
+            shift = -xd
 
-            # upper-left comparisons:
-            _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift = -xd, coefs = (y_coef, x_coef), cyc, fa)
+            # upper-left comps:
+            _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fa)
 
-            # upper-right comparisons:
-            _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift = xd, coefs = (y_coef, -x_coef), cyc, fa)
+            # upper-right comps:
+            # same ops on _derts__ shifted by upper-left comps, shift back for vertical comp?
+            _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fa)
 
-            # return:
-            buff___[index] = _derts__
+            buff___[index] = _derts__ # return
 
-        else:   # pure vertical comp, assign _derts__ to output
-            out_derts__, derts__ = scan_slice_(_derts__, derts__, cyc, fa)  # pure vertical: no shift, fixed coef
+        else:   # strictly vertical comp, no shift, fixed coef
+            out_derts__, derts__ = scan_slice_(_derts__, derts__, cyc, fa)  # _derts__ are converted to out_derts__
 
         yd += 1
-
     buff___.appendleft(derts__)  # buffer derts__ into buff___, after vertical_comp to preserve last derts__ in buff___
 
     return out_derts__   # = _derts__ if len(buff___) == rng else []
@@ -139,8 +138,8 @@ def scan_slice_(_derts__, derts__, cyc, fa=False):     # unit of vertical comp
 
             if i_derts_ < len(_derts__) and  _x0 < xn:   # if overlap, compare slice:
 
-                olp_x0 = max(x0, _x0)   # left overlap
-                olp_xn = min(xn, _xn)   # right overlap
+                olp_x0 = max(x0, _x0)  # left overlap
+                olp_xn = min(xn, _xn)  # right overlap
 
                 start = max(0, olp_x0 - x0)    # indices of slice derts_
                 end = min(len(derts_), len(derts_) + olp_xn - xn)
@@ -176,7 +175,7 @@ def scan_slice_(_derts__, derts__, cyc, fa=False):     # unit of vertical comp
                 break
 
             # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
-            
+
             _new_derts__ += [(_x0 + start, _derts_[start:end]) for start, end in
                              zip(
                                  [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
@@ -192,7 +191,7 @@ def scan_slice_(_derts__, derts__, cyc, fa=False):     # unit of vertical comp
                 _flt = [True] * len(_derts_)  # to filter incomplete _derts
 
         # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
-        
+
         new_derts__ += [(x0 + start, derts_[start:end]) for start, end in
                         zip(
                             [i for i in range(len(flt)) if not flt[i] and (i == 0 or flt[i - 1])],
@@ -201,7 +200,7 @@ def scan_slice_(_derts__, derts__, cyc, fa=False):     # unit of vertical comp
                         if start < end]
 
     if i_derts_ < len(_derts__):  # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
-        
+
         _new_derts__ += [(_x0 + start, _derts_[start:end]) for start, end in
                          zip(
                              [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
@@ -359,6 +358,7 @@ def compute_a(P_):  # compute angle from last dy, dx
     for P in P_:
         derts_ = P[-1]
         for derts in derts_:
+
             g, dy, dx, _ = derts[-1]
             a = complex(dx, dy)  # to complex number: a = dx + dyj
             a /= abs(_a)  # normalize a so that abs(a) == 1 (hypot() from real and imaginary part of a == 1)
