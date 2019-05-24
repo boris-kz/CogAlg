@@ -2,83 +2,60 @@ from collections import deque
 from math import hypot, pi
 from cmath import rect
 
-# constrains:
-two_pi = 2 * pi
+two_pi = 2 * pi  # angle constraint
 angle_coef = 256 / pi   # to scale angle into (-128, 128)
 
 # ************ FUNCTIONS ************************************************************************************************
 # -compare_derts()
-# -hypot_g()
-# -compute_a()
 # -lateral_comp()
 # -vertical_comp()
 # -scan_slice()
 # -scan_slice_diag()
 # -compute_g()
+# -hypot_g()
+# -compute_a()
 # ***********************************************************************************************************************
 
-def compare_derts(P_, buff___, '''index''', Ave, fa=0, hg=0):      # comp i at incremented range, dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
-
+def comp_dert(P_, buff___, Ave, rng, fa=0, hg=0):  
+    # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P; range = rng in intra_comp, no rng = buff___.maxlen
+    
     if hg:
         _derts__ = hypot_g(P_)
     else:
-        rng = buff___.maxlen
+        if fa and rng == 1:
+            compute_a(P_)  # compute angles within P
 
-        if fa and rng == 1:     # compute angles
-            compute_a(P_)
-
-        derts__ = lateral_comp(P_, rng, '''index''', fa)                  # horizontal comparison (return current line)
-        _derts__ = vertical_comp(derts__, buff___, rng, '''index''', fa)  # vertical and diagonal comparison (return last line in buff___)
+        derts__ = lateral_comp(P_, rng, fa)                  # horizontal comparison, returns current line
+        _derts__ = vertical_comp(derts__, buff___, rng, fa)  # vertical and diagonal comp, returns last line in buff___
         compute_g(_derts__, Ave, fa)
 
     return _derts__
+
     # ---------- compare_derts() end ----------------------------------------------------------------------------------------
 
-def hypot_g(P_):      # compute g with math.hypot(), convert dert into derts
+def lateral_comp(P_, rng, fa=0):  # horizontal comparison between pixels at distance == rng
+
     derts__ = []
-    for P in P_:
-        x0 = P[1]
-        dert_ = P[-1]
-        derts_ = [[(p,), (hypot(dy, dx), dy, dx)] for p, _, dy, dx in dert_]
+    max_index = rng - 1           # max_index in dert_buff_
 
-        derts__.append((x0, derts_))
-
-    return derts__
-    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
-def compute_a(P_):    # compute a with last dy, dx
-    for P in P_:
-        derts_ = P[-1]
-        for derts in derts_:
-            g, dy, dx, _ = derts[-1]
-            a = complex(dx, dy)             # to complex number: a = dx + dyj
-            a /= abs(_a)                    # normalize a so that abs(a) == 1 (hypot() from real and imaginary part of a == 1)
-            a_radian = phase(_a)            # angular value of a in radian: a_radian in (-pi, pi)
-
-            derts += [(a,), (a_radian,)]    # return
-    # ---------- compute_a() end --------------------------------------------------------------------------------------------
-
-def lateral_comp(P_, rng, '''index''', fa=0):     # horizontal comparison between pixels at distance == rng
-    # [cyc][alt][typ]
-    derts__ = []
-    max_index = rng - 1             # max_index in dert_buff_
+    if fa: cyc = -rng - 2  # cyc and rng are cross-convertable?
+    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert
 
     for P in P_:
-        x0 = P[1] + rng             # sub-P recedes
+        x0 = P[1] + rng          # sub-P recedes
         derts_ = P[-1]
         new_derts_ = []
-
-
         buff_ = deque(maxlen=rng)  # new dert's buffer each slice
 
         for derts in derts_:
-            i = derts['''index''' + fa][-fa]          # if fa, use angle in radian (index 1)
-            dy, dx = derts['''index''']         # draw accumulated dy, dx from specified dert
+            i = derts[cyc][-fa]          # if fa, use angle in radian (index 1)
+            dy, dx = derts[cyc][-fa]         # draw accumulated dy, dx from specified dert
 
             if len(buff_) == rng:
                 # xd == rng and coordinate is within P vs. gap
 
                 _derts = buff_[max_index]           # rng-spaced dert, or dert at the end of deque with maxlen=rng
-                _i = _derts['''index''' + fa][-fa]  # i from specified dert
+                _i = _derts[cyc][-fa]  # i from specified dert
                 _dy, _dx = _derts[-1]               # accumulated dy, dx from freshly appended dert (in the code below)
 
                 d = i - _i      # lateral comparison
@@ -98,43 +75,45 @@ def lateral_comp(P_, rng, '''index''', fa=0):     # horizontal comparison betwee
 
     # ---------- lateral_comp() end -----------------------------------------------------------------------------------------
 
-def vertical_comp(derts__, buff___, '''index''', fa):    # vertical and diagonal comparison
+def vertical_comp(derts__, buff___, rng, fa):    # vertical and diagonal comparison
 
-    output = []     # initialize output
-
+    out_derts__ = []     # initialize output
     # first line of derts in last element of buff___ is returned to compare() at len = maxlen(rng)
     yd = 1
+    
+    if fa: cyc = -rng - 2  # cyc and rng are cross-convertable?
+    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert
+
     for index, _derts__ in enumerate(buff___):  # iterate through (rng - 1) higher lines
 
         if yd < rng:  # diagonal comp, if rng == 1, this returns False
 
             xd = rng - yd
-
             hyp = hypot(xd, yd)
             y_coef = yd / hyp       # to decompose d into dy, replace with look-up table?
             x_coef = xd / hyp       # to decompose d into dx, replace with look-up table?
 
             # upper-left comparisons:
-            _derts__, derts__ = scan_slice_diag(_derts__, derts__, dert_index=('''index'''), shift = -xd, coefs = (y_coef, x_coef))
+            _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift = -xd, coefs = (y_coef, x_coef), cyc, fa)
 
             # upper-right comparisons:
-            _derts__, derts__ = scan_slice_diag(_derts__, derts__, dert_index=('''index'''), shift = xd, coefs = (y_coef, -x_coef))
+            _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift = xd, coefs = (y_coef, -x_coef), cyc, fa)
 
             # return:
             buff___[index] = _derts__
 
         else:   # pure vertical comp, assign _derts__ to output
-            output, derts__ = scan_slice_(_derts__, derts__, dert_index=('''index''')  # pure vertical: no shift, fixed coef
+            out_derts__, derts__ = scan_slice_(_derts__, derts__, cyc, fa)  # pure vertical: no shift, fixed coef
 
         yd += 1
 
     buff___.appendleft(derts__)  # buffer derts__ into buff___, after vertical_comp to preserve last derts__ in buff___
 
-    return output   # = _derts__ if len(buff___) == rng else []
+    return out_derts__   # = _derts__ if len(buff___) == rng else []
 
     # ---------- vertical_comp() end ----------------------------------------------------------------------------------------
 
-def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vertical comp
+def scan_slice_(_derts__, derts__, cyc, fa=False):     # unit of vertical comp
 
     _new_derts__ = []
     new_derts__ = []
@@ -142,20 +121,21 @@ def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vert
     i_derts_ = 0     # index of _derts_ for scanning
     _x0, _derts_ = _derts__[i_derts_]
     _xn = _x0 + len(_derts_)
-    _flt = [True] * len(_derts_)    # used to filter incomplete _derts
+    _flt = [True] * len(_derts_)    # to filter-out incomplete _derts
 
     for x0, derts_ in derts__:      # iterate through derts__
         xn = x0 + len(derts_)
-        flt = [True] * len(derts_)  # used for filtering of incomplete derts
+        flt = [True] * len(derts_)  # to filter-out incomplete derts
 
         while i_derts_ < len(_derts__):
 
             while i_derts_ < len(_derts__) and _xn <= x0:  # while no overlap
                 i_derts_ += 1
                 if i_derts_ < len(_derts__):
+
                     _x0, _derts_ = _derts__[i_derts_]
                     _xn = _x0 + len(_derts_)
-                    _flt = [True] * len(_derts_)    # used for filtering of incomplete _derts
+                    _flt = [True] * len(_derts_)  # to filter incomplete _derts
 
             if i_derts_ < len(_derts__) and  _x0 < xn:   # if overlap, compare slice:
 
@@ -168,21 +148,20 @@ def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vert
                 _start = max(0, olp_x0 - _x0)  # indices of slice _derts_
                 _end = min(len(_derts_), len(_derts_) + olp_xn - _xn)
 
-                flt[start:end] = [False for _ in flt[start:end]]        # update filter
+                flt[start:end] = [False for _ in flt[start:end]]  # update filter
                 _flt[_start:_end] = [False for _ in _flt[_start:_end]]
 
                 for _derts, derts in zip(_derts_[_start:_end], derts_[start:end]):
 
-                    i = derts[dert_index + fa][-fa]         # input
-                    dy, dx = derts[-1]           # derivatives accumulated over current-rng comps
+                    i = derts[cyc][-fa]    # input
+                    dy, dx = derts[-1]     # derivatives accumulated over current-rng comps
 
-                    _i = _derts[dert_index + fa][-fa]       # template
-                    _dy, _dx = _derts[-1]       # derivatives accumulated over current-rng comps
+                    _i = _derts[cyc][-fa]  # template
+                    _dy, _dx = _derts[-1]  # derivatives accumulated over current-rng comps
 
                     d = i - _i
-
-                    if fangle:              # if i and _i are angular values:
-                        d = rect(1, d)      # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
+                    if fa:              # if i and _i are angular values:
+                        d = rect(1, d)  # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
 
                     # bilateral accumulation:
 
@@ -190,13 +169,14 @@ def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vert
                     _dy += d
 
                     # return:
-                    derts[-1] = dy, dx           # pack dy, dx, ncomp back into derts
+                    derts[-1] = dy, dx      # pack dy, dx, ncomp back into derts
                     _derts[-1] = _dy, _dx
 
             if _xn > xn:  # save _derts_ for next dert
                 break
 
-            # _derts_'s scanning ends, filter out incomplete _dertss (_derts_ might be broken into many slices):
+            # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
+            
             _new_derts__ += [(_x0 + start, _derts_[start:end]) for start, end in
                              zip(
                                  [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
@@ -205,14 +185,14 @@ def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vert
                              if start < end]
 
             i_derts_ += 1  # next _derts_
-
             if i_derts_ < len(_derts__):
 
                 _x0, _derts_ = _derts__[i_derts_]
                 _xn = _x0 + len(_derts_)
-                _flt = [True] * len(_derts_)    # used for filtering of incomplete _derts
+                _flt = [True] * len(_derts_)  # to filter incomplete _derts
 
-        # derts_'s scanning ends, filter out incomplete dertss (derts_ might be broken into many slices):
+        # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
+        
         new_derts__ += [(x0 + start, derts_[start:end]) for start, end in
                         zip(
                             [i for i in range(len(flt)) if not flt[i] and (i == 0 or flt[i - 1])],
@@ -220,8 +200,8 @@ def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vert
                         )
                         if start < end]
 
-    if i_derts_ < len(_derts__):    # last _derts_
-        # _derts_'s scanning ends, filter out incomplete _dertss (_derts_ might be broken into many slices):
+    if i_derts_ < len(_derts__):  # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
+        
         _new_derts__ += [(_x0 + start, _derts_[start:end]) for start, end in
                          zip(
                              [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
@@ -230,36 +210,36 @@ def scan_slice_(_derts__, derts__, dert_index, fangle=False):     # unit of vert
                          if start < end]
 
     return _new_derts__, new_derts__
+
     # ---------- scan_slice_() end ------------------------------------------------------------------------------------------
 
-def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False):  # unit of diagonal comp
+def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fa=False):  # unit of diagonal comp
 
     _new_derts__ = []
     new_derts__ = []
 
-    y_coef, x_coef = coefs      # to decompose d
-    i_dert, i_param = i_index   # two-level index of compared parameter in derts
-
-    i_derts_ = 0                # index of _derts_
+    y_coef, x_coef = coefs  # to decompose d
+    i_derts_ = 0            # index of _derts_
     _x0, _derts_ = _derts__[i_derts_]
 
     _x0 += shift  # for diagonal comparisons only
     _xn = _x0 + len(_derts_)
-    _flt = [True] * len(_derts_)  # used for filtering of incomplete _derts
+    _flt = [True] * len(_derts_)  # to filter incomplete _derts
 
     for x0, derts_ in derts__:  # iterate through derts__
         xn = x0 + len(derts_)
-        flt = [True] * len(derts_)      # used for filtering of incomplete derts
+        flt = [True] * len(derts_)  # to filter incomplete _derts
 
         while i_derts_ < len(_derts__):
 
             while i_derts_ < len(_derts__) and _xn <= x0:  # while no overlap
                 i_derts_ += 1
                 if i_derts_ < len(_derts__):
+
                     _x0, _derts_ = _derts__[i_derts_]
-                    _x0 += shift  # for diagonal comparisons only
+                    _x0 += shift    # for diagonal comparisons only
                     _xn = _x0 + len(_derts_)
-                    _flt = [True] * len(_derts_)  # used for filtering of incomplete _derts
+                    _flt = [True] * len(_derts_)  # to filter incomplete _derts
 
             if i_derts_ < len(_derts__) and _x0 < xn:  # if overlap, compare slice:
 
@@ -274,15 +254,16 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
 
                 for _derts, derts in zip(_derts_[_start:_end], derts_[start:end]):
 
-                    i = derts[dert_index + fa][-fa]     # input
+                    i = derts[cyc][-fa]     # input
                     dy, dx = derts[-1]       # derivatives accumulated over current-rng comps
 
-                    _i = _derts[dert_index + fa][-fa]   # template
+                    _i = _derts[cyc][-fa]   # template
                     _dy, _dx = _derts[-1]   # derivatives accumulated over current-rng comps
 
                     d = i - _i
-                    if fangle:              # if i and _i are angular values:
-                        d = rect(1, d)      # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
+                    if fa:              # if i and _i are angular values:
+                        d = rect(1, d)  # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
+
                     # decomposition into vertical and horizontal differences:
 
                     partial_dy = int(y_coef * d)
@@ -301,8 +282,8 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
 
             if _xn > xn:  # save _derts_ for next dert
                 break
+            # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
 
-            # _derts_'s scanning ends, filter out incomplete _dertss (_derts_ might be broken into many slices):
             _new_derts__ += [(_x0 + start - shift, _derts_[start:end]) for start, end in
                              zip(
                                  [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
@@ -313,12 +294,14 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
 
             i_derts_ += 1  # next _derts
             if i_derts_ < len(_derts__):
+
                 _x0, _derts_ = _derts__[i_derts_]
                 _x0 += shift  # for diagonal comparisons only
                 _xn = _x0 + len(_derts_)
                 _flt = [True] * len(_derts_)  # used for filtering of incomplete _derts
 
-        # derts_'s scanning ends, filter out incomplete dertss (derts_ might be broken into many slices):
+        # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
+
         new_derts__ += [(x0 + start - shift, derts_[start:end]) for start, end in
                         zip(
                             [i for i in range(len(flt)) if not flt[i] and (i == 0 or flt[i - 1])],
@@ -326,8 +309,8 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
                         )
                         if start < end]
 
-    if i_derts_ < len(_derts__):  # last _derts_
-        # _derts_'s scanning ends, filter out incomplete _dertss (_derts_ might be broken into many slices):
+    if i_derts_ < len(_derts__):  # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
+
         _new_derts__ += [(_x0 + start - shift, _derts_[start:end]) for start, end in
                          zip(
                              [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
@@ -337,9 +320,10 @@ def scan_slice_diag(_derts__, derts__, dert_index, shift, coefs, fangle=False): 
                          if start < end]
 
     return _new_derts__, new_derts__
+
     # ---------- scan_slice_diag() end -------------------------------------------------------------------------------------
 
-def compute_g(derts__, fa=0):   # compute g from dx, dy
+def compute_g(derts__, Ave, fa=0):   # compute g from dx, dy
 
     for x0, derts_ in derts__:
         for derts in derts_:
@@ -347,15 +331,39 @@ def compute_g(derts__, fa=0):   # compute g from dx, dy
 
             if not fa:
                 g = hypot(dy, dx)
-
             else:
                 ga = hypot(phase(dy), phase(dx))
-
                 if ga > pi: ga = two_pi - ga  # translate ga's scope into [0, pi) (g is unsigned)
 
                 g = int(ga * angle_coef)  # transform to fit in scope [-128, 127)
 
-
             derts[-1] = (g,) + derts[-1]    # return
 
     # ---------- compute_g() end -------------------------------------------------------------------------------------------
+
+def hypot_g(P_):  # compute g with math.hypot(), convert dert into derts
+    derts__ = []
+
+    for P in P_:
+        x0 = P[1]
+        dert_ = P[-1]
+        derts_ = [[(p,), (hypot(dy, dx), dy, dx)] for p, _, dy, dx in dert_]
+        derts__.append((x0, derts_))
+
+    return derts__
+
+    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
+
+def compute_a(P_):  # compute angle from last dy, dx
+
+    for P in P_:
+        derts_ = P[-1]
+        for derts in derts_:
+            g, dy, dx, _ = derts[-1]
+            a = complex(dx, dy)  # to complex number: a = dx + dyj
+            a /= abs(_a)  # normalize a so that abs(a) == 1 (hypot() from real and imaginary part of a == 1)
+            a_radian = phase(_a)  # angular value of a in radians: a_radian in (-pi, pi)
+
+            derts += [(a,), (a_radian,)]  # return
+
+    # ---------- compute_a() end --------------------------------------------------------------------------------------------
