@@ -1,6 +1,6 @@
 from collections import deque
 from math import hypot, pi
-from cmath import rect
+from cmath import rect, phase
 
 two_pi = 2 * pi  # angle constraint
 angle_coef = 256 / pi   # to scale angle into (-128, 128)
@@ -361,7 +361,7 @@ def compute_a(P_):  # compute angle from last dy, dx
         for derts in derts_:
             g, dy, dx, _ = derts[-1]
             a = complex(dx, dy)  # to complex number: a = dx + dyj
-            a /= abs(_a)  # normalize a so that abs(a) == 1 (hypot() from real and imaginary part of a == 1)
+            a /= abs(a)  # normalize a so that abs(a) == 1 (hypot() from real and imaginary part of a == 1)
             a_radian = phase(_a)  # angular value of a in radians: a_radian in (-pi, pi)
 
             derts += [(a,), (a_radian,)]  # return
