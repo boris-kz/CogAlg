@@ -1,9 +1,8 @@
 import numpy as np
-from math import hypot
 from collections import deque, namedtuple
 from compare import compare_derts
 
-nt_blob = namedtuple('blob', 'I Derts sign box map root_blob seg_')
+Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -269,18 +268,18 @@ def feedback_draft(root_blob, blob, rng):
         Lyr += Ly
         # + nblobs per type, for nested sub_blob_ in deeper layers?
 
-        sub_blob_.append(nt_blob(I=I,  # 0th Dert is I only
-                                 Derts=[[ (cyc, alt, typ), (G, Dy, Dx, N, L, Ly, []) ]],  # 1st Dert is single-blob
-                                 # alt: sub_layer index: -1 ga | -3 g, default -2 a if rng==1, none for hypot_g
-                                 # rng: dert cycle index for comp_range only: i_dert = -(rng-1)*3 + alt
-                                 sign = s,
-                                 box= box,  # same boundary box
-                                 map= map,  # blob boolean map, to compute overlap
-                                 root_blob=blob,
-                                 # comp_range_input_ = new_comp_range_input_ # root_blob [(alt, rng)]:
-                                 # Dert @ prior intra_blob comp_branch input blob is evaluated for comp_range
-                                 seg_=seg_,
-                                 ) )
+        sub_blob_.append(Blob(I=I,  # 0th Dert is I only
+                              Derts=[[ (cyc, alt, typ), (G, Dy, Dx, N, L, Ly, []) ]],  # 1st Dert is single-blob
+                              # alt: sub_layer index: -1 ga | -3 g, default -2 a if rng==1, none for hypot_g
+                              # rng: dert cycle index for comp_range only: i_dert = -(rng-1)*3 + alt
+                              sign = s,
+                              box= box,  # same boundary box
+                              map= map,  # blob boolean map, to compute overlap
+                              root_blob=blob,
+                              # comp_range_input_ = new_comp_range_input_ # root_blob [(alt, rng)]:
+                              # Dert @ prior intra_blob comp_branch input blob is evaluated for comp_range
+                              seg_=seg_,
+                              ) )
         root_blob.Derts[-1][1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
 
         root_blob = root_blob.root_blob
