@@ -15,7 +15,12 @@ from intra_comp import intra_comp
     Dert params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
-        Derts[ I, fork_Derts[ (G_Dert, Ga_Dert: (G, Dx, Dy, L, Ly, rng, fa, sub_blob_)]],  # I in Derts for feedback
+        Derts[ I, (G_Dert, Ga_Dert (G, Dx, Dy, L, Ly, sub_blob_)), fa_fork_Derts, fa_fork_fork_Derts...]],  
+        
+        # intra_comp initializes Derts[0] and Derts[1], then feedback adds deeper Derts of extended syntax: 
+        # Derts[0] = I, Derts[1] = fa_Derts, Derts[>1] = fa_forks: sorted [(cyc,fa)] per blob, 
+        
+        # forks_forks: refs to higher-layer forks by nested feedback index: cyc, fa / layer of forking? 
         
         # Dert per current and lower layers of derivation tree for Dert-parallel comp_blob, 
         # Dert rdn = par: parallel fork index, same-syntax cross-branch summation in deeper Derts  
@@ -33,7 +38,7 @@ from intra_comp import intra_comp
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
-                    derts_[ typ_derts: g_dert, ga_dert (g, dx, dy, ?a) per current & higher derivation layer
+                    derts_[ fa_derts (g_dert (g, dx, dy), ga_dert (g, dx, dy, a)) per current & higher derivation layer
 '''
 ave = 20
 ave_blob = 1000  # fixed cost of blob syntax
@@ -50,7 +55,7 @@ def intra_blob(root_blob, rng, fa, eval_fork_, Ave_blob, Ave):  # rng->cyc and f
     # two-level intra_comp eval per sub_blob, intra_blob eval per blob, ga_root_blob = g_blob
     new_eval_fork_ = []  # next intra_blob eval branches
 
-    for blob in root_blob.Derts[-1][-1][fa][-1]:  # [cycle][fork][fa] sub_blobs are evaluated for comp_branch
+    for blob in root_blob.Derts[-1][-1][fa][-1]:  # [cyc][fork][fa] sub_blobs are evaluated for comp_branch
         if blob.Derts[-1][-1][fa][0] > Ave_blob:  # noisy or directional G: > root blob conversion + sub_blob eval cost
 
             Ave_blob = intra_comp(blob, rng, 0, Ave_blob, Ave)  #  fa = 0, Ave_blob adjusted by actual n_sub_blobs
@@ -71,13 +76,13 @@ def intra_blob(root_blob, rng, fa, eval_fork_, Ave_blob, Ave):  # rng->cyc and f
                     val_gg  = G - Ga  # value of gradient_of_gradient deviation: directional variation
                     val_gga = Ga      # value of gradient_of_angle_gradient deviation, no ga angle yet
                     val_rg  = G + Ga  # value of rng=2 gradient deviation:  non-directional variation
-                    val_rga = G + Ga  # value of rng=2 angle gradient deviation, with comp_angle
+                    # val_rga = G + Ga  # value of rng=2 angle gradient deviation, with comp_angle
 
                     eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? comp i = derts[-1] if fa
                         (val_gg,  Ave_blob * 2, 0, 1, 0),  # rng=1, fa=0,
                         (val_rg,  Ave_blob * 2, 0, 2, 0),  # rng=2, fa=0,
                         (val_gga, Ave_blob,     0, 1, 1),  # rng=1, fa=1,
-                        (val_rga, Ave_blob * 2, 0, 2, 1)   # rng=2, fa=1;  cyc = -rng; if rng > 1: cyc -= fa
+                        (val_rg,  Ave_blob * 2, 0, 2, 1)   # rng=2, fa=1;  cyc = -rng; if rng > 1: cyc -= fa
                         ]
 
                     sorted(eval_fork_, key=lambda val: val[0], reverse=True)
@@ -134,20 +139,5 @@ def intra_blob(root_blob, rng, fa, eval_fork_, Ave_blob, Ave):  # rng->cyc and f
 
     return root_blob
 
-
-def hypot_g(P_, dert___):
-    dert__ = []  # dert_ per P, dert__ per line, dert___ per blob
-
-    for P in P_:
-        x0 = P[1]
-        dert_ = P[-1]
-        for i, (p, ncomp, dy, dx, g) in enumerate(dert_):
-            g = hypot(dx, dy)
-
-            dert_[i] = [(p, ncomp, dy, dx, g)]  # p is replaced by a in odd layers and absent in deep even layers
-        dert__.append((x0, dert_))
-    dert___.append(dert__)
-
-    # ---------- hypot_g() end ----------------------------------------------------------------------------------------------
 
 

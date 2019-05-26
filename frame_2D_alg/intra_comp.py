@@ -1,7 +1,7 @@
 import numpy as np
 from math import hypot
 from collections import deque, namedtuple
-from comp_dert_draft import comp_dert
+from comp_dert_draft import compare_derts
 
 nt_blob = namedtuple('blob', 'Derts sign box map root_blob seg_')
 
@@ -14,7 +14,7 @@ nt_blob = namedtuple('blob', 'Derts sign box map root_blob seg_')
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, rng, fa, Ave_blob, Ave):
+def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
     blob.seg_.sort(key=lambda seg: seg[0])   # sort by y0 coordinate for unfolding
@@ -42,7 +42,7 @@ def intra_comp(blob, rng, fa, Ave_blob, Ave):
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = comp_dert(P_, buff___, rng, fa)   # no buff___ or alt in hypot_g or future dx_g
+        derts__ = compare_derts(P_, buff___, rng, fga, fia, fa)   # no buff___ or alt in hypot_g or future dx_g
         if derts__:     # form sub_blobs:
 
             sP_ = form_P_(derts__, Ave, rng, fa)
@@ -258,7 +258,7 @@ def feedback_draft(root_blob, blob, rng, fa):
         Gr += G
         Lyr += Ly
         Lr += L
-        sub_blob_.append(nt_blob( Derts= [I, ((G, Dy, Dx, L, Ly, []),())],  # Derts[0] = I, Derts[1] = (blob, ablob)
+        sub_blob_.append(nt_blob( Derts= [I, ((G, Dy, Dx, L, Ly, []),[])],  # Derts[0] = I, Derts[1] = (blob, ablob)
                                   # Derts[>1] = forks[cyc][fa], same as input derts[cyc][fa], added by feedback
                                   # sub_blob_ = [] per blob or fork, nested to depth = Derts[cyc][fa]
                                   sign = s,
