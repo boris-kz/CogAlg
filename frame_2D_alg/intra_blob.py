@@ -18,9 +18,8 @@ from intra_comp import intra_comp
         Derts[ I, (G_Dert, Ga_Dert (G, Dx, Dy, L, Ly, sub_blob_)), fa_fork_Derts, fa_fork_fork_Derts...]],  
         
         # intra_comp initializes Derts[0] and Derts[1], then feedback adds deeper Derts of extended syntax: 
-        # Derts[0] = I, Derts[1] = fa_Derts, Derts[>1] = fa_forks: sorted [(cyc,fa)] per blob, 
-        
-        # forks_forks: refs to higher-layer forks by nested feedback index: cyc, fa / layer of forking? 
+        # Derts[0] = I, Derts[1] = fga_Derts, Derts[>1] = fga_forks: sorted [(cyc,fga)] per blob, 
+        # forks and feedback are layer-sequential, no param accum across forks, index depth = Dert depth-1?
         
         # Dert per current and lower layers of derivation tree for Dert-parallel comp_blob, 
         # Dert rdn = par: parallel fork index, same-syntax cross-branch summation in deeper Derts  
@@ -38,7 +37,7 @@ from intra_comp import intra_comp
             [ seg_params,  
               Py_ = # vertical buffer of Ps per segment
                   [ P_params,       
-                    derts_[ fa_derts (g_dert (g, dx, dy), ga_dert (g, dx, dy, a)) per current & higher derivation layer
+                    derts_[ fa_derts (g_dert (g, dx, dy), ga_dert (g, a, dx, dy)) per current & higher derivation layer
 '''
 ave = 20
 ave_blob = 1000  # fixed cost of blob syntax
@@ -50,53 +49,52 @@ ave_intra_blob = 1000  # cost of eval per sub_blob, as below
 # Ave += ave: cost per next-layer dert, fixed comp grain: pixel
 # Ave_blob *= rave: cost per next root blob, variable len sub_blob_
 
-def intra_blob(root_blob, rng, fa, eval_fork_, Ave_blob, Ave):  # rng->cyc and fa (flag angle) select i_Dert and i_dert
+def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng->cyc and fa (flag angle) select i_Dert and i_dert
 
     # two-level intra_comp eval per sub_blob, intra_blob eval per blob, ga_root_blob = g_blob
     new_eval_fork_ = []  # next intra_blob eval branches
 
-    for blob in root_blob.Derts[-1][-1][fa][-1]:  # [cyc][fork][fa] sub_blobs are evaluated for comp_branch
-        if blob.Derts[-1][-1][fa][0] > Ave_blob:  # noisy or directional G: > root blob conversion + sub_blob eval cost
+    for blob in root_blob.Derts[-1][fga][-1]:  # [cyc][fga] sub_blobs are evaluated for comp_fork, add nested fork indices?
+        if blob.Derts[-1][fga][0] > Ave_blob:  # noisy or directional G: > root blob conversion + sub_blob eval cost
 
-            Ave_blob = intra_comp(blob, rng, 0, Ave_blob, Ave)  #  fa = 0, Ave_blob adjusted by actual n_sub_blobs
+            Ave_blob = intra_comp(blob, rng, fga, fia, 0, Ave_blob, Ave)  #  fa=0, Ave_blob adjust by n_sub_blobs
             Ave_blob *= rave  # estimated cost of redundant representations per blob
             Ave += ave  # estimated cost per dert
 
-            for sub_blob in blob.Derts[-1][-1][fa][-1]:  # sub_sub_blobs are evaluated for angle calc & comp
-                if sub_blob.Derts[-1][-1][fa][0] > Ave_blob:   # G > sub -> root blob conversion cost
-                    # update rng in Derts[-1 cyc][-1 fork], vs. pass as args?
+            for sub_blob in blob.Derts[-1][fga][-1]:  # sub_sub_blobs are evaluated for angle calc & comp
+                if sub_blob.Derts[-1][fga][0] > Ave_blob:   # G > sub -> root blob conversion cost
 
-                    Ave_blob = intra_comp(sub_blob, rng, 1, Ave_blob, Ave)  # fa = 1, + input rng, fa in Dert[-1]
-                    Ave_blob *= rave
+                    Ave_blob = intra_comp(sub_blob, rng, fga, fia, 1, Ave_blob, Ave)  # fa=1, Ave_blob adjust by n_sub_blobs
+                    Ave_blob *= rave  # rng is passed by eval_fork_?
                     Ave += ave
                     rdn = 1
-                    G =  sub_blob.Derts[-1][-1][-1][0][0]  # Derts: current + higher-layers params, no lower layers yet
-                    Ga = sub_blob.Derts[-1][-1][-1][1][0]  # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp:
+                    G =  sub_blob.Derts[-1][0][0]  # Derts: current + higher-layers params, no lower layers yet
+                    Ga = sub_blob.Derts[-1][1][0]  # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp:
 
                     val_gg  = G - Ga  # value of gradient_of_gradient deviation: directional variation
                     val_gga = Ga      # value of gradient_of_angle_gradient deviation, no ga angle yet
                     val_rg  = G + Ga  # value of rng=2 gradient deviation:  non-directional variation
-                    # val_rga = G + Ga  # value of rng=2 angle gradient deviation, with comp_angle
+                    val_ra  = val_rg  # value of rng=2 angle gradient deviation, angle has no value?
 
-                    eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? comp i = derts[-1] if fa
-                        (val_gg,  Ave_blob * 2, 0, 1, 0),  # rng=1, fa=0,
-                        (val_rg,  Ave_blob * 2, 0, 2, 0),  # rng=2, fa=0,
-                        (val_gga, Ave_blob,     0, 1, 1),  # rng=1, fa=1,
-                        (val_rg,  Ave_blob * 2, 0, 2, 1)   # rng=2, fa=1;  cyc = -rng; if rng > 1: cyc -= fa
+                    eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? cyc = -rng - 1 - fia
+                        (val_gg,  Ave_blob * 2, 0, 0, 0),  # rng=1, fga=0, fia=0: nested i_index per fork
+                        (val_rg,  Ave_blob * 2, 1, 0, 0),  # rng=2, fga=0, fia=0
+                        (val_gga, Ave_blob,     0, 1, 0),  # rng=1, fga=1, fia=0
+                        (val_ra,  Ave_blob * 2, 1, 1, 1)   # rng=2, fga=1, fia=1;
                         ]
 
                     sorted(eval_fork_, key=lambda val: val[0], reverse=True)
-                    for val, threshold, prior, rng, fa in eval_fork_:
+                    for val, threshold, rng, fga, fia in eval_fork_:
 
                         threshold *= rdn
                         if val > threshold:
                             rdn += 1
-                            if prior: rng += 1  # for recycled forks
+                            rng += 1  # for current and recycled forks
                             Ave_blob += ave_blob * rave * rdn
                             Ave += ave * rdn
-                            new_eval_fork_ += [(val, threshold, 1, rng, fa )]  # for all select forks, filter*rdn
+                            new_eval_fork_ += [(val, threshold, rng, fga, fia)]  # for all select forks, filter*rdn
 
-                            intra_blob(sub_blob, rng, fa, new_eval_fork_, Ave_blob, Ave)
+                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)
                             # root_blob.Derts[-1] += Derts, derts += dert
                         else:
                             break
