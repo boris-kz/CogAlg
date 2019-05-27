@@ -35,7 +35,7 @@ def compare_derts(P_, buff___, Ave, rng, fga, fia, fa=0, hg=0):  # dert_buff___ 
         if fa: compute_a(P_)  # compute angles within P
 
         derts__ = lateral_comp(P_, rng, fga, fia, fa)                  # horizontal comparison, returns current line
-        _derts__ = vertical_comp(derts__, buff___, rng, fga, fia, fa)  # vertical and diagonal comp, returns last line in buff___
+        _derts__ = vertical_comp(derts__, buff___, rng, fga, fia, fa)  # vertical & diagonal comp, returns last line in buff___
         compute_g(_derts__, Ave, fa)
 
     return _derts__
@@ -49,7 +49,7 @@ def lateral_comp(P_, rng, fga, fia, fa=0):  # horizontal comparison between pixe
     cyc = -rng - 1 - fia  # cyc and rng are cross-convertible, [cyc][fga]: index of input dert and feedback Dert_forks
 
     for P in P_:
-        x0 = P[1] + rng   # sub-P recedes
+        x0 = P[1] + rng   # sub-P recedes by excluding incomplete _derts
         derts_ = P[-1]
         new_derts_ = []
         buff_ = deque(maxlen=rng)  # new dert's buffer each slice
@@ -63,7 +63,7 @@ def lateral_comp(P_, rng, fga, fia, fa=0):  # horizontal comparison between pixe
             if len(buff_) == rng:          # xd == rng and coordinate is within P vs. gap
                 _derts = buff_[max_index]  # rng-spaced dert, or dert at the end of deque with maxlen=rng
 
-                _i_dert = _derts[cyc][fga]
+                _i_dert = _derts[cyc][fga]  # $ vs. separate derts_?
                 _i = _i_dert[fia]           # template is brightness or gradient in dert[0] or angle in dert[1]
                 _dy, _dx = _i_dert[-2, -1]  # derivatives accumulated in template dert over shorter + current rng comps
 
@@ -87,7 +87,7 @@ def vertical_comp(derts__, buff___, rng, fga, fia, fa):    # vertical and diagon
 
     out_derts__ = []  # first line of derts in last element of buff___ is returned to comp_dert() at len = maxlen(rng)
     yd = 1
-    cyc = -rng - 1 - fga  # cyc and rng are cross-convertible, [cyc][fga] is index of input dert and feedback Dert_forks
+    cyc = -rng -1 -fga  # cyc and rng are cross-convertible, [cyc][fga] is index of input dert and feedback Dert_forks
 
     for index, _derts__ in enumerate(buff___):  # iterate through (rng - 1) higher lines
         if yd < rng:  # diagonal comp, else rng == 1?
@@ -122,14 +122,14 @@ def scan_slice_(_derts__, derts__, cyc, fga, fia, fa=False):     # unit of verti
     _new_derts__ = []
     new_derts__ = []
 
-    i_derts_ = 0     # index of _derts_ for scanning
+    i_derts_ = 0  # index of _derts_, for scanning
     _x0, _derts_ = _derts__[i_derts_]
     _xn = _x0 + len(_derts_)
-    _flt = [True] * len(_derts_)    # to filter-out incomplete _derts
+    _exclude = [True] * len(_derts_)    # to exclude incomplete _derts from sub_Ps
 
     for x0, derts_ in derts__:      # iterate through derts__
         xn = x0 + len(derts_)
-        flt = [True] * len(derts_)  # to filter-out incomplete derts
+        exclude = [True] * len(derts_)  # exclude incomplete _derts from sub_Ps
 
         while i_derts_ < len(_derts__):
 
@@ -139,7 +139,7 @@ def scan_slice_(_derts__, derts__, cyc, fga, fia, fa=False):     # unit of verti
 
                     _x0, _derts_ = _derts__[i_derts_]
                     _xn = _x0 + len(_derts_)
-                    _flt = [True] * len(_derts_)  # to filter incomplete _derts
+                    _exclude = [True] * len(_derts_)  # to exclude incomplete _derts from sub_Ps
 
             if i_derts_ < len(_derts__) and  _x0 < xn:   # if overlap, compare slice:
 
@@ -152,28 +152,24 @@ def scan_slice_(_derts__, derts__, cyc, fga, fia, fa=False):     # unit of verti
                 _start = max(0, olp_x0 - _x0)  # indices of slice _derts_
                 _end = min(len(_derts_), len(_derts_) + olp_xn - _xn)
 
-                flt[start:end] = [False for _ in flt[start:end]]  # update filter
-                _flt[_start:_end] = [False for _ in _flt[_start:_end]]
+                exclude[start:end] = [False for _ in exclude[start:end]]  # update excluded derts
+                _exclude[_start:_end] = [False for _ in _exclude[_start:_end]]
 
                 for _derts, derts in zip(_derts_[_start:_end], derts_[start:end]):
 
-                    i = derts[cyc][-fga][fia]  # input is brightness or gradient in dert[0] or angle in dert[1]
+                    i = derts[cyc][fga][fia]  # input is brightness or gradient in dert[0] or angle in dert[1]
                     dy, dx = derts[-2, -1]   # derivatives accumulated in input dert over shorter + current rng comps
 
-                    _i = _derts[cyc][-fga][fia]  # template is brightness or gradient in dert[0] or angle in dert[1]
+                    _i = _derts[cyc][fga][fia]  # template is brightness or gradient in dert[0] or angle in dert[1]
                     _dy, _dx = _derts[-2, -1]  # derivatives accumulated in template dert over shorter + current rng comps
 
                     d = i - _i
                     if fa:              # if i and _i are angular values:
                         d = rect(1, d)  # convert d into complex number: d = dx + dyj (with dx^2 + dy^2 == 1.0)
 
-                    # bilateral accumulation:
-
-                    dy += d
-                    _dy += d
-
-                    # return:
-                    derts[-1] = dy, dx      # pack dy, dx, ncomp back into derts
+                    dy += d   # bilateral input accumulation
+                    _dy += d  # bilateral template accumulation
+                    derts[-1] = dy, dx    # $ return to temporary vs. packed derts_?
                     _derts[-1] = _dy, _dx
 
             if _xn > xn:  # save _derts_ for next dert
@@ -183,8 +179,8 @@ def scan_slice_(_derts__, derts__, cyc, fga, fia, fa=False):     # unit of verti
 
             _new_derts__ += [(_x0 + start, _derts_[start:end]) for start, end in
                              zip(
-                                 [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
-                                 [i for i in range(len(_flt)) if not _flt[i] and (i == len(_flt) - 1 or _flt[i + 1])],
+                                 [i for i in range(len(_exclude)) if not _exclude[i] and (i == 0 or _exclude[i - 1])],
+                                 [i for i in range(len(_exclude)) if not _exclude[i] and (i == len(_exclude) - 1 or _exclude[i + 1])],
                              )
                              if start < end]
 
@@ -193,14 +189,14 @@ def scan_slice_(_derts__, derts__, cyc, fga, fia, fa=False):     # unit of verti
 
                 _x0, _derts_ = _derts__[i_derts_]
                 _xn = _x0 + len(_derts_)
-                _flt = [True] * len(_derts_)  # to filter incomplete _derts
+                _exclude = [True] * len(_derts_)  # to filter incomplete _derts
 
         # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
 
         new_derts__ += [(x0 + start, derts_[start:end]) for start, end in
                         zip(
-                            [i for i in range(len(flt)) if not flt[i] and (i == 0 or flt[i - 1])],
-                            [i for i in range(len(flt)) if not flt[i] and (i == len(flt) - 1 or flt[i + 1])],
+                            [i for i in range(len(exclude)) if not exclude[i] and (i == 0 or exclude[i - 1])],
+                            [i for i in range(len(exclude)) if not exclude[i] and (i == len(exclude) - 1 or exclude[i + 1])],
                         )
                         if start < end]
 
@@ -208,8 +204,8 @@ def scan_slice_(_derts__, derts__, cyc, fga, fia, fa=False):     # unit of verti
 
         _new_derts__ += [(_x0 + start, _derts_[start:end]) for start, end in
                          zip(
-                             [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
-                             [i for i in range(len(_flt)) if not _flt[i] and (i == len(_flt) - 1 or _flt[i + 1])],
+                             [i for i in range(len(_exclude)) if not _exclude[i] and (i == 0 or _exclude[i - 1])],
+                             [i for i in range(len(_exclude)) if not _exclude[i] and (i == len(_exclude) - 1 or _exclude[i + 1])],
                          )
                          if start < end]
 
@@ -228,11 +224,11 @@ def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa=False):  
 
     _x0 += shift  # for diagonal comparisons only
     _xn = _x0 + len(_derts_)
-    _flt = [True] * len(_derts_)  # to filter incomplete _derts
+    _exclude = [True] * len(_derts_)  # to filter incomplete _derts
 
     for x0, derts_ in derts__:  # iterate through derts__
         xn = x0 + len(derts_)
-        flt = [True] * len(derts_)  # to filter incomplete _derts
+        exclude = [True] * len(derts_)  # to filter incomplete _derts
 
         while i_derts_ < len(_derts__):
 
@@ -243,7 +239,7 @@ def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa=False):  
                     _x0, _derts_ = _derts__[i_derts_]
                     _x0 += shift    # for diagonal comparisons only
                     _xn = _x0 + len(_derts_)
-                    _flt = [True] * len(_derts_)  # to filter incomplete _derts
+                    _exclude = [True] * len(_derts_)  # to filter incomplete _derts
 
             if i_derts_ < len(_derts__) and _x0 < xn:  # if overlap, compare slice:
 
@@ -273,15 +269,12 @@ def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa=False):  
                     partial_dy = int(y_coef * d)
                     partial_dx = int(x_coef * d)
 
-                    # bilateral accumulation:
-
-                    dy += partial_dy
+                    dy += partial_dy   # bilateral input accumulation:
                     dx += partial_dx
-                    _dy += partial_dy
+                    _dy += partial_dy  # bilateral template accumulation:
                     _dx += partial_dx
 
-                    # return:
-                    derts[-1] = dy, dx       # pack back
+                    derts[-1] = dy, dx   # return to temporary vs. packed derts_?
                     _derts[-1] = _dy, _dx
 
             if _xn > xn:  # save _derts_ for next dert
@@ -290,9 +283,9 @@ def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa=False):  
 
             _new_derts__ += [(_x0 + start - shift, _derts_[start:end]) for start, end in
                              zip(
-                                 [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
-                                 [i for i in range(len(_flt)) if
-                                  not _flt[i] and (i == len(_flt) - 1 or _flt[i + 1])],
+                                 [i for i in range(len(_exclude)) if not _exclude[i] and (i == 0 or _exclude[i - 1])],
+                                 [i for i in range(len(_exclude)) if
+                                  not _exclude[i] and (i == len(_exclude) - 1 or _exclude[i + 1])],
                              )
                              if start < end]
 
@@ -302,14 +295,14 @@ def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa=False):  
                 _x0, _derts_ = _derts__[i_derts_]
                 _x0 += shift  # for diagonal comparisons only
                 _xn = _x0 + len(_derts_)
-                _flt = [True] * len(_derts_)  # used for filtering of incomplete _derts
+                _exclude = [True] * len(_derts_)  # used for filtering of incomplete _derts
 
         # derts_s scanning ends, filter out incomplete derts__ (multiple slices):
 
         new_derts__ += [(x0 + start - shift, derts_[start:end]) for start, end in
                         zip(
-                            [i for i in range(len(flt)) if not flt[i] and (i == 0 or flt[i - 1])],
-                            [i for i in range(len(flt)) if not flt[i] and (i == len(flt) - 1 or flt[i + 1])],
+                            [i for i in range(len(exclude)) if not exclude[i] and (i == 0 or exclude[i - 1])],
+                            [i for i in range(len(exclude)) if not exclude[i] and (i == len(exclude) - 1 or exclude[i + 1])],
                         )
                         if start < end]
 
@@ -317,9 +310,9 @@ def scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa=False):  
 
         _new_derts__ += [(_x0 + start - shift, _derts_[start:end]) for start, end in
                          zip(
-                             [i for i in range(len(_flt)) if not _flt[i] and (i == 0 or _flt[i - 1])],
-                             [i for i in range(len(_flt)) if
-                              not _flt[i] and (i == len(_flt) - 1 or _flt[i + 1])],
+                             [i for i in range(len(_exclude)) if not _exclude[i] and (i == 0 or _exclude[i - 1])],
+                             [i for i in range(len(_exclude)) if
+                              not _exclude[i] and (i == len(_exclude) - 1 or _exclude[i + 1])],
                          )
                          if start < end]
 
