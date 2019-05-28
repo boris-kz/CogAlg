@@ -27,7 +27,7 @@ flag ga: i_dert = derts[cyc][fga], separate from fia, both set in current intra_
 flag ia: i = i_dert[fia]: selects dert[1] for incremental-range comp angle only
 '''
 
-def compare_derts(P_, buff___, Ave, rng, fga, fia, fa=0, hg=0):  # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
+def compare_derts(P_, _derts___, Ave, rng, fga, fia, fa=0, hg=0):  # dert___ in blob ( dert__ in P_ line ( dert_ in P
 
     if hg:
         _derts__ = hypot_g(P_)
@@ -35,7 +35,7 @@ def compare_derts(P_, buff___, Ave, rng, fga, fia, fa=0, hg=0):  # dert_buff___ 
         if fa: compute_a(P_)  # compute angles within P
 
         derts__ = lateral_comp(P_, rng, fga, fia, fa)                  # horizontal comparison, returns current line
-        _derts__ = vertical_comp(derts__, buff___, rng, fga, fia, fa)  # vertical & diagonal comp, returns last line in buff___
+        _derts__ = vertical_comp(derts__, _derts___, rng, fga, fia, fa)  # vertical & diagonal comp, returns last line
         compute_g(_derts__, Ave, fa)
 
     return _derts__
@@ -49,10 +49,10 @@ def lateral_comp(P_, rng, fga, fia, fa=0):  # horizontal comparison between pixe
     cyc = -rng - 1 - fia  # cyc and rng are cross-convertible, [cyc][fga]: index of input dert and feedback Dert_forks
 
     for P in P_:
-        x0 = P[1] + rng   # sub-P recedes by excluding incomplete _derts
+        x0 = P[1] + rng   # sub-P recedes by excluding incomplete-rng _derts
         derts_ = P[-1]
         new_derts_ = []
-        buff_ = deque(maxlen=rng)  # new dert's buffer each slice
+        _derts_ = deque(maxlen=rng)  # buffer of template derts for each slice
 
         for derts in derts_:
 
@@ -60,8 +60,8 @@ def lateral_comp(P_, rng, fga, fia, fa=0):  # horizontal comparison between pixe
             i = i_dert[fia]          # input is brightness or gradient in dert[0] or angle in dert[1]
             dy, dx = i_dert[-2, -1]  # derivatives accumulated in input dert over shorter + current rng comps
 
-            if len(buff_) == rng:          # xd == rng and coordinate is within P vs. gap
-                _derts = buff_[max_index]  # rng-spaced dert, or dert at the end of deque with maxlen=rng
+            if len(_derts_) == rng:          # xd == rng and coordinate is within P vs. gap
+                _derts = _derts_[max_index]  # rng-spaced dert, or dert at the end of deque with maxlen=rng
 
                 _i_dert = _derts[cyc][fga]  # $ vs. separate derts_?
                 _i = _i_dert[fia]           # template is brightness or gradient in dert[0] or angle in dert[1]
@@ -74,7 +74,7 @@ def lateral_comp(P_, rng, fga, fia, fa=0):  # horizontal comparison between pixe
                 _derts[-1] = _dy, _dx       # return  $ wrong syntax?
                 new_derts_.append(_derts)
 
-            buff_.appendleft(derts + [(dy, dx)])    # append new accumulated dy, dx for horizontal comp
+            _derts_.appendleft(derts + [(dy, dx)])    # append new accumulated dy, dx for horizontal comp
 
         if new_derts_:  # if not empty
             derts__.append((x0, new_derts_))        # new line of P derts_ appended with new_derts_
@@ -83,19 +83,19 @@ def lateral_comp(P_, rng, fga, fia, fa=0):  # horizontal comparison between pixe
 
     # ---------- lateral_comp() end ---------------------------------------------------------------------------------------
 
-def vertical_comp(derts__, buff___, rng, fga, fia, fa):    # vertical and diagonal comparison
+def vertical_comp(derts__, _derts___, rng, fga, fia, fa):    # vertical and diagonal comparison
 
-    out_derts__ = []  # first line of derts in last element of buff___ is returned to comp_dert() at len = maxlen(rng)
+    out_derts__ = []  # first line of derts in last element of _derts___ is returned to comp_dert() at len = maxlen(rng)
     yd = 1
     cyc = -rng -1 -fga  # cyc and rng are cross-convertible, [cyc][fga] is index of input dert and feedback Dert_forks
 
-    for index, _derts__ in enumerate(buff___):  # iterate through (rng - 1) higher lines
+    for index, _derts__ in enumerate(_derts___):  # iterate through (rng - 1) higher lines
         if yd < rng:  # diagonal comp, else rng == 1?
 
             xd = rng - yd
             hyp = hypot(xd, yd)
-            y_coef = yd / hyp       # to decompose d into dy, replace with look-up table?
-            x_coef = xd / hyp       # to decompose d into dx, replace with look-up table?
+            y_coef = yd / hyp   # to decompose d into dy, replace with look-up table?
+            x_coef = xd / hyp   # to decompose d into dx, replace with look-up table?
             coefs = (y_coef, x_coef)
             shift = -xd
 
@@ -105,15 +105,15 @@ def vertical_comp(derts__, buff___, rng, fga, fia, fa):    # vertical and diagon
             # upper-right comps: on _derts__ shifted by upper-left comps, shift back for vertical comp
             _derts__, derts__ = scan_slice_diag(_derts__, derts__, shift, coefs, cyc, fga, fia, fa)
 
-            buff___[index] = _derts__ # return
+            _derts___[index] = _derts__ # return
 
         else:   # strictly vertical comp, no shift, fixed coef
             out_derts__, derts__ = scan_slice_(_derts__, derts__, cyc, fga, fia, fa)  # _derts__ are converted to out_derts__
 
         yd += 1
-    buff___.appendleft(derts__)  # buffer derts__ into buff___, after vertical_comp to preserve last derts__ in buff___
+    _derts___.appendleft(derts__)  # buffer derts__ into _derts___ after vertical_comp to preserve last derts__ in _derts___
 
-    return out_derts__   # = _derts__ if len(buff___) == rng else []
+    return out_derts__   # = _derts__ if len(_derts___) == rng else []
 
     # ---------- vertical_comp() end ----------------------------------------------------------------------------------------
 

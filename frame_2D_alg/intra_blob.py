@@ -15,16 +15,15 @@ from intra_comp import intra_comp
     Dert params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
-        Derts[ I, (G_Dert, Ga_Dert (G, Dx, Dy, L, Ly, sub_blob_)), fa_fork_Derts, fa_fork_fork_Derts...]],  
+        Derts[ I, fga_Derts, fga_fork_Derts, fga_fork_fork_Derts...],  # fga_Derts = (g_Derts, ga_Derts), nested / depth:
+        "
+        Dert = G, Dx, Dy, L, Ly, sub_blob_; derivation tree: @Dert per current & lower layers for Dert-parallel comp_blob 
+        sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access 
         
-        # intra_comp initializes Derts[0] and Derts[1], then feedback adds deeper Derts of extended syntax: 
-        # Derts[0] = I, Derts[1] = fga_Derts, Derts[>1] = fga_forks: sorted [(cyc,fga)] per blob, 
-        # forks and feedback are layer-sequential, no param accum across forks, index depth = Dert depth-1?
-        
-        # Dert per current and lower layers of derivation tree for Dert-parallel comp_blob, 
-        # Dert rdn = par: parallel fork index, same-syntax cross-branch summation in deeper Derts  
-        # sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access
-        
+        intra_comp initializes Derts[0] and Derts[1] per sub_blob, layer-sequential feedback adds deeper nested Derts,        
+        feedback params are accumulated in fork_Dert @ [cyc][fga], nested to depth = Dert depth - 1?
+        forks = sorted [(cyc,fga)], Dert rdn = fork index + 1
+        "
         sign, # lower Derts are sign-mixed at depth > 0, typ-mixed at depth > 1, rng-mixed at depth > 2:
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn

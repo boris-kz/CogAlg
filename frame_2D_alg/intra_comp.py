@@ -1,7 +1,7 @@
 import numpy as np
 from math import hypot
 from collections import deque, namedtuple
-from comp_dert_draft import compare_derts
+from compare_derts import compare_derts
 
 nt_blob = namedtuple('blob', 'Derts sign box map root_blob seg_')
 
@@ -15,11 +15,13 @@ nt_blob = namedtuple('blob', 'Derts sign box map root_blob seg_')
 
 
 def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
+
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
     blob.seg_.sort(key=lambda seg: seg[0])   # sort by y0 coordinate for unfolding
     seg_ = []  # buffer of segments containing line y
-    buff___ = deque(maxlen=rng)
+    _derts___ = deque(maxlen=rng)  # buffer of template derts, accumulated over multiple comps
+
     sseg_ = deque()  # buffer of sub-segments
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
@@ -42,8 +44,8 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = compare_derts(P_, buff___, rng, fga, fia, fa)   # no buff___ or alt in hypot_g or future dx_g
-        if derts__:     # form sub_blobs:
+        derts__ = compare_derts(P_, _derts___, rng, fga, fia, fa)   # no _derts___ in hypot_g or future dx_g
+        if derts__:  # form sub_blobs:
 
             sP_ = form_P_(derts__, Ave, rng, fa)
             sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
@@ -56,15 +58,14 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def form_P_(derts__, Ave, rng, fa):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
+def form_P_(derts__, Ave, rng, fga):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
-    if fa: cyc = -rng - 2  # cyc and rng are cross-convertable?
-    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert
+    cyc = -rng -1 -fga  # cyc and rng are cross-convertable?
 
     for x_start, derts_ in derts__:  # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
-        dert_ = [derts[cyc][-fa] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
+        dert_ = [derts[cyc][fga] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
         i, g, dy, dx = dert_[0]
 
         _vg = g - Ave
