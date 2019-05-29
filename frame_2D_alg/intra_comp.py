@@ -2,6 +2,8 @@ import numpy as np
 from collections import deque, namedtuple
 from compare import compare_derts
 
+Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
+Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 
 # ************ FUNCTIONS ************************************************************************************************
@@ -13,21 +15,10 @@ Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, '''index''', fa, Ave_blob, Ave):
-
+def intra_comp(blob, Ave, Ave_blob, fa=False, ir=False):
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    # for testing only, else set in intra_blob:
-    if comp_branch == comp_range:
-        rng = blob.rng + 1      # increment rng
-        alt = blob.alt          # same sub_blobs
-    elif comp_branch == hypot_g:
-        rng = 0
-        alt = -1
-    else:       # if comp gradient or or comp_angle
-        rng = 1
-        alt = -1 if comp_branch == comp_gradient else -2
-
+    rng = blob.rng + 1 if ir else 1
     blob.seg_.sort(key=lambda seg: seg[0])   # sort by y0 coordinate for unfolding
     seg_ = []  # buffer of segments containing line y
     buff___ = deque(maxlen=rng)
@@ -38,41 +29,41 @@ def intra_comp(blob, '''index''', fa, Ave_blob, Ave):
 
     while y < yn:  # unfold blob into Ps for extended comp
 
-        while i < len(blob.seg_) and blob.seg_[i][0] == y:
+        while i < len(blob.seg_) and blob.seg_[i].y == y:
             seg_.append(blob.seg_[i])
             i += 1
         P_ = []  # line y Ps
         for seg in seg_:
-            if y < seg[0] + seg[1][-1]:         # y < y0 + Ly within segment, or len(Py)?
-                P_.append(seg[2][y - seg[0]])   # append P at line y of seg
+            if y < seg.y + seg.Ly:              # y < y0 + Ly within segment, or len(Py)?
+                P_.append(seg.Py_[y - seg.y])   # append P at line y of seg
 
         for seg in seg_:
-            if not y < seg[0] + seg[1][-1]:     # y >= y0 + Ly (out of segment):
+            if y >= seg.y + seg.Ly:     # y >= y0 + Ly (out of segment):
                 seg_.remove(seg)
 
-        P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
+        P_.sort(key=lambda P: P.x0)  # sort by x0 coordinate
         # core operations:
 
-        derts__ = compare_derts(P_, buff___, '''index''', fa)   # no buff___ or alt in hypot_g or future dx_g
+        derts__ = compare_derts(P_, buff___, fa)   # no buff___ or alt in hypot_g or future dx_g
         if derts__:     # form sub_blobs:
 
-            sP_ = form_P_(derts__, alt, Ave, rng)
-            sP_ = scan_P_(sP_, sseg_, blob, alt, rng)
-            sseg_ = form_seg_(y - rng, sP_, blob, alt, rng)
+            sP_ = form_P_(derts__, Ave, rng, fa)
+            sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
+            sseg_ = form_seg_(y - rng, sP_, blob, rng, fa)
 
         y += 1
 
     while sseg_:    # terminate last line
-        form_blob(sseg_.popleft(), blob, alt, rng)
+        form_blob(sseg_.popleft(), blob, rng, fa)
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def form_P_(derts__, alt, Ave, rng):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
+def form_P_(derts__, Ave, rng, fa):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
     for x_start, derts_ in derts__:   # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
-        dert_ = [derts['''index'''][-fa] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
+        dert_ = [derts[-rng-1+fa][fa] + derts[-1][:1] + derts[-1][-2:] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
         i, g, dy, dx = dert_[0]
 
         _vg = g - Ave
@@ -83,8 +74,8 @@ def form_P_(derts__, alt, Ave, rng):  # horizontally cluster and sum consecutive
             vg = g - Ave
             s = vg > 0
             if s != _s:  # P is terminated and new P is initialized:
-
-                P_.append([_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start : x0 - x_start + L]])  # derts is appended in comp_branch
+                P = Pattern(_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start : x0 - x_start + L])
+                P_.append(P)
                 x0, I, G, Dy, Dx, L = x, 0, 0, 0, 0, 0    # reset params
 
             I += i  # accumulate P params
@@ -94,12 +85,13 @@ def form_P_(derts__, alt, Ave, rng):  # horizontally cluster and sum consecutive
             L += 1
             _s = s  # prior sign
 
-            P_.append([_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start: x0 - x_start + L]])  # last P in row
+            P = Pattern(_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start: x0 - x_start + L])
+            P_.append(P)
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
 
-def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
+def scan_P_(P_, seg_, root_blob, rng, fa):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
 
     new_P_ = deque()
 
@@ -111,12 +103,12 @@ def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) betw
         fork_ = []
 
         while not stop:
-            x0 = P[1]  # first x in P
-            xn = x0 + P[-2]  # first x in next P
-            _x0 = _P[1]  # first x in _P
-            _xn = _x0 + _P[-2]  # first x in next _P
+            x0 = P.x0  # first x in P
+            xn = x0 + P.L  # first x in next P
+            _x0 = _P.x0  # first x in _P
+            _xn = _x0 + _P.L  # first x in next _P
 
-            if P[0] == _P[0] and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
+            if P.sign == _P.sign and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
                 seg[-1] += 1        # roots += 1
                 fork_.append(seg)   # P-connected segments are buffered into fork_
 
@@ -127,11 +119,11 @@ def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) betw
                     P = P_.popleft()  # load next P
                 else:  # if no P left: terminate loop
                     if seg[-1] != 1:  # if roots != 1: terminate seg
-                        form_blob(seg, root_blob, alt, rng)
+                        form_blob(seg, root_blob, rng, fa)
                     stop = True
             else:  # no next-P overlap
                 if seg[-1] != 1:  # if roots != 1: terminate seg
-                    form_blob(seg, root_blob, alt, rng)
+                    form_blob(seg, root_blob, rng, fa)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
@@ -143,49 +135,48 @@ def scan_P_(P_, seg_, root_blob, alt, rng):  # integrate x overlaps (forks) betw
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob(seg_.popleft(), root_blob, alt, rng)  # roots always == 0
+        form_blob(seg_.popleft(), root_blob, rng, fa)   # roots always == 0
 
     return new_P_
 
     # ---------- scan_P_() end ------------------------------------------------------------------------------------------
 
 
-def form_seg_(y, P_, root_blob, alt, rng):  # convert or merge every P into segment, merge blobs
+def form_seg_(y, P_, root_blob, rng, fa):  # convert or merge every P into segment, merge blobs
     new_seg_ = deque()
 
     while P_:
         P, fork_ = P_.popleft()
-        s, x0 = P[:2]           # s, x0
-        params = P[2:-1]        # L and other params
-        xn = x0 + params[-1]    # next-P x0 = x0 + L
-        params.append(1)        # add Ly
+
+        s, x0, I, G, Dy, Dx, L, dert_ = P
+        xn = x0 + L  # next-P x0
 
         if not fork_:  # new_seg is initialized with initialized blob
-            blob = [s, [0] * (len(params)), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box
-            new_seg = [y] + params + [[P]] + [blob, 0]              # y0, I, G, Dy, Dx, N, L, Ly, Py_, blob, roots
+            blob = [s, [0, 0, 0, 0, 0, 0], [], 1, [y, x0, xn]]      # s, [I, G, Dy, Dx, L], seg_, open_segments, box
+            new_seg = [y, I, G, Dy, Dx, L, 1, [P], blob, 0]  # y0, I, G, Dy, Dx, N, L, Ly, Py_, blob, roots
             blob[2].append(new_seg)
         else:
             if len(fork_) == 1 and fork_[0][3] == 1:  # P has one fork and that fork has one root
                 new_seg = fork_[0]
-                I, G, Dy, Dx, L, Ly = params
-                Is, Gs, Dys, Dxs, Ls, Lys = new_seg[1:-3]  # fork segment params, P is merged into segment:
-                new_seg[1:-3] = [Is + I, Gs + G, Dys + Dy, Dxs + Dx, Ls + L, Lys + Ly]
+
+                Is, Gs, Dys, Dxs, Ls, Ly = new_seg[1:-3]    # fork segment params, P is merged into segment:
+                new_seg[1:-3] = [Is + I, Gs + G, Dys + Dy, Dxs + Dx, Ls + L, Ly + 1]
                 new_seg[-3].append(P)  # Py_: vertical buffer of Ps
                 new_seg[-1] = 0  # reset roots
                 blob = new_seg[-2]
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0][-2]
-                new_seg = [y] + params + [[P]] + [blob, 0]  # new_seg is initialized with fork blob
-                blob[2].append(new_seg)                     # segment is buffered into blob
+                new_seg = [y, I, G, Dy, Dx, L, 1, [P], blob, 0]     # new_seg is initialized with fork blob
+                blob[2].append(new_seg)                             # segment is buffered into blob
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][-1] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob(fork_[0], root_blob, alt, rng)  # merge seg of 1st fork into its blob
+                        form_blob(fork_[0], root_blob, rng, fa)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork[-1] == 1:
-                            form_blob(fork, root_blob, alt, rng)
+                            form_blob(fork, root_blob, rng, fa)
 
                         if not fork[-2] is blob:
                             params, seg_, open_segs, box = fork[-2][1:]  # merged blob, omit sign
@@ -211,7 +202,7 @@ def form_seg_(y, P_, root_blob, alt, rng):  # convert or merge every P into segm
     # ---------- form_seg_() end --------------------------------------------------------------------------------------------
 
 
-def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
     y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg
     I, G, Dy, Dx, L, Ly = blob[1]
@@ -223,18 +214,31 @@ def form_blob(term_seg, root_blob, alt, rng):  # terminated segment is merged in
 
         yn = y0s + Lys  # yn from last segment
         map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
+        new_seg_ = []
         for seg in seg_:
-            seg.pop()  # remove roots counter
-            seg.pop()  # remove references to blob
-            for y, P in enumerate(seg[-1], start=seg[0]):
-                x0P = P[1]
-                LP = P[-2]
-                xnP = x0P + LP
-                map[y - y0, x0P - x0:xnP - x0] = True
+            y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_ = seg[:-2]                  # blob and roots are ignored
+            seg = Segment(y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_)              # convert to Segment namedtuple
+            new_seg_.append(seg)                                            # add segment to blob as namedtuple
+            for y, P in enumerate(seg.Py_, start=seg.y):
+                Pxn = P.x0 + P.L
+                map[y - y0, P.x0 - x0:Pxn - x0] = True
+
+        '''
+        blob = Blob(I=I,  # 0th Dert is I only
+                    Derts=[[ (cyc, alt, typ), (G, Dy, Dx, N, L, Ly, []) ]],  # 1st Dert is single-blob
+                    # alt: sub_layer index: -1 ga | -3 g, default -2 a if rng==1, none for hypot_g
+                    # rng: dert cycle index for comp_range only: i_dert = -(rng-1)*3 + alt
+                    sign = s,
+                    box= box,  # same boundary box
+                    map= map,  # blob boolean map, to compute overlap
+                    root_blob=blob,
+                    # comp_range_input_ = new_comp_range_input_ # root_blob [(alt, rng)]:
+                    # Dert @ prior intra_blob comp_branch input blob is evaluated for comp_range
+                    seg_=seg_,
+                    )
 
         feedback_draft(root_blob, blob, rng)
-
-        del blob
+        '''
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
 def feedback_draft(root_blob, blob, rng):
@@ -268,18 +272,7 @@ def feedback_draft(root_blob, blob, rng):
         Lyr += Ly
         # + nblobs per type, for nested sub_blob_ in deeper layers?
 
-        sub_blob_.append(Blob(I=I,  # 0th Dert is I only
-                              Derts=[[ (cyc, alt, typ), (G, Dy, Dx, N, L, Ly, []) ]],  # 1st Dert is single-blob
-                              # alt: sub_layer index: -1 ga | -3 g, default -2 a if rng==1, none for hypot_g
-                              # rng: dert cycle index for comp_range only: i_dert = -(rng-1)*3 + alt
-                              sign = s,
-                              box= box,  # same boundary box
-                              map= map,  # blob boolean map, to compute overlap
-                              root_blob=blob,
-                              # comp_range_input_ = new_comp_range_input_ # root_blob [(alt, rng)]:
-                              # Dert @ prior intra_blob comp_branch input blob is evaluated for comp_range
-                              seg_=seg_,
-                              ) )
+        sub_blob_.append()
         root_blob.Derts[-1][1] = Gr, Dyr, Dxr, Nr, Lr, Lyr, sub_blob_
 
         root_blob = root_blob.root_blob
