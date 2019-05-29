@@ -15,22 +15,22 @@ from intra_comp import intra_comp
     Dert params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
-        Derts[ I, fga_Derts, fga_fork_Derts, fga_fork_fork_Derts...],  # fga_Derts = (g_Derts, ga_Derts), nested / depth:
+        layers[ I, fga_Derts, fga_forks, fga_fork_forks...]  fga=0 g_Dert: G, Dx, Dy, L, Ly, sub_blob_, fga=1 ga_Dert: +A?
         "
-        Dert = G, Dx, Dy, L, Ly, sub_blob_; derivation tree: @Dert per current & lower layers for Dert-parallel comp_blob 
-        sub_blob_ per Dert is nested to depth = Derts[index] for Dert-sequential blob -> sub_blob access 
+        blob contains summed reps of sub_blob_ layers for layer-parallel comp_blob, vs fork( sub_blob_- sequential unfold:
+        forks and sub_blob_ are nested to depth = layers[index], forks = sorted [(cyc,fga)], Dert rdn = fork index + 1
         
-        intra_comp initializes Derts[0] and Derts[1] per sub_blob, layer-sequential feedback adds deeper nested Derts,        
-        feedback params are accumulated in fork_Dert @ [cyc][fga], nested to depth = Dert depth - 1?
-        forks = sorted [(cyc,fga)], Dert rdn = fork index + 1
+        intra_comp initializes layers[0] and layers[1] per sub_blob, feedback adds or accumulates nested fork_layers:
+        forks [(cyc,fga)] is nested to depth = layer depth-1: 
+        forks within each fga_fork, sequential feedback index += [target_index] with elevation?
         "
-        sign, # lower Derts are sign-mixed at depth > 0, typ-mixed at depth > 1, rng-mixed at depth > 2:
+        sign, # lower layers are mixed-sign
         map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
         box,  # boundary box: y0, yn, x0, xn
         
-        root_blob,  # reference, to return summed blob params
-        eval_fork_ += [(rng, fa)] of iDert: g | ga in der+, p | ga[-1] in rng+, 
-        new_eval_fork_ += [select forks] after eval for rng+ only, der+ eval is local 
+        root_blob,   # reference, to return summed blob params
+        eval_fork_ = [(rng, fga)] of iDert, 
+        new_eval_fork_ = [forks recycled from eval_fork_], for rng+ only, der+ is local 
     
         seg_ =  # seg_s of lower Derts are packed in their sub_blobs
             [ seg_params,  
