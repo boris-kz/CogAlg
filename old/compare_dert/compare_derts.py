@@ -5,6 +5,11 @@ from cmath import rect, phase
 two_pi = 2 * pi  # angle constraint
 angle_coef = 256 / pi   # to scale angle into (-128, 128)
 
+# flags:
+Flag_angle          = b001
+Flag_inc_rng        = b010
+Flag_hypot_g        = b100
+
 # ************ FUNCTIONS ************************************************************************************************
 # -compare_derts()
 # -lateral_comp()
@@ -16,10 +21,12 @@ angle_coef = 256 / pi   # to scale angle into (-128, 128)
 # -compute_a()
 # ***********************************************************************************************************************
 
-def comp_dert(P_, buff___, Ave, rng, fa=0, hg=0):    # comparison of input param between derts at range = rng
+def comp_dert(P_, buff___, Ave, rng, flags):    # comparison of input param between derts at range = rng
     # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
 
-    if hg:
+    fa = flags & Flag_angle
+
+    if flags & Flag_hypot_g:
         _derts__ = hypot_g(P_)
     else:
         if fa and rng == 1:

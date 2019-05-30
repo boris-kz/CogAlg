@@ -36,8 +36,7 @@ import numpy as np
 # -form_blob()
 # ***********************************************************************************************************************
 
-def image_to_blobs(
-        image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
+def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     frame = [[0, 0, 0, 0], [], image.shape]  # params, blob_, shape
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
@@ -242,7 +241,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += Dy
         frame[0][2] += Dx
         frame[1].append(Blob(I=I,  # top Dert
-                             Derts=[(G, Dy, Dx, L, Ly)],  # []: nested sub_blob_, depth = Derts[index]
+                             Derts=[Dert(G, Dy, Dx, L, Ly)],  # []: nested sub_blob_, depth = Derts[index]
                              sign=s,
                              alt=None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
                              rng=1,  # for comp_range only, i_dert = alt - (rng-1) *2
@@ -271,9 +270,10 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
+Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'I Derts sign alt rng box map root_blob seg_')
+Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, box, map, root_blob, seg_')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
@@ -283,12 +283,12 @@ frame_of_blobs = image_to_blobs(image)
 if DEBUG:
     from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
     draw('./../debug/root_blobs', map_frame(frame_of_blobs))
-    #
-    # from intra_comp import intra_comp, hypot_g
-    #
-    # for i, blob in enumerate(frame_of_blobs[2]):
-    #     if blob.Derts[0][0] > 500:
-    #         intra_comp(blob, hypot_g, 0, 8)
+
+    from intra_comp import intra_comp, hypot_g
+
+    for i, blob in enumerate(frame_of_blobs[2]):
+        if blob.Derts[0].L > 500:
+            intra_comp(blob, Ave=5, Ave_blob=0, fa=False, ir=False)
     #         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
 # END DEBUG -----------------------------------------------------------------------
 

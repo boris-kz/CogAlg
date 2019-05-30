@@ -1,10 +1,13 @@
 import numpy as np
 from collections import deque, namedtuple
-from compare import compare_derts
+from compare_derts import compare_derts
 
-Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
-Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
+
+# flags:
+Flag_angle          = b001
+Flag_inc_rng        = b010
+Flag_hypot_g        = b100
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -15,10 +18,11 @@ Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, Ave, Ave_blob, fa=False, ir=False):
+def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_range | hypot_g
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    rng = blob.rng + 1 if ir else 1
+    fa = flags & Flag_angle
+    rng = blob.rng + 1 if (flags & Flag_inc_rng) else 1
     blob.seg_.sort(key=lambda seg: seg[0])   # sort by y0 coordinate for unfolding
     seg_ = []  # buffer of segments containing line y
     buff___ = deque(maxlen=rng)
@@ -44,17 +48,17 @@ def intra_comp(blob, Ave, Ave_blob, fa=False, ir=False):
         P_.sort(key=lambda P: P.x0)  # sort by x0 coordinate
         # core operations:
 
-        derts__ = compare_derts(P_, buff___, fa)   # no buff___ or alt in hypot_g or future dx_g
-        if derts__:     # form sub_blobs:
+        derts__ = compare_derts(P_, buff___, flags)   # no buff___ or alt in hypot_g or future dx_g
+        # if derts__:     # form sub_blobs: currently excluded, for debugging compare_derts
 
-            sP_ = form_P_(derts__, Ave, rng, fa)
-            sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
-            sseg_ = form_seg_(y - rng, sP_, blob, rng, fa)
+            # sP_ = form_P_(derts__, Ave, rng, fa)
+            # sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
+            # sseg_ = form_seg_(y - rng, sP_, blob, rng, fa)
 
         y += 1
 
-    while sseg_:    # terminate last line
-        form_blob(sseg_.popleft(), blob, rng, fa)
+    # while sseg_:    # terminate last line
+    #     form_blob(sseg_.popleft(), blob, rng, fa)
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 

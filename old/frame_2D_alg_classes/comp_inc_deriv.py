@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque
-from frame_2D_alg_classes import Classes
-from frame_2D_alg_classes.misc import get_filters
+from old.frame_2D_alg_classes import Classes
+from old.frame_2D_alg_classes.misc import get_filters
 get_filters(globals()) # imports all filters at once
 # --------------------------------------------------------------------------------
 
@@ -71,7 +71,7 @@ def cluster_dert(y, sub_blob):
         while x < X - 1 and not P_map[x]:
             x += 1
         if x < X - 1 and P_map[x]:
-            P = Classes.cl_P(x0=x, num_params=dert_.shape[1]+1)  # P initialization
+            P = Classes.cl_P(x0=x, num_params=dert_.shape[1] + 1)  # P initialization
             while x < X - 1 and P_map[x]:
                 dert = dert_[x]
                 gg = dert[1]

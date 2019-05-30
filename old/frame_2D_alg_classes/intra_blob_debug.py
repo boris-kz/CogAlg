@@ -1,7 +1,7 @@
 from time import time
 import numpy as np
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg.compare import inc_range
+from frame_2D_alg.compare_derts import inc_range
 # from comp_P_ import comp_P_
 
 '''
@@ -103,12 +103,12 @@ def intra_blob(frame, redundancy=0.0):  # evaluate blobs for comp_angle, inc_ran
 
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg_classes.misc import get_filters
+from old.frame_2D_alg_classes.misc import get_filters
 
 get_filters(globals())  # imports all filters at once
 
 # Main ---------------------------------------------------------------------------
-from frame_2D_alg_classes import frame_blobs
+from old.frame_2D_alg_classes import frame_blobs
 
 Y, X = frame_blobs.Y, frame_blobs.X
 start_time = time()

@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque
-from frame_2D_alg_classes import Classes
-from frame_2D_alg_classes.misc import get_filters
+from old.frame_2D_alg_classes import Classes
+from old.frame_2D_alg_classes.misc import get_filters
 get_filters(globals()) # imports all filters at once
 # --------------------------------------------------------------------------------
 '''
@@ -73,7 +73,7 @@ def comp_angle(y, a_, lower_a_, dert_, P_map_):
         while x < X - 1 and not P_map_[x]:
             x += 1
         if x < X - 1 and P_map_[x]:
-            P = Classes.cl_P(x0=x, num_params=dert_.shape[1]+1)  # aP initialization
+            P = Classes.cl_P(x0=x, num_params=dert_.shape[1] + 1)  # aP initialization
             while x < X - 1 and P_map_[x]:
                 dert = dert_[x]
                 sda = dert[5]

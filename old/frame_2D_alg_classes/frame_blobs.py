@@ -1,9 +1,7 @@
 import cv2
-import argparse
 from time import time
 from collections import deque
-import math
-from frame_2D_alg_classes import Classes
+from old.frame_2D_alg_classes import Classes
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of maximal gradient. 
@@ -43,7 +41,7 @@ def comp_pixel(y, p_, lower_p_, dert_):
     P_ = deque()
     p = p_[0]  # input pixel
     x = 0
-    P = Classes.cl_P(x0=0, num_params=dert_.shape[1]+1)  # initialize P with: y, x0 = 0, sign = -1, all params = 0, initially [L, I, G, Dx, Dy]
+    P = Classes.cl_P(x0=0, num_params=dert_.shape[1] + 1)  # initialize P with: y, x0 = 0, sign = -1, all params = 0, initially [L, I, G, Dx, Dy]
 
     for right_p, lower_p in zip(p_[1:], lower_p_[:-1]):  # pixel p is compared to vertically and horizontally subsequent pixels
         dy = lower_p - p  # compare to lower pixel
@@ -84,7 +82,7 @@ def image_to_blobs(image):
 # ************ MAIN FUNCTIONS END ***************************************************************************************
 # ************ PROGRAM BODY *********************************************************************************************
 
-from frame_2D_alg_classes.misc import get_filters
+from old.frame_2D_alg_classes.misc import get_filters
 get_filters(globals())  # imports all filters at once
 
 # Load inputs --------------------------------------------------------------------
