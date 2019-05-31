@@ -46,7 +46,7 @@ def lateral_comp(P_, rng, fga, fia):  # horizontal comparison between pixels at 
 
     derts__ = []
     max_index = rng - 1   # max_index in dert_buff_
-    cyc = -rng - 1 - fia  # cyc and rng are cross-convertible, fia: input angle flag, for inc range comp_angle
+    cyc = -rng - 1 + fia  # cyc and rng are cross-convertible, fia: input angle flag, for inc range comp_angle
 
     for P in P_:
         x0 = P[1] + rng   # sub-P recedes by excluding incomplete-rng _derts
@@ -63,7 +63,7 @@ def lateral_comp(P_, rng, fga, fia):  # horizontal comparison between pixels at 
             if len(_derts_) == rng:          # xd == rng and coordinate is within P vs. gap
                 _derts = _derts_[max_index]  # rng-spaced dert, or dert at the end of deque with maxlen=rng
 
-                _i_dert = _derts[cyc][fga]  # $ vs. separate derts_?
+                _i_dert = _derts[cyc][fga]
                 _i = _i_dert[fia]           # template is brightness or gradient in dert[0] or angle in dert[1]
                 _dy, _dx = _i_dert[-1]      # derivatives accumulated in template dert over shorter + current rng comps
 
@@ -87,7 +87,7 @@ def vertical_comp(derts__, _derts___, rng, fga, fia, fa):    # vertical and diag
 
     out_derts__ = []  # first line of derts in last element of _derts___ is returned to comp_dert() at len = maxlen(rng)
     yd = 1
-    cyc = -rng - 1 - fia  # cyc and rng are cross-convertible, fia: input angle flag, for inc range comp_angle
+    cyc = -rng - 1 + fia  # cyc and rng are cross-convertible, fia: input angle flag, for inc range comp_angle
 
     for index, _derts__ in enumerate(_derts___):  # iterate through (rng - 1) higher lines
         if yd < rng:  # diagonal comp, else rng == 1?

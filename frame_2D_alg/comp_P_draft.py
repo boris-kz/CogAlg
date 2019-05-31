@@ -50,7 +50,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
     dL = L - _L;    mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # no comp I: Dy is higher-precision dI
+    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # Dy vs dI: higher-precision but only within iP?
     dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # G = hypot(Dy, Dx): comp in 2D structures only?
 
     Pd = ddX + dL + dDx + dDy  # -> combined-sign dPP, regardless of param? or comb vPP only: no x-sign?
