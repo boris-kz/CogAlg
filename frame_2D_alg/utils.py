@@ -16,7 +16,7 @@ from PIL import Image
 # -localize(): translate bounding box against a reference.
 # ***********************************************************************************************************************
 
-transparent_val = 127   # a pixel at this value is considered transparent
+transparent_val = 127       # a pixel at this value is considered transparent
 
 def imread(path):
     ''' Read a image from file as gray-scale.

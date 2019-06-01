@@ -1,30 +1,27 @@
-from collections import deque
-from math import hypot, pi
-from cmath import rect, phase
-
-two_pi = 2 * pi         # angle constraint
-angle_coef = 256 / pi   # to scale angle into (-128, 128)
+import numpy as np
 
 # flags:
-Flag_angle          = b001
-Flag_inc_rng        = b010
-Flag_hypot_g        = b100
+f_angle          = 0b00000001
+f_inc_rng        = 0b00000010
+f_comp_g         = 0b00000100
 
 # ************ FUNCTIONS ************************************************************************************************
-# -compare_derts()
+# -comp_derts()
+# -construct_input_array(P_, x0, mask)
 # ***********************************************************************************************************************
 
-def comp_dert(P_, buff___, Ave, rng, flags):    # comparison of input param between derts at range = rng
+def comp_derts(P_, buff__, bounds, mask, Ave, rng, flags):    # comparison of input param between derts at range = rng
     # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
 
-    fa = flags & Flag_angle
+    i_ = construct_input_array(P_, bounds, flags)   # construct input array with predetermined shape
 
-    if flags & Flag_hypot_g:
-        _derts__ = hypot_g(P_)
-    else:
-        if fa and rng == 1:
-            pass
+    if buff__.shape[0] < rng:
+        return [], np.concatenate((buff__, i_.reshape(1, -1)), axis=0)
 
-    return
+    np.concatenate((buff__[1:], i_.reshape(1, -1)), axis=0)     # discard top line, append last line buff
 
-    # ---------- compare_derts() end ----------------------------------------------------------------------------------------
+    _derts__ = # convolve buff__ with kernels, compute g, fold into _derts__
+
+    return _derts__ , buff__
+
+    # ---------- comp_derts() end -------------------------------------------------------------------------------------------

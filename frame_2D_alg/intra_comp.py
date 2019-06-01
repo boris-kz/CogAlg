@@ -1,13 +1,13 @@
 import numpy as np
 from collections import deque, namedtuple
-from compare_derts import compare_derts
+from compare_derts import comp_derts
 
 Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 
 # flags:
-Flag_angle          = b001
-Flag_inc_rng        = b010
-Flag_hypot_g        = b100
+f_angle          = 0b00000001
+f_inc_rng        = 0b00000010
+f_comp_g         = 0b00000100
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -18,15 +18,15 @@ Flag_hypot_g        = b100
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_range | hypot_g
+def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_range | hypot_g. default: 0 - do hypot_g
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    fa = flags & Flag_angle
-    rng = blob.rng + 1 if (flags & Flag_inc_rng) else 1
-    blob.seg_.sort(key=lambda seg: seg[0])   # sort by y0 coordinate for unfolding
-    seg_ = []  # buffer of segments containing line y
-    buff___ = deque(maxlen=rng)
-    sseg_ = deque()  # buffer of sub-segments
+    fa = flags & f_angle                                # check if inputs are angles
+    rng = blob.rng + 1 if (flags & f_inc_rng) else 1    # check range should be incremented
+    blob.seg_.sort(key=lambda seg: seg[0])              # sort by y0 coordinate for unfolding
+    seg_ = []                   # buffer of segments containing line y
+    buff__ = object()           # place-holder for buffer of unfolded higher-lines inputs (p, g or a). Also buffers accumulated previous-rng dx, dy if rng > 1
+    sseg_ = deque()             # buffer of sub-segments
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
     i = 0   # segment index
@@ -47,8 +47,8 @@ def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_rang
 
         P_.sort(key=lambda P: P.x0)  # sort by x0 coordinate
         # core operations:
-
-        derts__ = compare_derts(P_, buff___, flags)   # no buff___ or alt in hypot_g or future dx_g
+        indices = blob.map[y - y0, :].nonzero()
+        buff__, derts__ = comp_derts(P_, buff__, (x0, xn), indices, Ave, rng, flags)   # no buff___ or alt in hypot_g or future dx_g
         # if derts__:     # form sub_blobs: currently excluded, for debugging compare_derts
 
             # sP_ = form_P_(derts__, Ave, rng, fa)

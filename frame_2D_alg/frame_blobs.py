@@ -26,6 +26,10 @@ import numpy as np
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
 
+# flags:
+f_angle          = 0b00000001
+f_inc_rng        = 0b00000010
+f_comp_g         = 0b00000100
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
@@ -281,14 +285,13 @@ frame_of_blobs = image_to_blobs(image)
 
 # DEBUG --------------------------------------------------------------------------
 if DEBUG:
-    from utils import draw, over_draw, map_frame, map_sub_blobs, map_blob, map_segment, empty_map
+    from utils import *
+    from intra_comp import intra_comp
     draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-    from intra_comp import intra_comp, hypot_g
-
-    for i, blob in enumerate(frame_of_blobs[2]):
+    for i, blob in enumerate(frame_of_blobs[1]):
         if blob.Derts[0].L > 500:
-            intra_comp(blob, Ave=5, Ave_blob=0, fa=False, ir=False)
+            intra_comp(blob, Ave=5, Ave_blob=0)
     #         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
 # END DEBUG -----------------------------------------------------------------------
 
