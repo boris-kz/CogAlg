@@ -3,7 +3,7 @@ from math import hypot
 from collections import deque, namedtuple
 from compare_derts import compare_derts
 
-nt_blob = namedtuple('blob', 'Derts sign box map root_blob seg_')
+nt_blob = namedtuple('blob', 'Levels sign box map root_blob seg_')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -47,7 +47,7 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
         derts__ = compare_derts(P_, _derts___, rng, fga, fia, fa)   # no _derts___ in hypot_g or future dx_g
         if derts__:  # form sub_blobs:
 
-            sP_ = form_P_(derts__, Ave, rng, fa)
+            sP_ = form_P_(derts__, Ave, rng, fga, fia)
             sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
             sseg_ = form_seg_(y - rng, sP_, blob, rng, fa)
 
@@ -58,10 +58,10 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def form_P_(derts__, Ave, rng, fga):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
+def form_P_(derts__, Ave, rng, fga, fia):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
-    cyc = -rng -1 -fga  # cyc and rng are cross-convertable?
+    cyc = -rng -1 + fia  # cyc and rng are cross-convertable?
 
     for x_start, derts_ in derts__:  # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
@@ -224,51 +224,49 @@ def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged int
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        feedback_draft(root_blob, blob, rng, fa)
+        feedback_draft(root_blob, blob, rng, fa, 1)
 
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-def feedback_draft(root_blob, blob, rng, fa):
+def feedback_draft(root_blob, blob, rng, fga, fia):
 
-    # rng for comp_range, also layer index = derts[-(rng-1|2)][fa]:
-    # fa for sub_layer index: 0 g | 1 ga, none if hypot_g
+    # rng for comp_range, also layer index = derts[-(rng-1|2)][fga]:
+    # fga for sub_layer index: 0 g | 1 ga, none if hypot_g
 
     s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, box = blob
-
-    if fa: cyc = -rng - 2  # cyc and rng are cross-convertable?
-    else:  cyc = -rng - 1  # [cyc][fa]: index of input dert and feedback Dert
+    cyc = -rng - 1 + fia  # cyc and rng are cross-convertable
 
     while root_blob:  # accumulate Derts[cyc][fa] params in recursively higher root_blob
 
         if -cyc > len(root_blob.Derts):  # Dert cycles
             root_blob.Derts += ()  # Derts[cyc][(Dert, aDert)] may be initialized by any comp_branch
 
-        if  root_blob.Derts[-1][-1][cyc][fa]:  # fb source blob cyc and fa are always -1: forks is breadth-first
-            fb_Dert = root_blob.Derts[-1][-1][cyc][fa]  # feedback Dert in discontinuous forks, inverse index?
+        if  root_blob.Derts[-1][-1][cyc][fga]:  # fb source blob cyc and fga are always -1: forks is breadth-first
+            fb_Dert = root_blob.Derts[-1][-1][cyc][fga]  # feedback Dert in discontinuous forks, inverse index?
         else:
-            fb_Dert = (0, 0, 0, 0, 0, [])  # initialize new Dert for new layer, I=0 if rng=0? also cyc, fa
-            root_blob.Derts[-1][-1][cyc][fa] = fb_Dert
+            fb_Dert = (0, 0, 0, 0, 0, [])  # initialize new Dert for new layer, I=0 if rng=0? also cyc, fga
+            root_blob.Derts[-1][-1][cyc][fga] = fb_Dert
 
         root_blob.Derts[0] += I  # also accumulated per sub_blob, initially 0?
 
-        Gr, Dyr, Dxr, Lr, Lyr, sub_blob_ = fb_Dert  # rng per cyc_Dert ( fa per fa_Dert: always passed as arg?
+        Gr, Dyr, Dxr, Lr, Lyr, sub_blob_ = fb_Dert  # rng per cyc_Dert ( fga per fga_Dert: always passed as arg?
         Dyr += Dy
         Dxr += Dx
         Gr += G
         Lyr += Ly
         Lr += L
-        sub_blob_.append(nt_blob( Derts= [I, ((G, Dy, Dx, L, Ly, []),[])],  # Derts[0] = I, Derts[1] = (blob, ablob)
-                                  # Derts[>1] = forks[cyc][fa], same as input derts[cyc][fa], added by feedback
-                                  # sub_blob_ = [] per blob or fork, nested to depth = Derts[cyc][fa]
+        sub_blob_.append(nt_blob( Levels= [I, ((G, Dy, Dx, L, Ly, []),[])],  # Levels[0] = I, Levels[1] = (blob, ablob)
+                                  # Levels[>1] = forks[cyc][fga], same as input derts[cyc][fga], added by feedback
+                                  # sub_blob_ = [] per blob or fork, nested to depth = Levels[cyc][fga]
                                   sign = s,
                                   box= box,  # same boundary box
                                   map= map,  # blob boolean map, to compute overlap
                                   root_blob=blob,
                                   seg_=seg_,
                                   ))
-        root_blob.Derts[-1][-1] = Gr, Dyr, Dxr, Lr, Lyr, sub_blob_
+        root_blob.Levels[-1][-1] = Gr, Dyr, Dxr, Lr, Lyr, sub_blob_
 
         root_blob = root_blob.root_blob
 

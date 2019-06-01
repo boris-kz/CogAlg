@@ -1,21 +1,20 @@
 Welcome to the CogAlg wiki!
 
-Most of the programming is currently done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg), according to the principles introduced in README. I edit and paste his updates here for an overview, but his repository is best for running code. The code is divided into three self-contained folders:
+Much of the programming is currently done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg), according to the principles introduced in README. I edit and paste his updates here for an overview, but his repository is best for running code. The code is divided into three self-contained folders:
 
 **line_1D_alg:**
 
-- [line_POC](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_POC.py) is 1st-level core algorithm, to demonstrate basic principles. It works but is not effective for recognition and prediction in our 4D space-time.
+- [line_POC](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_POC.py) is 1st-level core algorithm, to demonstrate basic principles. It works, but being 1D-only, it's not effective for recognition and prediction in our 4D space-time.
 
-**frame_2D alg:** currently a work-in-progress, will process still images:
+**frame_2D_alg:** currently a work-in-progress, will process still images:
 
 - [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. This is a basic clustering / segmentation within an image, but resulting blobs contain comparison-derived parameters for future inter-blob comparison. The code is functional.
 
-- [intra_blob_debug](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob_debug): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs:
+- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs:
 
-  - [intra_comp_debug](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp_debug.py) is called by intra_blob to perform branch-specific extended comparison and form a corresponding master blob. Each layer of intra-blob may call four types of deeper comparison branches:
-  - [comp_angle](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_angle.py) computes and compares angle of gradient, to define sub- angle_blobs: contiguous areas of same-sign deviation of difference between angles of adjacent gradients
-  - [comp_gradient](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_gradient.py) compares gradient to define sub_blobs of same-sign deviation of higher-derivation gradients
-  - [comp_range](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_range.py) compares input parameter at incrementally greater range to define sub- range_blobs: contiguous areas of same-sign deviation of extended-range gradients
+  - [intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp.py) is called by intra_blob to perform comparison over extended range or higher derivation, and form corresponding master blob. Each intra-blob() may call two layers of intra_comp(): first for comparison over input parameter, then for comparison over angle of gradient derived by the first comparison. Both define corresponding sub_blobs: contiguous areas of same-sign deviation of resulting gradient.
+   
+    - [compare_derts](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/compare_derts.py) compares input parameter, or computes and compares angle of resulting gradient, to compute corresponding input gradient or angle gradient, over defined range.
   - [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): a draft for comparison between vertically consecutive Ps: horizontal slices of blob segments. This will be similar to higher levels of 1D alg.
 
 - inter_blob:
