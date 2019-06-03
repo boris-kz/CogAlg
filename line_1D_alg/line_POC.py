@@ -8,11 +8,12 @@ Principal version of 1st level 1D algorithm: dP definition and recursion eval wi
 Secondary dmPs, etc. are defined through direct match (min d, independent from dd), so it should use overlapping form_P?
 
 Initial match is defined as ave abs(d) - abs(d): secondary to difference because stable visual property of objects is albedo, but 
-such stability has low correlation with the value of albedo. Although indirect measure of match, low abs(d) is still predictive: 
-uniformity across space correlates with stability over time.
+such stability has low correlation with the value of albedo. 
 
+Although indirect measure of match, low abs(d) is still predictive: uniformity across space correlates with stability over time.
 Illumination is locally stable, so variation of albedo can be approximated as difference (vs. ratio) of brightness.
-Cross-comparison of consecutive pixels within horizontal scan line, forming match patterns mPs (spans of pixels with same-sign match),
+
+Cross-comparison of consecutive pixels of horizontal line forms match patterns mPs (spans of pixels with same-sign match deviation),
 and difference patterns dPs (spans of pixels with same-sign differences) within each negative mP.
 
 form_pattern() is conditionally recursive, cross-comparing p | d within a queue of above- minimal length and summed M | D.
@@ -159,12 +160,12 @@ end_time = time() - start_time
 print(end_time)
 
 '''
-Next level will cross-compare resulting hierarchical patterns and evaluate them for deeper internal and external cross-comparison
-P = s, L, I, D, M, r, e_: 
-
+Next level cross-compares resulting patterns Ps (s, L, I, D, M, r, nested e_) and evaluates them for deeper cross-comparison. 
+The depth of cross-comparison (discontinuous if generic) is increased in lower-recursion e_, then between same-recursion e_s:
+ 
 comp (s)?  # same-sign only
-    comp (L, I, D, M) in parallel, or L first, I is redundant?  
-        comp (r)?  # same derivation e_
+    comp (L, I, D, M)?  # in parallel or L first, equal-weight or I is redundant?  
+        comp (r)?  # same-recursion (derivation) order e_
             cross_comp (e_)
 '''
 

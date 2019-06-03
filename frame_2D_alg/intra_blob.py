@@ -31,25 +31,24 @@ from intra_comp import intra_comp
     layer-sequential forks( sub_blob_ unfolding, forks: sorted [(cyc,fga)], >0 layer pairs: from alt. input_comp, angle_comp
         
     intra_comp initializes Layers[0] and Layers[1] per sub_blob, feedback adds or accumulates deeper fork layer reps:
-    fork_Layer [(fork, i_cyc, i_fga)], generic fork: Dert | sub_forks | sub_sub_forks..,  
+    fork_Layer [(fork, i_cyc, i_fga)], generic fork may be Dert | sub_forks | sub_sub_forks...   
          
-    forks index nesting is in higher blobs: sequential feedback index += [higher-layer index]
-    alternating layers: rng+, sub_angle+: reduced coord res | increased angle res 
-     
-    vs computed g_angles in alternating g, ga layers? '''
+    forks index nesting in higher blobs: feedback index += [higher-layer index], alt fga, cyc+=1 if fga==0?    
+    parallel | alternating rng+, sub_angle+ layers: reduced coord, angle res, vs computed g_angles in alt g, ga layers? '''
 
 ave = 20
 ave_blob = 1000  # fixed cost of blob syntax
-rave = 10        # fixed cost ratio of converting blob to root_blob: Derts+=Dert, sub_blobs, derts+=dert
+rave = 10        # fixed root_blob / blob cost ratio: add sub_blobs, Levels+=Level, derts+=dert
 ave_n_sub_blobs = 10   # determines rave, adjusted per intra_comp
-ave_intra_blob = 1000  # cost of eval per sub_blob, as below
+ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
 ''' These filters are accumulated for evaluated intra_comp:
     Ave += ave: cost per next-layer dert, fixed comp grain: pixel
     Ave_blob *= rave: cost per next root blob, variable len sub_blob_
+    represented per fork or revised with each access, unless tree reorder?
 '''
 
-def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng->cyc and fa (flag angle) select i_Dert and i_dert
+def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> cyc and fga (flag ga) select i_Dert and i_dert
 
     new_eval_fork_ = []  # forks recycled from eval_fork_, for next intra_blob eval, rng+ only, der+ is local
     # two-level intra_comp eval per sub_blob, intra_blob eval per blob, root_blob fga = blob !fga, local Dert = Layers[1][-1]
@@ -77,25 +76,20 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng->cyc
                     val_ra  = val_rg  # value of rng=2 angle gradient deviation, + angle: no separate value?
 
                     eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? cyc = -rng - 1 - fia
-                        (val_gg,  Ave_blob * 2, 0, 0, 0),  # rng=1, fga=0, fia=0: for i_Dert, nested i_index per fork
-                        (val_rg,  Ave_blob * 2, 1, 0, 0),  # rng=2, fga=0, fia=0
-                        (val_gga, Ave_blob,     0, 1, 0),  # rng=1, fga=1, fia=0
-                        (val_ra,  Ave_blob * 2, 1, 1, 1)   # rng=2, fga=1, fia=1: rng comp_angle -> ga, no compute_a?
+                        (val_gg,  2, 0, 0, 0),  # coef=2, rng=1, fga=0, fia=0: for i_Dert, nested i_index per fork
+                        (val_rg,  2, 1, 0, 0),  # coef=2, rng=2, fga=0, fia=0
+                        (val_gga, 1, 0, 1, 0),  # coef=1, rng=1, fga=1, fia=0
+                        (val_ra,  2, 1, 1, 1)   # coef=2, rng=2, fga=1, fia=1: rng comp_angle -> ga, no compute_a?
                         ]
+                    for val, coef, rng, fga, fia in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
-                    sorted(eval_fork_, key=lambda val: val[0], reverse=True)
-                    for val, threshold, rng, fga, fia in eval_fork_:
-
-                        threshold *= rdn
-                        if val > threshold:
+                        if  val > ave_intra_blob * coef * rdn:  # cost of default eval_sub_blob_ per intra_blob
                             rdn += 1  # fork rdn = fork index + 1
                             rng += 1  # for current and recycled forks
                             Ave_blob += ave_blob * rave * rdn
                             Ave += ave * rdn
-                            new_eval_fork_ += [(val, threshold, rng, fga, fia)]  # selected forks are passed as arg:
-
-                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)
-                            # root_blob.Layers[-1](forks) += Derts, derts += dert
+                            new_eval_fork_ += [(val, coef, rng, fga, fia)]  # selected forks are passed as arg:
+                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers += fork
                         else:
                             break
     ''' 
@@ -108,34 +102,24 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng->cyc
     if G + Ga > Ave_blob * 2:  # 2 crit, -> i_dev + a_dev: noise, likely sign reversal & distant match
        intra_comp( ablob, comp_range, Ave_blob, Ave)  # forms extended-range-g- deviation sub_blobs
     
-    end of intra_comp:
-    Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
+    intra_comp returns Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
+    ave & ave_blob *= fork coef, greater for coarse kernels, += input switch cost, or same for any new fork?  
+
+    Simplicity vs efficiency: if fixed code+syntax complexity cost < accumulated variable inefficiency cost, in delays?
     
-    if not comp_angle:
-       if blob.Derts[-1][0] > Ave_blob + ave_eval:  # root_blob G > cost of evaluating sub_blobs
-          intra_blob( ablob, Ave_blob, Ave, rng)     
-
-    ave and ave_blob are averaged between branches, else multiple blobs, adjusted for ave comp_range x comp_gradient rdn
-    g and ga are dderived, blob of min_g? val -= branch switch cost?
-    no rG =  ga_blob.Derts[-2][-3][0]  # 2-distant input G
-    no rGa = ga_blob.Derts[-2][-1][0]  # 2-distant angle Ga
-
-    def intra_blob_hypot(frame):  # evaluates for hypot_g and recursion, ave is per hypot_g & comp_angle, or all branches?
-
-        for blob in frame.blob_:
-            if blob.Derts[-1][0] > ave_root_blob:  # G > root blob cost
-                intra_blob(blob, hypot_g, ave_root_blob, ave)  # g = hypot(dy, dx), adds Dert & sub_blob_, calls intra_blob
-    return frame
-
-    comp_P_() if estimated val_PP_ > ave_comp_P, for blob in root_blob.sub_blob_: defined by dx_g:
-     
-    L + I + |Dx| + |Dy|: P params sum is a superset of their match Pm, 
-    * L/ Ly/ Ly: elongation: >ave Pm? ~ box (xn - x0) / (yn - y0), 
-    * Dy / Dx:   variation-per-dimension bias 
-    * Ave / Ga:  angle match rate?
+    Input mag is weakly predictive, derivation at rng=1 is enough, rng+ for g only? 
+    starting with new orthogonal rng=1 comp_g, or first comp_a from initial g?
+    
+    dert: (g, (dx, dy) +45), derts[0] 4i -> struct_I: for feedback but not re-input?   
+    g, ga are dderived: separate v, d blob forks beyond 1st layer: compute olp? 
     '''
 
     return root_blob
+
+
+
+
+
 
 
 
