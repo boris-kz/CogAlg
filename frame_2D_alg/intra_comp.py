@@ -2,6 +2,8 @@ import numpy as np
 from collections import deque, namedtuple
 from compare_derts import comp_derts
 
+Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
+Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, derts_')
 Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 
 # flags:
@@ -25,7 +27,8 @@ def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_rang
     rng = blob.rng + 1 if (flags & f_inc_rng) else 1    # check range should be incremented
     blob.seg_.sort(key=lambda seg: seg[0])              # sort by y0 coordinate for unfolding
     seg_ = []                   # buffer of segments containing line y
-    buff__ = object()           # place-holder for buffer of unfolded higher-lines inputs (p, g or a). Also buffers accumulated previous-rng dx, dy if rng > 1
+    dbuff = deque(maxlen=rng)   # buffer of higher-line derts__
+    ibuff = object()            # place-holder for buffer of unfolded higher-lines inputs (p, g or a). Also buffers accumulated previous-rng dx, dy if rng > 1
     sseg_ = deque()             # buffer of sub-segments
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
@@ -48,7 +51,7 @@ def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_rang
         P_.sort(key=lambda P: P.x0)  # sort by x0 coordinate
         # core operations:
         indices = blob.map[y - y0, :].nonzero()
-        buff__, derts__ = comp_derts(P_, buff__, (x0, xn), indices, Ave, rng, flags)   # no buff___ or alt in hypot_g or future dx_g
+        derts__, ibuff = comp_derts(P_, dbuff, ibuff, (x0, xn), indices, Ave, flags)   # no buff___ or alt in hypot_g or future dx_g
         # if derts__:     # form sub_blobs: currently excluded, for debugging compare_derts
 
             # sP_ = form_P_(derts__, Ave, rng, fa)

@@ -114,10 +114,9 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
         P = P_.popleft()  # input-line Ps
         seg = seg_.popleft()  # higher-line segments,
         _P = seg[-3][-1]  # last element of each segment is higher-line P
-        stop = False
         fork_ = []
 
-        while not stop:
+        while True:
             x0 = P.x0  # first x in P
             xn = x0 + P.L  # first x in next P
             _x0 = _P.x0  # first x in _P
@@ -135,7 +134,7 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                 else:  # terminate loop
                     if seg[-1] != 1:  # if roots != 1: terminate seg
                         form_blob(seg, frame)
-                    stop = True
+                    break
             else:  # no next-P overlap
                 if seg[-1] != 1:  # if roots != 1: terminate seg
                     form_blob(seg, frame)
@@ -145,7 +144,7 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                     _P = seg[-3][-1]
                 else:  # if no seg left: terminate loop
                     new_P_.append((P, fork_))
-                    stop = True
+                    break
 
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
