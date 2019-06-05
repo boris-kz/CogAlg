@@ -1,5 +1,6 @@
 import numpy as np
-from cmath import phase, rect
+from cmath import phase
+from math import hypot
 
 # flags:
 f_angle          = 0b00000001
@@ -7,7 +8,7 @@ f_inc_rng        = 0b00000010
 f_comp_g         = 0b00000100
 
 # ************ FUNCTIONS ************************************************************************************************
-# -comp_derts()
+# -compare_i()
 # -construct_input_array()
 # -convolve()
 # -calc_g_fold_dert()
@@ -15,44 +16,44 @@ f_comp_g         = 0b00000100
 # -calc_a()
 # ***********************************************************************************************************************
 
-def comp_derts(P_, dbuff, ibuff, bounds, indices, Ave, rng, flags):    # comparison of input param between derts at range = rng
-    # dert_buff___ in blob ( dert__ in P_ line ( dert_ in P
-    rng = dbuff.maxlen
+def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of input param between derts at range = rng
+    # _dert___ in blob ( dert__ in P_ line ( dert_ in P
+    rng = _dert___.maxlen
     fa = flags & f_angle
     fga = fa and (flags & f_comp_g)
     fia = fa and (flags & f_inc_rng)
     cyc = -rng - 1 + fia
 
-    derts__, i_ = construct_input_array(P_, bounds, cyc, fa, fga, fia)   # construct input array with predetermined shape
+    derts__, i_ = construct_input_array(P_, bounds, flags, cyc, fa, fga, fia)   # construct input array with predetermined shape
 
     if not flags:           # no flag: hypot_g, return current line derts__
         return derts__, i_
 
-    dbuff.appendleft(derts__)
+    _dert___.appendleft(derts__)
 
-    if len(dbuff) == 0:                                     # no ibuff
+    if len(_dert___) == 0:                                      # no i__:
         return [], i_                                       # return empty _derts__
-    if i_.shape[0] <= rng * 2:                              # incomplete dbuff
-        return [], np.concatenate((ibuff, i_), axis=0)      # return empty _derts__
+    if i__.shape[0] <= rng * 2:                             # incomplete _dert___:
+        return [], np.concatenate((i__, i_), axis=0)        # return empty _derts__
 
-    ibuff = np.concatenate((ibuff[1:], i_), axis=0)         # discard top line, append last line ibuff
+    i__ = np.concatenate((i__[1:], i_), axis=0)             # discard top line, append last line i__
 
-    d_ = convolve(ibuff, kernels[rng])   # convolve ibuff with kernels
+    d_ = convolve(i__, kernels[rng], indices, rng)          # convolve i__ with kernels
 
     if flags & f_inc_rng:               # accumulate with
-        d_ += accumulated_d_(dbuff[0])    # derts on rng-higher line
+        d_ += accumulated_d_(_dert___[0])   # derts on rng-higher line
 
-    _derts__ = calc_g_fold_dert(dbuff.pop(), d_, flags)
+    _derts__ = calc_g_fold_dert(_dert___.pop(), d_, indices, bounds, flags)
 
-    return _derts__ , ibuff
+    return _derts__ , i__
 
-    # ---------- comp_derts() end -------------------------------------------------------------------------------------------
+    # ---------- compare_i() end --------------------------------------------------------------------------------------------
 
-def construct_input_array(P_, bounds, cyc, fa, fga, fia):   # unfold P_
+def construct_input_array(P_, bounds, flags, cyc, fa, fga, fia):   # unfold P_
 
     if flags:   # not for hypot_g
         start, end = bounds
-        b_calc_a = fa and not (fga or fia)
+        b_calc_a = fa and not fia
 
         derts__ = []
         i_ = np.empty(shape=(1, end - start), dtype=int)
@@ -67,21 +68,39 @@ def construct_input_array(P_, bounds, cyc, fa, fga, fia):   # unfold P_
             index = P.x0 - start
             i_[0, index: index + P.L] = [derts[cyc][fga][fia] for derts in derts_]   # construct input array for comparison
 
-    else:       # for hypot_g
-        derts__ = [(P.x0, [[(p,), (hypot(dy, dx), (dy, dx))] for p, g, dy, dx in P.dert_]) for P in P_]   # unfold into derts__
+    else:           # do hypot_g():
+        derts__ = [(P.x0, [[(p,), (int(hypot(dy, dx)), (dy, dx))] for p, g, dy, dx in P.dert_]) for P in P_]   # unfold into derts__
         i_ = None   # no comparison
 
     return derts__, i_
 
     # ---------- construct_input_array() end --------------------------------------------------------------------------------
 
-def convolve(a, k):
-    return
+def convolve(a, k, indices, rng):   # apply kernel, return array of dx, dy
+    # d_[0, :]: array of dy
+    # d_[1, :]: array of dx
+
+    d_ = np.empty((2, a.shape[1]))
+
+    d_[:, indices] = [(a[:, i-rng:i+rng+1] * k).sum(axis=(1, 2)) for i in indices]
+
+    return d_
 
     # ---------- convolve() end ---------------------------------------------------------------------------------------------
 
-def calc_g_fold_dert(derts__, d_, flags):
-    return
+def calc_g_fold_dert(derts__, d_, indices, bounds, flags):   # compute g using array of dx, dy. fold dert
+    x0, xn = bounds
+
+    g_ = np.empty((d_.shape[1],))
+
+    g_[indices] = np.hypot(d_[0, indices], d_[1, indices])
+
+    new_derts__ = []
+
+    # append new dert into new_derts
+    # ...
+
+    return new_derts__
 
     # ---------- calc_g_fold_dert() end -------------------------------------------------------------------------------------
 

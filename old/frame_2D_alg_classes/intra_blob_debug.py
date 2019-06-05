@@ -1,7 +1,7 @@
 from time import time
 import numpy as np
 # Recursion branches -------------------------------------------------------------
-from frame_2D_alg.compare_derts import inc_range
+from frame_2D_alg.compare_i import inc_range
 # from comp_P_ import comp_P_
 
 '''
