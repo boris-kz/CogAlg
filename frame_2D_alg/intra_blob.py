@@ -10,14 +10,14 @@ from intra_comp import intra_comp
     match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 
-    Each intra_comp() call from intra_blob() adds a layer of sub_blobs, new dert to derts and Dert to Derts, in each blob.
+    Each intra_comp() call from intra_blob() adds a layer of sub_blobs, new dert to derts and Layer to Layers, in each blob.
     Layer params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
     Layers[ I, Dert_pair, forks_pair, fork_forks_pair..] Dert_pair: g_Dert (G, Dx, Dy, L, Ly, sub_blob_), ga_Dert: g_Dert + A
         
     sign, # lower layers are mixed-sign
-    map,  # boolean map of blob, to compute overlap; map and box of lower Derts are similar to top Dert
+    map,  # boolean map of blob, to compute overlap; map and box of lower Layers are similar to top Layer
     box,  # boundary box: y0, yn, x0, xn 
     root_blob,  # reference, to return summed blob params
             
@@ -25,7 +25,7 @@ from intra_comp import intra_comp
         [ seg_params,  
           Py_ = # vertical buffer of Ps per segment
               [ P_params,       
-                derts_[ fga_derts (g_dert (g, (dx, dy)), ga_dert (g, a, (dx, dy))) per current & higher derivation layer
+                derts_[ fga_derts (g_dert (g, (dx, dy)), ga_dert (g, a, (dax, day))) per current and prior derivation layers
                 
     derivation layer reps are for layer-parallel comp_blob, nesting depth = Layer index in sub_blob_, Layer index-1 in forks
     layer-sequential forks( sub_blob_ unfolding, forks: sorted [(cyc,fga)], >0 layer pairs: from alt. input_comp, angle_comp
@@ -60,7 +60,7 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
             Ave_blob *= rave  # estimated cost of redundant representations per blob
             Ave += ave  # estimated cost per dert
 
-            for sub_blob in blob.Layers[1][0][-1]:  # [cyc=1][fga=0] sub_sub_blobs are evaluated for angle calc & comp
+            for sub_blob in blob.Layers[1][0][-1]:  # [cyc=1][fga=0] sub_sub_blobs evaluated for root_dert angle calc & comp
                 if sub_blob.Layers[1][0][0] > Ave_blob:  # G > sub -> root blob conversion cost
 
                     Ave_blob = intra_comp(sub_blob, rng, fga, fia, 1, Ave_blob, Ave)  # fa=1, Ave_blob adjust by n_sub_blobs
@@ -75,21 +75,23 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
                     val_rg  = G + Ga  # value of rng=2 gradient deviation:  non-directional variation
                     val_ra  = val_rg  # value of rng=2 angle gradient deviation, + angle: no separate value?
 
-                    eval_fork_ += [   # sort while appending?  adjust vals by lower Gs? cyc = -rng - 1 - fia
-                        (val_gg,  2, 0, 0, 0),  # coef=2, rng=1, fga=0, fia=0: for i_Dert, nested i_index per fork
-                        (val_rg,  2, 1, 0, 0),  # coef=2, rng=2, fga=0, fia=0
-                        (val_gga, 1, 0, 1, 0),  # coef=1, rng=1, fga=1, fia=0
-                        (val_ra,  2, 1, 1, 1)   # coef=2, rng=2, fga=1, fia=1: rng comp_angle -> ga, no compute_a?
-                        ]
-                    for val, coef, rng, fga, fia in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+                    eval_fork_ += [   # sort per append? nested index: rng->cyc, fga: g_dert | ga_dert, fia: g_inp | a_inp:
 
-                        if  val > ave_intra_blob * coef * rdn:  # cost of default eval_sub_blob_ per intra_blob
+                        (val_gg,  2, 0, 0, 0),  # n_crit=2, rng=1, fga=0, fia=0
+                        (val_rg,  2, 1, 0, 0),  # n_crit=2, rng=2, fga=0, fia=0
+                        (val_gga, 1, 0, 1, 0),  # n_crit=1, rng=1, fga=1, fia=0
+                        (val_ra,  2, 1, 1, 1)   # n_crit=2, rng=2, fga=1, fia=1: rng comp_angle -> ga, no compute_a?
+                        ]  # n_crit: filter multiplier;  or val per combined lower-layers'G: accumulated per rng extension?
+
+                    for val, n_crit, rng, fga, fia in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+
+                        if  val > ave_intra_blob * n_crit * rdn:  # cost of default eval_sub_blob_ per intra_blob
                             rdn += 1  # fork rdn = fork index + 1
                             rng += 1  # for current and recycled forks
                             Ave_blob += ave_blob * rave * rdn
                             Ave += ave * rdn
-                            new_eval_fork_ += [(val, coef, rng, fga, fia)]  # selected forks are passed as arg:
-                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers += fork
+                            new_eval_fork_ += [(val, n_crit, rng, fga, fia)]  # selected forks are passed as arg:
+                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers += [forks]
                         else:
                             break
     ''' 
@@ -107,11 +109,11 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
 
     Simplicity vs efficiency: if fixed code+syntax complexity cost < accumulated variable inefficiency cost, in delays?
     
-    Input mag is weakly predictive, derivation at rng=1 is enough, rng+ for g only? 
-    starting with new orthogonal rng=1 comp_g, or first comp_a from initial g?
+    Input mag is weakly predictive, comp at rng = 1/2 only, replaced by g for rng+ comp? 
+    starting with rng=1 comp_g (orthogonal or 3x3?), then rng=1 comp_angle of initial g?
     
-    dert: (g, (dx, dy) +45), derts[0] 4i -> struct_I: for feedback but not re-input?   
-    g, ga are dderived: separate v, d blob forks beyond 1st layer: compute olp? 
+    dert: (g, (dx, dy)), derts[0] 4i -> struc_I: for feedback, not re-input? also lower derts summation in rng+ comp?  
+    g, ga are dderived but angle blobs (directional patterns) are secondary: specific angle only in negative ga_blobs  
     '''
 
     return root_blob
