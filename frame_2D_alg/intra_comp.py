@@ -9,7 +9,7 @@ Blob = namedtuple('Blob', 'I Derts sign box map root_blob seg_')
 # flags:
 f_angle          = 0b00000001
 f_inc_rng        = 0b00000010
-f_comp_g         = 0b00000100
+f_hypot_g        = 0b00000100
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -20,7 +20,7 @@ f_comp_g         = 0b00000100
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, Ave, Ave_blob, flags=0):  # flags = angle | increasing_range | hypot_g. default: 0 - do hypot_g
+def intra_comp(blob, Ave, Ave_blob, flags=f_hypot_g):  # flags = angle | increasing_range | hypot_g. default: hypot_g
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
     fia = flags & f_angle                               # check if inputs are angles

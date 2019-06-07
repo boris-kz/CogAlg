@@ -5,7 +5,7 @@ from math import hypot
 # flags:
 f_angle          = 0b00000001
 f_inc_rng        = 0b00000010
-f_comp_g         = 0b00000100
+f_hypot_g        = 0b00000100
 
 # ************ FUNCTIONS ************************************************************************************************
 # -compare_i()
@@ -19,12 +19,11 @@ f_comp_g         = 0b00000100
 def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of input param between derts at range = rng
     # _dert___ in blob ( dert__ in P_ line ( dert_ in P
     rng = _dert___.maxlen
-    fa = flags & f_angle
-    fga = fa and (flags & f_comp_g)
-    fia = fa and (flags & f_inc_rng)
+    fia = flags & f_angle
+    fga = fia and not (flags & f_hypot_g)
     cyc = -rng - 1 + fia
 
-    derts__, i_ = construct_input_array(P_, bounds, flags, cyc, fa, fga, fia)   # construct input array with predetermined shape
+    derts__, i_ = construct_input_array(P_, bounds, flags, cyc, fia, fga)   # construct input array with predetermined shape
 
     if not flags:           # no flag: hypot_g, return current line derts__
         return derts__, i_
@@ -49,11 +48,11 @@ def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of inp
 
     # ---------- compare_i() end --------------------------------------------------------------------------------------------
 
-def construct_input_array(P_, bounds, flags, cyc, fa, fga, fia):   # unfold P_
+def construct_input_array(P_, bounds, flags, cyc, fia, fga):   # unfold P_
 
     if flags:   # not for hypot_g
         start, end = bounds
-        b_calc_a = fa and not fia
+        b_calc_a = fia and not fga
 
         derts__ = []
         i_ = np.empty(shape=(1, end - start), dtype=int)
