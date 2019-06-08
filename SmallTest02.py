@@ -2,10 +2,8 @@ import numpy as np
 
 np.random.seed(0)
 
-a = np.arange(9).reshape(3, 3)
-
-b = (a % 2).nonzero()
-
-a[b] = -1
+a = np.arange(10).reshape(5, 2)
 
 print(a)
+
+print(np.swapaxes(a, 0, 1))
