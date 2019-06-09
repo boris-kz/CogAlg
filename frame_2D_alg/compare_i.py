@@ -1,3 +1,13 @@
+'''
+Kernel-based version of:
+ Comparison of input param between derts at range=rng, summing derivatives from shorter + current range comps per pixel
+Input is pixel brightness p or gradient g in dert[0] or angle a in dert[1]: g_dert = g, (dy, dx); ga_dert = g, a, (dy, dx)
+ if fa: compute and compare angle from dy, dx in dert[-1], only for g_dert in 2nd intra_comp of intra_blob
+else:  compare input param in dert[fia]: p|g in derts[cyc][0] or angle a in dert[1]
+ flag ga: i_dert = derts[cyc][fga], both fga and fia are set for current intra_blob forks and potentially recycled
+flag ia: i = i_dert[fia]: selects dert[1] for incremental-range comp angle only
+'''
+
 import numpy as np
 
 from cmath import phase
@@ -15,7 +25,7 @@ f_hypot_g        = 0b00000100
 # -convolve()
 # -calc_g_fold_dert()
 # -accumulated_d_()
-# -calc_a()
+# -calc_angle()
 # ***********************************************************************************************************************
 
 def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of input param between derts at range = rng
@@ -28,7 +38,7 @@ def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of inp
 
     derts__, i_ = construct_input_array(P_, bounds, flags, cyc, fia, fga)   # construct input array with predetermined shape
 
-    if flags & f_hypot_g:           # no flag: hypot_g, return current line derts__
+    if flags & f_hypot_g:           # hypot_g, return current line derts__
         return derts__, i_
 
     _dert___.appendleft(derts__)
@@ -67,7 +77,7 @@ def construct_input_array(P_, bounds, flags, cyc, fia, fga):   # unfold P_
             if not b_calc_a:
                 derts_ = P.derts_
             else:  # compute angles
-                derts_ = [calc_a(derts) for derts in P.derts_]
+                derts_ = [calc_angle(derts) for derts in P.derts_]
 
             derts__.append((derts_, P.x0))  # unfold into derts__
 
@@ -139,7 +149,7 @@ def accumulated_d_(derts__, indices, coords, shape):    # construct the accumula
     # ---------- accumulated_d_() end ---------------------------------------------------------------------------------------
 
 
-def calc_a(derts):  # compute a for derts return derts appended with angle
+def calc_angle(derts):  # compute a, return derts with angle
 
     g = derts[-1][0]
     dy, dx = derts[-1][-2:]
@@ -149,4 +159,4 @@ def calc_a(derts):  # compute a for derts return derts appended with angle
 
     return derts + [(a, a_radiant)]
 
-    # ---------- calc_a() end -----------------------------------------------------------------------------------------------
+    # ---------- calc_angle() end -------------------------------------------------------------------------------------------
