@@ -45,7 +45,7 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 ''' These filters are accumulated for evaluated intra_comp:
     Ave += ave: cost per next-layer dert, fixed comp grain: pixel
     Ave_blob *= rave: cost per next root blob, variable len sub_blob_
-    represented per fork if tree reorder, else revised with each access?
+    represented per fork if tree reorder, else redefined at each access?
 '''
 
 def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> cyc and fga (flag ga) select i_Dert and i_dert
@@ -77,9 +77,9 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
                     val_rg = G + Ga  # value of rng=2 gradient deviation: non-directional variation
                     val_ra = val_rg  # value of rng=2 angle gradient deviation, + angle: no separate value?
 
-                    eval_fork_ += [   # sort per append? nested index: rng->cyc, fga: g_dert | ga_dert, fia: g_inp | a_inp:
+                    eval_fork_ += [  # sort per append? nested index: rng->cyc, fga: g_dert | ga_dert, fia: g_inp | a_inp:
 
-                        (val_gg, 2, 0, 0, 0),  # n_crit=2, rng=1, fga=0, fia=0; n_crit is filter multiplier
+                        (val_gg, 2, 0, 0, 0),  # n_crit=2, rng=1, fga=0, fia=0; n_crit is a filter multiplier
                         (val_ga, 1, 0, 1, 0),  # n_crit=1, rng=1, fga=1, fia=0
                         (val_rg, 2, 1, 0, 0),  # n_crit=2, rng=2, fga=0, fia=0
                         (val_ra, 2, 1, 1, 1)   # n_crit=2, rng=2, fga=1, fia=1: rng comp_angle -> ga, no compute_a?
@@ -113,13 +113,18 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
     simplicity vs efficiency: if fixed code+syntax complexity cost < accumulated variable inefficiency cost, in delays?
     
     input mag is weakly predictive, comp at rng=1, only g is worth comparing at inc_range (inc_deriv per i_dert): 
-    rng+ across deleted weak blobs, or after comp_blob only? comp_g(); eval? comp_angle (input g),
+    derts[0] = 4i -> I feedback, not reinput? lower derts summation / comp?  comp_g(); eval? comp_angle (input g)
+
+    2x2 g comp across weak blobs (internal + external noise) in same direction: -G -Ga? intra_blob, default comp_blob?  
+    all der+, if high Gg + Ga (0 if no comp_angle), res-reduction: no input-g rng+, but not comparable to 3x3 g?  
+               
+    3x3 g comp within strong blobs, forming concentric-g rng+| der+ sub-blobs: 
     
-    3x3: for discrete rng+ only: if high -G - Ga: form sub-derts? 
-    2x2: shift in same direction, fuzzy 4g (g doesn't need to be preserved, not input-g specific?)
-        
-    dert: (g, (dx, dy)), derts[0] 4i -> struc_I: for feedback, not re-input? also lower derts summation in rng+ comp?  
-    g, ga are dderived but angle blobs (directional patterns) are secondary: specific angle only in negative ga_blobs  
+    rng+ if G - Gg - Ga: persistent magnitude and direction of input g, -> derts' sub_derts_?
+    der+ if Gg: gg comp, also over rng+ but with longer-rng g in derts[-2]? regardless of G & Ga: rng+ is alt fork?
+    
+    comp_P eval per angle blob, if persistent direction * elongation, etc? 
+    g, ga are dderived but angle blobs (directional patterns) are secondary: specific angle only in negative ga_blobs    
     '''
 
     return root_blob

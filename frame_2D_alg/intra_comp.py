@@ -25,13 +25,13 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
     sseg_ = deque()  # buffer of sub-segments
     y0, yn, x0, xn = blob.box
     y = y0  # current y, from seg y0 -> yn - 1
-    i = 0   # segment index
+    i_seg = 0   # segment index
 
     while y < yn:  # unfold blob into Ps for extended comp
 
-        while i < len(blob.seg_) and blob.seg_[i][0] == y:
-            seg_.append(blob.seg_[i])
-            i += 1
+        while i_seg < len(blob.seg_) and blob.seg_[i_seg][0] == y:
+            seg_.append(blob.seg_[i_seg])
+            i_seg += 1
         P_ = []  # line y Ps
         for seg in seg_:
             if y < seg[0] + seg[1][-1]:         # y < y0 + Ly within segment, or len(Py)?
