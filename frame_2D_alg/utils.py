@@ -122,7 +122,7 @@ def map_segment(seg, box, original=False):
 
     # ---------- map_segment() end --------------------------------------------------------------------------------------
 
-def over_draw(map, sub_map, sub_box, box = (0, 0, 0, 0)):
+def over_draw(map, sub_map, sub_box, box = None):
     ''' Over-write map of sub-structure onto map of parent-structure.
         Argument:
         - map: map of parent-structure.
@@ -132,7 +132,10 @@ def over_draw(map, sub_map, sub_box, box = (0, 0, 0, 0)):
         Return: over-written map of parent-structure
     '''
 
-    y0, yn, x0, xn = localize(sub_box, box)
+    if box:
+        y0, yn, x0, xn = localize(sub_box, box)
+    else:
+        y0, yn, x0, xn = sub_box
     map[y0:yn, x0:xn][sub_map != transparent_val] = sub_map[sub_map != transparent_val]
     return map
     # ---------- over_draw() end ----------------------------------------------------------------------------------------

@@ -5,7 +5,7 @@ from compare_i import compare_i
 Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, derts_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, derts__, box, map, root_blob, seg_')
+Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
 
 # flags:
 f_angle          = 0b00000001
@@ -21,27 +21,48 @@ f_hypot_g        = 0b00000100
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, Ave, Ave_blob, flags=f_hypot_g):   # flags = angle | increasing_range | hypot_g. default: hypot_g
+def intra_comp(blob, Ave, Ave_blob, flags=f_hypot_g):  # flags = angle | increasing_range | hypot_g. default: hypot_g
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
-    rng = blob.rng + 1 if (flags & f_inc_rng) else 1    # check if range should be incremented
-
+    fia = flags & f_angle                               # check if inputs are angles
+    rng = blob.rng + 1 if (flags & f_inc_rng) else 1    # check range should be incremented
+    blob.seg_.sort(key=lambda seg: seg[0])              # sort by y0 coordinate for unfolding
+    seg_ = []                       # buffer of segments containing line y
+    _dert___ = deque(maxlen=rng)    # buffer of higher-line derts__
+    i__ = object()                  # place-holder for buffer of unfolded higher-lines inputs (p, g or a). Also buffers accumulated previous-rng dx, dy if rng > 1
+    sseg_ = deque()                 # buffer of sub-segments
     y0, yn, x0, xn = blob.box
+    y = y0  # current y, from seg y0 -> yn - 1
+    i = 0   # segment index
 
-    dert__ = compare_i(blob.dert__[y0:yn, x0:xn], blob.map, flags, rng)
+    while y < yn:  # unfold blob into Ps for extended comp
 
-    seg_ = deque()  # buffer of running segments
+        while i < len(blob.seg_) and blob.seg_[i].y == y:
+            seg_.append(blob.seg_[i])
+            i += 1
+        P_ = []  # line y Ps
+        for seg in seg_:
+            if y < seg.y + seg.Ly:              # y < y0 + Ly within segment, or len(Py)?
+                P_.append(seg.Py_[y - seg.y])   # append P at line y of seg
 
-    ''' These are being under revision
-    for y in range(y0 + rng, yn - rng):  # first and last row are discarded
-        P_ = form_P_(dert__[y])  # horizontal clustering
-        P_ = scan_P_(P_, seg_, blob, dert__)
-        seg_ = form_seg_(y, P_, blob, dert__)
+        for seg in seg_:
+            if y >= seg.y + seg.Ly:     # y >= y0 + Ly (out of segment):
+                seg_.remove(seg)
 
-    while seg_:  form_blob(seg_.popleft(), blob, dert__)  # frame ends, last-line segs are merged into their blobs
-    '''
+        P_.sort(key=lambda P: P.x0)  # sort by x0 coordinate
+        # core operations:
+        indices = blob.map[y - y0, :].nonzero()
+        derts__, i__ = compare_i(P_, _dert___, i__, (x0, xn), indices, flags)  # no _dert___ returned: _dert___ are edited not replaced
+        # if derts__:     # form sub_blobs: currently excluded, for debugging compare_derts
 
-    return blob
+            # sP_ = form_P_(derts__, Ave, rng, fa)
+            # sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
+            # sseg_ = form_seg_(y - rng, sP_, blob, rng, fa)
+
+        y += 1
+
+    # while sseg_:    # terminate last line
+    #     form_blob(sseg_.popleft(), blob, rng, fa)
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 

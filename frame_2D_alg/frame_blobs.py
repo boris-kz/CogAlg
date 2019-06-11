@@ -42,8 +42,8 @@ f_hypot_g        = 0b00000100
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    frame = [[0, 0, 0, 0], [], image.shape]  # params, blob_, shape
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    frame = Frame([0, 0, 0, 0], [], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
@@ -80,26 +80,24 @@ def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their
     P_ = deque()  # row of Ps
     i, g, dy, dx = dert_[1]  # first dert
     x0, I, G, Dy, Dx, L = 1, i, g, dy, dx, 1  # P params
-    P_dert_ = [(i, g, dy, dx)]  # dert buffer
     _s = g > 0  # sign
 
     for x, (i, g, dy, dx) in enumerate(dert_[2:-1], start=2):
         s = g > 0
         if s != _s:  # P is terminated and new P is initialized
-            P = Pattern(_s, x0, I, G, Dy, Dx, L, P_dert_)
+            P = Pattern(_s, x0, I, G, Dy, Dx, L, dert_[x0:x0+L])
             P_.append(P)
             x0, I, G, Dy, Dx, L = x, 0, 0, 0, 0, 0
-            P_dert_ = []
+
         # accumulate P params:
         I += i
         G += g
         Dy += dy
         Dx += dx
         L += 1
-        P_dert_.append((i, g, dy, dx))
         _s = s  # prior sign
 
-    P = Pattern(_s, x0, I, G, Dy, Dx, L, P_dert_)
+    P = Pattern(_s, x0, I, G, Dy, Dx, L, dert_[x0:x0+L])
     P_.append(P)    # last P in row
     return P_
 
@@ -133,11 +131,11 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     if seg[-1] != 1:  # if roots != 1: terminate seg
-                        form_blob(seg, frame)
+                        form_blob(seg, frame, dert__)
                     break
             else:  # no next-P overlap
                 if seg[-1] != 1:  # if roots != 1: terminate seg
-                    form_blob(seg, frame)
+                    form_blob(seg, frame, dert__)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
@@ -149,7 +147,7 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob(seg_.popleft(), frame)  # roots always == 0
+        form_blob(seg_.popleft(), frame, dert__)  # roots always == 0
 
     return new_P_
 
@@ -186,11 +184,11 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][-1] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
+                        form_blob(fork_[0], frame, dert__)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork[-1] == 1:
-                            form_blob(fork, frame)
+                            form_blob(fork, frame, dert__)
 
                         if not fork[-2] is blob:
                             params, seg_, open_segs, box = fork[-2][1:]  # merged blob, omit sign
@@ -227,7 +225,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, [y0, x0, xn] = blob
 
         yn = y0s + Lys  # yn from last segment
-        map = np.zeros((yn - y0, xn - x0), dtype=bool)  # local map of blob
+        map = np.zeros((yn - y0, xn - x0), dtype=bool)                      # local map of blob
         new_seg_ = []
         for seg in seg_:
             y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_ = seg[:-2]                  # blob and roots are ignored
@@ -246,10 +244,11 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[1].append(Blob(I=I,  # top Dert
                              Derts=[Dert(G, Dy, Dx, L, Ly)],  # []: nested sub_blob_, depth = Derts[index]
                              sign=s,
-                             alt=None,  # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
-                             rng=1,  # for comp_range only, i_dert = alt - (rng-1) *2
+                             alt=None,              # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
+                             rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
+                             dert__=frame.dert__,   # pointer to lower level data
                              box=(y0, yn, x0, xn),  # boundary box
-                             map=map,  # blob boolean map, to compute overlap
+                             map=map,               # blob boolean map, to compute overlap
                              root_blob=[blob],
                              seg_=new_seg_,
                              ))
@@ -276,7 +275,8 @@ start_time = time()
 Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, box, map, root_blob, seg_')
+Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
+Frame = namedtuple('Frame', 'Dert, sub_blob_, dert__')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
@@ -285,13 +285,11 @@ frame_of_blobs = image_to_blobs(image)
 # DEBUG --------------------------------------------------------------------------
 if DEBUG:
     from utils import *
-    from intra_comp import intra_comp
     draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-    for i, blob in enumerate(frame_of_blobs[1]):
-        if blob.Derts[0].L > 500:
-            intra_comp(blob, Ave=5, Ave_blob=0)
-    #         draw('./../debug/hypot_g' + str(i), map_sub_blobs(blob))
+    from intra_blob_test import intra_blob
+    intra_blob(frame_of_blobs[1])
+
 # END DEBUG -----------------------------------------------------------------------
 
 end_time = time() - start_time
