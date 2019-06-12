@@ -61,7 +61,7 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
 def form_P_(derts__, Ave, rng, fga, fia):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
-    cyc = -rng -1 + fia  # cyc and rng are cross-convertable?
+    cyc = -rng -1 + fia  # cyc and rng are cross-convertable
 
     for x_start, derts_ in derts__:  # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
