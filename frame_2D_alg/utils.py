@@ -19,37 +19,42 @@ from PIL import Image
 transparent_val = 127       # a pixel at this value is considered transparent
 
 def imread(path):
-    ''' Read a image from file as gray-scale.
-        Argument:
+    '''
+    Read an image from file as gray-scale.
+    Argument:
         - path: path of image for reading.
-        Return: numpy array of gray-scaled image '''
+    Return: numpy array of gray-scaled image
+    '''
 
     pil_image = Image.open(path).convert('L')
     image = np.array(pil_image.getdata()).reshape(*pil_image.size)
     return image
 
 def draw(path, image, extension='.bmp'):
-    ''' Output into an image file.
-        Arguments:
+    '''
+    Output into an image file.
+    Arguments:
         - path: path for saving image file.
         - image: input as numpy array.
         - extension: determine file-type of ouput image.
-        Return: None '''
+    Return: None
+    '''
 
     imsave(path + extension, image.astype('uint8'))
     return
     # ---------- draw() end ---------------------------------------------------------------------------------------------
 
 def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
-    ''' Given a blob and a traversing path, map image of all sub-blobs of a specific branch
-        belonging to that blob into a numpy array.
-        Arguments:
+    '''
+    Given a blob and a traversing path, map image of all sub-blobs of a specific branch
+    belonging to that blob into a numpy array.
+    Arguments:
         - blob: contain all mapped sub-blobs.
         - traverse_path: list of values determine the derivation sequence of target sub-blobs.
             + 0 for hypot_g/comp_gradient
             + 1 for comp_angle
             + 2 for comp_range
-        Return: numpy array of image's pixel
+    Return: numpy array of image's pixel
     '''
 
     image = empty_map(blob.box)
@@ -58,10 +63,12 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     # ---------- map_sub_blobs() end ------------------------------------------------------------------------------------
 
 def map_frame(frame):
-    ''' Map the whole frame of original image as computed blobs.
-        Argument:
+    '''
+    Map the whole frame of original image as computed blobs.
+    Argument:
         - frame: frame object input (as a list).
-        Return: numpy array of image's pixel '''
+    Return: numpy array of image's pixel
+    '''
 
     blob_, (height, width) = frame[-2:]
     box = (0, height, 0, width)
@@ -76,11 +83,12 @@ def map_frame(frame):
     # ---------- map_frame() end ----------------------------------------------------------------------------------------
 
 def map_blob(blob, original=False):
-    ''' Map a single blob into an image.
-        Argument:
+    '''
+    Map a single blob into an image.
+    Argument:
         - blob: the input blob.
         - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
-        Return: numpy array of image's pixel
+    Return: numpy array of image's pixel
     '''
 
     blob_img = empty_map(blob.box)
@@ -97,12 +105,14 @@ def map_blob(blob, original=False):
     # ---------- map_blob() end -----------------------------------------------------------------------------------------
 
 def map_segment(seg, box, original=False):
-    ''' Map a single segment of a blob into an image.
-        Argument:
+    '''
+    Map a single segment of a blob into an image.
+    Argument:
         - seg: the input segment.
         - box: the input segment's bounding box.
         - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
-        Return: numpy array of image's pixel '''
+    Return: numpy array of image's pixel
+    '''
 
     seg_img = empty_map(box)
 
@@ -122,29 +132,31 @@ def map_segment(seg, box, original=False):
 
     # ---------- map_segment() end --------------------------------------------------------------------------------------
 
-def over_draw(map, sub_map, sub_box, box = None):
-    ''' Over-write map of sub-structure onto map of parent-structure.
-        Argument:
+def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
+    '''
+    Over-write map of sub-structure onto map of parent-structure.
+    Argument:
         - map: map of parent-structure.
         - sub_map: map of sub-structure.
         - sub_box: bounding box of sub-structure.
         - box: bounding box of parent-structure, for computing local coordinate of sub-structure.
-        Return: over-written map of parent-structure
+    Return: over-written map of parent-structure
     '''
 
-    if box:
-        y0, yn, x0, xn = localize(sub_box, box)
-    else:
+    if  box is None:
         y0, yn, x0, xn = sub_box
-    map[y0:yn, x0:xn][sub_map != transparent_val] = sub_map[sub_map != transparent_val]
+    else:
+        y0, yn, x0, xn = localize(sub_box, box)
+    map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
     return map
     # ---------- over_draw() end ----------------------------------------------------------------------------------------
 
 def empty_map(shape):
-    ''' Create an empty numpy array of desired shape.
-        Argument:
+    '''
+    Create an empty numpy array of desired shape.
+    Argument:
         - shape: desired shape of the output.
-        Return: over-written map of parent-structure
+    Return: over-written map of parent-structure
     '''
 
     if len(shape) == 2:
@@ -164,13 +176,14 @@ def segment_box(seg):
     return y0s, yns, x0s, xns
 
 def localize(box, global_box):
-    ''' Compute local coordinates for given bounding box.
-        Used for overwriting map of parent structure with
-        maps of sub-structure, or other similar purposes.
-        Arguments:
+    '''
+    Compute local coordinates for given bounding box.
+    Used for overwriting map of parent structure with
+    maps of sub-structure, or other similar purposes.
+    Arguments:
         - box: bounding box need to be localized.
         - global_box: reference to which box is localized.
-        Return: box localized with localized coordinates
+    Return: box localized with localized coordinates
     '''
     y0s, yns, x0s, xns = box
     y0, yn, x0, xn = global_box

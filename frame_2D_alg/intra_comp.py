@@ -2,7 +2,7 @@ import numpy as np
 from collections import deque, namedtuple
 from compare_i import compare_i
 
-Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
+Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, derts_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, derts__, box, map, root_blob, seg_')

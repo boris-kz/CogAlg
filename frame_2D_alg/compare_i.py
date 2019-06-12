@@ -19,7 +19,7 @@ f_hypot_g        = 0b00000100
 # -compare_i()
 # ***********************************************************************************************************************
 
-def compare_i(derts__, map, flags, rng):    # comparison of input param between derts at range = rng. Currently under revision
+def compare_i(derts__, map, flags, rng=1):    # comparison of input param between derts at range = rng. Currently under revision
     # _dert___ in blob ( dert__ in P_ line ( dert_ in P
     if not (flags & f_hypot_g): # not hypot_g
 

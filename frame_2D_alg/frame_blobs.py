@@ -43,7 +43,7 @@ f_hypot_g        = 0b00000100
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
-    frame = Frame([0, 0, 0, 0], [], dert__)  # params, blob_, dert__
+    frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
     for y in range(1, height - 1):  # first and last row are discarded
@@ -241,17 +241,16 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][3] += G
         frame[0][1] += Dy
         frame[0][2] += Dx
-        frame[1].append(Blob(I=I,  # top Dert
-                             Derts=[Dert(G, Dy, Dx, L, Ly)],  # []: nested sub_blob_, depth = Derts[index]
-                             sign=s,
-                             alt=None,              # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
-                             rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
-                             dert__=frame.dert__,   # pointer to lower level data
-                             box=(y0, yn, x0, xn),  # boundary box
-                             map=map,               # blob boolean map, to compute overlap
-                             root_blob=[blob],
-                             seg_=new_seg_,
-                             ))
+        frame[0][3].append(Blob(I=I,  # top Dert
+                                Derts=[Dert(G, Dy, Dx, L, Ly, [])],  # []: nested sub_blob_, depth = Derts[index]
+                                sign=s,
+                                alt=None,              # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
+                                rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
+                                dert__=frame.dert__,   # pointer to lower level data
+                                box=(y0, yn, x0, xn),  # boundary box
+                                map=map,               # blob boolean map, to compute overlap
+                                root_blob=[blob],
+                                seg_=new_seg_))
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
@@ -272,11 +271,11 @@ height, width = image.shape
 # Main ---------------------------------------------------------------------------
 start_time = time()
 
-Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
+Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
-Frame = namedtuple('Frame', 'Dert, sub_blob_, dert__')
+Frame = namedtuple('Frame', 'Dert, dert__')
 frame_of_blobs = image_to_blobs(image)
 
 # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
