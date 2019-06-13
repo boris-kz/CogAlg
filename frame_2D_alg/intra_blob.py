@@ -71,35 +71,39 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
                     Gg = sub_blob.Layers[1][0][0]  # Derts: current + higher-layers params, no lower layers yet
                     Ga = sub_blob.Layers[1][1][0]  # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp:
 
-                    val_rg = G - Gg - Ga  # est. inc range gradient match, | novelty? secondary rng comp_angle, no calc_a?
-                    val_gg = G - Ga  # est. directional gradient_of_gradient match -> ggg, secondary der angle' calc, comp
+                    val_rg = G - Gg - Ga  # est. inc range gradient match, secondary rng comp_angle, no calc_a?
+                    val_ra = val_rg  # same for primary comp_angle, different comp, no calc_a?
+                    val_gg = G - Ga  # est. directional gradient_of_gradient match -> ggg
+                    val_ga = Ga      # same ops as comp gg?
 
-                    eval_fork_ += [  # sort per append? nested index: rng->cyc, fga: g_dert | ga_dert, fia: g_inp | a_inp:
-                        (val_rg, 3, rng),  # n_crit=3: filter multiplier, rng+=1 in eval sequence
-                        (val_gg, 2, 0),    # n_crit=2, rng=0
-                        ]
+                    eval_fork_ += [  # sort per append? nested index: fga: g_dert | ga_dert, fia: g_inp | a_inp:
+                        (val_rg, 3, rng, 0, 0),  # n_crit=3, rng,   fga=0, fia=0;   n_crit is filter multiplier
+                        (val_ra, 3, 0,   1, 1),  # n_crit=2, rng=0, fga=1, fia=1
+                        (val_gg, 2, 0,   0, 0),  # n_crit=2, rng=0  fga=0, fia=0
+                        (val_ga, 1, 0,   1, 0),  # n_crit=2, rng=0  fga=1, fia=0
+                    ]
                     new_eval_fork_ = []  # forks recycled for next intra_blob
-                    for val, n_crit, rng in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+                    for val, n_crit, rng, fga, fia in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
-                        if  val > ave_intra_blob * n_crit * rdn:  # cost of default eval_sub_blob_ per intra_blob
-                            rdn += 1  # fork rdn = fork index + 1
-                            rng += 1  # for current and recycled forks
-                            Ave_blob += ave_blob * rave * rdn
-                            Ave += ave * rdn
-                            new_eval_fork_ += [(val, n_crit, rng)]  # selected forks passed as arg:
-                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers[-1] += [fork]
+                        if val > ave_intra_blob * n_crit * rdn:  # cost of default eval_sub_blob_ per intra_blob
+                           rdn += 1  # fork rdn = fork index + 1
+                           rng += 1  # for current and recycled forks
+                           Ave_blob += ave_blob * rave * rdn
+                           Ave += ave * rdn
+                           new_eval_fork_ += [(val, n_crit, rng, fga, fia)]
+                           intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers[-1] += [fork]
                         else:
                             break
     ''' 
-    intra-P comp val = proj match: G - Gg - Ga? cont inc range, 
-    inter-P comp val = proj novel: skip, accelerated inc range, higher-order?
+    intra-P comp val = proj match: G - Gg - Ga? contiguous inc range, 
+    inter-P comp val = proj proj match (novelty): skipping inc range, maximizing prediction
     
     Gg and Ga are accumulated over full rng in same Dert, no intermediate Derts
     Ga: direction noise, likely Gg sign reversal, but not known where?   
     G - Gg - Ga < 0: weak blob, deconstruction for fuzzy comp 
     
     intra_comp returns Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
-    ave & ave_blob *= fork coef, greater for coarse kernels, += input switch cost, or same for any new fork?  
+    ave and ave_blob *= fork coef, greater for coarse kernels, += input switch cost, or same for any new fork?  
 
     simplicity vs efficiency: if fixed code+syntax complexity cost < accumulated variable inefficiency cost, in delays?
     
