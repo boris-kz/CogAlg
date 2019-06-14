@@ -25,7 +25,7 @@ from intra_comp import intra_comp
         [ seg_params,  
           Py_ = # vertical buffer of Ps per segment
               [ P_params,       
-                derts_[ fga_derts (g_dert (g, (dx, dy)), ga_dert (g, a, (dax, day))) per current and prior derivation layers
+                derts_[ fga_derts: (g_dert: g, (dx, dy); ga_dert: ga, a, (dax, day)) per current and prior derivation layers
                 
     derivation layer reps are for layer-parallel comp_blob, nesting depth = Layer index in sub_blob_, Layer index-1 in forks
     layer-sequential forks( sub_blob_ unfolding, forks: sorted [(cyc,fga)], >0 layer pairs: from alt. input_comp, angle_comp
@@ -36,9 +36,9 @@ from intra_comp import intra_comp
     forks index nesting in higher blobs: feedback index += [higher-layer index], alt fga, cyc+=1 if fga==0?    
     parallel | alternating rng+, sub_angle+ layers: reduced coord, angle res, vs computed g_angles in alt g, ga layers? '''
 
-ave = 20   # ave g reflects blob definition cost, higher for smaller positive no intra_comp for neg blobs
-ave_blob = 1000  # fixed cost of intra_comp per blob
-rave = 10        # fixed root_blob / blob cost ratio: add sub_blobs, Levels+=Level, derts+=dert
+ave = 20   # ave g reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
+ave_blob = 10000       # fixed cost of intra_comp per blob
+rave = 20              # fixed root_blob / blob cost ratio: add sub_blobs, Levels+=Level, derts+=dert
 ave_n_sub_blobs = 10   # determines rave, adjusted per intra_comp
 ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
@@ -72,39 +72,38 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
                     Ga = sub_blob.Layers[1][1][0]  # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp:
 
                     val_rg = G - Gg - Ga  # est. inc range gradient match, secondary rng comp_angle, no calc_a?
-                    val_ra = val_rg  # same for primary comp_angle, different comp, no calc_a?
-                    val_gg = G - Ga  # est. directional gradient_of_gradient match -> ggg
-                    val_ga = Ga      # same ops as comp gg?
+                    val_gg = G - Ga  # est. directional gradient_of_gradient match, -> ggg over a multiple of gg rng
+                    val_ga = Ga      # same as comp gg, -> gga -> comp gg angle: always secondary?
 
-                    eval_fork_ += [  # sort per append? nested index: fga: g_dert | ga_dert, fia: g_inp | a_inp:
-                        (val_rg, 3, rng, 0, 0),  # n_crit=3, rng,   fga=0, fia=0;   n_crit is filter multiplier
-                        (val_ra, 3, 0,   1, 1),  # n_crit=2, rng=0, fga=1, fia=1
-                        (val_gg, 2, 0,   0, 0),  # n_crit=2, rng=0  fga=0, fia=0
-                        (val_ga, 1, 0,   1, 0),  # n_crit=2, rng=0  fga=1, fia=0
+                    eval_fork_ += [  # sort per append? n_crit: filter multiplier, fga: g_dert | ga_dert index:
+                        (val_rg, 3, rng, 0),  # n_crit=3, rng=i_rng, fga=0
+                        (val_gg, 2, 0,   0),  # n_crit=2, rng=0, fga=0
+                        (val_ga, 1, 0,   1),  # n_crit=2, rng=0, fga=1
                     ]
                     new_eval_fork_ = []  # forks recycled for next intra_blob
-                    for val, n_crit, rng, fga, fia in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+                    for val, n_crit, rng, fga in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
                         if val > ave_intra_blob * n_crit * rdn:  # cost of default eval_sub_blob_ per intra_blob
                            rdn += 1  # fork rdn = fork index + 1
                            rng += 1  # for current and recycled forks
                            Ave_blob += ave_blob * rave * rdn
                            Ave += ave * rdn
-                           new_eval_fork_ += [(val, n_crit, rng, fga, fia)]
+                           new_eval_fork_ += [(val, n_crit, rng, fga)]
                            intra_blob(sub_blob, rng, fga, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers[-1] += [fork]
                         else:
                             break
     ''' 
-    intra-P comp val = proj match: G - Gg - Ga? contiguous inc range, 
-    inter-P comp val = proj proj match (novelty): skipping inc range, maximizing prediction
-    
     Gg and Ga are accumulated over full rng in same Dert, no intermediate Derts
     Ga: direction noise, likely Gg sign reversal, but not known where?   
     G - Gg - Ga < 0: weak blob, deconstruction for fuzzy comp 
     
+    angle comp is always secondary: no indep val_angle, eval per positive val_rg | gg | ga sub_blob?    
+
     intra_comp returns Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
     ave and ave_blob *= fork coef, greater for coarse kernels, += input switch cost, or same for any new fork?  
-
+    no val_ra = val_rg  # primary comp_angle over a multiple of rng? different comp, no calc_a?
+      (val_ra, 3, 0,   1, 1),  # n_crit=2, rng=0, fga=1, fia=1        
+    
     simplicity vs efficiency: if fixed code+syntax complexity cost < accumulated variable inefficiency cost, in delays?
     
     input mag is weakly predictive, comp at rng=1, only g is worth comparing at inc_range (inc_deriv per i_dert): 
@@ -115,13 +114,14 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
                
     3x3 g comp within strong blobs (core param Mag + Match > Ave), forming concentric-g rng+ or der+ sub-blobs: 
     
-    rng+ if G - Gg - Ga: persistent magnitude and direction of input g, -> derts' sub_derts_?
+    rng+ if G - Gg - Ga: persistent magnitude and direction of g -> rng_g P_: greater value variation, receding?
     der+ if Gg - Ga: gg comp over gg_rng + 1, initially non-overlapping? regardless of G & Ga: rng+ is alt fork?
         
-    no breakdown & revert to 2x2 rng+ if weak, stop only? 
+    no deconstruction to 2x2 rng+ if weak, stop only? 
     comp_P eval per angle blob, if persistent direction * elongation, etc? 
-    
-    g, ga are dderived but angle blobs (directional patterns) are secondary: specific angle only in negative ga_blobs    
+
+    intra-P comp val = proj match: G - Gg - Ga? contiguous inc range; no sub_derts_ -> derts_P_: if min len only?
+    inter-P comp val = proj proj match (novelty): skipping inc range -> skip_Ps?
     '''
 
     return root_blob
