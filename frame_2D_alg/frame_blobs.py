@@ -1,6 +1,8 @@
+import numpy as np
+
 from time import time
 from collections import deque, namedtuple
-import numpy as np
+from utils import kernel
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -26,6 +28,15 @@ import numpy as np
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
 
+Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly, sub_blob_')
+Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
+Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
+Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
+Frame = namedtuple('Frame', 'Dert, dert__')
+
+ave = 15
+DEBUG = True
+
 # flags:
 f_angle          = 0b00000001
 f_inc_rng        = 0b00000010
@@ -46,8 +57,8 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    for y in range(1, height - 1):  # first and last row are discarded
-        P_ = form_P_(dert__[y])  # horizontal clustering
+    for y in range(height - 1):  # first and last row are discarded
+        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
 
@@ -57,20 +68,27 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
-def comp_pixel(p__):  # bilateral comparison between vertically and horizontally consecutive pixels within image
+def comp_pixel(image):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
-    dert__ = np.empty(shape=(height, width, 4), dtype=int)  # initialize dert__
+    # Initialize variables:
+    Y = height - 1
+    X = width - 1
+    k = kernel(2)
+    d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
 
-    dy__ = p__[2:, 1:-1] - p__[:-2, 1:-1]  # vertical comp between rows, first and last column are discarded
-    dx__ = p__[1:-1, 2:] - p__[1:-1, :-2]  # lateral comp between columns, first and last row are discarded
-    g__ = np.abs(dy__) + np.abs(dx__) - ave  # deviation of gradient, initially approximated as |dy| + |dx|
+    # Convolve image with kernel:
+    for y in range(Y):
+        for x in range(X):
+            convolve = (image[y : y+2, x : x+2] * k)
+            d__[:, y, x] = convolve.sum(axis=(1, 2))
 
-    dert__[:, :, 0] = p__
-    dert__[1:-1, 1:-1, 1] = g__
-    dert__[1:-1, 1:-1, 2] = dy__  # first row, last row, first column and last-column are discarded
-    dert__[1:-1, 1:-1, 3] = dx__
+    # Sum pixel values:
+    p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]).reshape((1, Y, X))
 
-    return dert__
+    # Compute gradient magnitudes:
+    g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
+
+    return np.around(np.concatenate((p__, g__, d__), axis=0))
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
@@ -80,10 +98,12 @@ def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their
     P_ = deque()  # row of Ps
     i, g, dy, dx = dert_[1]  # first dert
     x0, I, G, Dy, Dx, L = 1, i, g, dy, dx, 1  # P params
-    _s = g > 0  # sign
+    vg = g - ave
+    _s = vg > 0  # sign
 
     for x, (i, g, dy, dx) in enumerate(dert_[2:-1], start=2):
-        s = g > 0
+        vg = g - ave
+        s = vg > 0
         if s != _s:  # P is terminated and new P is initialized
             P = Pattern(_s, x0, I, G, Dy, Dx, L, dert_[x0:x0+L])
             P_.append(P)
@@ -131,11 +151,11 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     if seg[-1] != 1:  # if roots != 1: terminate seg
-                        form_blob(seg, frame, dert__)
+                        form_blob(seg, frame)
                     break
             else:  # no next-P overlap
                 if seg[-1] != 1:  # if roots != 1: terminate seg
-                    form_blob(seg, frame, dert__)
+                    form_blob(seg, frame)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
@@ -147,7 +167,7 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob(seg_.popleft(), frame, dert__)  # roots always == 0
+        form_blob(seg_.popleft(), frame)  # roots always == 0
 
     return new_P_
 
@@ -184,11 +204,11 @@ def form_seg_(y, P_, frame):  # convert or merge every P into segment, merge blo
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0][-1] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob(fork_[0], frame, dert__)  # merge seg of 1st fork into its blob
+                        form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork[-1] == 1:
-                            form_blob(fork, frame, dert__)
+                            form_blob(fork, frame)
 
                         if not fork[-2] is blob:
                             params, seg_, open_segs, box = fork[-2][1:]  # merged blob, omit sign
@@ -238,10 +258,10 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         del seg_
 
         frame[0][0] += I
-        frame[0][3] += G
-        frame[0][1] += Dy
-        frame[0][2] += Dx
-        frame[0][3].append(Blob(I=I,  # top Dert
+        frame[0][1] += G
+        frame[0][2] += Dy
+        frame[0][3] += Dx
+        frame[0][4].append(Blob(I=I,  # top Dert
                                 Derts=[Dert(G, Dy, Dx, L, Ly, [])],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
                                 alt=None,              # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
@@ -257,40 +277,33 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
 
 # ************ PROGRAM BODY *********************************************************************************************
+if __name__ == '__main__':
 
-ave = 20
-DEBUG = True
+    # Load inputs --------------------------------------------------------------------
+    # image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
+    from utils import imread
 
-# Load inputs --------------------------------------------------------------------
-# image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
-from utils import imread
+    image = imread('./../images/raccoon_eye.jpg').astype(int)
+    height, width = image.shape
 
-image = imread('./../images/raccoon_eye.jpg').astype(int)
-height, width = image.shape
+    # Main ---------------------------------------------------------------------------
+    start_time = time()
 
-# Main ---------------------------------------------------------------------------
-start_time = time()
+    frame_of_blobs = image_to_blobs(image)
 
-Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly, sub_blob_')
-Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
-Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
-Frame = namedtuple('Frame', 'Dert, dert__')
-frame_of_blobs = image_to_blobs(image)
+    # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
+    # frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
-# from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
-# frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+    # DEBUG --------------------------------------------------------------------------
+    if DEBUG:
+        from utils import *
+        draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-# DEBUG --------------------------------------------------------------------------
-if DEBUG:
-    from utils import *
-    draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+        # from intra_blob_test import intra_blob
+        # intra_blob(frame_of_blobs[1])
 
-    from intra_blob_test import intra_blob
-    intra_blob(frame_of_blobs[1])
+    # END DEBUG -----------------------------------------------------------------------
 
-# END DEBUG -----------------------------------------------------------------------
-
-end_time = time() - start_time
-print(end_time)
-# ************ PROGRAM BODY END ******************************************************************************************
+    end_time = time() - start_time
+    print(end_time)
+    # ************ PROGRAM BODY END ******************************************************************************************

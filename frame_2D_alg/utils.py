@@ -1,20 +1,27 @@
-from imageio import imsave
+from collections import deque
+
 import numpy as np
+
+from imageio import imsave
 from PIL import Image
 
-# ************ MAIN FUNCTIONS *******************************************************************************************
+# ************ MAIN FUNCTIONS **************************************************
 # -imread(): read image from file as gray-scale
 # -draw(): output numpy array of pixel as image file.
-# -map_sub_blobs(): given a blob and a traversing path, map all sub blobs of a specific branch belongs to that blob
-# into a numpy array.
+# -map_sub_blobs(): given a blob and a traversing path, map all sub blobs of a
+# specific branch belongs to that blob into a numpy array.
 # -map_blobs(): map all blobs in blob_ into a numpy array.
 # -map_blob(): map all segments in blob.seg_ into a numpy array.
 # -map_segment(): map all Ps of a segment into a numpy array.
-# -over_draw(): used to draw sub-structure's map onto to current level structure.
+# -over_draw(): used to draw sub-structure's map onto to current level
+# structure.
 # -empty_map(): create a numpy array representing blobs' map.
-# -segment_box(): find bounding box of given segment(sub-composite structure that is building block of blob).
+# -segment_box(): find bounding box of given segment(sub-composite structure
+# that is building block of blob).
 # -localize(): translate bounding box against a reference.
-# ***********************************************************************************************************************
+# -kernel(): compute single kernel.
+# -generate_kernels(): return n-range kernels.
+# ******************************************************************************
 
 transparent_val = 127       # a pixel at this value is considered transparent
 
@@ -30,6 +37,7 @@ def imread(path):
     image = np.array(pil_image.getdata()).reshape(*pil_image.size)
     return image
 
+
 def draw(path, image, extension='.bmp'):
     '''
     Output into an image file.
@@ -42,15 +50,18 @@ def draw(path, image, extension='.bmp'):
 
     imsave(path + extension, image.astype('uint8'))
     return
-    # ---------- draw() end ---------------------------------------------------------------------------------------------
+    # ---------- draw() end ----------------------------------------------------
+
 
 def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
+
     '''
-    Given a blob and a traversing path, map image of all sub-blobs of a specific branch
-    belonging to that blob into a numpy array.
+    Given a blob and a traversing path, map image of all sub-blobs of a specific
+    branch belonging to that blob into a numpy array.
     Arguments:
         - blob: contain all mapped sub-blobs.
-        - traverse_path: list of values determine the derivation sequence of target sub-blobs.
+        - traverse_path: list of values determine the derivation sequence of
+        target sub-blobs.
             + 0 for hypot_g/comp_gradient
             + 1 for comp_angle
             + 2 for comp_range
@@ -60,7 +71,8 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     image = empty_map(blob.box)
 
     return image    # return filled image
-    # ---------- map_sub_blobs() end ------------------------------------------------------------------------------------
+    # ---------- map_sub_blobs() end -------------------------------------------
+
 
 def map_frame(frame):
     '''
@@ -70,7 +82,8 @@ def map_frame(frame):
     Return: numpy array of image's pixel
     '''
 
-    blob_, (height, width) = frame[-2:]
+    (I, G, Dy, Dx, blob_), dert__ = frame
+    height, width = dert__.shape[1:]
     box = (0, height, 0, width)
     image = empty_map(box)
 
@@ -80,14 +93,16 @@ def map_frame(frame):
         over_draw(image, blob_map, blob.box, box)
 
     return image
-    # ---------- map_frame() end ----------------------------------------------------------------------------------------
+    # ---------- map_frame() end -----------------------------------------------
+
 
 def map_blob(blob, original=False):
     '''
     Map a single blob into an image.
     Argument:
         - blob: the input blob.
-        - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
+        - original: each pixel is the original image's pixel instead of just
+        black or white to separate blobs.
     Return: numpy array of image's pixel
     '''
 
@@ -102,7 +117,8 @@ def map_blob(blob, original=False):
         over_draw(blob_img, seg_map, sub_box, blob.box)
 
     return blob_img
-    # ---------- map_blob() end -----------------------------------------------------------------------------------------
+    # ---------- map_blob() end ------------------------------------------------
+
 
 def map_segment(seg, box, original=False):
     '''
@@ -110,7 +126,8 @@ def map_segment(seg, box, original=False):
     Argument:
         - seg: the input segment.
         - box: the input segment's bounding box.
-        - original: each pixel is the original image's pixel instead of just black or white to separate blobs.
+        - original: each pixel is the original image's pixel instead of just
+        black or white to separate blobs.
     Return: numpy array of image's pixel
     '''
 
@@ -130,7 +147,8 @@ def map_segment(seg, box, original=False):
 
     return seg_img
 
-    # ---------- map_segment() end --------------------------------------------------------------------------------------
+    # ---------- map_segment() end ---------------------------------------------
+
 
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     '''
@@ -139,7 +157,8 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
         - map: map of parent-structure.
         - sub_map: map of sub-structure.
         - sub_box: bounding box of sub-structure.
-        - box: bounding box of parent-structure, for computing local coordinate of sub-structure.
+        - box: bounding box of parent-structure, for computing local coordinate
+        of sub-structure.
     Return: over-written map of parent-structure
     '''
 
@@ -149,7 +168,8 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
         y0, yn, x0, xn = localize(sub_box, box)
     map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
     return map
-    # ---------- over_draw() end ----------------------------------------------------------------------------------------
+    # ---------- over_draw() end -----------------------------------------------
+
 
 def empty_map(shape):
     '''
@@ -168,12 +188,14 @@ def empty_map(shape):
 
     return np.array([[transparent_val] * width] * height)
 
+
 def segment_box(seg):
     y0s = seg[0]            # y0
     yns = y0s + seg[-2]     # Ly
     x0s = min([P[1] for P in seg[-1]])
     xns = max([P[1] + P[-2] for P in seg[-1]])
     return y0s, yns, x0s, xns
+
 
 def localize(box, global_box):
     '''
@@ -189,3 +211,96 @@ def localize(box, global_box):
     y0, yn, x0, xn = global_box
 
     return y0s - y0, yns - y0, x0s - x0, xns - x0
+
+
+def kernel(n):
+    '''
+    Return kernel for comparison.
+    Note: dx kernel is transpose of dy kernel.
+    '''
+
+    # Compute symmetrical coefficients of kernel:
+    sides = np.array([*range(2, n + 1, 2)] + [n - 1] * (n // 2 - 1))
+    coefs = sides / np.hypot(sides, np.flip(sides))
+
+    # Calculate pivot point (positioned at the corner of the kernel):
+    odd = n % 2
+    ipivot = (n - 1 - odd) // 2
+
+    # Construct margins of kernel:
+    vert_coefs = coefs[:ipivot]
+    hor_coefs = coefs[ipivot:]
+    if odd:
+        vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
+        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
+    else:
+        vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
+        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
+
+    # Assign coefficients to kernel:
+    ky = np.zeros((n, n), dtype=float) # Initialize kernel for dy.
+    ky[0, :] = -hor_coefs # Assign upper coefficients.
+    ky[-1, :] = hor_coefs # Assign lower coefficients.
+    ky[1:-1, 0] = vert_coefs # Assign left-side coefficients.
+    ky[1:-1, -1] = vert_coefs # Assign right-side coefficients.
+
+    ky /= n - 1 # Divide by comparison distance.
+
+    kx = ky.T # Compute kernel for dx (transpose of ky).
+
+    return np.stack((ky, kx), axis=0)
+
+
+def generate_kernels(max_rng):
+    '''Generate a deque of kernels corresponding to max range. '''
+    indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
+    quart_full_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
+    quart_full_kernel[:, 0, 0] = 0 # Fill na value with zero
+
+    # Fill full dy kernel with the computed quadrant:
+    # Fill bottom-left quadrant:
+    half_full_kernel_y = np.concatenate(
+                             (
+                                 np.flip(
+                                     quart_full_kernel[0, :, 1:],
+                                     axis=1),
+                                 quart_full_kernel[0],
+                                 ),
+                             axis=1,
+                         )
+
+    # Fill upper half:
+    full_kernel_y = np.concatenate(
+                        (
+                            -np.flip(
+                                half_full_kernel_y[1:],
+                                axis=0),
+                            half_full_kernel_y,
+                            ),
+                    axis=0,
+                    )
+
+    full_kernel = np.stack((full_kernel_y, full_kernel_y.T), axis=0)
+
+    # Divide full kernel into deque of rng-kernels:
+    k_ = deque() # Initialize deque of different size kernels.
+    k = full_kernel # Initialize reference kernel.
+    for rng in range(max_rng, 1, -1):
+        rng_kernel = np.array(k) # Make a copy of k.
+        rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
+        rng_kernel /= rng # Divide by comparison distance.
+        k_.appendleft(rng_kernel)
+        k = k[:, 1: -1, 1:-1] # Make k recursively shrunken.
+
+    # Compute 2x2 kernel:
+    coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
+    kernel_2x2 = np.array([[[-coeff, -coeff],
+                            [coeff, coeff]],
+                           [[-coeff, coeff],
+                            [-coeff, coeff]]])
+
+    k_.appendleft(kernel_2x2)
+
+    return k_
+
+# ------------------------------------------------------------------------------
