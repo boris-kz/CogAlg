@@ -14,9 +14,10 @@ from intra_comp import intra_comp
     Layer params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
-    Layers[ I, Dert_pair, forks_pair, fork_forks_pair..] Dert_pair: g_Dert (G, Dx, Dy, L, Ly, sub_blob_), ga_Dert: g_Dert + A
+    Layers[ I, g_Dert, ga_Dert, tri_fork_, fork_fork_..]  # g_Dert: G, Dx, Dy, L, Ly, sub_blob_, ga_Dert: +A, incr sum scope
         
     sign, # lower layers are mixed-sign
+    rng,  # rng of I
     map,  # boolean map of blob, to compute overlap; map and box of lower Layers are similar to top Layer
     box,  # boundary box: y0, yn, x0, xn 
     root_blob,  # reference, to return summed blob params
@@ -95,14 +96,13 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
     ''' 
     Gg and Ga are accumulated over full rng in same Dert, no intermediate Derts
     Ga: direction noise, likely Gg sign reversal, but not known where?   
-    G - Gg - Ga < 0: weak blob, deconstruction for fuzzy comp 
-    
+    G - Gg - Ga < 0: weak blob, deconstruct for fuzzy comp 
     angle comp is always secondary: no indep val_angle, eval per positive val_rg | gg | ga sub_blob?    
 
     intra_comp returns Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
     ave and ave_blob *= fork coef, greater for coarse kernels, += input switch cost, or same for any new fork?  
     no val_ra = val_rg  # primary comp_angle over a multiple of rng? different comp, no calc_a?
-      (val_ra, 3, 0,   1, 1),  # n_crit=2, rng=0, fga=1, fia=1        
+      (val_ra, 3, 0, 1, 1),  # n_crit=2, rng=0, fga=1, fia=1        
     
     simplicity vs efficiency: if fixed code+syntax complexity cost < accumulated variable inefficiency cost, in delays?
     
@@ -112,14 +112,14 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # rng -> c
     2x2 g comp across weak blobs: negative G - Gg - Ga, off-center in same direction, after intra_blob, comp_blob?  
     all der+, if high Gg + Ga (0 if no comp_angle), input_g res reduction, convert to compare to 3x3 g?  
                
-    3x3 g comp within strong blobs (core param Mag + Match > Ave), forming concentric-g rng+ or der+ sub-blobs: 
+    3x3 g comp within strong blobs (core param Mag + Match > Ave), forming concentric-g rng+ or der+ fork sub-blobs: 
     
     rng+ if G - Gg - Ga: persistent magnitude and direction of g -> rng_g P_: greater value variation, receding?
-    der+ if Gg - Ga: gg comp over gg_rng + 1, initially non-overlapping? regardless of G & Ga: rng+ is alt fork?
-        
+    der+ if Gg: gg comp over gg_rng + 1, no overlap, G & Ga for rng+ only?
+    der+ if Ga: ga comp over ga_rng + 1, same as Gg?
+    
     no deconstruction to 2x2 rng+ if weak, stop only? 
     comp_P eval per angle blob, if persistent direction * elongation, etc? 
-
     intra-P comp val = proj match: G - Gg - Ga? contiguous inc range; no sub_derts_ -> derts_P_: if min len only?
     inter-P comp val = proj proj match (novelty): skipping inc range -> skip_Ps?
     '''
