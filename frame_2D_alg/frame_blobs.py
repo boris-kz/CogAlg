@@ -28,14 +28,21 @@ from utils import kernel
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
 
+# namedtuples declarations:
 Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
 Frame = namedtuple('Frame', 'Dert, dert__')
 
-ave = 15
+# Adjustable parameters:
+init_ksize = 3 # Declare initial kernel size. Tested values are 2 or 3.
+ave = 40
 DEBUG = True
+
+# Derived from above parameters:
+shrunk = init_ksize - 1
+Ave = ave / (init_ksize * 2 - 2) * 2
 
 # flags:
 f_angle          = 0b00000001
@@ -57,7 +64,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    for y in range(height - 1):  # first and last row are discarded
+    for y in range(height - shrunk):  # first and last row are discarded
         P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
@@ -71,19 +78,22 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 def comp_pixel(image):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
     # Initialize variables:
-    Y = height - 1
-    X = width - 1
-    k = kernel(2)
+    Y = height - shrunk
+    X = width - shrunk
+    k = kernel(init_ksize)
     d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
 
     # Convolve image with kernel:
     for y in range(Y):
         for x in range(X):
-            convolve = (image[y : y+2, x : x+2] * k)
+            convolve = (image[y : y+init_ksize, x : x+init_ksize] * k)
             d__[:, y, x] = convolve.sum(axis=(1, 2))
 
     # Sum pixel values:
-    p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]).reshape((1, Y, X))
+    p__ = (image[:-shrunk, :-shrunk]
+           + image[:-shrunk, shrunk:]
+           + image[shrunk:, :-shrunk]
+           + image[shrunk:, shrunk:]).reshape((1, Y, X))
 
     # Compute gradient magnitudes:
     g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
@@ -111,7 +121,7 @@ def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their
 
         # accumulate P params:
         I += i
-        G += g
+        G += vg
         Dy += dy
         Dx += dx
         L += 1
