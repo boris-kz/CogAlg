@@ -153,8 +153,8 @@ def form_seg_(y, P_, root_blob, alt, rng):  # convert or merge every P into segm
         params.append(1)        # add Ly
 
         if not fork_:  # new_seg is initialized with initialized blob
-            blob = [s, [0] * (len(params)), [], 1, [y, x0, xn]]     # s, params, seg_, open_segments, box
-            new_seg = [y] + params + [[P]] + [blob, 0]              # y0, I, G, Dy, Dx, N, L, Ly, Py_, blob, roots
+            blob = [s, [0] * (len(params)), [], 1, [y, x0, xn]]  # s, params, seg_, open_segments, box
+            new_seg = [y] + params + [[P]] + [blob, 0]           # y0, I, G, Dy, Dx, N, L, Ly, Py_, blob, roots
             blob[2].append(new_seg)
         else:
             if len(fork_) == 1 and fork_[0][3] == 1:  # P has one fork and that fork has one root
@@ -230,14 +230,14 @@ def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged int
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-def feedback_draft(root_blob, blob, rng, fga, fia):  # fga = g | ga sub_layer index
+def feedback_draft(root_blob, blob, rng, fga, fia):  # fga = g | ga sub_layer index, rng is in dert?
 
     s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, box = blob
-    cyc = -rng - 1 + fia  # rng for comp range and layer index: i_cyc for continuous range expansion
+    # no i_cyc: continuous g | gg | ga range expansion?
 
-    while root_blob:  # accumulate Levels[-1][-1][cyc][fa] params in recursively higher root_blob
+    while root_blob:  # accumulate Layers[-1][-1][cyc][fa] params in recursively higher root_blob
 
-        if -cyc > len(root_blob.Layers):  # no cyc, len derts?
+        if cyc > len(root_blob.Layers):  # cyc = len derts?
             root_blob.Layers += [()]  # Layers[cyc][(Dert, aDert)] may be initialized by any comp_branch
 
         if  root_blob.Layers[-1][-1][cyc][fga]:  # breadth-first, fork = [root_cyc=-1][root_fga=-1][i_cyc][i_fga]?
