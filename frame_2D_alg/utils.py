@@ -19,6 +19,7 @@ from PIL import Image
 # -segment_box(): find bounding box of given segment(sub-composite structure
 # that is building block of blob).
 # -localize(): translate bounding box against a reference.
+# -shrunk(): return shape tuple that is shrunken by x units.
 # -kernel(): compute single kernel.
 # -generate_kernels(): return n-range kernels.
 # ******************************************************************************
@@ -212,6 +213,9 @@ def localize(box, global_box):
 
     return y0s - y0, yns - y0, x0s - x0, xns - x0
 
+def shrunk(shape, x, axes=(0, 1)):
+    '''Return shape tuple that is shrunken by x units.'''
+    return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
 
 def kernel(n):
     '''
@@ -251,8 +255,13 @@ def kernel(n):
     return np.stack((ky, kx), axis=0)
 
 
-def generate_kernels(max_rng):
-    '''Generate a deque of kernels corresponding to max range. '''
+def generate_kernels(max_rng, k2x2=0):
+    '''
+    Generate a deque of kernels corresponding to max range.
+    Arguments:
+        - max_rng: maximum range of comparisons.
+        - k2x2: if True, generate an additional 2x2 kernel.
+    Return: box localized with localized coordinates'''
     indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
     quart_full_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
     quart_full_kernel[:, 0, 0] = 0 # Fill na value with zero
@@ -293,13 +302,14 @@ def generate_kernels(max_rng):
         k = k[:, 1: -1, 1:-1] # Make k recursively shrunken.
 
     # Compute 2x2 kernel:
-    coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
-    kernel_2x2 = np.array([[[-coeff, -coeff],
-                            [coeff, coeff]],
-                           [[-coeff, coeff],
-                            [-coeff, coeff]]])
+    if k2x2:
+        coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
+        kernel_2x2 = np.array([[[-coeff, -coeff],
+                                [coeff, coeff]],
+                               [[-coeff, coeff],
+                                [-coeff, coeff]]])
 
-    k_.appendleft(kernel_2x2)
+        k_.appendleft(kernel_2x2)
 
     return k_
 

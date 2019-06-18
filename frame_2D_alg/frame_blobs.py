@@ -41,7 +41,7 @@ ave = 40
 DEBUG = True
 
 # Derived from above parameters:
-shrunk = init_ksize - 1
+shrunken = init_ksize - 1
 Ave = ave / (init_ksize * 2 - 2) * 2
 
 # flags:
@@ -64,7 +64,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    for y in range(height - shrunk):  # first and last row are discarded
+    for y in range(height - shrunken):  # first and last row are discarded
         P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
@@ -78,9 +78,17 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 def comp_pixel(image):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
     # Initialize variables:
-    Y = height - shrunk
-    X = width - shrunk
-    k = kernel(init_ksize)
+    Y = height - shrunken
+    X = width - shrunken
+    if init_ksize == 2:
+        k = np.array([[[-1, -1],
+                       [1, 1]],
+                      [[-1, 1],
+                       [-1, 1]]])
+
+    else:
+        k = kernel(init_ksize)
+
     d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
 
     # Convolve image with kernel:
@@ -90,10 +98,13 @@ def comp_pixel(image):  # bilateral comparison between vertically and horizontal
             d__[:, y, x] = convolve.sum(axis=(1, 2))
 
     # Sum pixel values:
-    p__ = (image[:-shrunk, :-shrunk]
-           + image[:-shrunk, shrunk:]
-           + image[shrunk:, :-shrunk]
-           + image[shrunk:, shrunk:]).reshape((1, Y, X))
+    if init_ksize == 2:
+        p__ = (image[:-1, :-1]
+               + image[:-1, 1:]
+               + image[1:, :-1]
+               + image[1:, 1:]).reshape((1, Y, X)) * 0.25
+    else:
+        p__ = image[-1:1, -1:1]
 
     # Compute gradient magnitudes:
     g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
