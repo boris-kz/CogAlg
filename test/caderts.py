@@ -1,44 +1,46 @@
 """
 CADerts
 ------
-Compute derivations of an image's data.
+Compute derivatives of an image's data.
 """
 
 import numpy as np
 
-from frame_2D_alg.utils import imread, shrunk, kernel
+from utils import imread, shrunk, kernel
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Module constants
 
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # CADerts Class
 
-class CADerts:
+class CADerts(object):
     """
-    Read an image and compute the derivations of its data.
-    Currently only read image as grayscale.
+    Read an image and compute the derivatives of its data.
+    Currently only read image as gray-scale.
+
     Parameters
     ----------
-    path : String contain path to input file.
-    k2x2 : If = 1 use 2x2 kernel else 3x3.
+    input : ndarray
+        An input array, from which derivatives are computed.
+    k2x2 : bool, optional
+        If =True use 2x2 kernel else 3x3.
     """
 
-    def __init__(self, path, k2x2=0):
+    def __init__(self, inputs, k2x2=False, gen_derts=True):
         """
-        Create an instance of CABlobs, load input from if specified.
+        Create an instance of CADerts, load input from file.
+
         Parameters
         ----------
-        path : String contain path to input file.
-        k2x2 : If = 1 use 2x2 kernel else 3x3.
+        input : ndarray
+            An input array, from which derivatives are computed.
+        k2x2 : bool, optional
+            If =True use 2x2 kernel else 3x3.
         """
 
-        # Read input from file:
-        try:
-            inputs = imread(path)
-        except:
-            print('Cannot load specified file!')
-            return
+        assert (isinstance(inputs, np.ndarray)
+                and len(inputs.shape) == 2), "Input must be a 2D array!"
 
         # Attribute initializations:
         if k2x2:
@@ -63,9 +65,9 @@ class CADerts:
                             + inputs[2:, 1:-1]
                             + inputs[1:-1, :-2])
 
-        self.generate_derivations(inputs)
+        self.generate_derivatives(inputs)
 
-    # --------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Properties
 
     @property
@@ -94,11 +96,11 @@ class CADerts:
     def dx(self):
         return self.data[3]
 
-    # --------------------------------------------------------------------------
-    # Method
+    # -------------------------------------------------------------------------
+    # Methods
 
-    def generate_derivations(self, inputs):
-        """Generate derivations from inputs."""
+    def generate_derivatives(self, inputs):
+        """Generate derivatives from inputs."""
 
         # Convolve inputs with kernels:
         for y in range(self.shape[1]):
@@ -111,5 +113,26 @@ class CADerts:
         # Compute into gradient magnitudes:
         self.data[1] = np.hypot(self.data[2], self.data[3])
 
+# -----------------------------------------------------------------------------
+# Functions
+
+def from_image(path, **kwargs):
+    """Initialize and return a CADerts object."""
+
+    assert isinstance(path, str), "Path must be a string!"
+    # Read input from file:
+    try:
+        inputs = imread(path)
+    except:
+        print('Cannot load specified image!')
+        return None
+
+    return CADerts(inputs, **kwargs)
+
+def from_array(a, **kwargs):
+    """Create CADerts object from array-like input."""
+
+    return CADerts(np.array(a), **kwargs)
+
 # ----------------------------------------------------------------------
-# ------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------

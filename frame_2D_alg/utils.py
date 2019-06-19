@@ -35,7 +35,7 @@ def imread(path):
     '''
 
     pil_image = Image.open(path).convert('L')
-    image = np.array(pil_image.getdata()).reshape(*pil_image.size)
+    image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
     return image
 
 
