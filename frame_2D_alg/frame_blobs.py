@@ -42,7 +42,7 @@ DEBUG = True
 
 # Derived from above parameters:
 shrunken = init_ksize - 1
-Ave = ave / ((init_ksize - 1) * 4)
+Ave = ave * 8 / ((init_ksize - 1) * 4)
 
 # flags:
 f_angle          = 0b00000001

@@ -16,6 +16,7 @@ from PIL import Image
 # -over_draw(): used to draw sub-structure's map onto to current level
 # structure.
 # -empty_map(): create a numpy array representing blobs' map.
+# -
 # -segment_box(): find bounding box of given segment(sub-composite structure
 # that is building block of blob).
 # -localize(): translate bounding box against a reference.
@@ -59,7 +60,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     '''
     Given a blob and a traversing path, map image of all sub-blobs of a specific
     branch belonging to that blob into a numpy array.
-    Arguments:
+    Argumentss:
         - blob: contain all mapped sub-blobs.
         - traverse_path: list of values determine the derivation sequence of
         target sub-blobs.
@@ -100,7 +101,7 @@ def map_frame(frame):
 def map_blob(blob, original=False):
     '''
     Map a single blob into an image.
-    Argument:
+    Arguments:
         - blob: the input blob.
         - original: each pixel is the original image's pixel instead of just
         black or white to separate blobs.
@@ -124,7 +125,7 @@ def map_blob(blob, original=False):
 def map_segment(seg, box, original=False):
     '''
     Map a single segment of a blob into an image.
-    Argument:
+    Arguments:
         - seg: the input segment.
         - box: the input segment's bounding box.
         - original: each pixel is the original image's pixel instead of just
@@ -154,7 +155,7 @@ def map_segment(seg, box, original=False):
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     '''
     Over-write map of sub-structure onto map of parent-structure.
-    Argument:
+    Arguments:
         - map: map of parent-structure.
         - sub_map: map of sub-structure.
         - sub_box: bounding box of sub-structure.
@@ -175,7 +176,7 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
 def empty_map(shape):
     '''
     Create an empty numpy array of desired shape.
-    Argument:
+    Arguments:
         - shape: desired shape of the output.
     Return: over-written map of parent-structure
     '''
@@ -189,6 +190,26 @@ def empty_map(shape):
 
     return np.array([[transparent_val] * width] * height)
 
+def slice_to_box(slice):
+    """
+    Convert slice object to tuple of bounding box.
+
+    Parameters
+    ----------
+    slice : tuple
+        A tuple containing slice(start, stop, step) objects.
+
+    Return
+    ------
+    box : tuple
+        A tuple containing 4 integers representing
+        a bounding box
+    """
+
+    box = (slice[0].start, slice[0].stop,
+           slice[1].start, slice[1].stop)
+
+    return box
 
 def segment_box(seg):
     y0s = seg[0]            # y0

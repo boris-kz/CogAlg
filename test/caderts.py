@@ -2,6 +2,8 @@
 CADerts
 ------
 Compute derivatives of an image's data.
+
+See frame_2D_alg/frame_blobs.py for more informations.
 """
 
 import numpy as np
@@ -65,7 +67,7 @@ class CADerts(object):
                             + inputs[2:, 1:-1]
                             + inputs[1:-1, :-2])
 
-        self.generate_derivatives(inputs)
+        self._generate_derivatives(inputs)
 
     # -------------------------------------------------------------------------
     # Properties
@@ -99,7 +101,7 @@ class CADerts(object):
     # -------------------------------------------------------------------------
     # Methods
 
-    def generate_derivatives(self, inputs):
+    def _generate_derivatives(self, inputs):
         """Generate derivatives from inputs."""
 
         # Convolve inputs with kernels:
