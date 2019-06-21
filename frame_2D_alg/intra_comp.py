@@ -224,27 +224,24 @@ def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged int
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        feedback_draft(root_blob, blob, rng, fa, 1)
+        feedback_draft(root_blob, blob, rng, fa)
 
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-def feedback_draft(root_blob, blob, rng, fga, fia):  # fga = g | ga sub_layer index, rng is in dert?
+def feedback_draft(root_blob, blob, rng, fga):  # or rng per dert cyc: current, !i_cyc: cont. g | gg | ga rng expansion?
 
+    # fga = g | ga sub_layer
     s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, box = blob
-    # no i_cyc: continuous g | gg | ga range expansion?
 
-    while root_blob:  # accumulate Layers[-1][-1][cyc][fa] params in recursively higher root_blob
+    while root_blob:  # accumulate Layers[-1][cyc][fa] params in recursively higher root_blob
 
-        if cyc > len(root_blob.Layers):  # cyc = len derts?
-            root_blob.Layers += [()]  # Layers[cyc][(Dert, aDert)] may be initialized by any comp_branch
+        if len(derts) > len(root_blob.Layers):  # fork i_cyc is defined incrementally, with fb elevation?
+            root_blob.Layers += [(0, 0, 0, 0, 0, [])]  # initialize new Dert, by any comp_branch, I=0 if rng=0?
 
-        if  root_blob.Layers[-1][-1][cyc][fga]:  # breadth-first, fork = [root_cyc=-1][root_fga=-1][i_cyc][i_fga]?
-            fb_Dert = root_blob.Layers[-1][-1][cyc][fga]  # feedback Dert in discontinuous forks, inverse index?
-        else:
-            fb_Dert = (0, 0, 0, 0, 0, [])  # initialize new Dert for new layer, I=0 if rng=0? also cyc, fga
-            root_blob.Layers[-1][-1][cyc][fga] = fb_Dert
+        fb_Dert = root_blob.Layers[-1]  # feedback Dert in current fork, inverse index?
+        # breadth-first, fork = [root_cyc=-1][root_fga=-1][i_cyc][i_fga]?
 
         root_blob.Layers[0] += I  # also accumulated per sub_blob, initially 0?
 
