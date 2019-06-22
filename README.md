@@ -84,7 +84,7 @@ The nearest experimentally successful method is recently introduced “capsules�
 But measure of similarity in CapsNet (“agreement” in dynamic routing) is an unprincipled dot product. This is very common in recognition algorithms, but product exaggerates similarity: it is a superset of comparands, while conceptual similarity is their common subset. Exaggeration adds resistance to noise, but at the cost of drastically impaired precision. The distinction between input and noise is case-specific and should be learned from the input itself.    
 Common subset of two integers is the smaller of them, or compression of represented magnitude by replacing larger input with the difference between inputs. This is a direct implication of information theory: compression must be a measure of similarity, but no one else seems to use it from the bottom up. It’s not sufficient per se, basic working measure would probably be more complex, but minimum is unavoidable as a starting point.
  
-More generally, CapsNet is not designed strictly bottom-up, it carries a lot of baggage from conventional ANN:
+In general, CapsNet is not designed from the scratch, it carries a lot of baggage from conventional ANN:
 
 - CapsNet is initially fully-connected, with a network-centric bias toward uniform matrix operations (In CogAlg, search is selective over incremental dimensionality, distance, and unfolded depth of the inputs).
 - they use CNN for initial layers to recognize basic features, but a truly general method should apply the same principles on all levels of processing, any differentiation should be learned rather than built-in.

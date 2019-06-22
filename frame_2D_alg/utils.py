@@ -1,4 +1,5 @@
 from collections import deque
+
 import numpy as np
 
 from imageio import imsave
@@ -15,9 +16,11 @@ from PIL import Image
 # -over_draw(): used to draw sub-structure's map onto to current level
 # structure.
 # -empty_map(): create a numpy array representing blobs' map.
+# -
 # -segment_box(): find bounding box of given segment(sub-composite structure
 # that is building block of blob).
 # -localize(): translate bounding box against a reference.
+# -shrunk(): return shape tuple that is shrunken by x units.
 # -kernel(): compute single kernel.
 # -generate_kernels(): return n-range kernels.
 # ******************************************************************************
@@ -33,7 +36,7 @@ def imread(path):
     '''
 
     pil_image = Image.open(path).convert('L')
-    image = np.array(pil_image.getdata()).reshape(*pil_image.size)
+    image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
     return image
 
 
@@ -57,7 +60,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     '''
     Given a blob and a traversing path, map image of all sub-blobs of a specific
     branch belonging to that blob into a numpy array.
-    Arguments:
+    Argumentss:
         - blob: contain all mapped sub-blobs.
         - traverse_path: list of values determine the derivation sequence of
         target sub-blobs.
@@ -98,7 +101,7 @@ def map_frame(frame):
 def map_blob(blob, original=False):
     '''
     Map a single blob into an image.
-    Argument:
+    Arguments:
         - blob: the input blob.
         - original: each pixel is the original image's pixel instead of just
         black or white to separate blobs.
@@ -122,7 +125,7 @@ def map_blob(blob, original=False):
 def map_segment(seg, box, original=False):
     '''
     Map a single segment of a blob into an image.
-    Argument:
+    Arguments:
         - seg: the input segment.
         - box: the input segment's bounding box.
         - original: each pixel is the original image's pixel instead of just
@@ -152,7 +155,7 @@ def map_segment(seg, box, original=False):
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     '''
     Over-write map of sub-structure onto map of parent-structure.
-    Argument:
+    Arguments:
         - map: map of parent-structure.
         - sub_map: map of sub-structure.
         - sub_box: bounding box of sub-structure.
@@ -173,7 +176,7 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
 def empty_map(shape):
     '''
     Create an empty numpy array of desired shape.
-    Argument:
+    Arguments:
         - shape: desired shape of the output.
     Return: over-written map of parent-structure
     '''
@@ -187,6 +190,24 @@ def empty_map(shape):
 
     return np.array([[transparent_val] * width] * height)
 
+def slice_to_box(slice):
+    """
+    Convert slice object to tuple of bounding box.
+    Parameters
+    ----------
+    slice : tuple
+        A tuple containing slice(start, stop, step) objects.
+    Return
+    ------
+    box : tuple
+        A tuple containing 4 integers representing
+        a bounding box
+    """
+
+    box = (slice[0].start, slice[0].stop,
+           slice[1].start, slice[1].stop)
+
+    return box
 
 def segment_box(seg):
     y0s = seg[0]            # y0
@@ -211,6 +232,9 @@ def localize(box, global_box):
 
     return y0s - y0, yns - y0, x0s - x0, xns - x0
 
+def shrunk(shape, x, axes=(0, 1)):
+    '''Return shape tuple that is shrunken by x units.'''
+    return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
 
 def kernel(n):
     '''
@@ -250,8 +274,13 @@ def kernel(n):
     return np.stack((ky, kx), axis=0)
 
 
-def generate_kernels(max_rng):
-    '''Generate a deque of kernels corresponding to max range. '''
+def generate_kernels(max_rng, k2x2=0):
+    '''
+    Generate a deque of kernels corresponding to max range.
+    Arguments:
+        - max_rng: maximum range of comparisons.
+        - k2x2: if True, generate an additional 2x2 kernel.
+    Return: box localized with localized coordinates'''
     indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
     quart_full_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
     quart_full_kernel[:, 0, 0] = 0 # Fill na value with zero
@@ -292,12 +321,15 @@ def generate_kernels(max_rng):
         k = k[:, 1: -1, 1:-1] # Make k recursively shrunken.
 
     # Compute 2x2 kernel:
-    coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
-    kernel_2x2 = np.array([[[-coeff, -coeff],
-                            [coeff, coeff]],
-                           [[-coeff, coeff],
-                            [-coeff, coeff]]])
+    if k2x2:
+        coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
+        kernel_2x2 = np.array([[[-coeff, -coeff],
+                                [coeff, coeff]],
+                               [[-coeff, coeff],
+                                [-coeff, coeff]]])
 
-    k_.appendleft(kernel_2x2)
+        k_.appendleft(kernel_2x2)
 
     return k_
+
+# ------------------------------------------------------------------------------

@@ -15,7 +15,7 @@ get_filters(globals()) # imports all filters at once
 # ***********************************************************************************************************************
 
 def blob_to_ablobs(blob):  # compute and compare angle, define ablobs, accumulate a, da, ga in all reps within gblob
-    ''' same functionality as image_to_blobs() in frame_blobs.py'''
+    ''' same functionality as image_to_blobs() in frame_blobs_ortho.py'''
     #
 
     global Y, X
