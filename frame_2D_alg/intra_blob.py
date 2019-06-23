@@ -14,10 +14,11 @@ from intra_comp import intra_comp
     Layer params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
         
-    Layers[ I, (Ga, A),  # Layers[n] += derts[n], a for rng+ comp_a 
-            g_Dert, a_Dert, # (G, Dx, Dy, L, Ly, sub_blob_), +A for ga_Dert 
-            forks,  # g_rng+, a_rng+, g_rng2, ga_rng2 forks, fixed or mixed order?
-            fforks,.. # incrementally nested forks in deeper Layers, up to 4 per fork layer?
+    Layers[ I,  # summed pixel map in all sub_blob layers, not for deeper comp  # new dert and Dert if der+:
+            
+            g_Dert, ga_Dert, # (G, A, Dx, Dy, L, Ly, sub_blob_), += dert: g, a, (dx, dy), i = derts[-1][fia], a can be None
+            forks,  # input g_rng+, a_rng+, derived gg_rng2, ga_rng2, id by frng and fia, -> 8 comps
+            fforks, # access down frng, fia fork tree: <= 4 rng+ & <= 4 der+?  *= 4 forks per Layer?
           ]         
     sign, # lower layers are mixed-sign
     rng,  # one active rng per fork, no need for reverse rng per g dert: ref only to immediately higher g | ga dert? 
@@ -28,8 +29,7 @@ from intra_comp import intra_comp
     seg_ =  # seg_s of lower Layers are packed in their sub_blobs
         [ seg_params,  
           Py_ = # vertical buffer of Ps per segment
-              [ P_params,       
-                derts_[ (g_dert (g, (dx, dy)), ga_dert (ga, a, (dax, day)), rng): cycle per current & prior derivation layers
+              [ P_params, derts_[ (g_dert, ga_dert, rng) ]: pair per current & prior derivation layers
                 
     derivation layer reps are for layer-parallel comp_blob, nesting depth = Layer index in sub_blob_, Layer index-1 in forks
     layer-sequential forks( sub_blob_ unfolding, forks: sorted [(cyc,fga)], >0 layer pairs: from alt. input_comp, angle_comp
@@ -55,7 +55,6 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # fga (fla
 
     # two-level intra_comp eval per sub_blob, intra_blob eval per blob, root_blob fga = blob, ! fga,
     # local fork's Layers[cyc=1][fga] = Dert, initialized in prior intra_comp's feedback(), no lower Layers yet
-    # sub_blob eval / intra_blob fork, ga_blobs eval / intra_comp
 
     for blob in root_blob.Layers[1][1][-1]:  # [cyc=1][fga=1] sub_blobs are evaluated for comp_fork, add nested fork indices?
         if blob.Layers[1][1][0] > Ave_blob:  # noisy or directional G: > intra_comp cost: rel root blob + sub_blob_
@@ -71,15 +70,15 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # fga (fla
                     Ave_blob *= rave  # rng from eval_fork_ or Layers[0]?
                     Ave += ave
                     rdn = 1
-                    G =  sub_blob.Layers[0][0]     # I = Layers[-1][0], same as in shorter-rng sub_blobs Layers[-1]?
-                    Ga = sub_blob.Layers[0][1][0]  # Ga, A = Layers[-1][1]: rng+ input is g, its a & ga are computed together
+                    G =  sub_blob.Layers[0][0]     # I = Layers[-2][0], same as in shorter-rng sub_blobs Layers[-1]?
+                    Ga = sub_blob.Layers[0][1][0]  # Ga, A = Layers[-2][1], g' ga, a = derts[-3][1] for angle rng+
                     Gg = sub_blob.Layers[1][0][0]    # feedback from current-intra_blob's intra_comp(g)
                     Gga = sub_blob.Layers[1][1][0]   # feedback from current-intra_blob's intra_comp(ga)
 
                     val_rg = G - Gg - Gga  # est. match of input gradient at rng+1: persistent magnitude and direction
                     val_ra = val_rg - Ga - Ave_blob  # est. match of input angle at rng+1, no calc_a, - added root blob cost?
-                    val_gg = G - Gga  # est. directional gradient_of_gradient match at rng*2 -> ggg, Gga: current direction noise
-                    val_gga = Gga     # est. gradient_of_ga match at rng*2;   der+ is always with higher-order rng+1?
+                    val_gg = G - Gga  # est. directional gradient_of_gradient match at rng*2 -> ggg, Gga: direction noise
+                    val_gga = Gga     # est. gradient_of_ga match at rng*2;   der+ is always at higher-order rng+?
 
                     eval_fork_ += [  # sort per append? n_crit: filter multiplier, fga: g_dert | ga_dert index:
                         (val_rg,  3, rng, 0),  # n_crit=3, rng=i_rng, fga=0
@@ -104,9 +103,6 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # fga (fla
     G, A, Ga: input params;  G - Gg - Gga < 0: weak blob, deconstruct for fuzzy 2x2 comp
     Gg, Gga: derived params, accumulated up to current rng in same-g Dert, no intermediate Derts 
         
-    forks recycle ig, ia, add comp_gg, comp_gga, not nested, -> 8 comps?
-    fforks recycle <= 4 inputs, add <= 4 der+?  *= 4 forks per Layer, access down fga, frng tree?
-
     intra_comp returns Ave_blob *= len(blob.sub_blob_) / ave_n_sub_blobs  # adjust by actual / average n sub_blobs
     ave and ave_blob *= fork coef, greater for coarse kernels, += input switch cost, or same for any new fork?
     no val_ra = val_rg  # primary comp_angle over a multiple of rng? different comp, no calc_a?
