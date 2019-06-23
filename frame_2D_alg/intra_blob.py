@@ -17,8 +17,8 @@ from intra_comp import intra_comp
     Layers[ I,  # summed pixel map in all sub_blob layers, not for deeper comp  # new dert and Dert if der+:
             
             g_Dert, ga_Dert, # (G, A, Dx, Dy, L, Ly, sub_blob_), += dert: g, a, (dx, dy), i = derts[-1][fia], a can be None
-            forks,  # input g_rng+, a_rng+, derived gg_rng2, ga_rng2, id by frng and fia, -> 8 comps
-            fforks, # access down frng, fia fork tree: <= 4 rng+ & <= 4 der+?  *= 4 forks per Layer?
+            forks,  # input g_rng+, a_rng+, derived gg_rng2, ga_rng2, forking by f_range and f_angle,  
+            fforks, # access down the fork tree, <= 8 comps: 4 rng+ & 4 der+ per Layer?
           ]         
     sign, # lower layers are mixed-sign
     rng,  # one active rng per fork, no need for reverse rng per g dert: ref only to immediately higher g | ga dert? 
@@ -40,6 +40,10 @@ from intra_comp import intra_comp
     '''
 
 ave = 20   # ave g reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
+kwidth = 3   # kernel width
+if kwidth != 2:  # ave is defined per comp:
+    ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
+
 ave_blob = 10000       # fixed cost of intra_comp per blob
 rave = 20              # fixed root_blob / blob cost ratio: add sub_blobs, Levels+=Level, derts+=dert
 ave_n_sub_blobs = 10   # determines rave, adjusted per intra_comp

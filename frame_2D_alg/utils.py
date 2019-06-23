@@ -60,7 +60,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     '''
     Given a blob and a traversing path, map image of all sub-blobs of a specific
     branch belonging to that blob into a numpy array.
-    Argumentss:
+    Arguments:
         - blob: contain all mapped sub-blobs.
         - traverse_path: list of values determine the derivation sequence of
         target sub-blobs.
@@ -73,8 +73,8 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     image = empty_map(blob.box)
 
     return image    # return filled image
-    # ---------- map_sub_blobs() end -------------------------------------------
 
+    # ---------- map_sub_blobs() end -------------------------------------------
 
 def map_frame(frame):
     '''
@@ -95,8 +95,8 @@ def map_frame(frame):
         over_draw(image, blob_map, blob.box, box)
 
     return image
-    # ---------- map_frame() end -----------------------------------------------
 
+    # ---------- map_frame() end -----------------------------------------------
 
 def map_blob(blob, original=False):
     '''
@@ -134,7 +134,6 @@ def map_segment(seg, box, original=False):
     '''
 
     seg_img = empty_map(box)
-
     y0, yn, x0, xn = box
 
     for y, P in enumerate(seg[-1], start= seg[0] - y0):
@@ -232,13 +231,13 @@ def localize(box, global_box):
 
     return y0s - y0, yns - y0, x0s - x0, xns - x0
 
-def shrunk(shape, x, axes=(0, 1)):
-    '''Return shape tuple that is shrunken by x units.'''
+def shrink(shape, x, axes=(0, 1)):
+    '''Return shape tuple that is shrunk by x units.'''
     return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
 
 def kernel(n):
     '''
-    Return kernel for comparison.
+    Compute kernel coeffs per angle
     Note: dx kernel is transpose of dy kernel.
     '''
 
@@ -252,24 +251,23 @@ def kernel(n):
 
     # Construct margins of kernel:
     vert_coefs = coefs[:ipivot]
-    hor_coefs = coefs[ipivot:]
+    horiz_coefs = coefs[ipivot:]
     if odd:
         vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
+        horiz_coefs = np.concatenate((np.flip(horiz_coefs), [1], horiz_coefs))
     else:
         vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
+        horiz_coefs = np.concatenate((np.flip(horiz_coefs), horiz_coefs))
 
     # Assign coefficients to kernel:
     ky = np.zeros((n, n), dtype=float) # Initialize kernel for dy.
-    ky[0, :] = -hor_coefs # Assign upper coefficients.
-    ky[-1, :] = hor_coefs # Assign lower coefficients.
+    ky[0, :] = -horiz_coefs # Assign upper coefficients.
+    ky[-1, :] = horiz_coefs # Assign lower coefficients.
     ky[1:-1, 0] = vert_coefs # Assign left-side coefficients.
     ky[1:-1, -1] = vert_coefs # Assign right-side coefficients.
 
-    ky /= n - 1 # Divide by comparison distance.
-
-    kx = ky.T # Compute kernel for dx (transpose of ky).
+    ky /= n - 1  # Divide by comparison distance.
+    kx = ky.T  # Compute kernel for dx (transpose of ky).
 
     return np.stack((ky, kx), axis=0)
 
@@ -282,37 +280,37 @@ def generate_kernels(max_rng, k2x2=0):
         - k2x2: if True, generate an additional 2x2 kernel.
     Return: box localized with localized coordinates'''
     indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
-    quart_full_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
-    quart_full_kernel[:, 0, 0] = 0 # Fill na value with zero
+    quarter_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
+    quarter_kernel[:, 0, 0] = 0 # Fill na value with zero
 
-    # Fill full dy kernel with the computed quadrant:
+    # Fill dy kernel with the computed quadrant:
     # Fill bottom-left quadrant:
-    half_full_kernel_y = np.concatenate(
+    half_kernel_y = np.concatenate(
                              (
                                  np.flip(
-                                     quart_full_kernel[0, :, 1:],
+                                     quarter_kernel[0, :, 1:],
                                      axis=1),
-                                 quart_full_kernel[0],
+                                 quarter_kernel[0],
                                  ),
                              axis=1,
                          )
 
     # Fill upper half:
-    full_kernel_y = np.concatenate(
+    kernel_y = np.concatenate(
                         (
                             -np.flip(
-                                half_full_kernel_y[1:],
+                                half_kernel_y[1:],
                                 axis=0),
-                            half_full_kernel_y,
+                            half_kernel_y,
                             ),
                     axis=0,
                     )
 
-    full_kernel = np.stack((full_kernel_y, full_kernel_y.T), axis=0)
+    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
 
     # Divide full kernel into deque of rng-kernels:
     k_ = deque() # Initialize deque of different size kernels.
-    k = full_kernel # Initialize reference kernel.
+    k = kernel # Initialize reference kernel.
     for rng in range(max_rng, 1, -1):
         rng_kernel = np.array(k) # Make a copy of k.
         rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
@@ -322,7 +320,7 @@ def generate_kernels(max_rng, k2x2=0):
 
     # Compute 2x2 kernel:
     if k2x2:
-        coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
+        coeff = kernel[0, -1, -1] # Get the value of square root of 0.5
         kernel_2x2 = np.array([[[-coeff, -coeff],
                                 [coeff, coeff]],
                                [[-coeff, coeff],

@@ -45,11 +45,6 @@ if init_ksize != 2:  # ave is defined per comp, not * 8 / ((init_ksize - 1) * 4)
 
 DEBUG = True
 
-# flags:
-f_angle          = 0b00000001
-f_inc_rng        = 0b00000010
-f_hypot_g        = 0b00000100
-
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
 # -comp_pixel()
@@ -106,8 +101,8 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     else:
         p__ = image[-1:1, -1:1]
 
-    # Compute gradient deviation:
-    g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X)) - ave
+    # Compute gradient per kernel:
+    g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
 
     return np.around(np.concatenate((p__, g__, d__), axis=0))
 
