@@ -6,23 +6,23 @@ from collections import deque, namedtuple
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
     as |dx| + |dy|, then selectively and more precisely as hypot(dx, dy), from cross-comparison among adjacent pixels.
-
     Complemented by intra_blob (recursive search within blobs), it will be a 2D version of first-level core algorithm.
+    
     frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
     value of y per Le line is shown relative to y of current input line, incremented by top-down scan of input image:
-
+    
     1Le, line y:   comp_pixel (lateral and vertical comp) -> pixel + derivatives tuple: dert ) frame of derts: dert__ 
     2Le, line y-1: form_P(dert2) -> 1D pattern P
     3Le, line y-2: scan_P_(P, hP)-> hP, roots: down-connections, fork_: up-connections between Ps 
     4Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     5Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively  
-
+    
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, convert elements of 
     lower line into elements of new higher line, then displace elements of old higher line into higher function.
-
+    
     Higher-line elements include additional variables, derived while they were lower-line elements.
     Processing is mostly sequential because blobs are irregular and very difficult to map to matrices.
-
+    
     prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
@@ -31,8 +31,8 @@ from collections import deque, namedtuple
 Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
-Frame = namedtuple('Frame', 'Dert, dert__')
+Blob =    namedtuple('Blob',    'Layers, sign, rng, dert__, box, map, root_blob, seg_')
+Frame =   namedtuple('Frame',   'Dert, dert__')
 
 # Adjustable parameters:
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
@@ -171,7 +171,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     # ---------- image_to_blobs() end -----------------------------------------------------------------------------------
 
 
-def comp_pixel(image):  # bilateral comparison between vertically and horizontally consecutive pixels within image
+def comp_pixel(image):  # comparison between pixel and its neighbours within kernel, for the whole image
 
     # Initialize variables:
     Y = height - kwidth + 1
@@ -202,7 +202,7 @@ def comp_pixel(image):  # bilateral comparison between vertically and horizontal
     else:
         p__ = image[-1:1, -1:1]
 
-    # Compute gradient magnitudes:
+    # Compute gradient magnitudes per kernel:
     g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
 
     return np.around(np.concatenate((p__, g__, d__), axis=0))
@@ -378,10 +378,8 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += G
         frame[0][2] += Dy
         frame[0][3] += Dx
-        frame[0][4].append(Blob(I=I,  # top Dert
-                                Derts=[Dert(G, 0, Dy, Dx, L, Ly, [])],  # Init Dert with A = 0
+        frame[0][4].append(Blob(Layers=[[I], [Dert(G, 0, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
-                                alt=None,              # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
                                 rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
                                 dert__=frame.dert__,   # pointer to lower level data
                                 box=(y0, yn, x0, xn),  # boundary box
