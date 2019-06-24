@@ -2,7 +2,6 @@ import numpy as np
 
 from time import time
 from collections import deque, namedtuple
-from utils import kernel
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -28,26 +27,123 @@ from utils import kernel
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
 
-# namedtuples declarations:
-Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly, sub_blob_')
+# "Structures":
+Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'I, Derts, sign, alt, rng, dert__, box, map, root_blob, seg_')
 Frame = namedtuple('Frame', 'Dert, dert__')
 
 # Adjustable parameters:
-init_ksize = 3 # Declare initial kernel size. Tested values are 2 or 3.
-ave = 40
+kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
+ave = 20
 DEBUG = True
 
-# Derived from above parameters:
-shrunken = init_ksize - 1
-Ave = ave * 8 / ((init_ksize - 1) * 4)
+if kwidth == 3:
+    ave *= 4
+elif kwidth != 2:
+    print("kwidth must be 2 or 3!")
 
-# flags:
-f_angle          = 0b00000001
-f_inc_rng        = 0b00000010
-f_hypot_g        = 0b00000100
+# ************ UTILITY FUNCTIONS ****************************************************************************************
+# -kernel()
+# -generate_kernels()
+# ***********************************************************************************************************************
+
+def kernel(n):
+    '''
+    Return kernel for comparison.
+    Note: dx kernel is transpose of dy kernel.
+    '''
+
+    # Compute symmetrical coefficients of kernel:
+    sides = np.array([*range(2, n + 1, 2)] + [n - 1] * (n // 2 - 1))
+    coefs = sides / np.hypot(sides, np.flip(sides))
+
+    # Calculate pivot point (positioned at the corner of the kernel):
+    odd = n % 2
+    ipivot = (n - 1 - odd) // 2
+
+    # Construct margins of kernel:
+    vert_coefs = coefs[:ipivot]
+    hor_coefs = coefs[ipivot:]
+    if odd:
+        vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
+        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
+    else:
+        vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
+        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
+
+    # Assign coefficients to kernel:
+    ky = np.zeros((n, n), dtype=float) # Initialize kernel for dy.
+    ky[0, :] = -hor_coefs # Assign upper coefficients.
+    ky[-1, :] = hor_coefs # Assign lower coefficients.
+    ky[1:-1, 0] = vert_coefs # Assign left-side coefficients.
+    ky[1:-1, -1] = vert_coefs # Assign right-side coefficients.
+
+    ky /= n - 1 # Divide by comparison distance.
+
+    kx = ky.T # Compute kernel for dx (transpose of ky).
+
+    return np.stack((ky, kx), axis=0)
+
+
+def generate_kernels(max_rng, k2x2=0):
+    '''
+    Generate a deque of kernels corresponding to max range.
+    Arguments:
+        - max_rng: maximum range of comparisons.
+        - k2x2: if True, generate an additional 2x2 kernel.
+    Return: box localized with localized coordinates'''
+    indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
+    quart_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
+    quart_kernel[:, 0, 0] = 0 # Fill na value with zero
+
+    # Fill full dy kernel with the computed quadrant:
+    # Fill bottom-left quadrant:
+    half_kernel_y = np.concatenate(
+                        (
+                            np.flip(
+                                quart_kernel[0, :, 1:],
+                                axis=1),
+                            quart_kernel[0],
+                        ),
+                        axis=1,
+                    )
+
+    # Fill upper half:
+    kernel_y = np.concatenate(
+                   (
+                       -np.flip(
+                           half_kernel_y[1:],
+                           axis=0),
+                       half_kernel_y,
+                   ),
+                   axis=0,
+                   )
+
+    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
+
+    # Divide full kernel into deque of rng-kernels:
+    k_ = deque() # Initialize deque of different size kernels.
+    k = kernel # Initialize reference kernel.
+    for rng in range(max_rng, 1, -1):
+        rng_kernel = np.array(k) # Make a copy of k.
+        rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
+        rng_kernel /= rng # Divide by comparison distance.
+        k_.appendleft(rng_kernel)
+        k = k[:, 1: -1, 1:-1] # Make k recursively shrunken.
+
+    # Compute 2x2 kernel:
+    if k2x2:
+        coeff = kernel[0, -1, -1] # Get the value of square root of 0.5
+        kernel_2x2 = np.array([[[-coeff, -coeff],
+                                [coeff, coeff]],
+                               [[-coeff, coeff],
+                                [-coeff, coeff]]])
+
+        k_.appendleft(kernel_2x2)
+
+    return k_
 
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
@@ -64,7 +160,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    for y in range(height - shrunken):  # first and last row are discarded
+    for y in range(height - kwidth + 1):  # first and last row are discarded
         P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
@@ -78,27 +174,27 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 def comp_pixel(image):  # bilateral comparison between vertically and horizontally consecutive pixels within image
 
     # Initialize variables:
-    Y = height - shrunken
-    X = width - shrunken
-    if init_ksize == 2:
+    Y = height - kwidth + 1
+    X = width - kwidth + 1
+    if kwidth == 2:
         k = np.array([[[-1, -1],
                        [1, 1]],
                       [[-1, 1],
                        [-1, 1]]])
 
     else:
-        k = kernel(init_ksize)
+        k = kernel(kwidth)
 
     d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
 
     # Convolve image with kernel:
     for y in range(Y):
         for x in range(X):
-            convolve = (image[y : y+init_ksize, x : x+init_ksize] * k)
+            convolve = (image[y : y+kwidth, x : x+kwidth] * k)
             d__[:, y, x] = convolve.sum(axis=(1, 2))
 
     # Sum pixel values:
-    if init_ksize == 2:
+    if kwidth == 2:
         p__ = (image[:-1, :-1]
                + image[:-1, 1:]
                + image[1:, :-1]
@@ -283,7 +379,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][2] += Dy
         frame[0][3] += Dx
         frame[0][4].append(Blob(I=I,  # top Dert
-                                Derts=[Dert(G, Dy, Dx, L, Ly, [])],  # []: nested sub_blob_, depth = Derts[index]
+                                Derts=[Dert(G, 0, Dy, Dx, L, Ly, [])],  # Init Dert with A = 0
                                 sign=s,
                                 alt=None,              # angle | input layer index: -1 / ga | -2 / g, None for hypot_g & comp_angle
                                 rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
@@ -301,7 +397,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 if __name__ == '__main__':
 
     # Load inputs --------------------------------------------------------------------
-    # image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
+    # image = scipy.misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
     from utils import imread
 
     image = imread('./../images/raccoon_eye.jpg').astype(int)
@@ -318,7 +414,12 @@ if __name__ == '__main__':
     # DEBUG --------------------------------------------------------------------------
     if DEBUG:
         from utils import *
+
         draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+
+        f_angle = 0b00000001
+        f_inc_rng = 0b00000010
+        f_hypot_g = 0b00000100
 
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])

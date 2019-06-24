@@ -284,37 +284,37 @@ def generate_kernels(max_rng, k2x2=0):
         - k2x2: if True, generate an additional 2x2 kernel.
     Return: box localized with localized coordinates'''
     indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
-    quart_full_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
-    quart_full_kernel[:, 0, 0] = 0 # Fill na value with zero
+    quart_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
+    quart_kernel[:, 0, 0] = 0 # Fill na value with zero
 
     # Fill full dy kernel with the computed quadrant:
     # Fill bottom-left quadrant:
-    half_full_kernel_y = np.concatenate(
-                             (
-                                 np.flip(
-                                     quart_full_kernel[0, :, 1:],
-                                     axis=1),
-                                 quart_full_kernel[0],
-                                 ),
-                             axis=1,
-                         )
-
-    # Fill upper half:
-    full_kernel_y = np.concatenate(
+    half_kernel_y = np.concatenate(
                         (
-                            -np.flip(
-                                half_full_kernel_y[1:],
-                                axis=0),
-                            half_full_kernel_y,
-                            ),
-                    axis=0,
+                            np.flip(
+                                quart_kernel[0, :, 1:],
+                                axis=1),
+                            quart_kernel[0],
+                        ),
+                        axis=1,
                     )
 
-    full_kernel = np.stack((full_kernel_y, full_kernel_y.T), axis=0)
+    # Fill upper half:
+    kernel_y = np.concatenate(
+                   (
+                       -np.flip(
+                           half_kernel_y[1:],
+                           axis=0),
+                       half_kernel_y,
+                   ),
+                   axis=0,
+                   )
+
+    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
 
     # Divide full kernel into deque of rng-kernels:
     k_ = deque() # Initialize deque of different size kernels.
-    k = full_kernel # Initialize reference kernel.
+    k = kernel # Initialize reference kernel.
     for rng in range(max_rng, 1, -1):
         rng_kernel = np.array(k) # Make a copy of k.
         rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
@@ -324,7 +324,7 @@ def generate_kernels(max_rng, k2x2=0):
 
     # Compute 2x2 kernel:
     if k2x2:
-        coeff = full_kernel[0, -1, -1] # Get the value of square root of 0.5
+        coeff = kernel[0, -1, -1] # Get the value of square root of 0.5
         kernel_2x2 = np.array([[[-coeff, -coeff],
                                 [coeff, coeff]],
                                [[-coeff, coeff],
