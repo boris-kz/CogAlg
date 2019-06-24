@@ -35,13 +35,11 @@ Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob =    namedtuple('Blob',    'Layers, sign, rng, dert__, box, map, root_blob, seg_')
 Frame =   namedtuple('Frame',   'Dert, dert__')
 
-# Adjustable parameters:
-
-init_ksize = 3  # initial kernel size, tested values are 2 or 3.
-shrink = init_ksize - 1
-ave = 20
-if init_ksize != 2:  # ave is defined per comp, not * 8 / ((init_ksize - 1) * 4), also no even init_ksize increase
-    ave *= (init_ksize ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
+kwidth = 3  # initial kernel size, tested values are 2 or 3.
+shrink = kwidth - 1
+ave = 20  # filter or cost function
+# if kwidth != 2:  # ave is a cost per comp, incremental in intra_blob only
+  #  ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
 
 DEBUG = True
 
@@ -76,24 +74,24 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     # Initialize variables:
     Y = height - shrink
     X = width - shrink
-    if init_ksize == 2:
+    if kwidth == 2:
         k = np.array([[[-1, -1],
                        [1, 1]],
                       [[-1, 1],
                        [-1, 1]]])
     else:
-        k = kernel(init_ksize)
+        k = kernel(kwidth)
 
     d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
 
     # Convolve image with kernel:
     for y in range(Y):
         for x in range(X):
-            convolve = (image[y : y+init_ksize, x : x+init_ksize] * k)
+            convolve = (image[y : y+kwidth, x : x+kwidth] * k)
             d__[:, y, x] = convolve.sum(axis=(1, 2))
 
     # Sum pixel values:
-    if init_ksize == 2:
+    if kwidth == 2:
         p__ = (image[:-1, :-1]
                + image[:-1, 1:]
                + image[1:, :-1]

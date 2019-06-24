@@ -11,26 +11,29 @@ from intra_comp import intra_comp
     inter_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
 
     Each intra_comp() call from intra_blob() adds a layer of sub_blobs, new dert to derts and Layer to Layers, in each blob.
-    Layer params are summed params of sub_blobs per layer of derivation tree.
     Blob structure:
-        
-    Layers[ I,  # summed pixel map in all sub_blob layers, not for deeper comp  # new dert and Dert if der+:
-            
-            g_Dert, ga_Dert, # (G, A, Dx, Dy, L, Ly, sub_blob_), += dert: g, a, (dx, dy), i = derts[-1][fia], a can be None
-            forks,  # input g_rng+, a_rng+, derived gg_rng2, ga_rng2, forking by f_range and f_angle,  
-            fforks, # access down the fork tree, <= 8 comps: 4 rng+ & 4 der+ per Layer?
-          ]         
-    sign, # lower layers are mixed-sign
-    rng,  # one active rng per fork, no need for reverse rng per g dert: ref only to immediately higher g | ga dert? 
-    map,  # boolean map of blob, to compute overlap; map and box of lower Layers are similar to top Layer
-    box,  # boundary box: y0, yn, x0, xn 
-    root_blob,  # reference, to return summed blob params
-            
+    
+    Dert: G, Dx, Dy, L, Ly,  # core Layer of current blob, += dert: g, (dx, dy), i = derts[-1][fia]: Dert|dert [1] = angle if fga   
+    
+    fga,  # g-| ga- Dert flag;  new g- | ga- dert and Dert is formed per der+, not rng+
+    sign, # current g | ga sign
+    rng,  # comp range, in each Dert 
+    map,  # boolean map of blob to compute overlap
+    box,  # boundary box: y0, yn, x0, xn;  similar to top Layer box?
+    
+    sub_blob_,  # references down derivation tree
+    root_blob,  # reference to return all Derts' params: summed feedback from sub_blobs:
+    high_Derts, # higher-Dert params += higher-dert params (including I) for feedback to root_blob, sparse?
+                    
     seg_ =  # seg_s of lower Layers are packed in their sub_blobs
         [ seg_params,  
-          Py_ = # vertical buffer of Ps per segment
-              [ P_params, derts_[ (g_dert, ga_dert, rng) ]: pair per current & prior derivation layers
-                
+          Py_ # vertical buffer of Ps per segment:
+              [ P_params, derts_[ (g_dert, ga_dert) ]]: pair per current & prior derivation layers
+        ]
+    Layers[  # Dert params are summed across sub_blobs per layer of blob -> sub_blob forks derivation tree:
+            forks,  # input g_rng+, a_rng+, derived gg_rng2, ga_rng2, forking by f_range and f_angle,  
+            fforks, # access down the fork tree, <= 8 comps: 4 rng+ and 4 der+ per Layer?
+          ]         
     derivation layer reps are for layer-parallel comp_blob, nesting depth = Layer index in sub_blob_, Layer index-1 in forks
     layer-sequential forks( sub_blob_ unfolding, forks: sorted [(cyc,fga)], >0 layer pairs: from alt. input_comp, angle_comp
         
@@ -39,9 +42,9 @@ from intra_comp import intra_comp
     forks index sequentially nested in higher blobs: feedback index += [higher-layer index]
     '''
 
-ave = 20   # ave g reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
+ave = 20   # average g, reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
 kwidth = 3   # kernel width
-if kwidth != 2:  # ave is defined per comp:
+if kwidth != 2:  # ave is a cost per comp:
     ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
 
 ave_blob = 10000       # fixed cost of intra_comp per blob
