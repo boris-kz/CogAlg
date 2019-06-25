@@ -32,10 +32,10 @@ from utils import kernel
 Dert =    namedtuple('Dert',    'G, A, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob =    namedtuple('Blob',    'Layers, sign, rng, dert__, box, map, root_blob, seg_')
+Blob =    namedtuple('Blob',    'Dert, sign, rng, dert__, box, map, sub_blob_, seg_, Layers, root_blob, high_Derts')
 Frame =   namedtuple('Frame',   'Dert, dert__')
 
-kwidth = 3  # initial kernel size, tested values are 2 or 3.
+kwidth = 3  # initial kernel width, tested values are 2 or 3.
 shrink = kwidth - 1
 ave = 20  # filter or cost function
 # if kwidth != 2:  # ave is a cost per comp, incremental in intra_blob only
@@ -275,14 +275,19 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += G
         frame[0][2] += Dy
         frame[0][3] += Dx
-        frame[0][4].append(Blob(Layers=[[I], [Dert(G, 0, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
-                                sign=s,
-                                rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
-                                dert__=frame.dert__,   # pointer to lower level data
+        frame[0][4].append(Blob(Dert = [G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
+                                sign=s,  # current g | ga sign
+                                rng =1,  # comp range, in each Dert
+                                dert__=[],
+                                map=map,  # boolean map of blob to compute overlap
                                 box=(y0, yn, x0, xn),  # boundary box
-                                map=map,               # blob boolean map, to compute overlap
-                                root_blob=[blob],
-                                seg_=new_seg_))
+                                sub_blob_=[],  # ref to sub_blob derivation tree, sub_blob structure = blob structure
+                                seg_=new_seg_,  # references down blob formation tree, in vertical (horizontal) order
+
+                                Layers=[],  # summed reps of lower layers across sub_blob derivation tree
+                                root_blob=[blob],  # ref for feedback of all Derts params summed in sub_blobs
+                                high_Derts=[I]     # higher Dert params += higher-dert params, starting with I
+                           ))
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------

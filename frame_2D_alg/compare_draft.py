@@ -4,8 +4,7 @@ from math import hypot
 
 # flags:
 f_angle          = 0b00000001
-f_inc_rng        = 0b00000010
-f_comp_g         = 0b00000100  # = not f_inc_rng?
+f_rng_incr       = 0b00000010
 
 # ************ FUNCTIONS ************************************************************************************************
 # -compare_i()
@@ -29,14 +28,14 @@ flag ga: i_dert = derts[cyc][fga], both fga and fia are set for current intra_bl
 flag ia: i = i_dert[fia]: selects dert[1] for incremental-range comp angle only
 '''
 
-def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of input param between derts at range = rng
+def compare(P_, _dert___, i__, bounds, indices, flags):    # comparison of input param between derts at range = rng
     # _dert___ in blob ( dert__ in P_ line ( dert_ in P
 
     rng = _dert___.maxlen
     fa = flags & f_angle
 
-    fga = fa and (flags & f_comp_g)  # why comp_g only?
-    fia = fa and (flags & f_inc_rng)  # why fa, it can be for gradient of angle as well as for angle of angle?
+    fga = fa and (flags & -f_rng_incr)  # why comp_g only?
+    fia = fa and (flags & f_rng_incr)  # why fa, it can be for gradient of angle as well as for angle of angle?
     cyc = -rng - 1 + fia
 
     derts__, i_ = construct_input_array(P_, bounds, flags, cyc, fa, fga, fia)   # construct input array with predetermined shape
@@ -54,7 +53,7 @@ def compare_i(P_, _dert___, i__, bounds, indices, flags):    # comparison of inp
     i__ = np.concatenate((i__[1:], i_), axis=0)             # discard top line, append last line i__
     d_ = convolve(i__, kernels[rng], indices, rng)          # convolve i__ with kernels
 
-    if flags & f_inc_rng:               # accumulate with
+    if flags & f_rng_incr:               # accumulate with
         d_ += accumulated_d_(_dert___[0])   # derts on rng-higher line
 
     _derts__ = calc_g_fold_dert(_dert___.pop(), d_, indices, bounds, flags)
