@@ -3,7 +3,7 @@ CADerts
 ------
 Compute derivatives of an image's data.
 
-See frame_2D_alg/frame_blobs.py for more informations.
+See frame_2D_alg/frame_blobs.py for more information.
 """
 
 import numpy as np

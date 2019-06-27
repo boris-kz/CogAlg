@@ -1,4 +1,5 @@
 from functools import reduce
+
 from utils import over_draw
 from compare_i import compare_i
 
@@ -45,6 +46,18 @@ def intra_blob(blob_, derts__, Ave_blob, flags=0):  # arguments are added bit by
     # fold dert__:
     # ...
 
+    Ave_blob *= rave  # estimated cost of redundant representations per blob
+    Ave += ave  # estimated cost per dert
+
     # evaluation for angle comp:
+    selected_ablob_ = map(lambda ablob: ablob.Derts[0].G > Ave_blob, ablob_)
+
+    dert_map = reduce(lambda map, blob:
+                      over_draw(map, blob.map, blob.box, tv=False),
+                      sequence=selected_blob_,
+                      initial=np.zeros(derts__[0].shape, dtype=bool))
+
+    # compare:
+    dert__ = compare_i(derts__, dert_map, flags | f_angle)
 
 # -----------------------------------------------------------------------------

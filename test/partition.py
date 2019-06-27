@@ -15,7 +15,7 @@ from itertools import starmap # For CABlobsCluster's _form_blobs() method
 from collections import namedtuple # For blueprint of CABlob object
 
 import numpy as np
-import caderts
+import comparison
 
 from scipy.ndimage import label, find_objects # For forming CABlobs
 
@@ -34,7 +34,7 @@ ave = 30 # Initialize filter value for blobs partitioning.
 #     slice : tuple
 #         A tuple containing the slice(start, stop, step) of the region
 #         containing this blob.
-#     where : ndarray
+#     mask : ndarray
 #         2D Array where non-zero values are counted as part of
 #         this blob.
 #
@@ -44,7 +44,7 @@ ave = 30 # Initialize filter value for blobs partitioning.
 # ------------------------------------------------------------------------------
 CABlob = namedtuple('CABlob',
              ['slice',
-              'map',
+              'mask',
               ])
 
 # -----------------------------------------------------------------------------
@@ -90,10 +90,10 @@ class CABlobsCluster(object):
 
         # Initialize derts:
         if isinstance(inp, np.ndarray):
-            self.derts = caderts.from_array(inp, **kwargs)
+            self.derts = comparison.from_array(inp, **kwargs)
         elif isinstance(inp, str):
-            self.derts = caderts.from_image(inp, **kwargs)
-        elif isinstance(inp, caderts.CADerts):
+            self.derts = comparison.from_image(inp, **kwargs)
+        elif isinstance(inp, comparison.CADerts):
             self.derts = inp
         else:
             raise ValueError("Cannot read input of type "
@@ -129,7 +129,7 @@ class CABlobsCluster(object):
             self.blobs.extend(starmap(
                 lambda label, slice:
                     CABlob(slice=slice,
-                           map=(labeled_smap == label)[slice],
+                           mask=(labeled_smap == label)[slice],
                            ),
                 enumerate(slices, start=1),
             ))

@@ -200,7 +200,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                + image[1:, :-1]
                + image[1:, 1:]).reshape((1, Y, X)) * 0.25
     else:
-        p__ = image[-1:1, -1:1]
+        p__ = image[1:-1, 1:-1].reshape((1, Y, X))
 
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
@@ -378,7 +378,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += G
         frame[0][2] += Dy
         frame[0][3] += Dx
-        frame[0][4].append(Blob(Layers=[[I], [Dert(G, 0, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
+        frame[0][4].append(Blob(Layers=[[I], [Dert(G, None, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
                                 rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
                                 dert__=frame.dert__,   # pointer to lower level data
