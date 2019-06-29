@@ -1,9 +1,9 @@
 import numpy as np
 from math import hypot
 from collections import deque, namedtuple
-from compare_derts_debug import compare_derts
+from compare_draft import compare
 
-nt_blob = namedtuple('blob', 'Layers sign rng box map root_blob seg_')
+Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, sub_blob_, seg_, Layers, root_blob, high_Derts')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -14,7 +14,7 @@ nt_blob = namedtuple('blob', 'Layers sign rng box map root_blob seg_')
 # ***********************************************************************************************************************
 
 
-def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
+def intra_comp(blob, rng, fia, fa, Ave_blob, Ave):
 
     # unfold blob into derts, perform branch-specific comparison, convert blob into root_blob with new sub_blob_
 
@@ -44,10 +44,10 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = compare_derts(P_, _derts___, rng, fga, fia, fa)   # no _derts___ in hypot_g or future dx_g
+        derts__ = compare(P_, _derts___, rng, fia, fa)   # no _derts___ in hypot_g or future dx_g
         if derts__:  # form sub_blobs:
 
-            sP_ = form_P_(derts__, Ave, rng, fga, fia)
+            sP_ = form_P_(derts__, Ave, rng, fia)
             sP_ = scan_P_(sP_, sseg_, blob, rng, fa)
             sseg_ = form_seg_(y - rng, sP_, blob, rng, fa)
 
@@ -58,14 +58,14 @@ def intra_comp(blob, rng, fga, fia, fa, Ave_blob, Ave):
 
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
 
-def form_P_(derts__, Ave, rng, fga, fia):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
+def form_P_(derts__, Ave, rng, fia):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
 
     P_ = deque()    # row of Ps
     cyc = -rng -1 + fia  # cyc and rng are cross-convertable
 
-    for x_start, derts_ in derts__:  # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
+    for x_start, tderts_ in derts__:  # each derts_ is a span of horizontally contiguous derts, multiple derts_ per line
 
-        dert_ = [derts[cyc][fga] + derts[-1] for derts in derts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
+        dert_ = [derts[-1] + derts[-1] for derts in tderts_]   # temporary branch-specific dert_: (i, g, ncomp, dy, dx)
         i, g, dy, dx = dert_[0]
 
         _vg = g - Ave
@@ -77,7 +77,7 @@ def form_P_(derts__, Ave, rng, fga, fia):  # horizontally cluster and sum consec
             s = vg > 0
             if s != _s:  # P is terminated and new P is initialized:
 
-                P_.append([_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start : x0 - x_start + L]])  # derts is appended in comp_branch
+                P_.append([_s, x0, I, G, Dy, Dx, L, tderts_[x0 - x_start : x0 - x_start + L]])  # derts is appended in comp_branch
                 x0, I, G, Dy, Dx, L = x, 0, 0, 0, 0, 0    # reset params
 
             I += i  # accumulate P params
@@ -87,7 +87,7 @@ def form_P_(derts__, Ave, rng, fga, fia):  # horizontally cluster and sum consec
             L += 1
             _s = s  # prior sign
 
-            P_.append([_s, x0, I, G, Dy, Dx, L, derts_[x0 - x_start: x0 - x_start + L]])  # last P in row
+            P_.append([_s, x0, I, G, Dy, Dx, L, tderts_[x0 - x_start: x0 - x_start + L]])  # last P in row
     return P_
 
     # ---------- form_P_() end ------------------------------------------------------------------------------------------
@@ -224,45 +224,42 @@ def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged int
                 xnP = x0P + LP
                 map[y - y0, x0P - x0:xnP - x0] = True
 
-        feedback_draft(root_blob, blob, rng, fa)
+        feedback_draft(root_blob, blob, rng)
 
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
 
-def feedback_draft(root_blob, blob, rng, fga):  # or rng per dert cyc: current, !i_cyc: cont. g | gg | ga rng expansion?
+def feedback_draft(root_blob, blob, rng):  # or rng per dert cyc: current, !i_cyc: cont. g | gg | ga rng expansion?
 
     # fga = g | ga sub_layer
-    s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, box = blob
+    s, [I, G, A, Dy, Dx, L, Ly], seg_, open_segs, box = blob
 
-    while root_blob:  # accumulate Layers[-1][cyc][fa] params in recursively higher root_blob
+    while root_blob:  # add all blob Layers' Dert params to corresponding params of recursively higher root_blob
 
-        if len(derts) > len(root_blob.Layers):  # fork i_cyc is defined incrementally, with fb elevation?
-            root_blob.Layers += [(0, 0, 0, 0, 0, [])]  # initialize new Dert, by any comp_branch, I=0 if rng=0?
+        if len(blob.Layers) == len(root_blob.Layers):  # fork index is defined incrementally, with fb elevation?
+            root_blob.Layers += [(0, 0, 0, 0, 0, []),[]]  # new Layer, breadth-first, fork = [fder][fga]?
 
-        fb_Dert = root_blob.Layers[-1]  # feedback Dert in current fork, inverse index?
-        # breadth-first, fork = [root_cyc=-1][root_fga=-1][i_cyc][i_fga]?
+        root_blob.high_Derts[:][:] += blob.high_Derts[1:][:]  # also accumulated per sub_blob, initially 0?
+        root_blob.Dert[1][:] += blob.high_Derts[0][:]  # Dyr += Dy, Dxr += Dx, Gr += G, Lyr += Ly, Lr += L
 
-        root_blob.Layers[0] += I  # also accumulated per sub_blob, initially 0?
+        # blob.high_Derts[0] is summed next to discrete root_blob.Dert[0],
+        # then root_root_blob.Layers[1] sums across min n? source layers, buffered in target Layer
 
-        Gr, Dyr, Dxr, Lr, Lyr, sub_blob_ = fb_Dert
-        Dyr += Dy
-        Dxr += Dx
-        Gr += G
-        Lyr += Ly
-        Lr += L
-        sub_blob_.append(nt_blob( Layers= [I, (G, Dy, Dx, L, Ly, [])],  # Layers[0] = I, Layers[1] = g_Dert | ga_Dert?
+        root_blob.sub_blob_.append(Blob
+                                  (Dert=[G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
                                   # Layers[>1] = forks[cyc][fga], same as input derts[cyc][fga], added by feedback
                                   # sub_blob_ = [] per blob or fork, nested to depth = Levels[cyc][fga]
                                   sign = s,
                                   rng= rng,
                                   box= box,  # same boundary box
                                   map= map,  # blob boolean map, to compute overlap
-                                  root_blob=blob,
                                   seg_=seg_,
+                                  sub_blob_=[],
+                                  Layers = [],  # summed reps of lower layers across sub_blob derivation tree
+                                  root_blob = [blob],  # ref for feedback of all Derts params summed in sub_blobs
+                                  high_Derts = [I]  # higher Dert params += higher-dert params, starting with I
                                   ))
-        root_blob.Layers[-1][-1] = Gr, Dyr, Dxr, Lr, Lyr, sub_blob_
-
         root_blob = root_blob.root_blob
 
     # add:

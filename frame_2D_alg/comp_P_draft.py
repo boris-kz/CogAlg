@@ -2,7 +2,7 @@ from collections import deque
 from math import hypot
 from time import time
 '''
-    comp_P_ is a component of intra_blob, currently a draft
+    comp_P_ is a fork of intra_blob, currently a draft
     it will cross-compare vertically adjacent Ps (representing horizontally contiguous slices across a blob)
     and form dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation of P params
     (difference | match deviation per param is summed between all compared params in P)
@@ -11,7 +11,7 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    root blob for comp_P is formed by intra_comp(dx_g), ~ hypot_g without g compute, 
+    root blob for comp_P is formed by intra_comp(dx), ~ hypot_g without g compute, 
     select by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
     intra_comp(dx_g) eval by val_PP_ = 
     
@@ -29,8 +29,8 @@ flip_ave = 1000
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    s, x0, L, I, G, Dx, Dy, _derts_ = P  # ext: X, new: L, inp: I, dif: Dx, Dy -> G
-    _s, _x0, _L, _I, _G, _Dx, _Dy, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
+    s, x0, G, A, Dx, Dy, L, derts_ = P  # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
+    _s, _x0, _G, _A, _Dx, _Dy, _L, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
     overlap = min(xn, _xn) - max(x0, _x0)
@@ -50,13 +50,13 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
     dL = L - _L;    mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # Dy vs dI: higher-precision but only within iP?
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # G = hypot(Dy, Dx): comp in 2D structures only?
+    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # or abs dDs: value doesn't depend on orthogonal direction?
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # 2nd der? Dy per sub_P by intra_comp(dx), vs. dI per iP
 
-    Pd = ddX + dL + dDx + dDy  # -> combined-sign dPP, regardless of param? or comb vPP only: no x-sign?
-    # dL -> dDs corr by dDy only, abs dDs: variation vs. direction?
-    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy, !odDx?
-    Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= > Pd | Pm rolp?
+    Pd = ddX + dL + dDx + dDy  # -> directional dPP, equal-weight params, no rdn?
+    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
+    # G = hypot(Dy, Dx) for 2D structures comp?
+    Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= Pd | Pm rolp?
 
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
 
