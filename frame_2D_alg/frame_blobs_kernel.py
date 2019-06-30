@@ -308,8 +308,8 @@ if __name__ == '__main__':
 
     frame_of_blobs = image_to_blobs(image)
 
-    # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
-    # frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+    # from intra_blob import intra_blob  # not yet functional, comment-out to run
+    # frame_of_blobs = intra_blob(frame_of_blobs, Ave_blob=10000)  # evaluate for deeper clustering inside each blob, recursively
 
     # DEBUG --------------------------------------------------------------------------
     if DEBUG:

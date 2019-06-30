@@ -49,13 +49,12 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
 
-    dL = L - _L;    mL = min(L, _L)     # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
-    dDx = Dx - _Dx; mDx = min(Dx, _Dx)  # or abs dDs: value doesn't depend on orthogonal direction?
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # 2nd der? Dy per sub_P by intra_comp(dx), vs. dI per iP
+    dL = L - _L;    mL = min(L, _L)   # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
+    dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in dxP
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # 2nd der m & d, signed? Dy per sub_P by intra_comp(dx), vs. dI per iP
 
     Pd = ddX + dL + dDx + dDy  # -> directional dPP, equal-weight params, no rdn?
-    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
-    # G = hypot(Dy, Dx) for 2D structures comp?
+    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
     Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= Pd | Pm rolp?
 
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
