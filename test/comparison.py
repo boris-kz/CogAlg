@@ -1,7 +1,7 @@
 """
-CADerts
-------
-Compute derivatives of an image's data.
+SimpleDerts
+-------
+Compute gradient of 2D input array.
 
 See frame_2D_alg/frame_blobs.py for more information.
 """
@@ -14,9 +14,9 @@ from utils import imread, shrunk, kernel
 # Module constants
 
 # -----------------------------------------------------------------------------
-# CADerts Class
+# SimpleDerts Class
 
-class CADerts(object):
+class SimpleDerts(object):
     """
     Read an image and compute the derivatives of its data.
     Currently only read image as gray-scale.
@@ -29,9 +29,9 @@ class CADerts(object):
         If =True use 2x2 kernel else 3x3.
     """
 
-    def __init__(self, inputs, k2x2=False, gen_derts=True):
+    def __init__(self, inputs, k2x2=False):
         """
-        Create an instance of CADerts, load input from file.
+        Create an instance of SimpleDerts, load input from file.
 
         Parameters
         ----------
@@ -83,7 +83,7 @@ class CADerts(object):
         return self.kernel.shape[1]
 
     @property
-    def p(self):
+    def i(self):
         return self.data[0]
 
     @property
@@ -119,7 +119,7 @@ class CADerts(object):
 # Functions
 
 def from_image(path, **kwargs):
-    """Initialize and return a CADerts object."""
+    """Initialize and return a SimpleDerts object."""
 
     assert isinstance(path, str), "Path must be a string!"
     # Read input from file:
@@ -129,12 +129,12 @@ def from_image(path, **kwargs):
         print('Cannot load specified image!')
         return None
 
-    return CADerts(inputs, **kwargs)
+    return SimpleDerts(inputs, **kwargs)
 
 def from_array(a, **kwargs):
-    """Create CADerts object from array-like input."""
+    """Create SimpleDerts object from array-like input."""
 
-    return CADerts(np.array(a), **kwargs)
+    return SimpleDerts(np.array(a), **kwargs)
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

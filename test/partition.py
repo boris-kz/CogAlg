@@ -1,23 +1,23 @@
 """
-CABlob
+SimpleBlob
 -------
-Contain data of a blob. Building-block of CABlobsCluster.
+Contain data of a blob. Building-block of SimpleBlobsCluster.
 
-CABlobsCluster
+SimpleBlobsCluster
 -------------
 Convert lowest level data from an image into abstract data
 potentially representing shapes and edges.
 
-See frame_2D_alg/frame_blobs.py for more informations.
+See frame_2D_alg/frame_blobs.py for more information.
 """
 
-from itertools import starmap # For CABlobsCluster's _form_blobs() method
-from collections import namedtuple # For blueprint of CABlob object
+from itertools import starmap # For SimpleBlobsCluster's _form_blobs() method
+from collections import namedtuple # For blueprint of SimpleBlob object
 
 import numpy as np
 import comparison
 
-from scipy.ndimage import label, find_objects # For forming CABlobs
+from scipy.ndimage import label, find_objects # For forming SimpleBlobs
 
 # -----------------------------------------------------------------------------
 # Module constants
@@ -25,9 +25,9 @@ from scipy.ndimage import label, find_objects # For forming CABlobs
 ave = 30 # Initialize filter value for blobs partitioning.
 
 # -----------------------------------------------------------------------------
-# CABlob namedtuple
+# SimpleBlob namedtuple
 
-#     Initialize blueprint of CABlob objects:
+#     Initialize blueprint of SimpleBlob objects:
 #
 #     Parameters
 #     ----------
@@ -42,15 +42,15 @@ ave = 30 # Initialize filter value for blobs partitioning.
 
 # ----------------------------------------------------------------------
 # ------------------------------------------------------------------------------
-CABlob = namedtuple('CABlob',
+SimpleBlob = namedtuple('SimpleBlob',
              ['slice',
               'mask',
               ])
 
 # -----------------------------------------------------------------------------
-# CABlobsCluster Class
+# SimpleBlobsCluster Class
 
-class CABlobsCluster(object):
+class SimpleBlobsCluster(object):
     """
     Partitioning derts space into two regions by the (hyper) plane:
 
@@ -61,31 +61,31 @@ class CABlobsCluster(object):
     A blob is defined as a contiguous region that belongs to either,
     but not both, of those two regions.
 
-    CABlobsCluster distribute every derts into the blob that contains
+    SimpleBlobsCluster distribute every derts into the blob that contains
     them in the image.
 
     Parameters
     ----------
-    inp : ndarray, str or CADerts
+    inp : ndarray, str or SimpleDerts
             Contain data or metadata of derts for forming blobs.
     Ave : int or float
         Value for separating derts values
     kwargs
-        For other keyword-only arguments, see CADerts.
+        For other keyword-only arguments, see SimpleDerts.
     """
 
     def __init__(self, inp, Ave=None, **kwargs):
         """
-        Create and initialize an instance of CABlobs.
+        Create and initialize an instance of SimpleBlobs.
 
         Parameters
         ----------
-        inp : ndarray, str or CADerts
+        inp : ndarray, str or SimpleDerts
             Contain data or metadata of derts for forming blobs.
         Ave : int or float
             Value for separating derts values
         kwargs
-            For other keyword-only arguments, see CADerts.
+            For other keyword-only arguments, see SimpleDerts.
         """
 
         # Initialize derts:
@@ -93,7 +93,7 @@ class CABlobsCluster(object):
             self.derts = comparison.from_array(inp, **kwargs)
         elif isinstance(inp, str):
             self.derts = comparison.from_image(inp, **kwargs)
-        elif isinstance(inp, comparison.CADerts):
+        elif isinstance(inp, comparison.SimpleDerts):
             self.derts = inp
         else:
             raise ValueError("Cannot read input of type "
@@ -115,7 +115,7 @@ class CABlobsCluster(object):
     def _form_blobs(self, smap):
         """Generate blob objects from inputs."""
 
-        # Create the container for CABlobs objects:
+        # Create the container for SimpleBlobs objects:
         self.blobs = []
         self.num_blobs = 0
 
@@ -128,15 +128,15 @@ class CABlobsCluster(object):
             slices = find_objects(labeled_smap)
             self.blobs.extend(starmap(
                 lambda label, slice:
-                    CABlob(slice=slice,
-                           mask=(labeled_smap == label)[slice],
-                           ),
+                    SimpleBlob(slice=slice,
+                               mask=(labeled_smap == label)[slice],
+                               ),
                 enumerate(slices, start=1),
             ))
 
     def I(self, blob_index):
         """Return sum of p from index of a blob."""
-        return self.derts.p[self.blobs[blob_index].slice].sum()
+        return self.derts.i[self.blobs[blob_index].slice].sum()
 
     def G(self, blob_index):
         """Return sum of g from index of a blob."""

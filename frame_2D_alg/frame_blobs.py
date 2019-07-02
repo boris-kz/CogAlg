@@ -1,7 +1,7 @@
-import numpy as np
-
 from time import time
 from collections import deque, namedtuple
+
+import numpy as np
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -31,11 +31,11 @@ from collections import deque, namedtuple
 Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob =    namedtuple('Blob',    'Layers, sign, rng, dert__, box, map, root_blob, seg_')
+Blob =    namedtuple('Blob',    'Layers, sign, rng, dert__, box, mask, root_blob, seg_')
 Frame =   namedtuple('Frame',   'Dert, dert__')
 
 # Adjustable parameters:
-kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
+kwidth = 2 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 20
 DEBUG = True
 
@@ -47,6 +47,7 @@ elif kwidth != 2:
 # ************ UTILITY FUNCTIONS ****************************************************************************************
 # -kernel()
 # -generate_kernels()
+# -convolve()
 # ***********************************************************************************************************************
 
 def kernel(n):
@@ -145,6 +146,31 @@ def generate_kernels(max_rng, k2x2=0):
 
     return k_
 
+
+def convolve(a, k, mask=None):
+    """Convolve input with kernel."""
+    s = k.shape[1]
+    Y, X = tuple(np.subtract(a.shape, s - 1))
+    b = np.empty((k.shape[-3], Y, X))
+
+    if mask is not None:
+        new_mask = np.zeros((Y, X), dtype=bool)
+    else:
+        new_mask = None
+
+    for y in range(Y):
+        for x in range(X):
+            if mask is not None:
+                mview = mask[y : y+s, x : x+s]
+                if mview.sum() < mview.size:
+                    pass # Skip convolution where inputs are incomplete
+                else:
+                    new_mask[y, x] = True
+
+            b[:, y, x] = (a[y : y+s, x : x+s] * k).sum(axis=(1, 2))
+
+    return b, new_mask
+
 # ************ MAIN FUNCTIONS *******************************************************************************************
 # -image_to_blobs()
 # -comp_pixel()
@@ -160,6 +186,8 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
+    height, width = image.shape
+
     for y in range(height - kwidth + 1):  # first and last row are discarded
         P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
@@ -174,8 +202,6 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 def comp_pixel(image):  # comparison between pixel and its neighbours within kernel, for the whole image
 
     # Initialize variables:
-    Y = height - kwidth + 1
-    X = width - kwidth + 1
     if kwidth == 2:
         k = np.array([[[-1, -1],
                        [1, 1]],
@@ -185,25 +211,20 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     else:
         k = kernel(kwidth)
 
-    d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
-
     # Convolve image with kernel:
-    for y in range(Y):
-        for x in range(X):
-            convolve = (image[y : y+kwidth, x : x+kwidth] * k)
-            d__[:, y, x] = convolve.sum(axis=(1, 2))
+    d__, _ = convolve(image, k)
 
     # Sum pixel values:
     if kwidth == 2:
         p__ = (image[:-1, :-1]
                + image[:-1, 1:]
                + image[1:, :-1]
-               + image[1:, 1:]).reshape((1, Y, X)) * 0.25
+               + image[1:, 1:])[np.newaxis, ...] * 0.25
     else:
-        p__ = image[1:-1, 1:-1].reshape((1, Y, X))
+        p__ = image[1:-1, 1:-1][np.newaxis, ...]
 
     # Compute gradient magnitudes per kernel:
-    g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
+    g__ = np.hypot(d__[0], d__[1])[np.newaxis, ...]
 
     return np.around(np.concatenate((p__, g__, d__), axis=0))
 
@@ -362,7 +383,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, [y0, x0, xn] = blob
 
         yn = y0s + Lys  # yn from last segment
-        map = np.zeros((yn - y0, xn - x0), dtype=bool)                      # local map of blob
+        mask = np.zeros((yn - y0, xn - x0), dtype=bool)                      # local map of blob
         new_seg_ = []
         for seg in seg_:
             y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_ = seg[:-2]                  # blob and roots are ignored
@@ -370,7 +391,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
             new_seg_.append(seg)                                            # add segment to blob as namedtuple
             for y, P in enumerate(seg.Py_, start=seg.y):
                 Pxn = P.x0 + P.L
-                map[y - y0, P.x0 - x0:Pxn - x0] = True
+                mask[y - y0, P.x0 - x0:Pxn - x0] = True
 
         del seg_
 
@@ -383,7 +404,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                                 rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
                                 dert__=frame.dert__,   # pointer to lower level data
                                 box=(y0, yn, x0, xn),  # boundary box
-                                map=map,               # blob boolean map, to compute overlap
+                                mask=mask,               # blob boolean map, to compute overlap
                                 root_blob=[blob],
                                 seg_=new_seg_))
         del blob
@@ -399,7 +420,6 @@ if __name__ == '__main__':
     from utils import imread
 
     image = imread('./../images/raccoon_eye.jpg').astype(int)
-    height, width = image.shape
 
     # Main ---------------------------------------------------------------------------
     start_time = time()
@@ -415,9 +435,8 @@ if __name__ == '__main__':
 
         draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-        f_angle = 0b00000001
-        f_inc_rng = 0b00000010
-        f_hypot_g = 0b00000100
+        f_angle = 0b01
+        f_derive = 0b10
 
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])

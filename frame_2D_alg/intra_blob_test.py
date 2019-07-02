@@ -16,9 +16,8 @@ ave_n_sub_blobs = 10  # determines rave, adjusted per intra_comp
 ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
 # flags:
-f_angle          = 0b00000001
-f_inc_rng        = 0b00000010
-f_hypot_g        = 0b00000100
+f_angle = 0b01
+f_derive = 0b10
 
 # -----------------------------------------------------------------------------
 
@@ -28,23 +27,12 @@ f_hypot_g        = 0b00000100
     represented per fork if tree reorder, else revised with each access?
 '''
 
-def intra_blob(blob_, derts__, Ave_blob, flags=0):  # arguments are added bit by bit
-    ''' Evaluate root_blob, compute sub blobs '''
 
-    # evaluation for deriv comp or hypot_g:
-    selected_blob_ = map(lambda blob: blob.Derts[0].G > Ave_blob, blob_)
+def intra_blob(blob_, derts__, Ave_blob):  # arguments are added bit by bit
+    '''Evaluate root-blob, perform forking and computing sub-blobs.'''
+    # Angle fork:
+    ablob_, Ave_blob = eval_fork(blob_, derts__, Ave_blob, f_angle)
 
-    # apply overdraw to the sequence, return whole map:
-    dert_map = reduce(lambda map, blob:
-                          over_draw(map, blob.map, blob.box, tv=False),
-                      sequence=selected_blob_,
-                      initial=np.zeros(derts__[0].shape, dtype=bool))
-
-    # compare:
-    dert__ = compare_i(derts__, dert_map, flags)
-
-    # fold dert__:
-    # ...
 
     Ave_blob *= rave  # estimated cost of redundant representations per blob
     Ave += ave  # estimated cost per dert
@@ -60,4 +48,19 @@ def intra_blob(blob_, derts__, Ave_blob, flags=0):  # arguments are added bit by
     # compare:
     dert__ = compare_i(derts__, dert_map, flags | f_angle)
 
+
+def eval_fork(blob_, derts__, Ave_blob, flags=0):
+    """Return sub-blobs of fork."""
+    # Blob evaluation and filtering:
+    selected_blob_ = map(lambda blob: blob.Derts[0].G > Ave_blob, blob_)
+
+    # apply overdraw to the sequence, return whole map:
+    dert_mask = reduce(lambda map, blob:
+                       over_draw(map, blob.map, blob.box, tv=False),
+                       sequence=selected_blob_,
+                       initial=np.zeros(derts__[0].shape, dtype=bool))
+    # compare:
+    dert__ = compare_i(derts__, dert_map, flags)
+
+# ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

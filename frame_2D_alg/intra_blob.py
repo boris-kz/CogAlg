@@ -1,4 +1,4 @@
-from intra_comp import intra_comp
+# from intra_comp import intra_comp
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.

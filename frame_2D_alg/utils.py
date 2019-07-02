@@ -16,11 +16,12 @@ from PIL import Image
 # -over_draw(): used to draw sub-structure's map onto to current level
 # structure.
 # -empty_map(): create a numpy array representing blobs' map.
-# -
+# -slice_to_box(): Convert slice object to tuple of bounding box.
 # -segment_box(): find bounding box of given segment(sub-composite structure
 # that is building block of blob).
 # -localize(): translate bounding box against a reference.
-# -shrunk(): return shape tuple that is shrunken by x units.
+# -shrink(): return shape tuple that is shrunken by x units.
+# -convolve(a, k): Convolve input with kernel.
 # -kernel(): compute single kernel.
 # -generate_kernels(): return n-range kernels.
 # ******************************************************************************
@@ -238,6 +239,31 @@ def shrunk(shape, x, axes=(0, 1)):
     '''Return shape tuple that is shrunken by x units.'''
     return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
 
+def convolve(a, k, mask=None):
+    """Convolve input with kernel."""
+    s = k.shape[1]
+    Y, X = tuple(np.subtract(a.shape, s - 1))
+    b = np.empty((k.shape[-3], Y, X))
+
+    if mask is not None:
+        new_mask = np.zeros((Y, X), dtype=bool)
+    else:
+        new_mask = None
+
+    for y in range(Y):
+        for x in range(X):
+            if mask is not None:
+                mview = mask[y : y+s, x : x+s]
+                if mview.sum() < mview.size:
+                    pass # Skip convolution where inputs are incomplete
+                else:
+                    new_mask[y, x] = True
+
+            b[:, y, x] = (a[y : y+s, x : x+s] * k).sum(axis=(1, 2))
+
+    return b, new_mask
+
+
 def kernel(n):
     '''
     Return kernel for comparison.
@@ -261,7 +287,6 @@ def kernel(n):
     else:
         vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
         hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
-
     # Assign coefficients to kernel:
     ky = np.zeros((n, n), dtype=float) # Initialize kernel for dy.
     ky[0, :] = -hor_coefs # Assign upper coefficients.
@@ -334,4 +359,5 @@ def generate_kernels(max_rng, k2x2=0):
 
     return k_
 
-# ------------------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
