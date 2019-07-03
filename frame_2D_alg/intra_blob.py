@@ -55,6 +55,163 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 '''
 
 
+# ************ UTILITY FUNCTIONS ****************************************************************************************
+# -kernel()
+# -generate_kernels()
+# -convolve()
+# ***********************************************************************************************************************
+
+def kernel(n):
+    '''
+    Return kernel for comparison.
+    Note: dx kernel is transpose of dy kernel.
+    '''
+
+    # Compute symmetrical coefficients of kernel:
+    sides = np.array([*range(2, n + 1, 2)] + [n - 1] * (n // 2 - 1))
+    coefs = sides / np.hypot(sides, np.flip(sides))
+
+    # Calculate pivot point (positioned at the corner of the kernel):
+    odd = n % 2
+    ipivot = (n - 1 - odd) // 2
+
+    # Construct margins of kernel:
+    vert_coefs = coefs[:ipivot]
+    hor_coefs = coefs[ipivot:]
+    if odd:
+        vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
+        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
+    else:
+        vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
+        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
+
+    # Assign coefficients to kernel:
+    ky = np.zeros((n, n), dtype=float)  # Initialize kernel for dy.
+    ky[0, :] = hor_coefs  # Assign upper coefficients.
+    ky[-1, :] = hor_coefs  # Assign lower coefficients.
+    ky[1:-1, 0] = vert_coefs  # Assign left-side coefficients.
+    ky[1:-1, -1] = vert_coefs  # Assign right-side coefficients.
+
+    ky /= n - 1  # Divide by comparison distance.
+
+    kx = ky.T  # Compute kernel for dx (transpose of ky).
+
+    return np.stack((ky, kx), axis=0)
+
+
+def generate_kernels(max_rng, k2x2=0):
+    '''
+    Generate a deque of kernels corresponding to max range.
+    Arguments:
+        - max_rng: maximum range of comparisons.
+        - k2x2: if True, generate an additional 2x2 kernel.
+    Return: box localized with localized coordinates'''
+    indices = np.indices((max_rng, max_rng))  # Initialize 2D indices array.
+    quart_kernel = indices / np.hypot(*indices[:])  # Compute coeffs.
+    quart_kernel[:, 0, 0] = 0  # Fill na value with zero
+
+    # Fill full dy kernel with the computed quadrant:
+    # Fill bottom-left quadrant:
+    half_kernel_y = np.concatenate(
+        (
+            np.flip(
+                quart_kernel[0, :, 1:],
+                axis=1),
+            quart_kernel[0],
+        ),
+        axis=1,
+    )
+
+    # Fill upper half:
+    kernel_y = np.concatenate(
+        (
+            np.flip(
+                half_kernel_y[1:],
+                axis=0),
+            half_kernel_y,
+        ),
+        axis=0,
+    )
+
+    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
+
+    # Divide full kernel into deque of rng-kernels:
+    k_ = deque()  # Initialize deque of different size kernels.
+    k = kernel  # Initialize reference kernel.
+    for rng in range(max_rng, 1, -1):
+        rng_kernel = np.array(k)  # Make a copy of k.
+        rng_kernel[:, 1:-1, 1:-1] = 0  # Set central variables to 0.
+        rng_kernel /= rng  # Divide by comparison distance.
+        k_.appendleft(rng_kernel)
+        k = k[:, 1: -1, 1:-1]  # Make k recursively shrunken.
+
+    # Compute 2x2 kernel:
+    if k2x2:
+        coeff = kernel[0, -1, -1]  # Get the value of square root of 0.5
+        kernel_2x2 = np.array([coef * 8]).reshape((2, 2, 2))
+
+        k_.appendleft(kernel_2x2)
+
+    return k_
+
+
+def convolve(a, k, mask=None):
+    """Convolve input with kernel."""
+    s = k.shape[1]
+    Y, X = tuple(np.subtract(a.shape, s - 1))
+    b = np.empty((k.shape[-3], Y, X))
+
+    if mask is not None:
+        new_mask = np.zeros((Y, X), dtype=bool)
+    else:
+        new_mask = None
+
+    for y in range(Y):
+        for x in range(X):
+            if mask is not None:
+                mview = mask[y: y + s, x: x + s]
+                if mview.sum() < mview.size:
+                    pass  # Skip convolution where inputs are incomplete
+                else:
+                    new_mask[y, x] = True
+
+            b[:, y, x] = (a[y: y + s, x: x + s] * k).sum(axis=(1, 2))
+
+    return b, new_mask
+
+# ************ MODULE FUNCTIONS *****************************************************************************************
+# -root_blob_to_sub_blobs()
+# -intra_blob()
+# ***********************************************************************************************************************
+
+def root_blob_to_sub_blobs(root_blob, rng, fga, fia, fa, Ave_blob, Ave):
+    dert__ = comp_i(root_blob.dert__, rng, fga, fia, fa)  # comparison of derts
+    seg_ = deque()  # buffer of running segments
+
+    _, height, width = derts__.shape
+
+    for y in range(height - kwidth + 1):  # first and last row are discarded
+        P_ = form_P_(dert__[:, y].T, Ave_blob, Ave)  # horizontal clustering
+        P_ = scan_P_(P_, seg_, root_blob)
+        seg_ = form_seg_(y, P_, root_blob)
+
+    while seg_:  form_blob(seg_.popleft(), frame)  # last-line segs are merged into their blobs
+
+    return Ave_blob
+
+
+def comp_i(dert__, rng, fga, fia, fa):
+    return dert__
+
+def form_P_():
+    return
+def scan_P_():
+    return
+def form_seg_():
+    return
+def form_blob()
+    return
+
 def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # fga (flag ga) selects i_Dert and i_dert, no fia?
 
     # two-level intra_comp eval per sub_blob, intra_blob eval per blob, root_blob fga = blob, ! fga,

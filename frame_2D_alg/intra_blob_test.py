@@ -59,6 +59,7 @@ def eval_fork(blob_, derts__, Ave_blob, flags=0):
                        over_draw(map, blob.map, blob.box, tv=False),
                        sequence=selected_blob_,
                        initial=np.zeros(derts__[0].shape, dtype=bool))
+
     # compare:
     dert__ = compare_i(derts__, dert_map, flags)
 

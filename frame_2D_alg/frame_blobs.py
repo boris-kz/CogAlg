@@ -31,8 +31,8 @@ import numpy as np
 Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob =    namedtuple('Blob',    'Layers, sign, rng, dert__, box, mask, root_blob, seg_')
-Frame =   namedtuple('Frame',   'Dert, dert__')
+Blob =    namedtuple('Blob', 'Layers, sign, rng, dert__, box, mask, root_blob, seg_')
+Frame =   namedtuple('Frame', 'Dert, dert__')
 
 # Adjustable parameters:
 kwidth = 2 # Declare initial kernel size. Tested values are 2 or 3.
@@ -44,134 +44,7 @@ if kwidth == 3:
 elif kwidth != 2:
     print("kwidth must be 2 or 3!")
 
-# ************ UTILITY FUNCTIONS ****************************************************************************************
-# -kernel()
-# -generate_kernels()
-# -convolve()
-# ***********************************************************************************************************************
-
-def kernel(n):
-    '''
-    Return kernel for comparison.
-    Note: dx kernel is transpose of dy kernel.
-    '''
-
-    # Compute symmetrical coefficients of kernel:
-    sides = np.array([*range(2, n + 1, 2)] + [n - 1] * (n // 2 - 1))
-    coefs = sides / np.hypot(sides, np.flip(sides))
-
-    # Calculate pivot point (positioned at the corner of the kernel):
-    odd = n % 2
-    ipivot = (n - 1 - odd) // 2
-
-    # Construct margins of kernel:
-    vert_coefs = coefs[:ipivot]
-    hor_coefs = coefs[ipivot:]
-    if odd:
-        vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
-    else:
-        vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
-
-    # Assign coefficients to kernel:
-    ky = np.zeros((n, n), dtype=float) # Initialize kernel for dy.
-    ky[0, :] = -hor_coefs # Assign upper coefficients.
-    ky[-1, :] = hor_coefs # Assign lower coefficients.
-    ky[1:-1, 0] = vert_coefs # Assign left-side coefficients.
-    ky[1:-1, -1] = vert_coefs # Assign right-side coefficients.
-
-    ky /= n - 1 # Divide by comparison distance.
-
-    kx = ky.T # Compute kernel for dx (transpose of ky).
-
-    return np.stack((ky, kx), axis=0)
-
-
-def generate_kernels(max_rng, k2x2=0):
-    '''
-    Generate a deque of kernels corresponding to max range.
-    Arguments:
-        - max_rng: maximum range of comparisons.
-        - k2x2: if True, generate an additional 2x2 kernel.
-    Return: box localized with localized coordinates'''
-    indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
-    quart_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
-    quart_kernel[:, 0, 0] = 0 # Fill na value with zero
-
-    # Fill full dy kernel with the computed quadrant:
-    # Fill bottom-left quadrant:
-    half_kernel_y = np.concatenate(
-                        (
-                            np.flip(
-                                quart_kernel[0, :, 1:],
-                                axis=1),
-                            quart_kernel[0],
-                        ),
-                        axis=1,
-                    )
-
-    # Fill upper half:
-    kernel_y = np.concatenate(
-                   (
-                       -np.flip(
-                           half_kernel_y[1:],
-                           axis=0),
-                       half_kernel_y,
-                   ),
-                   axis=0,
-                   )
-
-    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
-
-    # Divide full kernel into deque of rng-kernels:
-    k_ = deque() # Initialize deque of different size kernels.
-    k = kernel # Initialize reference kernel.
-    for rng in range(max_rng, 1, -1):
-        rng_kernel = np.array(k) # Make a copy of k.
-        rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
-        rng_kernel /= rng # Divide by comparison distance.
-        k_.appendleft(rng_kernel)
-        k = k[:, 1: -1, 1:-1] # Make k recursively shrunken.
-
-    # Compute 2x2 kernel:
-    if k2x2:
-        coeff = kernel[0, -1, -1] # Get the value of square root of 0.5
-        kernel_2x2 = np.array([[[-coeff, -coeff],
-                                [coeff, coeff]],
-                               [[-coeff, coeff],
-                                [-coeff, coeff]]])
-
-        k_.appendleft(kernel_2x2)
-
-    return k_
-
-
-def convolve(a, k, mask=None):
-    """Convolve input with kernel."""
-    s = k.shape[1]
-    Y, X = tuple(np.subtract(a.shape, s - 1))
-    b = np.empty((k.shape[-3], Y, X))
-
-    if mask is not None:
-        new_mask = np.zeros((Y, X), dtype=bool)
-    else:
-        new_mask = None
-
-    for y in range(Y):
-        for x in range(X):
-            if mask is not None:
-                mview = mask[y : y+s, x : x+s]
-                if mview.sum() < mview.size:
-                    pass # Skip convolution where inputs are incomplete
-                else:
-                    new_mask[y, x] = True
-
-            b[:, y, x] = (a[y : y+s, x : x+s] * k).sum(axis=(1, 2))
-
-    return b, new_mask
-
-# ************ MAIN FUNCTIONS *******************************************************************************************
+# ************ MODULE FUNCTIONS *****************************************************************************************
 # -image_to_blobs()
 # -comp_pixel()
 # -form_P_()
@@ -203,30 +76,51 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
 
     # Initialize variables:
     if kwidth == 2:
-        k = np.array([[[-1, -1],
-                       [1, 1]],
-                      [[-1, 1],
-                       [-1, 1]]])
 
-    else:
-        k = kernel(kwidth)
+        dy__ = np.zeros(np.subtract(image.shape, 1))
+        dx__ = np.zeros(np.subtract(image.shape, 1))
 
-    # Convolve image with kernel:
-    d__, _ = convolve(image, k)
+        # Compare:
+        dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1])
+        dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1])
 
-    # Sum pixel values:
-    if kwidth == 2:
+        # Sum pixel values:
         p__ = (image[:-1, :-1]
                + image[:-1, 1:]
                + image[1:, :-1]
-               + image[1:, 1:])[np.newaxis, ...] * 0.25
+               + image[1:, 1:])
+
     else:
-        p__ = image[1:-1, 1:-1][np.newaxis, ...]
+        ky = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
+        kx = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
+
+        dy__ = np.zeros(np.subtract(image.shape, 2))
+        dx__ = np.zeros(np.subtract(image.shape, 2))
+
+        # Compare:
+        for slices in (
+                    (slice(2, None), slice(2, None)),
+                    (slice(2, None), slice(1, -1)),
+                    (slice(2, None), slice(None, -2)),
+                    (slice(1, -1), slice(None, -2)),
+                    (slice(None, -2), slice(None, -2)),
+                    (slice(None, -2), slice(1, -1)),
+                    (slice(None, -2), slice(2, None)),
+                    (slice(1, -1), slice(2, None)),
+                ):
+            d__ = image[slices] - image[1:-1, 1:-1]
+
+            # Decompose differences:
+            dy__ += d__ * ky
+            dx__ += d__ * kx
+
+        # Sum pixel values:
+        p__ = image[1:-1, 1:-1]
 
     # Compute gradient magnitudes per kernel:
-    g__ = np.hypot(d__[0], d__[1])[np.newaxis, ...]
+    g__ = np.hypot(dy__, dx__)
 
-    return np.around(np.concatenate((p__, g__, d__), axis=0))
+    return np.around(np.stack((p__, g__, dy__, dx__), axis=0))
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
@@ -401,10 +295,10 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][3] += Dx
         frame[0][4].append(Blob(Layers=[[I], [Dert(G, None, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
                                 sign=s,
-                                rng=1,                 # for comp_range only, i_dert = alt - (rng-1) *2
-                                dert__=frame.dert__,   # pointer to lower level data
-                                box=(y0, yn, x0, xn),  # boundary box
-                                mask=mask,               # blob boolean map, to compute overlap
+                                rng=1, # for comp_range only, i_dert = alt - (rng-1) *2
+                                dert__=frame.dert__[:, y0:yn, x0:xn], # pointer to lower level data
+                                box=(y0, yn, x0, xn), # boundary box
+                                mask=mask, # blob boolean map, to compute overlap
                                 root_blob=[blob],
                                 seg_=new_seg_))
         del blob
