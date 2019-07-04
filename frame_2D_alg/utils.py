@@ -85,7 +85,7 @@ def map_frame(frame):
     Return: numpy array of image's pixel
     '''
 
-    (I, G, Dy, Dx, blob_), dert__ = frame
+    (I, G, Dy, Dx, blob_), i__, dert__ = frame
     height, width = dert__.shape[1:]
     box = (0, height, 0, width)
     image = empty_map(box)

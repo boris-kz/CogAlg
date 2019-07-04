@@ -32,7 +32,7 @@ Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly, sub_blob_')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob =    namedtuple('Blob', 'Layers, sign, rng, dert__, box, mask, root_blob, seg_')
-Frame =   namedtuple('Frame', 'Dert, dert__')
+Frame =   namedtuple('Frame', 'Dert, i__, dert__')
 
 # Adjustable parameters:
 kwidth = 2 # Declare initial kernel size. Tested values are 2 or 3.
@@ -55,14 +55,14 @@ elif kwidth != 2:
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
-    frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
+    i__, dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    frame = Frame([0, 0, 0, 0, []], i__, dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
     height, width = image.shape
 
     for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
+        P_ = form_P_(i__[y], dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
 
@@ -98,7 +98,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
         dx__ = np.zeros(np.subtract(image.shape, 2))
 
         # Compare:
-        for slices in (
+        for neighbor in (
                     (slice(2, None), slice(2, None)),
                     (slice(2, None), slice(1, -1)),
                     (slice(2, None), slice(None, -2)),
@@ -108,7 +108,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                     (slice(None, -2), slice(2, None)),
                     (slice(1, -1), slice(2, None)),
                 ):
-            d__ = image[slices] - image[1:-1, 1:-1]
+            d__ = image[neighbor] - image[1:-1, 1:-1]
 
             # Decompose differences:
             dy__ += d__ * ky
@@ -120,20 +120,21 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(dy__, dx__)
 
-    return np.around(np.stack((p__, g__, dy__, dx__), axis=0))
+    return p__, np.around(np.stack((g__, dy__, dx__), axis=0))
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 
-def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # row of Ps
-    i, g, dy, dx = dert_[1]  # first dert
+    i = i_[0]
+    g, dy, dx = dert_[0]  # first dert
     x0, I, G, Dy, Dx, L = 1, i, g, dy, dx, 1  # P params
     vg = g - ave
     _s = vg > 0  # sign
 
-    for x, (i, g, dy, dx) in enumerate(dert_[2:-1], start=2):
+    for x, (i, (g, dy, dx)) in enumerate(zip(i_[1:], dert_[1:]), start=1):
         vg = g - ave
         s = vg > 0
         if s != _s:  # P is terminated and new P is initialized

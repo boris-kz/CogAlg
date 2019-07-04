@@ -54,6 +54,9 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
     represented per fork if tree reorder, else redefined at each access?
 '''
 
+# flags:
+f_angle = 0b01
+f_derive = 0b10
 
 # ************ UTILITY FUNCTIONS ****************************************************************************************
 # -kernel()
@@ -185,23 +188,53 @@ def convolve(a, k, mask=None):
 # ***********************************************************************************************************************
 
 def root_blob_to_sub_blobs(root_blob, rng, fga, fia, fa, Ave_blob, Ave):
-    dert__ = comp_i(root_blob.dert__, rng, fga, fia, fa)  # comparison of derts
+    i__, dert__ = comp_i(root_blob.dert__, rng, fga, fia, fa)  # comparison of derts
     seg_ = deque()  # buffer of running segments
 
     _, height, width = derts__.shape
 
-    for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(dert__[:, y].T, Ave_blob, Ave)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, root_blob)
-        seg_ = form_seg_(y, P_, root_blob)
+    for y in range(height):  # first and last row are discarded
+        P_ = form_P_(i__[y], dert__[:, y].T)  # horizontal clustering
+        P_ = scan_P_(P_, seg_, frame)
+        seg_ = form_seg_(y, P_, frame)
 
     while seg_:  form_blob(seg_.popleft(), frame)  # last-line segs are merged into their blobs
 
     return Ave_blob
 
 
-def comp_i(dert__, rng, fga, fia, fa):
-    return dert__
+def comp_i(dert__, k, flags):  # k generating operation need to be reworked
+    if flags & f_angle:
+        if k.shape[1] > 3: # if rng > 1.
+            i__ = dert[1]
+            i_comp__ = dert[2]
+        else: # Else: calculate a and a_radian
+            i__ = dert__[-2:] / dert__[0] # a__. Variable name is for consistency
+            i_comp__ = np.atan2(a__[0], a__[1]) # a_radian__. Variable name is for consistency
+    else:
+        i__ = i_comp__ = dert__[0]
+
+    dy__ = np.zeros(np.subtract(i_comp__.shape, 2))
+    dx__ = np.zeros(np.subtract(i_comp__.shape, 2))
+
+    for neighbor in (   # Note: Set of neighbors are being reconsidered
+            (slice(2, None), slice(2, None)),
+            (slice(2, None), slice(1, -1)),
+            (slice(2, None), slice(None, -2)),
+            (slice(1, -1), slice(None, -2)),
+            (slice(None, -2), slice(None, -2)),
+            (slice(None, -2), slice(1, -1)),
+            (slice(None, -2), slice(2, None)),
+            (slice(1, -1), slice(2, None)),
+        ):
+        d__ = image[neighbor] - i_compare__[1:-1, 1:-1]
+
+        dy__ += d__ * k[0]
+        dx__ += d__ * k[1]
+
+    g__ = np.hypot(dy__, dx__)
+
+    return i__, np.stack((g__, dy__, dx__), axis=0) # return i__, new_dert__. a and a radian need to be added to new_dert__
 
 def form_P_():
     return
