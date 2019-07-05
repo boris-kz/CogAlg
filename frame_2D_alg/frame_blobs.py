@@ -35,7 +35,7 @@ Blob =    namedtuple('Blob', 'Layers, sign, rng, dert__, box, mask, root_blob, s
 Frame =   namedtuple('Frame', 'Dert, i__, dert__')
 
 # Adjustable parameters:
-kwidth = 2 # Declare initial kernel size. Tested values are 2 or 3.
+kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 20
 DEBUG = True
 
@@ -77,9 +77,6 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     # Initialize variables:
     if kwidth == 2:
 
-        dy__ = np.zeros(np.subtract(image.shape, 1))
-        dx__ = np.zeros(np.subtract(image.shape, 1))
-
         # Compare:
         dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1])
         dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1])
@@ -94,11 +91,10 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
         ky = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
         kx = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
 
-        dy__ = np.zeros(np.subtract(image.shape, 2))
-        dx__ = np.zeros(np.subtract(image.shape, 2))
-
         # Compare:
-        for neighbor in (
+        d___ = np.array(map(lambda neighbor:
+                                image[neighbor] - image[1:-1, 1:-1],
+                            (
                     (slice(2, None), slice(2, None)),
                     (slice(2, None), slice(1, -1)),
                     (slice(2, None), slice(None, -2)),
@@ -107,12 +103,11 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                     (slice(None, -2), slice(1, -1)),
                     (slice(None, -2), slice(2, None)),
                     (slice(1, -1), slice(2, None)),
-                ):
-            d__ = image[neighbor] - image[1:-1, 1:-1]
+                ))).swapaxes(0, 2).swapaxes(0, 1)
 
-            # Decompose differences:
-            dy__ += d__ * ky
-            dx__ += d__ * kx
+        # Decompose differences:
+        dy__ = (d___ * ky).sum(axis=2)
+        dx__ = (d___ * kx).sum(axis=2)
 
         # Sum pixel values:
         p__ = image[1:-1, 1:-1]
@@ -130,7 +125,7 @@ def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and t
     P_ = deque()  # row of Ps
     i = i_[0]
     g, dy, dx = dert_[0]  # first dert
-    x0, I, G, Dy, Dx, L = 1, i, g, dy, dx, 1  # P params
+    x0, I, G, Dy, Dx, L = 0, i, g, dy, dx, 1  # P params
     vg = g - ave
     _s = vg > 0  # sign
 
