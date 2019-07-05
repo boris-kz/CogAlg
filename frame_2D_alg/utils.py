@@ -1,3 +1,16 @@
+"""
+Provide utilities for all kinds of operations.
+Categories:
+- General purpose functions
+- Blob slicing
+- Blob drawing
+- Comparison related
+"""
+
+from itertools import (
+    repeat, chain, product, starmap, tee
+)
+
 from collections import deque
 
 import numpy as np
@@ -5,84 +18,172 @@ import numpy as np
 from imageio import imsave
 from PIL import Image
 
-# ************ MAIN FUNCTIONS **************************************************
-# -imread(): read image from file as gray-scale
-# -draw(): output numpy array of pixel as image file.
-# -map_sub_blobs(): given a blob and a traversing path, map all sub blobs of a
-# specific branch belongs to that blob into a numpy array.
-# -map_blobs(): map all blobs in blob_ into a numpy array.
-# -map_blob(): map all segments in blob.seg_ into a numpy array.
-# -map_segment(): map all Ps of a segment into a numpy array.
-# -over_draw(): used to draw sub-structure's map onto to current level
-# structure.
-# -empty_map(): create a numpy array representing blobs' map.
-# -slice_to_box(): Convert slice object to tuple of bounding box.
-# -segment_box(): find bounding box of given segment(sub-composite structure
-# that is building block of blob).
-# -localize(): translate bounding box against a reference.
-# -shrink(): return shape tuple that is shrunken by x units.
-# -convolve(a, k): Convolve input with kernel.
-# -kernel(): compute single kernel.
-# -generate_kernels(): return n-range kernels.
-# ******************************************************************************
+# -----------------------------------------------------------------------------
+# Constants
 
-transparent_val = 127       # a pixel at this value is considered transparent
+transparent_val = 127 # Pixel at this value are considered transparent
+
+rim_slices = {
+    0:[ # For flattening outer rim of last two dimensions an ndarray:
+        (..., 0, slice(None, -1)),
+        (..., slice(None, -1), -1),
+        (..., -1, slice(-1, 0, -1)),
+        (..., slice(-1, 0, -1), 0),
+    ],
+
+    1:[# For flattening outer rim of last two dimensions an ndarray:
+        (0, slice(None, -1), ...),
+        (slice(None, -1), -1, ...),
+        (-1, slice(-1, 0, -1), ...),
+        (slice(-1, 0, -1), 0, ...),
+    ]
+}
+
+# -----------------------------------------------------------------------------
+# General purpose functions
+
+def bipolar(iterable):
+    "[0, 1, 2, 3] -> [(0, 3), (1, 2), (2, 1), (3, 0)]"
+    it1, it2 = tee(iterable)
+    return zip(it1,
+               map(lambda x: None if x is None else -x,
+                   reversed(list(it2))))
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
 
 def imread(path):
     '''
     Read an image from file as gray-scale.
-    Argument:
-        - path: path of image for reading.
-    Return: numpy array of gray-scaled image
+
+    Parameters
+    ----------
+    path : str
+        Path of image for reading.
+
+    Return
+    ------
+    out : ndarray
+        A  2D array of gray-scaled pixels.
     '''
 
     pil_image = Image.open(path).convert('L')
     image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
     return image
 
-
 def draw(path, image, extension='.bmp'):
     '''
     Output into an image file.
-    Arguments:
-        - path: path for saving image file.
-        - image: input as numpy array.
-        - extension: determine file-type of ouput image.
-    Return: None
+
+    Parameters
+    ----------
+    path : str
+        String contain path for saving image file.
+    image : ndarray
+        Array of image's pixels.
+    extension : str
+        Determine file-type of ouputed image.
     '''
 
     imsave(path + extension, image.astype('uint8'))
-    return
-    # ---------- draw() end ----------------------------------------------------
 
+def flattened_rim(a, arranged_d=0):
+
+    return np.concatenate(tuple(map(lambda slices: a[slices],
+                                    rim_slices[arranged_d])),
+                          axis=arranged_d-1)
+# -----------------------------------------------------------------------------
+# Blob slicing
+
+def slice_to_box(slice):
+    """
+    Convert slice object to tuple of bounding box.
+
+    Parameters
+    ----------
+    slice : tuple
+        A tuple containing slice(start, stop, step) objects.
+
+    Return
+    ------
+    box : tuple
+        A tuple containing 4 integers representing a bounding box.
+    """
+
+    box = (slice[0].start, slice[0].stop,
+           slice[1].start, slice[1].stop)
+
+    return box
+
+def localize(box, global_box):
+    '''
+    Compute local coordinates for given bounding box.
+    Used for overwriting map of parent structure with
+    maps of sub-structure, or other similar purposes.
+
+    Parameters
+    ----------
+    box : tuple
+        Bounding box need to be localized.
+    global_box : tuple
+        Reference to which box is localized.
+
+    Return
+    ------
+    out : tuple
+        Box localized with localized coordinates.
+    '''
+    y0s, yns, x0s, xns = box
+    y0, yn, x0, xn = global_box
+
+    return y0s - y0, yns - y0, x0s - x0, xns - x0
+
+def shrink(shape, x, axes=(0, 1)):
+    '''Return shape tuple that is shrunken by x units.'''
+    return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
+
+# -----------------------------------------------------------------------------
+# Blob drawing
 
 def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
 
     '''
-    Given a blob and a traversing path, map image of all sub-blobs of a specific
-    branch belonging to that blob into a numpy array.
-    Argumentss:
-        - blob: contain all mapped sub-blobs.
-        - traverse_path: list of values determine the derivation sequence of
-        target sub-blobs.
-            + 0 for hypot_g/comp_gradient
-            + 1 for comp_angle
-            + 2 for comp_range
-    Return: numpy array of image's pixel
+    Given a blob and a traversing path, map image of all sub-blobs
+    of a specific branch belonging to that blob into a numpy array.
+
+    Parameters
+    ----------
+    blob : Blob
+        Contain all mapped sub-blobs.
+    traverse_path : list
+        Determine the derivation sequence of target sub-blobs.
+
+    Return
+    ------
+    out : ndarray
+        2D array of image's pixel.
     '''
 
     image = empty_map(blob.box)
 
     return image    # return filled image
-    # ---------- map_sub_blobs() end -------------------------------------------
-
 
 def map_frame(frame):
     '''
-    Map the whole frame of original image as computed blobs.
-    Argument:
-        - frame: frame object input (as a list).
-    Return: numpy array of image's pixel
+    Map partitioned blobs into a 2D array.
+
+    Parameters
+    ----------
+    frame : Frame
+        Contain blobs that needs to be mapped.
+
+    Return
+    ------
+    out : ndarray
+        2D array of image's pixel.
     '''
 
     (I, G, Dy, Dx, blob_), i__, dert__ = frame
@@ -96,18 +197,9 @@ def map_frame(frame):
         over_draw(image, blob_map, blob.box, box)
 
     return image
-    # ---------- map_frame() end -----------------------------------------------
-
 
 def map_blob(blob, original=False):
-    '''
-    Map a single blob into an image.
-    Arguments:
-        - blob: the input blob.
-        - original: each pixel is the original image's pixel instead of just
-        black or white to separate blobs.
-    Return: numpy array of image's pixel
-    '''
+    '''Map a single blob into an image.'''
 
     blob_img = empty_map(blob.box)
 
@@ -120,19 +212,9 @@ def map_blob(blob, original=False):
         over_draw(blob_img, seg_map, sub_box, blob.box)
 
     return blob_img
-    # ---------- map_blob() end ------------------------------------------------
-
 
 def map_segment(seg, box, original=False):
-    '''
-    Map a single segment of a blob into an image.
-    Arguments:
-        - seg: the input segment.
-        - box: the input segment's bounding box.
-        - original: each pixel is the original image's pixel instead of just
-        black or white to separate blobs.
-    Return: numpy array of image's pixel
-    '''
+    '''Map a single segment of a blob into an image.'''
 
     seg_img = empty_map(box)
 
@@ -150,20 +232,8 @@ def map_segment(seg, box, original=False):
 
     return seg_img
 
-    # ---------- map_segment() end ---------------------------------------------
-
-
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
-    '''
-    Over-write map of sub-structure onto map of parent-structure.
-    Arguments:
-        - map: map of parent-structure.
-        - sub_map: map of sub-structure.
-        - sub_box: bounding box of sub-structure.
-        - box: bounding box of parent-structure, for computing local coordinate
-        of sub-structure.
-    Return: over-written map of parent-structure
-    '''
+    '''Over-write map of sub-structure onto map of parent-structure.'''
 
     if  box is None:
         y0, yn, x0, xn = sub_box
@@ -171,16 +241,9 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
         y0, yn, x0, xn = localize(sub_box, box)
     map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
     return map
-    # ---------- over_draw() end -----------------------------------------------
-
 
 def empty_map(shape):
-    '''
-    Create an empty numpy array of desired shape.
-    Arguments:
-        - shape: desired shape of the output.
-    Return: over-written map of parent-structure
-    '''
+    '''Create an empty numpy array of desired shape.'''
 
     if len(shape) == 2:
         height, width = shape
@@ -191,27 +254,6 @@ def empty_map(shape):
 
     return np.array([[transparent_val] * width] * height)
 
-def slice_to_box(slice):
-    """
-    Convert slice object to tuple of bounding box.
-
-    Parameters
-    ----------
-    slice : tuple
-        A tuple containing slice(start, stop, step) objects.
-
-    Return
-    ------
-    box : tuple
-        A tuple containing 4 integers representing
-        a bounding box
-    """
-
-    box = (slice[0].start, slice[0].stop,
-           slice[1].start, slice[1].stop)
-
-    return box
-
 def segment_box(seg):
     y0s = seg[0]            # y0
     yns = y0s + seg[-2]     # Ly
@@ -219,95 +261,26 @@ def segment_box(seg):
     xns = max([P[1] + P[-2] for P in seg[-1]])
     return y0s, yns, x0s, xns
 
-
-def localize(box, global_box):
-    '''
-    Compute local coordinates for given bounding box.
-    Used for overwriting map of parent structure with
-    maps of sub-structure, or other similar purposes.
-    Arguments:
-        - box: bounding box need to be localized.
-        - global_box: reference to which box is localized.
-    Return: box localized with localized coordinates
-    '''
-    y0s, yns, x0s, xns = box
-    y0, yn, x0, xn = global_box
-
-    return y0s - y0, yns - y0, x0s - x0, xns - x0
-
-def shrunk(shape, x, axes=(0, 1)):
-    '''Return shape tuple that is shrunken by x units.'''
-    return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
-
-def convolve(a, k, mask=None):
-    """Convolve input with kernel."""
-    s = k.shape[1]
-    Y, X = tuple(np.subtract(a.shape, s - 1))
-    b = np.empty((k.shape[-3], Y, X))
-
-    if mask is not None:
-        new_mask = np.zeros((Y, X), dtype=bool)
-    else:
-        new_mask = None
-
-    for y in range(Y):
-        for x in range(X):
-            if mask is not None:
-                mview = mask[y : y+s, x : x+s]
-                if mview.sum() < mview.size:
-                    pass # Skip convolution where inputs are incomplete
-                else:
-                    new_mask[y, x] = True
-
-            b[:, y, x] = (a[y : y+s, x : x+s] * k).sum(axis=(1, 2))
-
-    return b, new_mask
-
-
-def kernel(n):
-    '''
-    Return kernel for comparison.
-    Note: dx kernel is transpose of dy kernel.
-    '''
-
-    # Compute symmetrical coefficients of kernel:
-    sides = np.array([*range(2, n + 1, 2)] + [n - 1] * (n // 2 - 1))
-    coefs = sides / np.hypot(sides, np.flip(sides))
-
-    # Calculate pivot point (positioned at the corner of the kernel):
-    odd = n % 2
-    ipivot = (n - 1 - odd) // 2
-
-    # Construct margins of kernel:
-    vert_coefs = coefs[:ipivot]
-    hor_coefs = coefs[ipivot:]
-    if odd:
-        vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
-    else:
-        vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
-    # Assign coefficients to kernel:
-    ky = np.zeros((n, n), dtype=float) # Initialize kernel for dy.
-    ky[0, :] = -hor_coefs # Assign upper coefficients.
-    ky[-1, :] = hor_coefs # Assign lower coefficients.
-    ky[1:-1, 0] = vert_coefs # Assign left-side coefficients.
-    ky[1:-1, -1] = vert_coefs # Assign right-side coefficients.
-
-    ky /= n - 1 # Divide by comparison distance.
-
-    kx = ky.T # Compute kernel for dx (transpose of ky).
-
-    return np.stack((ky, kx), axis=0)
-
+# -----------------------------------------------------------------------------
+# Comparison related
 
 def generate_kernels(max_rng, k2x2=0):
     '''
     Generate a deque of kernels corresponding to max range.
-    Arguments:
-        - max_rng: maximum range of comparisons.
-        - k2x2: if True, generate an additional 2x2 kernel.
-    Return: box localized with localized coordinates'''
+    Deprecated. Use GenCoeff instead.
+
+    Parameters
+    ----------
+    max_rng : int
+        Maximum range of comparisons.
+    k2x2 : int
+        If True, generate an additional 2x2 kernel.
+
+    Return
+    ------
+    out : deque
+        Sequence of kernels for corresponding rng comparison.
+    '''
     indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
     quart_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
     quart_kernel[:, 0, 0] = 0 # Fill na value with zero
@@ -358,6 +331,146 @@ def generate_kernels(max_rng, k2x2=0):
         k_.appendleft(kernel_2x2)
 
     return k_
+
+
+def kernel(rng):
+    '''
+    Return coefficients for decomposition of d
+    (compared over rng) into dy and dx.
+    Here, we assume that kernel width is odd.
+    '''
+    # Start with array of indices:
+    indices = np.indices((rng+1, rng+1))
+
+    # Apply computations:
+    quart_kernel = indices / np.hypot(*indices)
+    quart_kernel[:, 0, 0] = 0
+
+    # Copy quarter of kernel into full kernel:
+    half_ky = np.concatenate(
+        (
+            np.flip(
+                quart_kernel[0, :, 1:],
+                axis=1),
+            quart_kernel[0],
+        ),
+        axis=1,
+    )
+
+    ky = np.concatenate(
+        (
+            np.flip(
+                half_ky[1:],
+                axis=0),
+            half_ky,
+        ),
+        axis=0,
+    )
+
+    kx = ky.T  # Compute kernel for dx (transpose of ky).
+
+    return np.stack((ky, kx), axis=0)
+
+# -----------------------------------------------------------------------------
+# GenCoeffs class
+
+class GenCoeffs(object):
+    """
+    Generate coefficients used by comparisons
+    of rng in {1, ..., max_rng}.
+    """
+    def __init__(self, max_rng=3):
+        """
+        Instanciate a GenCoeffs object.
+        """
+        self._generate_coeffs(max_rng)
+
+    def _generate_coeffs(self, max_rng):
+        """
+        Workhorse of GenCoeffs class, compute kernel
+        and separate into rng specific coefficients.
+        """
+        # Calculate combined kernel of rng from 1 to max_rng:
+        kers = kernel(max_rng)
+
+        # Separate into kernels of each rng and flatten them:
+        self._coeffs = list(
+            map(flattened_rim,
+                map(lambda slices: kers[slices],
+                    zip(repeat(...),
+                        *tee(chain((slice(None, None),),
+                                   map(lambda i: slice(i, -i), range(1, 3)),
+                                   ))
+                        ),
+                    ),
+                )
+        )
+
+        self._coeffs.reverse()
+
+    def to_file(self, path="coeffs.py"):
+        """Write coeffs to text file."""
+        ycoeffs, xcoeffs = zip(*map(lambda coeff: (coeff[0], coeff[1]),
+                                    self._coeffs,
+                                    ))
+        with open(path, "w") as file:
+            file.write('import numpy as np\n')
+            file.write('Y_COEFFS = {\n')
+            for i, ycoeff in enumerate(ycoeffs, start=1):
+                file.write(str(i) + ":np.\\\n" + repr(ycoeff) + ",\n")
+            file.write('}\n')
+            file.write('X_COEFFS = {\n')
+            for i, xcoeff in enumerate(xcoeffs, start=1):
+                file.write(str(i) + ":np.\\\n" + repr(xcoeff) + ",\n")
+            file.write('}\n')
+    @property
+    def coeff(self):
+        return self._coeffs
+
+# -----------------------------------------------------------------------------
+# GenTransSlice class
+
+class GenTransSlice(object):
+    """
+    Generate slicing for vectorized comparisons.
+    """
+    def __init__(self, max_rng=3):
+        """
+        Instanciate a GenTransSlice object.
+        """
+        self._generate_slices(max_rng)
+
+    def _generate_slices(self, max_rng):
+        """Generate target slices for comparison function."""
+        self._slices = []
+        slice_inds = [*chain((None,), range(1, max_rng * 2 + 1))]
+
+        for r in range(3, max_rng * 2 + 2, 2):
+            slices = [*starmap(slice, bipolar(slice_inds[:r]))]
+            slices = [*chain(slices,
+                             repeat(slices[-1],
+                                    r - 2),
+                             reversed(slices),
+                             repeat(slices[0],
+                                    r - 2))]
+            slices = [*zip(repeat(...), slices[-r+1:] + slices[:-r+1], slices)]
+            self._slices.append(slices)
+
+
+    def to_file(self, path="slices.py"):
+        """Write coeffs to text file."""
+        with open(path, "w") as file:
+            file.write('TRANSLATING_SLICES = {\n')
+            for i, slices in enumerate(self._slices, start=0):
+                file.write(str(i) + ":[\n")
+                for sl in slices:
+                    file.write(str(sl) + ",\n")
+                file.write("],\n")
+            file.write('}')
+
+    @property
+    def slices(self):
+        return self._slices
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

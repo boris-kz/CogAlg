@@ -88,26 +88,26 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                + image[1:, 1:])
 
     else:
-        ky = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
-        kx = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
+        ycoef = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
+        xcoef = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
 
-        # Compare:
-        d___ = np.array(map(lambda neighbor:
-                                image[neighbor] - image[1:-1, 1:-1],
-                            (
-                    (slice(2, None), slice(2, None)),
-                    (slice(2, None), slice(1, -1)),
-                    (slice(2, None), slice(None, -2)),
-                    (slice(1, -1), slice(None, -2)),
+        # Compare by subtracting centered image from translated image:
+        d___ = np.array(list(map(lambda trans_slices:
+                                image[trans_slices] - image[1:-1, 1:-1],
+                            [
                     (slice(None, -2), slice(None, -2)),
                     (slice(None, -2), slice(1, -1)),
                     (slice(None, -2), slice(2, None)),
                     (slice(1, -1), slice(2, None)),
-                ))).swapaxes(0, 2).swapaxes(0, 1)
+                    (slice(2, None), slice(2, None)),
+                    (slice(2, None), slice(1, -1)),
+                    (slice(2, None), slice(None, -2)),
+                    (slice(1, -1), slice(None, -2)),
+                ]))).swapaxes(0, 2).swapaxes(0, 1)
 
         # Decompose differences:
-        dy__ = (d___ * ky).sum(axis=2)
-        dx__ = (d___ * kx).sum(axis=2)
+        dy__ = (d___ * ycoef).sum(axis=2)
+        dx__ = (d___ * xcoef).sum(axis=2)
 
         # Sum pixel values:
         p__ = image[1:-1, 1:-1]

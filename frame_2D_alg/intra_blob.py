@@ -1,4 +1,4 @@
-# from intra_comp import intra_comp
+from comp_i import comp_i
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
@@ -54,133 +54,9 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
     represented per fork if tree reorder, else redefined at each access?
 '''
 
-# flags:
-f_angle = 0b01
-f_derive = 0b10
-
-# ************ UTILITY FUNCTIONS ****************************************************************************************
-# -kernel()
-# -generate_kernels()
-# -convolve()
-# ***********************************************************************************************************************
-
-def kernel(n):
-    '''
-    Return kernel for comparison.
-    Note: dx kernel is transpose of dy kernel.
-    '''
-
-    # Compute symmetrical coefficients of kernel:
-    sides = np.array([*range(2, n + 1, 2)] + [n - 1] * (n // 2 - 1))
-    coefs = sides / np.hypot(sides, np.flip(sides))
-
-    # Calculate pivot point (positioned at the corner of the kernel):
-    odd = n % 2
-    ipivot = (n - 1 - odd) // 2
-
-    # Construct margins of kernel:
-    vert_coefs = coefs[:ipivot]
-    hor_coefs = coefs[ipivot:]
-    if odd:
-        vert_coefs = np.concatenate((-np.flip(vert_coefs), [0], vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), [1], hor_coefs))
-    else:
-        vert_coefs = np.concatenate((-np.flip(vert_coefs), vert_coefs))
-        hor_coefs = np.concatenate((np.flip(hor_coefs), hor_coefs))
-
-    # Assign coefficients to kernel:
-    ky = np.zeros((n, n), dtype=float)  # Initialize kernel for dy.
-    ky[0, :] = hor_coefs  # Assign upper coefficients.
-    ky[-1, :] = hor_coefs  # Assign lower coefficients.
-    ky[1:-1, 0] = vert_coefs  # Assign left-side coefficients.
-    ky[1:-1, -1] = vert_coefs  # Assign right-side coefficients.
-
-    ky /= n - 1  # Divide by comparison distance.
-
-    kx = ky.T  # Compute kernel for dx (transpose of ky).
-
-    return np.stack((ky, kx), axis=0)
-
-
-def generate_kernels(max_rng, k2x2=0):
-    '''
-    Generate a deque of kernels corresponding to max range.
-    Arguments:
-        - max_rng: maximum range of comparisons.
-        - k2x2: if True, generate an additional 2x2 kernel.
-    Return: box localized with localized coordinates'''
-    indices = np.indices((max_rng, max_rng))  # Initialize 2D indices array.
-    quart_kernel = indices / np.hypot(*indices[:])  # Compute coeffs.
-    quart_kernel[:, 0, 0] = 0  # Fill na value with zero
-
-    # Fill full dy kernel with the computed quadrant:
-    # Fill bottom-left quadrant:
-    half_kernel_y = np.concatenate(
-        (
-            np.flip(
-                quart_kernel[0, :, 1:],
-                axis=1),
-            quart_kernel[0],
-        ),
-        axis=1,
-    )
-
-    # Fill upper half:
-    kernel_y = np.concatenate(
-        (
-            np.flip(
-                half_kernel_y[1:],
-                axis=0),
-            half_kernel_y,
-        ),
-        axis=0,
-    )
-
-    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
-
-    # Divide full kernel into deque of rng-kernels:
-    k_ = deque()  # Initialize deque of different size kernels.
-    k = kernel  # Initialize reference kernel.
-    for rng in range(max_rng, 1, -1):
-        rng_kernel = np.array(k)  # Make a copy of k.
-        rng_kernel[:, 1:-1, 1:-1] = 0  # Set central variables to 0.
-        rng_kernel /= rng  # Divide by comparison distance.
-        k_.appendleft(rng_kernel)
-        k = k[:, 1: -1, 1:-1]  # Make k recursively shrunken.
-
-    # Compute 2x2 kernel:
-    if k2x2:
-        coeff = kernel[0, -1, -1]  # Get the value of square root of 0.5
-        kernel_2x2 = np.array([coef * 8]).reshape((2, 2, 2))
-
-        k_.appendleft(kernel_2x2)
-
-    return k_
-
-
-def convolve(a, k, mask=None):
-    """Convolve input with kernel."""
-    s = k.shape[1]
-    Y, X = tuple(np.subtract(a.shape, s - 1))
-    b = np.empty((k.shape[-3], Y, X))
-
-    if mask is not None:
-        new_mask = np.zeros((Y, X), dtype=bool)
-    else:
-        new_mask = None
-
-    for y in range(Y):
-        for x in range(X):
-            if mask is not None:
-                mview = mask[y: y + s, x: x + s]
-                if mview.sum() < mview.size:
-                    pass  # Skip convolution where inputs are incomplete
-                else:
-                    new_mask[y, x] = True
-
-            b[:, y, x] = (a[y: y + s, x: x + s] * k).sum(axis=(1, 2))
-
-    return b, new_mask
+# Declare comparison flags:
+F_ANGLE = 0b01
+F_DERIVE = 0b10
 
 # ************ MODULE FUNCTIONS *****************************************************************************************
 # -root_blob_to_sub_blobs()
@@ -202,39 +78,6 @@ def root_blob_to_sub_blobs(root_blob, rng, fga, fia, fa, Ave_blob, Ave):
 
     return Ave_blob
 
-
-def comp_i(dert__, k, flags):  # k generating operation need to be reworked
-    if flags & f_angle:
-        if k.shape[1] > 3: # if rng > 1.
-            i__ = dert[1]
-            i_comp__ = dert[2]
-        else: # Else: calculate a and a_radian
-            i__ = dert__[-2:] / dert__[0] # a__. Variable name is for consistency
-            i_comp__ = np.atan2(a__[0], a__[1]) # a_radian__. Variable name is for consistency
-    else:
-        i__ = i_comp__ = dert__[0]
-
-    dy__ = np.zeros(np.subtract(i_comp__.shape, 2))
-    dx__ = np.zeros(np.subtract(i_comp__.shape, 2))
-
-    for neighbor in (   # Note: Set of neighbors are being reconsidered
-            (slice(2, None), slice(2, None)),
-            (slice(2, None), slice(1, -1)),
-            (slice(2, None), slice(None, -2)),
-            (slice(1, -1), slice(None, -2)),
-            (slice(None, -2), slice(None, -2)),
-            (slice(None, -2), slice(1, -1)),
-            (slice(None, -2), slice(2, None)),
-            (slice(1, -1), slice(2, None)),
-        ):
-        d__ = image[neighbor] - i_compare__[1:-1, 1:-1]
-
-        dy__ += d__ * k[0]
-        dx__ += d__ * k[1]
-
-    g__ = np.hypot(dy__, dx__)
-
-    return i__, np.stack((g__, dy__, dx__), axis=0) # return i__, new_dert__. a and a radian need to be added to new_dert__
 
 def form_P_():
     return
@@ -321,10 +164,3 @@ def intra_blob(root_blob, rng, fga, fia, eval_fork_, Ave_blob, Ave):  # fga (fla
     '''
 
     return root_blob
-
-
-
-
-
-
-
