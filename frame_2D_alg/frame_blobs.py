@@ -78,14 +78,14 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     if kwidth == 2:
 
         # Compare:
-        dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1])
-        dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1])
+        dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1]) * 0.70710678
+        dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1]) * 0.70710678
 
         # Sum pixel values:
         p__ = (image[:-1, :-1]
                + image[:-1, 1:]
                + image[1:, :-1]
-               + image[1:, 1:])
+               + image[1:, 1:]) * 0.25
 
     else:
         ycoef = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
