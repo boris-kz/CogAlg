@@ -32,7 +32,7 @@ Dert =    namedtuple('Dert',    'G, A, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob =    namedtuple('Blob',    'Dert, sign, rng, box, map, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
-Frame =   namedtuple('Frame',   'Dert, i__, dert__')
+Frame =   namedtuple('Frame',   'Dert, blob_, i__, dert__')
 
 # Adjustable parameters:
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
