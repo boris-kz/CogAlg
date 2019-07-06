@@ -1,7 +1,6 @@
+import numpy as np
 from time import time
 from collections import deque, namedtuple
-
-import numpy as np
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -27,12 +26,13 @@ import numpy as np
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
 
-# "Structures":
-Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly, sub_blob_')
+# Structures:
+
+Dert =    namedtuple('Dert',    'G, A, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob =    namedtuple('Blob', 'Layers, sign, rng, dert__, box, mask, root_blob, seg_')
-Frame =   namedtuple('Frame', 'Dert, i__, dert__')
+Blob =    namedtuple('Blob',    'Dert, sign, rng, box, map, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
+Frame =   namedtuple('Frame',   'Dert, i__, dert__')
 
 # Adjustable parameters:
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
@@ -41,7 +41,10 @@ DEBUG = True
 
 if kwidth == 3:
     ave *= 4
-elif kwidth != 2:
+    rng = 1
+elif kwidth == 2:
+    rng = 0
+else:
     print("kwidth must be 2 or 3!")
 
 # ************ MODULE FUNCTIONS *****************************************************************************************
@@ -93,7 +96,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
 
         # Compare by subtracting centered image from translated image:
         d___ = np.array(list(map(lambda trans_slices:
-                                image[trans_slices] - image[1:-1, 1:-1],
+                                 image[trans_slices] - image[1:-1, 1:-1],
                             [
                     (slice(None, -2), slice(None, -2)),
                     (slice(None, -2), slice(1, -1)),
@@ -273,7 +276,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, [y0, x0, xn] = blob
 
         yn = y0s + Lys  # yn from last segment
-        mask = np.zeros((yn - y0, xn - x0), dtype=bool)                      # local map of blob
+        mask = np.zeros((yn - y0, xn - x0), dtype=bool)                     # local map of blob
         new_seg_ = []
         for seg in seg_:
             y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_ = seg[:-2]                  # blob and roots are ignored
@@ -289,14 +292,18 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[0][1] += G
         frame[0][2] += Dy
         frame[0][3] += Dx
-        frame[0][4].append(Blob(Layers=[[I], [Dert(G, None, Dy, Dx, L, Ly, [])]],  # []: nested sub_blob_, depth = Derts[index]
-                                sign=s,
-                                rng=1, # for comp_range only, i_dert = alt - (rng-1) *2
-                                dert__=frame.dert__[:, y0:yn, x0:xn], # pointer to lower level data
-                                box=(y0, yn, x0, xn), # boundary box
-                                mask=mask, # blob boolean map, to compute overlap
-                                root_blob=[blob],
-                                seg_=new_seg_))
+        frame[0][4].append(Blob(Dert = [G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
+                                sign=s,  # current g | ga sign
+                                rng =rng,  # comp range
+                                map=map,   # boolean map of blob to compute overlap
+                                box=(y0, yn, x0, xn),  # boundary box
+                                seg_=new_seg_,  # references down blob formation tree, in vertical (horizontal) order
+                                dert__=[],
+                                sub_blob_=[],   # ref to sub_blob derivation tree, sub_blob structure = blob structure
+                                lLayers=[],     # summed reps of lower layers across sub_blob derivation tree
+                                root_blob=[blob],  # ref for feedback of all Derts params summed in sub_blobs
+                                hLayers=[I]     # higher Dert params += higher-dert params, starting with I
+                           ))
         del blob
 
     # ---------- form_blob() end ----------------------------------------------------------------------------------------
@@ -306,28 +313,22 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 if __name__ == '__main__':
 
     # Load inputs --------------------------------------------------------------------
-    # image = scipy.misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
     from utils import imread
-
     image = imread('./../images/raccoon_eye.jpg').astype(int)
 
     # Main ---------------------------------------------------------------------------
+
     start_time = time()
-
     frame_of_blobs = image_to_blobs(image)
-
-    # from intra_blob_debug import intra_blob_hypot  # not yet functional, comment-out to run
-    # frame_of_blobs = intra_blob_hypot(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
+    # frame_of_blobs = intra_blob(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
     # DEBUG --------------------------------------------------------------------------
     if DEBUG:
         from utils import *
-
         draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
         f_angle = 0b01
         f_derive = 0b10
-
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])
 
