@@ -7,18 +7,25 @@ from time import time
     and form dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation of P params
     (difference | match deviation per param is summed between all compared params in P)
     
-    comp_P is potentially micro- and macro- recursive: 
+    par_coefs per level: match|dev rate fb, also per pattern, for form par_P, after full-blob comp_P_ 
+    sub_coefs per sub_blob, if recurrent in super_blob from comp_blob 
+ 
+    comp_P is potentially micro and macro recursive: 
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
     root blob for comp_P is formed by intra_comp(dx), ~ hypot_g without g compute, 
-    select by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
-    intra_comp(dx_g) eval by val_PP_ = 
+    blob redefine per core: dx in der+ blob, v(!+ig) in rng+ blob: total v~g, not oriented, ig is a different dim?
     
-    L + |Dx| + |Dy|  # = max Pm, * orientation coefs: 
-    * max((ave_Lx, Ly) / min(ave_Lx, Ly))  # length bias = g stability and comp_P range?    
-    * max((Dy, Dx) / min(Dy, Dx))          # variation bias, if same min, max Ds?
-    * Ave_blob / Ga                        # angle match rate: stability of direction (min, max), thus oriented match?   
+    core comp within P -> vdP, ddP, ortho? blobs redefine per ddx, dvx, vd, vv, etc.? recursively -> nested PPs?
+    map seg,P -> sub-seg,P for nested intra_comp(dx_g) -> comp_P_, in overlapped blob of combined elongation:  
+    
+    val_PP_ = 
+    L + |V| + |Dx| + |Dy|  # max Pm,  or core params M, G only, they represent all others? 
+    # * orientation coefs: 
+    * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # length bias: g match rate, max comp_P rng?    
+    * max((Dy, Dx) / min(Dy, Dx))        # variation bias, if same min, max Ds?  no Mx, My: low bias? 
+    * Ave_blob / Ga                      # angle match rate: stability of direction (min, max), thus oriented match?   
     
     eval per blob, too expensive for seg?  no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
 '''
@@ -29,8 +36,8 @@ flip_ave = 1000
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also conditional ders from norm and DIV comp
 
-    s, x0, G, A, Dx, Dy, L, derts_ = P  # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
-    _s, _x0, _G, _A, _Dx, _Dy, _L, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
+    s, x0, G, A, M, Dx, Dy, L, derts_ = P  # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
+    _s, _x0, _G, _A, _M, _Dx, _Dy, _L, _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
     overlap = min(xn, _xn) - max(x0, _x0)
@@ -47,19 +54,21 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, also c
         hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance), to estimate params of orthogonal slice:
         L /= hyp
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
-        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over ver_L, Ders summed in ver / lat ratio?
+        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over vert_L, Ders summed in vert / lat ratio?
 
-    dL = L - _L;    mL = min(L, _L)   # comp Derts[1] -> abs match, dderived rep value is magnitude-proportional?
-    dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in dxP
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # 2nd der m & d, signed? Dy per sub_P by intra_comp(dx), vs. dI per iP
+    dL = L - _L; mL = min(L, _L)  # comp Derts[1] -> abs match, dderived: magnitude-proportional value
+    dM = M - _M; mM = min(M, _M)  # or V / G? no Mx, My: non-core, lesser and redundant bias?
 
-    Pd = ddX + dL + dDx + dDy  # -> directional dPP, equal-weight params, no rdn?
+    dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in vxP
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
+
+    Pd = ddX + dL, dM, + dDx + dDy  # -> directional dPP, equal-weight params, no rdn?
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
-    Pm = mX + mL + mDx + mDy  # -> complementary vPP, rdn *= Pd | Pm rolp?
+    Pm = mX + mL + mM, mDx + mDy  # -> complementary vPP, rdn *= Pd | Pm rolp?
 
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
 
-        rL  = L / _L   # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
         nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
         nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
 

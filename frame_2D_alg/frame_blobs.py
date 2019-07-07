@@ -1,7 +1,6 @@
 import numpy as np
 from time import time
 from collections import deque, namedtuple
-from utils import kernel
 
 '''   
     frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
@@ -29,21 +28,26 @@ from utils import kernel
 
 # Structures:
 
-Dert =    namedtuple('Dert',    'G, A, Dy, Dx, L, Ly, sub_blob_')
+Dert =    namedtuple('Dert',    'G, A, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob =    namedtuple('Blob',    'Dert, sign, rng, dert__, box, map, sub_blob_, seg_, Layers, root_blob, high_Derts')
-Frame =   namedtuple('Frame',   'Dert, dert__')
+Blob =    namedtuple('Blob',    'Dert, sign, rng, box, map, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
+Frame =   namedtuple('Frame',   'I, G, Dy, Dx, blob_, i__, dert__')
 
-kwidth = 3  # initial kernel width, tested values are 2 or 3.
-shrink = kwidth - 1
-ave = 20  # filter or cost function
-# if kwidth != 2:  # ave is a cost per comp, incremental in intra_blob only
-  #  ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
-
+# Adjustable parameters:
+kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
+ave = 20
 DEBUG = True
 
-# ************ MAIN FUNCTIONS *******************************************************************************************
+if kwidth == 3:
+    ave *= 4
+    rng = 1
+elif kwidth == 2:
+    rng = 0
+else:
+    print("kwidth must be 2 or 3!")
+
+# ************ MODULE FUNCTIONS *****************************************************************************************
 # -image_to_blobs()
 # -comp_pixel()
 # -form_P_()
@@ -54,12 +58,14 @@ DEBUG = True
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
-    frame = Frame([0, 0, 0, 0, []], dert__)  # params, blob_, dert__
+    i__, dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    frame = Frame(0, 0, 0, 0, [], i__, dert__)  # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    for y in range(height - shrink):  # first and last row are discarded
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
+    height, width = image.shape
+
+    for y in range(height - kwidth + 1):  # first and last row are discarded
+        P_ = form_P_(i__[y], dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
 
@@ -72,50 +78,61 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 def comp_pixel(image):  # comparison between pixel and its neighbours within kernel, for the whole image
 
     # Initialize variables:
-    Y = height - shrink
-    X = width - shrink
     if kwidth == 2:
-        k = np.array([[[-1, -1],
-                       [1, 1]],
-                      [[-1, 1],
-                       [-1, 1]]])
-    else:
-        k = kernel(kwidth)
 
-    d__ = np.empty(shape=(2, Y, X)) # initialize dy__, dx__
+        # Compare:
+        dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1]) * 0.70710678
+        dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1]) * 0.70710678
 
-    # Convolve image with kernel:
-    for y in range(Y):
-        for x in range(X):
-            convolve = (image[y : y+kwidth, x : x+kwidth] * k)
-            d__[:, y, x] = convolve.sum(axis=(1, 2))
-
-    # Sum pixel values:
-    if kwidth == 2:
+        # Sum pixel values:
         p__ = (image[:-1, :-1]
                + image[:-1, 1:]
                + image[1:, :-1]
-               + image[1:, 1:]).reshape((1, Y, X)) * 0.25
+               + image[1:, 1:]) * 0.25
+
     else:
-        p__ = image[-1:1, -1:1]
+        ycoef = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
+        xcoef = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
 
-    # Compute gradient per kernel:
-    g__ = np.hypot(d__[0], d__[1]).reshape((1, Y, X))
+        # Compare by subtracting centered image from translated image:
+        d___ = np.array(list(map(lambda trans_slices:
+                                 image[trans_slices] - image[1:-1, 1:-1],
+                            [
+                    (slice(None, -2), slice(None, -2)),
+                    (slice(None, -2), slice(1, -1)),
+                    (slice(None, -2), slice(2, None)),
+                    (slice(1, -1), slice(2, None)),
+                    (slice(2, None), slice(2, None)),
+                    (slice(2, None), slice(1, -1)),
+                    (slice(2, None), slice(None, -2)),
+                    (slice(1, -1), slice(None, -2)),
+                ]))).swapaxes(0, 2).swapaxes(0, 1)
 
-    return np.around(np.concatenate((p__, g__, d__), axis=0))
+        # Decompose differences:
+        dy__ = (d___ * ycoef).sum(axis=2)
+        dx__ = (d___ * xcoef).sum(axis=2)
+
+        # Sum pixel values:
+        p__ = image[1:-1, 1:-1]
+
+    # Compute gradient magnitudes per kernel:
+    g__ = np.hypot(dy__, dx__)
+
+    return p__, np.around(np.stack((g__, dy__, dx__), axis=0))
 
     # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
 
 
-def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # row of Ps
-    i, g, dy, dx = dert_[1]  # first dert
-    x0, I, G, Dy, Dx, L = 1, i, g, dy, dx, 1  # P params
+    i = i_[0]
+    g, dy, dx = dert_[0]  # first dert
+    x0, I, G, Dy, Dx, L = 0, i, g, dy, dx, 1  # P params
     vg = g - ave
     _s = vg > 0  # sign
 
-    for x, (i, g, dy, dx) in enumerate(dert_[2:-1], start=2):
+    for x, (i, (g, dy, dx)) in enumerate(zip(i_[1:], dert_[1:]), start=1):
         vg = g - ave
         s = vg > 0
         if s != _s:  # P is terminated and new P is initialized
@@ -259,7 +276,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         s, [I, G, Dy, Dx, L, Ly], seg_, open_segs, [y0, x0, xn] = blob
 
         yn = y0s + Lys  # yn from last segment
-        map = np.zeros((yn - y0, xn - x0), dtype=bool)                      # local map of blob
+        mask = np.zeros((yn - y0, xn - x0), dtype=bool)                     # local map of blob
         new_seg_ = []
         for seg in seg_:
             y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_ = seg[:-2]                  # blob and roots are ignored
@@ -267,26 +284,25 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
             new_seg_.append(seg)                                            # add segment to blob as namedtuple
             for y, P in enumerate(seg.Py_, start=seg.y):
                 Pxn = P.x0 + P.L
-                map[y - y0, P.x0 - x0:Pxn - x0] = True
+                mask[y - y0, P.x0 - x0:Pxn - x0] = True
 
         del seg_
 
-        frame[0][0] += I
-        frame[0][1] += G
-        frame[0][2] += Dy
-        frame[0][3] += Dx
-        frame[0][4].append(Blob(Dert = [G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
-                                sign=s,  # current g | ga sign
-                                rng =1,  # comp range, in each Dert
-                                dert__=[],
-                                map=map,  # boolean map of blob to compute overlap
-                                box=(y0, yn, x0, xn),  # boundary box
-                                sub_blob_=[],  # ref to sub_blob derivation tree, sub_blob structure = blob structure
-                                seg_=new_seg_,  # references down blob formation tree, in vertical (horizontal) order
-
-                                Layers=[],  # summed reps of lower layers across sub_blob derivation tree
-                                root_blob=[blob],  # ref for feedback of all Derts params summed in sub_blobs
-                                high_Derts=[I]     # higher Dert params += higher-dert params, starting with I
+        frame[0] += I
+        frame[1] += G
+        frame[2] += Dy
+        frame[3] += Dx
+        frame[4].append(Blob(Dert = [G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
+                             sign=s,  # current g | ga sign
+                             rng =rng,  # comp range
+                             map=map,   # boolean map of blob to compute overlap
+                             box=(y0, yn, x0, xn),  # boundary box
+                             seg_=new_seg_,  # references down blob formation tree, in vertical (horizontal) order
+                             dert__=[],
+                             sub_blob_=[],   # ref to sub_blob derivation tree, sub_blob structure = blob structure
+                             lLayers=[],     # summed reps of lower layers across sub_blob derivation tree
+                             root_blob=[blob],  # ref for feedback of all Derts params summed in sub_blobs
+                             hLayers=[I]     # higher Dert params += higher-dert params, starting with I
                            ))
         del blob
 
@@ -297,25 +313,22 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 if __name__ == '__main__':
 
     # Load inputs --------------------------------------------------------------------
-    # image = misc.imread('./../images/raccoon_eye.jpg', flatten=True).astype(int)  # will not be supported by future versions of scipy
     from utils import imread
-
     image = imread('./../images/raccoon_eye.jpg').astype(int)
-    height, width = image.shape
 
     # Main ---------------------------------------------------------------------------
+
     start_time = time()
-
     frame_of_blobs = image_to_blobs(image)
-
-    # from intra_blob import intra_blob  # not yet functional, comment-out to run
-    # frame_of_blobs = intra_blob(frame_of_blobs, Ave_blob=10000)  # evaluate for deeper clustering inside each blob, recursively
+    # frame_of_blobs = intra_blob(frame_of_blobs)  # evaluate for deeper clustering inside each blob, recursively
 
     # DEBUG --------------------------------------------------------------------------
     if DEBUG:
         from utils import *
         draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
+        f_angle = 0b01
+        f_derive = 0b10
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])
 

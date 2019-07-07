@@ -1,9 +1,8 @@
 import numpy as np
-from math import hypot
 from collections import deque, namedtuple
-from compare_draft import compare
+from comp_i import comp_i
 
-Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, sub_blob_, seg_, Layers, root_blob, high_Derts')
+Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, sub_blob_, lLayers, root_blob, hLayers')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -44,7 +43,7 @@ def intra_comp(blob, rng, fia, fa, Ave_blob, Ave):
         P_.sort(key=lambda P: P[1])  # sort by x0 coordinate
         # core operations:
 
-        derts__ = compare(P_, _derts___, rng, fia, fa)   # no _derts___ in hypot_g or future dx_g
+        derts__ = comp_i(P_, _derts___, rng, fia, fa)   # no _derts___ in hypot_g or future dx_g
         if derts__:  # form sub_blobs:
 
             sP_ = form_P_(derts__, Ave, rng, fia)
@@ -255,10 +254,11 @@ def feedback_draft(root_blob, blob, rng):  # or rng per dert cyc: current, !i_cy
                                   box= box,  # same boundary box
                                   map= map,  # blob boolean map, to compute overlap
                                   seg_=seg_,
+                                  # derts__,
                                   sub_blob_=[],
-                                  Layers = [],  # summed reps of lower layers across sub_blob derivation tree
+                                  lLayers = [],  # summed reps of lower layers across sub_blob derivation tree
                                   root_blob = [blob],  # ref for feedback of all Derts params summed in sub_blobs
-                                  high_Derts = [I]  # higher Dert params += higher-dert params, starting with I
+                                  hLayers = [I]  # higher Dert params += higher-dert params, starting with I
                                   ))
         root_blob = root_blob.root_blob
 
