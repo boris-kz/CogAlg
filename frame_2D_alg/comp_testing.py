@@ -41,15 +41,15 @@ if __name__ == "__main__":
     # Convert dert to derts:
     derts = [input[np.newaxis, ...], dert]
 
+    # Angle comp from derts (forking):
+    input, aderts = comp_i(derts, flags=F_ANGLE)
+    draw("../debug/ga1", (aderts[-1][0] > aave) * 255)
+
     # Rng comp from derts:
     for rng in range(1, 4):
         input, derts = comp_i(derts, rng=rng)
         ave *= ((rng * 2 + 1) ** 2 - 1) / 2
         draw("../debug/g%d" % (rng), (derts[-1][0] > ave) * 255)
-
-    # Angle comp from derts (forking):
-    input, aderts = comp_i(derts, flags=F_ANGLE)
-    draw("../debug/ga1", (aderts[-1][0] > aave) * 255)
 
     # Gradient comp from derts (forking):
     input, gderts = comp_i(derts, flags=F_DERIVE)
