@@ -107,7 +107,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert___, rng, flags): # Need to be coded from scratch
+def comp_i(dert___, rng=1, flags=0):
     """
     Determine which parameter from dert__ is the input,
     then compare the input over predetermined range
@@ -118,33 +118,23 @@ def comp_i(dert___, rng, flags): # Need to be coded from scratch
         Contains input array.
     rng : int
         Determine translation between comparands.
-    flags : int
+    flags : int, default: 0
         Indicate which params in dert__ being used as input.
 
     Return
     ------
     i__ : MaskedArray
         Input array for summing in form_P_().
-    new_dert__ : MaskedArray
-        Array contain new parameters derived from the comparisons.
+    new_dert___ : list
+        Last element is the array of derivatives computed in
+        this operation.
     """
     # Compare angle flow control:
     if flags & F_ANGLE:
-        return comp_a(dert___, rng, new_mask)
+        return comp_a(dert___, rng)
 
     # Assign input array:
-    if flags & F_DERIVE:
-        i__ = dert___[-1][0] # Assign g__ of previous layer to i__
-        shape = tuple(np.subtract(i__.shape, rng * 2))
-
-        # Accumulate dx__, dy__ starting from 0:
-        dy__ = ma.zeros(shape)
-        dx__ = ma.zeros(shape)
-    else:
-        i__ = dert___[-2][0] # Assign one layer away g__ to i__
-
-        # Accumulated dx__, dy__ of previous layer:
-        dy__, dx__ = dert___[-1][-2:]
+    i__, dy__, dx__ = assign_inputs(dert___, rng, flags)
 
     # Compare inputs:
     d__ = translated_operation(i__, rng, op.sub)
@@ -156,8 +146,30 @@ def comp_i(dert___, rng, flags): # Need to be coded from scratch
     # Compute gs:
     g__ = ma.hypot(dy__, dx__)
 
-    return i__, ma.stack((g__, dy__, dx__), axis=0)
+    if flags & F_DERIVE:
+        new_dert___ = dert___ + [ma.stack((g__, dy__, dx__), axis=0)]
+    else:
+        new_dert___ = dert___[:-1] + [ma.stack((g__, dy__, dx__), axis=0)]
 
+    return i__, new_dert___
+
+def assign_inputs(dert___, rng, flags):
+    """Get input and accumulated dx, dy from dert___."""
+    if flags & F_DERIVE:
+        assert rng == 1
+        i__ = dert___[-1][0] # Assign g__ of previous layer to i__
+        shape = tuple(np.subtract(i__.shape, 2)) #
+
+        # Accumulate dx__, dy__ starting from 0:
+        dy__ = ma.zeros(shape)
+        dx__ = ma.zeros(shape)
+    else:
+        i__ = dert___[-2][0] # Assign one layer away g__ to i__
+
+        # Accumulated dx__, dy__ of previous layer:
+        dy__, dx__ = dert___[-1][-2:][central_slice(1)]
+
+    return i__, dy__, dx__
 
 def comp_a(dert___, rng):
     """
@@ -166,22 +178,7 @@ def comp_a(dert___, rng):
     """
 
     # Assign array of comparands:
-    if rng > 1:
-        a__ = dert___[-1][1:3]  # Assign a__ of previous layer
-
-        # Accumulated dax__, day__ of previous layer:
-        day__ = dert___[-1][-4:-2]
-        dax__ = dert___[-1][-2:]
-    else:
-        # Compute angle from g__, dy__, dx__ of previous layer:
-        g__ = dert___[-1][0]
-        dy__, dx__ =  dert___[-1][-2:]
-        a__ = np.stack((dy, dx), axis=0) / g__
-
-        shape = tuple(np.subtract(dy__.shape, rng * 2))
-        # Accumulate dax__, day__ starting from 0:
-        day__ = ma.zeros((2,)+shape)
-        dax__ = ma.zeros((2,)+shape)
+    a__, day__, dax__ = assign_angle_inputs(dert___, rng)
 
     # Compute angle differences:
     da__ = translated_operation(a__, rng, angle_diff)
@@ -191,10 +188,44 @@ def comp_a(dert___, rng):
     dax__ += (da__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Compute ga:
-    ga__ = ma.arctan2(*ma.hypot(day__, dax__)) * PI_TO_BYTE_SCALE
+    ga__ = (ma.arctan2(*ma.hypot(day__, dax__))
+            * PI_TO_BYTE_SCALE)[np.newaxis, ...]
 
-    return a__, ma.stack((ga__, a__, day__, dax__), axis=0)
+    if rng > 1:
+        new_dert___ = dert___[:-1] + [ma.concatenate((ga__,
+                                                      day__,
+                                                      dax__), axis=0)]
+    else:
+        new_dert___ = dert___[:-1] + [
+            ma.concatenate((dert___[-1][:1],
+                            a__,
+                            dert___[-1][1:]), axis=0),
+            ma.concatenate((ga__, day__, dax__), axis=0),
+        ]
 
+    return a__, new_dert___
+# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+def assign_angle_inputs(dert___, rng):
+    """Get comparands and accumulated dax, day from dert___."""
+    if rng > 1:
+        a__ = dert___[-1][1:3]  # Assign a__ of previous layer
+
+        # Accumulated dax__, day__ of previous layer:
+        day__ = dert___[-1][-4:-2][central_slice(1)]
+        dax__ = dert___[-1][-2:][central_slice(1)]
+    else:
+        # Compute angle from g__, dy__, dx__ of previous layer:
+        g__ = dert___[-1][0]
+        dy__, dx__ =  dert___[-1][-2:]
+        a__ = np.stack((dy__, dx__), axis=0) / g__
+
+        shape = tuple(np.subtract(dy__.shape, 2))
+        # Accumulate dax__, day__ starting from 0:
+        day__ = ma.zeros((2,)+shape)
+        dax__ = ma.zeros((2,)+shape)
+
+    return a__, day__, dax__
 # -----------------------------------------------------------------------------
 # Utility functions
 
@@ -235,7 +266,7 @@ def translated_operation(a, rng, operator):
         out = out.swapaxes(dim, dim+1)
 
     return out
-# ----------------------------------------------------------------------
+
 def angle_diff(a2, a1):
     """
     Return the vector, of which angle is the angle between a2 and a1.
