@@ -15,7 +15,7 @@ PI_TO_BYTE_SCALE = 162.33804195373324
 
 # Declare comparison flags:
 F_ANGLE = 0b01
-F_DERIVE = 0b10
+F_DERIV = 0b10
 
 # Declare slicing for vectorized rng comparisons:
 TRANSLATING_SLICES = {
@@ -129,6 +129,8 @@ def comp_i(dert___, rng=1, flags=0):
         Last element is the array of derivatives computed in
         this operation.
     """
+    assert isinstance(dert___[-1], ma.MaskedArray)
+
     # Compare angle flow control:
     if flags & F_ANGLE:
         return comp_a(dert___, rng)
@@ -146,7 +148,7 @@ def comp_i(dert___, rng=1, flags=0):
     # Compute gs:
     g__ = ma.hypot(dy__, dx__)
 
-    if flags & F_DERIVE:
+    if flags & F_DERIV:
         new_dert___ = dert___ + [ma.stack((g__, dy__, dx__), axis=0)]
     else:
         new_dert___ = dert___[:-1] + [ma.stack((g__, dy__, dx__), axis=0)]
@@ -155,7 +157,7 @@ def comp_i(dert___, rng=1, flags=0):
 
 def assign_inputs(dert___, rng, flags):
     """Get input and accumulated dx, dy from dert___."""
-    if flags & F_DERIVE:
+    if flags & F_DERIV:
         assert rng == 1
         i__ = dert___[-1][0] # Assign g__ of previous layer to i__
         shape = tuple(np.subtract(i__.shape, 2)) #
@@ -197,9 +199,9 @@ def comp_a(dert___, rng):
                                                       dax__), axis=0)]
     else:
         new_dert___ = dert___[:-1] + [
-            ma.concatenate((dert___[-1][:1],
-                            a__,
-                            dert___[-1][1:]), axis=0),
+            ma.concatenate((dert___[-1][:1], # Keep g__.
+                            a__, # a__ Replace dy__, dx__.
+                            ), axis=0),
             ma.concatenate((ga__, day__, dax__), axis=0),
         ]
 
@@ -209,7 +211,7 @@ def comp_a(dert___, rng):
 def assign_angle_inputs(dert___, rng):
     """Get comparands and accumulated dax, day from dert___."""
     if rng > 1:
-        a__ = dert___[-1][1:3]  # Assign a__ of previous layer
+        a__ = dert___[-2][-2:]  # Assign a__ of previous layer
 
         # Accumulated dax__, day__ of previous layer:
         day__ = dert___[-1][-4:-2][central_slice(1)]
@@ -218,6 +220,9 @@ def assign_angle_inputs(dert___, rng):
         # Compute angle from g__, dy__, dx__ of previous layer:
         g__ = dert___[-1][0]
         dy__, dx__ =  dert___[-1][-2:]
+
+        g__[g__ == 0] = ma.masked # To avoid devision by zero.
+
         a__ = np.stack((dy__, dx__), axis=0) / g__
 
         shape = tuple(np.subtract(dy__.shape, 2))

@@ -327,8 +327,8 @@ if __name__ == '__main__':
         from utils import *
         draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
-        f_angle = 0b01
-        f_derive = 0b10
+        F_ANGLE = 0b01
+        F_DERIV = 0b10
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])
 

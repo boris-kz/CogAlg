@@ -56,7 +56,7 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
 # Declare comparison flags:
 F_ANGLE = 0b01
-F_DERIVE = 0b10
+F_DERIV = 0b10
 
 # ************ MODULE FUNCTIONS *****************************************************************************************
 # -root_blob_to_sub_blobs()
