@@ -21,10 +21,10 @@ from time import time
     map seg,P -> sub-seg,P for nested intra_comp(dx_g) -> comp_P_, in overlapped blob of combined elongation:  
     
     val_PP_ = 
-    L + |V| + |Dx| + |Dy|  # max Pm,  or core params M, G only, they represent all others? 
+    L + |V| + |Dx| + |Dy|  # max Pm, vs. core params M, G only, represent value of all others? 
     # * orientation coefs: 
     * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # length bias: g match rate, max comp_P rng?    
-    * max((Dy, Dx) / min(Dy, Dx))        # variation bias, if same min, max Ds?  no Mx, My: low bias? 
+    * max(Dy, Dx) / min(Dy, Dx)          # variation bias, if same min, max Ds?  no Mx, My: low bias? 
     * Ave_blob / Ga                      # angle match rate: stability of direction (min, max), thus oriented match?   
     
     eval per blob, too expensive for seg?  no abs_Dx, abs_Dy for comp dert eval: mostly redundant?

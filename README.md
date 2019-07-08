@@ -16,10 +16,9 @@ We need help with design and implementation of this algorithm, in Python or Juli
 
 
 
-Proposed algorithm is a clean design for deep learning: non-neuromorphic, sub-statistical, comparison-first. 
-It performs hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. “Incremental” means that first-level inputs must be minimal in complexity, such as pixels of video or equivalents in other modalities. Symbolic data is second-hand, it should not be used as primary input. 
+Proposed algorithm is a clean-design alternative to deep learning: non-neuromorphic, sub-statistical, comparison-first. It performs hierarchical search for patterns, by cross-comparing inputs over selectively incremental distance and composition. Hence, first-level comparands must be minimal in complexity and distance from each other, such as adjacent pixels of video or equivalents in other modalities. Symbolic data is second-hand, it should not be used as primary input for any self-contained system. 
 
-Pixel comparison must also be minimal in complexity: a lossless transform by inverse arithmetic operations. Initial comparison is by subtraction, similar to edge detection kernel in CNN. But my comparison forms multiple parameters: partial match, miss, dimensions, and accumulates them within patterns: spans of same-sign miss or same-sign match deviation. Each of these summed parameters has independent predictive value, so match and miss between patterns is combined match and miss of their parameters.
+Pixel comparison must also be minimal in complexity: a lossless transform by inverse arithmetic operations. Initial comparison is by subtraction, similar to edge detection kernel in CNN. But my comparison forms multiple derived parameters: partial match, miss, angle,dimensions, and accumulates them within patterns: spans of same-sign miss or same-sign match deviation. Each of these summed parameters has independent predictive value, so match and miss between patterns is combined match and miss of their parameters.
 
 Match is a compression of represented magnitude by replacing larger input with the miss between inputs. Specific match and miss between two variables are determined by the power of comparison operation: 
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss), 
