@@ -10,7 +10,8 @@ Note: Since these operations performed only on multivariate variables,
 import numpy as np
 import numpy.ma as ma
 
-from frame_blobs import comp_pixel
+import frame_blobs
+
 from comp_i import comp_i
 from utils import imread, draw
 
@@ -31,11 +32,16 @@ branch_dict = {
 # -----------------------------------------------------------------------------
 # Adjustable parameters
 
+# Input:
 image_path = "../images/raccoon.jpg"
+
+# Outputs:
+output_path = "../debug/"
+binary_output = True
 
 # Aves:
 init_ave = 20
-angle_ave = 40
+angle_ave = 20
 
 # How ave is increased?
 increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
@@ -45,14 +51,16 @@ increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
 # Recursive comps' pipelines:
 pipe_lines = [
     ("a", [
-        ("r3", []),
+        ("r", [
+            ("r", []),
+        ]),
     ]),
-    ("r3", [
-        ("g3",[
+    ("g", [
+        ("a", []),
+        ("r", [
             ("a", []),
         ]),
     ]),
-    ("g3", []),
 ]
 
 # -----------------------------------------------------------------------------
@@ -66,39 +74,34 @@ def recursive_comp(derts, rng, Ave, fork_sequence, pipes):
 
 def forking(derts, rng, Ave, fork_sequence, branch, subpipes):
     """Forking comps into further forks."""
-    # Identify branch and target rng:
-    if len(branch) == 1:
-        new_rng = 1
+    if branch == 'r':
+        rng += 1
+        fork_sequence = fork_sequence[:-1] + str(rng)  # Replace rng only.
     else:
-        new_rng = int(branch[1:])
-        branch = branch[0]
+        fork_sequence += branch + str(rng)  # Add new derivation.
+        if branch == "a":
+            rng = 1
 
-    if branch != 'r':
-        rng = 1 # Reset rng.
-        _, derts = comp_i(derts,
-                          rng=rng,
-                          flags=branch_dict[branch])
-        Ave = increase_ave(Ave, rng)
-        fork_sequence += branch + str(rng) # Add new derivation.
-        draw_fork(derts, Ave, fork_sequence)
+    Ave = increase_ave(Ave, rng)
+    _, derts = comp_i(derts,
+                      rng=rng,
+                      flags=branch_dict[branch])
 
-    # Increased range comparison:
-    for r in range(rng + 1, new_rng + 1):
-        _, derts = comp_i(derts,
-                          rng=r,
-                          flags=branch_dict['r'])
+    draw_fork(derts, Ave, fork_sequence)
 
-        Ave = increase_ave(Ave, rng)
-        fork_sequence = fork_sequence[:-1] + str(r) # Replace rng only.
-        draw_fork(derts, Ave, fork_sequence)
-
-    recursive_comp(derts, new_rng, Ave, fork_sequence, subpipes)
+    recursive_comp(derts, rng, Ave, fork_sequence, subpipes)
 
 def draw_fork(derts, Ave, fork_sequence):
     """Output fork's gradient image."""
-    if fork_sequence[-2] == "a":
-        Ave = angle_ave
-    draw("../debug/" + fork_sequence, (derts[-1][0] > Ave) * 255)
+    out = derts[-1][0]
+    if binary_output:
+        if fork_sequence[-2] == "a":
+            Ave = angle_ave
+        draw(output_path + fork_sequence, (out > Ave) * 255)
+    else:
+        draw(output_path + fork_sequence,
+             # out)
+             (out - out.min()) / (out.max() - out.min()) * 255)
 
 # -----------------------------------------------------------------------------
 # Main
@@ -106,17 +109,17 @@ def draw_fork(derts, Ave, fork_sequence):
 if __name__ == "__main__":
     # Initial comp:
     image = imread(image_path)
-    input, dert = comp_pixel(image)
-    draw_fork([dert], init_ave, "g0")
-
+    input, dert = frame_blobs.comp_pixel(image)
+    draw_fork([dert], init_ave, "g" + str(frame_blobs.rng))
+    draw(output_path + "p", input)
     # Recursive comps:
     recursive_comp(derts=[
-                       ma.masked_array(input)[np.newaxis, ...],
+                       ma.masked_array(image)[np.newaxis, ...],
                        ma.masked_array(dert),
                    ],
-                   rng=0,
+                   rng=1,
                    Ave=init_ave,
-                   fork_sequence="g0",
+                   fork_sequence="g" + str(frame_blobs.rng),
                    pipes=pipe_lines)
 
 # ----------------------------------------------------------------------

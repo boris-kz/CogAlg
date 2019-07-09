@@ -359,7 +359,7 @@ def kernel(rng):
 
     ky = np.concatenate(
         (
-            np.flip(
+            -np.flip(
                 half_ky[1:],
                 axis=0),
             half_ky,
@@ -394,7 +394,7 @@ class GenCoeffs(object):
         kers = kernel(max_rng)
 
         # Separate into kernels of each rng and flatten them:
-        self._coeffs = list(
+        self._coeffs = reversed(list(
             map(flattened_rim,
                 map(lambda slices: kers[slices],
                     zip(repeat(...),
@@ -404,9 +404,7 @@ class GenCoeffs(object):
                         ),
                     ),
                 )
-        )
-
-        self._coeffs.reverse()
+        ))
 
     def to_file(self, path="coeffs.py"):
         """Write coeffs to text file."""

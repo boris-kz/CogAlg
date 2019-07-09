@@ -36,16 +36,11 @@ Frame =   namedtuple('Frame',   'I, G, Dy, Dx, blob_, i__, dert__')
 
 # Adjustable parameters:
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
-ave = 20
+ave = 20 + 60 * (kwidth == 3)
+rng = int(kwidth == 3)
 DEBUG = True
 
-if kwidth == 3:
-    ave *= 4
-    rng = 1
-elif kwidth == 2:
-    rng = 0
-else:
-    print("kwidth must be 2 or 3!")
+assert kwidth in (2, 3)
 
 # ************ MODULE FUNCTIONS *****************************************************************************************
 # -image_to_blobs()
@@ -81,8 +76,8 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     if kwidth == 2:
 
         # Compare:
-        dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1]) * 0.70710678
-        dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1]) * 0.70710678
+        dy__ = (image[1:, 1:] + image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
+        dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
 
         # Sum pixel values:
         p__ = (image[:-1, :-1]
@@ -91,8 +86,8 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                + image[1:, 1:]) * 0.25
 
     else:
-        ycoef = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
-        xcoef = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
+        ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
+        xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
 
         # Compare by subtracting centered image from translated image:
         d___ = np.array(list(map(lambda trans_slices:
