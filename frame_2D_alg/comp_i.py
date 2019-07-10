@@ -11,7 +11,7 @@ import numpy.ma as ma
 # -----------------------------------------------------------------------------
 # Constants
 
-PI_TO_BYTE_SCALE = 162.33804195373324
+PI_TO_BYTE_SCALE = 114.79033031003102
 
 # Declare comparison flags:
 F_ANGLE = 0b01
@@ -159,9 +159,10 @@ def assign_inputs(dert___, rng, flags):
         dx__ = ma.zeros(shape)
     else:
         i__ = dert___[-2][0] # Assign one layer away g__ to i__
+        size_dif = (i__.shape[-1] - dert___[-1][0].shape[-1]) >> 1
 
         # Accumulated dx__, dy__ of previous layer:
-        dy__, dx__ = dert___[-1][-2:][central_slice(1)]
+        dy__, dx__ = dert___[-1][-2:][central_slice(rng - size_dif)]
 
     return i__, dy__, dx__
 
@@ -182,7 +183,7 @@ def comp_a(dert___, rng):
     dax__ += (da__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Compute ga:
-    ga__ = (ma.arctan2(*ma.hypot(day__, dax__))
+    ga__ = (ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
             * PI_TO_BYTE_SCALE)[np.newaxis, ...]
 
     if rng > 1:
@@ -211,9 +212,15 @@ def assign_angle_inputs(dert___, rng):
     else:
         # Compute angle from g__, dy__, dx__ of previous layer:
         g__ = dert___[-1][0]
-        dy__, dx__ =  dert___[-1][-2:]
+        if len(dert___[-1]) == 3:
+            dy__, dx__ =  dert___[-1][-2:]
+        elif len(dert___[-1]) == 5:
+            dy__, dx__ = ma.arctan2(dert___[-1][-2:-4],
+                                    dert___[-1][-4:])
+        else:
+            raise(ValueError)
 
-        g__[g__ == 0] = ma.masked # To avoid devision by zero.
+        g__[g__ == 0] = ma.masked # To avoid dividing by zero.
 
         a__ = np.stack((dy__, dx__), axis=0) / g__
 

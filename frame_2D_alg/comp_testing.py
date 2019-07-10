@@ -111,7 +111,7 @@ if __name__ == "__main__":
     image = imread(image_path)
     input, dert = frame_blobs.comp_pixel(image)
     draw_fork([dert], init_ave, "g" + str(frame_blobs.rng))
-    draw(output_path + "p", input)
+
     # Recursive comps:
     recursive_comp(derts=[
                        ma.masked_array(image)[np.newaxis, ...],
