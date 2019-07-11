@@ -186,7 +186,7 @@ def map_frame(frame):
         2D array of image's pixel.
     '''
 
-    (I, G, Dy, Dx, blob_), i__, dert__ = frame
+    I, G, Dy, Dx, blob_, i__, dert__ = frame.values()
     height, width = dert__.shape[1:]
     box = (0, height, 0, width)
     image = empty_map(box)
@@ -194,22 +194,22 @@ def map_frame(frame):
     for i, blob in enumerate(blob_):
         blob_map = map_blob(blob)
 
-        over_draw(image, blob_map, blob.box, box)
+        over_draw(image, blob_map, blob['box'], box)
 
     return image
 
 def map_blob(blob, original=False):
     '''Map a single blob into an image.'''
 
-    blob_img = empty_map(blob.box)
+    blob_img = empty_map(blob['box'])
 
-    for seg in blob.seg_:
+    for seg in blob['seg_']:
 
         sub_box = segment_box(seg)
 
         seg_map = map_segment(seg, sub_box, original)
 
-        over_draw(blob_img, seg_map, sub_box, blob.box)
+        over_draw(blob_img, seg_map, sub_box, blob['box'])
 
     return blob_img
 
@@ -220,17 +220,22 @@ def map_segment(seg, box, original=False):
 
     y0, yn, x0, xn = box
 
-    for y, P in enumerate(seg[-1], start= seg[0] - y0):
-        x0P= P[1]
-        x0P -= x0
-        derts_ = P[-1]
-        for x, derts in enumerate(derts_, start=x0P):
+    for y, P in enumerate(seg['Py_'], start= seg['y0'] - y0):
+        derts_ = P['dert_']
+        for x, derts in enumerate(derts_, start=P['x0']-x0):
             if original:
                 seg_img[y, x] = derts[0][0]
             else:
-                seg_img[y, x] = 255 if P[0] else 0
+                seg_img[y, x] = 255 if P['sign'] else 0
 
     return seg_img
+
+def segment_box(seg):
+    y0s = seg['y0']            # y0
+    yns = y0s + seg['Ly']     # Ly
+    x0s = min([P['x0'] for P in seg['Py_']])
+    xns = max([P['x0'] + P['L'] for P in seg['Py_']])
+    return y0s, yns, x0s, xns
 
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     '''Over-write map of sub-structure onto map of parent-structure.'''
@@ -253,13 +258,6 @@ def empty_map(shape):
         width = xn - x0
 
     return np.array([[transparent_val] * width] * height)
-
-def segment_box(seg):
-    y0s = seg[0]            # y0
-    yns = y0s + seg[-2]     # Ly
-    x0s = min([P[1] for P in seg[-1]])
-    xns = max([P[1] + P[-2] for P in seg[-1]])
-    return y0s, yns, x0s, xns
 
 # -----------------------------------------------------------------------------
 # Comparison related

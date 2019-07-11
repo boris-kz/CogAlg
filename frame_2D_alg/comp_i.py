@@ -135,8 +135,8 @@ def comp_i(dert___, rng=1, flags=0):
     d__ = translated_operation(i__, rng, op.sub)
 
     # Decompose and add to corresponding dy and dx:
-    dy__ += (d__ * Y_COEFFS[rng]).sum(axis=-1)
-    dx__ += (d__ * X_COEFFS[rng]).sum(axis=-1)
+    dy__[central_slice(rng)] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
+    dx__[central_slice(rng)] += (d__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Compute gs:
     g__ = ma.hypot(dy__, dx__)
@@ -152,17 +152,15 @@ def assign_inputs(dert___, rng, flags):
     """Get input and accumulated dx, dy from dert___."""
     if flags & F_DERIV:
         i__ = dert___[-1][0] # Assign g__ of previous layer to i__
-        shape = tuple(np.subtract(i__.shape, rng * 2))
 
         # Accumulate dx__, dy__ starting from 0:
-        dy__ = ma.zeros(shape)
-        dx__ = ma.zeros(shape)
+        dy__ = ma.array(np.zeros(i__.shape), mask=rim_mask(i__.shape, rng))
+        dx__ = ma.array(np.zeros(i__.shape), mask=rim_mask(i__.shape, rng))
     else:
         i__ = dert___[-2][0] # Assign one layer away g__ to i__
-        size_dif = (i__.shape[-1] - dert___[-1][0].shape[-1]) >> 1
 
         # Accumulated dx__, dy__ of previous layer:
-        dy__, dx__ = dert___[-1][-2:][central_slice(rng - size_dif)]
+        dy__, dx__ = dert___[-1][-2:]
 
     return i__, dy__, dx__
 
@@ -179,8 +177,8 @@ def comp_a(dert___, rng):
     da__ = translated_operation(a__, rng, angle_diff)
 
     # Decompose and add to corresponding day and dax:
-    day__ += (da__ * Y_COEFFS[rng]).sum(axis=-1)
-    dax__ += (da__ * X_COEFFS[rng]).sum(axis=-1)
+    day__[central_slice(rng)] += (da__ * Y_COEFFS[rng]).sum(axis=-1)
+    dax__[central_slice(rng)] += (da__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Compute ga:
     ga__ = (ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
@@ -205,10 +203,11 @@ def assign_angle_inputs(dert___, rng):
     """Get comparands and accumulated dax, day from dert___."""
     if rng > 1:
         a__ = dert___[-2][-2:]  # Assign a__ of previous layer
+# -----------------------------------------------------------------------------
 
         # Accumulated dax__, day__ of previous layer:
-        day__ = dert___[-1][-4:-2][central_slice(1)]
-        dax__ = dert___[-1][-2:][central_slice(1)]
+        day__ = dert___[-1][-4:-2]
+        dax__ = dert___[-1][-2:]
     else:
         # Compute angle from g__, dy__, dx__ of previous layer:
         g__ = dert___[-1][0]
@@ -224,10 +223,10 @@ def assign_angle_inputs(dert___, rng):
 
         a__ = np.stack((dy__, dx__), axis=0) / g__
 
-        shape = tuple(np.subtract(dy__.shape, 2))
+        shape = (2,) + g__.shape
         # Accumulate dax__, day__ starting from 0:
-        day__ = ma.zeros((2,)+shape)
-        dax__ = ma.zeros((2,)+shape)
+        day__ = ma.array(np.zeros(shape), mask=rim_mask(shape, rng))
+        dax__ = ma.array(np.zeros(shape), mask=rim_mask(shape, rng))
 
     return a__, day__, dax__
 # -----------------------------------------------------------------------------
@@ -238,6 +237,12 @@ def central_slice(i):
     if i < 1:
         return ..., slice(None), slice(None)
     return ..., slice(i, -i), slice(i, -i)
+
+def rim_mask(shape, i):
+    """The opposite of central_slice."""
+    out = np.ones(shape, dtype=bool)
+    out[central_slice(i)] = False
+    return out
 
 def translated_operation(a, rng, operator):
     """

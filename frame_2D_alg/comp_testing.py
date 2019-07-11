@@ -66,19 +66,19 @@ pipe_lines = [
 # -----------------------------------------------------------------------------
 # Functions
 
-def recursive_comp(derts, rng, Ave, fork_sequence, pipes):
+def recursive_comp(derts, rng, Ave, fork_history, pipes):
     """Comparisons under a fork."""
     for branch, subpipes in pipes: # Stop recursion if pipes = [].
-        forking(derts, rng, Ave, fork_sequence,
+        forking(derts, rng, Ave, fork_history,
                 branch, subpipes)
 
-def forking(derts, rng, Ave, fork_sequence, branch, subpipes):
+def forking(derts, rng, Ave, fork_history, branch, subpipes):
     """Forking comps into further forks."""
     if branch == 'r':
         rng += 1
-        fork_sequence = fork_sequence[:-1] + str(rng)  # Replace rng only.
+        fork_history = fork_history[:-1] + str(rng)  # Replace rng only.
     else:
-        fork_sequence += branch + str(rng)  # Add new derivation.
+        fork_history += branch + str(rng)  # Add new derivation.
         if branch == "a":
             rng = 1
 
@@ -87,19 +87,19 @@ def forking(derts, rng, Ave, fork_sequence, branch, subpipes):
                       rng=rng,
                       flags=branch_dict[branch])
 
-    draw_fork(derts, Ave, fork_sequence)
+    draw_fork(derts, Ave, fork_history)
 
-    recursive_comp(derts, rng, Ave, fork_sequence, subpipes)
+    recursive_comp(derts, rng, Ave, fork_history, subpipes)
 
-def draw_fork(derts, Ave, fork_sequence):
+def draw_fork(derts, Ave, fork_history):
     """Output fork's gradient image."""
     out = derts[-1][0]
     if binary_output:
-        if fork_sequence[-2] == "a":
+        if fork_history[-2] == "a":
             Ave = angle_ave
-        draw(output_path + fork_sequence, (out > Ave) * 255)
+        draw(output_path + fork_history, (out > Ave) * 255)
     else:
-        draw(output_path + fork_sequence,
+        draw(output_path + fork_history,
              # out)
              (out - out.min()) / (out.max() - out.min()) * 255)
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
                    ],
                    rng=1,
                    Ave=init_ave,
-                   fork_sequence="g" + str(frame_blobs.rng),
+                   fork_history="g" + str(frame_blobs.rng),
                    pipes=pipe_lines)
 
 # ----------------------------------------------------------------------
