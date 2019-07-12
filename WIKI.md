@@ -1,6 +1,6 @@
 Welcome to the CogAlg wiki!
 
-Much of the programming is currently done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg), according to the principles introduced in README. I edit and paste his updates here for an overview, but his repository is best for running code. The code is divided into three self-contained folders:
+Most of the programming is currently done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg), according to the principles introduced in README. I edit and paste his updates here for an overview, but his repository is best for running code. The code is divided into three self-contained folders:
 
 **line_1D_alg:**
 
@@ -14,7 +14,7 @@ Much of the programming is currently done by [Khanh Nguyen](https://github.com/k
 
   - [intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp.py) is called by intra_blob to perform comparison over extended range or higher derivation, and form corresponding master blob. Each intra-blob() may call two layers of intra_comp(): first for comparison over input parameter, then for comparison over angle of gradient derived by the first comparison. Both define corresponding sub_blobs: contiguous areas of same-sign deviation of resulting gradient.
    
-    - [compare_derts](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/compare_derts.py) compares input parameter, or computes and compares angle of resulting gradient, to compute corresponding input gradient or angle gradient, over defined range.
+    - [comp_i](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_i.py) compares input parameter, or computes and compares angle of resulting gradient, to compute corresponding input gradient or angle gradient, over defined range.
   - [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): a draft for comparison between vertically consecutive Ps: horizontal slices of blob segments. This will be similar to higher levels of 1D alg.
 
 - inter_blob:
@@ -23,7 +23,7 @@ Much of the programming is currently done by [Khanh Nguyen](https://github.com/k
   
 **video_3D_alg:**
 
-- [video_draft()](https://github.com/boris-kz/CogAlg/blob/master/video_3D_alg/video_draft.py) is a 3D extension of outdated frame_blobs. Eventually, it will extend all of 2D alg with time dimension. This version will hopefully be fully recursive and effective in real world.
+- [video_draft()](https://github.com/boris-kz/CogAlg/blob/master/video_3D_alg/video_draft.py) is obsolete 3D extension of frame_blobs. Eventually, it will extend all of 2D alg with time dimension. This version will hopefully be fully recursive and effective in real world.
 
 Higher levels for each D-cycle alg will process discontinuous search among full-D patterns.
 Complete hierarchical algorithm will have two-level code: 

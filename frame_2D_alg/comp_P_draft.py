@@ -14,19 +14,19 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    root blob for comp_P is formed by intra_comp(dx), ~ hypot_g without g compute, 
-    blob redefine per core: dx in der+ blob, v(!+ig) in rng+ blob: total v~g, not oriented, ig is a different dim?
+    comp_P blob formed by intra_comp(dx, no g calc) -> sub_blob per dx in der+ blob | v in rng+ blob -=ig: different dim?
+    core comp within P -> vdP, ddP, ortho?  then blobs redefine per ddx, dvx, vd, vv, etc.? recursively -> nested PPs?
     
-    core comp within P -> vdP, ddP, ortho? blobs redefine per ddx, dvx, vd, vv, etc.? recursively -> nested PPs?
-    map seg,P -> sub-seg,P for nested intra_comp(dx_g) -> comp_P_, in overlapped blob of combined elongation:  
+    map seg,P -> sub-seg,P for nested intra_comp(dx_g)  
+    -> comp_P_ eval by combined overlapped-blob elongation:  
     
     val_PP_ = 
-    L + |V| + |Dx| + |Dy|  # max Pm, vs. core params M, G only, represent value of all others? 
-    # * orientation coefs: 
-    * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # length bias: g match rate, max comp_P rng?    
-    * max(Dy, Dx) / min(Dy, Dx)          # variation bias, if same min, max Ds?  no Mx, My: low bias? 
-    * Ave_blob / Ga                      # angle match rate: stability of direction (min, max), thus oriented match?   
+    V + G: core params represent value of all others, no max Pm = L + |V| + |Dx| + |Dy|: redundant and coef filtered? 
+    # orientation coefs: 
+    * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # dim bias: g match rate, max comp_P rng?    
+    * max(Dy, Dx) / min(Dy, Dx)    # variation bias (no Mx, My: low bias?); both biases are signed and may cancel-out 
     
+    * Ave_blob / Ga  # angle match rate: stability of variation bias -> secondary comp( d | ortho_d)?   
     eval per blob, too expensive for seg?  no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
 '''
 ave = 20

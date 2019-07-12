@@ -54,7 +54,7 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
     represented per fork if tree reorder, else redefined at each access?
 '''
 
-def intra_blob(root_blob, rng, fia, eval_fork_, Ave_blob, Ave):  # fia (flag ia) selects input a | g in higher dert
+def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) selects input a | g in higher dert
 
     # two-level intra_comp eval per root_blob.sub_blob, deep intra_blob fork eval per input blob to last intra_comp
     # local fork's blob is initialized in prior intra_comp's feedback(), no lower Layers yet
@@ -62,42 +62,48 @@ def intra_blob(root_blob, rng, fia, eval_fork_, Ave_blob, Ave):  # fia (flag ia)
     for blob in root_blob.sub_blob_:  # sub_blobs are evaluated for comp_fork, add nested fork indices?
         if blob.Dert[0] > Ave_blob:  # noisy or directional G | Ga: > intra_comp cost: rel root blob + sub_blob_
 
-            Ave_blob = intra_comp(blob, rng, fia, 0, Ave_blob, Ave)  # fa=0, Ave_blob adjust by n_sub_blobs
+            Ave_blob = intra_comp(blob, rng, 0, Ave_blob, Ave)  # fa=0, Ave_blob adjust by n_sub_blobs
             Ave_blob *= rave  # estimated cost of redundant representations per blob
             Ave += ave  # estimated cost per dert
 
             for sub_blob in blob.sub_blob_:  # sub_sub_blobs evaluated for root_dert angle calc & comp
                 if sub_blob.Dert[0] > Ave_blob:  # G > intra_comp cost;  no independent angle value
 
-                    Ave_blob = intra_comp(sub_blob, rng, fia, 1, Ave_blob, Ave)  # fa=1: same as fia?
+                    Ave_blob = intra_comp(sub_blob, rng, 1, Ave_blob, Ave)  # fa=1: same as fia?
                     Ave_blob *= rave  # Ave_blob adjusted by n_sub_blobs
                     Ave += ave
                     rdn = 1
                     G = sub_blob.high_Derts[-2][0]         # input gradient
                     Gg, Mg = sub_blob.high_Derts[-1][0,2]  # from first intra_comp in current-intra_blob
-                    Gag = sub_blob.Dert[0]     # from last intra_comp, no m_angle ~ no m_brightness: mag != value
+                    Ga = sub_blob.Dert[0]      # from last intra_comp, no m_angle ~ no m_brightness: mag != value
 
-                    eval_fork_ += [      # sort per append?
-                        (G+Mg, 1, 0),    # rng = input rng, fia=0;  est. match of input gradient at rng+1
-                        (G+Mg- ave_blob, 1, 1),  # -root_blob_cost; est. match of angle of input gradient at rng+1
-                        (Gg, rng, 0),    # rng = kernel rng, fia=0; est. match of gg at rng*2
-                        (Gag, rng, 0)    # rng = kernel rng, fia=0; est. match of gag at rng*2
+                    eval_fork_ += [  # sort per append?
+                        (G+Mg, 1),   # est. match of input gradient at rng+1
+                        (Gg, rng+1), # est. match of gg at rng+rng+1
+                        (Ga, rng+1)  # est. match of ga at rng+rng+1
                     ]
                     new_eval_fork_ = []  # forks recycled for next intra_blob
-                    for val, irng, fia in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+                    for val, irng in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
                         if val > ave_intra_blob * rdn:  # cost of default eval_sub_blob_ per intra_blob
                            rdn += 1  # fork rdn = fork index + 1
                            rng += irng  # incremented by input rng, for current and recycled forks, or in next intra_blob?
                            Ave_blob += ave_blob * rave * rdn
                            Ave += ave * rdn
-                           new_eval_fork_ += [(val, rng, fia)]
-                           intra_blob(sub_blob, rng, fia, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers[-1] += [fork]
+                           new_eval_fork_ += [(val, rng)]
+                           intra_blob(sub_blob, rng, new_eval_fork_, Ave_blob, Ave)  # root_blob.Layers[-1] += [fork]
 
                         else:
                             break
-    ''' 
-    rng+ val = deviation of g + mg, from comp_g -> mg, gg: summed over rng in same Dert, new Dert per der+ only 
+    '''
+    parallel forks: 
+    i rng+ / v(i+m), i & m = 0 if i is p, single exposed input per fork
+    g der+ / vg: initial fork, but then more coarse?
+    ga der+/ vga, rng = der+'rng? 
+    
+    no (G+Mg- ave_blob, 1, 1): comp a if same-rng comp i, no indep value, replaced by ga as i is replaced by g?
+        
+    from comp_g -> mg, gg: summed over rng in same Dert, new Dert per der+ only 
     m is unsigned, weak bias: no ma, mx,my, mA: lags ga? no kernel buff: olp, no Mg -> Mgg: g is not common 
      
     dderived match beyond I and A: dev (min) g -> g_blob ( +match mg -> rg_blob, +miss gg -> gg_blob

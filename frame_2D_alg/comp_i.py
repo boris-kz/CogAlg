@@ -1,6 +1,6 @@
 '''
-Compare a|g of input derts to a|g of derts in the perimeter of surrounding square,
-side of the square = rng * 2 + 1
+Comparison of chosen parameter of derts__ (a or g)
+over predetermined range (determined by kernel).
 '''
 
 import operator as op
@@ -9,13 +9,15 @@ import numpy as np
 import numpy.ma as ma
 
 # -----------------------------------------------------------------------------
-PI_BYTE = 162.33804195373324
+# Constants
 
-# comparison flags:
+PI_TO_BYTE_SCALE = 114.79033031003102
+
+# Declare comparison flags:
 F_ANGLE = 0b01
 F_DERIV = 0b10
 
-# slices for vectorized rng comparisons:
+# Declare slicing for vectorized rng comparisons:
 TRANSLATING_SLICES = {
     1:[
         (Ellipsis, slice(None, -2, None), slice(None, -2, None)),
@@ -73,59 +75,68 @@ TRANSLATING_SLICES = {
     ],
 }
 
-# coefficients for decomposing d into dy and dx:
+# Declare coefficients for decomposing d into dy and dx:
 Y_COEFFS = {
-    3:np.array([0.70710678, 0.83205029, 0.9486833 , 1.        , 0.9486833 ,
-                0.83205029, 0.70710678, 0.5547002 , 0.31622777, 0.        ,
-                0.31622777, 0.5547002 , 0.70710678, 0.83205029, 0.9486833 ,
-                1.        , 0.9486833 , 0.83205029, 0.70710678, 0.5547002 ,
-                0.31622777, 0.        , 0.31622777, 0.5547002 ]),
-    2:np.array([0.70710678, 0.89442719, 1.        , 0.89442719, 0.70710678,
-                0.4472136 , 0.        , 0.4472136 , 0.70710678, 0.89442719,
-                1.        , 0.89442719, 0.70710678, 0.4472136 , 0.        ,
-                0.4472136 ]),
-    1:np.array([0.70710678, 1.        , 0.70710678, 0.        , 0.70710678,
-                1.        , 0.70710678, 0.        ]),
+1:np.array([-0.5, -1. , -0.5,  0. ,  0.5,  1. ,  0.5,  0. ]),
+2:np.array([-0.25, -0.4 , -0.5 , -0.4 , -0.25, -0.2 ,  0.  ,  0.2 ,  0.25,
+            0.4 ,  0.5 ,  0.4 ,  0.25,  0.2 ,  0.  , -0.2 ]),
+3:np.array([-0.16666667, -0.23076923, -0.3       , -0.33333333, -0.3       ,
+            -0.23076923, -0.16666667, -0.15384615, -0.1       ,  0.        ,
+            0.1       ,  0.15384615,  0.16666667,  0.23076923,  0.3       ,
+            0.33333333,  0.3       ,  0.23076923,  0.16666667,  0.15384615,
+            0.1       ,  0.        , -0.1       , -0.15384615]),
 }
-
 X_COEFFS = {
-    3:np.array([0.70710678, 0.5547002 , 0.31622777, 0.        , 0.31622777,
-                0.5547002 , 0.70710678, 0.83205029, 0.9486833 , 1.        ,
-                0.9486833 , 0.83205029, 0.70710678, 0.5547002 , 0.31622777,
-                0.        , 0.31622777, 0.5547002 , 0.70710678, 0.83205029,
-                0.9486833 , 1.        , 0.9486833 , 0.83205029]),
-    2:np.array([0.70710678, 0.4472136 , 0.        , 0.4472136 , 0.70710678,
-                0.89442719, 1.        , 0.89442719, 0.70710678, 0.4472136 ,
-                0.        , 0.4472136 , 0.70710678, 0.89442719, 1.        ,
-                0.89442719]),
-    1:np.array([0.70710678, 0.        , 0.70710678, 1.        , 0.70710678,
-                0.        , 0.70710678, 1.        ]),
+1:np.array([-0.5,  0. ,  0.5,  1. ,  0.5,  0. , -0.5, -1. ]),
+2:np.array([-0.25, -0.2 ,  0.  ,  0.2 ,  0.25,  0.4 ,  0.5 ,  0.4 ,  0.25,
+            0.2 ,  0.  , -0.2 , -0.25, -0.4 , -0.5 , -0.4 ]),
+3:np.array([-0.16666667, -0.15384615, -0.1       ,  0.        ,  0.1       ,
+             0.15384615,  0.16666667,  0.23076923,  0.3       ,  0.33333333,
+            0.3       ,  0.23076923,  0.16666667,  0.15384615,  0.1       ,
+            0.        , -0.1       , -0.15384615, -0.16666667, -0.23076923,
+            -0.3       , -0.33333333, -0.3       , -0.23076923]),
 }
 
 # -----------------------------------------------------------------------------
+# Functions
 
 def comp_i(dert___, rng=1, flags=0):
     """
-    Select compared parameter in dert in dert__:
+    Determine which parameter from dert__ is the input,
+    then compare the input over predetermined range
+    Parameters
     ----------
-    dert__ : MaskedArray  #  Contains input array.
-    rng : int,  flags : int, default: 0   # translation into compared parameter
-    Return:
+    dert__ : MaskedArray
+        Contains input array.
+    rng : int
+        Determine translation between comparands.
+    flags : int, default: 0
+        Indicate which params in dert__ being used as input.
+    Return
     ------
-    i__ : MaskedArray   # for summing in form_P_().
-    new_dert___ : list  # Last element is array of resulting derivatives
+    i__ : MaskedArray
+        Input array for summing in form_P_().
+    new_dert___ : list
+        Last element is the array of derivatives computed in
+        this operation.
     """
+    assert isinstance(dert___[-1], ma.MaskedArray)
 
+    # Compare angle flow control:
     if flags & F_ANGLE:
         return comp_a(dert___, rng)
 
-    i__, dy__, dx__ = get_new_gdert(dert___, rng, flags)
-    d__ = comp_translated(i__, rng, op.sub)  # Compare translated inputs
+    # Assign input array:
+    i__, dy__, dx__ = assign_inputs(dert___, rng, flags)
 
-    # Decompose and add to corresponding dy and dx per extended square:
+    # Compare inputs:
+    d__ = translated_operation(i__, rng, op.sub)
 
-    dy__ += (d__ * Y_COEFFS[rng]).sum(axis=-1)
-    dx__ += (d__ * X_COEFFS[rng]).sum(axis=-1)
+    # Decompose and add to corresponding dy and dx:
+    dy__[central_slice(rng)] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
+    dx__[central_slice(rng)] += (d__ * X_COEFFS[rng]).sum(axis=-1)
+
+    # Compute gs:
     g__ = ma.hypot(dy__, dx__)
 
     if flags & F_DERIV:
@@ -135,35 +146,41 @@ def comp_i(dert___, rng=1, flags=0):
 
     return i__, new_dert___
 
-def get_new_gdert(dert___, rng, flags):  # Get input g and accumulated dx, dy from dert___
-
+def assign_inputs(dert___, rng, flags):
+    """Get input and accumulated dx, dy from dert___."""
     if flags & F_DERIV:
-        assert rng == 1
-        i__ = dert___[-1][0]  # i__ is g__ of previous layer
-        shape = tuple(np.subtract(i__.shape, 2))
+        i__ = dert___[-1][0] # Assign g__ of previous layer to i__
 
-        # accumulate dx__, dy__ starting from 0:
-        dy__ = ma.zeros(shape)
-        dx__ = ma.zeros(shape)
+        # Accumulate dx__, dy__ starting from 0:
+        dy__ = ma.array(np.zeros(i__.shape), mask=rim_mask(i__.shape, rng))
+        dx__ = ma.array(np.zeros(i__.shape), mask=rim_mask(i__.shape, rng))
     else:
-        i__ = dert___[-2][0]  # select g__ one layer away from i__
-        dy__, dx__ = dert___[-1][-2:][central_slice(1)]  # accumulated dx and dy
+        i__ = dert___[-2][0] # Assign one layer away g__ to i__
+
+        # Accumulated dx__, dy__ of previous layer:
+        dy__, dx__ = dert___[-1][-2:]
 
     return i__, dy__, dx__
 
 def comp_a(dert___, rng):
     """
-    As comp_i but comparands are 2D vectors, forms differences in angle.
+    Same functionality as comp_i except for comparands are 2D vectors
+    instead of scalars, and differences here are differences in angle.
     """
-    a__, day__, dax__ = get_new_adert(dert___, rng)
-    da__ = comp_translated(a__, rng, angle_diff)  # Compute angle differences
+
+    # Assign array of comparands:
+    a__, day__, dax__ = assign_angle_inputs(dert___, rng)
+
+    # Compute angle differences:
+    da__ = translated_operation(a__, rng, angle_diff)
 
     # Decompose and add to corresponding day and dax:
-    day__ += (da__ * Y_COEFFS[rng]).sum(axis=-1)
-    dax__ += (da__ * X_COEFFS[rng]).sum(axis=-1)
+    day__[central_slice(rng)] += (da__ * Y_COEFFS[rng]).sum(axis=-1)
+    dax__[central_slice(rng)] += (da__ * X_COEFFS[rng]).sum(axis=-1)
 
-    ga__ = (ma.arctan2(*ma.hypot(day__, dax__))
-            * PI_BYTE)[np.newaxis, ...]
+    # Compute ga:
+    ga__ = (ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
+            * PI_TO_BYTE_SCALE)[np.newaxis, ...]
 
     if rng > 1:
         new_dert___ = dert___[:-1] + [ma.concatenate((ga__,
@@ -171,36 +188,46 @@ def comp_a(dert___, rng):
                                                       dax__), axis=0)]
     else:
         new_dert___ = dert___[:-1] + [
-            ma.concatenate((dert___[-1][:1],
-                            a__,
-                            dert___[-1][1:]), axis=0),
+            ma.concatenate((dert___[-1][:1], # Keep g__.
+                            a__, # a__ Replace dy__, dx__.
+                            ), axis=0),
             ma.concatenate((ga__, day__, dax__), axis=0),
         ]
+
     return a__, new_dert___
 
-# ----------------------------------------------------------------------
+
+def assign_angle_inputs(dert___, rng):
+    """Get comparands and accumulated dax, day from dert___."""
+    if rng > 1:
+        a__ = dert___[-2][-2:]  # Assign a__ of previous layer
 # -----------------------------------------------------------------------------
 
-def get_new_adert(dert___, rng):  # get angle and accumulated dax, day from dert___
-
-    if rng > 1:  # select angle, dax__, day__ accumulated on previous layer:
-        a__ = dert___[-1][1:3]
-        day__ = dert___[-1][-4:-2][central_slice(1)]
-        dax__ = dert___[-1][-2:][central_slice(1)]
-
-    else:   # compute angle from g__, dy__, dx__:
+        # Accumulated dax__, day__ of previous layer:
+        day__ = dert___[-1][-4:-2]
+        dax__ = dert___[-1][-2:]
+    else:
+        # Compute angle from g__, dy__, dx__ of previous layer:
         g__ = dert___[-1][0]
-        dy__, dx__ =  dert___[-1][-2:]
+        if len(dert___[-1]) == 3:
+            dy__, dx__ =  dert___[-1][-2:]
+        elif len(dert___[-1]) == 5:
+            dy__, dx__ = ma.arctan2(dert___[-1][-2:-4],
+                                    dert___[-1][-4:])
+        else:
+            raise(ValueError)
+
+        g__[g__ == 0] = ma.masked # To avoid dividing by zero.
+
         a__ = np.stack((dy__, dx__), axis=0) / g__
 
-        shape = tuple(np.subtract(dy__.shape, 2))
-        # accumulate dax__, day__ starting from 0:
-        day__ = ma.zeros((2,)+shape)
-        dax__ = ma.zeros((2,)+shape)
+        shape = (2,) + g__.shape
+        # Accumulate dax__, day__ starting from 0:
+        day__ = ma.array(np.zeros(shape), mask=rim_mask(shape, rng))
+        dax__ = ma.array(np.zeros(shape), mask=rim_mask(shape, rng))
 
     return a__, day__, dax__
 # -----------------------------------------------------------------------------
-
 # Utility functions
 
 def central_slice(i):
@@ -209,19 +236,37 @@ def central_slice(i):
         return ..., slice(None), slice(None)
     return ..., slice(i, -i), slice(i, -i)
 
-def comp_translated(a, rng, operator):
+def rim_mask(shape, i):
+    """The opposite of central_slice."""
+    out = np.ones(shape, dtype=bool)
+    out[central_slice(i)] = False
+    return out
+
+def translated_operation(a, rng, operator):
     """
-    Return array of differences between central slice and translated slices
+    Return an array of corresponding results from operations between
+    translated slices and central slice of an array.
+    Parameters
     ----------
-    a : ndarray  # Input array
-    rng : int   # Range of translations
-    operator : function  # Binary operator computing the differences
-    out : ndarray  # computed differences are added to each translated slice.
+    a : ndarray
+        Input array.
+    rng : int
+        Range of translations.
+    operator : function
+        Binary operator of which the result between central
+        and translated slices are returned.
+    Return
+    ------
+    out : ndarray
+        Array of results where additional dimension correspondent
+        to each translated slice.
     """
     out = ma.masked_array([*map(lambda slices:
                                     operator(a[slices],
                                              a[central_slice(rng)]),
                                 TRANSLATING_SLICES[rng])])
+
+    # Rearrange axes:
     for dim in range(out.ndim - 1):
         out = out.swapaxes(dim, dim+1)
 
@@ -229,12 +274,16 @@ def comp_translated(a, rng, operator):
 
 def angle_diff(a2, a1):
     """
-    Return angle between a2 and a1, works in arrays, for 2D vectors
+    Return the vector, of which angle is the angle between a2 and a1.
+    Can be applied to arrays.
+    Note: This only works for 2D vectors.
     """
+    # Extend a1 vector(s) into basis/bases:
     y, x = a1
     bases = [(x, -y), (y, x)]
-    transform_mat = ma.array(bases)  # Extend a1 vector(s) into basis/bases
+    transform_mat = ma.array(bases)
 
+    # Apply transformation:
     da = (transform_mat * a2).sum(axis=1)
 
     return da
