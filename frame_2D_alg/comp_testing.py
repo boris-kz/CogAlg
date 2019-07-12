@@ -49,18 +49,33 @@ increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
 # increase_ave = lambda ave, rng: ave
 
 # Recursive comps' pipelines:
-pipe_lines = [
-    ("a", [
-        ("r", [
+pipe_lines = [ # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
+    ("g", [
+        ("g", [
+            ("g", []),
+            ("a", []),
             ("r", []),
         ]),
-    ]),
-    ("g", [
-        ("a", []),
+        ("a", [
+            ("g"),
+            ("a"),
+        ]),
         ("r", [
-            ("a", []),
+            ("g"),
+            ("a"),
         ]),
     ]),
+    ("a", [  # actually ga
+        ("g", [
+            ("g", []),
+            ("a", []),
+            ("r", []),
+        ]),
+        ("a", [
+            ("g", []),
+            ("a", []),
+        ]),
+    ])
 ]
 
 # -----------------------------------------------------------------------------

@@ -302,11 +302,14 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
         blob.pop('open_segments')
         blob.update(box=(y0, yn, x0, xn), # boundary box
+                    slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                     rng=rng,
                     mask=mask,
                     dert___=[frame['i__'], frame['dert__']],
                     hLayers=I,
-                    slices=(slice(y0, yn), slice(x0, xn)))
+                    root_blob=blob,
+                    lLayers=[],
+                    )
         frame['blob_'].append(blob)
 
         """
