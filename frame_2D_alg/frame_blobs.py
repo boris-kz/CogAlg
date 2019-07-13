@@ -26,6 +26,7 @@ from time import time
 from collections import deque, namedtuple
 
 import numpy as np
+import intra_blob
 
 # -----------------------------------------------------------------------------
 # Structures
@@ -38,6 +39,7 @@ Frame = namedtuple('Frame', 'I, G, Dy, Dx, blob_, i__, dert__')
 
 # -----------------------------------------------------------------------------
 # Adjustable parameters
+image_path = "./../images/raccoon.jpg"
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 20 + 60 * (kwidth == 3)
 rng = int(kwidth == 3)
@@ -54,14 +56,15 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = dict(I=0, G=0, Dy=0, Dx=0, blob_=[], i__=i__, dert__=dert__) # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    height, width = image.shape
+    # height, width = image.shape
+    P__ = intra_blob.form_P__(0, i__[0], dert__, ave)
+    for y, P_ in enumerate(P__):
+    # for y in range(height - kwidth + 1):  # first and last row are discarded
+    #     P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
+        P_ = scan_P_(P_, seg_, form_blob_func=form_blob, frame=frame)
+        seg_ = form_seg_(y, P_, form_blob_func=form_blob, frame=frame)
 
-    for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, frame)
-        seg_ = form_seg_(y, P_, frame)
-
-    while seg_:  form_blob(seg_.popleft(), frame)  # frame ends, last-line segs are merged into their blobs
+    while seg_:  form_blob(seg_.popleft(), frame=frame)  # frame ends, last-line segs are merged into their blobs
     return frame  # frame of 2D patterns
 
 
@@ -143,7 +146,7 @@ def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and t
     return P_
 
 
-def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
+def scan_P_(P_, seg_, form_blob_func, **kwargs):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
 
     new_P_ = deque()
 
@@ -170,11 +173,11 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     if seg['roots'] != 1:  # if roots != 1: terminate seg
-                        form_blob(seg, frame)
+                        form_blob_func(seg, **kwargs)
                     break
             else:  # no next-P overlap
                 if seg['roots'] != 1:  # if roots != 1: terminate seg
-                    form_blob(seg, frame)
+                    form_blob_func(seg, **kwargs)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
@@ -186,12 +189,12 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob(seg_.popleft(), frame)  # roots always == 0
+        form_blob_func(seg_.popleft(), **kwargs)  # roots always == 0
 
     return new_P_
 
 
-def form_seg_(y, P_, frame):
+def form_seg_(y, P_, form_blob_func, **kwargs):
     """Convert or merge every P into segment, merge blobs."""
     new_seg_ = deque()
 
@@ -233,11 +236,11 @@ def form_seg_(y, P_, frame):
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0]['roots'] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
+                        form_blob_func(fork_[0], **kwargs)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork['roots'] == 1:
-                            form_blob(fork, frame)
+                            form_blob_func(fork, **kwargs)
 
                         if not fork['blob'] is blob:
                             Dert, s, box, seg_, open_segs = fork['blob'].values()  # merged blob
@@ -333,7 +336,7 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
 
 if __name__ == '__main__':
     from utils import imread
-    image = imread('./../images/raccoon_eye.jpg').astype(int)
+    image = imread(image_path).astype(int)
 
     start_time = time()
     frame_of_blobs = image_to_blobs(image)

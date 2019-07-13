@@ -37,11 +37,14 @@
 
 import operator as op
 
+from collections import deque
 from functools import reduce
+from itertools import groupby, starmap
 
 import numpy as np
 import numpy.ma as ma
 
+from frame_blobs import scan_P_, form_seg_
 from comp_i import comp_i
 
 # -----------------------------------------------------------------------------
@@ -77,42 +80,65 @@ def root_blob_to_sub_blobs(i__, dert___, root_blob, Ave):
     dert__ = dert___[-1][root_blob.slices]
     y0, yn, x0, xn = root_blob['box']
 
+    P__ = form_P__(x0, i__, dert__, Ave) # horizontal clustering
     seg_ = deque()  # buffer of running segments
+    for y, P_ in enumerate(P__, start=y0):
+        P_ = scan_P_(P_, seg_, form_blob_func=form_blob, root_blob=root_blob, rng=rng)
+        seg_ = form_seg_(y, P_, form_blob_func=form_blob, root_blob=root_blob, rng=rng)
 
-    for y in range(y0, yn):  # first and last row are discarded
-        P_ = form_P_(x0, i__[y], dert__[:, y].T, Ave)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, root_blob, rng)
-        seg_ = form_seg_(y, P_, root_blob, rng)
-
-    while seg_:  form_blob(seg_.popleft(), root_blob)  # last-line segs are merged into their blobs
+    while seg_:  form_blob(seg_.popleft(), root_blob, rng)  # last-line segs are merged into their blobs
 
     return Ave_blob
 
 
 def form_P_(x0, i_, dert_, Ave):
     g = dert_[:, 0]
+
+    # Group same-sign adjacent derts: (sign, index, length)
     groups = [(sign, next(group)[0], len([*group]) + 1)
-              for sign, group in groupby(enumerate(g), lambda item: item[1][0] > Ave)
+              for sign, group in groupby(enumerate(g), lambda item: item[1] > Ave)
               if sign is not ma.masked]
 
-    P_ = [dict(sign=s,
-               x0=x+x0,
-               I=i_[x : x+L].sum(),
-               G=dert_[x : x+L, 0].sum(),
-               Dy=dert_[x : x+L, 1].sum(),
-               Dx=dert_[x : x+L, 2].sum(),
-               L=L,
-               dert_=dert_[x : x+L]) for s, x, L in groups]
+    # build list of
+    P_ = deque(dict(sign=s,
+                    x0=x+x0,
+                    I=i_[x : x+L].sum(),
+                    G=dert_[x : x+L, 0].sum() - Ave * L,
+                    Dy=dert_[x : x+L, 1].sum(),
+                    Dx=dert_[x : x+L, 2].sum(),
+                    L=L,
+                    dert_=dert_[x : x+L])
+               for s, x, L in groups)
 
     return P_
 
-def scan_P_():
-    return
+def form_P__(x0, i__, dert__, Ave):
+    g__ = dert__[0, :, :]
 
-def form_seg_():
-    return
+    groups_ = starmap(lambda y, g_:
+                      (y,
+                       [(sign, next(group)[0], len(list(group)) + 1)
+                        for sign, group in groupby(enumerate(g_),
+                                                   lambda x: x[1] > Ave)
+                        if sign is not ma.masked]
+                       ),
+                      enumerate(g__))
 
-def form_blob()
+    P__ = [deque(dict(sign=s,
+                      x0=x+x0,
+                      I=i_[x : x+L].sum(),
+                      G=dert_[0, x : x+L].sum() - Ave * L,
+                      Dy=dert_[1, x : x+L].sum(),
+                      Dx=dert_[2, x : x+L].sum(),
+                      L=L,
+                      dert_=dert_[:, x : x+L].T,
+                      )
+                 for s, x, L in groups)
+           for i_, dert_, (y, groups) in zip(i__, dert__.swapaxes(0, 1), groups_)]
+
+    return P__
+
+def form_blob(term_seg, root_blob, rng):
     return
 
 

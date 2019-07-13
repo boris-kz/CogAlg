@@ -57,12 +57,12 @@ pipe_lines = [ # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
             ("r", []),
         ]),
         ("a", [
-            ("g"),
-            ("a"),
+            ("g", []),
+            ("a", []),
         ]),
         ("r", [
-            ("g"),
-            ("a"),
+            ("g", []),
+            ("a", []),
         ]),
     ]),
     ("a", [  # actually ga
