@@ -56,11 +56,11 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = dict(I=0, G=0, Dy=0, Dx=0, blob_=[], i__=i__, dert__=dert__) # params, blob_, dert__
     seg_ = deque()  # buffer of running segments
 
-    # height, width = image.shape
-    P__ = intra_blob.form_P__(0, i__[0], dert__, ave)
-    for y, P_ in enumerate(P__):
-    # for y in range(height - kwidth + 1):  # first and last row are discarded
-    #     P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
+    height, width = image.shape
+    # P__ = intra_blob.form_P__(0, i__[0], dert__, ave)
+    # for y, P_ in enumerate(P__):
+    for y in range(height - kwidth + 1):  # first and last row are discarded
+        P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, form_blob_func=form_blob, frame=frame)
         seg_ = form_seg_(y, P_, form_blob_func=form_blob, frame=frame)
 

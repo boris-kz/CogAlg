@@ -80,29 +80,41 @@ def root_blob_to_sub_blobs(i__, dert___, root_blob, Ave):
     dert__ = dert___[-1][root_blob.slices]
     y0, yn, x0, xn = root_blob['box']
 
-    P__ = form_P__(x0, i__, dert__, Ave) # horizontal clustering
-    seg_ = deque()  # buffer of running segments
+    P__ = form_P__(x0, i__, dert__, Ave) # Horizontal clustering
+    seg_ = deque()  # Buffer of running segments
     for y, P_ in enumerate(P__, start=y0):
-        P_ = scan_P_(P_, seg_, form_blob_func=form_blob, root_blob=root_blob, rng=rng)
-        seg_ = form_seg_(y, P_, form_blob_func=form_blob, root_blob=root_blob, rng=rng)
+        P_ = scan_P_(P_, seg_,
+                     form_blob_func=update_sub_blob,
+                     # update_sub_blob() addition arguments:
+                     root_blob=root_blob, rng=rng)
+        seg_ = form_seg_(y, P_,
+                         form_blob_func=update_sub_blob,
+                         # update_sub_blob() addition arguments:
+                         root_blob=root_blob, rng=rng)
 
-    while seg_:  form_blob(seg_.popleft(), root_blob, rng)  # last-line segs are merged into their blobs
+    # Merge last-line segments into their blobs:
+    while seg_:  form_blob(seg_.popleft(), root_blob, rng)
 
     return Ave_blob
 
 
 def form_P_(x0, i_, dert_, Ave):
+    """
+    Form P_ on a single line of dert__. No a_ support.
+    Deprecated. use form_P__ instead.
+    """
     g = dert_[:, 0]
 
     # Group same-sign adjacent derts: (sign, index, length)
     groups = [(sign, next(group)[0], len([*group]) + 1)
-              for sign, group in groupby(enumerate(g), lambda item: item[1] > Ave)
+              for sign, group in groupby(enumerate(g),
+                                         lambda item: item[1] > Ave)
               if sign is not ma.masked]
 
-    # build list of
+    # Build list of P:
     P_ = deque(dict(sign=s,
                     x0=x+x0,
-                    I=i_[x : x+L].sum(),
+                    I=i_[..., x : x+L].sum(axis=-1),
                     G=dert_[x : x+L, 0].sum() - Ave * L,
                     Dy=dert_[x : x+L, 1].sum(),
                     Dx=dert_[x : x+L, 2].sum(),
@@ -112,9 +124,23 @@ def form_P_(x0, i_, dert_, Ave):
 
     return P_
 
-def form_P__(x0, i__, dert__, Ave):
-    g__ = dert__[0, :, :]
 
+def form_P__(x0, i__, dert__, Ave):
+    """
+    Form P across the whole dert array.
+    """
+    # Separating i__ vs. a__ cases:
+    if i__.ndim == 2: # Case of i__.
+        dy_slice = 1
+        dx_slice = 2
+    elif i__ndim == 3: # Case of a__.
+        dy_slice = slice(1, 3)
+        dx_slice = slice(3, None)
+    else:
+        raise ValueError
+    g__ = dert__[0, :, :] # Assign g__ for partitioning.
+
+    # Partition:
     groups_ = starmap(lambda y, g_:
                       (y,
                        [(sign, next(group)[0], len(list(group)) + 1)
@@ -124,22 +150,73 @@ def form_P__(x0, i__, dert__, Ave):
                        ),
                       enumerate(g__))
 
+    # Clustering:
     P__ = [deque(dict(sign=s,
                       x0=x+x0,
-                      I=i_[x : x+L].sum(),
+                      I=i_[..., x : x+L].sum(axis=-1),
                       G=dert_[0, x : x+L].sum() - Ave * L,
-                      Dy=dert_[1, x : x+L].sum(),
-                      Dx=dert_[2, x : x+L].sum(),
+                      Dy=dert_[dy_slice, x : x+L].sum(axis=-1),
+                      Dx=dert_[dx_slice, x : x+L].sum(axis=-1),
                       L=L,
                       dert_=dert_[:, x : x+L].T,
                       )
                  for s, x, L in groups)
-           for i_, dert_, (y, groups) in zip(i__, dert__.swapaxes(0, 1), groups_)]
+           for i_, dert_, (y, groups) in zip(i__,
+                                             dert__.swapaxes(0, 1),
+                                             groups_)]
 
     return P__
 
-def form_blob(term_seg, root_blob, rng):
-    return
+
+def update_sub_blob(term_seg, root_blob, rng):
+    """Terminated segment is merged into it's blob."""
+    y0, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg.values()
+    I, G, Dy, Dx, L, Ly = blob['Dert'].values()
+
+    blob['Dert'].update(I=Is + I,
+                        G=Gs + G,
+                        Dy=Dys + Dy,
+                        Dx=Dxs + Dx,
+                        L=Ls + L,
+                        Ly=Lys + Ly)
+
+    blob['open_segments'] += roots - 1  # Update Number of open segments
+
+    if blob['open_segments'] == 0:
+        terminate_blob(y0+Lys, blob, root_blob, rng)
+
+
+def terminate_sub_blob(yn, sub_blob, root_blob, rng):
+    """Sub-blob is terminated and send feedback to it's root-blob."""
+    Dert, s, [y0, x0, xn], seg_, open_segs = sub_blob.values()
+
+    mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
+    for seg in seg_:
+        seg.pop('roots')
+        for y, P in enumerate(seg['Py_'], start=seg['y0']):
+            x_start = P['x0'] - x0
+            x_stop = x_start + P['L']
+            mask[y - y0, x_start:x_stop] = False
+
+    I = Dert.pop('I')
+    G, Dy, Dx, L, Ly = Dert.values()
+    # Update frame:
+    root_blob['Dert'].update(I=root_blob['Dert']['I'] + I,
+                             G=root_blob['Dert']['G'] + G,
+                             Dy=root_blob['Dert']['Dy'] + Dy,
+                             Dx=root_blob['Dert']['Dx'] + Dx)
+
+    blob.pop('open_segments')
+    blob.update(box=(y0, yn, x0, xn),  # boundary box
+                slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
+                rng=rng,
+                mask=mask,
+                dert___=[frame['i__'], frame['dert__']],
+                hLayers=root_blob,
+                root_blob=sub_blob,
+                lLayers=[],
+                )
+    root_blob['lLayers'].append(blob)
 
 
 def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) selects input a | g in higher dert

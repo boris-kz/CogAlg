@@ -203,7 +203,6 @@ def assign_angle_inputs(dert___, rng):
     """Get comparands and accumulated dax, day from dert___."""
     if rng > 1:
         a__ = dert___[-2][-2:]  # Assign a__ of previous layer
-# -----------------------------------------------------------------------------
 
         # Accumulated dax__, day__ of previous layer:
         day__ = dert___[-1][-4:-2]
