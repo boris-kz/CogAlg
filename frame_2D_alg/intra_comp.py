@@ -2,6 +2,7 @@ import numpy as np
 from collections import deque, namedtuple
 from comp_i import comp_i
 
+ave_n_sub_blobs = 10
 Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, sub_blob_, lLayers, root_blob, hLayers')
 
 # ************ FUNCTIONS ************************************************************************************************
@@ -55,7 +56,10 @@ def intra_comp(blob, rng, fa, Ave_blob, Ave):
     while sseg_:    # terminate last line
         form_blob(sseg_.popleft(), blob, rng, fa)
 
+    return Ave_blob * len(blob.sub_blob_) / ave_n_sub_blobs
+
     # ---------- intra_comp() end -------------------------------------------------------------------------------------------
+
 
 def form_P_(derts__, Ave, rng):  # horizontally cluster and sum consecutive (pixel, derts) into Ps
     P_ = deque()   # row of Ps
@@ -225,26 +229,34 @@ def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged int
 
         del blob
 
-    # ---------- form_blob() end ----------------------------------------------------------------------------------------
+    # ---------- form_blob() end ---------------------------------------------------------------------------------
 
-def feedback_draft(root_blob, blob, rng):  # or rng per dert cyc: current, !i_cyc: cont. g | gg | ga rng expansion?
+def feedback_draft(root_blob, blob, rng, fork_type):  # fork_type: g | a | r, needs to be added, rng is per blob?
 
-    # fga = g | ga sub_layer
-    s, [I, G, A, Dy, Dx, L, Ly], seg_, open_segs, box = blob
+    s, [I, G, A, M, Dy, Dx, L, Ly], seg_, open_segs, box = blob  # update as needed
 
-    while root_blob:  # add all blob Layers' Dert params to corresponding params of recursively higher root_blob
+    while root_blob:  # add each Dert param to corresponding param of recursively higher root_blob
 
-        if len(blob.Layers) == len(root_blob.Layers):  # fork index is defined incrementally, with fb elevation?
-            root_blob.Layers += [(0, 0, 0, 0, 0, []),[]]  # new Layer, breadth-first, fork = [fder][fga]?
+        if len(blob.lLayers) == len(root_blob.lLayers):  # last blob Layer is deeper than last root_blob Layer
+            root_blob.Layers += [[fork_type, [(0, 0, 0, 0, 0, 0, 0, [])]]]  # new layer: a list of fork_type reps
+        else:
+            new_fork_type = 0
+            for root_fork_type in blob.lLayers[-1][0]:  # layer is a list of fork_type reps, see above
+                if root_fork_type != fork_type:
+                    new_fork_type = 1
+            if new_fork_type == 0:
+                root_blob.Layers[-1] += [fork_type, [(0, 0, 0, 0, 0, 0, 0, [])]]  # initialize new fork_type rep
 
-        root_blob.high_Derts[:][:] += blob.high_Derts[1:][:]  # also accumulated per sub_blob, initially 0?
-        root_blob.Dert[1][:] += blob.high_Derts[0][:]  # Dyr += Dy, Dxr += Dx, Gr += G, Lyr += Ly, Lr += L
+        root_blob.hLayers[:][:] += blob.hLayers[1:][:]  # pseudo for accumulation of co-located params, as below:
 
-        # blob.high_Derts[0] is summed next to discrete root_blob.Dert[0],
-        # then root_root_blob.Layers[1] sums across min n? source layers, buffered in target Layer
+        root_blob.Dert[:] += blob.hLayers[0][:]  # Gr+=G, Ar+=A, Mr+=M, Dyr+=Dy, Dxr+=Dx, Gr+=G, Lyr+=Ly, Lr+=L
+        # or sub_blob accumulation next to discrete Dert: each param_layer is sub-selective summation hierarchy?
+
+        root_blob.lLayers[0][:] += blob.Dert
+        # then root_root_blob.Layers[1] sums across min n? source layers, buffered in target Layer?
 
         root_blob.sub_blob_.append(Blob
-                                  (Dert=[G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
+                                  (Dert=[G, A, M, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
                                   sign = s,
                                   rng= rng,
                                   box= box,  # same boundary box
@@ -257,7 +269,3 @@ def feedback_draft(root_blob, blob, rng):  # or rng per dert cyc: current, !i_cy
                                   hLayers = [I]  # higher Dert params += higher-dert params, starting with I
                                   ))
         root_blob = root_blob.root_blob
-
-    # add:
-    # return Ave_blob *= len(sub_blob_) / ave_n_sub_blobs
-

@@ -59,15 +59,15 @@ def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) sele
     # two-level intra_comp eval per root_blob.sub_blob, deep intra_blob fork eval per input blob to last intra_comp
     # local fork's blob is initialized in prior intra_comp's feedback(), no lower Layers yet
 
-    for blob in root_blob.sub_blob_:  # sub_blobs are evaluated for comp_fork, add nested fork indices?
-        if blob.Dert[0] > Ave_blob:  # noisy or directional G | Ga: > intra_comp cost: rel root blob + sub_blob_
+    for blob in root_blob.sub_blob_:  # sub_blobs are evaluated by G for comp_g
+        if blob.Dert[0] > Ave_blob:  # intra_comp cost: rel root blob + sub_blob_
 
             Ave_blob = intra_comp(blob, rng, 0, Ave_blob, Ave)  # fa=0, Ave_blob adjust by n_sub_blobs
             Ave_blob *= rave  # estimated cost of redundant representations per blob
             Ave += ave  # estimated cost per dert
 
-            for sub_blob in blob.sub_blob_:  # sub_sub_blobs evaluated for root_dert angle calc & comp
-                if sub_blob.Dert[0] > Ave_blob:  # G > intra_comp cost;  no independent angle value
+            for sub_blob in blob.sub_blob_:  # sub_sub_blobs are evaluated for root_dert angle calc & comp
+                if sub_blob.Dert[0] > Ave_blob:  # Ga > intra_comp cost, no independent angle value
 
                     Ave_blob = intra_comp(sub_blob, rng, 1, Ave_blob, Ave)  # fa=1: same as fia?
                     Ave_blob *= rave  # Ave_blob adjusted by n_sub_blobs
@@ -96,13 +96,15 @@ def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) sele
                         else:
                             break
     '''
-    parallel forks: 
-    i rng+ / v(i+m), i & m = 0 if i is p, single exposed input per fork
-    g der+ / vg: initial fork, but then more coarse?
-    ga der+/ vga, rng = der+'rng? 
+    if len(root_blob.lLayers) > ave_lLayers and V+G > ave_VG:  # at the end of intra_blob
+        comp_layers()  # primary comp L: if high overlap? -> blob_hier ders, sums; vs feedback sum per layer? 
     
-    no (G+Mg- ave_blob, 1, 1): comp a if same-rng comp i, no indep value, replaced by ga as i is replaced by g?
-        
+    parallel forks: 
+    i rng+ / v: i+m, i & m = 0 if i is p | a, single exposed-rng input per fork
+    g der+ / vg: initial fork, then more coarse?
+    ga der+/ vga, rng = der+'rng, no (G+Mg- ave_blob, 1, 1): comp a if same-rng comp i?
+    
+    a rng+ / -vga: no indep value, replace by ga as i by g?  but ga is summed, low res?
     from comp_g -> mg, gg: summed over rng in same Dert, new Dert per der+ only 
     m is unsigned, weak bias: no ma, mx,my, mA: lags ga? no kernel buff: olp, no Mg -> Mgg: g is not common 
      

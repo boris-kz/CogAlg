@@ -82,8 +82,8 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     if kwidth == 2:
 
         # Compare:
-        dy__ = (image[1:, 1:] + image[1:, :-1]) - (image[:-1, 1:] + image[:-1, :-1]) * 0.70710678
-        dx__ = (image[1:, 1:] + image[:-1, 1:]) - (image[1:, :-1] + image[:-1, :-1]) * 0.70710678
+        dy__ = (image[1:, 1:] + image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
+        dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
 
         # Sum pixel values:
         p__ = (image[:-1, :-1]
@@ -92,8 +92,8 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                + image[1:, 1:]) * 0.25
 
     else:
-        ycoef = np.sqrt(np.array([2, 0, 2, 4, 2, 0, 2, 4])) / 2
-        xcoef = np.sqrt(np.array([2, 4, 2, 0, 2, 4, 2, 0])) / 2
+        ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
+        xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
 
         # Compare by subtracting centered image from translated image:
         d___ = np.array(list(map(lambda trans_slices:
@@ -119,9 +119,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(dy__, dx__)
 
-    return p__, np.around(np.stack((g__, dy__, dx__), axis=0))
-
-    # ---------- comp_pixel() end ---------------------------------------------------------------------------------------
+    return p__[np.newaxis, ...], np.around(np.stack((g__, dy__, dx__), axis=0))
 
 
 def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps

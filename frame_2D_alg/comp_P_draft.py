@@ -14,20 +14,21 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    comp_P blob formed by intra_comp(dx, no g calc) -> sub_blob per dx in der+ blob | v in rng+ blob -=ig: different dim?
-    core comp within P -> vdP, ddP, ortho?  then blobs redefine per ddx, dvx, vd, vv, etc.? recursively -> nested PPs?
+    comp_P blob formed by intra_comp(dx, no g calc) -> sub_blob per dx in der+ blob or v in rng+ blob:-= ig: different dim?
+    core comp in P -> vdP, ddP, ortho? then blobs redefine per ddx, dvx, vd, vv, etc.? recursively -> nested PPs?
     
-    map seg,P -> sub-seg,P for nested intra_comp(dx_g)  
-    -> comp_P_ eval by combined overlapped-blob elongation:  
-    
+    comp_layers if len and V+G -> blob_hier ders, sums; vs feedback sum per layer? 
+    combined V+G * orientation -> nested intra_comp(dx_g), nested comp_P: map seg,P -> sub-seg,P -> nested PPs?
+        
     val_PP_ = 
     V + G: core params represent value of all others, no max Pm = L + |V| + |Dx| + |Dy|: redundant and coef filtered? 
     # orientation coefs: 
-    * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # dim bias: g match rate, max comp_P rng?    
+    * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # dim bias | elongation: g match rate, max comp_P rng?    
     * max(Dy, Dx) / min(Dy, Dx)    # variation bias (no Mx, My: low bias?); both biases are signed and may cancel-out 
     
-    * Ave_blob / Ga  # angle match rate: stability of variation bias -> secondary comp( d | ortho_d)?   
-    eval per blob, too expensive for seg?  no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
+    * Ave_blob / Ga  # inverted: angle match rate, stability of variation bias, 
+    | already represented by hforks' V+G, positional + magnitude, -> comp( d | ortho_d)?   
+    eval per blob, too expensive for seg? no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
 '''
 ave = 20
 div_ave = 200

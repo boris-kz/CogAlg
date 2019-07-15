@@ -37,24 +37,41 @@ increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
 # Uncomment below definition of increase_ave for identity function:
 # increase_ave = lambda ave, rng: ave
 
-# comp sequence:
-fork_tree = [
-    ("a", [
+# Recursive comparison pipelines:
+pipe_lines = [  # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
+    ("g", [
+        ("g", [
+            ("g", []),
+            ("a", []),
+            ("r", []),
+        ]),
+        ("a", [
+            ("g", []),
+            ("a", []),
+        ]),
         ("r", [
+            ("g", []),
+            ("a", []),
             ("r", []),
         ]),
     ]),
-    ("g", [
-        ("a", []),
-        ("r", [
+    ("a", [  # actually ga
+        ("g", [
+            ("g", []),
+            ("a", []),
+            ("r", []),
+        ]),
+        ("a", [
+            ("g", []),
             ("a", []),
         ]),
-    ]),
+    ])
 ]
+
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_tree(derts, rng, Ave, past_forks, tree):  # comparisons down fork_tree
+def comp_tree(derts, rng, Ave, past_forks, tree):  # comparisons down pipe_lines
 
     for fork, subtree in tree: # Stop recursion if tree = [].
         next_layer(derts, rng, Ave, past_forks,
@@ -105,7 +122,7 @@ if __name__ == "__main__":
                    rng=1,
                    Ave=init_ave,
                    past_forks ="g" + str(frame_blobs.rng),
-                   tree=fork_tree)
+                   tree=pipe_lines)
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------
