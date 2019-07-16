@@ -309,9 +309,9 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
                     rng=rng,
                     mask=mask,
                     dert___=[frame['i__'], frame['dert__']],
-                    hLayers=np.array([I, 0, 0, 0, 0]),
+                    hDerts=np.array([I, 0, 0, 0, 0]),
                     root_blob=None,
-                    lLayers={},
+                    Layers={},
                     )
         frame['blob_'].append(blob)
 
