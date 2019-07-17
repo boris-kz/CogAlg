@@ -1,9 +1,12 @@
 import numpy as np
+import operator as op
+from itertools import starmap
+
 from collections import deque, namedtuple
 from comp_i import comp_i
 
 ave_n_sub_blobs = 10
-Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, sub_blob_, lLayers, root_blob, hLayers')
+Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, Layers, hDerts, root_blob')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -235,37 +238,56 @@ def feedback_draft(root_blob, blob, rng, fork_type):  # fork_type: g | a | r, ne
 
     s, [I, G, A, M, Dy, Dx, L, Ly], seg_, open_segs, box = blob  # update as needed
 
+    # first root_blob.sub_blob_.append(sub_blob) is by initialised sub_blob,
+    # then accumulate fork in existing sub_blob:
+
+    sub_blob = namedtuple('sub_blob', 'Dert, sign, rng, box, map, seg_, sub_blob_, Layers, root_blob, hDerts')
+
+    sub_blob.Dert=[G, A, M, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
+
+    root_blob.sub_blob_.append(Blob(Dert=[G, A, M, Dy, Dx, L, Ly],  # in immediate root_blob only, else accumulate
+                                    sign= s,  # current g | ga sign
+                                    rng=rng,  # comp range
+                                    map=map,  # boolean map of blob to compute overlap
+                                    box=box,  # same boundary box
+                                    seg_=seg_,
+                                    # derts__,
+                                    Layers=[],  # summed reps of lower layers across sub_blob derivation tree
+                                    hDerts=[I], # higher Dert params += h_dert params, starting with I, for comp
+                                    root_blob = [blob]   # ref for feedback of Layers params summed in sub_blobs
+                                    ))
     while root_blob:  # add each Dert param to corresponding param of recursively higher root_blob
 
-        if len(blob.lLayers) == len(root_blob.lLayers):  # last blob Layer is deeper than last root_blob Layer
+        if len(blob.Layers) == len(root_blob.Layers):  # last blob Layer is deeper than last root_blob Layer
             root_blob.Layers += [[fork_type, [(0, 0, 0, 0, 0, 0, 0, [])]]]  # new layer: a list of fork_type reps
         else:
-            new_fork_type = 0
-            for root_fork_type in blob.lLayers[-1][0]:  # layer is a list of fork_type reps, see above
-                if root_fork_type != fork_type:
-                    new_fork_type = 1
-            if new_fork_type == 0:
+            new_fork_type = 1
+            for root_fork_type, _ in blob.Layers[-1]:  # layer is a list of fork_type reps, see above
+                if root_fork_type == fork_type:
+                    new_fork_type = 0
+            if new_fork_type == 1:
                 root_blob.Layers[-1] += [fork_type, [(0, 0, 0, 0, 0, 0, 0, [])]]  # initialize new fork_type rep
 
-        root_blob.hLayers[:][:] += blob.hLayers[1:][:]  # pseudo for accumulation of co-located params, as below:
+        root_blob.Layers[0][:] = starmap(op.add, zip(root_blob.Layers[0][:], blob.Dert[:]))
+        root_blob.Layers[1:][:] = map(lambda zipped: zipped[0] + zipped[1], zip(root_blob.Layers[1:][:], blob.Layers[:][:]))
 
-        root_blob.Dert[:] += blob.hLayers[0][:]  # Gr+=G, Ar+=A, Mr+=M, Dyr+=Dy, Dxr+=Dx, Gr+=G, Lyr+=Ly, Lr+=L
-        # or sub_blob accumulation next to discrete Dert: each param_layer is sub-selective summation hierarchy?
-
-        root_blob.lLayers[0][:] += blob.Dert
-        # then root_root_blob.Layers[1] sums across min n? source layers, buffered in target Layer?
-
-        root_blob.sub_blob_.append(Blob
-                                  (Dert=[G, A, M, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
-                                  sign = s,
-                                  rng= rng,
-                                  box= box,  # same boundary box
-                                  map= map,  # blob boolean map, to compute overlap
-                                  seg_=seg_,
-                                  # derts__,
-                                  sub_blob_=[],  # per blob or fork, nested to depth = hLevels
-                                  lLayers = [],  # summed reps of lower layers across sub_blob derivation tree
-                                  root_blob = [blob],  # ref for feedback of all Derts params summed in sub_blobs
-                                  hLayers = [I]  # higher Dert params += higher-dert params, starting with I
-                                  ))
+        blob = root_blob
         root_blob = root_blob.root_blob
+        # replace fork_type with that of
+
+        for fork in root_blob.Layers[-1]:
+            if fork[0] == fork_type:
+                fork[1][:] = starmap(op.add, zip(root_blob.Layers[0][:], blob.Dert[:]))
+                break
+'''
+hDerts rep for comp only, no feedback: sparsity by L, low collective variation and no individual comp?
+if min nlayers: root_root_blob.Layers[0] is Layers rep?
+
+root_blob.hLayers[:][:] += blob.hLayers[1:][:]  # pseudo for accumulation of co-located params, as below:
+root_blob.Dert[:] += blob.hLayers[0][:]  # Gr+=G, Ar+=A, Mr+=M, Dyr+=Dy, Dxr+=Dx, Gr+=G, Lyr+=Ly, Lr+=L
+
+# or sub_blob accumulation next to discrete Dert: each param_layer is sub-selective summation hierarchy?
+
+root_blob.Dert[:] = map(lambda zipped: zipped[0] + zipped[1], zip(root_blob.Dert[:], blob.hLayers[0][:]))
+starmap(operator.add, zip(root_blob.Dert[:], blob.hLayers[0][:]))
+'''

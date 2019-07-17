@@ -32,7 +32,7 @@ from collections import deque, namedtuple
 Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
+Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, dert__, Layers, hDerts, root_blob')
 Frame = namedtuple('Frame', 'I, G, Dy, Dx, blob_, i__, dert__')
 
 # Adjustable parameters:
@@ -294,15 +294,14 @@ def form_blob(term_seg, frame):  # terminated segment is merged into continued o
         frame[3] += Dx
         frame[4].append(Blob(Dert=[G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
                              sign=s,  # current g | ga sign
-                             rng=rng,  # comp range
-                             map=map,  # boolean map of blob to compute overlap
+                             rng=rng, # comp range
+                             map=map, # boolean map of blob to compute overlap
                              box=(y0, yn, x0, xn),  # boundary box
                              seg_=new_seg_,  # references down blob formation tree, in vertical (horizontal) order
                              dert__=[],
-                             sub_blob_=[],  # ref to sub_blob derivation tree, sub_blob structure = blob structure
-                             lLayers=[],  # summed reps of lower layers across sub_blob derivation tree
-                             root_blob=blob,  # ref for feedback of all Derts params summed in sub_blobs
-                             hLayers=[I]  # higher Dert params += higher-dert params, starting with I
+                             Layers=[],  # summed reps of lower layers across sub_blob derivation tree
+                             hDerts=[I],  # higher Dert params += higher-dert params, starting with I
+                             root_blob=blob  # ref for feedback of all Derts params summed in sub_blobs
                              ))
         del blob
 

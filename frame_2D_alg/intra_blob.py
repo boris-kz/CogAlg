@@ -1,5 +1,6 @@
 from intra_comp import intra_comp
 
+
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
     combined frame_blobs and intra_blob form a 2D version of 1st-level algorithm.
@@ -26,16 +27,14 @@ from intra_comp import intra_comp
         Py_ [(P_params, derts_)]  # vertical buffer of Ps per segment
         # derts [(g_dert, ga_dert)]: two layers per intra_blob, sum in blob.rng, i = derts[-1][fia]
         ],
-    derts__,   # intra_comp inputs
-    sub_blob_, # layer-sequential references down sub_blob derivation tree, sub_blob structure = blob structure
-    lLayers[   # summed reps of lower layers across sub_blob derivation tree, from feedback, for layer-parallel comp_blob
-                
-        Dert, forks,  # input g_rng+, a_rng+, derived gg_rng2, ga_rng2, fork id: f_deriv, f_angle  
-        Dert, fforks, ... # fork_tree depth = Layers depth-1, += <= 8 (4 rng+, 4 der+) forks per Layer 
-        # Dert may be None: params are summed only if min nforks, also summed fork_Layers if min nLayers? 
-        ],
+    derts__,  # intra_comp inputs
+    Layers[ fork_tree [type, Dert, sub_blob_] ]  # Layers across derivation tree consist of forks: deriv+, range+, angle
+    
+        # fork_tree is nested to depth = Layers[n]-1, for layer-parallel comp_blob  
+        # Dert may be None: params are summed if len(sub_blob_) > min, same for fork_ and fork_layer_? 
+        
     root_blob, # reference for feedback of all Derts params summed in sub_blobs 
-    hLayers    # higher-Dert params += higher-dert params (including I), for feedback to root_blob, no forking   
+    hDerts     # higher-Dert params += higher-dert params (including I), for layer-parallel comp_blob, no forking   
     '''
 
 ave = 20   # average g, reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
@@ -96,7 +95,7 @@ def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) sele
                         else:
                             break
     '''
-    if len(root_blob.lLayers) > ave_lLayers and V+G > ave_VG:  # at the end of intra_blob
+    if len(root_blob.Layers) > ave_Layers and V+G > ave_VG:  # at the end of intra_blob
         comp_layers()  # primary comp L: if high overlap? -> blob_hier ders, sums; vs feedback sum per layer? 
     
     parallel forks: 
