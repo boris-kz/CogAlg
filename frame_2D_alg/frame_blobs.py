@@ -23,20 +23,19 @@
 '''
 
 from time import time
-from collections import deque, namedtuple
+from collections import deque, defaultdict, namedtuple
 
 import numpy as np
-import intra_blob
 
 # -----------------------------------------------------------------------------
 # Structures
-
+'''
 Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
 Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
 Blob = namedtuple('Blob', 'Dert, sign, rng, box, mask, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
 Frame = namedtuple('Frame', 'I, G, Dy, Dx, blob_, i__, dert__')
-
+'''
 # -----------------------------------------------------------------------------
 # Adjustable parameters
 image_path = "./../images/raccoon.jpg"
@@ -215,15 +214,12 @@ def form_seg_(y, P_, form_blob_func, **kwargs):
         else:
             if len(fork_) == 1 and fork_[0]['roots'] == 1:  # P has one fork and that fork has one root
                 new_seg = fork_[0]
-                # y0 = y, I = I, G = G, Dy = 0, Dx = Dx, L = L, Ly = 1,
-                # Py_ = [P], blob = blob, roots = 0
-                _, Is, Gs, Dys, Dxs, Ls, Ly, _, _, _ = new_seg.values()    # fork segment params, P is merged into segment:
-                new_seg.update(I=Is + I,
-                               G=Gs + G,
-                               Dy=Dys + Dy,
-                               Dx=Dxs + Dx,
-                               L=Ls + L,
-                               Ly=Ly + 1)
+
+                # Fork segment params, P is merged into segment:
+                update_Dert(new_seg,
+                            # Params to update:
+                            I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=1)
+
                 new_seg['Py_'].append(P)  # Py_: vertical buffer of Ps
                 new_seg['roots'] = 0  # reset roots
                 blob = new_seg['blob']
@@ -244,14 +240,10 @@ def form_seg_(y, P_, form_blob_func, **kwargs):
 
                         if not fork['blob'] is blob:
                             Dert, s, box, seg_, open_segs = fork['blob'].values()  # merged blob
-                            Is, Gs, Dys, Dxs, Ls, Lys = Dert.values()
-                            I, G, Dy, Dx, L, Ly = blob['Dert'].values()
-                            blob['Dert'].update(I=Is + I,
-                                                G=Gs + G,
-                                                Dy=Dys + Dy,
-                                                Dx=Dxs + Dx,
-                                                L=Ls + L,
-                                                Ly=Lys + Ly)  # sum merging blobs
+                            I, G, Dy, Dx, L, Ly = Dert.values()
+                            update_Dert(blob['Dert'],
+                                        # Params to update:
+                                        I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
                             blob['open_segments'] += open_segs
                             blob['box'][0] = min(blob['box'][0], box[0])  # extend box y0
                             blob['box'][1] = min(blob['box'][1], box[1])  # extend box x0
@@ -271,64 +263,66 @@ def form_seg_(y, P_, form_blob_func, **kwargs):
     return new_seg_
 
 
-def form_blob(term_seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
 
-    y0s, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg.values()
-    I, G, Dy, Dx, L, Ly = blob['Dert'].values()
-    blob['Dert'].update(I=Is + I,
-                        G=Gs + G,
-                        Dy=Dys + Dy,
-                        Dx=Dxs + Dx,
-                        L=Ls + L,
-                        Ly=Lys + Ly)
-    blob['open_segments'] += roots - 1  # number of open segments
+    blob = terminate_segment(seg)
 
     if blob['open_segments'] == 0:  # if open_segments == 0: blob is terminated and packed in frame
-        Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
-
-        yn = y0s + Lys  # yn from last segment
-        mask = np.ones((yn - y0, xn - x0), dtype=bool) # local map of blob
-        for seg in seg_:
-            seg.pop('roots')
-            for y, P in enumerate(seg['Py_'], start=seg['y0']):
-                x_start = P['x0'] - x0
-                x_stop = x_start + P['L']
-                mask[y - y0, x_start:x_stop] = False
-
-        I = Dert.pop('I')
-        G, Dy, Dx, L, Ly = Dert.values()
+        I = terminate_blob(blob, seg,
+                           # Additional parameters to update blob:
+                           rng=1,
+                           dert___=[frame['i__'], frame['dert__']],
+                           root_blob=None,
+                           )
+        blob.update(hDerts=np.array([I, 0, 0, 0, 0]))
         # Update frame:
         frame.update(I=frame['I']+I,
-                     G=frame['G']+G,
-                     Dy=frame['Dy']+Dy,
-                     Dx=frame['Dx']+Dx)
+                     G=frame['G']+blob['Dert']['G'],
+                     Dy=frame['Dy']+blob['Dert']['Dy'],
+                     Dx=frame['Dx']+blob['Dert']['Dx'])
 
-        blob.pop('open_segments')
-        blob.update(box=(y0, yn, x0, xn), # boundary box
-                    slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
-                    rng=rng,
-                    mask=mask,
-                    dert___=[frame['i__'], frame['dert__']],
-                    hDerts=np.array([I, 0, 0, 0, 0]),
-                    root_blob=None,
-                    Layers={},
-                    )
         frame['blob_'].append(blob)
 
-        """
-        frame['blob'].append(Blob(Dert = [G, None, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
-                             sign=s,  # current g | ga sign
-                             rng =rng,  # comp range
-                             mask=mask,   # boolean mask of blob to compute overlap
-                             box=(y0, yn, x0, xn),  # boundary box
-                             seg_=new_seg_,  # references down blob formation tree, in vertical (horizontal) order
-                             dert__=frame.dert__,
-                             sub_blob_=[],   # ref to sub_blob derivation tree, sub_blob structure = blob structure
-                             lLayers=[],     # summed reps of lower layers across sub_blob derivation tree
-                             root_blob=[blob],  # ref for feedback of all Derts params summed in sub_blobs
-                             hLayers=[I]     # higher Dert params += higher-dert params, starting with I
-                           ))
-        """
+
+def terminate_segment(seg):
+    y0, I, G, Dy, Dx, L, Ly, Py_, blob, roots = seg.values()
+    update_Dert(blob['Dert'],
+                # Params to update:
+                I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
+    blob['open_segments'] += roots - 1  # number of open segments
+    return blob
+
+
+def terminate_blob(blob, last_seg, **kwargs): # root_blob, dert___, rng, fork_type):
+
+    Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
+
+    yn = last_seg['y0'] + last_seg['Ly'] # Compute yn.
+
+    mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
+    for seg in seg_:
+        seg.pop('roots')
+        for y, P in enumerate(seg['Py_'], start=seg['y0']):
+            x_start = P['x0'] - x0
+            x_stop = x_start + P['L']
+            mask[y - y0, x_start:x_stop] = False
+
+    I = Dert.pop('I')
+    blob.pop('open_segments')
+    blob.update(box=(y0, yn, x0, xn),  # boundary box
+                slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
+                mask=mask,
+                forks=defaultdict(list),
+                **kwargs)
+
+    return I
+
+
+# -----------------------------------------------------------------------------
+# Utilities
+
+def update_Dert(Dert : dict, **params) -> None:
+    Dert.update({param:Dert[param]+value for param, value in params.items()})
 
 
 # -----------------------------------------------------------------------------
@@ -344,7 +338,7 @@ if __name__ == '__main__':
 
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
-        from utils import *
+        from utils import draw, map_frame
         draw('./../debug/root_blobs', map_frame(frame_of_blobs))
 
         F_ANGLE = 0b01
