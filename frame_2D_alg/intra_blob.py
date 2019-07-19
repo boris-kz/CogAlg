@@ -267,3 +267,47 @@ def eval_sub_blob_(blob_, Ave_blob): # return global dert___ and list of selecte
     dert___[-1][:, mask] = ma.masked # Mask irrelevant parts.
 
     return dert___, select_blob_
+
+
+''' previous version of feedback, with my issues listed in comments:
+
+def feedback(blob):  # accumulate root_fork.layers
+
+    root_blob = blob['root_blob']
+    if root_blob is None: # Stop recursion.
+        return
+    fork_type = blob['fork_type']
+
+    len_root_fork = root_blob['forks'][fork_type]
+    len_sub_fork = max(*map(len, blob['fork'].values()))
+
+    while len_root_fork <= len_sub_fork:
+    # how can sub layers be > root layers when
+    # feedback always appends root layers at len_root_fork = len_sub_fork?
+
+        root_blob['forks'][fork_type].append(dict(G=0, Dy=0, Dx=0, L=0, Ly=0, sub_blob_=[]))
+
+    # accum lower layers, no accum hDerts:
+
+    Gs, Dys, Dxs, Ls, Lys = blob['Dert']
+    # Dert of root layers[0] is accumulated with sub Dert, but
+    # Derts of root layers[1,:] are accumulated with Derts of corresponding sub layers
+
+    root_blob['forks'][fork_type] = [*map(
+        lambda layer: accum_layer(layer, blob, Gs, Dys, Dxs, Ls, Lys),
+        root_blob['forks'][fork_type]
+    )]
+    feedback(root_blob)
+
+def accum_layer(layer, blob, G, Dy, Dx, L, Ly):
+
+    accum_Dert(layer, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
+    # see above, params should be from Derts of corresponding sub layers
+
+    layer['sub_blob_'].append(blob)
+    # this is only for root layer[0],
+    # sub_blob_ of root layer[1,:] are appended with
+    # sub_blob_ of corresponding sub layer
+
+    return layer
+'''
