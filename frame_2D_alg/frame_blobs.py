@@ -216,7 +216,7 @@ def form_seg_(y, P_, form_blob_func, **kwargs):
                 new_seg = fork_[0]
 
                 # Fork segment params, P is merged into segment:
-                update_Dert(new_seg,
+                accum_Dert(new_seg,
                             # Params to update:
                             I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=1)
 
@@ -241,7 +241,7 @@ def form_seg_(y, P_, form_blob_func, **kwargs):
                         if not fork['blob'] is blob:
                             Dert, s, box, seg_, open_segs = fork['blob'].values()  # merged blob
                             I, G, Dy, Dx, L, Ly = Dert.values()
-                            update_Dert(blob['Dert'],
+                            accum_Dert(blob['Dert'],
                                         # Params to update:
                                         I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
                             blob['open_segments'] += open_segs
@@ -286,7 +286,7 @@ def form_blob(seg, frame):  # terminated segment is merged into continued or ini
 
 def terminate_segment(seg):
     y0, I, G, Dy, Dx, L, Ly, Py_, blob, roots = seg.values()
-    update_Dert(blob['Dert'],
+    accum_Dert(blob['Dert'],
                 # Params to update:
                 I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
     blob['open_segments'] += roots - 1  # number of open segments
@@ -321,7 +321,7 @@ def terminate_blob(blob, last_seg, **kwargs): # root_blob, dert___, rng, fork_ty
 # -----------------------------------------------------------------------------
 # Utilities
 
-def update_Dert(Dert : dict, **params) -> None:
+def accum_Dert(Dert : dict, **params) -> None:
     Dert.update({param:Dert[param]+value for param, value in params.items()})
 
 

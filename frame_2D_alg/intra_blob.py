@@ -1,13 +1,3 @@
-from collections import deque, defaultdict
-from functools import reduce
-from itertools import groupby, starmap
-
-import numpy as np
-import numpy.ma as ma
-
-from frame_blobs import scan_P_, form_seg_
-from comp_i import comp_i
-
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
     combined frame_blobs and intra_blob form a 2D version of 1st-level algorithm.
@@ -35,26 +25,41 @@ from comp_i import comp_i
         # derts [(g_dert, ga_dert)]: two layers per intra_blob, sum in blob.rng, i = derts[-1][fia]
         ],
     derts__,  # intra_comp inputs
-    forks [ layers [ Dert, sub_blob_] ]  # each fork (deriv+ | range+ | angle) contains layers across its derivation tree 
+    Layers[ fork_tree [type, Dert, sub_blob_] ]  # Layers across derivation tree consist of forks: deriv+, range+, angle
 
-        # all fork' layers are accumulated by feedback, with merged | nested forking on Layers[1:]?
-        # Dert is for layer-parallel comp_blob, None if len(sub_blob_) < min, same for fork and layers?
+        # fork_tree is nested to depth = Layers[n]-1, for layer-parallel comp_blob
+        # Dert may be None: params are summed if len(sub_blob_) > min, same for fork_ and fork_layer_?
 
     root_blob, # reference for feedback of all Derts params summed in sub_blobs
     hDerts     # higher-Dert params += higher-dert params (including I), for layer-parallel comp_blob, no forking
-    '''
+'''
+
+from collections import deque
+from functools import reduce
+from itertools import groupby, starmap
+
+import numpy as np
+import numpy.ma as ma
+
+from frame_blobs import (
+    scan_P_,
+    form_seg_,
+    terminate_segment,
+    terminate_blob,
+)
+from comp_i import comp_i
 
 # -----------------------------------------------------------------------------
 # Filters
 
-ave = 20  # average g, reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
-kwidth = 3  # kernel width
+ave = 20   # average g, reflects blob definition cost, higher for smaller positive blobs, no intra_comp for neg blobs
+kwidth = 3   # kernel width
 if kwidth != 2:  # ave is an opportunity cost per comp:
     ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
 
-ave_blob = 10000  # fixed cost of intra_comp per blob, accumulated in deeper layers
-rave = 20  # fixed root_blob / blob cost ratio: add sub_blobs, Levels+=Level, derts+=dert
-ave_n_sub_blobs = 10  # determines rave, adjusted per intra_comp
+ave_blob = 10000       # fixed cost of intra_comp per blob, accumulated in deeper layers
+rave = 20              # fixed root_blob / blob cost ratio: add sub_blobs, Levels+=Level, derts+=dert
+ave_n_sub_blobs = 10   # determines rave, adjusted per intra_comp
 ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
 ''' These filters are accumulated for evaluated intra_comp:
@@ -67,59 +72,97 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 F_ANGLE = 0b01
 F_DERIV = 0b10
 
-
 # -----------------------------------------------------------------------------
 # Functions
 
+
 def intra_comp(i__, dert___, root_blob, rng, fork_type, Ave, Ave_blob):
-    i__ = i__[root_blob.slices]  # i__, dert__ within root_blob' box:
+
+    # Take dert__ and i__ inside root_blob's box:
+    i__ = i__[root_blob.slices]
     dert__ = dert___[-1][root_blob.slices]
     y0, yn, x0, xn = root_blob['box']
 
-    P__ = form_P__(x0, i__, dert__, Ave)  # horizontal clustering
-    seg_ = deque()  # buffer of running segments
+    P__ = form_P__(x0, i__, dert__, Ave) # Horizontal clustering
+    seg_ = deque()  # Buffer of running segments
     for y, P_ in enumerate(P__, start=y0):
         P_ = scan_P_(P_, seg_,
-                     form_blob_func=merge_segment,  # merge' arguments:
-                     root_blob=root_blob, dert___=dert___, rng=rng, fork_type=fork_type)
+                     form_blob_func=merge_segment,
+                     # merge_segment() additional arguments:
+                     root_blob=root_blob, dert___=dert___,
+                     rng=rng, fork_type=fork_type)
         seg_ = form_seg_(y, P_,
-                         form_blob_func=merge_segment,  # merge' arguments:
-                         root_blob=root_blob, dert___=dert___, rng=rng, fork_type=fork_type)
+                         form_blob_func=merge_segment,
+                         # merge_segment() additional arguments:
+                         root_blob=root_blob, dert___=dert___,
+                         rng=rng, fork_type=fork_type)
 
-    # merge last-line segments into their blobs:
+    # Merge last-line segments into their blobs:
     while seg_: form_blob(seg_.popleft(), root_blob, rng)
 
     return Ave_blob * len(root_blob['Layers'][-1][fork_type]['sub_blob_']) / ave_n_sub_blobs
 
 
-def form_P__(x0, i__, dert__, Ave):  # forms Ps across the whole dert array.
-    
-    if i__.ndim == 2:  # inputs are g_derts
+def form_P_(x0, i_, dert_, Ave):
+    """
+    Form P_ on a single line of dert__. No a_ support.
+    Deprecated. use form_P__ instead.
+    """
+    g = dert_[:, 0]
+
+    # Group same-sign adjacent derts: (sign, index, length)
+    s_x_L_ = [(sign, next(group)[0], len([*group]) + 1)
+              for sign, group in groupby(enumerate(g),
+                                         lambda item: item[1] > Ave)
+              if sign is not ma.masked]
+
+    # Build list of P:
+    P_ = deque(dict(sign=s,
+                    x0=x+x0,
+                    I=i_[..., x : x+L].sum(axis=-1),
+                    G=dert_[x : x+L, 0].sum() - Ave * L,
+                    Dy=dert_[x : x+L, 1].sum(),
+                    Dx=dert_[x : x+L, 2].sum(),
+                    L=L,
+                    dert_=dert_[x : x+L])
+               for s, x, L in s_x_L_)
+
+    return P_
+
+
+def form_P__(x0, i__, dert__, Ave):
+    """
+    Forms Ps across the whole dert array.
+    """
+    if i__.ndim == 2:   # Inputs are g_derts.
         dy_slice = 1
         dx_slice = 2
-    elif i__.ndim == 3:  # inputs are ga_derts
+    elif i__.ndim == 3: # Inputs are ga_derts.
         dy_slice = slice(1, 3)
         dx_slice = slice(3, None)
     else:
         raise ValueError
-    g__ = dert__[0, :, :]
+    g__ = dert__[0, :, :]  # g sign determines clustering:
 
-    s_x_L__ = starmap(lambda y, g_:  # dert clustering by g sign:
+    # Clustering:
+    s_x_L__ = starmap(lambda y, g_:
                       (y,
                        [(sign, next(group)[0], len(list(group)) + 1)
-                        for sign, group in groupby(enumerate(g_), lambda x: x[1] > Ave)
+                        for sign, group in groupby(enumerate(g_),
+                                                   lambda x: x[1] > Ave)
                         if sign is not ma.masked]
                        ),
                       enumerate(g__))
 
-    P__ = [deque(dict(sign=s,  # P accumulation:
-                      x0=x + x0,
-                      I=i_[..., x: x + L].sum(axis=-1),
-                      G=dert_[0, x: x + L].sum() - Ave * L,
-                      Dy=dert_[dy_slice, x: x + L].sum(axis=-1),
-                      Dx=dert_[dx_slice, x: x + L].sum(axis=-1),
+    # Accumulation:
+    P__ = [deque(dict(sign=s,
+                      x0=x+x0,
+                      I=i_[..., x : x+L].sum(axis=-1),
+                      G=dert_[0, x : x+L].sum() - Ave * L,
+                      Dy=dert_[dy_slice, x : x+L].sum(axis=-1),
+                      Dx=dert_[dx_slice, x : x+L].sum(axis=-1),
                       L=L,
-                      dert_=dert_[:, x: x + L].T,
+                      dert_=dert_[:, x : x+L].T,
                       )
                  for s, x, L in s_x_L_)
            for i_, dert_, (y, s_x_L_) in zip(i__,
@@ -129,85 +172,49 @@ def form_P__(x0, i__, dert__, Ave):  # forms Ps across the whole dert array.
     return P__
 
 
-def merge_segment(term_seg, root_blob, dert___, rng, fork_type):
-    y0, Is, Gs, Dys, Dxs, Ls, Lys, Py_, blob, roots = term_seg.values()
-    I, G, Dy, Dx, L, Ly = blob['Dert'].values()
+def merge_segment(seg, root_blob, dert___, rng, fork_type):
 
-    blob['Dert'].update(I=Is + I,
-                        G=Gs + G,
-                        Dy=Dys + Dy,
-                        Dx=Dxs + Dx,
-                        L=Ls + L,
-                        Ly=Lys + Ly)
-
-    blob['open_segments'] += roots - 1  # update number of open segments
+    blob = terminate_segment(seg)
 
     if blob['open_segments'] == 0:
-        terminate_blob(y0 + Lys, blob, root_blob, dert___, rng, fork_type)
+        terminate_blob(blob, seg,
+                       # Additional parameters to update blob:
+                       rng=rng,
+                       dert___=dert___,
+                       root_blob=root_blob,
+                       hDerts=np.concatenate(
+                           (
+                               np.array(root_blob['Dert'].values()),
+                               root_blob['hDert'],
+                           ),
+                           axis=0,
+                       ),
+                       fork_type=fork_type,
+                       )
+        feedback(blob)
 
 
-def terminate_blob(yn, blob, root_blob, dert___, rng, fork_type):
-    Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
-
-    mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
-    for seg in seg_:
-        seg.pop('roots')
-        for y, P in enumerate(seg['Py_'], start=seg['y0']):
-            x_start = P['x0'] - x0
-            x_stop = x_start + P['L']
-            mask[y - y0, x_start:x_stop] = False
-
-    Dert.pop('I')
-    blob.pop('open_segments')
-    blob.update(box=(y0, yn, x0, xn),  # boundary box
-                slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
-                rng=rng,
-                mask=mask,
-                dert___=dert___,
-                hDerts=np.concatenate(
-                    (
-                        np.array(root_blob['Dert'].values()),
-                        root_blob['hDert'],
-                    ),
-                    axis=0,
-                ),
-                root_blob=root_blob,
-                fork_type=fork_type,
-                layers={},
-                )
-
-    feedback(blob)
-
-
-def feedback(blob): # add each Dert param to corresponding param of recursively higher root_blob.
-
+def feedback(blob): # Add each Dert param to corresponding param of recursively higher root_blob.
     root_blob = blob['root_blob']
-    if root_blob is None: # stop recursion.
+    if root_blob is None: # Stop recursion.
         return
     fork_type = blob['fork_type']
 
-    #  len_root_layers = root_blob['forks'][fork_type]['layers']  
-    #  len_blob_layers = max(*map(len, blob['fork'].values()))  # no, its len(layers) within fork?
+    # Last blob Layer is deeper than last root_blob Layer:
+    len_root_fork = len(root_blob['forks'][fork_type])
+    len_sub_fork = max(*map(len, blob['fork'].values()))
+    while len_root_fork <= len_sub_fork:
+        root_blob['forks'][fork_type] = np.stack((
+            root_blob['forks'][fork_type],
+            (0, 0, 0, 0, 0),
+        ))
 
-    if root_blob['forks'][fork_type]['layers'] == blob['forks'][fork_type]['layers']:  
-        # blob Layers + Dert is deeper than root_blob Layers, 
-        # initialize new layer:
-        root_blob['forks'][fork_type].append(dict(G=0, Dy=0, Dx=0, L=0, Ly=0, sub_blob_=[]))  
+    # layers accumulations:
+    G, Dy, Dx, L, Ly = blob['Dert'].values()
+    root_blob['forks'][fork_type][0] += [G, Dy, Dx, L, Ly]
+    root_blob['forks'][fork_type][1:] += blob['forks'][fork_type]
 
-    Gs, Dys, Dxs, Ls, Lys = blob['Dert']  # accumulation of Lower layers, not hDerts:
-    root_blob['forks'][fork_type] = [*map(
-        lambda layer: layer_accum(layer, blob, Gs, Dys, Dxs, Ls, Lys),
-        root_blob['forks'][fork_type]
-    )]
     feedback(root_blob)
-
-
-def layer_accum(layer, blob, G, Dy, Dx, L, Ly):
-    update_Dert(layer,  # Params to update:
-                G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
-    layer['sub_blob_'].append(blob)
-
-    return layer
 
 
 def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) selects input a | g in higher dert
@@ -216,7 +223,7 @@ def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) sele
     # local fork's blob is initialized in prior intra_comp's feedback(), no lower Layers yet
 
     for blob in root_blob.sub_blob_:  # sub_blobs are evaluated for comp_fork, add nested fork indices?
-        if blob.Dert[0] > Ave_blob:  # noisy or directional G | Ga: > intra_comp cost: rel root blob + sub_blob_
+        if blob.Dert[0] > Ave_blob: # noisy or directional G | Ga: > intra_comp cost: rel root blob + sub_blob_
 
             Ave_blob = intra_comp(blob, rng, 0, Ave_blob, Ave)  # fa=0, Ave_blob adjust by n_sub_blobs
             Ave_blob *= rave  # estimated cost of redundant representations per blob
@@ -234,9 +241,9 @@ def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) sele
                     Ga = sub_blob.Dert[0]  # from last intra_comp, no m_angle ~ no m_brightness: mag != value
 
                     eval_fork_ += [  # sort per append?
-                        (G + Mg, 1),  # est. match of input gradient at rng+1, 0 if i is p, single exposed input per fork
-                        (Gg, rng + 1),  # est. match of gg at rng+rng+1, initial fork, then more coarse?
-                        (Ga, rng + 1)  # est. match of ga at rng+rng+1;  a_rng+/ g_rng+, no indep value, replaced by ga
+                        (G + Mg, 1),  # est. match of input gradient at rng+1
+                        (Gg, rng + 1),  # est. match of gg at rng+rng+1
+                        (Ga, rng + 1)  # est. match of ga at rng+rng+1
                     ]
                     new_eval_fork_ = []  # forks recycled for next intra_blob
                     for val, irng in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
@@ -251,19 +258,28 @@ def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) sele
 
                         else:
                             break
+    '''
+    parallel forks: 
+    i rng+ / v(i+m), i & m = 0 if i is p, single exposed input per fork
+    g der+ / vg: initial fork, but then more coarse?
+    ga der+/ vga, rng = der+'rng? 
+    no (G+Mg- ave_blob, 1, 1): comp a if same-rng comp i, no indep value, replaced by ga as i is replaced by g?
+    '''
 
     return root_blob
 
-def eval_sub_blob_(blob_, Ave_blob): # return global dert___ and list of selected blobs
+def select_blobs(blob_, Ave_blob):
+    """Return global dert___ and list of selected blobs."""
+    # Get list of selected blob:
+    selected_blob_ = [blob for blob in blob_
+                      if blob['Dert']['G'] > Ave_blob] # noisy or directional G | Ga: > intra_comp cost: rel root blob + sub_blob_
 
-    select_blob_ = [blob for blob in blob_ if blob['Dert']['G'] > Ave_blob]
-    # noisy or directional G | Ga: > intra_comp cost: rel root blob + sub_blob_
-
-    dert___ = blob_[0]['dert___']  # dert___ per blob
-    shape = dert___[-1][0].shape   # shape of previous layer' gs
+    # Get dert___ of selected blob:
+    dert___ = blob_[0]['dert___'] # Get dert___ of any blob.
+    shape = dert___[-1][0].shape # Get previous layer's g's shape.
     mask = reduce(lambda m, blob: m[blob['slices'] & blob['mask']],
                   blob,
                   np.ones(shape, dtype=bool))
     dert___[-1][:, mask] = ma.masked # Mask irrelevant parts.
 
-    return dert___, select_blob_
+    return dert___, selected_blob_
