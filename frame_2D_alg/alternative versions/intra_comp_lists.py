@@ -6,7 +6,6 @@ from collections import deque, namedtuple
 from comp_i import comp_i
 
 ave_n_sub_blobs = 10
-Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, Layers, hDerts, root_blob')
 
 # ************ FUNCTIONS ************************************************************************************************
 # -intra_comp()
@@ -236,26 +235,24 @@ def form_blob(term_seg, root_blob, rng, fa):  # terminated segment is merged int
 
 def feedback_draft(root_blob, blob, rng, fork_type):  # fork_type: g | a | r, needs to be added, rng is per blob?
 
-    s, [I, G, A, M, Dy, Dx, L, Ly], seg_, open_segs, box = blob  # update as needed
+    s, [I, G, A, M, Dy, Dx, L, Ly], seg_, open_segs, box, derts__ = blob  # update as needed
+    Blob = namedtuple('Blob', 'Dert, sign, rng, box, map, seg_, derts__, layers, hDerts, root_blob')
 
     # first root_blob.sub_blob_.append(sub_blob) is by initialised sub_blob,
-    # then accumulate fork in existing sub_blob:
+    # then accumulate fork in existing sub_blob: namedtuple('sub_blob', 'Dert, sign, rng, box, map, seg_, sub_blob_, Layers, hDerts, root_blob')
 
-    sub_blob = namedtuple('sub_blob', 'Dert, sign, rng, box, map, seg_, sub_blob_, Layers, root_blob, hDerts')
-
-    sub_blob.Dert=[G, A, M, Dy, Dx, L, Ly],  # core Layer of current blob, A is None for g_Dert
-
-    root_blob.sub_blob_.append(Blob(Dert=[G, A, M, Dy, Dx, L, Ly],  # in immediate root_blob only, else accumulate
-                                    sign= s,  # current g | ga sign
-                                    rng=rng,  # comp range
-                                    map=map,  # boolean map of blob to compute overlap
-                                    box=box,  # same boundary box
-                                    seg_=seg_,
-                                    # derts__,
-                                    Layers=[],  # summed reps of lower layers across sub_blob derivation tree
-                                    hDerts=[I], # higher Dert params += h_dert params, starting with I, for comp
-                                    root_blob = [blob]   # ref for feedback of Layers params summed in sub_blobs
-                                    ))
+    root_blob[fork_type].sub_blob_.append(Blob(
+        Dert=[G, A, M, Dy, Dx, L, Ly],  # in immediate root_blob only, else accumulate
+        sign= s,  # current g | ga sign
+        rng=rng,  # comp range
+        map=map,  # boolean map of blob to compute overlap
+        box=box,  # same boundary box
+        seg_=seg_,
+        derts__=derts__,
+        layers=[],  # summed reps of lower layers across sub_blob derivation tree
+        hDerts=[I], # higher Dert params += h_dert params, starting with I, for comp
+        root_blob = [blob]   # ref for feedback of Layers params summed in sub_blobs
+        ))
     while root_blob:  # add each Dert param to corresponding param of recursively higher root_blob
 
         if len(blob.Layers) == len(root_blob.Layers):  # last blob Layer is deeper than last root_blob Layer

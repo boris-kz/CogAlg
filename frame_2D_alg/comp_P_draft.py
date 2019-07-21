@@ -14,17 +14,19 @@ from time import time
     - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
 
-    comp_P blob formed by intra_comp(dx, no g calc) -> sub_blob per dx in der+ blob or v in rng+ blob:-= ig: different dim?
+    comp_P blob formed by intra_comp(dx) -> sub_blob per dx in der+ blob or v in rng+ blob: -= ig: different dim?
     core comp in P -> vdP, ddP, ortho? then blobs redefine per ddx, dvx, vd, vv, etc.? recursively -> nested PPs?
     
     comp_layers if len and V+G -> blob_hier ders, sums; vs feedback sum per layer? 
     combined V+G * orientation -> nested intra_comp(dx_g), nested comp_P: map seg,P -> sub-seg,P -> nested PPs?
         
     val_PP_ = 
-    V + G: core params represent value of all others, no max Pm = L + |V| + |Dx| + |Dy|: redundant and coef filtered? 
+    V + G: alt core params represent value of all others, no max Pm = L + |V| + |Dx| + |Dy|: redundant and coef-filtered? 
     # orientation coefs: 
     * max(ave_Lx, Ly) / min(ave_Lx, Ly)  # dim bias | elongation: g match rate, max comp_P rng?    
-    * max(Dy, Dx) / min(Dy, Dx)    # variation bias (no Mx, My: low bias?); both biases are signed and may cancel-out 
+    * max(Dy, Dx) / min(Dy, Dx)    # variation bias (no Mx, My: low bias?)
+    
+    | flip def / comb bias: max((ave_Lx + Dx), (Ly + Dy)) / min((ave_Lx + Dx), (Ly + Dy))
     
     * Ave_blob / Ga  # inverted: angle match rate, stability of variation bias, 
     | already represented by hforks' V+G, positional + magnitude, -> comp( d | ortho_d)?   
