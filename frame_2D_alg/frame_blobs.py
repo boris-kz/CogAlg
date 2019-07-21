@@ -23,7 +23,8 @@
 '''
 
 from time import time
-from collections import deque, defaultdict, namedtuple
+from collections import deque, defaultdict
+from itertools import starmap
 
 import numpy as np
 

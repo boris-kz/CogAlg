@@ -34,13 +34,13 @@
     hDerts     # higher-Dert params += higher-dert params (including I), for layer-parallel comp_blob, no forking
 '''
 
+import operator as op
 from collections import deque
 from functools import reduce
 from itertools import groupby, starmap
 
 import numpy as np
 import numpy.ma as ma
-
 from frame_blobs import (
     scan_P_,
     form_seg_,
@@ -194,28 +194,47 @@ def merge_segment(seg, root_blob, dert___, rng, fork_type):
         feedback(blob)
 
 
-def feedback(blob): # Add each Dert param to corresponding param of recursively higher root_blob.
+def feedback(blob, sfork_type=None): # Add each Dert param to corresponding param of recursively higher root_blob.
     root_blob = blob['root_blob']
     if root_blob is None: # Stop recursion.
         return
     fork_type = blob['fork_type']
 
     # Last blob Layer is deeper than last root_blob Layer:
-    len_root_fork = len(root_blob['forks'][fork_type])
-    len_sub_fork = max(*map(len, blob['fork'].values()))
-    while len_root_fork <= len_sub_fork:
-        root_blob['forks'][fork_type] = np.stack((
-            root_blob['forks'][fork_type],
-            (0, 0, 0, 0, 0),
-        ))
+    len_sub_fork = max(0, 0, *map(len, blob['forks'].values()))
+    while len(root_blob['forks'][fork_type]) <= len_sub_fork:
+        root_blob['forks'][fork_type] += [((0, 0, 0, 0, 0), [])]
 
-    # layers accumulations:
+    # First layers accumulations:
     G, Dy, Dx, L, Ly = blob['Dert'].values()
-    root_blob['forks'][fork_type][0] += [G, Dy, Dx, L, Ly]
-    root_blob['forks'][fork_type][1:] += blob['forks'][fork_type]
+    (Gr, Dyr, Dxr, Lr, Lyr), sub_blob_ = root_blob['forks'][fork_type][0]
+    root_blob['forks'][fork_type][0] = (
+        (Gr + G, Dyr + Dy, Dxr + Dx, Lr + L, Lyr + Ly),
+        sub_blob_ + [blob],
+    )
 
-    feedback(root_blob)
+    # Accumulate the rest of layers:
+    root_blob['forks'][fork_type][1:] = \
+        [*starmap( # Like map() except for taking multiple arguments.
+            # Function (with multiple arguments):
+            lambda Dert, sub_blob_, sDert, ssub_blob_:
+                (
+                    (*starmap(op.add, zip(Dert, sDert)),), # Dert accum
+                    sub_blob_ + ssub_blob_, # sub_blob_ accum
+                ),
+            # Mapped iterables:
+            zip(
+                # Transform 2 lists of tuples of 2 into 1 list of tuples of 4:
+                # (Dert, sub_blob_, sDert, ssub_blob_)
+                *zip(*root_blob['forks'][fork_type][1:]),
+                *zip(*blob['forks'][sfork_type]),
+            ),
+        )]
+    # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)
+    # root_blob['forks'][fork_type][1:] += blob['forks'][fork_type]
 
+    feedback(root_blob, fork_type)
+# -----------------------------------------------------------------------------
 
 def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) selects input a | g in higher dert
 
