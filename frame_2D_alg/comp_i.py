@@ -253,7 +253,10 @@ def central_slice(i):
 
 
 def rim_mask(shape, i):
-    """The opposite of central_slice."""
+    """
+    Return 2D array mask where outer pad (pad width=i) is True,
+    the rest is False.
+    """
     out = np.ones(shape, dtype=bool)
     out[central_slice(i)] = False
     return out

@@ -61,10 +61,10 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     # for y, P_ in enumerate(P__):
     for y in range(height - kwidth + 1):  # first and last row are discarded
         P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
-        P_ = scan_P_(P_, seg_, form_blob_func=form_blob, frame=frame)
-        seg_ = form_seg_(y, P_, form_blob_func=form_blob, frame=frame)
+        P_ = scan_P_(P_, seg_, frame)
+        seg_ = form_seg_(y, P_, frame)
 
-    while seg_:  form_blob(seg_.popleft(), frame=frame)  # frame ends, last-line segs are merged into their blobs
+    while seg_:  form_blob(seg_.popleft(), frame)  # frame ends, last-line segs are merged into their blobs
     return frame  # frame of 2D patterns
 
 
@@ -146,7 +146,7 @@ def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and t
     return P_
 
 
-def scan_P_(P_, seg_, form_blob_func, **kwargs):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
+def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign Ps and _Ps into blob segments
 
     new_P_ = deque()
 
@@ -173,11 +173,11 @@ def scan_P_(P_, seg_, form_blob_func, **kwargs):  # integrate x overlaps (forks)
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     if seg['roots'] != 1:  # if roots != 1: terminate seg
-                        form_blob_func(seg, **kwargs)
+                        form_blob(seg, frame)
                     break
             else:  # no next-P overlap
                 if seg['roots'] != 1:  # if roots != 1: terminate seg
-                    form_blob_func(seg, **kwargs)
+                    form_blob(seg, frame)
 
                 if seg_:  # load next _P
                     seg = seg_.popleft()
@@ -189,12 +189,12 @@ def scan_P_(P_, seg_, form_blob_func, **kwargs):  # integrate x overlaps (forks)
     while P_:  # terminate Ps and segs that continue at line's end
         new_P_.append((P_.popleft(), []))  # no fork
     while seg_:
-        form_blob_func(seg_.popleft(), **kwargs)  # roots always == 0
+        form_blob(seg_.popleft(), frame)  # roots always == 0
 
     return new_P_
 
 
-def form_seg_(y, P_, form_blob_func, **kwargs):
+def form_seg_(y, P_, frame):
     """Convert or merge every P into segment, merge blobs."""
     new_seg_ = deque()
 
@@ -233,11 +233,11 @@ def form_seg_(y, P_, form_blob_func, **kwargs):
 
                 if len(fork_) > 1:  # merge blobs of all forks
                     if fork_[0]['roots'] == 1:  # if roots == 1: fork hasn't been terminated
-                        form_blob_func(fork_[0], **kwargs)  # merge seg of 1st fork into its blob
+                        form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
                         if fork['roots'] == 1:
-                            form_blob_func(fork, **kwargs)
+                            form_blob(fork, frame)
 
                         if not fork['blob'] is blob:
                             Dert, s, box, seg_, open_segs = fork['blob'].values()  # merged blob
@@ -269,20 +269,7 @@ def form_blob(seg, frame):  # terminated segment is merged into continued or ini
     blob = terminate_segment(seg)
 
     if blob['open_segments'] == 0:  # if open_segments == 0: blob is terminated and packed in frame
-        I = terminate_blob(blob, seg,
-                           # Additional parameters to update blob:
-                           rng=1,
-                           dert___=[frame['i__'], frame['dert__']],
-                           root_blob=None,
-                           )
-        blob.update(hDerts=np.array([I, 0, 0, 0, 0]))
-        # Update frame:
-        frame.update(I=frame['I']+I,
-                     G=frame['G']+blob['Dert']['G'],
-                     Dy=frame['Dy']+blob['Dert']['Dy'],
-                     Dx=frame['Dx']+blob['Dert']['Dx'])
-
-        frame['blob_'].append(blob)
+        terminate_blob(blob, seg, frame)
 
 
 def terminate_segment(seg):
@@ -294,7 +281,7 @@ def terminate_segment(seg):
     return blob
 
 
-def terminate_blob(blob, last_seg, **kwargs): # root_blob, dert___, rng, fork_type):
+def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type):
 
     Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
 
@@ -308,15 +295,27 @@ def terminate_blob(blob, last_seg, **kwargs): # root_blob, dert___, rng, fork_ty
             x_stop = x_start + P['L']
             mask[y - y0, x_start:x_stop] = False
 
-    I = Dert.pop('I')
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
+                rng=1,
+                dert___=[frame['i__'], frame['dert__']],
                 mask=mask,
+                hDerts=np.array([I, 0, 0, 0, 0]),
+                root_blob=None,
                 forks=defaultdict(list),
-                **kwargs)
+                )
 
-    return I
+    I = Dert.pop('I')
+    G, Dy, Dx, L, Ly = blob['Dert'].values()
+
+    # Update frame:
+    frame.update(I=frame['I'] + I,
+                 G=frame['G'] + G,
+                 Dy=frame['Dy'] + Dy,
+                 Dx=frame['Dx'] + Dx)
+
+    frame['blob_'].append(blob)
 
 
 # -----------------------------------------------------------------------------

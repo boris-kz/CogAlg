@@ -41,12 +41,6 @@ from itertools import groupby, starmap
 
 import numpy as np
 import numpy.ma as ma
-from frame_blobs import (
-    scan_P_,
-    form_seg_,
-    terminate_segment,
-    terminate_blob,
-)
 from comp_i import comp_i
 
 # -----------------------------------------------------------------------------
@@ -86,16 +80,8 @@ def intra_comp(i__, dert___, root_blob, rng, fork_type, Ave, Ave_blob):
     P__ = form_P__(x0, i__, dert__, Ave) # Horizontal clustering
     seg_ = deque()  # Buffer of running segments
     for y, P_ in enumerate(P__, start=y0):
-        P_ = scan_P_(P_, seg_,
-                     form_blob_func=merge_segment,
-                     # merge_segment() additional arguments:
-                     root_blob=root_blob, dert___=dert___,
-                     rng=rng, fork_type=fork_type)
-        seg_ = form_seg_(y, P_,
-                         form_blob_func=merge_segment,
-                         # merge_segment() additional arguments:
-                         root_blob=root_blob, dert___=dert___,
-                         rng=rng, fork_type=fork_type)
+        P_ = scan_P_(P_, seg_)
+        seg_ = form_seg_(y, P_)
 
     # Merge last-line segments into their blobs:
     while seg_: form_blob(seg_.popleft(), root_blob, rng)
@@ -132,7 +118,7 @@ def form_P_(x0, i_, dert_, Ave):
 
 def form_P__(x0, i__, dert__, Ave):
     """
-    Forms Ps across the whole dert array.
+    Form Ps across the whole dert array.
     """
     if i__.ndim == 2:   # Inputs are g_derts.
         dy_slice = 1
@@ -172,6 +158,18 @@ def form_P__(x0, i__, dert__, Ave):
     return P__
 
 
+def scan_P__(P__):
+    """Dectect contiguity between Ps of different lines."""
+    return
+
+def form_seg_(P__):
+    return
+
+def form_blob(seg_):
+    return
+# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
 def merge_segment(seg, root_blob, dert___, rng, fork_type):
 
     blob = terminate_segment(seg)
@@ -194,18 +192,22 @@ def merge_segment(seg, root_blob, dert___, rng, fork_type):
         feedback(blob)
 
 
-def feedback(blob, sfork_type=None): # Add each Dert param to corresponding param of recursively higher root_blob.
+def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding param of recursively higher root_blob.
     root_blob = blob['root_blob']
     if root_blob is None: # Stop recursion.
         return
     fork_type = blob['fork_type']
 
     # Last blob Layer is deeper than last root_blob Layer:
-    len_sub_fork = max(0, 0, *map(len, blob['forks'].values()))
-    while len(root_blob['forks'][fork_type]) <= len_sub_fork:
-        root_blob['forks'][fork_type] += [((0, 0, 0, 0, 0), [])]
+    len_sub_layers = max(0, 0, *map(len, blob['forks'].values()))
+    while len(root_blob['forks'][fork_type]) <= len_sub_layers:
+        root_blob['forks'][fork_type].append(((0, 0, 0, 0, 0), []))
+    # Equivalent with:
+    # if len(root_blob['forks'][fork_type]) <= len_sub_layers:
+    #     root_blob['forks'][fork_type].append(((0, 0, 0, 0, 0), []))
 
-    # First layers accumulations:
+
+    # First layer accumulations:
     G, Dy, Dx, L, Ly = blob['Dert'].values()
     (Gr, Dyr, Dxr, Lr, Lyr), sub_blob_ = root_blob['forks'][fork_type][0]
     root_blob['forks'][fork_type][0] = (
@@ -213,7 +215,7 @@ def feedback(blob, sfork_type=None): # Add each Dert param to corresponding para
         sub_blob_ + [blob],
     )
 
-    # Accumulate the rest of layers:
+    # Accumulate dipper layers:
     root_blob['forks'][fork_type][1:] = \
         [*starmap( # Like map() except for taking multiple arguments.
             # Function (with multiple arguments):
@@ -227,7 +229,7 @@ def feedback(blob, sfork_type=None): # Add each Dert param to corresponding para
                 # Transform 2 lists of tuples of 2 into 1 list of tuples of 4:
                 # (Dert, sub_blob_, sDert, ssub_blob_)
                 *zip(*root_blob['forks'][fork_type][1:]),
-                *zip(*blob['forks'][sfork_type]),
+                *zip(*blob['forks'][sub_fork_type][:]),
             ),
         )]
     # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)
