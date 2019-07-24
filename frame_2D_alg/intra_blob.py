@@ -41,7 +41,9 @@ from itertools import groupby, starmap
 
 import numpy as np
 import numpy.ma as ma
+
 from comp_i import comp_i
+from utils import pairwise
 
 # -----------------------------------------------------------------------------
 # Filters
@@ -84,36 +86,9 @@ def intra_comp(i__, dert___, root_blob, rng, fork_type, Ave, Ave_blob):
         seg_ = form_seg_(y, P_)
 
     # Merge last-line segments into their blobs:
-    while seg_: form_blob(seg_.popleft(), root_blob, rng)
+    while seg_: form_blob(seg_.popleft(), root_blob=root_blob, rng=rng)
 
     return Ave_blob * len(root_blob['Layers'][-1][fork_type]['sub_blob_']) / ave_n_sub_blobs
-
-
-def form_P_(x0, i_, dert_, Ave):
-    """
-    Form P_ on a single line of dert__. No a_ support.
-    Deprecated. use form_P__ instead.
-    """
-    g = dert_[:, 0]
-
-    # Group same-sign adjacent derts: (sign, index, length)
-    s_x_L_ = [(sign, next(group)[0], len([*group]) + 1)
-              for sign, group in groupby(enumerate(g),
-                                         lambda item: item[1] > Ave)
-              if sign is not ma.masked]
-
-    # Build list of P:
-    P_ = deque(dict(sign=s,
-                    x0=x+x0,
-                    I=i_[..., x : x+L].sum(axis=-1),
-                    G=dert_[x : x+L, 0].sum() - Ave * L,
-                    Dy=dert_[x : x+L, 1].sum(),
-                    Dx=dert_[x : x+L, 2].sum(),
-                    L=L,
-                    dert_=dert_[x : x+L])
-               for s, x, L in s_x_L_)
-
-    return P_
 
 
 def form_P__(x0, i__, dert__, Ave):
@@ -121,51 +96,99 @@ def form_P__(x0, i__, dert__, Ave):
     Form Ps across the whole dert array.
     """
     if i__.ndim == 2:   # Inputs are g_derts.
-        dy_slice = 1
-        dx_slice = 2
+        fa = 0
     elif i__.ndim == 3: # Inputs are ga_derts.
-        dy_slice = slice(1, 3)
-        dx_slice = slice(3, None)
+        fa = 1
     else:
         raise ValueError
     g__ = dert__[0, :, :]  # g sign determines clustering:
 
     # Clustering:
-    s_x_L__ = starmap(lambda y, g_:
-                      (y,
-                       [(sign, next(group)[0], len(list(group)) + 1)
-                        for sign, group in groupby(enumerate(g_),
-                                                   lambda x: x[1] > Ave)
-                        if sign is not ma.masked]
-                       ),
-                      enumerate(g__))
+    s_x_L__ = [*map(
+        lambda g_:
+            [(sign, next(group)[0], len(list(group)) + 1)
+             for sign, group in groupby(enumerate(g_),
+                                        lambda x: x[1] > Ave) # groupby() criteria.
+             if sign is not ma.masked],
+        enumerate(g__),
+    )]
 
     # Accumulation:
     P__ = [deque(dict(sign=s,
                       x0=x+x0,
                       I=i_[..., x : x+L].sum(axis=-1),
                       G=dert_[0, x : x+L].sum() - Ave * L,
-                      Dy=dert_[dy_slice, x : x+L].sum(axis=-1),
-                      Dx=dert_[dx_slice, x : x+L].sum(axis=-1),
+                      M=None if fa else dert_[1, x : x+L].sum(),
+                      Dy=dert_[1:3, x : x+L].sum(axis=-1) if fa
+                         else dert_[2, x : x+L].sum(),
+                      Dx=dert_[3:, x : x+L].sum(axis=-1) if fa
+                         else dert_[3, x : x+L].sum(),
                       L=L,
                       dert_=dert_[:, x : x+L].T,
                       )
                  for s, x, L in s_x_L_)
-           for i_, dert_, (y, s_x_L_) in zip(i__,
-                                             dert__.swapaxes(0, 1),
-                                             s_x_L__)]
+           for i_, dert_, s_x_L_ in zip(i__,
+                                        dert__.swapaxes(0, 1),
+                                        s_x_L__)]
 
     return P__
 
 
-def scan_P__(P__):
-    """Dectect contiguity between Ps of different lines."""
+def scan_P_(P_, seg_, **kwargs):
+
+    new_P_ = deque()
+
+    if P_ and seg_:  # if both are not empty
+        P = P_.popleft()  # input-line Ps
+        seg = seg_.popleft()  # higher-line segments,
+        _P = seg['Py_'][-1]  # last element of each segment is higher-line P
+        fork_ = []
+
+        while True:
+            x0 = P['x0']  # first x in P
+            xn = x0 + P['L']  # first x in next P
+            _x0 = _P['x0']  # first x in _P
+            _xn = _x0 + _P['L']  # first x in next _P
+
+            if P['sign'] == _P['sign'] and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
+                seg['roots'] += 1  # roots
+                fork_.append(seg)  # P-connected segments are buffered into fork_
+
+            if xn < _xn:  # _P overlaps next P in P_
+                new_P_.append((P, fork_))
+                fork_ = []
+                if P_:
+                    P = P_.popleft()  # load next P
+                else:  # terminate loop
+                    if seg['roots'] != 1:  # if roots != 1: terminate seg
+                        form_blob(seg, **kwargs)
+                    break
+            else:  # no next-P overlap
+                if seg['roots'] != 1:  # if roots != 1: terminate seg
+                    form_blob(seg, **kwargs)
+
+                if seg_:  # load next _P
+                    seg = seg_.popleft()
+                    _P = seg['Py_'][-1]
+                else:  # if no seg left: terminate loop
+                    new_P_.append((P, fork_))
+                    break
+
+    while P_:  # terminate Ps and segs that continue at line's end
+        new_P_.append((P_.popleft(), []))  # no fork
+    while seg_:
+        form_blob(seg_.popleft(), **kwargs)  # roots always == 0
+
+    return new_P_
+
+
+def scan_P__():
     return
 
-def form_seg_(P__):
-    return
 
-def form_blob(seg_):
+def form_seg_():
+
+def form_blob(seg, **kwargs):
     return
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -205,7 +228,6 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     # Equivalent with:
     # if len(root_blob['forks'][fork_type]) <= len_sub_layers:
     #     root_blob['forks'][fork_type].append(((0, 0, 0, 0, 0), []))
-
 
     # First layer accumulations:
     G, Dy, Dx, L, Ly = blob['Dert'].values()
