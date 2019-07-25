@@ -27,7 +27,9 @@ from collections import deque, defaultdict
 from itertools import starmap
 
 import numpy as np
+import numpy.ma as ma
 
+from utils import imread
 # -----------------------------------------------------------------------------
 # Structures
 '''
@@ -111,7 +113,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(dy__, dx__)
 
-    return p__[np.newaxis, ...], np.around(np.stack((g__, dy__, dx__), axis=0))
+    return ma.array(p__)[np.newaxis, ...], ma.around(ma.stack((g__, dy__, dx__), axis=0))
 
 
 def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
@@ -295,19 +297,19 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
             x_stop = x_start + P['L']
             mask[y - y0, x_start:x_stop] = False
 
+    I = Dert.pop('I')
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                 rng=1,
                 dert___=[frame['i__'], frame['dert__']],
                 mask=mask,
-                hDerts=np.array([I, 0, 0, 0, 0]),
+                hDerts=np.array([[I, 0, 0, 0, 0, 0]]),
                 root_blob=None,
                 forks=defaultdict(list),
                 )
-
-    I = Dert.pop('I')
     G, Dy, Dx, L, Ly = blob['Dert'].values()
+    blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
 
     # Update frame:
     frame.update(I=frame['I'] + I,
@@ -329,7 +331,6 @@ def accum_Dert(Dert : dict, **params) -> None:
 # Main
 
 if __name__ == '__main__':
-    from utils import imread
     image = imread(image_path).astype(int)
 
     start_time = time()

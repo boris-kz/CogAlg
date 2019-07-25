@@ -43,7 +43,7 @@ import numpy as np
 import numpy.ma as ma
 
 from comp_i import comp_i
-from utils import pairwise
+from utils import pairwise, flatten
 
 # -----------------------------------------------------------------------------
 # Filters
@@ -72,64 +72,57 @@ F_DERIV = 0b10
 # Functions
 
 
-def intra_comp(i__, dert___, root_blob, rng, fork_type, Ave, Ave_blob):
+def intra_comp(dert___, root_blob, fork_type, Ave, Ave_blob, rng=1):
 
-    # Take dert__ and i__ inside root_blob's box:
-    i__ = i__[root_blob.slices]
-    dert__ = dert___[-1][root_blob.slices]
+    # Take dert__ inside root_blob's bounding box:
+    dert__ = dert___[-1][root_blob['slices']]
     y0, yn, x0, xn = root_blob['box']
 
-    P__ = form_P__(x0, i__, dert__, Ave) # Horizontal clustering
-    seg_ = deque()  # Buffer of running segments
-    for y, P_ in enumerate(P__, start=y0):
-        P_ = scan_P_(P_, seg_)
-        seg_ = form_seg_(y, P_)
+    P__ = form_P__(x0, y0, dert__, Ave) # Horizontal clustering
+    P_ = scan_P__(P__)
+    seg_ = form_segment_(P_)
+    blob_ = form_blob_(seg_, root_blob, dert___, rng, fork_type)
 
-    # Merge last-line segments into their blobs:
-    while seg_: form_blob(seg_.popleft(), root_blob=root_blob, rng=rng)
-
-    return Ave_blob * len(root_blob['Layers'][-1][fork_type]['sub_blob_']) / ave_n_sub_blobs
+    return Ave_blob * len(blob_) / ave_n_sub_blobs
 
 
-def form_P__(x0, i__, dert__, Ave):
+def form_P__(x0, y0, dert__, Ave):
     """Form Ps across the whole dert array."""
-    if i__.ndim == 2:   # Inputs are g_derts.
+    if len(dert__) == 4:   # Inputs are g_derts.
         fa = 0
-    elif i__.ndim == 3: # Inputs are ga_derts.
+    elif len(dert__) == 5: # Inputs are ga_derts.
         fa = 1
     else:
         raise ValueError
     g__ = dert__[0, :, :]  # g sign determines clustering:
 
     # Clustering:
-    s_x_L__ = starmap(
-        lambda y, g_: # Each line.
+    s_x_L__ = [*map(
+        lambda g_: # Each line.
             [(sign, next(group)[0], len(list(group)) + 1) # (s, x, L)
-             for sign, group in groupby(enumerate(g_ > Ave, start=x0),
+             for sign, group in groupby(enumerate(g_ > Ave),
                                         op.itemgetter(1)) # (x, s): return s.
              if sign is not ma.masked], # Ignore gaps.
-        enumerate(g__), # Each line.
-    )
+        g__, # Each line.
+    )]
 
     # Accumulation:
-    P__ = [deque(dict(sign=s,
-                      x0=x,
-                      I=i_[..., x : x+L].sum(axis=-1),
-                      G=dert_[0, x : x+L].sum() - Ave * L,
-                      M=None if fa else dert_[1, x : x+L].sum(),
-                      Dy=dert_[1:3, x : x+L].sum(axis=-1) if fa
-                         else dert_[2, x : x+L].sum(),
-                      Dx=dert_[3:, x : x+L].sum(axis=-1) if fa
-                         else dert_[3, x : x+L].sum(),
-                      L=L,
-                      dert_=dert_[:, x : x+L].T,
-                      root_=[],
-                      fork_=[],
-                      y=y)
-                 for s, x, L in s_x_L_)
-           for i_, dert_, (y, s_x_L_) in zip(i__,
-                                             dert__.swapaxes(0, 1),
-                                             enumerate(s_x_L__))]
+    P__ = [[dict(sign=s,
+                 x0=x+x0,
+                 G=dert_[0, x : x+L].sum() - Ave * L,
+                 M=0 if fa else dert_[1, x : x+L].sum(),
+                 Dy=np.array(dert_[1:3, x : x+L].sum(axis=-1)) if fa
+                 else dert_[2, x : x+L].sum(),
+                 Dx=np.array(dert_[3:, x : x+L].sum(axis=-1)) if fa
+                 else dert_[3, x : x+L].sum(),
+                  L=L,
+                  dert_=dert_[:, x : x+L].T,
+                  root_=[],
+                  fork_=[],
+                  y=y)
+            for s, x, L in s_x_L_]
+           for dert_, (y, s_x_L_) in zip(dert__.swapaxes(0, 1),
+                                         enumerate(s_x_L__, start=y0))]
 
     return P__
 
@@ -142,7 +135,7 @@ def scan_P__(P__):
         try:
             _P, P = next(_P_), next(P_) # First pair to check.
         except StopIteration: # No more fork-root pair.
-            pass # To next pair of _P_, P_.
+            continue # To next pair of _P_, P_.
         while True:
             left, olp = relative_pos(_P, P) # Check for 4 different cases.
             if olp and _P['sign'] == P['sign']:
@@ -156,7 +149,7 @@ def scan_P__(P__):
     return [*flatten(P__)] # Flatten P__ before return.
 
 
-def relative_pos(_P, P): # Used in scan_P__().
+def relative_pos(_P, P): # Used in scan_P_().
     """
     Check for end-point relative position and overlap.
     Used in scan_P__().
@@ -174,12 +167,12 @@ def relative_pos(_P, P): # Used in scan_P__().
 
 def form_segment_(P_):
     """Form segments of vertically contiguous Ps."""
-    seg_keys = 'y0', 'G', 'M', 'Dy', 'Dx', 'L', 'Ly', 'Py_'
+    seg_keys = 'y0', 'G', 'M', 'Dy', 'Dx', 'L', 'Ly', 'Py_', 'root_', 'fork_'
 
     # Get a list of all segment's first P:
-    P0_ = filter(lambda P: (len(P['fork_']) != 1
-                           or len(P['fork_'][0]['root_']) != 1),
-                 P_)
+    P0_ = [*filter(lambda P: (len(P['fork_']) != 1
+                            or len(P['fork_'][0]['root_']) != 1),
+                   P_)]
 
     # Form segments:
     seg_ = [dict(zip(seg_keys,
@@ -199,20 +192,24 @@ def form_segment_(P_):
             # cluster_P(P): traverse segnent from first P:
             for Py_ in map(cluster_P, P0_)]
 
+    a = len(P_)
+    b = sum(map(lambda P: len(P['Py_']), seg_))
+    assert a == b
+
     for seg in seg_:
         seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
 
     for seg in seg_:
-        seg['root_'] = [*map(lambda P: P['seg'], seg['root_'])]
-        seg['fork_'] = [*map(lambda P: P['seg'], seg['fork_'])]
+        seg.update(root_=[*map(lambda P: P['seg'], seg['root_'])],
+                   fork_=[*map(lambda P: P['seg'], seg['fork_'])])
 
     for seg in seg_:
-        seg['Py_'][0].pop('seg')
-        seg['Py_'][1].pop('seg')
-        seg['Py_'][0].pop('fork_')
-        seg['Py_'][1].pop('root_')
+        for i, ref in ((0, 'fork_'), (-1, 'root_')):
+            seg['Py_'][i].pop('seg')
+            seg['Py_'][i].pop(ref)
 
     return seg_
+
 
 def cluster_P(P): # Used in form_segment_().
     """
@@ -220,29 +217,33 @@ def cluster_P(P): # Used in form_segment_().
     Used in form_segment_().
     """
 
-    if len(P['root_'] != 1) != 1 or len(P['root_'][0]['fork_']) != 1:
+    if len(P['root_']) == 1 and len(P['root_'][0]['fork_']) == 1:
         P['root_'][0].pop('y')
         root = P.pop('root_')[0] # Only 1 root.
-        root.pop('fork') # Only 1 fork.
+        root.pop('fork_') # Only 1 fork.
         return [P] + cluster_P(root)
     else:
         return [P]
 
 
 def form_blob_(seg_, root_blob, dert___, rng, fork_type):
-    encountered = set()
+    encountered = []
     blob_ = []
     for seg in seg_:
-        G, M, Dy, Dx, L, Ly, blob_seg_ = 0, 0, 0, 0, 0, 0, []
-        x0, xn = 9999999, 0
+        if seg in encountered:
+            continue
 
         q = deque([seg])
-        encountered.add(seg)
+        encountered.append(seg)
+
+        s = seg['Py_'][0]['sign']
+        G, M, Dy, Dx, L, Ly, blob_seg_ = 0, 0, 0, 0, 0, 0, []
+        x0, xn = 9999999, 0
         while q:
             blob_seg = q.popleft()
             for ext_seg in blob_seg['fork_'] + blob_seg['root_']:
                 if ext_seg not in encountered:
-                    encountered.add(ext_seg)
+                    encountered.append(ext_seg)
             G += blob_seg['G']
             M += blob_seg['M']
             Dy += blob_seg['Dy']
@@ -255,7 +256,7 @@ def form_blob_(seg_, root_blob, dert___, rng, fork_type):
             xn = max(xn, max(map(lambda P: P['x0']+P['L'], blob_seg['Py_'])))
 
         y0 = min(map(op.itemgetter('y0'), blob_seg_))
-        yn = max(map(lambda segment: segments['y0']+segments['Ly'], blob_seg_))
+        yn = max(map(lambda segment: segment['y0']+segment['Ly'], blob_seg_))
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)
         for blob_seg in blob_seg_:
@@ -277,10 +278,10 @@ def form_blob_(seg_, root_blob, dert___, rng, fork_type):
             root_blob = root_blob,
             hDerts = np.concatenate(
                 (
-                    np.array(root_blob['Dert'].values()),
-                    root_blob['hDert'],
+                    [[*root_blob['Dert'].values()]],
+                    root_blob['hDerts'],
                 ),
-                axis=0,
+                axis=0
             ),
             forks=defaultdict(list),
             fork_type=fork_type,
@@ -292,9 +293,6 @@ def form_blob_(seg_, root_blob, dert___, rng, fork_type):
 
     return blob_
 
-# ----------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-
 
 def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding param of recursively higher root_blob.
     root_blob = blob['root_blob']
@@ -305,16 +303,16 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     # Last blob Layer is deeper than last root_blob Layer:
     len_sub_layers = max(0, 0, *map(len, blob['forks'].values()))
     while len(root_blob['forks'][fork_type]) <= len_sub_layers:
-        root_blob['forks'][fork_type].append(((0, 0, 0, 0, 0), []))
+        root_blob['forks'][fork_type].append((0, 0, 0, 0, 0, 0, []))
     # Equivalent with:
     # if len(root_blob['forks'][fork_type]) <= len_sub_layers:
-    #     root_blob['forks'][fork_type].append(((0, 0, 0, 0, 0), []))
+    #     root_blob['forks'][fork_type].append((0, 0, 0, 0, 0, [])))
 
     # First layer accumulations:
-    G, Dy, Dx, L, Ly = blob['Dert'].values()
-    (Gr, Dyr, Dxr, Lr, Lyr), sub_blob_ = root_blob['forks'][fork_type][0]
+    G, M, Dy, Dx, L, Ly = blob['Dert'].values()
+    Gr, Mr, Dyr, Dxr, Lr, Lyr, sub_blob_ = root_blob['forks'][fork_type][0]
     root_blob['forks'][fork_type][0] = (
-        (Gr + G, Dyr + Dy, Dxr + Dx, Lr + L, Lyr + Ly),
+        Gr + G, Mr + M, Dyr + Dy, Dxr + Dx, Lr + L, Lyr + Ly,
         sub_blob_ + [blob],
     )
 
@@ -322,17 +320,12 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     root_blob['forks'][fork_type][1:] = \
         [*starmap( # Like map() except for taking multiple arguments.
             # Function (with multiple arguments):
-            lambda Dert, sub_blob_, sDert, ssub_blob_:
-                (
-                    (*starmap(op.add, zip(Dert, sDert)),), # Dert accum
-                    sub_blob_ + ssub_blob_, # sub_blob_ accum
-                ),
+            lambda Dert, sDert:
+                (*starmap(op.add, zip(Dert, sDert)),), # Dert and sub_blob_ accum
             # Mapped iterables:
             zip(
-                # Transform 2 lists of tuples of 2 into 1 list of tuples of 4:
-                # (Dert, sub_blob_, sDert, ssub_blob_)
-                *zip(*root_blob['forks'][fork_type][1:]),
-                *zip(*blob['forks'][sub_fork_type][:]),
+                root_blob['forks'][fork_type][1:],
+                blob['forks'][sub_fork_type][:],
             ),
         )]
     # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)
@@ -401,9 +394,16 @@ def select_blobs(blob_, Ave_blob):
     # Get dert___ of selected blob:
     dert___ = blob_[0]['dert___'] # Get dert___ of any blob.
     shape = dert___[-1][0].shape # Get previous layer's g's shape.
-    mask = reduce(lambda m, blob: m[blob['slices'] & blob['mask']],
-                  blob,
+    mask = reduce(merge_mask,
+                  blob_,
                   np.ones(shape, dtype=bool))
     dert___[-1][:, mask] = ma.masked # Mask irrelevant parts.
 
     return dert___, selected_blob_
+
+def merge_mask(mask, blob):
+    mask[blob['slices']] &= blob['mask']
+    return mask
+
+# ----------------------------------------------------------------------
+# -----------------------------------------------------------------------------
