@@ -133,14 +133,14 @@ def comp_i(dert___, rng=1, flags=0):
 
     # Compare inputs:
     d__ = translated_operation(i__, rng, op.sub)
-    valid = central_slice(rng)
+    comp_field = central_slice(rng)
 
     # Decompose and add to corresponding dy and dx:
-    dy__[valid] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
-    dx__[valid] += (d__ * X_COEFFS[rng]).sum(axis=-1)
+    dy__[comp_field] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
+    dx__[comp_field] += (d__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Compute ms:
-    m__[valid] += translated_operation(i__, rng, np.minimum).sum(axis=-1)
+    m__[comp_field] += translated_operation(i__, rng, np.minimum).sum(axis=-1)
 
     # Compute gs:
     g__ = ma.hypot(dy__, dx__)
@@ -188,11 +188,11 @@ def comp_a(dert___, rng):
 
     # Compute angle differences:
     da__ = translated_operation(a__, rng, angle_diff)
-    valid = central_slice(rng)
+    comp_field = central_slice(rng)
 
     # Decompose and add to corresponding day and dax:
-    day__[valid] += (da__ * Y_COEFFS[rng]).mean(axis=-1)
-    dax__[valid] += (da__ * X_COEFFS[rng]).mean(axis=-1)
+    day__[comp_field] += (da__ * Y_COEFFS[rng]).mean(axis=-1)
+    dax__[comp_field] += (da__ * X_COEFFS[rng]).mean(axis=-1)
 
     # Compute ga:
     ga__ = (ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
