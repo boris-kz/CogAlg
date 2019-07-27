@@ -348,10 +348,10 @@ def intra_blobs(eval_fork_, Ave_blob, Ave, rdn):
 
         Gg = sum(map(lambda blob: blob['Dert']['G'], fork_sub_blob_))
         Ga = sum(map(lambda blob: blob['Dert']['Ga'], fork_sub_blob_))
-        new_eval_fork_.extend([
+        new_eval_fork_.extend += [
             (Gg, fork_sub_blob_, rng, F_DERIV),
             (Ga, fork_sub_blob_, rng, F_ANGLE),
-        ])
+        ]
 
         if not flags & F_ANGLE:
             G = sum(map(lambda blob: blob['Dert']['G'], blob_))
