@@ -13,9 +13,10 @@ import numpy.ma as ma
 
 PI_TO_BYTE_SCALE = 114.79033031003102
 
-# Declare comparison flags:
-F_ANGLE = 0b01
-F_DERIV = 0b10
+# Declare dert flags:
+F_ANGLE = 0b001
+F_DERIV = 0b010
+F_RANGE = 0b100
 
 # Declare slicing for vectorized rng comparisons:
 TRANSLATING_SLICES = {
@@ -100,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert___, rng=1, flags=0):
+def comp_i(dert___, rng, flags):
     """
     Determine which parameter from dert__ is the input,
     then compare the input over predetermined range
@@ -111,13 +112,11 @@ def comp_i(dert___, rng=1, flags=0):
         Contains input array.
     rng : int
         Determine translation between comparands.
-    flags : int, default: 0
+    flags : int
         Indicate which params in dert__ being used as input.
 
     Return
     ------
-    i__ : MaskedArray
-        Input array for summing in form_P_().
     new_dert___ : list
         Last element is the array of derivatives computed in
         this operation.
@@ -126,7 +125,7 @@ def comp_i(dert___, rng=1, flags=0):
 
     # Compare angle flow control:
     if flags & F_ANGLE:
-        return comp_a(dert___, rng)
+        return comp_a(dert___, rng, flags)
 
     # Assign input array:
     i__, dy__, dx__, m__ = assign_inputs(dert___, rng, flags)
@@ -177,14 +176,14 @@ def assign_inputs(dert___, rng, flags):
     return i__, dy__, dx__, m__
 
 
-def comp_a(dert___, rng):
+def comp_a(dert___, rng, flags):
     """
     Same functionality as comp_i except for comparands are 2D vectors
     instead of scalars, and differences here are differences in angle.
     """
 
     # Assign array of comparands:
-    a__, day__, dax__ = assign_angle_inputs(dert___, rng)
+    a__, day__, dax__ = assign_angle_inputs(dert___, rng, flags)
 
     # Compute angle differences:
     da__ = translated_operation(a__, rng, angle_diff)
@@ -210,12 +209,12 @@ def comp_a(dert___, rng):
             ma.concatenate((ga__, day__, dax__), axis=0),
         ]
 
-    return new_dert___
+    return new_dert___, rng
 
 
-def assign_angle_inputs(dert___, rng):
+def assign_angle_inputs(dert___, rng, flags):
     """Get comparands and accumulated dax, day from dert___."""
-    if rng > 1:
+    if flags & F_RANGE:
         a__ = dert___[-2][-2:]  # Assign a__ of previous layer
 
         # Accumulated dax__, day__ of previous layer:
