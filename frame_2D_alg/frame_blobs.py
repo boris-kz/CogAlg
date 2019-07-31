@@ -41,7 +41,7 @@ Frame = namedtuple('Frame', 'I, G, Dy, Dx, blob_, i__, dert__')
 '''
 # -----------------------------------------------------------------------------
 # Adjustable parameters
-image_path = "./../images/raccoon.jpg"
+image_path = "./../images/raccoon_eye.jpg"
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 20 + 60 * (kwidth == 3)
 rng = int(kwidth == 3)

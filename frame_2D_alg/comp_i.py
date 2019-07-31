@@ -209,7 +209,7 @@ def comp_a(dert___, rng, flags):
             ma.concatenate((ga__, day__, dax__), axis=0),
         ]
 
-    return new_dert___, rng
+    return new_dert___
 
 
 def assign_angle_inputs(dert___, rng, flags):
@@ -223,11 +223,11 @@ def assign_angle_inputs(dert___, rng, flags):
     else:
         # Compute angle from g__, dy__, dx__ of previous layer:
         g__ = dert___[-1][0]
-        if len(dert___[-1]) == 3:
+        if len(dert___[-1]) in (3, 4):
             dy__, dx__ =  dert___[-1][-2:]
         elif len(dert___[-1]) == 5:
-            dy__, dx__ = ma.arctan2(dert___[-1][-2:-4],
-                                    dert___[-1][-4:])
+            dy__, dx__ = ma.arctan2(dert___[-1][-4:-2],
+                                    dert___[-1][-2:])
         else:
             raise(ValueError)
 

@@ -19,14 +19,15 @@ from utils import imread, draw
 # Constants
 
 # Declare comparison flags:
-F_ANGLE = 0b01
-F_DERIV = 0b10
+F_ANGLE = 0b001
+F_DERIV = 0b010
+F_RANGE = 0b100
 
 # Branche dict:
 branch_dict = {
-    'r': 0,
     'a': F_ANGLE,
     'g': F_DERIV,
+    'r': F_RANGE,
 }
 
 # -----------------------------------------------------------------------------
@@ -37,11 +38,11 @@ image_path = "../images/raccoon.jpg"
 
 # Outputs:
 output_path = "../debug/"
-binary_output = True
+binary_output = False
 
 # Aves:
 init_ave = 20
-angle_ave = 20
+angle_ave = 100
 
 # How ave is increased?
 increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
@@ -98,9 +99,9 @@ def forking(derts, rng, Ave, fork_history, branch, subpipes):
             rng = 1
 
     Ave = increase_ave(Ave, rng)
-    _, derts = comp_i(derts,
-                      rng=rng,
-                      flags=branch_dict[branch])
+    derts = comp_i(derts,
+                   rng=rng,
+                   flags=branch_dict[branch])
 
     draw_fork(derts, Ave, fork_history)
 

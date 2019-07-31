@@ -364,6 +364,7 @@ def intra_blobs(eval_fork_, Ave_blob, Ave, rdn):
             ))
 
     intra_blobs(sorted(new_eval_fork_), Ave_blob, Ave, rdn)
+
 # -----------------------------------------------------------------------------
 
 def intra_blob(root_blob, rng, eval_fork_, Ave_blob, Ave):  # fia (flag ia) selects input a | g in higher dert
