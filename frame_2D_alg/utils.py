@@ -320,7 +320,7 @@ def generate_kernels(max_rng, k2x2=0):
         rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
         rng_kernel /= rng # Divide by comparison distance.
         k_.appendleft(rng_kernel)
-        k = k[:, 1: -1, 1:-1] # Make k recursively shrunken.
+        k = k[:, 1:-1, 1:-1] # Make k recursively shrunken.
 
     # Compute 2x2 kernel:
     if k2x2:
@@ -455,7 +455,6 @@ class GenTransSlice(object):
                                     r - 2))]
             slices = [*zip(repeat(...), slices[-r+1:] + slices[:-r+1], slices)]
             self._slices.append(slices)
-
 
     def to_file(self, path="slices.py"):
         """Write coeffs to text file."""

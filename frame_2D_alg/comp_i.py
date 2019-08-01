@@ -229,7 +229,7 @@ def assign_angle_inputs(dert___, rng, flags):
             dy__, dx__ = ma.arctan2(dert___[-1][-4:-2],
                                     dert___[-1][-2:])
         else:
-            raise(ValueError)
+            raise ValueError
 
         g__[g__ == 0] = ma.masked # To avoid dividing by zero.
 

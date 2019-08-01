@@ -51,32 +51,33 @@ increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
 
 # Recursive comps' pipelines:
 pipe_lines = [ # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
-    ("g", [
-        ("g", [
-            ("g", []),
-            ("a", []),
-            ("r", []),
-        ]),
-        ("a", [
-            ("g", []),
-            ("a", []),
-        ]),
-        ("r", [
-            ("g", []),
-            ("a", []),
-        ]),
-    ]),
     ("a", [  # actually ga
         ("g", [
-            ("g", []),
-            ("a", []),
             ("r", []),
+            ("a", []),
+            ("g", []),
         ]),
         ("a", [
-            ("g", []),
             ("a", []),
+            ("g", []),
         ]),
-    ])
+    ]),
+    ("g", [
+        ("g", [
+            ("r", []),
+            ("a", []),
+            ("g", []),
+        ]),
+        ("a", [
+            ("a", []),
+            ("g", []),
+        ]),
+        ("r", [
+            ("r", []),
+            ("a", []),
+            ("g", []),
+        ]),
+    ]),
 ]
 
 # -----------------------------------------------------------------------------
@@ -92,9 +93,7 @@ def forking(derts, rng, Ave, fork_history, branch, subpipes):
     """Forking comps into further forks."""
     if branch == 'r':
         rng += 1
-        fork_history = fork_history[:-1] + str(rng)  # Replace rng only.
     else:
-        fork_history += branch + str(rng)  # Add new derivation.
         if branch == "a":
             rng = 1
 
@@ -103,6 +102,7 @@ def forking(derts, rng, Ave, fork_history, branch, subpipes):
                    rng=rng,
                    flags=branch_dict[branch])
 
+    fork_history += branch  # Add new derivation.
     draw_fork(derts, Ave, fork_history)
 
     recursive_comp(derts, rng, Ave, fork_history, subpipes)
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     # Initial comp:
     image = imread(image_path)
     input, dert = frame_blobs.comp_pixel(image)
-    draw_fork([dert], init_ave, "g" + str(frame_blobs.rng))
+    draw_fork([dert], init_ave, "g")
 
     # Recursive comps:
     recursive_comp(derts=[
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                    ],
                    rng=1,
                    Ave=init_ave,
-                   fork_history="g" + str(frame_blobs.rng),
+                   fork_history="g",
                    pipes=pipe_lines)
 
 # ----------------------------------------------------------------------
