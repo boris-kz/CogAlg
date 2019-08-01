@@ -13,9 +13,10 @@ import numpy.ma as ma
 
 PI_TO_BYTE_SCALE = 114.79033031003102
 
-# Declare comparison flags:
-F_ANGLE = 0b01
-F_DERIV = 0b10
+# Declare dert flags:
+F_ANGLE = 0b001
+F_DERIV = 0b010
+F_RANGE = 0b100
 
 # Declare slicing for vectorized rng comparisons:
 TRANSLATING_SLICES = {
@@ -100,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert___, rng=1, flags=0):
+def comp_i(dert___, rng, flags):
     """
     Determine which parameter from dert__ is the input,
     then compare the input over predetermined range
@@ -110,12 +111,10 @@ def comp_i(dert___, rng=1, flags=0):
         Contains input array.
     rng : int
         Determine translation between comparands.
-    flags : int, default: 0
+    flags : int
         Indicate which params in dert__ being used as input.
     Return
     ------
-    i__ : MaskedArray
-        Input array for summing in form_P_().
     new_dert___ : list
         Last element is the array of derivatives computed in
         this operation.
@@ -124,27 +123,32 @@ def comp_i(dert___, rng=1, flags=0):
 
     # Compare angle flow control:
     if flags & F_ANGLE:
-        return comp_a(dert___, rng)
+        return comp_a(dert___, rng, flags)
 
     # Assign input array:
-    i__, dy__, dx__ = assign_inputs(dert___, rng, flags)
+    i__, dy__, dx__, m__ = assign_inputs(dert___, rng, flags)
 
     # Compare inputs:
     d__ = translated_operation(i__, rng, op.sub)
+    comp_field = central_slice(rng)
 
     # Decompose and add to corresponding dy and dx:
-    dy__[central_slice(rng)] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
-    dx__[central_slice(rng)] += (d__ * X_COEFFS[rng]).sum(axis=-1)
+    dy__[comp_field] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
+    dx__[comp_field] += (d__ * X_COEFFS[rng]).sum(axis=-1)
+
+    # Compute ms:
+    m__[comp_field] += translated_operation(i__, rng, np.minimum).sum(axis=-1)
 
     # Compute gs:
     g__ = ma.hypot(dy__, dx__)
 
     if flags & F_DERIV:
-        new_dert___ = dert___ + [ma.stack((g__, dy__, dx__), axis=0)]
+        new_dert___ = dert___ + [ma.stack((g__, m__, dy__, dx__), axis=0)]
     else:
-        new_dert___ = dert___[:-1] + [ma.stack((g__, dy__, dx__), axis=0)]
+        new_dert___ = dert___[:-1] + [ma.stack((g__, m__, dy__, dx__), axis=0)]
 
-    return i__, new_dert___
+    return new_dert___
+
 
 def assign_inputs(dert___, rng, flags):
     """Get input and accumulated dx, dy from dert___."""
@@ -152,31 +156,40 @@ def assign_inputs(dert___, rng, flags):
         i__ = dert___[-1][0] # Assign g__ of previous layer to i__
 
         # Accumulate dx__, dy__ starting from 0:
-        dy__ = ma.array(np.zeros(i__.shape), mask=rim_mask(i__.shape, rng))
-        dx__ = ma.array(np.zeros(i__.shape), mask=rim_mask(i__.shape, rng))
+        dy__, dx__, m__ = (ma.array(np.zeros(i__.shape)) for _ in range(3))
     else:
         i__ = dert___[-2][0] # Assign one layer away g__ to i__
 
-        # Accumulated dx__, dy__ of previous layer:
-        dy__, dx__ = dert___[-1][-2:]
+        # Accumulated m__, dx__, dy__ of previous layer:
+        try: # Most of the time there's m__ (len(dert__) == 5):
+            dx__ = dert___[-1][3] # Raise an IndexError is len(dert__) < 5.
+            m__, dy__ = dert___[-1][1:3]
+        except IndexError: # With dert from frame_blobs (len(dert__) == 4):
+            dy__, dx__ = dert___[-1][1:3]
+            m__ = ma.array(np.zeros(i__.shape))
 
-    return i__, dy__, dx__
+    shrink_mask = rim_mask(i__.shape, rng)
+    for arr in (dy__, dx__, m__):
+        arr[shrink_mask] = ma.masked
+    return i__, dy__, dx__, m__
 
-def comp_a(dert___, rng):
+
+def comp_a(dert___, rng, flags):
     """
     Same functionality as comp_i except for comparands are 2D vectors
     instead of scalars, and differences here are differences in angle.
     """
 
     # Assign array of comparands:
-    a__, day__, dax__ = assign_angle_inputs(dert___, rng)
+    a__, day__, dax__ = assign_angle_inputs(dert___, rng, flags)
 
     # Compute angle differences:
     da__ = translated_operation(a__, rng, angle_diff)
+    comp_field = central_slice(rng)
 
     # Decompose and add to corresponding day and dax:
-    day__[central_slice(rng)] += (da__ * Y_COEFFS[rng]).sum(axis=-1)
-    dax__[central_slice(rng)] += (da__ * X_COEFFS[rng]).sum(axis=-1)
+    day__[comp_field] += (da__ * Y_COEFFS[rng]).mean(axis=-1)
+    dax__[comp_field] += (da__ * X_COEFFS[rng]).mean(axis=-1)
 
     # Compute ga:
     ga__ = (ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
@@ -194,14 +207,13 @@ def comp_a(dert___, rng):
             ma.concatenate((ga__, day__, dax__), axis=0),
         ]
 
-    return a__, new_dert___
+    return new_dert___
 
 
-def assign_angle_inputs(dert___, rng):
+def assign_angle_inputs(dert___, rng, flags):
     """Get comparands and accumulated dax, day from dert___."""
-    if rng > 1:
+    if flags & F_RANGE:
         a__ = dert___[-2][-2:]  # Assign a__ of previous layer
-# -----------------------------------------------------------------------------
 
         # Accumulated dax__, day__ of previous layer:
         day__ = dert___[-1][-4:-2]
@@ -209,11 +221,11 @@ def assign_angle_inputs(dert___, rng):
     else:
         # Compute angle from g__, dy__, dx__ of previous layer:
         g__ = dert___[-1][0]
-        if len(dert___[-1]) == 3:
+        if len(dert___[-1]) in (3, 4):
             dy__, dx__ =  dert___[-1][-2:]
         elif len(dert___[-1]) == 5:
-            dy__, dx__ = ma.arctan2(dert___[-1][-2:-4],
-                                    dert___[-1][-4:])
+            dy__, dx__ = ma.arctan2(dert___[-1][-4:-2],
+                                    dert___[-1][-2:])
         else:
             raise(ValueError)
 
@@ -224,9 +236,14 @@ def assign_angle_inputs(dert___, rng):
         shape = (2,) + g__.shape
         # Accumulate dax__, day__ starting from 0:
         day__ = ma.array(np.zeros(shape), mask=rim_mask(shape, rng))
-        dax__ = ma.array(np.zeros(shape), mask=rim_mask(shape, rng))
+        dax__ = ma.array(np.zeros(shape))
+
+    shrink_mask = rim_mask(a__.shape, rng)
+    day__[shrink_mask] = ma.masked
+    dax__[shrink_mask] = ma.masked
 
     return a__, day__, dax__
+
 # -----------------------------------------------------------------------------
 # Utility functions
 
@@ -236,11 +253,16 @@ def central_slice(i):
         return ..., slice(None), slice(None)
     return ..., slice(i, -i), slice(i, -i)
 
+
 def rim_mask(shape, i):
-    """The opposite of central_slice."""
+    """
+    Return 2D array mask where outer pad (pad width=i) is True,
+    the rest is False.
+    """
     out = np.ones(shape, dtype=bool)
     out[central_slice(i)] = False
     return out
+
 
 def translated_operation(a, rng, operator):
     """
@@ -271,6 +293,7 @@ def translated_operation(a, rng, operator):
         out = out.swapaxes(dim, dim+1)
 
     return out
+
 
 def angle_diff(a2, a1):
     """

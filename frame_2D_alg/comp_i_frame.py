@@ -1,44 +1,54 @@
 """
 For testing comparison operations and sub-blobs of different depths.
 Requirements: numpy, frame_blobs, comp_i, utils.
+Note: Since these operations performed only on multivariate variables,
+"__" in variable names will be skipped.
 """
 
 import numpy as np
 import numpy.ma as ma
+
 import frame_blobs
+
 from comp_i import comp_i
 from utils import imread, draw
 
 # -----------------------------------------------------------------------------
+# Constants
 
 # Declare comparison flags:
-F_ANGLE = 0b01
-F_DERIV = 0b10
+F_ANGLE = 0b001
+F_DERIV = 0b010
+F_RANGE = 0b100
 
-fork_dict = {
-    'r': 0,
+# Branche dict:
+branch_dict = {
     'a': F_ANGLE,
     'g': F_DERIV,
+    'r': F_RANGE,
 }
 
 # -----------------------------------------------------------------------------
+# Adjustable parameters
+
 # Input:
 image_path = "../images/raccoon.jpg"
 
 # Outputs:
 output_path = "../debug/"
-binary_output = True
+binary_output = False
 
-# filters:
+# Aves:
 init_ave = 20
-angle_ave = 20
+angle_ave = 100
 
+# How ave is increased?
 increase_ave = lambda ave, rng: ave * ((rng * 2 + 1) ** 2 - 1) / 2
 # Uncomment below definition of increase_ave for identity function:
 # increase_ave = lambda ave, rng: ave
 
-# Recursive comparison pipelines:
-pipe_lines = [  # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
+# Recursive comps' pipelines:
+pipe_lines = [ # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
     ("g", [
         ("g", [
             ("g", []),
@@ -71,41 +81,44 @@ pipe_lines = [  # 3 forks per g, 2 per p | a: no rng+, replaced by g | ga:
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_tree(derts, rng, Ave, past_forks, tree):  # comparisons down pipe_lines
+def recursive_comp(derts, rng, Ave, fork_history, pipes):
+    """Comparisons under a fork."""
+    for branch, subpipes in pipes: # Stop recursion if pipes = [].
+        forking(derts, rng, Ave, fork_history,
+                branch, subpipes)
 
-    for fork, subtree in tree: # Stop recursion if tree = [].
-        next_layer(derts, rng, Ave, past_forks,
-                fork, subtree)
-
-def next_layer(derts, rng, Ave, past_forks, fork, subtree):  # calls deeper forks
-
-    if fork == 'r':
+def forking(derts, rng, Ave, fork_history, branch, subpipes):
+    """Forking comps into further forks."""
+    if branch == 'r':
         rng += 1
-        past_forks = past_forks[:-1] + str(rng)  # Replace rng only.
+        fork_history = fork_history[:-1] + str(rng)  # Replace rng only.
     else:
-        past_forks += fork + str(rng)  # Add new derivation.
-        if fork == "a":
+        fork_history += branch + str(rng)  # Add new derivation.
+        if branch == "a":
             rng = 1
 
     Ave = increase_ave(Ave, rng)
-    _, derts = comp_i(derts,
-                      rng=rng,
-                      flags=fork_dict[fork])
+    derts = comp_i(derts,
+                   rng=rng,
+                   flags=branch_dict[branch])
 
-    draw_fork(derts, Ave, past_forks)
-    comp_tree(derts, rng, Ave, past_forks, subtree)
+    draw_fork(derts, Ave, fork_history)
 
-def draw_fork(derts, Ave, past_forks):  # Output fork' gradient image
+    recursive_comp(derts, rng, Ave, fork_history, subpipes)
 
+def draw_fork(derts, Ave, fork_history):
+    """Output fork's gradient image."""
     out = derts[-1][0]
     if binary_output:
-        if past_forks[-2] == "a":
+        if fork_history[-2] == "a":
             Ave = angle_ave
-        draw(output_path + past_forks, (out > Ave) * 255)
+        draw(output_path + fork_history, (out > Ave) * 255)
     else:
-        draw(output_path + past_forks, (out - out.min()) / (out.max() - out.min()) * 255)
+        draw(output_path + fork_history,
+             # out)
+             (out - out.min()) / (out.max() - out.min()) * 255)
 
-# ---------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Main
 
 if __name__ == "__main__":
@@ -115,14 +128,14 @@ if __name__ == "__main__":
     draw_fork([dert], init_ave, "g" + str(frame_blobs.rng))
 
     # Recursive comps:
-    comp_tree(derts=[
+    recursive_comp(derts=[
                        ma.masked_array(image)[np.newaxis, ...],
                        ma.masked_array(dert),
                    ],
                    rng=1,
                    Ave=init_ave,
-                   past_forks ="g" + str(frame_blobs.rng),
-                   tree=pipe_lines)
+                   fork_history="g" + str(frame_blobs.rng),
+                   pipes=pipe_lines)
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

@@ -42,7 +42,7 @@ Autonomous cognition must start with analog inputs, such as video or audio. All 
 
 Such raw inputs have modality-specific properties and comparison should be adjusted accordingly, by feedback or manually. For example, vision relies on reflected light: brightness or albedo don’t directly represent source of impact, though they do represent some resistance to a very "light" impact. Uniformity of albedo indicates some common property within object, so it should form patterns. But the degree of commonality doesn’t depend on intensity of albedo, so match should be defined indirectly, as below-average |difference| or |ratio| of albedo.
 
-*Many readers see a gap between this outline and algorithm, or a lack of the latter. It’s true that algorithm is far from complete, but the above-explained principles are stable, and we are translating them into code. Final algorithm will be a meta-level of search: 1st level + additional operations to process recursive input complexity increment, generating next level. We are in a space-time continuum, thus each level will be 3D or 4D cycle. I avoid complex math because it's not selectively incremental.*
+*Many readers see a gap between this outline and the algorithm, or a lack of the latter. It’s true that algorithm is far from complete, but the above-explained principles are stable, and we are translating them into code. Final algorithm will be a meta-level of search: 1st level + additional operations to process recursive input complexity increment, generating next level. We are in a space-time continuum, thus each level will be 3D or 4D cycle. I avoid complex math because it's not selectively incremental.*
 
 
 

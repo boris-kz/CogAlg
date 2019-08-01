@@ -55,6 +55,10 @@ def pairwise(iterable):
     next(b, None)
     return zip(a, b)
 
+def flatten(listOfLists):
+    "Flatten one level of nesting"
+    return chain.from_iterable(listOfLists)
+
 def imread(path):
     '''
     Read an image from file as gray-scale.
