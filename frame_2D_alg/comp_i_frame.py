@@ -117,7 +117,7 @@ def draw_fork(derts, Ave, fork_history):
     else:
         draw(output_path + fork_history,
              # out)
-             (out - out.min()) / (out.max() - out.min()) * 255)
+             out.astype(int) % 256)
 
 # -----------------------------------------------------------------------------
 # Main
