@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test/classes" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lookup_tables" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <orderEntry type="inheritedJdk" />

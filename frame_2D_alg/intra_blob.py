@@ -67,6 +67,13 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
     represented per fork if tree reorder, else redefined at each access?
 '''
 
+FORK_TYPES = {
+    0:'',
+    F_ANGLE:'a',
+    F_DERIV:'g',
+    F_RANGE:'r',
+}
+
 # -----------------------------------------------------------------------------
 # Functions
 
@@ -81,7 +88,12 @@ def intra_cluster(dert___, root_blob, Ave, Ave_blob, rng=1, flags=0):
                    fa=flags&F_ANGLE) # Horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)
-    blob_ = form_blob_(seg_, root_blob, dert___, rng, fork_type=flags) # flags as fork_type
+    blob_ = form_blob_(seg_, root_blob, dert___, rng,
+                       fork_type=(
+                           FORK_TYPES[flags&F_ANGLE]
+                           + FORK_TYPES[flags&F_DERIV]
+                           + FORK_TYPES[flags&F_RANGE]
+                       ) # flags as fork_type
 
     return blob_, Ave_blob * len(blob_) / ave_n_sub_blobs
 
@@ -275,10 +287,10 @@ def form_blob_(seg_, root_blob, dert___, rng, fork_type):
                 axis=0
             ),
             forks=defaultdict(list),
-            fork_type=fork_type,
+            fork_types=root_blob['fork_types']+fork_type,
         )
 
-        feedback(blob)
+        # feedback(blob)
 
         blob_.append(blob)
 
@@ -325,7 +337,7 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     feedback(root_blob, fork_type)
 
 
-def intra_blobs(eval_fork_, Ave_blob, Ave, rdn):
+def intra_forks(eval_fork_, Ave_blob, Ave, rdn):
     new_eval_fork_ = []
 
     for val, blob_, rng, flags in eval_fork_:
@@ -363,7 +375,7 @@ def intra_blobs(eval_fork_, Ave_blob, Ave, rdn):
                 F_RANGE,
             ))
 
-    intra_blobs(sorted(new_eval_fork_), Ave_blob, Ave, rdn)
+    intra_forks(sorted(new_eval_fork_), Ave_blob, Ave, rdn)
 
 # -----------------------------------------------------------------------------
 

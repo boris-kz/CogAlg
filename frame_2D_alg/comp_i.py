@@ -11,12 +11,18 @@ import numpy.ma as ma
 # -----------------------------------------------------------------------------
 # Constants
 
-PI_TO_BYTE_SCALE = 114.79033031003102
-
 # Declare dert flags:
 F_ANGLE = 0b001
 F_DERIV = 0b010
 F_RANGE = 0b100
+
+# Declare comp_scopes:
+SCALER_g = {
+    1:0.354801226089485,
+    2:0.168952964804517,
+    3:0.110256954721035,
+}
+SCALER_ga = 57.597736326150859
 
 # Declare slicing for vectorized rng comparisons:
 TRANSLATING_SLICES = {
@@ -142,7 +148,7 @@ def comp_i(dert___, rng, flags):
     m__[comp_field] += translated_operation(i__, rng, ma.minimum).sum(axis=-1)
 
     # Compute gs:
-    g__ = ma.hypot(dy__, dx__)
+    g__ = ma.hypot(dy__, dx__) * SCALER_g[rng]
 
     if flags & F_DERIV:
         new_dert___ = dert___ + [ma.stack((g__, m__, dy__, dx__), axis=0)]
@@ -194,8 +200,8 @@ def comp_a(dert___, rng, flags):
     dax__[comp_field] += (da__ * X_COEFFS[rng]).mean(axis=-1)
 
     # Compute ga:
-    ga__ = (ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
-            * PI_TO_BYTE_SCALE)[np.newaxis, ...]
+    ga__ = ma.floor(ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
+                    * SCALER_ga)[np.newaxis, ...]
 
     if rng > 1:
         new_dert___ = dert___[:-1] + [ma.concatenate((ga__,

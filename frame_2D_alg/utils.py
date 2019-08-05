@@ -8,7 +8,7 @@ Categories:
 """
 
 from itertools import (
-    repeat, chain, product, starmap, tee
+    repeat, accumulate, chain, starmap, tee
 )
 
 from collections import deque
@@ -22,22 +22,6 @@ from PIL import Image
 # Constants
 
 transparent_val = 127 # Pixel at this value are considered transparent
-
-rim_slices = {
-    0:[ # For flattening outer rim of last two dimensions an ndarray:
-        (..., 0, slice(None, -1)),
-        (..., slice(None, -1), -1),
-        (..., -1, slice(-1, 0, -1)),
-        (..., slice(-1, 0, -1), 0),
-    ],
-
-    1:[# For flattening outer rim of last two dimensions an ndarray:
-        (0, slice(None, -1), ...),
-        (slice(None, -1), -1, ...),
-        (-1, slice(-1, 0, -1), ...),
-        (slice(-1, 0, -1), 0, ...),
-    ]
-}
 
 # -----------------------------------------------------------------------------
 # General purpose functions
@@ -94,11 +78,6 @@ def draw(path, image, extension='.bmp'):
 
     imsave(path + extension, image.astype('uint8'))
 
-def flattened_rim(a, arranged_d=0):
-
-    return np.concatenate(tuple(map(lambda slices: a[slices],
-                                    rim_slices[arranged_d])),
-                          axis=arranged_d-1)
 # -----------------------------------------------------------------------------
 # Blob slicing
 
@@ -266,86 +245,17 @@ def empty_map(shape):
 # -----------------------------------------------------------------------------
 # Comparison related
 
-def generate_kernels(max_rng, k2x2=0):
-    '''
-    Generate a deque of kernels corresponding to max range.
-    Deprecated. Use GenCoeff instead.
-
-    Parameters
-    ----------
-    max_rng : int
-        Maximum range of comparisons.
-    k2x2 : int
-        If True, generate an additional 2x2 kernel.
-
-    Return
-    ------
-    out : deque
-        Sequence of kernels for corresponding rng comparison.
-    '''
-    indices = np.indices((max_rng, max_rng)) # Initialize 2D indices array.
-    quart_kernel = indices / np.hypot(*indices[:]) # Compute coeffs.
-    quart_kernel[:, 0, 0] = 0 # Fill na value with zero
-
-    # Fill full dy kernel with the computed quadrant:
-    # Fill bottom-left quadrant:
-    half_kernel_y = np.concatenate(
-                        (
-                            np.flip(
-                                quart_kernel[0, :, 1:],
-                                axis=1),
-                            quart_kernel[0],
-                        ),
-                        axis=1,
-                    )
-
-    # Fill upper half:
-    kernel_y = np.concatenate(
-                   (
-                       -np.flip(
-                           half_kernel_y[1:],
-                           axis=0),
-                       half_kernel_y,
-                   ),
-                   axis=0,
-                   )
-
-    kernel = np.stack((kernel_y, kernel_y.T), axis=0)
-
-    # Divide full kernel into deque of rng-kernels:
-    k_ = deque() # Initialize deque of different size kernels.
-    k = kernel # Initialize reference kernel.
-    for rng in range(max_rng, 1, -1):
-        rng_kernel = np.array(k) # Make a copy of k.
-        rng_kernel[:, 1:-1, 1:-1] = 0 # Set central variables to 0.
-        rng_kernel /= rng # Divide by comparison distance.
-        k_.appendleft(rng_kernel)
-        k = k[:, 1:-1, 1:-1] # Make k recursively shrunken.
-
-    # Compute 2x2 kernel:
-    if k2x2:
-        coeff = kernel[0, -1, -1] # Get the value of square root of 0.5
-        kernel_2x2 = np.array([[[-coeff, -coeff],
-                                [coeff, coeff]],
-                               [[-coeff, coeff],
-                                [-coeff, coeff]]])
-
-        k_.appendleft(kernel_2x2)
-
-    return k_
-
-
 def kernel(rng):
-    '''
+    """
     Return coefficients for decomposition of d
     (compared over rng) into dy and dx.
     Here, we assume that kernel width is odd.
-    '''
+    """
     # Start with array of indices:
     indices = np.indices((rng+1, rng+1))
 
     # Apply computations:
-    quart_kernel = indices / np.hypot(*indices)
+    quart_kernel = indices / (indices**2).sum(axis=0)
     quart_kernel[:, 0, 0] = 0
 
     # Copy quarter of kernel into full kernel:
@@ -372,104 +282,6 @@ def kernel(rng):
     kx = ky.T  # Compute kernel for dx (transpose of ky).
 
     return np.stack((ky, kx), axis=0)
-
-# -----------------------------------------------------------------------------
-# GenCoeffs class
-
-class GenCoeffs(object):
-    """
-    Generate coefficients used by comparisons
-    of rng in {1, ..., max_rng}.
-    """
-    def __init__(self, max_rng=3):
-        """
-        Instanciate a GenCoeffs object.
-        """
-        self._generate_coeffs(max_rng)
-
-    def _generate_coeffs(self, max_rng):
-        """
-        Workhorse of GenCoeffs class, compute kernel
-        and separate into rng specific coefficients.
-        """
-        # Calculate combined kernel of rng from 1 to max_rng:
-        kers = kernel(max_rng)
-
-        # Separate into kernels of each rng and flatten them:
-        self._coeffs = reversed(list(
-            map(flattened_rim,
-                map(lambda slices: kers[slices],
-                    zip(repeat(...),
-                        *tee(chain((slice(None, None),),
-                                   map(lambda i: slice(i, -i), range(1, 3)),
-                                   ))
-                        ),
-                    ),
-                )
-        ))
-
-    def to_file(self, path="coeffs.py"):
-        """Write coeffs to text file."""
-        ycoeffs, xcoeffs = zip(*map(lambda coeff: (coeff[0], coeff[1]),
-                                    self._coeffs,
-                                    ))
-        with open(path, "w") as file:
-            file.write('import numpy as np\n')
-            file.write('Y_COEFFS = {\n')
-            for i, ycoeff in enumerate(ycoeffs, start=1):
-                file.write(str(i) + ":np.\\\n" + repr(ycoeff) + ",\n")
-            file.write('}\n')
-            file.write('X_COEFFS = {\n')
-            for i, xcoeff in enumerate(xcoeffs, start=1):
-                file.write(str(i) + ":np.\\\n" + repr(xcoeff) + ",\n")
-            file.write('}\n')
-    @property
-    def coeff(self):
-        return self._coeffs
-
-# -----------------------------------------------------------------------------
-# GenTransSlice class
-
-class GenTransSlice(object):
-    """
-    Generate slicing for vectorized comparisons.
-    """
-    def __init__(self, max_rng=3):
-        """
-        Instanciate a GenTransSlice object.
-        """
-        self._generate_slices(max_rng)
-
-    def _generate_slices(self, max_rng):
-        """Generate target slices for comparison function."""
-        self._slices = []
-        slice_inds = [*chain((None,), range(1, max_rng * 2 + 1))]
-
-        for r in range(3, max_rng * 2 + 2, 2):
-            slices = [*starmap(slice, bipolar(slice_inds[:r]))]
-            slices = [*chain(slices,
-                             repeat(slices[-1],
-                                    r - 2),
-                             reversed(slices),
-                             repeat(slices[0],
-                                    r - 2))]
-            slices = [*zip(repeat(...), slices[-r+1:] + slices[:-r+1], slices)]
-            self._slices.append(slices)
-
-    def to_file(self, path="slices.py"):
-        """Write coeffs to text file."""
-        with open(path, "w") as file:
-            file.write('TRANSLATING_SLICES = {\n')
-            for i, slices in enumerate(self._slices, start=0):
-                file.write(str(i) + ":[\n")
-                for sl in slices:
-                    file.write(str(sl) + ",\n")
-                file.write("],\n")
-            file.write('}')
-
-    @property
-    def slices(self):
-        return self._slices
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

@@ -24,7 +24,7 @@ F_DERIV = 0b010
 F_RANGE = 0b100
 
 # Branche dict:
-branch_dict = {
+FORK_TYPES = {
     'a': F_ANGLE,
     'g': F_DERIV,
     'r': F_RANGE,
@@ -38,7 +38,8 @@ image_path = "../images/raccoon.jpg"
 
 # Outputs:
 output_path = "../debug/"
-binary_output = False
+output_bin = False
+output_normalize = False
 
 # Aves:
 init_ave = 20
@@ -100,7 +101,7 @@ def forking(derts, rng, Ave, fork_history, branch, subpipes):
     Ave = increase_ave(Ave, rng)
     derts = comp_i(derts,
                    rng=rng,
-                   flags=branch_dict[branch])
+                   flags=FORK_TYPES[branch])
 
     fork_history += branch  # Add new derivation.
     draw_fork(derts, Ave, fork_history)
@@ -110,24 +111,34 @@ def forking(derts, rng, Ave, fork_history, branch, subpipes):
 def draw_fork(derts, Ave, fork_history):
     """Output fork's gradient image."""
     out = derts[-1][0]
-    if binary_output:
-        if fork_history[-2] == "a":
+    if output_bin:
+        if fork_history[-1] == "a":
             Ave = angle_ave
         draw(output_path + fork_history, (out > Ave) * 255)
-    else:
+    elif output_normalize:
         draw(output_path + fork_history,
-             # out)
-             out.astype(int) % 256)
+             (out - out.min()) / (out.max() - out.min()))
+    else:
+        draw(output_path + fork_history, out)
 
 # -----------------------------------------------------------------------------
 # Main
 
 if __name__ == "__main__":
     # Initial comp:
+    print('Reading image...')
     image = imread(image_path)
-    input, dert = frame_blobs.comp_pixel(image)
-    draw_fork([dert], init_ave, "g")
+    print('Done!')
 
+    print('Doing first comp...')
+    input, dert = frame_blobs.comp_pixel(image)
+    print('Done!')
+
+    print('Outputting first g array...')
+    draw_fork([dert], init_ave, "g")
+    print('Done!')
+
+    print('Doing recursive comps...')
     # Recursive comps:
     recursive_comp(derts=[
                        ma.masked_array(image)[np.newaxis, ...],
@@ -137,6 +148,9 @@ if __name__ == "__main__":
                    Ave=init_ave,
                    fork_history="g",
                    pipes=pipe_lines)
+    print('Done!')
+
+    print('Terminating...')
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

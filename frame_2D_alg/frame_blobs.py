@@ -111,7 +111,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
         p__ = image[1:-1, 1:-1]
 
     # Compute gradient magnitudes per kernel:
-    g__ = np.hypot(dy__, dx__)
+    g__ = np.hypot(dy__, dx__) * 0.354801226089485
 
     return ma.array(p__)[np.newaxis, ...], ma.around(ma.stack((g__, dy__, dx__), axis=0))
 
@@ -304,9 +304,10 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
                 rng=1,
                 dert___=[frame['i__'], frame['dert__']],
                 mask=mask,
-                hDerts=np.array([[I, 0, 0, 0, 0, 0]]),
                 root_blob=None,
+                hDerts=np.array([[I, 0, 0, 0, 0, 0]]),
                 forks=defaultdict(list),
+                fork_types='',
                 )
     G, Dy, Dx, L, Ly = blob['Dert'].values()
     blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
