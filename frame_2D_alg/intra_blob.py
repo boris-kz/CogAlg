@@ -100,13 +100,13 @@ def intra_cluster(dert___, root_blob, Ave, Ave_blob, rng=1, flags=0):
 
 def form_P__(x0, y0, dert__, Ave, fa, ncomp):
     """Form Ps across the whole dert array."""
-    g__ = dert__[0, :, :]  # g sign determines clustering:
+    g__ = dert__[0, :, :] - Ave * ncomp  # g sign determines clustering:
 
     # Clustering:
     s_x_L__ = [*map(
         lambda g_: # Each line.
             [(sign, next(group)[0], len(list(group)) + 1) # (s, x, L)
-             for sign, group in groupby(enumerate(g_ > Ave),
+             for sign, group in groupby(enumerate(g_ > 0),
                                         op.itemgetter(1)) # (x, s): return s.
              if sign is not ma.masked], # Ignore gaps.
         g__, # Each line.
@@ -115,7 +115,7 @@ def form_P__(x0, y0, dert__, Ave, fa, ncomp):
     # Accumulation:
     P__ = [[dict(sign=s,
                  x0=x+x0,
-                 G=dert_[0, x : x+L].sum() - Ave * L * ncomp,
+                 G=dert_[0, x : x+L].sum(),
                  M=0 if fa else dert_[1, x : x+L].sum(),
                  Dy=np.array(dert_[1:3, x : x+L].sum(axis=-1)) if fa
                  else dert_[2, x : x+L].sum(),
