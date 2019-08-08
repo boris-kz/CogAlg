@@ -85,7 +85,7 @@ def intra_cluster(dert___, root_blob, Ave, Ave_blob, rng=1, flags=0):
     y0, yn, x0, xn = root_blob['box']
 
     P__ = form_P__(x0, y0, dert__, Ave,
-                   fa=flags&F_ANGLE) # Horizontal clustering
+                   fa=flags&F_ANGLE, ncomp=((2*rng + 1)**2-1)) # Horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)
     blob_ = form_blob_(seg_, root_blob, dert___, rng,
@@ -98,7 +98,7 @@ def intra_cluster(dert___, root_blob, Ave, Ave_blob, rng=1, flags=0):
     return blob_, Ave_blob * len(blob_) / ave_n_sub_blobs
 
 
-def form_P__(x0, y0, dert__, Ave, fa):
+def form_P__(x0, y0, dert__, Ave, fa, ncomp):
     """Form Ps across the whole dert array."""
     g__ = dert__[0, :, :]  # g sign determines clustering:
 
@@ -115,7 +115,7 @@ def form_P__(x0, y0, dert__, Ave, fa):
     # Accumulation:
     P__ = [[dict(sign=s,
                  x0=x+x0,
-                 G=dert_[0, x : x+L].sum() - Ave * L,
+                 G=dert_[0, x : x+L].sum() - Ave * L * ncomp,
                  M=0 if fa else dert_[1, x : x+L].sum(),
                  Dy=np.array(dert_[1:3, x : x+L].sum(axis=-1)) if fa
                  else dert_[2, x : x+L].sum(),

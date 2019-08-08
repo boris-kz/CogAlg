@@ -148,7 +148,7 @@ def comp_i(dert___, rng, flags):
     m__[comp_field] += translated_operation(i__, rng, ma.minimum).sum(axis=-1)
 
     # Compute gs:
-    g__ = ma.hypot(dy__, dx__) * SCALER_g[rng]
+    g__ = ma.hypot(dy__, dx__)# * SCALER_g[rng]
 
     if flags & F_DERIV:
         new_dert___ = dert___ + [ma.stack((g__, m__, dy__, dx__), axis=0)]
@@ -200,8 +200,7 @@ def comp_a(dert___, rng, flags):
     dax__[comp_field] += (da__ * X_COEFFS[rng]).mean(axis=-1)
 
     # Compute ga:
-    ga__ = ma.floor(ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))
-                    * SCALER_ga)[np.newaxis, ...]
+    ga__ = ma.hypot(ma.arctan2(*day__), ma.arctan2(*dax__))[np.newaxis, ...]
 
     if rng > 1:
         new_dert___ = dert___[:-1] + [ma.concatenate((ga__,
