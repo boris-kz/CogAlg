@@ -30,15 +30,7 @@ import numpy as np
 import numpy.ma as ma
 
 from utils import imread
-# -----------------------------------------------------------------------------
-# Structures
-'''
-Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly')
-Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
-Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'Dert, sign, rng, box, mask, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
-Frame = namedtuple('Frame', 'I, G, Dy, Dx, blob_, i__, dert__')
-'''
+
 # -----------------------------------------------------------------------------
 # Adjustable parameters
 image_path = "./../images/raccoon_eye.jpg"
@@ -55,12 +47,14 @@ assert kwidth in (2, 3)
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     i__, dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
-    frame = dict(I=0, G=0, Dy=0, Dx=0, blob_=[], i__=i__, dert__=dert__) # params, blob_, dert__
-    seg_ = deque()  # buffer of running segments
+    frame = dict(rng=1,
+                 dert___=[i__, dert__],
+                 mask=None,
+                 I=0, G=0, Dy=0, Dx=0, blob_=[])
 
+    seg_ = deque()  # buffer of running segments
     height, width = image.shape
-    # P__ = intra_blob.form_P__(0, i__[0], dert__, ave)
-    # for y, P_ in enumerate(P__):
+
     for y in range(height - kwidth + 1):  # first and last row are discarded
         P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
@@ -301,13 +295,9 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
-                rng=1,
-                dert___=[frame['i__'], frame['dert__']],
                 mask=mask,
-                root_blob=None,
-                hDerts=np.array([[I, 0, 0, 0, 0, 0]]),
-                forks=defaultdict(list),
-                fork_types='',
+                root_fork=frame,
+                sub_forks=defaultdict(list),
                 )
     G, Dy, Dx, L, Ly = blob['Dert'].values()
     blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
@@ -320,13 +310,11 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
 
     frame['blob_'].append(blob)
 
-
 # -----------------------------------------------------------------------------
 # Utilities
 
 def accum_Dert(Dert : dict, **params) -> None:
     Dert.update({param:Dert[param]+value for param, value in params.items()})
-
 
 # -----------------------------------------------------------------------------
 # Main

@@ -21,7 +21,7 @@ from PIL import Image
 # -----------------------------------------------------------------------------
 # Constants
 
-transparent_val = 127 # Pixel at this value are considered transparent
+transparent_val = -128 # Pixel at this value are considered transparent
 
 # -----------------------------------------------------------------------------
 # General purpose functions
@@ -154,34 +154,34 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
 
     return image    # return filled image
 
-def map_frame(frame):
+def map_frame(frame, raw=False):
     '''
     Map partitioned blobs into a 2D array.
 
     Parameters
     ----------
-    frame : Frame
+    frame : dict
         Contain blobs that needs to be mapped.
-
+    raw : bool
+        Draw raw values instead of boolean.
     Return
     ------
     out : ndarray
         2D array of image's pixel.
     '''
 
-    I, G, Dy, Dx, blob_, i__, dert__ = frame.values()
-    height, width = dert__.shape[1:]
+    height, width = frame['dert___'][-1].shape[1:]
     box = (0, height, 0, width)
     image = empty_map(box)
 
-    for i, blob in enumerate(blob_):
-        blob_map = map_blob(blob)
+    for i, blob in enumerate(frame['blob_']):
+        blob_map = map_blob(blob, raw)
 
         over_draw(image, blob_map, blob['box'], box)
 
     return image
 
-def map_blob(blob, original=False):
+def map_blob(blob, raw=False):
     '''Map a single blob into an image.'''
 
     blob_img = empty_map(blob['box'])
@@ -190,13 +190,13 @@ def map_blob(blob, original=False):
 
         sub_box = segment_box(seg)
 
-        seg_map = map_segment(seg, sub_box, original)
+        seg_map = map_segment(seg, sub_box, raw)
 
         over_draw(blob_img, seg_map, sub_box, blob['box'])
 
     return blob_img
 
-def map_segment(seg, box, original=False):
+def map_segment(seg, box, raw=False):
     '''Map a single segment of a blob into an image.'''
 
     seg_img = empty_map(box)
@@ -204,10 +204,9 @@ def map_segment(seg, box, original=False):
     y0, yn, x0, xn = box
 
     for y, P in enumerate(seg['Py_'], start= seg['y0'] - y0):
-        derts_ = P['dert_']
-        for x, derts in enumerate(derts_, start=P['x0']-x0):
-            if original:
-                seg_img[y, x] = derts[0][0]
+        for x, dert in enumerate(P['dert_'], start=P['x0']-x0):
+            if raw:
+                seg_img[y, x] = dert[0]
             else:
                 seg_img[y, x] = 255 if P['sign'] else 0
 
