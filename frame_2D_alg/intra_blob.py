@@ -98,6 +98,8 @@ def intra_forks(eval_fork_, Ave_blob, Ave, rdn):
         if flags & F_RANGE:
             rng += 1
 
+        filter_blobs(fork, Ave_blob)  # Filter below-Ave_blob blobs.
+
         # Comparison:
         dert___ = comp_i(fork['dert___'],
                          fork['rng'],
@@ -115,36 +117,33 @@ def intra_forks(eval_fork_, Ave_blob, Ave, rdn):
             Ave_blob *= rave  # estimated cost of redundant representations per blob
             Ave += ave  # estimated cost per dert
 
-        filter_blobs(sub_fork, Ave_blob)  # Filter below-Ave_blob blobs.
-
-        """
         # Currently under revision:
-        Gg = sum(map(lambda blob: blob['Dert']['G'], fork_sub_blob_))
-        Ga = sum(map(lambda blob: blob['Dert']['Ga'], fork_sub_blob_))
+        Gg = sub_fork['G']
+        Ga = sub_fork['Ga'] # There's no Ga before angle-comp, what is the equivalent?
         new_eval_fork_.extend += [
             (Gg, fork_sub_blob_, rng, F_DERIV),
-            Ga, fork_sub_blob_, rng, F_ANGLE),
+            (Ga, fork_sub_blob_, rng, F_ANGLE),
         ]
 
         if not flags & F_ANGLE:
-            G = sum(map(lambda blob: blob['Dert']['G'], blob_))
-            Mg = sum(map(lambda blob: blob['Dert']['M'], fork_sub_blob_))
+            G = fork['G'] # Input gradient.
+            Mg = sub_fork['M']
             new_eval_fork_.append((
                 G+Mg,
                 fork_sub_blob_,
                 rng,
                 F_RANGE,
             ))
-        """
 
-    intra_forks(sorted(new_eval_fork_), Ave_blob, Ave, rdn)
+    intra_forks(sorted(new_eval_fork_, reverse=True),
+                Ave_blob, Ave, rdn)
 
 def filter_blobs(fork, Ave_blob):
     """Filter and sort blobs of a fork."""
     # Filter below Ave_blob blobs:
-    fork['blob_'] = [*takewhile(lambda blob: blob['G'] > Ave_blob,
+    fork['blob_'] = [*takewhile(lambda blob: blob['Dert']['G'] > Ave_blob,
                                 sorted(fork['blob_'],
-                                       key=lambda blob: blob['G'],
+                                       key=lambda blob: blob['Dert']['G'],
                                        reverse=True))]
     # noisy or directional G | Ga: > intra_cluster cost: rel root blob + sub_blob_
 
@@ -218,15 +217,9 @@ def intra_cluster(root_blob, fork, Ave, Ave_blob, rng=1, flags=0):
                    fa=flags&F_ANGLE, ncomp=((2*rng + 1)**2-1)) # Horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)
-    blob_ = form_blob_(seg_, root_blob, dert___, rng,
-                       fork_type=(
-                           FORK_TYPES[flags&F_ANGLE]
-                           + FORK_TYPES[flags&F_DERIV]
-                           + FORK_TYPES[flags&F_RANGE]
-                       ), # flags as fork_type
-                       )
+    blob_ = form_blob_(seg_, root_blob, fork, flags)
 
-    return blob_, Ave_blob * len(blob_) / ave_n_sub_blobs
+    return Ave_blob * len(blob_) / ave_n_sub_blobs
 
 
 def form_P__(x0, y0, dert__, Ave, fa, ncomp):
@@ -305,7 +298,8 @@ def comp_edge(_P, P): # Used in scan_P_().
 def form_segment_(P_):
     """Form segments of vertically contiguous Ps."""
 
-    seg_pars = 'y0', 'G', 'M', 'Dy', 'Dx', 'L', 'Ly', 'Py_', 'root_', 'fork_'
+    seg_param_keys = \
+        'y0', 'G', 'M', 'Dy', 'Dx', 'L', 'Ly', 'Py_', 'root_', 'fork_'
 
     # Get a list of all segment's first P:
     P0_ = [*filter(lambda P: (len(P['fork_']) != 1
@@ -313,7 +307,7 @@ def form_segment_(P_):
                    P_)]
 
     # Form segments:
-    seg_ = [dict(zip(seg_pars, # segment's params as keys
+    seg_ = [dict(zip(seg_param_keys, # Segment's params as keys.
                      [Py_[0].pop('y'),] # y0
                      # Accumulate params:
                      + [*map(sum,
@@ -360,7 +354,7 @@ def cluster_vertical(P): # Used in form_segment_().
         return [P]
 
 
-def form_blob_(seg_, root_blob, dert___, rng, fork_type):
+def form_blob_(seg_, root_blob, fork, flags):
     encountered = []
     blob_ = []
     for seg in seg_:
@@ -404,21 +398,13 @@ def form_blob_(seg_, root_blob, dert___, rng, fork_type):
             G=G, M=M, Dy=Dy, Dx=Dx, L=L, Ly=Ly,
             sign=s,
             box=(y0, yn, x0, xn),  # boundary box
-            slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
             seg_=blob_seg_,
-            rng = rng,
-            dert___ = dert___,
-            mask=mask,
-            root_blob = root_blob,
-            hDerts = np.concatenate(
-                (
-                    [[*root_blob['Dert'].values()]],
-                    root_blob['hDerts'],
-                ),
-                axis=0
-            ),
-            forks=defaultdict(list),
-            fork_types=fork_type,
+            slices=(Ellipsis, slice(y0, yn), slice(x0, xn)), # For quick slicing from global dert__.
+            mask=mask, # mask of this blob.
+            fork=fork, # Contain all blobs (possibly from different root_blob) that belong to the same fork.
+            root_blob=root_blob,
+            child_forks=defaultdict(list), # Contain sub-blobs that belong to this blob.
+            fork_types=flags, # fork_type of a blob is relative to it's root_blob.
         )
 
         feedback(blob)
@@ -435,31 +421,39 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     fork_type = blob['fork_type']
 
     # Last blob Layer is deeper than last root_blob Layer:
-    len_sub_layers = max(0, 0, *map(len, blob['forks'].values()))
-    while len(root_blob['forks'][fork_type]) <= len_sub_layers:
-        root_blob['forks'][fork_type].append((0, 0, 0, 0, 0, 0, []))
-    # Equivalent with:
-    # if len(root_blob['forks'][fork_type]) <= len_sub_layers:
-    #     root_blob['forks'][fork_type].append((0, 0, 0, 0, 0, [])))
+    len_sub_layers = max(0, 0, *map(len, blob['child_forks'].values()))
+    if len(root_blob['child_forks'][fork_type]) == len_sub_layers:
+        root_blob['child_forks'][fork_type].append((0, 0, 0, 0, 0, 0, []))
+
+    # Global fork accumulation:
+    G, M, Dy, Dx, L, Ly = blob['Dert'].values()
+    blob['fork'].update(
+        G=blob['fork']['G']+G,
+        M=blob['fork']['M']+M,
+        Dy=blob['fork']['Dy']+Dy,
+        Dx=blob['fork']['Dx']+Dx,
+        L=blob['fork']['L']+L,
+        Ly=blob['fork']['Ly']+ly,
+        blob_ + [blob],
+    )
 
     # First layer accumulations:
-    G, M, Dy, Dx, L, Ly = blob['Dert'].values()
-    Gr, Mr, Dyr, Dxr, Lr, Lyr, sub_blob_ = root_blob['forks'][fork_type][0]
-    root_blob['forks'][fork_type][0] = (
+    Gr, Mr, Dyr, Dxr, Lr, Lyr, sub_blob_ = root_blob['child_forks'][fork_type][0]
+    root_blob['child_forks'][fork_type][0] = (
         Gr + G, Mr + M, Dyr + Dy, Dxr + Dx, Lr + L, Lyr + Ly,
         sub_blob_ + [blob],
     )
 
-    # Accumulate deeper :) layers:
-    root_blob['forks'][fork_type][1:] = \
+    # Accumulate deeper layers:
+    root_blob['child_forks'][fork_type][1:] = \
         [*starmap( # Like map() except for taking multiple arguments.
             # Function (with multiple arguments):
             lambda Dert, sDert:
                 (*starmap(op.add, zip(Dert, sDert)),), # Dert and sub_blob_ accum
             # Mapped iterables:
             zip(
-                root_blob['forks'][fork_type][1:],
-                blob['forks'][sub_fork_type][:],
+                root_blob['child_forks'][fork_type][1:],
+                blob['child_forks'][sub_fork_type][:],
             ),
         )]
     # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)

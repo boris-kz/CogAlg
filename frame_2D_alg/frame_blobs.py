@@ -24,7 +24,6 @@
 
 from time import time
 from collections import deque, defaultdict
-from itertools import starmap
 
 import numpy as np
 import numpy.ma as ma
@@ -296,8 +295,9 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                 mask=mask,
-                root_fork=frame,
-                sub_forks=defaultdict(list),
+                fork=frame, # Equivalent of fork in lower layers.
+                root_blob=None,
+                child_forks=defaultdict(list), # Contain sub-blobs that belong to this blob.
                 )
     G, Dy, Dx, L, Ly = blob['Dert'].values()
     blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
