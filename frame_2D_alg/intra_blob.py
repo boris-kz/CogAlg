@@ -118,20 +118,16 @@ def intra_forks(eval_fork_, Ave_blob, Ave, rdn):
             Ave += ave  # estimated cost per dert
 
         # Currently under revision:
-        Gg = sub_fork['G']
-        Ga = sub_fork['Ga'] # There's no Ga before angle-comp, what is the equivalent?
         new_eval_fork_.extend += [
-            (Gg, fork_sub_blob_, rng, F_DERIV),
-            (Ga, fork_sub_blob_, rng, F_ANGLE),
+            (sub_fork['G'], fork_sub_blob_, rng*2+1, F_ANGLE),
+            (sub_fork['G'], fork_sub_blob_, rng*2+1, F_DERIV),
         ]
 
         if not flags & F_ANGLE:
-            G = fork['G'] # Input gradient.
-            Mg = sub_fork['M']
             new_eval_fork_.append((
-                G+Mg,
+                fork['G'] + sub_fork['M'],
                 fork_sub_blob_,
-                rng,
+                rng+1,
                 F_RANGE,
             ))
 

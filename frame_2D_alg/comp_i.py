@@ -1,6 +1,7 @@
 '''
-Comparison of chosen parameter of derts__ (a or g)
-over predetermined range (determined by kernel).
+comp_i/comp_a:
+Comparison of chosen parameter of derts (g or a)
+over predetermined range.
 '''
 
 import operator as op
