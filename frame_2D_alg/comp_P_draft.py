@@ -19,22 +19,25 @@ from time import time
     intra_P comp -> vdP, ddP, ortho? then blobs redefine per ddx, dvx, vd, vv..? 
 
     orientation = (Ly / Lx) * (|Dx| / |Dy|) / 2  
-    # vert ! horiz match coef = elongation * 1/ ddirection / 2 
+    # vert ! horizontal match coef = elongation * 1/ ddirection / 2 
     if orientation < 1: 
         orientation = 1 / orientation; flip_cost = flip_ave
     else: flip_cost = 0;  # vs. separate L, D max/min orientation
 
     comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P;   
      
-    if nested Ps: map seg,P -> sub-seg,P, comp_P -> nested PPs, 
-    post comp_P or intra_blob: 
+    if nested Ps: map seg,P -> sub-seg,P, comp_P -> nested PPs, consolidated after comp_P or intra_blob: 
     hier_comp if PP or blob layers(len and G+M): comp_layer -> blob_hier ders, sums
+    
+    rng+ should preserve resolution: rng+_dert_ is dert layers, 
+    rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 
+    rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr? 
 '''
 
 ave = 20
 div_ave = 200
 flip_ave = 1000
-dX_ave = 10
+ave_dX = 10
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
@@ -42,24 +45,24 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     _s, _x0, (_G, _M, _Dx, _Dy, _L), _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
-    mX = min(xn, _xn) - max(x0, _x0)  # overlap, both extent and co-extent have independent value?
-    dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or ~ abs diff: max_L - overlap?
+    mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
+    dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
 
-    if dX > dX_ave:
-        rX = mX / max(L, _L)  # relative overlap, positional coincidence is separate from similarity: no rL eval?
+    if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
+       rX = dX / mX  # average dist!prox, | prox!dist, | mX / max_L?
     ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
     DdX += ddX  # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
 
-    if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, to maximize lat diff and vert match
+    if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, maximizing lat diff, vert match
 
-        hyp = hypot(dX, 1)  # long axis increment = hyp / 1 (vertical distance), to estimate params of orthogonal slice:
+        hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
         L /= hyp
         Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
         Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # est D over vert_L, Ders summed in vert / lat ratio?
 
-    dL = L - _L; mL = min(L, _L)  # comp Derts[1] -> abs match, dderived: magnitude-proportional value
+    dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
     dM = M - _M; mM = min(M, _M)  # no Mx, My: non-core, lesser and redundant bias?
 
     dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in vxP
