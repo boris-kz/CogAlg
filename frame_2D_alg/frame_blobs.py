@@ -276,7 +276,7 @@ def terminate_segment(seg):
     return blob
 
 
-def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type):
+def terminate_blob(blob, last_seg, frame):
 
     Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
 
