@@ -107,7 +107,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert___, rng, flags):
+def comp_i(dert___, rng, fa):
     """
     Determine which parameter from dert__ is the input,
     then compare the input over predetermined range
@@ -128,11 +128,11 @@ def comp_i(dert___, rng, flags):
     assert isinstance(dert___[-1], ma.MaskedArray)
 
     # Compare angle flow control:
-    if flags & F_ANGLE:
-        return comp_a(dert___, rng, flags)
+    if fa:
+        return comp_a(dert___, rng, fa)
 
     # Assign input array:
-    i__, dy__, dx__, m__ = assign_inputs(dert___, rng, flags)
+    i__, dy__, dx__, m__ = assign_inputs(dert___, rng, fa)
 
     # Compare inputs:
     d__ = translated_operation(i__, rng, op.sub)
@@ -164,7 +164,7 @@ def assign_inputs(dert___, rng, flags):
         # Accumulate dx__, dy__ starting from 0:
         dy__, dx__, m__ = (ma.array(np.zeros(i__.shape)) for _ in range(3))
     else:
-        i__ = dert___[-2][0] # Assign one layer away g__ to i__
+        i__ = dert___[-2][0]  # Assign one layer away g__ to i__
 
         # Accumulated m__, dx__, dy__ of previous layer:
         try: # Most of the time there's m__ (len(dert__) == 5):
@@ -317,4 +317,4 @@ def angle_diff(a2, a1):
     return da
 
 # ----------------------------------------------------------------------
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------
