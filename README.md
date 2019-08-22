@@ -154,3 +154,6 @@ For more detailed account of current development see [WIKI](https://github.com/b
 
 Suggestions and collaboration are most welcome, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md).
 
+## Note
+
+The code in this repository is experimental, it is by no mean be complete or usable. Please visit the intro page for more information: www.cognitivealgorithm.info .

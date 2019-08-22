@@ -120,6 +120,6 @@ while dert_buff__:
 
 image = np.array([[(abs(dx) + abs(dy) - ave * ncomp > 0) * 255 for p, ncomp, dx, dy in dert_] for dert_ in dert__])
 
-cv2.imwrite('./../debug/out.bmp', image)
+cv2.imwrite('./../visualization/images/out.bmp', image)
 
 print('Done!')

@@ -112,49 +112,55 @@ def intra_blob(root_blob, rng, Ave_blob, Ave):  # Single blob recursive forking:
     return root_blob
 """
 
-def intra_blob(blob, rng, flags, Ave_blob, Ave, rdn):
+def intra_blob(blob, rng, Ave_blob, Ave, rdn):
     """
     Single-layer version of intra_blob().
     """
+    G, M, Dy, Dx, Ga, Dxx, Dxy, Dyx, Dyy, L, Ly = blob['Dert'].values()
 
-    # Comparison
-    dert__ = comp_i(blob['dert__'], rng, flags)  # Newly derived derts.
-
-    # Clustering:
-    P__ = form_P__(dert__, Ave,
-                   fa=flags & F_ANGLE,
-                   ncomp=((rng*2 + 1) ** 2 - 1)) # Horizontal clustering.
-    P_ = scan_P__(P__)
-    seg_ = form_segment_(P_) # Vertical clustering.
-    sub_blob_ = form_blob_(seg_, blob, flags)
-    Ave_blob *= len(sub_blob_) / ave_n_sub_blobs
+    # gfork:
+    dert__ = comp_i(blob['dert__'], rng)  # Newly derived derts.
+    gblob_, Ave_blob = intra_comp(dert__, root_blob, Ave, Ave_blob)
 
     # Loop through newly formed sub-blobs:
-    G, M, Dy, Dx, L, Ly = blob['Dert'].values()
-    for sub_blob in sorted(sub_blob_,
+    for sub_blob in sorted(gblob_,
                            key=lambda blob: blob['Dert']['G'],
                            reverse=True):
-
-        Gs, Ms, Dys, Dxs, Ls, Lys = blob['Dert'].values()
-
-        if Gs < Ave_blob:
+        Gg, Mg, Dgy, Dgx, Lg, Lyg = sub_blob['Dert'].values()
+        if Gg < Ave_blob:
             return # Stop recursion.
 
-        Ave_blob *= rave # Estimated cost of redundant representations per blob.
-        Ave += ave # Estimated cost per dert.
+        ablob_, Ave_blob = intra_comp(dert__, root_blob, Ave, Ave_blob)
+        Ave_blob *= rave  # Estimated cost of redundant representations per blob.
+        Ave += ave  # Estimated cost per dert.
 
-        # Evaluation for deeper forking:
-        if Gs > ave_intra_blob * rdn: # Evaluate angle and deriv fork.
-            for sub_flags in (F_ANGLE, F_DERIV):
-                intra_blob(sub_blob,
-                           rng*2+1, sub_flags,
-                           Ave_blob, Ave, rdn+1)
+        for ablob in sorted(ablob_,
+                            key=lambda blob: blob['Dert']['G'],
+                            reverse=True):
+            (Gga, Mga, Dya, Dxa,
+             Gaa, Dxxa, Dxya, Dyxa, Dyya, Lga, Lyga) = ablob['Dert'].values()
+            if Gga < Ave_blob:
+                return  # Stop recursion.
 
-        if (not flags & F_ANGLE  # Angle blob don't have F_RANGE sub-blobs.
-                and G + Ms > ave_intra_blob * rdn): # Evaluate rng fork.
-            intra_blob(sub_blob,
-                       rng+1, F_RANGE,
-                       Ave_blob, Ave, rdn+1)
+            Ave_blob *= rave # Estimated cost of redundant representations per blob.
+            Ave += ave # Estimated cost per dert.
+
+            # Evaluation for deeper forking:
+            if Gg > ave_intra_blob * rdn: # Evaluate angle and deriv fork.
+                intra_blob(sub_blob, rng*2+1, Ave_blob, Ave, rdn+1)
+
+            if G + Mg > ave_intra_blob * rdn: # Evaluate rng fork.
+                intra_blob(sub_blob, rng+1, Ave_blob, Ave, rdn+1)
+
+
+def intra_comp(dert__, root_blob, Ave, Ave_blob):
+    P__ = form_P__(dert__, Ave)  # Horizontal clustering.
+    P_ = scan_P__(P__)
+    seg_ = form_segment_(P_)  # Vertical clustering.
+    blob_ = form_blob_(seg_, root_blob)
+
+    return blob_, Ave_blob * len(sub_blob_) / ave_n_sub_blobs
+
 
 def form_P__(dert__, Ave, fa, ncomp, x0=0, y0=0):
     """Form Ps across the whole dert array."""
@@ -287,7 +293,7 @@ def cluster_vertical(P): # Used in form_segment_().
     else:
         return [P]
 
-def form_blob_(seg_, blob, flags):
+def form_blob_(seg_, blob):
     feedback()
     return []
 

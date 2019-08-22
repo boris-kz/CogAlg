@@ -25,7 +25,7 @@ SCALER_GA = 255.9 / 2**0.5 / np.pi
 # MTLookupTable class
 
 class MTLookupTable(object):
-    """Meta-class for look-up table generators."""
+    """Meta-class for lookup table generators."""
 
     imports = set() # For outputting into python script.
     def __init__(self, *args, **kwargs):
@@ -33,13 +33,13 @@ class MTLookupTable(object):
         self._generate_table(*args, **kwargs)
 
     def _generate_table(self, *args, **kwargs):
-        """Meta-method for generating look-up table."""
+        """Meta-method for generating lookup table."""
         return self
 
     def as_code_str(self):
         """
         Meta-method for generating python code string declaring
-        look-up table in Python code.
+        lookup table in Python code.
         """
         return ""
 
@@ -52,9 +52,9 @@ class MTLookupTable(object):
         return self
 
 # -----------------------------------------------------------------------------
-# GenCoeffs class
+# CoefficientGenerator class
 
-class GenCoeffs(MTLookupTable):
+class CoefficientGenerator(MTLookupTable):
     """
     Generate coefficients used by comparisons
     of rng in {1, ..., max_rng}.
@@ -62,7 +62,7 @@ class GenCoeffs(MTLookupTable):
 
     def __init__(self, max_rng=3):
         """
-        Instanciate a GenCoeffs object.
+        Instanciate a CoefficientGenerator object.
         """
         MTLookupTable.__init__(self, max_rng=max_rng)
 
@@ -102,7 +102,7 @@ class GenCoeffs(MTLookupTable):
         Examples
         --------
         >>> a = np.arange(9).reshape(3, 3)
-        >>> GenCoeffs.flattened_rim(a)
+        >>> CoefficientGenerator.flattened_rim(a)
         array([0, 1, 2, 5, 8, 7, 6, 3])
         """
         return np.concatenate(tuple(map(lambda slices: a[slices],
@@ -114,7 +114,7 @@ class GenCoeffs(MTLookupTable):
 
     def _generate_table(self, max_rng):
         """
-        Workhorse of GenCoeffs class, compute kernel
+        Workhorse of CoefficientGenerator class, compute kernel
         and separate into rng specific coefficients.
         """
         # Calculate combined kernel of rng from 1 to max_rng:
@@ -122,7 +122,7 @@ class GenCoeffs(MTLookupTable):
 
         # Separate into kernels of each rng and flatten them:
         self._coeffs = [*reversed([*
-            map(GenCoeffs.flattened_rim,
+            map(CoefficientGenerator.flattened_rim,
                 map(lambda slices: kers[slices],
                     zip(
                         repeat(...),
@@ -173,16 +173,17 @@ class GenCoeffs(MTLookupTable):
         return self._coeffs
 
 # -----------------------------------------------------------------------------
-# GenTransSlice class
+# TranslatingSliceGenerator class
 
-class GenTransSlice(MTLookupTable):
+
+class TranslatingSliceGenerator(MTLookupTable):
     """
     Generate slicing for vectorized comparisons.
     """
 
     def __init__(self, max_rng=3):
         """
-        Instanciate a GenTransSlice object.
+        Instantiate a TranslatingSliceGenerator object.
         """
         MTLookupTable.__init__(self, max_rng=max_rng)
 
@@ -221,8 +222,9 @@ class GenTransSlice(MTLookupTable):
 # -----------------------------------------------------------------------------
 # Functions
 
-def create_lookup_module(path, Generators):
-    """Create a Python module of look-up tables."""
+
+def create_lookup_table_module(path, Generators):
+    """Create a Python module of lookup tables."""
     required_imports = reduce(
         op.add,
         reduce(

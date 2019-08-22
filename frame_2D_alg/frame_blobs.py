@@ -329,7 +329,7 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
         from utils import draw, map_frame
-        draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+        draw("./../visualization/images/", map_frame(frame_of_blobs))
 
         F_ANGLE = 0b01
         F_DERIV = 0b10

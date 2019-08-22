@@ -10,7 +10,7 @@ def draw_blob(path, frame, typ=0, debug_parts=0, debug_local=0, show=0):
 
     for blob_idx, blob in enumerate(frame.blob_):  # Iterate through blobs
         if debug_parts: blob_img = np.array([[[127] * 4] * X] * Y)
-        # debug original blob - segment ----------------------------------------------------------------
+        # images original blob - segment ----------------------------------------------------------------
         if typ == 0:
             if debug_local:
                 x0, xn, y0, yn = blob.box
@@ -36,7 +36,7 @@ def draw_blob(path, frame, typ=0, debug_parts=0, debug_local=0, show=0):
                         x0, xn, y0, yn = [b + blob.x0() for b in seg.box[:2]] + [b + blob.y0() for b in seg.box[2:]]
                         cv2.rectangle(seg_img, (x0 - 1, y0 - 1), (xn, yn), (0, 255, 255), 1)
                         cv2.imwrite(path + '/blob%dseg%d.bmp' % (blob_idx, seg_idx), seg_img)
-        # debug sub_blob - segment ----------------------------------------------------------------------
+        # images sub_blob - segment ----------------------------------------------------------------------
         else:
             sub_blob_ = []
             if typ == 1:

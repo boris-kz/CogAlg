@@ -37,7 +37,7 @@ FORK_TYPES = {
 image_path = "../images/raccoon.jpg"
 
 # Outputs:
-output_path = "../debug/"
+output_path = "../visualization/images/"
 output_bin = False
 output_normalize = False
 
