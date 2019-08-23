@@ -13,25 +13,25 @@ import operator as op
     intra_comp also sends feedback to root_fork | root_blob, then to root_blob.root_blob, etc.
     Blob structure:
     
-    root_fork,  # = root_blob['fork_'][iG]: reference for feedback of Dert params summed in sub_blobs, up to frame
+    root_fork, # = root_blob['layer_'][-1][fa]['fork_'][iG]: reference for feedback of sub_blob' Dert params, up to frame
     
     Dert = G, Gg, M, Dx, Dy, Ga, Dax, Day, L, Ly  
-    # incremental: fork iG, + Dert in g_fork, + aDert in a_fork, L, Ly are defined for Gg | Ga
+    # extended per fork: iG + gDert in g_fork, + aDert in a_fork, L, Ly are defined by Gg | Ga sign
     
     iG,   # fork-specific address of compared g: 0 if G | 1 if Gg | 5 if Ga (2 if iG = i_tuple[0]) 
     sign, # of iG
     rng,  # comp range, in each Dert
     map,  # boolean map of blob to compute overlap
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
-    derts__, # intra_comp inputs
+    dert___,  # intra_comp inputs
 
-    segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = g, gg, m, dy, dx, ga, day, dax    
+    segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = g, gg, m, dy, dx, ga, day, dax
     # references down blob formation tree, accumulating Dert, in vertical (horizontal) order
      
-    layer_  # corresponding params are merged across all forks of a layer
+    layer_  # corresponding-type params are summed across all forks within each layer, via feedback
         [
         g_fork: (Dert, sub_blob_)  # of sub_blobs selected for g_fork but not for a_fork
-        a_fork: (Dert, fork_ ['iG', [Dert, sub_blob_]])  # g_params and a_params, per selected input blob  
+        a_fork: (Dert, fork_ ['iG', [Dert, sub_blob_]])  # a_params are appended to g_params, per selected input blob  
         ]
     # lower layers across derivation tree, empty at fork_eval, to accumulate feedback, nested fork_ and sub_blob_  
     # Dert: fork-derived params for layer-parallel comp_blob, combined from multiple forks in fork_ and blobs in blob_ 
@@ -339,23 +339,22 @@ def merge_mask(mask, blob):
     mask[blob['slices']] &= blob['mask']
     return mask
 
+'''
+    # initialization before accumulation, Dert only
+    if fa:
+        blob['Dert'] = 'G'=0, 'Gg'=0, 'M'=0, 'Dy'=0, 'Dx'=0, 'Ga'=0, 'Day'=0, 'Dax'=0, 'L'=0, 'Ly'=0
+        # no: dert___[:] = dert___[:][:], 0, 0, 0  # (g, gg, m, dy, dx) -> (g, gg, m, dy, dx, ga, day, dax)
+    else:
+        blob['Dert'] = 'G'=0, 'Gg'=0, 'Dy'=0, 'Dx'=0, 'L'=0, 'Ly'=0
+        # no: dert___[:] = dert___[:][:], 0, 0, 0, 0  # g -> (g, gg, m, dy, dx)
+'''
 
-def intra_comp(blob, root_fork, Ave_blob, Ave, iG, rng, fa):
+def intra_comp(blob, root_fork, Ave_blob, Ave, rng, iG, fa):
 
     select_blobs(root_fork['blob_'], Ave_blob)  # filter-out below-Ave_blob blobs
 
-    Dert = blob['Dert'][iG]  # sub_blob G is summed from dert gs
-    dert___ = blob['dert___']
-
-    if fa:
-        blob['Dert'] = Dert[:], 0, 0, 0, 0, 0  # + Ga, Dax, Day, L, Ly
-        dert___[:] = dert___[:][:], 0, 0, 0  # (g, gg, m, dy, dx) -> (g, gg, m, dy, dx, ga, day, dax)
-    else:
-        blob['Dert'] = Dert[:,2], 0, 0, 0, 0, 0, 0  # - L, Ly, + G, M, Dx, Dy, L, Ly
-        dert___[:] = dert___[:][:], 0, 0, 0, 0  # g -> (g, gg, m, dy, dx)
-
     # comparison:
-    dert___ = comp_i(dert___, rng, fa)  # fa is comp_a flag
+    dert___ = comp_i(blob['dert___'], rng, iG, fa)  # fa is comp_a flag
 
     # clustering:
     P__ = form_P__(dert___, Ave, fa)  # horizontal clustering
@@ -370,15 +369,15 @@ def intra_comp(blob, root_fork, Ave_blob, Ave, iG, rng, fa):
     return Ave_blob, Ave
 
 
-def intra_fork(root_blob, root_fork, Ave_blob, Ave, iG, rng):  # root_fork: blob_ and feedback, dert___ | root_blob?
+def intra_fork(root_blob, root_fork, Ave_blob, Ave, rng, iG):  # root_fork: blob_ and feedback, dert___ | root_blob?
 
     root_blob['dert___'] = root_blob['dert___'][:][iG]
 
-    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, iG, rng, fa=0)  # g_layer
+    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa=0)  # g_layer
 
     Ave *= 2; Ave_blob *= 2  # a_fork_coef = 2: > cost, Aves += redundant sub_blob_ per: ga_val < gg_val
 
-    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, iG, rng, fa=1)  # a_layer
+    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa=1)  # a_layer
 
     # intra_comp adds g|a_dert to dert, g|a_Dert to Dert; a_fork' blob_, dert___ selected from g_fork' blob_, dert___
     # intra_fork forms params that are summed in corresponding params of root_blob.layer_[-1], via feedback

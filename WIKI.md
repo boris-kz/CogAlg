@@ -12,7 +12,7 @@ Most of the programming is currently done by [Khanh Nguyen](https://github.com/k
 
 - [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs:
 
-  - [intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp.py) is called by intra_blob to perform comparison over extended range or higher derivation, and form corresponding master blob. Each intra-blob() may call two layers of intra_comp(): first for comparison over input parameter, then for comparison over angle of gradient derived by the first comparison. Both define corresponding sub_blobs: contiguous areas of same-sign deviation of resulting gradient.
+  - intra_comp is called by intra_blob to perform comparison over extended range or higher derivation, and form corresponding master blob. Each intra-blob() may call two layers of intra_comp(): first for comparison over input parameter, then for comparison over angle of gradient derived by the first comparison. Both define corresponding sub_blobs: contiguous areas of same-sign deviation of resulting gradient.
    
     - [comp_i](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_i.py) compares input parameter, or computes and compares angle of resulting gradient, to compute corresponding input gradient or angle gradient, over defined range.
     
