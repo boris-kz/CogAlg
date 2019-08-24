@@ -15,7 +15,7 @@ import operator as op
     
     root_fork, # = root_blob['layer_'][-1][fa]['fork_'][iG]: reference for feedback of sub_blob' Dert params, up to frame
     
-    Dert = G, Gg, M, Dx, Dy, Ga, Dax, Day, L, Ly  
+    Dert = G, Gg, M, Dx, Dy, Ga, Dax, Day, L, Ly,  
     # extended per fork: iG + gDert in g_fork, + aDert in a_fork, L, Ly are defined by Gg | Ga sign
     
     iG,   # fork-specific address of compared g: 0 if G | 1 if Gg | 5 if Ga (2 if iG = i_tuple[0]) 
@@ -23,18 +23,18 @@ import operator as op
     rng,  # comp range, in each Dert
     map,  # boolean map of blob to compute overlap
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
-    dert___,  # intra_comp inputs
-
+    dert___, # intra_comp inputs
+    a_mask,  # dert___ mask for intra_comp(comp_a)
+    
     segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = g, gg, m, dy, dx, ga, day, dax
     # references down blob formation tree, accumulating Dert, in vertical (horizontal) order
      
-    layer_  # corresponding-type params are summed across all forks within each layer, via feedback
-        [
-        g_fork: (Dert, sub_blob_)  # of sub_blobs selected for g_fork but not for a_fork
-        a_fork: (Dert, fork_ ['iG', [Dert, sub_blob_]])  # a_params are appended to g_params, per selected input blob  
-        ]
-    # lower layers across derivation tree, empty at fork_eval, to accumulate feedback, nested fork_ and sub_blob_  
-    # Dert: fork-derived params for layer-parallel comp_blob, combined from multiple forks in fork_ and blobs in blob_ 
+    layer_[  # lower layers across derivation tree, empty at fork_eval, Dert params and sub_blob_ accumulate feedback
+           (  
+            g_layer: Dert, sub_blob_ 
+            a_layer: Dert, sub_blob_, fork_ ['iG', [Dert, sub_blob_]]  # a_params and fork_ in comp_a sub_blobs only
+           )
+          ]  # Dert: params for layer-parallel comp_blob, combined from multiple forks in fork_ and blobs in blob_         
     '''
 
 from collections import deque, defaultdict
@@ -323,21 +323,6 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
 def select_blobs(blob_, Ave_blob):
     """ return selected dert___ and blob_ per root_blob."""
 
-    selected_blob_ = [blob for blob in blob_
-                      if blob['Dert']['G'] > Ave_blob]  # noisy or directional G | Ga: > cost: root blob + sub_blob_
-
-    dert___ = blob_[0]['dert___']  # dert___ per blob.
-    shape = dert___[-1][0].shape   # shape of higher-layer gs
-    mask = reduce(merge_mask,
-                  blob_,
-                  np.ones(shape, dtype=bool))
-    dert___[-1][:, mask] = ma.masked  # mask unselected blobs
-
-    return dert___, selected_blob_
-
-def merge_mask(mask, blob):
-    mask[blob['slices']] &= blob['mask']
-    return mask
 
 '''
     # initialization before accumulation, Dert only
@@ -349,20 +334,36 @@ def merge_mask(mask, blob):
         # no: dert___[:] = dert___[:][:], 0, 0, 0, 0  # g -> (g, gg, m, dy, dx)
 '''
 
-def intra_comp(blob, root_fork, Ave_blob, Ave, rng, iG, fa):
 
-    select_blobs(root_fork['blob_'], Ave_blob)  # filter-out below-Ave_blob blobs
+def merge_mask(mask, blob):
+    mask[blob['slices']] &= blob['mask']
+    return mask
+
+def intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa):
+
+    # select above-Ave_blob blobs, for ref to new sub_blobs only:
+    blob_ = [blob for blob in root_fork['blob_']
+             if blob['Dert']['G'] > Ave_blob]  # noisy or directional G | Ga: > cost: root blob + sub_blob_
+
+    dert___ = blob_[0]['dert___']  # dert___ per blob.
+    shape = dert___[-1][0].shape  # shape of higher-layer gs
+
+    # mask unselected blobs' dert___s
+    mask = reduce(merge_mask,
+                  blob_,
+                  np.ones(shape, dtype=bool))
+    dert___[-1][:, mask] = ma.masked
 
     # comparison:
-    dert___ = comp_i(blob['dert___'], rng, iG, fa)  # fa is comp_a flag
+    dert___ = comp_i(root_blob['dert___'], rng, iG, fa)  # fa is comp_a flag
 
     # clustering:
     P__ = form_P__(dert___, Ave, fa)  # horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)          # vertical clustering
-    sub_blob_ = form_blob_(seg_, blob, fa)  # with feedback
+    blob_ = form_blob_(seg_, root_blob, fa)  # with feedback
 
-    Ave_blob *= len(sub_blob_) / ave_n_sub_blobs
+    Ave_blob *= len(blob_) / ave_n_sub_blobs
     Ave_blob *= rave  # cost per blob, same crit G for g_fork and a_fork
     Ave += ave  # cost per dert, both Ave and Ave_blob are for next intra_comp
 
