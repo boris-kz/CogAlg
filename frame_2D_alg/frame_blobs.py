@@ -24,22 +24,15 @@
 
 from time import time
 from collections import deque, defaultdict
-from itertools import starmap
 
 import numpy as np
+import numpy.ma as ma
+
+from utils import imread
 
 # -----------------------------------------------------------------------------
-# Structures
-'''
-Dert = namedtuple('Dert', 'G, A, Dy, Dx, L, Ly')
-Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, dert_')
-Segment = namedtuple('Segment', 'y, I, G, Dy, Dx, L, Ly, Py_')
-Blob = namedtuple('Blob', 'Dert, sign, rng, box, mask, seg_, dert__, sub_blob_, lLayers, root_blob, hLayers')
-Frame = namedtuple('Frame', 'I, G, Dy, Dx, blob_, i__, dert__')
-'''
-# -----------------------------------------------------------------------------
 # Adjustable parameters
-image_path = "./../images/raccoon.jpg"
+image_path = "./../images/raccoon_eye.jpg"
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 20 + 60 * (kwidth == 3)
 rng = int(kwidth == 3)
@@ -53,12 +46,14 @@ assert kwidth in (2, 3)
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     i__, dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
-    frame = dict(I=0, G=0, Dy=0, Dx=0, blob_=[], i__=i__, dert__=dert__) # params, blob_, dert__
-    seg_ = deque()  # buffer of running segments
+    frame = dict(rng=1,
+                 dert___=[i__, dert__],
+                 mask=None,
+                 I=0, G=0, Dy=0, Dx=0, blob_=[])
 
+    seg_ = deque()  # buffer of running segments
     height, width = image.shape
-    # P__ = intra_blob.form_P__(0, i__[0], dert__, ave)
-    # for y, P_ in enumerate(P__):
+
     for y in range(height - kwidth + 1):  # first and last row are discarded
         P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
@@ -74,7 +69,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     if kwidth == 2:
 
         # Compare:
-        dy__ = (image[1:, 1:] + image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
+        dy__ = (image[1:, 1:] - image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
         dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
 
         # Sum pixel values:
@@ -109,9 +104,9 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
         p__ = image[1:-1, 1:-1]
 
     # Compute gradient magnitudes per kernel:
-    g__ = np.hypot(dy__, dx__)
+    g__ = np.hypot(dy__, dx__) * 0.354801226089485
 
-    return p__[np.newaxis, ...], np.around(np.stack((g__, dy__, dx__), axis=0))
+    return ma.array(p__)[np.newaxis, ...], ma.around(ma.stack((g__, dy__, dx__), axis=0))
 
 
 def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
@@ -281,11 +276,11 @@ def terminate_segment(seg):
     return blob
 
 
-def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type):
+def terminate_blob(blob, last_seg, frame):
 
     Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
 
-    yn = last_seg['y0'] + last_seg['Ly']
+    yn = last_seg['y0'] + last_seg['Ly'] # Compute yn.
 
     mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
     for seg in seg_:
@@ -295,19 +290,17 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
             x_stop = x_start + P['L']
             mask[y - y0, x_start:x_stop] = False
 
+    I = Dert.pop('I')
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
-                rng=1,
-                dert___=[frame['i__'], frame['dert__']],
                 mask=mask,
-                hDerts=np.array([I, 0, 0, 0, 0]),
+                root_fork=frame, # Equivalent of fork in lower layers.
                 root_blob=None,
-                forks=defaultdict(list),
+                fork_=defaultdict(dict), # Contain sub-blobs that belong to this blob.
                 )
-
-    I = Dert.pop('I')
     G, Dy, Dx, L, Ly = blob['Dert'].values()
+    blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
 
     # Update frame:
     frame.update(I=frame['I'] + I,
@@ -317,19 +310,16 @@ def terminate_blob(blob, last_seg, frame): # root_blob, dert___, rng, fork_type)
 
     frame['blob_'].append(blob)
 
-
 # -----------------------------------------------------------------------------
 # Utilities
 
 def accum_Dert(Dert : dict, **params) -> None:
     Dert.update({param:Dert[param]+value for param, value in params.items()})
 
-
 # -----------------------------------------------------------------------------
 # Main
 
 if __name__ == '__main__':
-    from utils import imread
     image = imread(image_path).astype(int)
 
     start_time = time()
@@ -339,10 +329,8 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
         from utils import draw, map_frame
-        draw('./../debug/root_blobs', map_frame(frame_of_blobs))
+        draw("./../visualization/images/", map_frame(frame_of_blobs))
 
-        F_ANGLE = 0b01
-        F_DERIV = 0b10
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])
 
