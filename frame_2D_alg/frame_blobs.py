@@ -69,7 +69,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     if kwidth == 2:
 
         # Compare:
-        dy__ = (image[1:, 1:] + image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
+        dy__ = (image[1:, 1:] - image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
         dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
 
         # Sum pixel values:
@@ -295,9 +295,9 @@ def terminate_blob(blob, last_seg, frame):
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                 mask=mask,
-                fork=frame, # Equivalent of fork in lower layers.
+                root_fork=frame, # Equivalent of fork in lower layers.
                 root_blob=None,
-                child_forks=defaultdict(list), # Contain sub-blobs that belong to this blob.
+                fork_=defaultdict(dict), # Contain sub-blobs that belong to this blob.
                 )
     G, Dy, Dx, L, Ly = blob['Dert'].values()
     blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
@@ -331,8 +331,6 @@ if __name__ == '__main__':
         from utils import draw, map_frame
         draw("./../visualization/images/", map_frame(frame_of_blobs))
 
-        F_ANGLE = 0b01
-        F_DERIV = 0b10
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])
 
