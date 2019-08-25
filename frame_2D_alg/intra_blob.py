@@ -13,28 +13,26 @@ import operator as op
     intra_comp also sends feedback to root_fork | root_blob, then to root_blob.root_blob, etc.
     Blob structure:
     
-    root_fork, # = root_blob['layer_'][-1][fa]['fork_'][iG]: reference for feedback of sub_blob' Dert params, up to frame
+    root_fork, # = root_blob['fork_'][iG]: reference for feedback of blob' Dert params and sub_blob_, up to frame
     
     Dert = G, Gg, M, Dx, Dy, Ga, Dax, Day, L, Ly,  
     # extended per fork: iG + gDert in g_fork, + aDert in a_fork, L, Ly are defined by Gg | Ga sign
     
-    iG,   # fork-specific address of compared g: 0 if G | 1 if Gg | 5 if Ga (2 if iG = i_tuple[0]) 
+    iG,   # fork-specific address of compared g: 0 if G | 1 if Gg | 5 if Ga (2 if iG = iG_tuple[0]) 
     sign, # of iG
     rng,  # comp range, in each Dert
     map,  # boolean map of blob to compute overlap
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert___, # intra_comp inputs
-    a_mask,  # dert___ mask for intra_comp(comp_a)
-    
+       
     segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = g, gg, m, dy, dx, ga, day, dax
     # references down blob formation tree, accumulating Dert, in vertical (horizontal) order
-     
-    layer_[  # lower layers across derivation tree, empty at fork_eval, Dert params and sub_blob_ accumulate feedback
-           (  
-            g_layer: Dert, sub_blob_ 
-            a_layer: Dert, sub_blob_, fork_ ['iG', [Dert, sub_blob_]]  # a_params and fork_ in comp_a sub_blobs only
-           )
-          ]  # Dert: params for layer-parallel comp_blob, combined from multiple forks in fork_ and blobs in blob_         
+    
+    fork_ # multiple derivation trees per blob: 0-1 in g_blobs, 0-3 in a_blobs, next sub_blob_ is in layer_[0]:
+        [
+         layer_ [(Dert, sub_blob_)]  # alternating g(even) | a(odd) layers across derivation tree, seq access
+        ]
+        # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob        
     '''
 
 from collections import deque, defaultdict
@@ -68,19 +66,6 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
 # -----------------------------------------------------------------------------
 # Functions
-
-
-def intra_cluster(dert___, root_blob, Ave, Ave_blob, rng, fa):
-
-    dert__ = dert___[-1][root_blob['slices']]  # inside root_blob's bounding box
-    y0, yn, x0, xn = root_blob['box']
-
-    P__ = form_P__(x0, y0, dert__, Ave, fa)
-    P_ = scan_P__(P__)
-    seg_ = form_segment_(P_)
-    blob_ = form_blob_(seg_, root_blob, dert___, rng, fa)
-
-    return blob_, Ave_blob * len(blob_) / ave_n_sub_blobs
 
 
 def form_P__(x0, y0, dert__, Ave, fa):
@@ -319,93 +304,85 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
 
     feedback(root_blob, fork_type)
 
-
-def select_blobs(blob_, Ave_blob):
-    """ return selected dert___ and blob_ per root_blob."""
-
-
 '''
-    # initialization before accumulation, Dert only
+    # initialization before accumulation, Dert only?
     if fa:
         blob['Dert'] = 'G'=0, 'Gg'=0, 'M'=0, 'Dy'=0, 'Dx'=0, 'Ga'=0, 'Day'=0, 'Dax'=0, 'L'=0, 'Ly'=0
-        # no: dert___[:] = dert___[:][:], 0, 0, 0  # (g, gg, m, dy, dx) -> (g, gg, m, dy, dx, ga, day, dax)
+        dert___[:] = dert___[:][:], 0, 0, 0  # (g, gg, m, dy, dx) -> (g, gg, m, dy, dx, ga, day, dax)
     else:
         blob['Dert'] = 'G'=0, 'Gg'=0, 'Dy'=0, 'Dx'=0, 'L'=0, 'Ly'=0
-        # no: dert___[:] = dert___[:][:], 0, 0, 0, 0  # g -> (g, gg, m, dy, dx)
+        dert___[:] = dert___[:][:], 0, 0, 0, 0  # g -> (g, gg, m, dy, dx)
 '''
-
-
-def merge_mask(mask, blob):
-    mask[blob['slices']] &= blob['mask']
-    return mask
 
 def intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa):
 
-    # select above-Ave_blob blobs, for ref to new sub_blobs only:
-    blob_ = [blob for blob in root_fork['blob_']
-             if blob['Dert']['G'] > Ave_blob]  # noisy or directional G | Ga: > cost: root blob + sub_blob_
+    for blob in root_fork['blob_']: # select above-Ave_blob blobs, for ref to new sub_blobs only:
+        if blob['Dert']['G'] > Ave_blob:  # noisy or directional G | Ga: > cost: root blob + sub_blob_
 
-    dert___ = blob_[0]['dert___']  # dert___ per blob.
-    shape = dert___[-1][0].shape  # shape of higher-layer gs
+            dert___ = comp_i(root_blob['dert___'], rng, iG, fa)  # comparison, fa is comp_a flag
 
-    # mask unselected blobs' dert___s
-    mask = reduce(merge_mask,
-                  blob_,
-                  np.ones(shape, dtype=bool))
-    dert___[-1][:, mask] = ma.masked
+            # clustering:
+            P__ = form_P__(dert___, Ave, fa)  # horizontal clustering
+            P_ = scan_P__(P__)
+            seg_ = form_segment_(P_)          # vertical clustering
+            blob_ = form_blob_(seg_, root_blob, fa)  # with feedback
 
-    # comparison:
-    dert___ = comp_i(root_blob['dert___'], rng, iG, fa)  # fa is comp_a flag
+            Ave_blob *= len(blob_) / ave_n_sub_blobs
+            Ave_blob *= rave  # cost per blob, same crit G for g_fork and a_fork
+            Ave += ave  # cost per dert, both Ave and Ave_blob are for next intra_comp
 
-    # clustering:
-    P__ = form_P__(dert___, Ave, fa)  # horizontal clustering
-    P_ = scan_P__(P__)
-    seg_ = form_segment_(P_)          # vertical clustering
-    blob_ = form_blob_(seg_, root_blob, fa)  # with feedback
-
-    Ave_blob *= len(blob_) / ave_n_sub_blobs
-    Ave_blob *= rave  # cost per blob, same crit G for g_fork and a_fork
-    Ave += ave  # cost per dert, both Ave and Ave_blob are for next intra_comp
+            if not fa:
+                Ave *= 2; Ave_blob *= 2  # a_fork_coef = 2: > cost, Aves += redundant sub_blob_ per: ga_val < gg_val
 
     return Ave_blob, Ave
 
 
-def intra_fork(root_blob, root_fork, Ave_blob, Ave, rng, iG):  # root_fork: blob_ and feedback, dert___ | root_blob?
+def intra_fork(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa):  # fa -> not fa for intra_comp type:
 
-    root_blob['dert___'] = root_blob['dert___'][:][iG]
+    # root_fork ref for blob_ and feedback,
+    # no need for root_blob ref, see new root_fork init ln353?
 
-    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa=0)  # g_layer
+    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, not fa)  # alternating g | a layers
 
-    Ave *= 2; Ave_blob *= 2  # a_fork_coef = 2: > cost, Aves += redundant sub_blob_ per: ga_val < gg_val
-
-    Ave_blob, Ave = intra_comp(root_blob, root_fork, Ave_blob, Ave, rng, iG, fa=1)  # a_layer
-
-    # intra_comp adds g|a_dert to dert, g|a_Dert to Dert; a_fork' blob_, dert___ selected from g_fork' blob_, dert___
-    # intra_fork forms params that are summed in corresponding params of root_blob.layer_[-1], via feedback
+    # intra_comp adds g|a_dert to dert, g|a_Dert to Dert, all params are summed in same params of root_blob.layer_[-1]
 
     for blob in root_fork['blob_']:
-        if len(blob["Dert"]) == 10:  # only blobs processed by a_fork
-            rdn = 1
-            G =  blob['Dert']['G']   # summed per new blob, not passed iG
-            Gg = blob['Dert']['Gg']  # added by 1st intra_comp
-            Mg = blob['Dert']['Mg']  # added by 1st intra_comp
-            Ga = blob['Dert']['Ga']  # added by 2nd intra_comp, no m_angle ~ no m_brightness: mag != value
+        if fa: # blob is g_blob, evaluated for single a_fork (ig_sub_blobs formed by intra_comp(fa=0) are ignored):
 
-            eval_fork_ = [       # sub_forks:
-                (G + Mg, 1, 0),  # rng+ / est match of input gradient iG=Dert[0] at rng+1, 0 if i is p
-                (Gg, rng+1, 1),  # der+ / est match of gg: iG=Dert[1] at rng+rng+1, initial fork same as rng+
-                (Ga, rng+1, 5),  # gad+ / est match of ga: iG=Dert[5] at rng+rng+1; a_rng+/ g_rng+: no indep value
-                ]
-            for val, irng, iG in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
-                if val > rdn * ave_intra_blob:  # cost of sub_blob_ eval in intra_blob
+            if blob['Dert']['G'].values > ave_intra_blob:
+                blob['fork'][0] = blob['Dert'][:-2]  # root_fork initialization
+                blob['fork'][0] += [0, 0, 0, 0, 0]   # should be 'Ga'=0, 'Day'=0, 'Dax'=0, 'L'=0, 'Ly'=0, please edit
 
-                    rdn += 1  # fork rdn = fork index + 1
-                    rng += irng  # comp rng per fork
-                    Ave_blob += ave_blob * rave * rdn
-                    Ave += ave * rdn
-                    intra_fork(blob, blob['fork'][iG], Ave_blob, Ave, blob['Dert'][iG], rng)
-                    # iG: address of crit G in Dert, comp g in dert__, root_fork ref: iG or rdn-2 == eval_fork_[i]?
-            else:
-                break
+                intra_fork(blob, blob['fork_'][0], Ave_blob, Ave, blob['Dert']['G'], rng, fa=1)  # single fork in fork_
+
+        else: # blob is a_blob, a_sub_blobs formed by intra_comp(fa=1) are evaluated for three g_forks:
+
+            for sub_blob in blob['fork_'][iG][0]['sub_blob_']:  # sub_blob_ in layer_[0] in fork_[iG]
+                if sub_blob['Dert']['G'].values > ave_intra_blob:
+
+                    rdn = 1
+                    G =  sub_blob['Dert']['G'].values   # summed per new blob, not passed iG
+                    Gg = sub_blob['Dert']['Gg'].values  # added by 1st intra_comp
+                    M =  sub_blob['Dert']['M'].values   # added by 1st intra_comp
+                    Ga = sub_blob['Dert']['Ga'].values  # added by 2nd intra_comp, no m_angle ~ no m_brightness: mag != value
+
+                    eval_fork_ = [      # sub_forks:
+                        (G + M, 1, 0),  # rng+ / est match of input gradient iG=Dert[0] at rng+1, 0 if i is p
+                        (Gg, rng+1, 1), # der+ / est match of gg: iG=Dert[1] at rng+rng+1, initial fork same as rng+
+                        (Ga, rng+1, 5), # gad+ / est match of ga: iG=Dert[5] at rng+rng+1; a_rng+/ g_rng+: no indep value
+                        ]
+                    for val, irng, iG in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+
+                        if  val > rdn * ave_intra_blob:  # cost of sub_blob_ eval in intra_fork
+                            rdn += 1  # fork rdn = fork index + 1
+                            rng += irng  # comp rng per fork
+                            Ave_blob += ave_blob * rave * rdn
+                            Ave += ave * rdn
+                            # TODO: add root_fork initialization, as in line 353
+
+                            intra_fork(sub_blob, sub_blob['fork_'][iG], Ave_blob, Ave, blob['Dert'][iG], rng, fa=0)
+                            # iG is index of crit G in Dert, comp g in dert__, root_fork ref: iG or rdn-2 == eval_fork_[i]?
+                        else:
+                            break
 
     return root_blob
