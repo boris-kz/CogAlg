@@ -117,7 +117,6 @@ def comp_i(blob_derts, rng, iG, fa):
     out : MaskedArray
         The array that contain result from comparison.
     """
-
     assert isinstance(derts, ma.MaskedArray)
 
     if fa:
