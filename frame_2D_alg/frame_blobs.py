@@ -33,7 +33,7 @@ from utils import imread
 # -----------------------------------------------------------------------------
 # Adjustable parameters
 image_path = "./../images/raccoon_eye.jpg"
-kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
+kwidth = 2 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 20 + 60 * (kwidth == 3)
 rng = int(kwidth == 3)
 DEBUG = True
@@ -45,9 +45,9 @@ assert kwidth in (2, 3)
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    i__, dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
     frame = dict(rng=1,
-                 dert___=[i__, dert__],
+                 dert___=dert__,
                  mask=None,
                  I=0, G=0, Dy=0, Dx=0, blob_=[])
 
@@ -106,7 +106,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(dy__, dx__) * 0.354801226089485
 
-    return ma.array(p__)[np.newaxis, ...], ma.around(ma.stack((g__, dy__, dx__), axis=0))
+    return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
 
 def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
