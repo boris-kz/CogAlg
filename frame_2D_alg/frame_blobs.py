@@ -47,7 +47,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
 
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
     frame = dict(rng=1,
-                 dert___=dert__,
+                 dert__=dert__,
                  mask=None,
                  I=0, G=0, Dy=0, Dx=0, blob_=[])
 
@@ -55,7 +55,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     height, width = image.shape
 
     for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(i__[0, y], dert__[:, y].T)  # horizontal clustering
+        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
 
@@ -109,16 +109,15 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
     return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
 
-def form_P_(i_, dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # row of Ps
-    i = i_[0]
-    g, dy, dx = dert_[0]  # first dert
+    i, g, dy, dx = dert_[0]  # first dert
     x0, I, G, Dy, Dx, L = 0, i, g, dy, dx, 1  # P params
     vg = g - ave
     _s = vg > 0  # sign
 
-    for x, (i, (g, dy, dx)) in enumerate(zip(i_[1:], dert_[1:]), start=1):
+    for x, (i, g, dy, dx) in enumerate(dert_[1:], start=1):
         vg = g - ave
         s = vg > 0
         if s != _s:  # P is terminated and new P is initialized
@@ -290,16 +289,18 @@ def terminate_blob(blob, last_seg, frame):
             x_stop = x_start + P['L']
             mask[y - y0, x_start:x_stop] = False
 
-    I = Dert.pop('I')
+    dert__ = frame['dert__'][:, y0:yn, x0:xn]
+    dert__[:, mask] = ma.masked
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
-                slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
-                mask=mask,
+                # slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
+                # mask=mask,
+                dert__=dert__,
                 root_fork=frame, # Equivalent of fork in lower layers.
                 root_blob=None,
                 fork_=defaultdict(dict), # Contain sub-blobs that belong to this blob.
                 )
-    G, Dy, Dx, L, Ly = blob['Dert'].values()
+    I, G, Dy, Dx, L, Ly = blob['Dert'].values()
     blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
 
     # Update frame:

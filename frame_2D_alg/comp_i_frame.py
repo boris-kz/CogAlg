@@ -17,9 +17,6 @@ from utils import imread, draw
 from intra_blob import ave
 
 # -----------------------------------------------------------------------------
-# Constants
-
-# -----------------------------------------------------------------------------
 # Adjustable parameters
 
 # Input:
