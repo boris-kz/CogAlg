@@ -49,7 +49,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
 
     if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
-       rX = dX / mX  # average dist!prox, | prox!dist, | mX / max_L?
+       rX = dX / mX  # average dist/prox, | prox/dist, | mX / max_L?
     ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
     ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
@@ -103,7 +103,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     return (P, P_ders), vs, ds
 
 
-def comp_P_(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursive?
+def cluster_P_(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursive?
 
     # differential Pd -> dPP and Pm -> vPP: dderived params magnitude is the only proxy to predictive value
 

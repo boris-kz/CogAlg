@@ -1,5 +1,5 @@
 """
-Perform comparison of g or a over predetermined range.
+Compare g or a over range = rng.
 """
 
 import operator as op
@@ -101,46 +101,56 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(blob_derts, rng, iG, fa):
+def comp_i(inderts, rng, fa, iG=None):
     """
     Compare g or a over predetermined range.
     Parameters
     ----------
-    blob_derts : MaskedArray
+    inderts : MaskedArray
         Contain the arrays: g, m, dy, dx.
     rng : int
         Determine translation between comparands.
+    fa : int
+        Determine compare function: g_comp or a_comp.
+    iG : int, optional
+        Determine comparands in the case of g_comp.
     Return
     ------
     out : MaskedArray
         The array that contain result from comparison.
     """
-
-    assert isinstance(derts, ma.MaskedArray)
+    assert isinstance(inderts, ma.MaskedArray)
 
     if fa:
-        return comp_a(blob_derts, rng)
+        return comp_a(inderts, rng)
     else:
-        return comp_g(select_derts(blob_derts, iG), rng)
+        return comp_g(select_derts(inderts, iG), rng)
 
-def select_derts(blob_derts, iG):
+
+def select_derts(inderts, iG):
     """
     Select_g to compare
     """
-    g = blob_derts[iG]
+    g = inderts[iG]
     if iG == 0: # Accumulated m, dy, dx:
-        m, dy, dx = blob_derts[2:5]
+        try:
+            assert len(inderts) == 10
+            m, dy, dx = inderts[2:5]
+        except AssertionError:
+            dy, dx = inderts[2:4]
+            m = ma.zeros(g.shape)
     else: # Initialized m, dy, dx:
-        m, dy, dx = ma.zeros(g.shape)
+        m, dy, dx = [ma.zeros(g.shape) for _ in range(3)]
 
     return g, m, dy, dx
 
-def comp_g(derts, rng):
+
+def comp_g(inderts, rng):
     """
     Compare g over predetermined range.
     """
-    # Unpack derts:
-    g, m, dy, dx = derts
+    # Unpack inderts, derivatives accumulated over shorter rng+ (if m), initialized for der+ & gad+?
+    g, m, dy, dx = inderts
 
     # Compare gs:
     d = translated_operation(g, rng, op.sub)
@@ -153,29 +163,44 @@ def comp_g(derts, rng):
     # Compute ms:
     m[comp_field] += translated_operation(g, rng, ma.minimum).sum(axis=-1)
 
+    # Apply mask:
+    rm = rim_mask(g.shape, rng)
+    m[rm] = dy[rm] = dx[rm] = ma.masked
+
     # Compute gg:
     gg = ma.hypot(dy, dx) * SCALER_g[rng]
 
     return ma.stack((g, gg, m, dy, dx), axis=0) # ma.stack() for extra array dimension.
 
 
-def comp_a(gblob_derts, rng):
+def comp_a(ginderts, rng):
     """
     Compute and compare a over predetermined range.
     """
     # Unpack derts:
-    g, gg, m, dy, dx = gblob_derts
+    try:
+        g, gg, m, dy, dx = ginderts
+    except ValueError: # Initial dert doesn't contain m.
+        g, gg, dy, dx = ginderts
+
+    # Initialize dax, day:
+    day, dax = [ma.zeros((2,)+g.shape) for _ in range(2)]
 
     # Compute angles:
-    a = ma.stack((dy, dx), axis=0) / g
+    a = ma.stack((dy, dx), axis=0) / gg
 
     # Compute angle differences:
     da = translated_operation(a, rng, angle_diff)
     comp_field = central_slice(rng)
 
+
     # Decompose and add to corresponding day and dax:
-    day[comp_field] += (da * Y_COEFFS[rng]).mean(axis=-1)
-    dax[comp_field] += (da * X_COEFFS[rng]).mean(axis=-1)
+    day[comp_field] = (da * Y_COEFFS[rng]).mean(axis=-1)
+    dax[comp_field] = (da * X_COEFFS[rng]).mean(axis=-1)
+
+    # Apply mask:
+    rm = rim_mask(day.shape, rng)
+    day[rm] = dax[rm] = ma.masked
 
     # Compute ga:
     ga = ma.hypot(
@@ -183,22 +208,31 @@ def comp_a(gblob_derts, rng):
         ma.arctan2(*dax)
     )[np.newaxis, ...] * SCALER_ga
 
-    return ma.concatenate( # Concatenate on the first dimension.
-        (
-            ma.stack((g, gg, m, dy, dx), axis=0),
-            ga, day, dax,
-        ),
-        axis=0,
-    )
+    try:
+        return ma.concatenate( # Concatenate on the first dimension.
+            (
+                ma.stack((g, gg, m), axis=0),
+                ga, day, dax,
+            ),
+            axis=0,
+        )
+    except NameError: # m doesn't exist.
+        return ma.concatenate(  # Concatenate on the first dimension.
+            (
+                ma.stack((g, gg), axis=0),
+                a, ga, day, dax,
+            ),
+            axis=0,
+        )
 
 # -----------------------------------------------------------------------------
 # Utility functions
 
-def central_slice(i):
+def central_slice(k):
     """Return central slice objects (last 2 dimensions)."""
-    if i < 1:
+    if k < 1:
         return ..., slice(None), slice(None)
-    return ..., slice(i, -i), slice(i, -i)
+    return ..., slice(k, -k), slice(k, -k)
 
 
 def rim_mask(shape, i):
