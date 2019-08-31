@@ -170,7 +170,7 @@ def map_frame(frame, raw=False):
         2D array of image's pixel.
     '''
 
-    height, width = frame['dert___'][-1].shape[1:]
+    height, width = frame['dert__'].shape[1:]
     box = (0, height, 0, width)
     image = empty_map(box)
 

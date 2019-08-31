@@ -284,13 +284,13 @@ def terminate_blob(blob, last_seg, frame):
     mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
     for seg in seg_:
         seg.pop('roots')
-        for y, P in enumerate(seg['Py_'], start=seg['y0']):
+        for y, P in enumerate(seg['Py_'], start=seg['y0']-y0):
             x_start = P['x0'] - x0
             x_stop = x_start + P['L']
-            mask[y - y0, x_start:x_stop] = False
+            mask[y, x_start:x_stop] = False
 
     dert__ = frame['dert__'][:, y0:yn, x0:xn]
-    dert__[:, mask] = ma.masked
+    dert__.mask[:] = mask
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 # slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
@@ -330,7 +330,7 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
         from utils import draw, map_frame
-        draw("./../visualization/images/", map_frame(frame_of_blobs))
+        draw("./../visualization/images/blobs", map_frame(frame_of_blobs))
 
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])

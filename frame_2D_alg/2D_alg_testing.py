@@ -6,10 +6,11 @@ Currently testing: intra_blob.form_P__
 """
 
 import frame_blobs
+import numpy as np
 
 from utils import imread, draw
 from comp_i import comp_i
-from intra_blob import form_P__
+from intra_blob import form_P__, scan_P__
 
 # -----------------------------------------------------------------------------
 # Adjustable parameters
@@ -42,10 +43,14 @@ if __name__ == "__main__":
     print('Done!')
 
     print('Outputing derts...')
-    draw(output_path, 255*normalize(derts[4]))
+    draw(output_path, 255 * normalize(derts[4]))
     print('Done!')
 
     print('Running form_P__...')
     y0, yn, x0, xn = best_blob['box']
     P__ = form_P__(x0, y0, derts, 50, fa=1)
+    print('Done!')
+
+    print('Running scan_P__...')
+    P_ = scan_P__(P__)
     print('Done!')

@@ -166,8 +166,10 @@ def comp_g(inderts, rng):
     m[comp_field] += translated_operation(g, rng, ma.minimum).sum(axis=-1)
 
     # Apply mask:
-    rm = rim_mask(g.shape, rng)
-    m[rm] = dy[rm] = dx[rm] = ma.masked
+    msq = np.ones(g.shape, dtype=int)  # Rim mask.
+    msq[comp_field] = g.mask[comp_field] + d.mask.sum(axis=-1)  # Summed d mask.
+    imsq = msq.nonzero()
+    m[imsq] = dy[imsq] = dx[imsq] = ma.masked # Apply mask.
 
     # Compute gg:
     gg = ma.hypot(dy, dx) * SCALER_g[rng]
@@ -190,6 +192,7 @@ def comp_a(ginderts, rng):
 
     # Compute angles:
     a = ma.stack((dy, dx), axis=0) / gg
+    a.mask = gg.mask
 
     # Compute angle differences:
     da = translated_operation(a, rng, angle_diff)
@@ -201,8 +204,10 @@ def comp_a(ginderts, rng):
     dax[comp_field] = (da * X_COEFFS[rng]).mean(axis=-1)
 
     # Apply mask:
-    rm = rim_mask(day.shape, rng)
-    day[rm] = dax[rm] = ma.masked
+    msq = np.ones(a.shape, dtype=int) # Rim mask.
+    msq[comp_field] = a.mask[comp_field] + da.mask.sum(axis=-1) # Summed d mask.
+    imsq = msq.nonzero()
+    day[imsq] = dax[imsq] = ma.masked # Apply mask.
 
     # Compute ga:
     ga = ma.hypot(

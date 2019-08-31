@@ -130,18 +130,18 @@ def scan_P__(P__):
     """ detect forks and roots per P"""
 
     for _P_, P_ in pairwise(P__): # Iterate through pairs of lines.
-        _P_, P_ = iter(_P_), iter(P_) # Convert to iterators.
+        _itP_, itP_ = iter(_P_), iter(P_) # Convert to iterators.
         try:
-            _P, P = next(_P_), next(P_) # First pair to check.
+            _P, P = next(_itP_), next(itP_) # First pair to check.
         except StopIteration: # No more fork-root pair.
             continue # To next pair of _P_, P_.
         while True:
-            left, olp = comp_edge(_P, P) # Check for 4 different cases.
+            isleft, olp = comp_edge(_P, P) # Check for 4 different cases.
             if olp and _P['sign'] == P['sign']:
                 _P['root_'].append(P)
                 P['fork_'].append(_P)
             try:
-                _P, P = (next(_P_), P_) if left else (_P, next(P_))
+                _P, P = (next(_itP_), P) if isleft else (_P, next(itP_))
             except StopIteration: # No more fork-root pair.
                 break # To next pair of _P_, P_.
 
