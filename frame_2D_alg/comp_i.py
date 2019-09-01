@@ -1,5 +1,10 @@
 """
 Perform comparison of g or a over predetermined range.
+
+Note: This module mostly operate on arrays. For less lengthy
+variable name, most array's name will be denoted without "__"
+(with the exception of input dert__).
+
 """
 
 import operator as op
@@ -101,13 +106,13 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(inderts, rng, fa, iG=None):
+def comp_i(dert__, rng, fa, iG=None):
     """
     Compare g or a over predetermined range.
 
     Parameters
     ----------
-    inderts : MaskedArray
+    dert__ : MaskedArray
         Contain the arrays: g, m, dy, dx.
     rng : int
         Determine translation between comparands.
@@ -121,25 +126,25 @@ def comp_i(inderts, rng, fa, iG=None):
     out : MaskedArray
         The array that contain result from comparison.
     """
-    assert isinstance(inderts, ma.MaskedArray)
+    assert isinstance(dert__, ma.MaskedArray)
 
     if fa:
-        return comp_a(inderts, rng)
+        return comp_a(dert__, rng)
     else:
-        return comp_g(select_derts(inderts, iG), rng)
+        return comp_g(select_derts(dert__, iG), rng)
 
 
-def select_derts(inderts, iG):
+def select_derts(dert__, iG):
     """
     Select_g to compare
     """
-    g = inderts[iG]
+    g = dert__[iG]
     if iG == 0: # Accumulated m, dy, dx:
         try:
-            assert len(inderts) == 10
-            m, dy, dx = inderts[2:5]
+            assert len(dert__) == 10
+            m, dy, dx = dert__[2:5]
         except AssertionError:
-            dy, dx = inderts[2:4]
+            dy, dx = dert__[2:4]
             m = ma.zeros(g.shape)
     else: # Initialized m, dy, dx:
         m, dy, dx = [ma.zeros(g.shape) for _ in range(3)]
@@ -147,12 +152,12 @@ def select_derts(inderts, iG):
     return g, m, dy, dx
 
 
-def comp_g(inderts, rng):
+def comp_g(dert__, rng):
     """
     Compare g over predetermined range.
     """
-    # Unpack inderts:
-    g, m, dy, dx = inderts
+    # Unpack dert__:
+    g, m, dy, dx = dert__
 
     # Compare gs:
     d = translated_operation(g, rng, op.sub)
@@ -177,15 +182,15 @@ def comp_g(inderts, rng):
     return ma.stack((g, gg, m, dy, dx), axis=0) # ma.stack() for extra array dimension.
 
 
-def comp_a(ginderts, rng):
+def comp_a(gdert__, rng):
     """
     Compute and compare a over predetermined range.
     """
-    # Unpack derts:
+    # Unpack dert__:
     try:
-        g, gg, m, dy, dx = ginderts
+        g, gg, m, dy, dx = gdert__
     except ValueError: # Initial dert doesn't contain m.
-        g, gg, dy, dx = ginderts
+        g, gg, dy, dx = gdert__
 
     # Initialize dax, day:
     day, dax = [ma.zeros((2,)+g.shape) for _ in range(2)]

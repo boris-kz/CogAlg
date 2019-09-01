@@ -80,7 +80,7 @@ aseg_param_keys = aDert_params + seg_params
 
 
 
-def form_P__(x0, y0, dert__, Ave, fa, noM=0):
+def form_P__(x0, y0, dert__, Ave, fa):
     """Form Ps across the whole dert array."""
 
     if fa:
@@ -102,15 +102,15 @@ def form_P__(x0, y0, dert__, Ave, fa, noM=0):
     Pderts__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
                 for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
 
-    # Accumulation:
+    # Accumulated params:
+    # if not fa: G, Gg, M, Dy, Dx
+    # if fa: G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax
     PDerts__ = map(lambda Pderts_:
                        map(lambda Pderts: Pderts.sum(axis=0),
                            Pderts_),
                    Pderts__)
 
     param_keys = aP_param_keys if fa else gP_param_keys
-    if noM:
-        param_keys.remove("M")
 
     P__ = [
         [
