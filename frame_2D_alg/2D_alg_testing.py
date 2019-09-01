@@ -5,12 +5,13 @@ Change quickly in parallel with development.
 Currently testing: intra_blob.form_P__
 """
 
-import frame_blobs
 import numpy as np
+import matplotlib.pyplot as plt
+import frame_blobs
 
-from utils import imread, draw
+from utils import imread, draw, debug_segment
 from comp_i import comp_i
-from intra_blob import form_P__, scan_P__
+from intra_blob import form_P__, scan_P__, form_segment_
 
 # -----------------------------------------------------------------------------
 # Adjustable parameters
@@ -42,15 +43,24 @@ if __name__ == "__main__":
     derts = comp_i(best_blob['dert__'], 1, fa=1)
     print('Done!')
 
-    print('Outputing derts...')
-    draw(output_path, 255 * normalize(derts[4]))
-    print('Done!')
-
     print('Running form_P__...')
     y0, yn, x0, xn = best_blob['box']
-    P__ = form_P__(x0, y0, derts, 50, fa=1)
+    P__ = form_P__(x0, y0, derts, 50, fa=1, noM=1)
     print('Done!')
 
     print('Running scan_P__...')
     P_ = scan_P__(P__)
+    print('Done!')
+
+    print('Running form_seg_...')
+    seg_ = form_segment_(P_, fa=1, noM=1)
+    print('Done!')
+
+    print('Debugging segments...')
+    seg_ = seg_
+    gray_scale = plt.get_cmap('gray')
+    draw(output_path, debug_segment(derts.shape[1:], *seg_))
+    for seg in seg_:
+        plt.imshow(debug_segment(derts.shape[1:], seg), cmap=gray_scale)
+        plt.show()
     print('Done!')

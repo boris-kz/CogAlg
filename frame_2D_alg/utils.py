@@ -21,7 +21,7 @@ from PIL import Image
 # -----------------------------------------------------------------------------
 # Constants
 
-transparent_val = -128 # Pixel at this value are considered transparent
+transparent_val = 128 # Pixel at this value are considered transparent
 
 # -----------------------------------------------------------------------------
 # General purpose functions
@@ -190,13 +190,13 @@ def map_blob(blob, raw=False):
 
         sub_box = segment_box(seg)
 
-        seg_map = map_segment(seg, sub_box, raw)
+        seg_map = map_segment(seg, sub_box, blob['sign'], raw)
 
         over_draw(blob_img, seg_map, sub_box, blob['box'])
 
     return blob_img
 
-def map_segment(seg, box, raw=False):
+def map_segment(seg, box, s, raw=False):
     '''Map a single segment of a blob into an image.'''
 
     seg_img = empty_map(box)
@@ -208,7 +208,7 @@ def map_segment(seg, box, raw=False):
             if raw:
                 seg_img[y, x] = dert[0]
             else:
-                seg_img[y, x] = 255 if P['sign'] else 0
+                seg_img[y, x] = 255 if s else 0
 
     return seg_img
 
@@ -218,6 +218,15 @@ def segment_box(seg):
     x0s = min([P['x0'] for P in seg['Py_']])
     xns = max([P['x0'] + P['L'] for P in seg['Py_']])
     return y0s, yns, x0s, xns
+
+def debug_segment(background_shape, *segments):
+    image = empty_map(background_shape)
+    for seg in segments:
+        seg_box = segment_box(seg)
+        over_draw(image,
+                  map_segment(seg, seg_box, seg['sign']),
+                  seg_box)
+    return image
 
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     '''Over-write map of sub-structure onto map of parent-structure.'''

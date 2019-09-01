@@ -67,7 +67,7 @@ gDert_params = ["G", "Gg", "M", "Dy", "Dx"]
 aDert_params = gDert_params + ["Ga", "Dyay", "Dyax", "Dxay", "Dxax"]
 
 P_params = ["L", "x0", "dert_", "root_", "fork_", "y", "sign"]
-seg_params = ["L","Ly", "y0", "Py_", "root_", "fork_"]
+seg_params = ["L", "Ly", "y0", "Py_", "root_", "fork_", "sign"]
 
 gP_param_keys = gDert_params + P_params
 aP_param_keys = aDert_params + P_params
@@ -80,7 +80,7 @@ aseg_param_keys = aDert_params + seg_params
 
 
 
-def form_P__(x0, y0, dert__, Ave, fa):
+def form_P__(x0, y0, dert__, Ave, fa, noM=0):
     """Form Ps across the whole dert array."""
 
     if fa:
@@ -109,7 +109,7 @@ def form_P__(x0, y0, dert__, Ave, fa):
                    Pderts__)
 
     param_keys = aP_param_keys if fa else gP_param_keys
-    if len(dert__) == 9: # No M.
+    if noM:
         param_keys.remove("M")
 
     P__ = [
@@ -163,45 +163,38 @@ def comp_edge(_P, P): # Used in scan_P_().
     else:
         return False, _x0 < xn
 
-'''
-UNDER MAINTENANCE:
-def form_segment_(P_):
+def form_segment_(P_, fa, noM):
     """Form segments of vertically contiguous Ps."""
-
-    # Get a list of all segment's first P:
+    # Get a list of every segment's first P:
     P0_ = [*filter(lambda P: (len(P['fork_']) != 1
                             or len(P['fork_'][0]['root_']) != 1),
                    P_)]
 
+    param_keys = aseg_param_keys if fa else gseg_param_keys
+    if noM:
+        param_keys.remove("M")
+
     # Form segments:
-    seg_ = [dict(zip(seg_pars, # segment's params as keys
-                     [Py_[0].pop('y'),] # y0
-                     # Accumulate params:
-                     + [*map(sum,
-                             zip(*map(op.itemgetter('G',
-                                                    'M',
-                                                    'Dy',
-                                                    'Dx',
-                                                    'L'),
-                                      Py_)))]
-                     + [len(Py_)]  # Ly
-                     + [Py_]
-                     + [Py_[-1]['root_']]  # root_
-                     + [Py_[0]['fork_']])) # fork_
+    seg_ = [dict(zip(param_keys, # segment's params as keys
+                     # Accumulated params:
+                     [*map(sum,
+                           zip(*map(op.itemgetter(*param_keys[:-6]),
+                                    Py_))),
+                      len(Py_), Py_[0].pop('y'), Py_, # Ly, y0, Py_ .
+                      Py_[-1].pop('root_'), Py_[0].pop('fork_'), # root_, fork_ .
+                      Py_[0].pop('sign')]))
             # cluster_vertical(P): traverse segment from first P:
             for Py_ in map(cluster_vertical, P0_)]
 
-    for seg in seg_:
+    for seg in seg_: # Update segs' refs.
         seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
 
-    for seg in seg_:
+    for seg in seg_: # Update root_ and fork_ .
         seg.update(root_=[*map(lambda P: P['seg'], seg['root_'])],
                    fork_=[*map(lambda P: P['seg'], seg['fork_'])])
 
-    for seg in seg_:
-        for i, ref in ((0, 'fork_'), (-1, 'root_')):
-            seg['Py_'][i].pop('seg')
-            seg['Py_'][i].pop(ref)
+    for i, seg in enumerate(seg_): # Remove segs' refs.
+        del seg['Py_'][0]['seg']
 
     return seg_
 
@@ -213,14 +206,16 @@ def cluster_vertical(P): # Used in form_segment_().
     """
 
     if len(P['root_']) == 1 and len(P['root_'][0]['fork_']) == 1:
-        P['root_'][0].pop('y')
         root = P.pop('root_')[0] # Only 1 root.
         root.pop('fork_') # Only 1 fork.
+        root.pop('y')
+        root.pop('sign')
         return [P] + cluster_vertical(root)
-    else:
-        return [P]
 
+    return [P]
 
+'''
+UNDER MAINTENANCE:
 def form_blob_(seg_, root_blob, dert___, rng, fork_type):
     encountered = []
     blob_ = []
