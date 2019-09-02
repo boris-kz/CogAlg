@@ -67,7 +67,7 @@ gDert_params = ["G", "Gg", "M", "Dy", "Dx"]
 aDert_params = gDert_params + ["Ga", "Dyay", "Dyax", "Dxay", "Dxax"]
 
 P_params = ["L", "x0", "dert_", "root_", "fork_", "y", "sign"]
-seg_params = ["L", "Ly", "y0", "Py_", "root_", "fork_", "sign"]
+seg_params = ["S", "Ly", "y0", "Py_", "root_", "fork_", "sign"]
 
 gP_param_keys = gDert_params + P_params
 aP_param_keys = aDert_params + P_params
@@ -80,23 +80,29 @@ aseg_param_keys = aDert_params + seg_params
 
 
 
-def form_P__(x0, y0, dert__, Ave, fa):
+def form_P__(x0, y0, dert__, Ave, fa, dderived):
     """Form Ps across the whole dert array."""
 
-    if fa:
-        g__ = dert__[-5, :, :] - Ave # g sign determines clustering.
+    if iG == 1:
+        dert__[1, :, :] -= Ave
+        crit__ = dert__[1, :, :] # der+ crit is gg;  g -> crit (for clustering).
+    elif iG == 0:
+        dert__[2, :, :] -= Ave
+        crit__ = dert__[2, :, :]  # minimal rng+ crit is m: min | -vg .
+        if dderived:
+            crit__ += dert__[0, :, :]  # + iG magnitude, or any compressible?
     else:
-        g__ = dert__[1, :, :] - Ave
-
+        dert__[-5, :, :] -= Ave
+        crit__ = dert__[-5, :, :] # ga_der+ crit is ga .
 
     # Clustering:
     s_x_L__ = [*map(
-        lambda g_: # Each line.
+        lambda crit_: # Each line.
             [(sign, next(group)[0], len(list(group)) + 1) # (s, x, L)
-             for sign, group in groupby(enumerate(g_ > 0),
+             for sign, group in groupby(enumerate(crit_ > 0),
                                         op.itemgetter(1)) # (x, s): return s.
              if sign is not ma.masked], # Ignore gaps.
-        g__,  # line, blob slice
+        crit__,  # line, blob slice
     )]
 
     Pderts__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
@@ -111,6 +117,8 @@ def form_P__(x0, y0, dert__, Ave, fa):
                    Pderts__)
 
     param_keys = aP_param_keys if fa else gP_param_keys
+    if len(dert__) == 9:
+        param_keys.remove("M")
 
     P__ = [
         [
@@ -171,7 +179,7 @@ def form_segment_(P_, fa, noM):
                    P_)]
 
     param_keys = aseg_param_keys if fa else gseg_param_keys
-    if noM:
+    if "M" not in P_[0]:
         param_keys.remove("M")
 
     # Form segments:

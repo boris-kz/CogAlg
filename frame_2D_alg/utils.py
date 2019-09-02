@@ -216,7 +216,7 @@ def segment_box(seg):
     y0s = seg['y0']            # y0
     yns = y0s + seg['Ly']     # Ly
     x0s = min([P['x0'] for P in seg['Py_']])
-    xns = max([P['x0'] + P['S'] for P in seg['Py_']])
+    xns = max([P['x0'] + P['L'] for P in seg['Py_']])
     return y0s, yns, x0s, xns
 
 def debug_segment(background_shape, *segments):

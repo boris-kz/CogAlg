@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     print('Running form_P__...')
     y0, yn, x0, xn = best_blob['box']
-    P__ = form_P__(x0, y0, derts, 50, fa=1, noM=1)
+    P__ = form_P__(x0, y0, derts, 50, fa=1)
     print('Done!')
 
     print('Running scan_P__...')
@@ -53,7 +53,7 @@ if __name__ == "__main__":
     print('Done!')
 
     print('Running form_seg_...')
-    seg_ = form_segment_(P_, fa=1, noM=1)
+    seg_ = form_segment_(P_, fa=1)
     print('Done!')
 
     print('Debugging segments...')

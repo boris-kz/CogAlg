@@ -112,38 +112,39 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
 
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(dy__, dx__) * 0.354801226089485
-    m__ = MAX_G - g__
 
-    return ma.around(ma.stack((p__, g__, m__, dy__, dx__), axis=0))
+    return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
 
 def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # row of Ps
-    I, G, M, Dy, Dx, S, x0 = *dert_[0], 1, 0  # P params = first dert .
+    I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # P params = first dert .
     G -= ave
+    M = -G - ave
     _s = G > 0  # sign
 
-    for x, (i, g, m, dy, dx) in enumerate(dert_[1:], start=1):
+    for x, (i, g, dy, dx) in enumerate(dert_[1:], start=1):
         vg = g - ave
+        vm = -vg - ave
         s = vg > 0
         if s != _s:  # P is terminated and new P is initialized
-            P = dict(I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S,
-                     x0=x0, dert_=dert_[x0:x0+S], sign=_s)
+            P = dict(I=I, G=G, M=M, Dy=Dy, Dx=Dx, L=L,
+                     x0=x0, dert_=dert_[x0:x0+L], sign=_s)
             P_.append(P)
-            I, G, M, Dy, Dx, S, x0 = 0, 0, 0, 0, 0, 0, x
+            I, G, M, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, 0, x
 
-        # accumulate P params:
+        # Accumulate P params:
         I += i
         G += vg
-        M += m
+        M += vm
         Dy += dy
         Dx += dx
-        S += 1
+        L += 1
         _s = s  # prior sign
 
-    P = dict(I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S,
-             x0=x0, dert_=dert_[x0:x0 + S], sign=_s)
+    P = dict(I=I, G=G, M=M, Dy=Dy, Dx=Dx, L=L,
+             x0=x0, dert_=dert_[x0:x0 + L], sign=_s)
     P_.append(P)    # last P in row
     return P_
 
@@ -160,9 +161,9 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
 
         while True:
             x0 = P['x0']  # first x in P
-            xn = x0 + P['S']  # first x in next P
+            xn = x0 + P['L']  # first x in next P
             _x0 = _P['x0']  # first x in _P
-            _xn = _x0 + _P['S']  # first x in next _P
+            _xn = _x0 + _P['L']  # first x in next _P
 
             if (P['sign'] == seg['sign']
                 and _x0 < xn and x0 < _xn): # Test for sign match and x overlap.
@@ -205,15 +206,15 @@ def form_seg_(y, P_, frame):
         P, fork_ = P_.popleft()
 
         s = P.pop('sign')
-        I, G, M, Dy, Dx, S, x0, dert_ = P.values()
-        xn = x0 + S     # next-P x0
+        I, G, M, Dy, Dx, L, x0, dert_ = P.values()
+        xn = x0 + L     # next-P x0
         if not fork_:   # new_seg is initialized with initialized blob
             blob = dict(Dert=dict(I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0),
                         box=[y, x0, xn],
                         seg_=[],
                         sign=s,
                         open_segments=1)
-            new_seg = dict(I=I, G=G, M=M, Dy=0, Dx=Dx, S=S, Ly=1,
+            new_seg = dict(I=I, G=G, M=M, Dy=0, Dx=Dx, S=L, Ly=1,
                            y0=y, Py_=[P], blob=blob, roots=0, sign=s)
             blob['seg_'].append(new_seg)
         else:
@@ -223,7 +224,7 @@ def form_seg_(y, P_, frame):
                 # Fork segment params, P is merged into segment:
                 accum_Dert(new_seg,
                            # Params to update:
-                           I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S, Ly=1)
+                           I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=L, Ly=1)
 
                 new_seg['Py_'].append(P)  # Py_: vertical buffer of Ps
                 new_seg['roots'] = 0  # reset roots
@@ -231,7 +232,7 @@ def form_seg_(y, P_, frame):
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0]['blob']
-                new_seg = dict(I=I, G=G, M=M, Dy=0, Dx=Dx, S=S, Ly=1, # new_seg is initialized with fork blob
+                new_seg = dict(I=I, G=G, M=M, Dy=0, Dx=Dx, S=L, Ly=1, # new_seg is initialized with fork blob
                                y0=y, Py_=[P], blob=blob, roots=0, sign=s)
                 blob['seg_'].append(new_seg)  # segment is buffered into blob
 
@@ -297,7 +298,7 @@ def terminate_blob(blob, last_seg, frame):
         seg.pop('roots')
         for y, P in enumerate(seg['Py_'], start=seg['y0']-y0):
             x_start = P['x0'] - x0
-            x_stop = x_start + P['S']
+            x_stop = x_start + P['L']
             mask[y, x_start:x_stop] = False
 
     dert__ = frame['dert__'][:, y0:yn, x0:xn]
