@@ -31,10 +31,15 @@ import numpy.ma as ma
 from utils import imread
 
 # -----------------------------------------------------------------------------
+# Constants
+
+MAX_G = 256 # 721.2489168102785 without normalization.
+
+# -----------------------------------------------------------------------------
 # Adjustable parameters
 image_path = "./../images/raccoon_eye.jpg"
-kwidth = 2 # Declare initial kernel size. Tested values are 2 or 3.
-ave = 20 + 60 * (kwidth == 3)
+kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
+ave = 50
 rng = int(kwidth == 3)
 DEBUG = True
 
@@ -49,7 +54,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     frame = dict(rng=1,
                  dert__=dert__,
                  mask=None,
-                 I=0, G=0, Dy=0, Dx=0, blob_=[])
+                 I=0, G=0, M=0, Dy=0, Dx=0, blob_=[])
 
     seg_ = deque()  # buffer of running segments
     height, width = image.shape
@@ -83,9 +88,9 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
         xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
 
         # Compare by subtracting centered image from translated image:
-        d___ = np.array(list(map(lambda trans_slices:
-                                 image[trans_slices] - image[1:-1, 1:-1],
-                            [
+        d___ = np.array(list(
+            map(lambda trans_slices: image[trans_slices] - image[1:-1, 1:-1],
+                [
                     (slice(None, -2), slice(None, -2)),
                     (slice(None, -2), slice(1, -1)),
                     (slice(None, -2), slice(2, None)),
@@ -94,7 +99,9 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                     (slice(2, None), slice(1, -1)),
                     (slice(2, None), slice(None, -2)),
                     (slice(1, -1), slice(None, -2)),
-                ]))).swapaxes(0, 2).swapaxes(0, 1)
+                ]
+            )
+        )).swapaxes(0, 2).swapaxes(0, 1)
 
         # Decompose differences:
         dy__ = (d___ * ycoef).sum(axis=2)
@@ -105,6 +112,7 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
 
     # Compute gradient magnitudes per kernel:
     g__ = np.hypot(dy__, dx__) * 0.354801226089485
+    #  no m__ = MAX_G - g__, immediate vm = -vg - Ave
 
     return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
@@ -112,29 +120,30 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
 def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
 
     P_ = deque()  # row of Ps
-    i, g, dy, dx = dert_[0]  # first dert
-    x0, I, G, Dy, Dx, L = 0, i, g, dy, dx, 1  # P params
-    vg = g - ave
-    _s = vg > 0  # sign
+    I, G, M, Dy, Dx, L, x0 = *dert_[0], 1, 0  # P params = first dert .
+    G -= ave
+    _s = G > 0  # sign
 
-    for x, (i, g, dy, dx) in enumerate(dert_[1:], start=1):
+    for x, (i, g, m, dy, dx) in enumerate(dert_[1:], start=1):
         vg = g - ave
         s = vg > 0
         if s != _s:  # P is terminated and new P is initialized
-            P = dict(sign=_s, x0=x0, I=I, G=G, Dy=Dy, Dx=Dx, L=L, dert_=dert_[x0:x0+L])
+            P = dict(I=I, G=G, M=M, Dy=Dy, Dx=Dx, L=L,
+                     x0=x0, dert_=dert_[x0:x0+L], sign=_s)
             P_.append(P)
-            x0, I, G, Dy, Dx, L = x, 0, 0, 0, 0, 0
+            I, G, M, Dy, Dx, S, x0 = 0, 0, 0, 0, 0, 0, x
 
         # accumulate P params:
         I += i
         G += vg
+        M += m
         Dy += dy
         Dx += dx
-        L += 1
+        S += 1
         _s = s  # prior sign
 
-    P = dict(sign=_s, x0=x0, I=I, G=G,
-             Dy=Dy, Dx=Dx, L=L, dert_=dert_[x0:x0 + L])
+    P = dict(I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S,
+             x0=x0, dert_=dert_[x0:x0 + S], sign=_s)
     P_.append(P)    # last P in row
     return P_
 
@@ -151,11 +160,12 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
 
         while True:
             x0 = P['x0']  # first x in P
-            xn = x0 + P['L']  # first x in next P
+            xn = x0 + P['S']  # first x in next P
             _x0 = _P['x0']  # first x in _P
-            _xn = _x0 + _P['L']  # first x in next _P
+            _xn = _x0 + _P['S']  # first x in next _P
 
-            if P['sign'] == _P['sign'] and _x0 < xn and x0 < _xn:  # test for sign match and x overlap
+            if (P['sign'] == seg['sign']
+                and _x0 < xn and x0 < _xn): # Test for sign match and x overlap.
                 seg['roots'] += 1  # roots
                 fork_.append(seg)  # P-connected segments are buffered into fork_
 
@@ -194,16 +204,17 @@ def form_seg_(y, P_, frame):
     while P_:
         P, fork_ = P_.popleft()
 
-        s, x0, I, G, Dy, Dx, L, dert_ = P.values()
-        xn = x0 + L     # next-P x0
-        if not fork_:  # new_seg is initialized with initialized blob
-            blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, L=0, Ly=0),
-                        sign=s,
+        s = P.pop('sign')
+        I, G, M, Dy, Dx, S, x0, dert_ = P.values()
+        xn = x0 + S     # next-P x0
+        if not fork_:   # new_seg is initialized with initialized blob
+            blob = dict(Dert=dict(I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0),
                         box=[y, x0, xn],
                         seg_=[],
+                        sign=s,
                         open_segments=1)
-            new_seg = dict(y0=y, I=I, G=G, Dy=0, Dx=Dx, L=L, Ly=1,
-                           Py_=[P], blob=blob, roots=0)
+            new_seg = dict(I=I, G=G, M=M, Dy=0, Dx=Dx, S=S, Ly=1,
+                           y0=y, Py_=[P], blob=blob, roots=0, sign=s)
             blob['seg_'].append(new_seg)
         else:
             if len(fork_) == 1 and fork_[0]['roots'] == 1:  # P has one fork and that fork has one root
@@ -211,8 +222,8 @@ def form_seg_(y, P_, frame):
 
                 # Fork segment params, P is merged into segment:
                 accum_Dert(new_seg,
-                            # Params to update:
-                            I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=1)
+                           # Params to update:
+                           I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S, Ly=1)
 
                 new_seg['Py_'].append(P)  # Py_: vertical buffer of Ps
                 new_seg['roots'] = 0  # reset roots
@@ -220,8 +231,8 @@ def form_seg_(y, P_, frame):
 
             else:  # if > 1 forks, or 1 fork that has > 1 roots:
                 blob = fork_[0]['blob']
-                new_seg = dict(y0=y, I=I, G=G, Dy=0, Dx=Dx, L=L, Ly=1,
-                               Py_=[P], blob=blob, roots=0) # new_seg is initialized with fork blob
+                new_seg = dict(I=I, G=G, M=M, Dy=0, Dx=Dx, S=S, Ly=1, # new_seg is initialized with fork blob
+                               y0=y, Py_=[P], blob=blob, roots=0, sign=s)
                 blob['seg_'].append(new_seg)  # segment is buffered into blob
 
                 if len(fork_) > 1:  # merge blobs of all forks
@@ -233,11 +244,11 @@ def form_seg_(y, P_, frame):
                             form_blob(fork, frame)
 
                         if not fork['blob'] is blob:
-                            Dert, s, box, seg_, open_segs = fork['blob'].values()  # merged blob
-                            I, G, Dy, Dx, L, Ly = Dert.values()
+                            Dert, box, seg_, s, open_segs = fork['blob'].values()  # merged blob
+                            I, G, M, Dy, Dx, S, Ly = Dert.values()
                             accum_Dert(blob['Dert'],
-                                        # Params to update:
-                                        I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
+                                       # Params to update:
+                                       I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
                             blob['open_segments'] += open_segs
                             blob['box'][0] = min(blob['box'][0], box[0])  # extend box y0
                             blob['box'][1] = min(blob['box'][1], box[1])  # extend box x0
@@ -266,47 +277,47 @@ def form_blob(seg, frame):  # terminated segment is merged into continued or ini
 
 
 def terminate_segment(seg):
-    y0, I, G, Dy, Dx, L, Ly, Py_, blob, roots = seg.values()
+    I, G, M, Dy, Dx, S, Ly, y0, Py_, blob, roots, sign = seg.values()
     accum_Dert(blob['Dert'],
                 # Params to update:
-                I=I, G=G, Dy=Dy, Dx=Dx, L=L, Ly=Ly)
+                I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
     blob['open_segments'] += roots - 1  # number of open segments
     return blob
 
 
 def terminate_blob(blob, last_seg, frame):
 
-    Dert, s, [y0, x0, xn], seg_, open_segs = blob.values()
+    Dert, [y0, x0, xn], seg_, s, open_segs = blob.values()
 
     yn = last_seg['y0'] + last_seg['Ly'] # Compute yn.
 
     mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
     for seg in seg_:
+        seg.pop('sign')
         seg.pop('roots')
-        for y, P in enumerate(seg['Py_'], start=seg['y0']):
+        for y, P in enumerate(seg['Py_'], start=seg['y0']-y0):
             x_start = P['x0'] - x0
-            x_stop = x_start + P['L']
-            mask[y - y0, x_start:x_stop] = False
+            x_stop = x_start + P['S']
+            mask[y, x_start:x_stop] = False
 
     dert__ = frame['dert__'][:, y0:yn, x0:xn]
-    dert__[:, mask] = ma.masked
+    dert__.mask[:] = mask
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
+                dert__=dert__,
+                # Deprecated params: (dert__ and box are sufficient)
                 # slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                 # mask=mask,
-                dert__=dert__,
                 root_fork=frame, # Equivalent of fork in lower layers.
                 root_blob=None,
                 fork_=defaultdict(dict), # Contain sub-blobs that belong to this blob.
                 )
-    I, G, Dy, Dx, L, Ly = blob['Dert'].values()
-    blob['Dert'] = {'G':G, 'M':0, 'Dy':Dy, 'Dx':Dx, 'L':L, 'Ly':Ly}
 
     # Update frame:
-    frame.update(I=frame['I'] + I,
-                 G=frame['G'] + G,
-                 Dy=frame['Dy'] + Dy,
-                 Dx=frame['Dx'] + Dx)
+    frame.update(I=frame['I'] + blob['Dert']['I'],
+                 G=frame['G'] + blob['Dert']['G'],
+                 Dy=frame['Dy'] + blob['Dert']['Dy'],
+                 Dx=frame['Dx'] + blob['Dert']['Dx'])
 
     frame['blob_'].append(blob)
 
@@ -329,7 +340,7 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
         from utils import draw, map_frame
-        draw("./../visualization/images/", map_frame(frame_of_blobs))
+        draw("./../visualization/images/blobs", map_frame(frame_of_blobs))
 
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])

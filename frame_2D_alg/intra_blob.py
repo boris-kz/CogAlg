@@ -11,16 +11,20 @@ import operator as op
     comp_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
     
     Input brightness is not correlated with predictive value, but both its stability and variation are: 
-    stability: negative gradient deviation, is predictive value of initial input, but not of gradient or its derivatives
-    variation: positive gradient deviation, is predictive value of input gradient and its cross-comparison.
-    High-value blobs can be of either sign, neg g value is for comp_blob, also adds coef for intra_comp g?
-        
+    stability: negative gradient deviation (-vvg), is predictive value of initial input, vs. gradient or its derivatives
+    variation: positive gradient deviation (+vvg), is predictive value of input gradient and its cross-comparison.
+    
+    -vg is indirect indicator of comp p|a rng+ value, though lower precision than ig + m: not for g?
+    vm = min | -vg - Ave: double filter? complimentary to max_g | max_inp, < ave for -vg?
+    value of comp_blob (as +vg), then blob-> params value distribution, not for alt_g intra_comps: exclusive?
+            
     Blob structure:
     
     root_fork, # = root_blob['fork_'][iG]: reference for feedback of blob' Dert params and sub_blob_, up to frame
     
-    Dert = G, Gg, M, Dy, Dx, Ga, Day, Dax, L, Ly,  
+    Dert = G, Gg, M, Dy, Dx, Ga, Day, Dax, S, Ly
     # extended per fork: iG + gDert in g_fork, + aDert in a_fork, L, Ly are defined by Gg | Ga sign
+    # G: gradient, Gg: G of g, M: match (min|-vg), Dy, Dx: vert,lat Ds, Ga: G of angle, Day, Dax: Ds of angle, S: area, Ly: vert dim  
     
     iG,   # fork type: index of compared ig in dert and criterion iG in Dert: 0 if G | 1 if Gg | 5 if Ga 
     sign, # of iG
@@ -30,7 +34,7 @@ import operator as op
     dert__, # comp_i inputs
        
     segment_[ seg_params, Py_ [(P_params, dert_)]],  
-    # dert: g, gg, m, dy, dx, ga, day, dax; no m_angle: mag!=val, ~brightness
+    # dert: g, gg, m, dy, dx, ga, day, dax; no ma: angle_mag != val, ~brightness
     # references down blob formation tree, accumulating Dert, in vertical (horizontal) order
     
     fork_ # multiple derivation trees per blob: 0-1 in g_blobs, 0-3 in a_blobs, next sub_blob_ is in layer_[0]:
@@ -75,7 +79,7 @@ gDert_params = ["G", "Gg", "M", "Dy", "Dx"]
 aDert_params = gDert_params + ["Ga", "Dyay", "Dyax", "Dxay", "Dxax"]
 
 P_params = ["L", "x0", "dert_", "root_", "fork_", "y", "sign"]
-seg_params = ["L", "Ly", "y0", "Py_", "root_", "fork_"]
+seg_params = ["S", "Ly", "y0", "Py_", "root_", "fork_"]
 
 gP_param_keys = gDert_params + P_params
 aP_param_keys = aDert_params + P_params
@@ -88,13 +92,18 @@ aseg_param_keys = aDert_params + seg_params
 # Functions, CLUSTERING FUNCTIONS ARE UNDER REVISION:
 
 
-def form_P__(x0, y0, dert__, Ave, fa):
+def form_P__(x0, y0, dert__, Ave, iG, fa, dderived):
     """Form Ps across the whole dert array."""
 
-    if fa:
-        g__ = dert__[-5, :, :] - Ave  # g sign determines clustering.
+    if iG == 1:
+        crit__ = dert__[1, :, :] - Ave  # der+ crit is gg;  g -> crit (for clustering)
+    elif iG == 0:
+        crit__ = dert__[2, :, :]  # minimal rng+ crit is m: min | -vg
+        if dderived:
+            crit__ += dert__[0, :, :]  # + iG magnitude, or any compressible?
+        crit__ -= Ave
     else:
-        g__ = dert__[1, :, :] - Ave
+        crit__ = dert__[5, :, :] - Ave  # ga_der+ crit is ga
 
     # Clustering:
     s_x_L__ = [*map(
@@ -103,21 +112,21 @@ def form_P__(x0, y0, dert__, Ave, fa):
          for sign, group in groupby(enumerate(g_ > 0),
                                     op.itemgetter(1))  # (x, s): return s.
          if sign is not ma.masked],  # Ignore gaps.
-        g__,  # line, blob slice
+        crit__,  # line, blob slice
     )]
 
     Pderts__ = [[dert_[:, x: x + L].T for s, x, L in s_x_L_]
                 for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
 
-    # Accumulation:
+    # Accumulated params:
+    # if not fa: G, Gg, M, Dy, Dx
+    # if fa: G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax
     PDerts__ = map(lambda Pderts_:
                    map(lambda Pderts: Pderts.sum(axis=0),
                        Pderts_),
                    Pderts__)
 
     param_keys = aP_param_keys if fa else gP_param_keys
-    if len(dert__) == 9:  # No M.
-        param_keys.remove("M")
 
     P__ = [
         [
@@ -129,24 +138,7 @@ def form_P__(x0, y0, dert__, Ave, fa):
         ]
         for y, Pparams_ in enumerate(zip(PDerts__, Pderts__, s_x_L__), start=y0)
     ]
-    ''' vs.
-        P__ = [[dict(sign=s,
-                     x0=x+x0,
-                     G=dert_[0, x : x+L].sum() - Ave * L,
-                     M=0 if fa else dert_[1, x : x+L].sum(),
-                     Dy=np.array(dert_[1:3, x : x+L].sum(axis=-1)) if fa
-                     else dert_[2, x : x+L].sum(),
-                     Dx=np.array(dert_[3:, x : x+L].sum(axis=-1)) if fa
-                     else dert_[3, x : x+L].sum(),
-                     L=L,
-                     dert_=dert_[:, x : x+L].T,
-                     root_=[],
-                     fork_=[],
-                     y=y)
-                for s, x, L in s_x_L_]
-               for dert_, (y, s_x_L_) in zip(dert__.swapaxes(0, 1),
-                                             enumerate(s_x_L__, start=y0))]
-    '''
+
     return P__
 
 
@@ -154,18 +146,18 @@ def scan_P__(P__):
     """ detect forks and roots per P"""
 
     for _P_, P_ in pairwise(P__):  # Iterate through pairs of lines.
-        _P_, P_ = iter(_P_), iter(P_)  # Convert to iterators.
+        _itP_, itP_ = iter(_P_), iter(P_)  # Convert to iterators.
         try:
-            _P, P = next(_P_), next(P_)  # First pair to check.
+            _P, P = next(_itP_), next(itP_)  # First pair to check.
         except StopIteration:  # No more fork-root pair.
             continue  # To next pair of _P_, P_.
         while True:
-            left, olp = comp_edge(_P, P)  # Check for 4 different cases.
+            isleft, olp = comp_edge(_P, P)  # Check for 4 different cases.
             if olp and _P['sign'] == P['sign']:
                 _P['root_'].append(P)
                 P['fork_'].append(_P)
             try:
-                _P, P = (next(_P_), P_) if left else (_P, next(P_))
+                _P, P = (next(_itP_), P) if isleft else (_P, next(itP_))
             except StopIteration:  # No more fork-root pair.
                 break  # To next pair of _P_, P_.
 
@@ -188,62 +180,56 @@ def comp_edge(_P, P):  # Used in scan_P_().
         return False, _x0 < xn
 
 
-def form_segment_(P_):
+def form_segment_(P_, fa, noM):
     """Form segments of vertically contiguous Ps."""
-
-    seg_pars = 'y0', 'G', 'M', 'Dy', 'Dx', 'L', 'Ly', 'Py_', 'root_', 'fork_'
-
-    # Get a list of all segment's first P:
+    # Get a list of every segment's first P:
     P0_ = [*filter(lambda P: (len(P['fork_']) != 1
-                            or len(P['fork_'][0]['root_']) != 1),
+                              or len(P['fork_'][0]['root_']) != 1),
                    P_)]
 
+    param_keys = aseg_param_keys if fa else gseg_param_keys
+    if noM:
+        param_keys.remove("M")
+
     # Form segments:
-    seg_ = [dict(zip(seg_pars, # segment's params as keys
-                     [Py_[0].pop('y'),] # y0
-                     # Accumulate params:
-                     + [*map(sum,
-                             zip(*map(op.itemgetter('G',
-                                                    'M',
-                                                    'Dy',
-                                                    'Dx',
-                                                    'L'),
-                                      Py_)))]
-                     + [len(Py_)]  # Ly
-                     + [Py_]
-                     + [Py_[-1]['root_']]  # root_
-                     + [Py_[0]['fork_']])) # fork_
+    seg_ = [dict(zip(param_keys,  # segment's params as keys
+                     # Accumulated params:
+                     [*map(sum,
+                           zip(*map(op.itemgetter(*param_keys[:-6]),
+                                    Py_))),
+                      len(Py_), Py_[0].pop('y'), Py_,  # Ly, y0, Py_ .
+                      Py_[-1].pop('root_'), Py_[0].pop('fork_'),  # root_, fork_ .
+                      Py_[0].pop('sign')]))
             # cluster_vertical(P): traverse segment from first P:
             for Py_ in map(cluster_vertical, P0_)]
 
-    for seg in seg_:
+    for seg in seg_:  # Update segs' refs.
         seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
 
-    for seg in seg_:
+    for seg in seg_:  # Update root_ and fork_ .
         seg.update(root_=[*map(lambda P: P['seg'], seg['root_'])],
                    fork_=[*map(lambda P: P['seg'], seg['fork_'])])
 
-    for seg in seg_:
-        for i, ref in ((0, 'fork_'), (-1, 'root_')):
-            seg['Py_'][i].pop('seg')
-            seg['Py_'][i].pop(ref)
+    for i, seg in enumerate(seg_):  # Remove segs' refs.
+        del seg['Py_'][0]['seg']
 
     return seg_
 
 
-def cluster_vertical(P): # Used in form_segment_().
+def cluster_vertical(P):  # Used in form_segment_().
     """
     Cluster P vertically, stop at the end of segment.
     Used in form_segment_().
     """
 
     if len(P['root_']) == 1 and len(P['root_'][0]['fork_']) == 1:
-        P['root_'][0].pop('y')
-        root = P.pop('root_')[0] # Only 1 root.
-        root.pop('fork_') # Only 1 fork.
+        root = P.pop('root_')[0]  # Only 1 root.
+        root.pop('fork_')  # Only 1 fork.
+        root.pop('y')
+        root.pop('sign')
         return [P] + cluster_vertical(root)
-    else:
-        return [P]
+
+    return [P]
 
 
 def form_blob_(seg_, root_blob, dert___, rng, fork_type):
@@ -352,9 +338,9 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     feedback(root_blob, fork_type)
 
 
-def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, fa):  # root_fork reference is for blob_ and feedback
+def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, dderived, fa):  # root_fork ref is for blob_ and feedback
 
-    # comparison: comp_g -> dert__(g, gg, m, dy, dx) or comp_a -> dert__(g, gg, m, dy, dx, ga, day, dax):
+    # comparison: comp_g -> dert__(i, g, m, dy, dx) or comp_a -> dert__(i, g, m, dy, dx, ga, day, dax):
 
     dert__ = comp_i(idert__, rng, iG, fa)  # fa = not root_fork_fa to alternate between comp_g & comp_a layers
 
@@ -383,7 +369,8 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, fa):  # root_fork ref
                     L=0, Ly=0,
                     blob_=[]
                 )
-                intra_fork(blob['dert__'], blob['fork_'][0], Ave_blob, Ave, blob['Dert']['G'], rng, ~fa) # fa=1, fork_=[a_fork]
+                intra_fork(blob['dert__'], blob['fork_'][0], Ave_blob, Ave, blob['Dert']['G'], rng, dderived, ~fa)
+                # fa=1, fork_=[a_fork]
 
         else:  # blob is a_blob, sub_blobs formed by comp_a are evaluated for three g_forks:
 
@@ -391,12 +378,10 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, fa):  # root_fork ref
                 G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax, Ly, L = sub_blob['Dert'].values()
                 rdn = 1
                 eval_fork_ = [  # sub_forks:
+                    (G + M, 1, 0),     # rng+ / est match of input gradient iG=Dert[0] at rng+1, 0 if i is p
                     (Gg, rng + 1, 1),  # der+ / est match of gg: iG=Dert[1] at rng+rng+1, initial fork same as rng+
-                    (Ga, rng + 1, 5 if 'M' else 4),  # gad+ / est match of ga: iG=Dert[5] at rng+rng+1; a_rng+/ g_rng+
+                    (Ga, rng + 1, 5),  # gad+ / est match of ga: iG=Dert[5] at rng+rng+1; a_rng+/ g_rng+
                 ]
-                if "M":
-                    eval_fork_ += [(G + M, 1, 0)]  # rng+ / est match of input gradient iG=Dert[0] at rng+1, 0 if i is p
-
                 for val, irng, iG in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
                     if val > rdn * ave_intra_blob:  # cost of sub_blob_ eval in intra_fork
@@ -407,7 +392,7 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, fa):  # root_fork ref
                             G=0, Gg=0, M=0, Dy=0, Dx=0, Ly=0, L=0,
                             blob_=[]
                         )
-                        intra_fork(sub_blob['dert__'], sub_blob['fork_'][iG], Ave_blob, Ave, blob['Dert'][iG], rng+irng, ~fa)
+                        intra_fork(sub_blob['dert__'], sub_blob['fork_'][iG], Ave_blob, Ave, blob['Dert'][iG], rng+irng, dderived, ~fa)
                         # passed fa=0, fork_ = [g_forks]
                     else:
                         break

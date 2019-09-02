@@ -2,10 +2,11 @@ from collections import deque
 from math import hypot
 from time import time
 '''
-    comp_P_ is a fork of intra_blob, currently a draft
-    it will cross-compare vertically adjacent Ps (representing horizontally contiguous slices across a blob),
-    forming dPPs and vPPs: vertically contiguous sets of Ps with same-sign vertical difference or match deviation: 
-    Pd | Pv is formed by summing difference | match deviation per P param between all compared params within P  
+    comp_P_ will be a fork of intra_blob, currently a draft.
+    
+    It will trace edges | axes, by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
+    Cross-comparison forms dPPs and vPPs: clusters of Ps with same-sign vertical difference or match deviation: 
+    Pd | Pv is formed by summing difference | match deviation per P param between all compared params within P.  
     
     there may be par_coefs per level: match|dev rate fb, also per pattern, for form par_P, after full-blob comp_P_ 
     also sub_coefs per sub_blob, if recurrent in super_blob from comp_blob: stable parts per object combination?  
@@ -17,6 +18,7 @@ from time import time
     pre comp_P: 
     intra_comp(dx) -> sub_blob_ per dx in der+ blob or v - ig in rng+ blob: ig is different dim?
     intra_P comp -> vdP, ddP, ortho? then blobs redefine per ddx, dvx, vd, vv..? 
+    comp_P will be selective for strongly oriented (dimensionally asymmetric) blobs:
 
     orientation = (Ly / Lx) * (|Dx| / |Dy|) / 2  
     # vert ! horizontal match coef = elongation * 1/ ddirection / 2 

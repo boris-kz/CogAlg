@@ -38,5 +38,5 @@ Stephan Verbeeck, $2000 for insistence on using 2x2 gradient, as well as his per
 
 Todor Arnaudov, $1600, frequent contributor, March-June
 
-Khanh Nguyen, $8500, a lead programmer of this project, January-July
+Khanh Nguyen, $9250, a lead programmer of this project, January-August
 
