@@ -20,21 +20,21 @@ import operator as op
             
     Blob structure:
     
-    root_fork, # = root_blob['fork_'][iG]: reference for feedback of blob' Dert params and sub_blob_, up to frame
+    root_fork, # = root_blob['fork_'][nI]: reference for feedback of blob' Dert params and sub_blob_, up to frame
     
-    Dert = G, Gg, M, Dy, Dx, Ga, Day, Dax, S, Ly
-    # extended per fork: iG + gDert in g_fork, + aDert in a_fork, L, Ly are defined by Gg | Ga sign
-    # G: gradient, Gg: G of g, M: match (min|-vg), Dy, Dx: vert,lat Ds, Ga: G of angle, Day, Dax: Ds of angle, S: area, Ly: vert dim  
+    Dert = I, G, M, Dy, Dx, Ga, Day, Dax, S, Ly
+    # extended per fork: iG + gDert in g_fork, + aDert in a_fork, L, Ly are defined by G | Ga sign
+    # I: input, G: gradient, M: match, Dy, Dx: vert,lat Ds, Ga: G of angle, Day, Dax: Ds of angle, S: area, Ly: vert dim  
     
-    iG,   # fork type: index of compared ig in dert and criterion iG in Dert: 0 if G | 1 if Gg | 5 if Ga 
-    sign, # of iG
+    nI,   # fork type: index of next comp_i comparand in dert and criterion nI in Dert: 0 if I | 1 if G | 5 if Ga 
+    sign, # of nI
     rng,  # comp range, in each Dert
     map,  # boolean map of blob to compute overlap
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert__, # comp_i inputs
        
     segment_[ seg_params, Py_ [(P_params, dert_)]],  
-    # dert: g, gg, m, dy, dx, ga, day, dax; no ma: angle_mag != val, ~brightness
+    # dert: i, g, m, dy, dx, ga, day, dax; no ma: angle_mag != val, ~brightness
     # references down blob formation tree, accumulating Dert, in vertical (horizontal) order
     
     fork_ # multiple derivation trees per blob: 0-1 in g_blobs, 0-3 in a_blobs, next sub_blob_ is in layer_[0]:
@@ -75,7 +75,7 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 '''
 
 # Other constants
-gDert_params = ["G", "Gg", "M", "Dy", "Dx"]
+gDert_params = ["I", "G", "M", "Dy", "Dx"]
 aDert_params = gDert_params + ["Ga", "Dyay", "Dyax", "Dxay", "Dxax"]
 
 P_params = ["L", "x0", "dert_", "root_", "fork_", "y", "sign"]
@@ -89,18 +89,18 @@ aseg_param_keys = aDert_params + seg_params
 
 
 # -----------------------------------------------------------------------------
-# Functions, CLUSTERING FUNCTIONS ARE UNDER REVISION:
+# Functions, ALL UNDER REVISION:
 
 
-def form_P__(x0, y0, dert__, Ave, iG, fa, dderived):
+def form_P__(x0, y0, dert__, Ave, nI, fa, dderived):
     """Form Ps across the whole dert array."""
 
-    if iG == 1:
+    if nI == 1:
         crit__ = dert__[1, :, :] - Ave  # der+ crit is gg;  g -> crit (for clustering)
-    elif iG == 0:
-        crit__ = dert__[2, :, :]  # minimal rng+ crit is m: min | -vg
+    elif nI == 0:
+        crit__ = dert__[2, :, :]  # minimal rng+ crit is m (min |-vg) + I:
         if dderived:
-            crit__ += dert__[0, :, :]  # + iG magnitude, or any compressible?
+            crit__ += dert__[0, :, :]  # + nI magnitude: superset of new m
         crit__ -= Ave
     else:
         crit__ = dert__[5, :, :] - Ave  # ga_der+ crit is ga
@@ -119,8 +119,8 @@ def form_P__(x0, y0, dert__, Ave, iG, fa, dderived):
                 for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
 
     # Accumulated params:
-    # if not fa: G, Gg, M, Dy, Dx
-    # if fa: G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax
+    # if not fa: I, G, M, Dy, Dx
+    # if fa: I, G, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax
     PDerts__ = map(lambda Pderts_:
                    map(lambda Pderts: Pderts.sum(axis=0),
                        Pderts_),
@@ -338,20 +338,19 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
     feedback(root_blob, fork_type)
 
 
-def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, dderived, fa):  # root_fork ref is for blob_ and feedback
-    '''
-    clustering by g|m before comp: both are already derived, but exclusive for +|-vg only if not dderived?
-    '''
+def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa):  # root_fork ref is for blob_ and feedback
+
+    # sub-clustering by -vg in frame_blobs, by m in prior intra_fork(~fa), by m and ga in prior intra_fork(fa)?
     # comparison: comp_g -> dert__(i, g, m, dy, dx) or comp_a -> dert__(i, g, m, dy, dx, ga, day, dax):
 
-    dert__ = comp_i(idert__, rng, iG, fa)  # fa = not root_fork_fa to alternate between comp_g & comp_a layers
+    dert__ = comp_i(idert__, rng, nI, fa)  # fa = not root_fork_fa to alternate between comp_g & comp_a layers
 
     # clustering: dert__ -> sub_blob_, with added g|a_Dert per sub_blob Dert:
 
-    P__ = form_P__(dert__, Ave, iG)  # horizontal clustering
+    P__ = form_P__(dert__, Ave, nI)  # horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)  # vertical clustering
-    blob_ = form_blob_(seg_, root_fork, iG)  # with feedback to root_fork
+    blob_ = form_blob_(seg_, root_fork, nI)  # with feedback to root_fork
 
     Ave_blob *= len(blob_) / ave_n_sub_blobs
     Ave_blob *= rave  # cost per blob, same crit G for g_fork and a_fork
@@ -360,17 +359,20 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, dderived, fa):  # roo
     if not fa:
         Ave *= 2; Ave_blob *= 2  # a_fork_coef = 2: > cost, Aves += redundant g_sub_blob_: ga_val < gg_val
 
-    for blob in root_fork[0]['blob_']:  # blob_ in layer_[0] of root_fork
+    for blob in root_fork[0]['blob_']:  # blob_ in layer_[0] of root_fork, filled by feedback of form_blob
 
         if fa:  # sub_blobs (a_blobs formed by comp_a) are evaluated for three g_forks:
 
-            for sub_blob in blob['fork_'][iG][0]['sub_blob_']:  # sub_blob_ in layer_[0], if any from higher-layer blob eval
+            for sub_blob in blob['fork_'][nI][0]['sub_blob_']:  # sub_blob_ in layer_[0], if any from higher-layer blob eval
                 '''    
-                if -sub_blob['Dert']['G'] > ave_intra_blob:  # -g_sub_blob sub-cluster -> m, ga sub_sub_blob_s: low overlap? 
-                    for sub_sub_blob in sub_blob_
-                    eval_fork_[rng+, ga_der+ if dderived?]   
-                    M is sub I, which is not inverse to G
-                    A also depends on I? 
+                if -sub_blob['Dert']['G'] > ave_intra_blob:  # low overlap to der+ fork 
+                    # -g_sub_blob sub-cluster -> m, ga sub_sub_blob_s: possible overlap between rng+ and ga+ forks:
+                    
+                    for sub_sub_blob in sub_blob_:
+                        eval_fork_[rng+, ga_der+]  # M: sub-I, complem G, A_val: also sub-I_val, G: I & likely A variation?
+                
+                elif sub_blob['Dert']['G'] > ave_intra_blob:  # call der+ fork:
+                    intra_fork(sub_blob['dert__'], sub_blob['fork_'][nI], Ave_blob, Ave, blob['Dert'][1], rng+irng, dderived, ~fa)                   
                 '''
                 I, G, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax, Ly, L = sub_blob['Dert'].values()
                 rdn = 1
@@ -379,23 +381,24 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, iG, dderived, fa):  # roo
                     (G, rng + 1, 1),  # der+ / est match of g= Dert[1] at rng+rng+1, initial fork same as rng+
                     (Ga, rng + 1, 5), # ga_der+ / est match of ga=Dert[5] at rng+rng+1; a_rng+/ g_rng+
                 ]
-                for val, irng, iG in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
+                for val, irng, nI in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
                     if val > rdn * ave_intra_blob:  # cost of sub_blob_ eval in intra_fork
                         rdn += 1  # fork rdn = fork index + 1
                         Ave_blob += ave_blob * rave * rdn
                         Ave += ave * rdn
-                        sub_blob['fork_'][iG] = dict(   # initialize root_fork at ['fork_'][rdn-2 | iG: crit?]:
+                        sub_blob['fork_'][nI] = dict(   # initialize root_fork at ['fork_'][rdn-2 | iG: crit?]:
                             I=0, G=0, M=0, Dy=0, Dx=0, Ly=0, L=0, blob_=[]
                         )
-                        intra_fork(sub_blob['dert__'], sub_blob['fork_'][iG], Ave_blob, Ave, blob['Dert'][iG], rng+irng, dderived, ~fa)
+                        intra_fork(sub_blob['dert__'], sub_blob['fork_'][nI], Ave_blob, Ave, blob['Dert'][nI], rng+irng, dderived, ~fa)
                         # passed fa=0, fork_ = [g_forks]
                     else:
                         break
 
-        else:  # and if dderived? blob is g_blob, evaluated for single a_fork (a_sub_blobs overlap g_sub_blobs):
+        else:  # blob is g_blob, evaluated for single a_fork (a_sub_blobs will overlap g_sub_blobs):
+               # also -g_blobs' sub_clustering by m for rng+, possibly p_rng+, as in frame_blobs?
 
-            if blob['Dert']['I'] > ave_intra_blob:   # I is iG, filters maybe specific for a_fork and hLe blob?
+            if blob['Dert']['I'] > ave_intra_blob:   # I is nI, filters maybe specific for a_fork and hLe blob?
                 blob['fork'][0] = dict(   # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax:
                     I=0, G=0, M=0, Dy=0, Dx=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, L=0, Ly=0, blob_=[]
                 )
