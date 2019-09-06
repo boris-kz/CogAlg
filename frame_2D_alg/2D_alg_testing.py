@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     print('Running form_P__...')
     y0, yn, x0, xn = best_blob['box']
-    P__ = form_P__(x0, y0, derts, 50, fa=1)
+    P__ = form_P__(x0, y0, derts, 50, fa=1, dderived=0)
     print('Done!')
 
     print('Running scan_P__...')

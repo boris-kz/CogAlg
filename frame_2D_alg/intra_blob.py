@@ -83,17 +83,12 @@ aseg_param_keys = aDert_params + seg_params
 def form_P__(x0, y0, dert__, Ave, fa, dderived):
     """Form Ps across the whole dert array."""
 
-    if iG == 1:
+    if not fa:
         dert__[1, :, :] -= Ave
-        crit__ = dert__[1, :, :] # der+ crit is gg;  g -> crit (for clustering).
-    elif iG == 0:
-        dert__[2, :, :] -= Ave
-        crit__ = dert__[2, :, :]  # minimal rng+ crit is m: min | -vg .
-        if dderived:
-            crit__ += dert__[0, :, :]  # + iG magnitude, or any compressible?
+        crit__ = dert__[1, :, :]
     else:
-        dert__[-5, :, :] -= Ave
-        crit__ = dert__[-5, :, :] # ga_der+ crit is ga .
+        dert__[5, :, :] -= Ave
+        crit__ = dert__[5, :, :]
 
     # Clustering:
     s_x_L__ = [*map(
@@ -110,7 +105,7 @@ def form_P__(x0, y0, dert__, Ave, fa, dderived):
 
     # Accumulated params:
     # if not fa: G, Gg, M, Dy, Dx
-    # if fa: G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax
+    # if fa: G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxaxz
     PDerts__ = map(lambda Pderts_:
                        map(lambda Pderts: Pderts.sum(axis=0),
                            Pderts_),
@@ -171,22 +166,29 @@ def comp_edge(_P, P): # Used in scan_P_().
     else:
         return False, _x0 < xn
 
-def form_segment_(P_, fa, noM):
+def form_segment_(P_, fa):
     """Form segments of vertically contiguous Ps."""
     # Get a list of every segment's first P:
     P0_ = [*filter(lambda P: (len(P['fork_']) != 1
                             or len(P['fork_'][0]['root_']) != 1),
                    P_)]
 
-    param_keys = aseg_param_keys if fa else gseg_param_keys
+    if fa:
+        seg_param_keys = aseg_param_keys
+        Dert_param_keys = aDert_params
+    else:
+        seg_param_keys = gseg_param_keys
+        Dert_param_keys = gDert_params
+
     if "M" not in P_[0]:
-        param_keys.remove("M")
+        seg_param_keys.remove("M")
+        Dert_param_keys.remove('M')
 
     # Form segments:
-    seg_ = [dict(zip(param_keys, # segment's params as keys
+    seg_ = [dict(zip(seg_param_keys, # segment's params as keys
                      # Accumulated params:
                      [*map(sum,
-                           zip(*map(op.itemgetter(*param_keys[:-6]),
+                           zip(*map(op.itemgetter(*Dert_param_keys, 'L'),
                                     Py_))),
                       len(Py_), Py_[0].pop('y'), Py_, # Ly, y0, Py_ .
                       Py_[-1].pop('root_'), Py_[0].pop('fork_'), # root_, fork_ .
