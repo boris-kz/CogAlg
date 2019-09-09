@@ -80,14 +80,11 @@ The nearest experimentally successful method is recently introduced “capsules�
 - these distances and proportions are also compared to find “equivariance” or affine transformations,
 - capsules also send direct feedback to lower layer (dynamic routing), vs. trans-hidden-layer backprop in ANN
 
-But measure of similarity in CapsNet (“agreement” in dynamic routing) is an unprincipled dot product. This is very common in recognition algorithms, but product exaggerates similarity: it is a superset of comparands, while conceptual similarity is their common subset. Exaggeration adds resistance to noise, but at the cost of drastically impaired precision. The distinction between input and noise is case-specific and should be learned from the input itself.    
-Common subset of two integers is the smaller of them, or compression of represented magnitude by replacing larger input with the difference between inputs. This is a direct implication of information theory: compression must be a measure of similarity, but no one else seems to use it from the bottom up. It’s not sufficient per se, basic working measure would probably be more complex, but minimum is unavoidable as a starting point.
- 
-In general, CapsNet is not designed from the scratch, it carries a lot of baggage from conventional ANN:
+But measure of similarity in CapsNet (“agreement” in dynamic routing) is an unprincipled dot product. Product is very common measure, but it vastly exaggerates similarity. It’s a superset of comparands, but conceptually similarity is a common subset, which would be a minimum for single-variable comparands. Exaggeration adds resistance to noise, but at the cost of drastically impaired precision. The distinction between signal and noise is case-specific and should be learned from the input, not built into algorithm.
 
-- CapsNet is initially fully-connected, with a network-centric bias toward uniform matrix operations (In CogAlg, search is selective over incremental dimensionality, distance, and unfolded depth of the inputs).
-- they use CNN for initial layers to recognize basic features, but a truly general method should apply the same principles on all levels of processing, any differentiation should be learned rather than built-in.
-- capsules of all layers contain the same parameters: probability and pose variables, while I think the number of parameters should be incremental with elevation, each level forms higher-order derivatives of input variables.
+In general, CapsNet is not a consistent bottom-up design, it carries a lot of baggage from conventional ANN:
+- parameters are hand-picked and defined on a blob / object level, vs. derived recursively starting from pixel-level cross-comparisons.
+- capsules of all layers have the same parameters: probability and pose variables, while I think their number should be incremental with elevation, each level forming higher-order derivatives of input parameters.
 - the number of layers is fixed, while I think it should be incremental with experience.
 
 My patterns have match instead of probability, a miss that includes pose variables, plus selected properties of lower-level patterns. In my terms, Hinton’s equivariance is a match between misses: differences and distances. 
