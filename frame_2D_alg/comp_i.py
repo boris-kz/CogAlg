@@ -140,9 +140,9 @@ def select_derts(dert__, iG):
             m__, dy__, dx__ = dert__[2:5]
         except AssertionError:
             dy__, dx__ = dert__[2:4]
-            m__ = ma.zeros(g.shape)
+            m__ = ma.zeros(g__.shape)
     else: # Initialized m, dy, dx:
-        m__, dy__, dx__ = [ma.zeros(g.shape) for _ in range(3)]
+        m__, dy__, dx__ = [ma.zeros(g__.shape) for _ in range(3)]
 
     return g__, m__, dy__, dx__
 

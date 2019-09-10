@@ -93,22 +93,20 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, inI, dderived, fa):  # ro
 
         if fa or not dderived:  # sub_blobs (a_blobs formed by comp_a) are evaluated for g_forks (rng+, der+, if dderived: ga):
 
-            for sub_blob in sub_blob_:  # sub_blob_ in layer_[0], if any from higher-layer blob eval
-                G = sub_blob['Dert']['G']
-                Gr = sub_blob['Dert']['I'] + sub_blob['Dert']['M']
-                Ga = sub_blob['Dert']['Ga']
+            for sub_blob in blob['fork_'][nI][0]['blob_']:  # sub-blobs in layer_[0], if any from higher-layer blob eval
+                I, G, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax = sub_blob['Dert'].values()
                 if -G > ave_intra_blob:  # no der+, exclusive (overlapping rng+ and ga+) forks eval:
 
                     # +G and +M are largely exclusive, I is not but I+M is?
                     # val Ga = I (val_A) + G (val_A, but not A variation?), indep ga but not ma = -ga?
                     # weaker rng+|ga+ fork' filter *= rdn to stronger alt fork, per -g_sub_blob (no 1/1 overlap per ssub_blob):
-                    if Ga > ave_intra_blob and Ga > Gr:# v_ga+ > v_rng+
+                    if Ga > ave_intra_blob and Ga > I + M: # v_ga+ > v_rng+
                         cluster_eval(dert__, root_fork, Ave_blob, Ave, rng, 5, dderived, ~fa)  # cluster by ga for ga+ eval
 
-                        if Gr > ave_intra_blob * 2:  # redundant fork.
+                        if I + M > ave_intra_blob * 2:  # redundant fork.
                             cluster_eval(dert__, root_fork, Ave_blob, Ave, rng, 0, dderived, ~fa)  # cluster by i+m for rng+ eval
 
-                    elif Gr > ave_intra_blob:   # rng+ val > ga+ val
+                    elif I + M > ave_intra_blob:   # rng+ val > ga+ val
                         cluster_eval(dert__, root_fork, Ave_blob, Ave, rng, 0, dderived, ~fa)  # cluster by i+m for rng+ eval
 
                         if Ga > ave_intra_blob * 2:  # redundant fork
@@ -164,10 +162,10 @@ def form_P__(dert__, Ave, nI, dderived, x0=0, y0=0):
     """Form Ps across the whole dert array."""
 
     dert__[nI, :, :] -= Ave
-    crit__ = dert__[1, :, :]
+    crit__ = dert__[nI, :, :]
 
     if dderived:
-        crit__ += dert__[0, :, :]
+        crit__ += dert__[2, :, :]
 
     # Clustering:
     s_x_L__ = [*map(
@@ -190,7 +188,7 @@ def form_P__(dert__, Ave, nI, dderived, x0=0, y0=0):
                            Pderts_),
                    Pderts__)
 
-    param_keys = aP_param_keys if fa else gP_param_keys
+    param_keys = aP_param_keys if nI != 1 else gP_param_keys
     if len(dert__) == 9:
         param_keys.remove("M")
 
