@@ -78,14 +78,15 @@ aseg_param_keys = aDert_params + seg_params
 # -----------------------------------------------------------------------------
 # Functions
 
-def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa):  # root_fork ref is for blob_ and feedback
+def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, inI, dderived, fa):  # root_fork ref is for blob_ and feedback
+    # inI to distinguish from nI, the same as idert__ and dert__.
 
     # fork fa = ~ root_fork_fa, alternating between comp_g and comp_a layers (if dderived, not from frame_blobs or p_rng+)
     # comparison:
-    dert__ = comp_i(idert__, rng, nI, fa)  # comp_g -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, ga, day, dax)
+    dert__ = comp_i(idert__, rng, inI, fa)  # comp_g -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, ga, day, dax)
 
-    if fa: nI = 5  # primary clustering is by new g: gg | ga, dert__-> blob_, with added g|a_Dert per sub_blob Dert
-    else:  nI = 1
+    nI = 5 if fa else 1 # primary clustering is by new g: gg | ga, dert__-> blob_, with added g|a_Dert per sub_blob Dert
+
     blob_, Ave, Ave_blob = cluster(dert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa)
 
     for blob in root_fork[0]['blob_']:  # blob_ in layer_[0] of root_fork, filled by feedback of form_blob
@@ -157,7 +158,7 @@ def cluster_eval(dert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa):  # co
             if nI: rng *= 2  # nI = 1|5
             intra_fork(blob['dert__'], blob['fork_'][nI], Ave_blob, Ave, nI, rng, dderived, fa)
 
-def form_P__(x0, y0, dert__, Ave, fa, dderived):
+def form_P__(dert__, Ave, fa, x0=0, y0=0):
     """Form Ps across the whole dert array."""
 
     if not fa:
