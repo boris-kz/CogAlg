@@ -1,4 +1,3 @@
-import operator as op
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
     combined frame_blobs and intra_blob form a 2D version of 1st-level algorithm.
@@ -34,6 +33,8 @@ import operator as op
         ]
         # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob        
     '''
+
+import operator as op
 
 from collections import deque, defaultdict
 from functools import reduce
@@ -301,76 +302,67 @@ def cluster_vertical(P): # Used in form_segment_().
 
     return [P]
 
-'''
-UNDER REVISION:
-def form_blob_(seg_, root_blob, dert___, rng, fork_type):
-    encountered = []
-    blob_ = []
-    for seg in seg_:
-        if seg in encountered:
-            continue
+# ----------------------------------------------------------------------
+def form_blob_(seg_, root_fork, nI):
+    """
+    Form blobs from given list of segments.
+    Each blob is formed from a number of connected segments.
+    """
 
-        q = deque([seg])
-        encountered.append(seg)
+    # TODO:
+    #  -Add Dert, box and mask computation.
+    #  -Add feedback.
 
-        s = seg['Py_'][0]['sign']
-        G, M, Dy, Dx, L, Ly, blob_seg_ = 0, 0, 0, 0, 0, 0, []
-        x0, xn = 9999999, 0
-        while q:
-            blob_seg = q.popleft()
-            for ext_seg in blob_seg['fork_'] + blob_seg['root_']:
-                if ext_seg not in encountered:
-                    encountered.append(ext_seg)
-            G += blob_seg['G']
-            M += blob_seg['M']
-            Dy += blob_seg['Dy']
-            Dx += blob_seg['Dx']
-            L += blob_seg['L']
-            Ly += blob_seg['Ly']
-            blob_seg_.append(blob_seg)
-
-            x0 = min(x0, min(map(op.itemgetter('x0'), blob_seg['Py_'])))
-            xn = max(xn, max(map(lambda P: P['x0']+P['L'], blob_seg['Py_'])))
-
-        y0 = min(map(op.itemgetter('y0'), blob_seg_))
-        yn = max(map(lambda segment: segment['y0']+segment['Ly'], blob_seg_))
-
-        mask = np.ones((yn - y0, xn - x0), dtype=bool)
-        for blob_seg in blob_seg_:
-            for y, P in enumerate(blob_seg['Py_'], start=blob_seg['y0']):
-                x_start = P['x0'] - x0
-                x_stop = x_start + P['L']
-                mask[y - y0, x_start:x_stop] = False
-
-        # Form blob:
-        blob = dict(
+    # Form blob:
+    blob_ = [
+        dict(
             Dert=dict(G=G, M=M, Dy=Dy, Dx=Dx, L=L, Ly=Ly),
-            sign=s,
             box=(y0, yn, x0, xn),  # boundary box
-            slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
             seg_=blob_seg_,
-            rng = rng,
-            dert___ = dert___,
-            mask=mask,
-            root_blob = root_blob,
-            hDerts = np.concatenate(
-                (
-                    [[*root_blob['Dert'].values()]],
-                    root_blob['hDerts'],
-                ),
-                axis=0
-            ),
+            sign=blob_seg_[0].pop('sign'), # Pop the remaining segment's sign.
+            dert__= dert__[y0:yn, x0:xn],
+            root_fork=root_fork,
+            root_blob=root_fork['root_blob'],
             forks=defaultdict(list),
-            fork_type=fork_type,
+            fork_type=nI,
         )
 
-        feedback(blob)
+        for blob_seg_ in fill_blobs(seg_)
+    ]
 
-        blob_.append(blob)
+    # feedback(blob_)
 
     return blob_
 
+def fill_blobs(seg_):
 
+    blob_seg__ = [] # list of blob's segment lists.
+    owned_seg_ = [] # list blob-owned segments.
+
+    # Iterate through list of all segments:
+    for seg in seg_:
+        # Check whether seg has already been owned:
+        if seg in owned_seg_:
+            continue # Skip.
+
+        blob_seg_ = [seg] # Initialize list of blob segments.
+        q_ = deque([seg]) # Initialize queue of filling segments.
+
+        while len(q_) > 0:
+            blob_seg = q_.pop()
+            for ext_seg in blob_seg['fork_'] + blob_seg['root_']:
+                if ext_seg not in blob_seg_:
+                    blob_seg_.append(ext_seg)
+                    q_.append(ext_seg)
+                    ext_seg.pop("sign") # Remove all blob_seg's signs except for the first one.
+
+        owned_seg_ += blob_seg_
+        blob_seg__.append(blob_seg_)
+
+    return blob_seg__
+
+'''
+UNDER REVISION:
 def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding param of recursively higher root_blob.
 
     root_blob = blob['root_blob']
