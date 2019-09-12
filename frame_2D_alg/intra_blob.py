@@ -64,17 +64,18 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 
 # -----------------------------------------------------------------------------
 # Other constants
-gDert_params = ["I", "G", "M", "Dy", "Dx"]
-aDert_params = gDert_params + ["Ga", "Dyay", "Dyax", "Dxay", "Dxax"]
 
-P_params = ["L", "x0", "dert_", "root_", "fork_", "y", "sign"]
-seg_params = ["S", "Ly", "y0", "Py_", "root_", "fork_", "sign"]
+gDERT_PARAMS = "I", "G", "M", "Dy", "Dx"
+aDERT_PARAMS = gDert_params + ("Ga", "Dyay", "Dyax", "Dxay", "Dxax")
 
-gP_param_keys = gDert_params + P_params
-aP_param_keys = aDert_params + P_params
+P_PARAMS = "L", "x0", "dert_", "root_", "fork_", "y", "sign"
+SEG_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "root_", "fork_", "sign"
 
-gseg_param_keys = gDert_params + seg_params
-aseg_param_keys = aDert_params + seg_params
+gP_PARAM_KEYS = gDERT_PARAMS + P_PARAMS
+aP_PARAM_KEYS = aDERT_PARAMS + P_PARAMS
+
+gSEG_PARAM_KEYS = gDERT_PARAMS + SEG_PARAMS
+aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 
 # -----------------------------------------------------------------------------
 # Functions
@@ -88,12 +89,17 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, inI, dderived, fa):  # ro
 
     nI = 5 if fa else 1 # primary clustering is by new g: gg | ga, dert__-> blob_, with added g|a_Dert per sub_blob Dert
 
-    sub_blob_, Ave, Ave_blob = cluster(dert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa)
+    blob_, Ave, Ave_blob = cluster(dert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa)
 
-    for blob in root_fork[0]['blob_']:  # blob_ in layer_[0] of root_fork, filled by feedback of form_blob
+    for blob in blob_:  # blob_ in layer_[0] of root_fork, filled by feedback of form_blob
 
-        if fa or not dderived:  # sub_blobs (a_blobs formed by comp_a) are evaluated for g_forks (rng+, der+, if dderived: ga):
+        if not fa and dderived: # top blob is g_blob, evaluated for single a_fork (a_sub_blobs will overlap g_sub_blobs formed by prior fork):
+            blob['fork'][0] = dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
+                I=0, G=0, M=0, Dy=0, Dx=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, blob_=[]
+            )
+            intra_fork(blob['dert__'], blob['fork_'][nI], Ave_blob, Ave, rng * 2 + 1, nI, dderived, ~fa)  # fa = 1
 
+        else:  # sub_blobs (a_blobs formed by comp_a) are evaluated for g_forks (rng+, der+, if dderived: ga):
             for sub_blob in blob['fork_'][nI][0]['blob_']:  # sub-blobs in layer_[0], if any from higher-layer blob eval
                 I, G, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax = sub_blob['Dert'].values()
                 if -G > ave_intra_blob:  # no der+, exclusive (overlapping rng+ and ga+) forks eval:
@@ -116,13 +122,6 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, inI, dderived, fa):  # ro
                 elif G > ave_intra_blob:
                     # exclusive der+ fork:
                     intra_fork(sub_blob['dert__'], sub_blob['fork_'][nI], Ave_blob, Ave, rng*2, nI, dderived, ~fa)
-
-        else:  # top blob is g_blob, evaluated for single a_fork (a_sub_blobs will overlap g_sub_blobs formed by prior fork):
-
-            blob['fork'][0] = dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
-                I=0, G=0, M=0, Dy=0, Dx=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, blob_=[]
-            )
-            intra_fork(blob['dert__'], blob['fork_'][nI], Ave_blob, Ave, rng*2 + 1, nI, dderived, ~fa)  # fa = 1
 
     return dert__
 
@@ -162,9 +161,15 @@ def cluster_eval(dert__, root_fork, Ave_blob, Ave, rng, nI, dderived, fa):  # co
 def form_P__(dert__, Ave, nI, dderived, x0=0, y0=0):
     """Form Ps across the whole dert array."""
 
+    # Determine params type:
+    if len(dert__) == 9: # No M.
+        param_keys = aP_PARAM_KEYS[:2] + aP_PARAM_KEYS[3:]
+    else:
+        param_keys = aP_PARAM_KEYS if nI != 1 else gP_PARAM_KEYS
+
+    # Select crit__ from dert__:
     dert__[nI, :, :] -= Ave
     crit__ = dert__[nI, :, :]
-
     if dderived:
         crit__ += dert__[2, :, :]
 
@@ -181,17 +186,13 @@ def form_P__(dert__, Ave, nI, dderived, x0=0, y0=0):
     Pderts__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
                 for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
 
-    # Accumulated params:
-    # if not fa: G, Gg, M, Dy, Dx
-    # if fa: G, Gg, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxaxz
+    # Accumulation:
+    # if not fa: I, G, M, Dy, Dx
+    # if fa: I, G, M, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxaxz
     PDerts__ = map(lambda Pderts_:
                        map(lambda Pderts: Pderts.sum(axis=0),
                            Pderts_),
                    Pderts__)
-
-    param_keys = aP_param_keys if nI != 1 else gP_param_keys
-    if len(dert__) == 9:
-        param_keys.remove("M")
 
     P__ = [
         [
@@ -208,7 +209,7 @@ def form_P__(dert__, Ave, nI, dderived, x0=0, y0=0):
 
 
 def scan_P__(P__):
-    """ detect forks and roots per P"""
+    """Detect forks and roots per P."""
 
     for _P_, P_ in pairwise(P__): # Iterate through pairs of lines.
         _itP_, itP_ = iter(_P_), iter(P_) # Convert to iterators.
@@ -221,7 +222,7 @@ def scan_P__(P__):
             if olp and _P['sign'] == P['sign']:
                 _P['root_'].append(P)
                 P['fork_'].append(_P)
-            try:
+            try: # Check for stopping:
                 _P, P = (next(_itP_), P) if isleft else (_P, next(itP_))
             except StopIteration: # No more fork-root pair.
                 break # To next pair of _P_, P_.
@@ -239,36 +240,39 @@ def comp_edge(_P, P): # Used in scan_P_().
     x0 = P['x0']
     xn = x0 + P['L']
 
-    if _xn < xn: # End-point relative position
-        return True, x0 < _xn
+    if _xn < xn: # End-point relative position.
+        return True, x0 < _xn # Overlap.
     else:
         return False, _x0 < xn
 
 def form_segment_(P_, fa):
     """Form segments of vertically contiguous Ps."""
-    # Get a list of every segment's first P:
+    # Determine params type:
+    if "M" not in P_[0]:
+        seg_param_keys = (*aSEG_PARAM_KEYS[:2], *aSEG_PARAM_KEYS[3:])
+        Dert_keys = (*aDERT_PARAMS[:2], *aDERT_PARAMS[3:], "L")
+    elif fa: # segment params: I G M Dy Dx Ga Dyay Dyax Dxay Dxax S Ly y0 Py_ root_ fork_ sign
+        seg_param_keys = aSEG_PARAM_KEYS
+        Dert_keys = aDERT_PARAMS + ("L",)
+    else: # segment params: I G M Dy Dx S Ly y0 Py_ root_ fork_ sign
+        seg_param_keys = gSEG_PARAM_KEYS
+        Dert_keys = gDERT_PARAMS + ("L",)
+
+    # Get a list of every segment's top P:
     P0_ = [*filter(lambda P: (len(P['fork_']) != 1
                             or len(P['fork_'][0]['root_']) != 1),
                    P_)]
-
-    if fa:
-        seg_param_keys = aseg_param_keys
-        Dert_param_keys = aDert_params
-    else:
-        seg_param_keys = gseg_param_keys
-        Dert_param_keys = gDert_params
-
-    if "M" not in P_[0]:
-        seg_param_keys.remove("M")
-        Dert_param_keys.remove('M')
 
     # Form segments:
     seg_ = [dict(zip(seg_param_keys, # segment's params as keys
                      # Accumulated params:
                      [*map(sum,
-                           zip(*map(op.itemgetter(*Dert_param_keys, 'L'),
+                           zip(*map(op.itemgetter(*Dert_keys),
                                     Py_))),
-                      len(Py_), Py_[0].pop('y'), Py_, # Ly, y0, Py_ .
+                      len(Py_), Py_[0].pop('y'), # Ly, y0 .
+                      min(P['x0'] for P in Py_), # x0 .
+                      max(P['x0']+P['L'] for P in Py_), # xn .
+                      Py_,
                       Py_[-1].pop('root_'), Py_[0].pop('fork_'), # root_, fork_ .
                       Py_[0].pop('sign')]))
             # cluster_vertical(P): traverse segment from first P:
@@ -298,11 +302,11 @@ def cluster_vertical(P): # Used in form_segment_().
         root.pop('fork_') # Only 1 fork.
         root.pop('y')
         root.pop('sign')
-        return [P] + cluster_vertical(root)
+        return [P] + cluster_vertical(root) # Plus next P in segment
 
-    return [P]
+    return [P] # End of segment
 
-# ----------------------------------------------------------------------
+
 def form_blob_(seg_, root_fork, nI):
     """
     Form blobs from given list of segments.
@@ -310,17 +314,42 @@ def form_blob_(seg_, root_fork, nI):
     """
 
     # TODO:
-    #  -Add Dert, box and mask computation.
+    #  -Add dert__, mask.
     #  -Add feedback.
+    # Determine params type:
+    if 'M' not in seg_[0]: # No M.
+        Dert_keys = (*aDERT_PARAMS[:2], *aDERT_PARAMS[3:], "S", "Ly")
+    else:
+        Dert_keys = (*gDERT_PARAMS, "S", "Ly") if nI != 1 \
+            else (*aDERT_PARAMS, "S", "Ly")
 
     # Form blob:
     blob_ = [
         dict(
-            Dert=dict(G=G, M=M, Dy=Dy, Dx=Dx, L=L, Ly=Ly),
-            box=(y0, yn, x0, xn),  # boundary box
+            Dert=dict(
+                zip(
+                    Dert_keys,
+                    [*map(sum,
+                          zip(*map(op.itemgetter(*Dert_keys),
+                                   blob_seg_)))],
+                )
+            ),
+            box=(
+                *starmap(lambda func, x_: func(x_),
+                    zip(
+                        (min, max, min, max),
+                        zip(*[(
+                            seg['y0'], # y0_ .
+                            seg['y0']+seg['Ly'], # yn_ .
+                            seg['x0'], # x0_ .
+                            seg['xn'], # xn_ .
+                        ) for seg in blob_seg_]),
+                    ),
+                ),
+            ),  # boundary box
             seg_=blob_seg_,
-            sign=blob_seg_[0].pop('sign'), # Pop the remaining segment's sign.
-            dert__= dert__[y0:yn, x0:xn],
+            sign=blob_seg_[0].pop('sign'),  # Pop the remaining segment's sign.
+            dert__=dert__[y0:yn, x0:xn],
             root_fork=root_fork,
             root_blob=root_fork['root_blob'],
             forks=defaultdict(list),
