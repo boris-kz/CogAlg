@@ -38,7 +38,7 @@ import operator as op
 
 from collections import deque, defaultdict
 from functools import reduce
-from itertools import groupby, starmap
+from itertools import groupby, starmap, repeat
 
 import numpy as np
 import numpy.ma as ma
@@ -69,7 +69,7 @@ gDERT_PARAMS = "I", "G", "M", "Dy", "Dx"
 aDERT_PARAMS = gDert_params + ("Ga", "Dyay", "Dyax", "Dxay", "Dxax")
 
 P_PARAMS = "L", "x0", "dert_", "root_", "fork_", "y", "sign"
-SEG_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "root_", "fork_", "sign"
+SEG_PARAMS = "S", "Ly", "y0", "Py_", "root_", "fork_", "sign"
 
 gP_PARAM_KEYS = gDERT_PARAMS + P_PARAMS
 aP_PARAM_KEYS = aDERT_PARAMS + P_PARAMS
@@ -269,10 +269,7 @@ def form_segment_(P_, fa):
                      [*map(sum,
                            zip(*map(op.itemgetter(*Dert_keys),
                                     Py_))),
-                      len(Py_), Py_[0].pop('y'), # Ly, y0 .
-                      min(P['x0'] for P in Py_), # x0 .
-                      max(P['x0']+P['L'] for P in Py_), # xn .
-                      Py_,
+                      len(Py_), Py_[0].pop('y'), Py_, # Ly, y0, Py_ .
                       Py_[-1].pop('root_'), Py_[0].pop('fork_'), # root_, fork_ .
                       Py_[0].pop('sign')]))
             # cluster_vertical(P): traverse segment from first P:
@@ -314,18 +311,45 @@ def form_blob_(seg_, root_fork, nI):
     """
 
     # TODO:
-    #  -Add dert__, mask.
-    #  -Add feedback.
+    #  -Debug .
+    #  -Add feedback .
+
     # Determine params type:
     if 'M' not in seg_[0]: # No M.
         Dert_keys = (*aDERT_PARAMS[:2], *aDERT_PARAMS[3:], "S", "Ly")
     else:
-        Dert_keys = (*gDERT_PARAMS, "S", "Ly") if nI != 1 \
-            else (*aDERT_PARAMS, "S", "Ly")
+        Dert_keys = (*aDERT_PARAMS, "S", "Ly") if nI != 1 \
+            else (*gDERT_PARAMS, "S", "Ly")
 
     # Form blob:
-    blob_ = [
-        dict(
+    blob_ = []
+    for blob_seg_ in cluster_segments(seg_):
+        # Compute boundary box in batch:
+        y0, yn, x0, xn = starmap(
+            lambda func, x_: func(x_),
+            zip(
+                (min, max, min, max),
+                zip(*[(
+                    seg['y0'],  # y0_ .
+                    seg['y0'] + seg['Ly'],  # yn_ .
+                    seg['x0'],  # x0_ .
+                    seg['xn'],  # xn_ .
+                ) for seg in blob_seg_]),
+            ),
+        )
+
+        # Compute mask:
+        mask = np.ones((yn - y0, xn - x0), dtype=bool)
+        for blob_seg in blob_seg_:
+            for y, P in enumerate(blob_seg['Py_'], start=blob_seg['y0']):
+                x_start = P['x0'] - x0
+                x_stop = x_start + P['L']
+                mask[y - y0, x_start:x_stop] = False
+
+        blob_dert__ = dert__[:, y0:yn, x0:xn]
+        blob_dert__.mask[:] = mask
+
+        blob = dict(
             Dert=dict(
                 zip(
                     Dert_keys,
@@ -334,36 +358,22 @@ def form_blob_(seg_, root_fork, nI):
                                    blob_seg_)))],
                 )
             ),
-            box=(
-                *starmap(lambda func, x_: func(x_),
-                    zip(
-                        (min, max, min, max),
-                        zip(*[(
-                            seg['y0'], # y0_ .
-                            seg['y0']+seg['Ly'], # yn_ .
-                            seg['x0'], # x0_ .
-                            seg['xn'], # xn_ .
-                        ) for seg in blob_seg_]),
-                    ),
-                ),
-            ),  # boundary box
+            box=(y0, yn, x0, xn),
             seg_=blob_seg_,
             sign=blob_seg_[0].pop('sign'),  # Pop the remaining segment's sign.
-            dert__=dert__[y0:yn, x0:xn],
+            dert__=blob_dert__,
             root_fork=root_fork,
             root_blob=root_fork['root_blob'],
             forks=defaultdict(list),
             fork_type=nI,
         )
+        blob_.append(blob)
 
-        for blob_seg_ in fill_blobs(seg_)
-    ]
-
-    # feedback(blob_)
+        # feedback(blob)
 
     return blob_
 
-def fill_blobs(seg_):
+def cluster_segments(seg_):
 
     blob_seg__ = [] # list of blob's segment lists.
     owned_seg_ = [] # list blob-owned segments.
