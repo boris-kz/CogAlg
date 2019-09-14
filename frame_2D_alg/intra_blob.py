@@ -66,10 +66,10 @@ ave_intra_blob = 1000  # cost of default eval_sub_blob_ per intra_blob
 # Other constants
 
 gDERT_PARAMS = "I", "G", "M", "Dy", "Dx"
-aDERT_PARAMS = gDert_params + ("Ga", "Dyay", "Dyax", "Dxay", "Dxax")
+aDERT_PARAMS = gDERT_PARAMS + ("Ga", "Dyay", "Dyax", "Dxay", "Dxax")
 
 P_PARAMS = "L", "x0", "dert_", "root_", "fork_", "y", "sign"
-SEG_PARAMS = "S", "Ly", "y0", "Py_", "root_", "fork_", "sign"
+SEG_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "root_", "fork_", "sign"
 
 gP_PARAM_KEYS = gDERT_PARAMS + P_PARAMS
 aP_PARAM_KEYS = aDERT_PARAMS + P_PARAMS
@@ -269,7 +269,10 @@ def form_segment_(P_, fa):
                      [*map(sum,
                            zip(*map(op.itemgetter(*Dert_keys),
                                     Py_))),
-                      len(Py_), Py_[0].pop('y'), Py_, # Ly, y0, Py_ .
+                      len(Py_), Py_[0].pop('y'), # Ly, y0
+                      min(P['x0'] for P in Py_),
+                      max(P['x0']+P['L'] for P in Py_),
+                      Py_, # Py_ .
                       Py_[-1].pop('root_'), Py_[0].pop('fork_'), # root_, fork_ .
                       Py_[0].pop('sign')]))
             # cluster_vertical(P): traverse segment from first P:
@@ -304,7 +307,7 @@ def cluster_vertical(P): # Used in form_segment_().
     return [P] # End of segment
 
 
-def form_blob_(seg_, root_fork, nI):
+def form_blob_(seg_, dert__, root_fork, nI):
     """
     Form blobs from given list of segments.
     Each blob is formed from a number of connected segments.

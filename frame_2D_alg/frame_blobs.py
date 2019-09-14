@@ -340,8 +340,8 @@ if __name__ == '__main__':
 
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
-        from utils import draw, map_frame
-        draw("./../visualization/images/blobs", map_frame(frame_of_blobs))
+        from utils import imwrite, map_frame
+        imwrite("./../visualization/images/blobs", map_frame(frame_of_blobs))
 
         # from intra_blob_test import intra_blob
         # intra_blob(frame_of_blobs[1])

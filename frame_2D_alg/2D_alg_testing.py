@@ -9,9 +9,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import frame_blobs
 
-from utils import imread, draw, debug_segment
+from utils import imread, imwrite, debug_segment, debug_blob
 from comp_i import comp_i
-from intra_blob import form_P__, scan_P__, form_segment_
+from intra_blob import form_P__, scan_P__, form_segment_, form_blob_
 
 # -----------------------------------------------------------------------------
 # Adjustable parameters
@@ -52,15 +52,18 @@ if __name__ == "__main__":
     P_ = scan_P__(P__)
     print('Done!')
 
-    print('Running form_seg_...')
+    print('Running form_segment_...')
     seg_ = form_segment_(P_, fa=1)
     print('Done!')
 
-    print('Debugging segments...')
-    seg_ = seg_
-    gray_scale = plt.get_cmap('gray')
-    draw(output_path, debug_segment(derts.shape[1:], *seg_))
-    for seg in seg_:
-        plt.imshow(debug_segment(derts.shape[1:], seg), cmap=gray_scale)
-        plt.show()
+    print('Running form_blob_...')
+    blob_ = form_blob_(seg_, derts, root_fork={'root_blob':None}, nI=4)
     print('Done!')
+
+    print('Debugging blobs...')
+    gray_scale = plt.get_cmap('gray')
+    imwrite(output_path, debug_blob(derts.shape[1:], *blob_))
+    print('Done!')
+    for blob in blob_:
+        plt.imshow(debug_blob(derts.shape[1:], blob), cmap=gray_scale)
+        plt.show()

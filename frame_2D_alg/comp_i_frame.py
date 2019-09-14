@@ -13,7 +13,7 @@ import numpy.ma as ma
 import frame_blobs
 
 from comp_i import comp_i
-from utils import imread, draw
+from utils import imread, imwrite
 from intra_blob import ave
 
 # -----------------------------------------------------------------------------
@@ -47,10 +47,10 @@ def recursive_comp(derts, rng, Ave, fork_history, depth, fa, iG=None):
     if not fa:
         recursive_comp(derts, rng, Ave, fork_history, depth, fa=1)
     else:
-        draw_fork(derts[0], Ave, fork_history)
+        imwrite_fork(derts[0], Ave, fork_history)
         if depth == 0 or rng*2 + 1 > 3:
-            draw_fork(derts[1], Ave, fork_history+"g")
-            draw_fork(derts[5], Ave, fork_history+"ga")
+            imwrite_fork(derts[1], Ave, fork_history+"g")
+            imwrite_fork(derts[5], Ave, fork_history+"ga")
             return
         recursive_comp(derts, rng+1, Ave, fork_history+"r", depth,
                        fa=0, iG=0)
@@ -60,17 +60,17 @@ def recursive_comp(derts, rng, Ave, fork_history, depth, fa, iG=None):
                        fa=0, iG=5)
 
 
-def draw_fork(g, Ave, fork_history):
+def imwrite_fork(g, Ave, fork_history):
     """Output fork's gradient image."""
     if output_bin:
         if fork_history[-1] == "a":
             Ave = angle_ave
-        draw(output_path + fork_history, (g > Ave) * 255)
+        imwrite(output_path + fork_history, (g > Ave) * 255)
     elif output_normalize:
-        draw(output_path + fork_history,
+        imwrite(output_path + fork_history,
              255 * (g - g.min()) / (g.max() - g.min()))
     else:
-        draw(output_path + fork_history, g)
+        imwrite(output_path + fork_history, g)
 
 # -----------------------------------------------------------------------------
 # Main

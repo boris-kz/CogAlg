@@ -11,8 +11,6 @@ from itertools import (
     repeat, accumulate, chain, starmap, tee
 )
 
-from collections import deque
-
 import numpy as np
 
 from imageio import imsave
@@ -62,7 +60,7 @@ def imread(path):
     image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
     return image
 
-def draw(path, image, extension='.bmp'):
+def imwrite(path, image, extension='.bmp'):
     '''
     Output into an image file.
 
@@ -150,7 +148,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
         2D array of image's pixel.
     '''
 
-    image = empty_map(blob.box)
+    image = blank_image(blob.box)
 
     return image    # return filled image
 
@@ -172,34 +170,34 @@ def map_frame(frame, raw=False):
 
     height, width = frame['dert__'].shape[1:]
     box = (0, height, 0, width)
-    image = empty_map(box)
+    image = blank_image(box)
 
     for i, blob in enumerate(frame['blob_']):
-        blob_map = map_blob(blob, raw)
+        blob_map = draw_blob(blob, raw)
 
         over_draw(image, blob_map, blob['box'], box)
 
     return image
 
-def map_blob(blob, raw=False):
+def draw_blob(blob, raw=False):
     '''Map a single blob into an image.'''
 
-    blob_img = empty_map(blob['box'])
+    blob_img = blank_image(blob['box'])
 
     for seg in blob['seg_']:
 
         sub_box = segment_box(seg)
 
-        seg_map = map_segment(seg, sub_box, blob['sign'], raw)
+        seg_map = draw_segment(seg, sub_box, blob['sign'], raw)
 
         over_draw(blob_img, seg_map, sub_box, blob['box'])
 
     return blob_img
 
-def map_segment(seg, box, s, raw=False):
+def draw_segment(seg, box, s, raw=False):
     '''Map a single segment of a blob into an image.'''
 
-    seg_img = empty_map(box)
+    seg_img = blank_image(box)
 
     y0, yn, x0, xn = box
 
@@ -220,12 +218,20 @@ def segment_box(seg):
     return y0s, yns, x0s, xns
 
 def debug_segment(background_shape, *segments):
-    image = empty_map(background_shape)
+    image = blank_image(background_shape)
     for seg in segments:
         seg_box = segment_box(seg)
         over_draw(image,
-                  map_segment(seg, seg_box, seg['sign']),
+                  draw_segment(seg, seg_box, seg['sign']),
                   seg_box)
+    return image
+
+def debug_blob(background_shape, *blobs):
+    image = blank_image(background_shape)
+    for blob in blobs:
+        over_draw(image,
+                  draw_blob(blob),
+                  blob['box'])
     return image
 
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
@@ -238,7 +244,7 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
     return map
 
-def empty_map(shape):
+def blank_image(shape):
     '''Create an empty numpy array of desired shape.'''
 
     if len(shape) == 2:
