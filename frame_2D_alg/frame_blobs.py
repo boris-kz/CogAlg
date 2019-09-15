@@ -51,10 +51,12 @@ assert kwidth in (2, 3)
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
     dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
-    frame = dict(rng=1,
-                 dert__=dert__,
-                 mask=None,
-                 I=0, G=0, Dy=0, Dx=0, blob_=[])
+    frame = dict(
+        rng=1,
+        dert__=dert__,
+        Dert = dict(I=0, G=0, Dy=0, Dx=0),
+        blob_=[],
+    )
 
     seg_ = deque()  # buffer of running segments
     height, width = image.shape
@@ -311,14 +313,16 @@ def terminate_blob(blob, last_seg, frame):
                 # mask=mask,
                 root_fork=frame, # Equivalent of fork in lower layers.
                 root_blob=None,
-                fork_=defaultdict(dict), # Contain sub-blobs that belong to this blob.
+                fork_=defaultdict(list), # Contain sub-blobs that belong to this blob.
                 )
 
     # Update frame:
-    frame.update(I=frame['I'] + blob['Dert']['I'],
-                 G=frame['G'] + blob['Dert']['G'],
-                 Dy=frame['Dy'] + blob['Dert']['Dy'],
-                 Dx=frame['Dx'] + blob['Dert']['Dx'])
+    frame['Dert'].update(
+        I=frame['Dert']['I'] + blob['Dert']['I'],
+        G=frame['Dert']['G'] + blob['Dert']['G'],
+        Dy=frame['Dert']['Dy'] + blob['Dert']['Dy'],
+        Dx=frame['Dert']['Dx'] + blob['Dert']['Dx'],
+    )
 
     frame['blob_'].append(blob)
 

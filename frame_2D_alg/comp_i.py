@@ -101,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert__, rng, fa, iG=None):
+def comp_i(dert__, rng, fa, nI=None):
     """
     Compare g or a over predetermined range.
 
@@ -113,7 +113,7 @@ def comp_i(dert__, rng, fa, iG=None):
         Determine translation between comparands.
     fa : int
         Determine compare function: g_comp or a_comp.
-    iG : int, optional
+    nI : int, optional
         Determine comparands in the case of g_comp.
 
     Return
@@ -126,15 +126,15 @@ def comp_i(dert__, rng, fa, iG=None):
     if fa:
         return comp_a(dert__, rng)
     else:
-        return comp_g(select_derts(dert__, iG), rng)
+        return comp_g(select_derts(dert__, nI), rng)
 
 
-def select_derts(dert__, iG):
+def select_derts(dert__, nI):
     """
     Select_g to compare
     """
-    g__ = dert__[iG]
-    if iG == 0: # Accumulated m, dy, dx:
+    g__ = dert__[nI]
+    if nI == 0: # Accumulated m, dy, dx:
         try:
             assert len(dert__) == 10
             m__, dy__, dx__ = dert__[2:5]

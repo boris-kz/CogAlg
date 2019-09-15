@@ -83,9 +83,13 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, inI, dderived, fa):  # root_fork ref is for blob_ and feedback
     # inI to distinguish from nI, the same as idert__ and dert__.
 
+    # TODO:
+    #  -Update fork .
+    #  -Add feedback .
+
     # fork fa = ~ root_fork_fa, alternating between comp_g and comp_a layers (if dderived, not from frame_blobs or p_rng+)
     # comparison:
-    dert__ = comp_i(idert__, rng, inI, fa)  # comp_g -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, ga, day, dax)
+    dert__ = comp_i(idert__, rng, fa, inI)  # comp_g -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, ga, day, dax)
 
     nI = 5 if fa else 1 # primary clustering is by new g: gg | ga, dert__-> blob_, with added g|a_Dert per sub_blob Dert
 
@@ -94,9 +98,9 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, rng, inI, dderived, fa):  # ro
     for blob in blob_:  # blob_ in layer_[0] of root_fork, filled by feedback of form_blob
 
         if not fa and dderived: # top blob is g_blob, evaluated for single a_fork (a_sub_blobs will overlap g_sub_blobs formed by prior fork):
-            blob['fork'][0] = dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
+            blob['forks'][inI] = [dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
                 I=0, G=0, M=0, Dy=0, Dx=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, blob_=[]
-            )
+            )]
             intra_fork(blob['dert__'], blob['fork_'][nI], Ave_blob, Ave, rng * 2 + 1, nI, dderived, ~fa)  # fa = 1
 
         else:  # sub_blobs (a_blobs formed by comp_a) are evaluated for g_forks (rng+, der+, if dderived: ga):
@@ -307,15 +311,11 @@ def cluster_vertical(P): # Used in form_segment_().
     return [P] # End of segment
 
 
-def form_blob_(seg_, dert__, root_fork, nI):
+def form_blob_(seg_, root_fork, nI):
     """
     Form blobs from given list of segments.
     Each blob is formed from a number of connected segments.
     """
-
-    # TODO:
-    #  -Debug .
-    #  -Add feedback .
 
     # Determine params type:
     if 'M' not in seg_[0]: # No M.
@@ -349,8 +349,8 @@ def form_blob_(seg_, dert__, root_fork, nI):
                 x_stop = x_start + P['L']
                 mask[y - y0, x_start:x_stop] = False
 
-        blob_dert__ = dert__[:, y0:yn, x0:xn]
-        blob_dert__.mask[:] = mask
+        dert__ = root_fork['dert__'][:, y0:yn, x0:xn]
+        dert__.mask[:] = mask
 
         blob = dict(
             Dert=dict(
@@ -364,10 +364,10 @@ def form_blob_(seg_, dert__, root_fork, nI):
             box=(y0, yn, x0, xn),
             seg_=blob_seg_,
             sign=blob_seg_[0].pop('sign'),  # Pop the remaining segment's sign.
-            dert__=blob_dert__,
+            dert__=dert__,
             root_fork=root_fork,
             root_blob=root_fork['root_blob'],
-            forks=defaultdict(list),
+            fork_=defaultdict(list),
             fork_type=nI,
         )
         blob_.append(blob)
