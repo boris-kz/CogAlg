@@ -101,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert__, rng, fa, nI=None):
+def comp_i(dert__, fa, rng, nI=None):
     """
     Compare g or a over predetermined range.
 
@@ -109,10 +109,10 @@ def comp_i(dert__, rng, fa, nI=None):
     ----------
     dert__ : MaskedArray
         Contain the arrays: g, m, dy, dx.
-    rng : int
-        Determine translation between comparands.
     fa : int
         Determine compare function: g_comp or a_comp.
+    rng : int
+        Determine translation between comparands.
     nI : int, optional
         Determine comparands in the case of g_comp.
 

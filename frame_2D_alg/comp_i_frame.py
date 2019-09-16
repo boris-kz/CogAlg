@@ -39,9 +39,9 @@ max_depth = 3
 # -----------------------------------------------------------------------------
 # Functions
 
-def recursive_comp(derts, rng, Ave, fork_history, depth, fa, iG=None):
+def recursive_comp(derts, rng, Ave, fork_history, depth, fa, nI=None):
     """Comparisons under a fork."""
-    derts = comp_i(derts, rng, fa, iG)
+    derts = comp_i(derts, fa, rng, nI)
     Ave += ave
 
     if not fa:
@@ -53,11 +53,11 @@ def recursive_comp(derts, rng, Ave, fork_history, depth, fa, iG=None):
             imwrite_fork(derts[5], Ave, fork_history+"ga")
             return
         recursive_comp(derts, rng+1, Ave, fork_history+"r", depth,
-                       fa=0, iG=0)
+                       fa=0, nI=0)
         recursive_comp(derts, rng*2+1, Ave, fork_history+"g", depth,
-                       fa=0, iG=1)
+                       fa=0, nI=1)
         recursive_comp(derts, rng*2+1, Ave, fork_history+"ga", depth,
-                       fa=0, iG=5)
+                       fa=0, nI=5)
 
 
 def imwrite_fork(g, Ave, fork_history):

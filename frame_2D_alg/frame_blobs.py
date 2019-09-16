@@ -312,7 +312,6 @@ def terminate_blob(blob, last_seg, frame):
                 # slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                 # mask=mask,
                 root_fork=frame, # Equivalent of fork in lower layers.
-                root_blob=None,
                 fork_=defaultdict(list), # Contain sub-blobs that belong to this blob.
                 )
 
