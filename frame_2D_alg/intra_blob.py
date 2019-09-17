@@ -84,7 +84,6 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, dderived, fa):  # root_fork re
     # inI to distinguish from nI, the same as idert__ and dert__.
 
     # TODO:
-    #  -Review fork's layers .
     #  -Add feedback .
 
     # fork fa = ~ root_fork_fa, alternating between comp_g and comp_a layers (if dderived, not from frame_blobs or p_rng+)
@@ -99,15 +98,17 @@ def intra_fork(idert__, root_fork, Ave_blob, Ave, dderived, fa):  # root_fork re
     for blob in blob_:  # blob_ in layer_[0] of root_fork, filled by feedback of form_blob
 
         if not fa and dderived: # top blob is g_blob, evaluated for single a_fork (a_sub_blobs will overlap g_sub_blobs formed by prior fork):
-            blob['forks'][inI] = [dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
+            blob['forks'][inI] = dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
                 rng=rng * 2 + 1, # rng is passed to next (recursive) intra_fork here .
                 dert__=None, # Place-holder for dert__, computed next (recursive) intra_fork() .
-                Dert = dict(I=0, G=0, M=0, Dy=0, Dx=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0),
-                blob_=[],
+                layer_=[(
+                    dict(I=0, G=0, M=0, Dy=0, Dx=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0),
+                    [],
+                )],
                 root_blob=blob,
                 typ=nI,
             )]
-            intra_fork(blob['dert__'], blob['fork_'][nI][0], Ave_blob, Ave, dderived, ~fa)  # fa = 1
+            intra_fork(blob['dert__'], blob['fork_'][inI], Ave_blob, Ave, dderived, ~fa)  # fa = 1
 
         """
         UNDER REVISION:
@@ -175,13 +176,15 @@ def cluster_eval(root_fork, Ave_blob, Ave, nI, dderived, fa):  # combine cluster
             blob['fork'][nI] = [dict(  # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax for comp angle
                 rng=rng,
                 dert__=None,  # Place-holder for dert__, computed next (recursive) intra_fork() .
-                Dert=dict(I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0),
-                blob_=[],
+                layer_=[(
+                    dict(I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0),
+                    [],
+                )],
                 root_blob=blob,
                 typ=nI,
             )]
             if nI: rng *= 2
-            intra_fork(blob['dert__'], blob['fork_'][nI][0], Ave_blob, Ave, dderived, fa)
+            intra_fork(blob['dert__'], blob['fork_'][nI], Ave_blob, Ave, dderived, fa)
 
 def form_P__(dert__, Ave, nI, dderived, x0=0, y0=0):
     """Form Ps across the whole dert array."""
