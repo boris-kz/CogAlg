@@ -425,20 +425,23 @@ def cluster_segments(seg_):
 
     return blob_seg__
 
-'''
-UNDER REVISION:
-def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding param of recursively higher root_blob.
 
-    root_blob = blob['root_blob']
-    if root_blob is None: # Stop recursion.
-        return
-    fork_type = blob['fork_type']
+def feedback(blob, fork=None): # Add each Dert param to corresponding param of recursively higher root_blob.
 
-    # blob Layers is deeper than root_blob Layers:
-    len_sub_layers = max(0, 0, *map(len, blob['forks'].values()))
-    while len(root_blob['forks'][fork_type]) <= len_sub_layers:
-        root_blob['forks'][fork_type].append((0, 0, 0, 0, 0, 0, []))
+    root_fork = blob['root_fork']
 
+    # fork layers is deeper than root_fork Layers:
+    if fork is not None:
+        if len(root_fork['layer_']) <= len(fork['layer_']):
+            root_fork['layer_'].append((
+                dict(zip( # Dert
+                    root_fork['layer_'][0][0], # keys
+                    repeat(0), # values
+                )),
+                [], # blob_
+            ))
+
+    """
     # First layer accumulation:
     G, M, Dy, Dx, L, Ly = blob['Dert'].values()
     Gr, Mr, Dyr, Dxr, Lr, Lyr, sub_blob_ = root_blob['forks'][fork_type][0]
@@ -461,9 +464,9 @@ def feedback(blob, sub_fork_type=None): # Add each Dert param to corresponding p
         )]
     # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)
     # root_blob['forks'][fork_type][1:] += blob['forks'][fork_type]
-
-    feedback(root_blob, fork_type)
-'''
+    """
+    if root_fork['root_blob'] is not None: # Stop recursion if false.
+        feedback(root_fork['root_blob'])
 
 '''
     # initialization before accumulation, Dert only?
