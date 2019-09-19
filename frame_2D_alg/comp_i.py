@@ -1,5 +1,5 @@
 """
-Perform comparison of g or a over predetermined range.
+Perform comparison of p, g or a over predetermined range.
 """
 
 import operator as op
@@ -101,39 +101,66 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert__, fa, rng, nI=None):
+def comp_i(dert__, rng, fig, fia, nI):
     """
-    Compare g or a over predetermined range.
+    Compare p, g or a over predetermined range.
 
     Parameters
     ----------
     dert__ : MaskedArray
         Contain the arrays: g, m, dy, dx.
-    fa : int
-        Determine compare function: g_comp or a_comp.
     rng : int
         Determine translation between comparands.
+    fig : int
+        Determine if m is computed (input is the gradient of something).
+    fia : int
+        Determine if angle compared.
     nI : int, optional
-        Determine comparands in the case of g_comp.
+        Determine comparand's index.
 
     Return
     ------
     out : MaskedArray
         The array that contain result from comparison.
     """
+    # Full dert indices:
+    # Index 0   1   2   3   4   5   6   7    8    9    10   11
+    #       i   g   dy  dx  ay  ax  ga  dyay dyax dxay dxax
+    #       i   g   m   dy  dx  ay  ax  ga   dyay dyax dxay dxax
+
     assert isinstance(dert__, ma.MaskedArray)
 
-    if fa:
-        return comp_a(dert__, rng)
-    else:
-        return comp_g(select_derts(dert__, nI), rng)
+    # Select inputs:
+    i__ = dert__[nI:nI+fia+1]
 
+    if nI in (3, 4): # dy index.
+        i__ /= dert__[2] # Compute angle.
 
-def select_derts(dert__, nI):
+    comp_field = central_slice(rng)
+
+    d__ = translated_operation(a__, rng,
+                               # angle_diff or subtract:
+                               operator=angle_diff if fia else op.sub)
+
+    dy__ = (d__ * Y_COEFFS[rng]).sum(axis=-1)
+    dx__ = (d__ * X_COEFFS[rng]).sum(axis=-1)
+
+    # Cases of accumulated dy, dx:
+    if nI in (0, 4, 5):
+        dy__ += dert__[nI+fig+2 : nI+fig+fia+3] # 3:5 if fia else 2:3 if fig else 3:4
+        dx__ += dert__[nI+fig+fia+3 : nI+fig+2*fia+4] # 5:7 if fia else 3:4 if fig else 4:5
+
+    # TODO: g, m
+
+# -----------------------------------------------------------------------------
+
+def select_i(dert__, fig, nI):
     """
-    Select_g to compare
+    Select inputs to compare.
     """
-    g__ = dert__[nI]
+    i__ = dert__[nI]
+    if fig:
+        pass
     if nI == 0: # Accumulated m, dy, dx:
         try:
             assert len(dert__) == 10
@@ -144,10 +171,10 @@ def select_derts(dert__, nI):
     else: # Initialized m, dy, dx:
         m__, dy__, dx__ = [ma.zeros(g__.shape) for _ in range(3)]
 
-    return g__, m__, dy__, dx__
+    return i__, m__, dy__, dx__
 
 
-def comp_g(dert__, rng):
+def comp_i(dert__, rng):
     """
     Compare g over predetermined range.
     """
@@ -198,6 +225,8 @@ def comp_a(gdert__, rng):
     da__ = translated_operation(a__, rng, angle_diff)
     comp_field = central_slice(rng)
 
+    dy__[comp_field] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
+    dx__[comp_field] += (d__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Decompose and add to corresponding day and dax:
     day__[comp_field] = (da__ * Y_COEFFS[rng]).mean(axis=-1)

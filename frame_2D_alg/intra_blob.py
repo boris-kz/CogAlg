@@ -22,7 +22,7 @@
     rng,  # comp range, in each Dert
     map,  # boolean map of blob to compute overlap
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
-    dert__, # comp_i inputs
+    dert__, # compare inputs
        
     segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = g, gg, m, dy, dx, ga, day, dax
     # references down blob formation tree, accumulating Dert, in vertical (horizontal) order
