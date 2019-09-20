@@ -101,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_i(dert__, fa, rng, nI=None):
+def comp_i(dert__, fia, rng, nI=None):
     """
     Compare g or a over predetermined range.
 
@@ -109,12 +109,12 @@ def comp_i(dert__, fa, rng, nI=None):
     ----------
     dert__ : MaskedArray
         Contain the arrays: g, m, dy, dx.
-    fa : int
-        Determine compare function: g_comp or a_comp.
+    fia : int
+        Determine compare function: comp_g or comp_a.
     rng : int
         Determine translation between comparands.
     nI : int, optional
-        Determine comparands in the case of g_comp.
+        Determine comparands in the case of comp_g.
 
     Return
     ------
@@ -123,28 +123,27 @@ def comp_i(dert__, fa, rng, nI=None):
     """
     assert isinstance(dert__, ma.MaskedArray)
 
-    if fa:
+    if fia:
         return comp_a(dert__, rng)
-    else:
+    else: # Input is g or ga
         return comp_g(select_derts(dert__, nI), rng)
 
 
-def select_derts(dert__, nI):
+def select_i(dert__, nI):
     """
-    Select_g to compare
+    Select inputs to compare.
     """
-    g__ = dert__[nI]
+    i__ = dert__[nI]
     if nI == 0: # Accumulated m, dy, dx:
-        try:
-            assert len(dert__) == 10
+        if len(dert__) == 10:
             m__, dy__, dx__ = dert__[2:5]
-        except AssertionError:
+        else:
             dy__, dx__ = dert__[2:4]
             m__ = ma.zeros(g__.shape)
     else: # Initialized m, dy, dx:
-        m__, dy__, dx__ = [ma.zeros(g__.shape) for _ in range(3)]
+        m__, dy__, dx__ = [ma.zeros(i__.shape) for _ in range(3)]
 
-    return g__, m__, dy__, dx__
+    return i__, m__, dy__, dx__
 
 
 def comp_g(dert__, rng):
@@ -152,7 +151,7 @@ def comp_g(dert__, rng):
     Compare g over predetermined range.
     """
     # Unpack dert__:
-    g__, m__, dy__, dx__ = dert__
+    i__, m__, dy__, dx__ = dert__
 
     # Compare gs:
     d__ = translated_operation(g__, rng, op.sub)
@@ -172,27 +171,32 @@ def comp_g(dert__, rng):
     m__[imsq] = dy__[imsq] = dx__[imsq] = ma.masked # Apply mask.
 
     # Compute gg:
-    gg__ = ma.hypot(dy__, dx__) * SCALER_g[rng]
+    g__ = ma.hypot(dy__, dx__) * SCALER_g[rng]
 
-    return ma.stack((g__, gg__, m__, dy__, dx__), axis=0) # ma.stack() for extra array dimension.
+    return ma.stack((i__, g__, m__, dy__, dx__), axis=0) # ma.stack() for extra array dimension.
 
 
-def comp_a(gdert__, rng):
+def comp_a(dert__, rng):
     """
     Compute and compare a over predetermined range.
     """
     # Unpack dert__:
-    try:
-        g__, gg__, m__, dy__, dx__ = gdert__
-    except ValueError: # Initial dert doesn't contain m.
-        g__, gg__, dy__, dx__ = gdert__
+    if len(dert__) in (5, 12): # idert or full dert with m.
+        i__, g__, m__, dy__, dx__ = dert__[:5]
+    else: # idert or full dert without m.
+        i__, g__, dy__, dx__ = dert__[:4]
 
-    # Initialize dax, day:
-    day__, dax__ = [ma.zeros((2,)+g__.shape) for _ in range(2)]
+    try: # if ra+:
+        a__ = dert__[-7:-5] # Computed angle. Reverse indexing for ignoring m check and full dert check.
+        day__ = dert__[-4:-2] # Accumulated day__.
+        dax__ = dert__[-2:] # Accumulated day__.
+    except ValueError: # if fa:
+        # Compute angles:
+        a__ = ma.stack((dy__, dx__), axis=0) / g__
+        a__.mask = g__.mask
 
-    # Compute angles:
-    a__ = ma.stack((dy__, dx__), axis=0) / gg__
-    a__.mask = gg__.mask
+        # Initialize dax, day:
+        day__, dax__ = [ma.zeros((2,) + i__.shape) for _ in range(2)]
 
     # Compute angle differences:
     da__ = translated_operation(a__, rng, angle_diff)
@@ -215,18 +219,18 @@ def comp_a(gdert__, rng):
         ma.arctan2(*dax__)
     )[np.newaxis, ...] * SCALER_ga
 
-    try:
+    try: # dert with m is more common:
         return ma.concatenate( # Concatenate on the first dimension.
             (
-                ma.stack((g__, gg__, m__), axis=0),
+                ma.stack((i__, g__, m__), axis=0),
                 ga__, day__, dax__,
             ),
             axis=0,
         )
-    except NameError: # m doesn't exist.
+    except NameError: # m doesn't exist:
         return ma.concatenate(  # Concatenate on the first dimension.
             (
-                ma.stack((g__, gg__), axis=0),
+                ma.stack((i__, g__), axis=0),
                 a__, ga__, day__, dax__,
             ),
             axis=0,
