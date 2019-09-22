@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import frame_blobs
 
 from utils import imread, imwrite, debug_segment, debug_blob
-from comp_i import comp_i
+from comparison import comp_v
 from intra_blob import form_P__, scan_P__, form_segment_, form_blob_
 
 # -----------------------------------------------------------------------------
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     print('Done!')
 
     print('Doing angle comp on best blob...')
-    derts = comp_i(best_blob['dert__'], 1, fa=1)
+    derts = comp_v(best_blob['dert__'], 1, fa=1)
     print('Done!')
 
     print('Running form_P__...')

@@ -1,7 +1,7 @@
 """
 For testing comparison operations and sub-blobs of different depths.
 
-Requirements: numpy, frame_blobs, comp_i, utils.
+Requirements: numpy, frame_blobs, comp_v, utils.
 
 Note: Since these operations performed only on multivariate variables,
 "__" in variable names will be skipped.
@@ -12,7 +12,7 @@ import numpy.ma as ma
 
 import frame_blobs
 
-from comp_i import comp_i
+from comparison import comp_v
 from utils import imread, imwrite
 from intra_blob import ave
 
@@ -41,7 +41,7 @@ max_depth = 3
 
 def recursive_comp(derts, rng, Ave, fork_history, depth, fa, nI=None):
     """Comparisons under a fork."""
-    derts = comp_i(derts, fa, rng, nI)
+    derts = comp_v(derts, fa, rng, nI)
     Ave += ave
 
     if not fa:
