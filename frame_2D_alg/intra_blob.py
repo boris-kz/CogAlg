@@ -58,7 +58,7 @@ from utils import pairwise, flatten
 # Filters
 
 ave = 20   # average g, reflects blob definition cost, higher for smaller positive blobs, no intra_cluster for neg blobs
-kwidth = 3   # kernel width, not needed?
+# kwidth = 3   # kernel width, not needed?
 if kwidth != 2:  # ave is an opportunity cost per comp:
     ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
 
@@ -89,6 +89,7 @@ aseg_param_keys = aDert_params + seg_params
 # -----------------------------------------------------------------------------
 # Functions, ALL UNDER REVISION:
 
+
 def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig;  nI selects five comp_i or comp_a forks
 
     # comp_i -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, a, ga, ?ma, day, dax):
@@ -96,60 +97,16 @@ def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig;  nI sele
 
     if nI == 0 or 1: crit = 1  # r+ or g+ forks
     else: crit = 6  # ga+ fork if nI==6, ra+ fork if nI==5, a+ fork if nI==(3,4)
-    gblob_, Ave, Ave_blob = cluster(dert__, blob['fork_'][crit], Ave_blob, Ave, rng, crit, fig, fa)  # cluster by g or ga
 
-    if not fig:  # blobs formed by comp_a or comp_p evaluated for exclusive g+ and r+ forks, same in frame_blobs:
-        for blob in gblob_:  # sub-clustering within sub_blobs from default clustering only
+    sub_blob_, Ave, Ave_blob = cluster(blob, Ave_blob, Ave, rng, crit, fig, fa)  # cluster by g or ga
+    for sub_blob in sub_blob_:  # exclusive g+|r+ sub-clustering forks within sub_blobs, same in frame_blobs:
 
-            if blob['Dert']['G'] > ave_intra_blob:  # +G blob, exclusive g+ fork; G: input or default clustering
-                cluster_eval(blob, Ave_blob, Ave, rng*2+1, crit, fig, ~fa)  # eval fork crit | a+?
+        if sub_blob['Dert']['G'] > ave_intra_blob:  # +G sub_blob, exclusive der+ fork; G: input or default clustering
+            cluster_eval(sub_blob, Ave_blob, Ave, rng*2+1, crit, fig, ~fa)  # eval fork crit | a+?
 
-            elif -blob['Dert']['G'] > ave_intra_blob:  # -G blob, exclusive r+ fork, m & M def in comp_P
-                cluster_eval(blob, Ave_blob, Ave, rng+1, 2, fig, fa)  # eval same-dert r+, not a+
+        elif -sub_blob['Dert']['G'] > ave_intra_blob:  # -G sub_blob, exclusive rng+ fork, m & M def in comp_P
+            cluster_eval(sub_blob, Ave_blob, Ave, rng+1, 2, fig, fa)  # eval same-dert r+, not a+
 
-    elif nI == 0:  # overlapping g+ and r+ forks, as exclusive but for same blob (next: r+, g+, ra+, ga+ eval, a+ if a=dert[5])
-
-        rblob_, Ave, Ave_blob = cluster(dert__, blob['fork_'][2], Ave_blob, Ave, rng, 2, fig, fa)
-        # parallel cluster by m+i, rdn forks per blob (no exact gblob x rblob overlap?), eval by root_fork Dert params:
-
-        g_prior = blob['fork_'][2]['Dert']['G'] - ave_intra_blob > 0 and blob['fork_'][2]['Dert']['I'+'M'] - ave_intra_blob
-
-        if g_prior: # root_fork Dert' G val > 0 and > M+I val:
-            for sub_gblob in gblob_:
-                cluster_eval(sub_gblob, Ave_blob, Ave, rng*2+1, crit, fig, ~fa)  # gblob_ sub_clustering by g, g+ eval
-
-            if blob['fork_'][2]['Dert']['I'+'M'] > ave_intra_blob * 2:  # rdn r+ val > 0, 2+0 in cluster_eval, not ra+
-                for sub_rblob in rblob_:
-                    cluster_eval(sub_rblob, Ave_blob, Ave, rng+1, 2, fig, fa)  # rblob_ sub_clustering by m+i, r+ eval
-
-        elif blob['fork_'][2]['Dert']['I'+'M'] > ave_intra_blob:  # root_fork Dert' M+I val > 0 and > G val
-            for sub_rblob in rblob_:
-                cluster_eval(sub_rblob, Ave_blob, Ave, rng+1, 2, fig, fa)  # rblob_ sub_clustering by m+i, r+ eval
-
-            if blob['fork_'][2]['Dert']['G'] > ave_intra_blob * 2:  # redundant g+ val > 0
-                for sub_gblob in gblob_:
-                    cluster_eval(sub_gblob, Ave_blob, Ave, rng*2+1, crit, fig, ~fa)  # gblob_ sub_clustering by g, g+ eval
-        ''' 
-        or only exclusive forks: minor gains for r+ in positive gblobs? 
-        only two forks, no:  
-            I, G, M, Dy, Dx, Ga, Ma, Dyay, Dyax, Dxay, Dxax, Ly, L = blob['Dert'].values()
-            rdn = 1
-            eval_fork_ = (  # iforks per ablob, prioritized:
-                (M + fig* I, 1, 2),  # r+ / est match of i= Dert[0] at rng+1
-                (G, rng + 1, 1),     # g+ / est match of g= Dert[1] at rng+rng+1, same as rng+ if rng==0
-                (Ma, 1, 7),          # ra+ / est match of a=Dert[5] at rng+1 (rng was redefined in a+ fork call)
-                (Ga, rng + 1, 6),    # ga+ / est match of ga=Dert[6] at rng+rng+1
-            )
-            for val, irng, crit in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
-
-                if val > rdn * ave_intra_blob:  # cost of sub_blob_ eval in intra_fork
-                    rdn += 1  # fork rdn = fork index + 1
-                    Ave_blob += ave_blob * rave * rdn
-                    Ave += ave * rdn
-                    cluster_eval(blob, Ave_blob, Ave, rng, crit, fig, ~fa)
-                else:
-                    break
-        '''
     return dert__
 
 
@@ -158,16 +115,29 @@ def cluster_eval(blob, Ave_blob, Ave, rng, crit, fig, fa):  # sub-cluster -> blo
     sub_blob_, Ave, Ave_blob = cluster(blob, Ave_blob, Ave, rng, crit, fig, fa)
     # dert__-> sub_blob_, root_fork = blob['fork_'][crit]
 
-    for sub_blob in sub_blob_:  # next intra_fork(comp_v) eval, redundant iforks?
-        if crit == 2:   # M
-            nI = 0; val = sub_blob['Dert']['I' + fig * 'M']  # r+ fork
-        elif crit == 7: # Ma
-            nI = 5; val = sub_blob['Dert']['Ma']  # ra+ fork, nI = a | (dy,dx)
+    for sub_blob in sub_blob_:
+        if fa:
+            if crit > ave_intra_blob:  # a+ fork, crit = 1(G) | 6(Ga), filter maybe specific for a+ and hLe blob?
+                intra_fork(sub_blob, Ave_blob, Ave, (3.4), rng, fig, fa=1)
         else:
-            nI = crit; val = sub_blob['Dert'][nI]  # g+ if 1, ga+ if 6, each= a+ if fa: alternating g|a der+ forks
+            I, G, M, Dy, Dx, Ga, Ma, Dyay, Dyax, Dxay, Dxax, Ly, L = blob['Dert'].values()
+            rdn = 1
+            eval_fork_ = (            # iforks per ablob, prioritized:
+                (M + fig * I, 1, 0),  # r+ / est match of i= Dert[0] at rng+1
+                (G, rng + 1, 1),      # g+ / est match of g= Dert[1] at rng+rng+1, same as rng+ if rng==0
+                (Ma, 1, 5),           # ra+ / est match of a=Dert[5] at rng+1 (rng was redefined in a+ fork call)
+                (Ga, rng + 1, 6),     # ga+ / est match of ga=Dert[6] at rng+rng+1
+            )
+            for val, irng, nI in sorted(eval_fork_, key=lambda val: val[0], reverse=True):
 
-        if val > ave_intra_blob:  # filter maybe specific for afork and hLe blob?
-            intra_fork(sub_blob, Ave_blob, Ave, nI, rng, fig, fa)
+                if val > rdn * ave_intra_blob:  # cost of sub_blob_ eval in intra_fork
+                    rdn += 1  # fork rdn = fork index + 1
+                    Ave_blob += ave_blob * rave * rdn
+                    Ave += ave * rdn
+                    if val > ave_intra_blob:  # filter maybe specific for afork and hLe blob?
+                        intra_fork(sub_blob, Ave_blob, Ave, nI, rng, fig, fa)
+                else:
+                    break
 
 
 def cluster(blob, Ave_blob, Ave, rng, crit, fig, fa):  # fig = dderived, i is ig, crit: clustering criterion
