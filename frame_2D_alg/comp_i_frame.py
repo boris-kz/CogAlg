@@ -12,7 +12,7 @@ import numpy.ma as ma
 
 import frame_blobs
 
-from comparison import comp_v
+from comp_v import comp_v
 from utils import imread, imwrite
 from intra_blob import ave
 

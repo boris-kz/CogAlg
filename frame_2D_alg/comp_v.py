@@ -126,7 +126,7 @@ def comp_v(dert__, fia, rng, nI=None):
     if fia:
         return comp_a(dert__, rng)
     else: # Input is g or ga
-        return comp_i(select_derts(dert__, nI), rng)
+        return comp_i(select_i(dert__, nI), rng)
 
 
 def select_i(dert__, nI):
@@ -139,7 +139,7 @@ def select_i(dert__, nI):
             m__, dy__, dx__ = dert__[2:5]
         else:
             dy__, dx__ = dert__[2:4]
-            m__ = ma.zeros(g__.shape)
+            m__ = ma.zeros(i__.shape)
     else: # Initialized m, dy, dx:
         m__, dy__, dx__ = [ma.zeros(i__.shape) for _ in range(3)]
 
@@ -154,7 +154,7 @@ def comp_i(dert__, rng):
     i__, m__, dy__, dx__ = dert__
 
     # Compare gs:
-    d__ = translated_operation(g__, rng, op.sub)
+    d__ = translated_operation(i__, rng, op.sub)
     comp_field = central_slice(rng)
 
     # Decompose and add to corresponding dy and dx:
@@ -162,11 +162,11 @@ def comp_i(dert__, rng):
     dx__[comp_field] += (d__ * X_COEFFS[rng]).sum(axis=-1)
 
     # Compute ms:
-    m__[comp_field] += translated_operation(g__, rng, ma.minimum).sum(axis=-1)
+    m__[comp_field] += translated_operation(i__, rng, ma.minimum).sum(axis=-1)
 
     # Apply mask:
-    msq = np.ones(g__.shape, dtype=int)  # Rim mask.
-    msq[comp_field] = g__.mask[comp_field] + d__.mask.sum(axis=-1)  # Summed d mask.
+    msq = np.ones(i__.shape, dtype=int)  # Rim mask.
+    msq[comp_field] = i__.mask[comp_field] + d__.mask.sum(axis=-1)  # Summed d mask.
     imsq = msq.nonzero()
     m__[imsq] = dy__[imsq] = dx__[imsq] = ma.masked # Apply mask.
 
@@ -186,11 +186,11 @@ def comp_a(dert__, rng):
     else: # idert or full dert without m.
         i__, g__, dy__, dx__ = dert__[:4]
 
-    try: # if ra+:
+    if len(dert__) > 10: # if ra+:
         a__ = dert__[-7:-5] # Computed angle. Reverse indexing for ignoring m check and full dert check.
         day__ = dert__[-4:-2] # Accumulated day__.
         dax__ = dert__[-2:] # Accumulated day__.
-    except ValueError: # if fa:
+    else: # if fa:
         # Compute angles:
         a__ = ma.stack((dy__, dx__), axis=0) / g__
         a__.mask = g__.mask
@@ -222,15 +222,15 @@ def comp_a(dert__, rng):
     try: # dert with m is more common:
         return ma.concatenate( # Concatenate on the first dimension.
             (
-                ma.stack((i__, g__, m__), axis=0),
-                ga__, day__, dax__,
+                ma.stack((i__, g__, m__, dy__, dx__), axis=0),
+                a__, ga__, day__, dax__,
             ),
             axis=0,
         )
     except NameError: # m doesn't exist:
         return ma.concatenate(  # Concatenate on the first dimension.
             (
-                ma.stack((i__, g__), axis=0),
+                ma.stack((i__, g__, dy__, dx__), axis=0),
                 a__, ga__, day__, dax__,
             ),
             axis=0,

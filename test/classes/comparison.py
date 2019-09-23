@@ -11,7 +11,7 @@ import operator as op
 import numpy as np
 import numpy.ma as ma
 
-from comparison import (
+from comp_v import (
     Y_COEFFS, X_COEFFS,
     central_slice,
     rim_mask,

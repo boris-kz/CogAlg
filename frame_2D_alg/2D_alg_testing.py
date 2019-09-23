@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import frame_blobs
 
 from utils import imread, imwrite, debug_segment, debug_blob
-from comparison import comp_v
+from comp_v import comp_v
 from intra_blob import form_P__, scan_P__, form_segment_, form_blob_
 
 # -----------------------------------------------------------------------------

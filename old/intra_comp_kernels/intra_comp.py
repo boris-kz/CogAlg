@@ -1,6 +1,6 @@
 import numpy as np
 from collections import deque, namedtuple
-from comparison import compare_i
+from comp_v import compare_i
 
 Dert = namedtuple('Dert', 'G, Dy, Dx, L, Ly')
 Pattern = namedtuple('Pattern', 'sign, x0, I, G, Dy, Dx, L, derts_')

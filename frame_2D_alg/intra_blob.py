@@ -43,7 +43,7 @@ from itertools import groupby, starmap, repeat
 import numpy as np
 import numpy.ma as ma
 
-from comparison import comp_v
+from comp_v import comp_v
 from utils import pairwise, flatten
 
 # -----------------------------------------------------------------------------
