@@ -339,11 +339,11 @@ if __name__ == '__main__':
     frame_of_blobs = [  # evaluate for deeper sub-clustering within each blob, recursively
     for blob in frame_of_blobs:
 
-        if blob['Dert']['G'] > ave_intra_blob:  # +G blob, exclusive g+ fork
-        cluster_eval(blob, Ave_blob, Ave, rng * 2 + 1, 1, fig, ~fa)
+        if blob['Dert']['G'] > Ave_blob:  # +G blob, exclusive der+ fork
+        cluster_eval(blob, Ave_blob, Ave, rng * 2 + 1, 1, fig=0, fa=0)
 
-        elif -blob['Dert']['G'] > ave_intra_blob:  # -G blob, exclusive r+ fork
-        cluster_eval(blob, Ave_blob, Ave, rng, 2, fig, ~fa)  # m and M def in comp_P, -> same-dert r+, !a+?
+        elif -blob['Dert']['G'] > Ave_blob:  # -G blob, exclusive rng+ fork
+        cluster_eval(blob, Ave_blob, Ave, rng + 1, 2, fig, fa=0)  # m and M def in comp_P
     ]  
     '''
     # DEBUG -------------------------------------------------------------------
