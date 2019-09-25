@@ -101,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_v(dert__, fia, rng, nI=None):
+def comp_v(dert__, nI, rng):
     """
     Compare g or a over predetermined range.
 
@@ -109,12 +109,10 @@ def comp_v(dert__, fia, rng, nI=None):
     ----------
     dert__ : MaskedArray
         Contain the arrays: g, m, dy, dx.
-    fia : int
-        Determine compare function: comp_i or comp_a.
+    nI : int
+        Determine comparands.
     rng : int
         Determine translation between comparands.
-    nI : int, optional
-        Determine comparands in the case of comp_i.
 
     Return
     ------
@@ -123,9 +121,9 @@ def comp_v(dert__, fia, rng, nI=None):
     """
     assert isinstance(dert__, ma.MaskedArray)
 
-    if fia:
+    if nI in (2, 3, 4, 5): # Input is dy or ay:
         return comp_a(dert__, rng)
-    else: # Input is g or ga
+    else: # Input is g or ga:
         return comp_i(select_i(dert__, nI), rng)
 
 
@@ -187,7 +185,7 @@ def comp_a(dert__, rng):
         i__, g__, dy__, dx__ = dert__[:4]
 
     if len(dert__) > 10: # if ra+:
-        a__ = dert__[-7:-5] # Computed angle. Reverse indexing for ignoring m check and full dert check.
+        a__ = dert__[-7:-5] # Computed angle. Reverse indexing for ignoring m check.
         day__ = dert__[-4:-2] # Accumulated day__.
         dax__ = dert__[-2:] # Accumulated day__.
     else: # if fa:
