@@ -185,7 +185,7 @@ def comp_a(dert__, rng):
         i__, g__, dy__, dx__ = dert__[:4]
 
     if len(dert__) > 10: # if ra+:
-        a__ = dert__[-7:-5] # Computed angle. Reverse indexing for ignoring m check.
+        a__ = dert__[-7:-5] # Computed angle (use reverse indexing to avoid m check).
         day__ = dert__[-4:-2] # Accumulated day__.
         dax__ = dert__[-2:] # Accumulated day__.
     else: # if fa:

@@ -44,9 +44,9 @@ def recursive_comp(derts, rng, Ave, fork_history, depth, fa, nI):
     derts = comp_v(derts, nI, rng)
     Ave += ave
 
-    dsize = len(derts)
-    assert (dsize in (4, 5, 11, 12))
-    has_m = dsize in (5, 12)
+    dscope = len(derts)
+    assert (dscope in (4, 5, 11, 12))
+    has_m = dscope in (5, 12)
     # 0 1 2 3 4 5 6 7 8 9 0 1
     # i g d d a a g d d d d
     # i g m d d a a g d d d d
