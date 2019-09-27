@@ -138,31 +138,24 @@ def cluster_eval(blob, Ave_blob, Ave, irng, crit, fig, fa):  # cluster -> sub_bl
             if sub_blob['Dert'][0] > Ave_blob + ave_intra_fork:  # I > Ave_blob, different for a+?
                 Ave_blob += ave_blob * rave
                 Ave += ave
-                intra_fork(sub_blob, Ave_blob, Ave, (3,4), irng*2+1, fig=0, fa=1)
+                intra_fork(sub_blob, Ave_blob, Ave, (3,4), irng*2+1, fig, fa)  # comp_a fork: fig=0, fa=1
 
-        else:  # comp_i evaluation per g|m-defined sub_blob, select <= two | four possible comparand params
-            # or directly by crit: rdn eval per root blob?
-            rdn = 1
-            I, G, M = sub_blob['Dert'][0, 1, 2]
-            eval_fork_ = [
-                (M + I * fig, irng + 1, 0), # r+ / est match of i= Dert[0] at rng+1
-                (G,  irng * 2 + 1, 1),      # g+ / est match of g= Dert[1] at rng+rng+1, same as rng+ if rng==0
-            ]
-            if fig:  # I, G, M, Dy, Dx, A, Ga, Ma, Dyay, Dyax, Dxay, Dxax, S, Ly = sub_blob['Dert'].values
-                Ga, Ma = sub_blob['Dert'][6, 7]
-                eval_fork_ += [
-                    (Ma, irng + 1, 5),      # ra+ / est match of a=Dert[5] at rng+1 (rng was redefined in a+ fork?)
-                    (Ga, irng * 2 + 1, 6),  # ga+ / est match of ga=Dert[6] at rng+rng+1
-                ]
-            for val, rng, nI in sorted(eval_fork_, key=lambda val: val[0], reverse=True):  # prioritize iforks
+        else:  # comp_i evaluation per g|m-defined sub_blob, crit-defined i, Ave, Ave_blob: rdn-adjusted in intra_fork
 
-                if val > rdn * (Ave_blob + ave_intra_fork):  # variable + fixed cost of intra_fork
-                    rdn += 1  # fork redundancy, = fork_ index + 1
-                    Ave_blob += ave_blob * rave * rdn
-                    Ave += ave * rdn
-                    intra_fork(sub_blob, Ave_blob, Ave, nI, rng, fig, fa=0)
-                else:
-                    break
+            if crit == 1 or 6:
+                rng = irng * 2 + 1  # der+ comp val = est match of i= Dert[1|6] at rng*2+1, same as rng+ if rng==0
+                nI = crit  # g+ | ga+
+            else:
+                rng = irng + 1    # rng+ comp val = est match of i= Dert[0|5] at rng+1, irng was redefined in a+ fork?
+                nI = crit-2  # r+ | ra+: i = 0 if 2 | 5 if 7
+
+            if crit == 2 and fig: Crit = sub_blob['Dert'][0 + 2]
+            else: Crit = sub_blob['Dert'][crit]
+
+            if Crit > Ave_blob + ave_intra_fork:
+                Ave_blob += ave_blob * rave
+                Ave += ave
+                intra_fork(sub_blob, Ave_blob, Ave, nI, rng, fig, fa)  # comp_i fork: fa=0
 
 
 def cluster(blob, Ave_blob, Ave, crit, fig, fa):  # fig = dderived, i is ig, crit: clustering criterion
