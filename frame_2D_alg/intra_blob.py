@@ -1,15 +1,9 @@
 import operator as op
 '''
-    intra_blob() evaluates for recursive internal search and clustering: intra_fork() and comp_P(), within each blob.
-    Which adds a layer of sub_blobs & sub_forks per blob, with feedback to root_fork, then root_blob, etc.
-    2D version of 1st-level algorithm will be a combination of frame_blobs and intra_blob.
-    to be added:
+    intra_blob() evaluates for recursive internal cross-comp and clustering: intra_fork() and comp_P(), within each blob.
+    Which adds a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root_blob, etc.
+    2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob and comp_P.
 
-    inter_sub_blob() will compare sub_blobs of same range and derivation within higher-level blob, bottom-up ) top-down:
-    inter_level() will compare between blob levels, where lower composition level is integrated by inter_sub_blob
-    match between levels' edges may form composite blob, axis comp if sub_blobs within blob margin?
-    comp_blob() will be 2nd level 2D alg: a prototype for recursive meta-level alg
-    
     Input brightness is not correlated with predictive value, but both its stability and variation are: 
     stability: negative gradient deviation (-vvg), is predictive value of initial input, vs. gradient or its derivatives
     variation: positive gradient deviation (+vvg), is predictive value of input gradient, thus its cross-comparison.
@@ -20,7 +14,7 @@ import operator as op
             
     Blob structure:
     
-    root_fork, # = root_blob['fork_'][nI]: reference for feedback of blob' Dert params and sub_blob_, up to frame
+    root_fork,  # = root_blob['fork_'][crit]: reference for feedback of blob' Dert params and sub_blob_, up to frame
     
     Dert = I, G, M, Dy, Dx, A, Ga, Ma, Day, Dax, S, Ly
     # extended per fork: nI + gDert in ifork, + aDert in afork, S: area, Ly: vert dim, defined by criterion sign
@@ -34,13 +28,22 @@ import operator as op
     dert__, # comp_i inputs
        
     segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert: i, g, ?m, dy, dx, a, ga, ?ma, day, dax
-    # refs down blob formation tree in vertical (horizontal) order, accumulating Dert
+    # references down blob formation tree in vertical (horizontal) order, accumulating Dert params
     
-    fork_ # multiple derivation trees per blob: 0-1 in gblobs, 0-4 in r|a blobs, next sub_blob_ is in layer_[0]:
+    fork_ # 1|2 derivation trees per blob: g,m sub_blob_s per ilayer, g sub_blob_ per alayer
         [
-         layer_ [(Dert, sub_blob_)]  # alternating g(even) | a(odd) layers across derivation tree, seq access
+         layer_ [(Dert, sub_blob_)]  # alternating g (even) | a (odd) layers across derivation tree
         ]
-        # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob        
+        # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob    
+    
+    to be added:
+    comp_P_: vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each,
+    merge_blob_: combination of small negative-value blobs into infra-blob: for comp_blob_ but not intra_blob,
+    comp_blob_:  cross-comp of sub_blobs ) blobs of same range and derivation, within root blob ) frame,
+    comp_layer_: cross-comp of blob layers, after comp_blob_ within each
+    (edge sub-blobs matching between levels may form composite blob, axis comp if sub_blobs within blob margin?)
+    
+    Combination of all these functions will form 2nd level 2D alg: a prototype for recursive meta-level alg
     '''
 
 from collections import deque, defaultdict
@@ -93,22 +96,16 @@ def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa
     # comp_i -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, a, ga, ?ma, day, dax):
     dert__ = comp_i(blob['dert__'], rng, nI, fig, fa)
 
-    if nI == (3,4) or 5: # a+ | ra+ comp forks; also define rng?
-        g_crit = 6  # Ga
-        m_crit = 7  # Ma
+    if nI == (3,4) or 5: # a+ | ra+ comp forks
+        g_crit = 6; m_crit = 7  # Ga, Ma
     else:           # g+ | r+ | ga+ comp forks
-        g_crit = 1  # G
-        m_crit = 2  # M
+        g_crit = 1; m_crit = 2  # G, M
 
     sub_blob_, Ave_blob = cluster(blob, Ave_blob, Ave, g_crit, fig, fa)  # primary clustering by g or ga
-    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng incr in cluster_eval
+    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng incr in cluster_eval, or define here?
 
         if sub_blob['Dert']['G'] > Ave_blob + ave_clust_eval:  # sub_blob +G > average clustering + eval cost
-
-            if not fig:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
-                cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, fa=0)  # next comp_g; comp_a if fig only
-
-            else:  # comp_g -> redundant g, m sub-clustering forks, eval: comp_a|g per g_sub_blob, comp_i per m_sub_blob
+            if fig:  # comp_g -> redundant g, m sub-clustering forks, eval: comp_a|g per g_sub_blob, comp_i per m_sub_blob
 
                 if sub_blob['Dert']['G'] - Ave_blob + ave_clust_eval > 0 and sub_blob['Dert']['M'+'I'] - Ave_blob + ave_clust_eval:
                     cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa)  # g prior
@@ -121,6 +118,9 @@ def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa
 
                     if sub_blob['Dert']['G'] > Ave_blob + ave_clust_eval:  # redundant g val > 0, Ave_blob incr by prior mfork
                         cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa) # parallel clustering by g
+
+            else:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
+                cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, fa=0)  # next comp_g; comp_a if fig only
 
         elif -sub_blob['Dert']['G'] > Ave_blob + ave_clust_eval:  # -G sub_blob, exclusive mfork, m and M defined in comp_P
             cluster_eval(sub_blob, Ave_blob, Ave, rng, m_crit, fig, fa=0)  # eval same-dert r+ | ra+, no next a+
@@ -160,15 +160,14 @@ def cluster_eval(blob, Ave_blob, Ave, irng, crit, fig, fa):  # cluster -> sub_bl
 
 def cluster(blob, Ave_blob, Ave, crit, fig, fa):  # fig = dderived, i is ig, crit: clustering criterion
 
-    if fa:  # comp_a of g | ga, -> ga+ | ra+ forks
-        blob['fork_'][0] = dict(
-            I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[]
-            # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax, at fork_[crit] = 0: unique?
-        )
+    if fa:  # comp angle of g | ga, -> ga+ | ra+ forks
+        blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[])
+        # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax
+
     else:
-        blob['fork_'][crit] = dict(
-            I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[]  # initialize root_fork at ['fork_'][crit]
-        )
+        blob['fork_'][0 if crit == 1 or 6 else 1] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
+        # initialize root_fork at ['fork_'][0|1]: only two forks per blob, then possibly two per g_sub_blob?
+
     P__ = form_P__(blob['dert__'], Ave, crit, fig)  # horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)  # vertical clustering
