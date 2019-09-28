@@ -83,9 +83,9 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa, nI selects 5 comp_i | comp_a forks
 
     # comp_i -> dert(i, g, ?m, dy, dx) | comp_a -> dert(i, g, ?m, dy, dx, a, ga, ?ma, day, dax):
-    dert__ = comp_i(blob['dert__'], rng, nI, fig, fa)
+    dert__ = comp_i(blob['dert__'], nI, rng)
 
-    if nI == (3,4) or 5: # a+ | ra+ comp forks
+    if nI in (2, 3, 4, 5): # a+ | ra+ comp forks
         g_crit = 6  # Ga
         r_crit = 7  # Ma
     else:           # g+ | r+ | ga+ comp forks
@@ -95,26 +95,26 @@ def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa
     sub_blob_, Ave, Ave_blob = cluster(blob, Ave_blob, Ave, g_crit, fig, fa)  # primary clustering by g or ga
     e = ave_clust_eval
     for sub_blob in sub_blob_:  # evaluate der+ | rng+ sub-clustering forks per sub_blob, rng is passed on
-
-        if sub_blob['Dert']['G'] > Ave_blob + e:  # +G sub_blob, > average clustering + eval cost
+        I, G, M = op.itemgetter('I', 'G', 'M')(sub_blob['Dert'])
+        if G > Ave_blob + e:  # +G sub_blob, > average clustering + eval cost
 
             if not fig:  # comp_a or comp_p -> exclusive der+ fork, as in frame_blobs, else optional
                 cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa)
             else:  # comp_g -> rdn der+, rng+ forks
 
-                if sub_blob['Dert']['G'] - Ave_blob + e > 0 and sub_blob['Dert']['M'+'I'] - Ave_blob + e:  # der+ prior
+                if G - Ave_blob + e > 0 and M + I - Ave_blob + e:  # der+ prior
                     cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa)
 
-                    if sub_blob['Dert']['M'+'I'] > Ave_blob + e:  # redundant rng+ val > 0, Ave_blob incr by prior der+
+                    if M + I > Ave_blob + e:  # redundant rng+ val > 0, Ave_blob incr by prior der+
                         cluster_eval(sub_blob, Ave_blob, Ave, rng, r_crit, fig, fa)  # parallel clustering by m+i
 
-                elif sub_blob['Dert']['M'+'I'] > Ave_blob + e:  # sub_blob M+I val > 0 and > G val: rng+ prior
+                elif M + I > Ave_blob + e:  # sub_blob M+I val > 0 and > G val: rng+ prior
                     cluster_eval(sub_blob, Ave_blob, Ave, rng, r_crit, fig, fa)  # cluster by m+i, rng+ eval
 
-                    if sub_blob['Dert']['G'] > Ave_blob + e:  # redundant der+ val > 0, Ave_blob incr by prior rng+
+                    if G > Ave_blob + e:  # redundant der+ val > 0, Ave_blob incr by prior rng+
                         cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa) # parallel cluster by g
 
-        elif -sub_blob['Dert']['G'] > Ave_blob + e:  # -G sub_blob, exclusive rng+ fork, m & M def in comp_P
+        elif -G > Ave_blob + e:  # -G sub_blob, exclusive rng+ fork, m & M def in comp_P
             cluster_eval(sub_blob, Ave_blob, Ave, rng, r_crit, fig, fa)  # eval same-dert r+ | ra+, no next a+
 
     return dert__
