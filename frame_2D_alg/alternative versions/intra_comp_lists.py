@@ -3,7 +3,7 @@ import operator as op
 from itertools import starmap
 
 from collections import deque, namedtuple
-from comp_i import comp_i
+from comp_v import comp_i
 
 ave_n_sub_blobs = 10
 
