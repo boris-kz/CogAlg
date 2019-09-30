@@ -88,11 +88,11 @@ aP_param_keys = aDert_params + P_params
 gseg_param_keys = gDert_params + seg_params
 aseg_param_keys = aDert_params + seg_params
 
-# --------------------------------------------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------------------------------------
 # Functions, ALL UNDER REVISION:
 
 
-def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa, nI selects compared param in dert
+def intra_fork(blob, Ave_clust_eval, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa, nI: comparand in dert
 
     dert__ = comp_v(blob['dert__'], rng, nI)  # dert: i, g, ?m, dy, dx; or dert_a: i, g, ?m, dy, dx, a, ga, ?ma, day, dax
 
@@ -102,44 +102,43 @@ def intra_fork(blob, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i is ig, =0 if fa
         g_crit = 1; m_crit = 2  # G, M
 
     sub_blob_, Ave_blob = cluster(blob, Ave_blob, Ave, g_crit, fig, fa)  # primary clustering by g or ga
-    e = ave_clust_eval  # also incr by layer and prior?
 
     for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng incr in cluster_eval
         I, G, M = op.itemgetter('I', 'G', 'M')(sub_blob['Dert'])
 
-        if G > Ave_blob + e:  # +G sub_blob, > average clustering + eval cost
-            if fig:  # comp_g -> redundant g, m sub-clustering forks, eval: comp_a|g per g_sub_blob, comp_i per m_sub_blob
+        if G > Ave_blob + Ave_clust_eval:  # +G > clustering cost (variable) + eval cost (fixed)
+            if fig: # comp_g -> redundant g, m sub-clustering forks, eval: comp_a|g per g_sub_blob, comp_i per m_sub_blob
 
-                if G - Ave_blob + e > 0 and M + I - Ave_blob + e:
-                    cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa)  # g prior, redundant m eval by incr Ave_blob:
-                    if M + I > Ave_blob + e:
-                        cluster_eval(sub_blob, Ave_blob, Ave, rng, m_crit, fig, fa)  # parallel clustering by m+i
-
-                elif M + I > Ave_blob + e:  # sub_blob M + I val > 0 and > G val
-                    cluster_eval(sub_blob, Ave_blob, Ave, rng, m_crit, fig, fa)  # m prior, redundant g eval by incr Ave_blob:
-                    if G > Ave_blob + e:
-                        cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, ~fa)  # parallel clustering by g
+                if G > M + I:
+                    cluster_eval(sub_blob, Ave_clust_eval, Ave_blob, Ave, rng, g_crit, fig, ~fa)  # g prior, redundant m eval
+                    if M + I > Ave_blob + Ave_clust_eval:
+                        cluster_eval(sub_blob, Ave_clust_eval, Ave_blob, Ave, rng, m_crit, fig, fa)  # parallel cluster by m+i
+                else:
+                    cluster_eval(sub_blob, Ave_clust_eval, Ave_blob, Ave, rng, m_crit, fig, fa)  # m prior, redundant g eval
+                    if G > Ave_blob + Ave_clust_eval:
+                        cluster_eval(sub_blob, Ave_clust_eval, Ave_blob, Ave, rng, g_crit, fig, ~fa)  # parallel cluster by g
 
             else:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
-                cluster_eval(sub_blob, Ave_blob, Ave, rng, g_crit, fig, fa=0)  # next comp_g; comp_a if fig only
+                cluster_eval(sub_blob, Ave_clust_eval, Ave_blob, Ave, rng, g_crit, fig, fa=0) # next comp_g; comp_a if fig only
 
-        elif -G > Ave_blob + e:  # -G sub_blob, exclusive mfork, m and M defined in comp_P
-            cluster_eval(sub_blob, Ave_blob, Ave, rng, m_crit, fig, fa=0)  # eval same-dert r+ | ra+, no next a+
+        elif -G > Ave_blob + Ave_clust_eval:  # exclusive mfork, m and M defined in comp_P
+            cluster_eval(sub_blob, Ave_clust_eval, Ave_blob, Ave, rng, m_crit, fig, fa=0)  # eval same-dert r+| ra+, no next a+
 
     return dert__
 
 
-def cluster_eval(blob, Ave_blob, Ave, irng, crit, fig, fa):  # cluster -> sub_blob_, next intra_fork eval per sub_blob
+def cluster_eval(blob, Ave_clust_eval, Ave_blob, Ave, irng, crit, fig, fa):  # cluster -> sub_blob_, next intra_fork eval
 
     sub_blob_, Ave_blob = cluster(blob, Ave_blob, Ave, crit, fig, fa)  # conditional sub-clustering by g|m or ga|ma
     for sub_blob in sub_blob_:
 
-        if fa: # comp_a evaluation per g-defined sub_blob, to alternate between a and i blob layers
+        if fa: # comp_a evaluation per g-defined sub_blob, alternating between a and i blob layers
 
             if sub_blob['Dert'][0] > Ave_blob + ave_intra_fork:  # I > Ave_blob, different for a+?
+                Ave_clust_eval += ave_clust_eval
                 Ave_blob += ave_blob * rave
                 Ave += ave
-                intra_fork(sub_blob, Ave_blob, Ave, (3,4), irng*2+1, fig, fa)  # comp_a fork: fig=0, fa=1
+                intra_fork(sub_blob, Ave_clust_eval, Ave_blob, Ave, (3,4), irng*2+1, fig, fa)  # comp_a fork: fig=0, fa=1
 
         else:  # comp_i evaluation per g|m-defined sub_blob, crit-defined i, Ave, Ave_blob: rdn-adjusted in intra_fork
 
@@ -154,9 +153,10 @@ def cluster_eval(blob, Ave_blob, Ave, irng, crit, fig, fa):  # cluster -> sub_bl
             else: Crit = sub_blob['Dert'][crit]
 
             if Crit > Ave_blob + ave_intra_fork:
+                Ave_clust_eval += ave_clust_eval
                 Ave_blob += ave_blob * rave
                 Ave += ave
-                intra_fork(sub_blob, Ave_blob, Ave, nI, rng, fig, fa)  # comp_i fork: fa=0
+                intra_fork(sub_blob, Ave_clust_eval, Ave_blob, Ave, nI, rng, fig, fa)  # comp_i fork: fa=0
 
 
 def cluster(blob, Ave_blob, Ave, crit, fig, fa):  # fig = dderived, i is ig, crit: clustering criterion
