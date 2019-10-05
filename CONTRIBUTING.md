@@ -30,7 +30,7 @@ Andrei Demchenko, $1800 for conventional refactoring and interface improvement i
 
 Todor Arnaudov, $2000 for help in debugging frame_dblobs.py, September - October.
 
-Khanh Nguyen, $2700, a lead programmer of this project starting December 2018. 
+Khanh Nguyen, $2700, for debugging and improving line_POC, December 2018. 
 
 2019:
 
@@ -38,5 +38,5 @@ Stephan Verbeeck, $2000 for insistence on using 2x2 gradient, as well as his per
 
 Todor Arnaudov, $1600, frequent contributor, March-June
 
-Khanh Nguyen, $10000, a lead programmer of this project, January-September
+Khanh Nguyen, $9200, for getting to work frame_blobs, comp_v, comp_v_frame, and work on intra_blob, January-September
 

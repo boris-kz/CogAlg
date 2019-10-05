@@ -4,7 +4,8 @@ from time import time
 '''
     comp_P_ will be a fork of intra_blob, currently a draft.
     
-    It will trace edges | axes, by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
+    It traces blob axis (ridge?) by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
+    This effectively vectorizes the blob
     Cross-comparison forms dPPs and vPPs: clusters of Ps with same-sign vertical difference or match deviation: 
     Pd | Pv is formed by summing difference | match deviation per P param between all compared params within P.  
     
