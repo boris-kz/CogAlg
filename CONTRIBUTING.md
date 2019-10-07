@@ -38,5 +38,5 @@ Stephan Verbeeck, $2000 for insistence on using 2x2 gradient, as well as his per
 
 Todor Arnaudov, $1600, frequent contributor, March-June
 
-Khanh Nguyen, $9200, for getting to work frame_blobs, comp_v, comp_v_frame, and work on intra_blob, January-September
+Khanh Nguyen, $9200, for getting to work frame_blobs, comp_v, comp_v_frame, and partial work on intra_blob, January-September
 

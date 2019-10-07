@@ -200,7 +200,7 @@ if __name__ == "__main__":
             return
 
         # -------------------------------------------------------------------------
-        # Overriden properties
+        # Overridden properties
         @property
         def dy(self):
             return self._derts[1:3]
