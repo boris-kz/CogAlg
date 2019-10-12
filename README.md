@@ -6,7 +6,7 @@ Full introduction: www.cognitivealgorithm.info
 Intelligence is a general cognitive ability, ultimately an ability to predict. That includes cognitive component of action: planning is technically a self-prediction. Any prediction is interactive projection of known patterns, hence primary cognitive process is pattern discovery. This perspective is well established, pattern recognition is a core of any IQ test. But there is no general and constructive definition of either pattern or recognition (quantified similarity). Below, I define similarity for the simplest inputs, then describe hierarchically recursive algorithm to search for patterns across incrementally complex inputs (lower-level patterns).
 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement pattern discovery via artificial neural networks, which operate in a very coarse statistical fashion.
-Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock and still work-in-progress. My approach is derived from theoretically defined measure of similarity, I outline it below and then compare to ANN, biological NN, CapsNet, and clustering. Current code is explained in [WIKI](https://github.com/boris-kz/CogAlg/wiki).
+Less coarse (more selective) are Capsule Networks, recently introduced by Geoffrey Hinton et al. But they are largely ad hock and still work-in-progress. My approach is derived from theoretically defined measure of similarity, I outline it below and then compare to ANN, biological NN and CapsNet. Current code is explained in [WIKI](https://github.com/boris-kz/CogAlg/wiki).
 
 We need help with design and implementation of this algorithm, in Python or Julia. This is an open project, but I will pay for contributions, or monthly if there is a good track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). Contributions should be justified in terms of strictly incremental search for similarity, which forms hierarchical patterns. These terms are defined below, but better definitions would be even more valuable contribution. 
 
@@ -72,34 +72,23 @@ Other biological constraints are very slow neurons, and the imperative of fast r
 
 
 The nearest experimentally successful method is recently introduced “capsules”. Some similarities to CogAlg:
-- capsules also output multi-variate vectors, “encapsulating” several properties, similar to my patterns,
-- these properties also include coordinates and dimensions, compared to compute differences and ratios,
-- these distances and proportions are also compared to find “equivariance” or affine transformations,
-- capsules also send direct feedback to lower layer (dynamic routing), vs. trans-hidden-layer backprop in ANN
+- Capsules also output multi-variate vectors, “encapsulating” several parameters, similar to my patterns,
+- These parameters also include coordinates and dimensions, compared to compute differences and ratios (proportions and orientation),
+- These distances and proportions are also compared to find “equivariance” or affine transformations,
+- Capsules also send feedback to lower layer (dynamic routing), vs. trans-hidden-layer backprop in ANN
 
-But measure of similarity in CapsNet (“agreement” in dynamic routing) is still an unprincipled dot product. Product vastly exaggerates similarity, leading to exploding or vanishing gradients. It's a superset of comparands magnitude, but similarity is conceptually a common subset, which would be a minimum for single-variable comparands. Exaggeration adds resistance to noise, but at the cost of drastically impaired precision. The distinction between signal and noise is case-specific and should be learned from the input, not built into algorithm.
+My main problems with CapsNet and alternative treatment in CogAlg:
+- Parameters are not consistently derived by incremental and recursive cross-comparisons, starting with pixels.
+- Capsules of all layers have the same parameters, while I think their number should be incremental with elevation, each level adding new derivatives per input parameter.
+- Main parameters are probability and pose variables. My patterns have match instead of probability and miss that includes spatial distance, which is converted into pose variables by cross-comparison. Equivariance is my match among misses: differences and distances.
 
-Dot product is currently dominant similarity measure, but it has no theoretical justification. I think one of the reasons this exaggerated similarity is so subjectively effective is a winner-take-all bias of most recognition tests: a single central object on a background. This might be related to “singular” focus in biological perception: it evolved to guide a single body in the environment. Which is amplified by dominant focus on interpersonal and hunter-prey interactions in humans: these are mostly one-to-one. But it’s still wrong as general principle.
+- Number of layers is fixed, while I think it should be incremental with experience. Hierarchy should be a dynamic pipeline: pattern is displaced from a current level by a miss to new input, then forwarded to existing or newly formed higher level. Thus, both hierarchy of patterns per system, and sub-hierarchy of variables per pattern, will expand with experience. The derivatives are summed within pattern, then evaluated for extending intra-pattern search and feedback.
 
-Some other basic differences between CapsNet and my model:
-- Parameters are not derived consistently by incremental and recursive cross-comparisons, starting with pixels.
-- Capsules of all layers have the same parameters, while I think the number of parameters should be incremental with elevation, each level should add new derivatives per input parameter.
-- Main parameters are probability and pose variables. My patterns have match instead of probability and miss that includes spatial distance, which is converted into pose variables by cross-comparison. In my terms, Hinton’s equivariance is a match between misses (differences and distances).
+- Measure of similarity in CapsNet, and “agreement” in dynamic routing, is still an unprincipled dot product. Product vastly exaggerates similarity. It's a superset of comparands magnitude, but similarity is conceptually a common subset, which would be a minimum for single-variable comparands. Exaggeration adds resistance to noise, but at the cost of drastically impaired precision. The distinction between signal and noise is case-specific and should be learned from the input, not built into algorithm.
 
-- Number of layers is fixed, while I think it should be incremental with experience. Hierarchy should be a dynamic pipeline: pattern is displaced from a current level by a miss to new input, then forwarded to existing or newly formed higher level. Patterns include selected lower-level parameters and their derivatives. Thus, both hierarchy of patterns per system, and sub-hierarchy of variables per pattern, will expand with experience. The derivatives are summed within pattern, then evaluated for extending intra-pattern search and feedback.
+Dot product is a currently dominant similarity measure, but it has no theoretical justification. I think one of the reasons this exaggerated similarity is so subjectively effective is a winner-take-all bias of most recognition tests: a single central object on a background. This might be related to “singular” focus in biological perception: it evolved to guide a single body in the environment. Which is amplified by dominant focus on interpersonal and hunter-prey interactions in humans: these are mostly one-to-one. But it’s still wrong as general principle.
 
-
-
-
-### Comparison to conventional clustering
-
-
-
-My approach is a form of hierarchical clustering, but match in conventional clustering is inverted distance: a misleading term for difference. This is the opposite of multiplication between comparands, which computes similarity (match) but no coincident difference (miss). I believe both should be computed because each has independent predictive value: match is a common subset, distinct from and complementary to the difference.
- 
-This distinction is not apparent in modalities where signal carrier is “light” and reflected, such as visual input. There, magnitude (brightness) of input parameter or its match (compression of input magnitude) has low correlation with predictive value. This is true for most raw information sources, but match is a key higher-order parameter. That is, match of parameters that do represent predictive value (such as inverted distance), should be a criterion / metrics for higher-level clustering of patterns that contain / encapsulate them.
-
-Again, main feature of my approach is incrementally deep hierarchical syntax (encapsulated parameters) of my patterns. Which means that metrics will change with elevation: criterion of higher-level clustering will be derived from comparison of lower-level parameters between their patterns. I can’t find an analogue to this evolving hierarchical nature of both elements and metrics in any other clustering technique.
+My approach is a form of nearest-neighbour hierarchical clustering, but main feature is incrementally deep syntax (encapsulated parameters) per pattern. Which means that clustering metrics will change with elevation: criterion of higher-level clustering will be derived from comparison of lower-level parameters. I can’t find any other clustering technique with such evolving hierarchical nature of both elements and metrics.
 
 
 
@@ -125,13 +114,14 @@ Ratio can be further compressed by converting to radix | logarithm, and so on. B
 
 To filter future inputs, this absolute match should be projected: recombined with co-derived miss projected for a target distance. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative predictive value pattern.
 
-Separate filters are formed for each type of compared variable. For example, original input brightness may not be very predictive, because almost all perceived light is reflected rather than emitted. Then its filter will increase, reducing total span (cost) of value patterns, potentially down to 1. On the other hand, if differences or ratios between pixels are more predictive than pixels themselves, then filter for forming positive difference- or ratio- value patterns will be reduced.
+Separate filters are formed for each type of compared variable. Initial input, such as reflected light, is likely to be incidental and very indirectly representative of physical properties in observed objects. Then its filter will increase, reducing number of positive patterns, potentially down to 0. But differences or ratios between inputs represent variation, which is anti-correlated with match. They have negative predictive value, inverted to get incrementally closer to intrinsically predictive properties, such as mass or momentum.
 
-Hence a vision-specific way I define initial match. Predictive visual property is albedo, which means locally stable ratio of brightness / intensity. Since lighting is usually uniform over much larger area than pixel, the difference in brightness between adjacent pixels should also be stable. Relative brightness indicates some underlying property, so it should be cross-compared to form patterns. But it’s reflected: doesn’t really correspond to some physical density of an object, thus its match doesn’t correspond to a minimum.
+Hence a vision-specific way I define initial match. Predictive visual property is albedo, which means locally stable ratio of brightness / intensity. Since lighting is usually uniform over much larger area than pixel, the difference in brightness between adjacent pixels should also be stable. Relative brightness indicates some underlying property, so it should be cross-compared to form patterns. But it is reflected: only indirectly representative of observed object.
 
-But comparison always forms difference or variation. Absent significant correlation between input magnitude and represented physical object magnitude, the best proxy to match is average_|difference| - |difference|.
-Though less accurate (defined via average diff vs. individual input), this match is also a complementary of diff: complementary of |difference| within average_|difference| (=max of the |difference| s), similar to minimum: complementary of |difference| within max input.
-Difference is (anti-) correlated with match, so its match in higher-level comparisons is defined as minimum.
+Absent significant correlation between input magnitude and represented physical object magnitude, the only proxy to match in initial comparison is inverse deviation of absolute difference:
+average_|difference| - |difference|. Though less accurate (defined via average diff vs. individual input), this match is also a complementary of diff:
+- complementary of |difference| within average_|difference| (=max of the |difference| s), similar to minimum:
+- complementary of |difference| within max input.
 
 
 
