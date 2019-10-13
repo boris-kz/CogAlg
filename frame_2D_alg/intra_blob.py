@@ -160,9 +160,10 @@ def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -
 
 
 def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering criterion
+
     # if g+: g, dy, dx = 0; if fig: += idy, idx, m; if nI==7: += a, ga, day, dax; elif nI==(4,5): += a, ga, day, dax = 0; else init dert
 
-    if fa:  # comp angle of g | ga, -> ga+ | ra+ forks
+    if fa:  # comp angle of g | ga, then eval ga+ | ra+ forks
         blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[])
         # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax  # bPARAMS?  no need for iDy, iDx?
     else:
@@ -172,7 +173,7 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
     P__ = form_P__(blob['dert__'], Ave, crit, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)  # vertical clustering
-    sub_blob_ = form_blob_(seg_, blob['fork_'][crit], crit)  # feedback to root_fork at blob['fork_'][crit]
+    sub_blob_ = form_blob_(seg_, blob['fork_'][crit], crit)  # with feedback to root_fork at blob['fork_'][crit]
 
     return sub_blob_, AveB * len(sub_blob_) / aveN
 
@@ -184,8 +185,8 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
 def form_P__(dert__, Ave, nI, fig, x0=0, y0=0):  # cluster horizontal ) vertical dert__ into P__
 
     if fig:
-        if nI == 0 or 1: param_keys = gP_PARAM_KEYS  # nI = i r+, | g g+
-        else: param_keys = aP_PARAM_KEYS  # nI = (4,5) a+ | 7 ra+ | 8 ga+
+        if nI == 0 or 1: param_keys = gP_PARAM_KEYS  # nI = i-> r+, | g-> g+
+        else: param_keys = aP_PARAM_KEYS  # nI = (4,5)-> a+ | 7-> ra+ | 8-> ga+
     else: param_keys = P_PARAM_KEYS
 
     crit__ = dert__[nI, :, :]  # extract crit__ from dert__ (2D arrays)
