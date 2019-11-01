@@ -4,14 +4,20 @@ import operator as op
     Which adds a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root_blob, etc.
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob and comp_P.
 
-    Input brightness is not correlated with predictive value, but both its stability and variation are: 
-    stability: negative gradient deviation (-vvg), is predictive value of initial input, vs. gradient or its derivatives
-    variation: positive gradient deviation (+vvg), is predictive value of input gradient, thus its cross-comparison.
-    
-    -vg is indirect indicator of comp_p rng+ value, lower precision than min: not for g
-    vm = min | -vg - ave (lower?): double filter, complimentary to max_g | max_i; rng+ -> discrete ders: 
-    value of comp_blob (as +vg), then blob-> params value distribution, not for alt_g intra_comps: exclusive?
+    recursive comp value: +vg (variation) -> der+ comp, +v|-vg| (stability) -> rng+ comp:
+    positive deviation of gradient: +vg, is predictive value of gradient, triggers comp_g (der+)
+    positive deviation of |negative gradient|: -vvg, is predictive value of input, triggers rng+ comp_p 
+    intensity != predictive inertia?
             
+    to be added in 2nd level 2D alg (a prototype for recursive meta-level alg):
+    
+    - intra_blob:  add buffering kernel layers (vg s) per rng+ comp, forming corresponding sub-blobs  
+    - comp_P_:     vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each,
+    - merge_blob_: merge negative summed-value (small) blobs into infra-blob: for comp_blob_ but not intra_blob,
+    - comp_blob_:  cross-comp of sub_blobs ) blobs of same range and derivation, within root blob ) frame,
+    - comp_layer_: cross-comp of blob layers, after comp_blob_ within each?
+    - (edge sub-blobs matching between levels may form composite blob, axis comp if sub_blobs within blob margin?)
+
     Blob structure:
     
     root_fork,  # = root_blob['fork_'][crit]: reference for feedback of blob' Dert params and sub_blob_, up to frame
@@ -34,16 +40,7 @@ import operator as op
         [
          layer_ [(Dert, sub_blob_)]  # alternating g (even) | a (odd) layers across derivation tree
         ]
-        # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob    
-    
-    to be added:
-    comp_P_: vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each,
-    merge_blob_: merge negative summed-value (small) blobs into infra-blob: for comp_blob_ but not intra_blob,
-    comp_blob_:  cross-comp of sub_blobs ) blobs of same range and derivation, within root blob ) frame,
-    comp_layer_: cross-comp of blob layers, after comp_blob_ within each?
-    (edge sub-blobs matching between levels may form composite blob, axis comp if sub_blobs within blob margin?)
-    
-    Combination of all these functions will form 2nd level 2D alg: a prototype for recursive meta-level alg
+        # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob
     '''
 
 from collections import deque, defaultdict
@@ -102,17 +99,17 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
     #    elif nI==(4,5): += a, ga, day, dax = 0
     #    else base dert init?
 
-    if nI == 0 or 1: crit = 1
+    if nI == 0 or 1: crit = 1  # primary clustering by g|ga, secondary by crit = i+m | ig:
     else: crit = 8  # a+| ra+
-    sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)  # primary clustering by g | ga
+    sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)
 
-    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng incr in cluster_eval
+    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng is incremented in cluster_eval
         I, G, M = op.itemgetter('I', 'G', 'M')(sub_blob['Dert'])
 
         if G > AveB + AveC:  # +G > clustering cost (variable cluster size) + eval cost (fixed layer rep)
 
             if fig and nI == 0: # rdn sub-clustering by g & m, eval comp_a|g per gsub_blob, comp_i per msub_blob
-                                # r+ comp_g: g_crit = 1, m_crit = 6: eval by 0+6; not ra+ | ga+: fig = 0
+                                # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0
                 if G > M + I:
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # g+ prior, redundant r+ eval:
                     if M + I > AveB + AveC:
@@ -179,53 +176,55 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
 
 
 # functions below are out of date
-#-----------------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------------------------------------------
 
 
-def form_P__(dert__, Ave, nI, fig, x0=0, y0=0):  # cluster horizontal ) vertical dert__ into P__
+def form_P__(dert__, Ave, crit, fig, fsub, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
-    if fig:
-        if nI == 0 or 1: param_keys = gP_PARAM_KEYS  # nI = i-> r+, | g-> g+
-        else: param_keys = aP_PARAM_KEYS  # nI = (4,5)-> a+ | 7-> ra+ | 8-> ga+
+    # fsub: sub-clustering,
+
+    if fig:  # i = ig, crit = 0 + 6: r+ if fig, | 1: g+|r+, | 8: ra+, vs. nI = 0: i, | 1: g, | 7: a, | 8: ga
+
+        if crit == 0 or 1: param_keys = gP_PARAM_KEYS  # nI = i -> r+, | g -> g+
+        else: param_keys = aP_PARAM_KEYS  # crit = 8?  nI = (4,5)-> a+ | 7 -> ra+ | 8-> ga+
     else: param_keys = P_PARAM_KEYS
 
-    crit__ = dert__[nI, :, :]  # extract crit__ from dert__ (2D arrays)
-    if nI == 0 or 7:  # r+ | ra+ forks
+    crit__ = dert__[crit, :, :]  # extract crit__ from dert__ (both are 2D arrays)
+    if crit == 0 or 8:  # r+ | a+ | ra+ forks
         if fig:
-            crit__ = ~crit__[:]  # invert -g sign, r+ only
-        else:
-            crit__[:] += dert__[6, :, :]
+            crit__[:] += dert__[6, :, :]  # m = ig + min?
+    elif crit == 1:
+            crit__ = ~crit__[:]  # and if  m = -g, for r+ only
+
     crit__[:] -= Ave
 
-    # Clustering:
+    # Cluster dert__ into Pdert__:
     s_x_L__ = [*map(
         lambda crit_: # Each line.
             [(sign, next(group)[0], len(list(group)) + 1) # (s, x, L)
              for sign, group in groupby(enumerate(crit_ > 0),
                                         op.itemgetter(1)) # (x, s): return s.
              if sign is not ma.masked], # Ignore gaps.
-        crit__,  # line, blob slice
+        crit__,  # blob slices in line
     )]
-
-    Pderts__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
+    Pdert__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
                 for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
 
-    # Accumulate Dert: if fa: I, G, Dy, Dx, Ga, Dyay, Dyax, Dxay, Dxax; else: I, G, Dy, Dx
+    # Accumulate Dert = P param_keys
 
-    PDerts__ = map(lambda Pderts_:
-                       map(lambda Pderts: Pderts.sum(axis=0),
-                           Pderts_),
-                   Pderts__)
-
+    PDert__ = map(lambda Pdert_:
+                       map(lambda Pdert_: Pdert_.sum(axis=0),
+                           Pdert_),
+                   Pdert__)
     P__ = [
         [
             dict(zip( # Key-value pairs:
                 param_keys,
-                [*PDerts, L, x+x0, Pderts, [], [], y, s]
+                [*PDerts, L, x+x0, Pderts, [], [], y, s]  # why Pderts?
             ))
             for PDerts, Pderts, (s, x, L) in zip(*Pparams_)
         ]
-        for y, Pparams_ in enumerate(zip(PDerts__, Pderts__, s_x_L__), start=y0)
+        for y, Pparams_ in enumerate(zip(PDert__, Pdert__, s_x_L__), start=y0)
     ]
 
     return P__
