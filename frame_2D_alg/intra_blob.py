@@ -1,22 +1,21 @@
 import operator as op
 '''
-    intra_blob() evaluates for recursive internal cross-comp and clustering: intra_fork() and comp_P(), within each blob.
-    Which adds a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root_blob, etc.
+    intra_blob evaluates for recursive internal cross-comp and clustering within each blob: der+ and rng+ intra_forks.
+    Which add a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root_blob, etc.
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob and comp_P.
 
-    recursive comp value: +vg (variation) -> der+ comp, +v|-vg| (stability) -> rng+ comp:
-    positive deviation of gradient: +vg, is predictive value of gradient, triggers comp_g (der+)
-    positive deviation of |negative gradient|: -vvg, is predictive value of input, triggers rng+ comp_p 
-    intensity != predictive inertia?
-            
-    to be added in 2nd level 2D alg (a prototype for recursive meta-level alg):
+    high internal cross-comp values: +vg (variation) -> der+ comp, +v|-vg| (stability) -> rng+ comp:
+    edge areas: positive deviation of gradient: +vg, is predictive value of gradient, triggers comp_g (der+)
+    flat areas: positive deviation of |negative gradient|: -vvg, is predictive value of input, triggers rng+ comp_p
     
-    - intra_blob:  add buffering kernel layers (vg s) per rng+ comp, forming corresponding sub-blobs  
-    - comp_P_:     vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each,
-    - merge_blob_: merge negative summed-value (small) blobs into infra-blob: for comp_blob_ but not intra_blob,
-    - comp_blob_:  cross-comp of sub_blobs ) blobs of same range and derivation, within root blob ) frame,
-    - comp_layer_: cross-comp of blob layers, after comp_blob_ within each?
-    - (edge sub-blobs matching between levels may form composite blob, axis comp if sub_blobs within blob margin?)
+    to be added in 1st level 2D alg: 
+    - buffer kernel layers per rng+, forming corresponding sub-blobs?
+    - comp_P_: vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each
+    
+    to be added in 2nd level 2D alg (a prototype for recursive meta-level alg):  
+    - merge_blob_: merge weak blobs (with negative summed value) into infra-blob: for comp_blob_ but not intra_blob,
+    - comp_blob_:  cross-comp of same range and derivation blobs within root blob ) frame, 
+    - comp_layer_: cluster | reorder? including comp sub_blobs to higher-blob margin or axis, depending on location
 
     Blob structure:
     
@@ -29,9 +28,9 @@ import operator as op
     crit, # index of clustering criterion in dert and Dert: g | ga for der+ fork, m | ma for rng+ fork 
     sign, # of crit
     rng,  # comp range, also per fork?
-    map,  # boolean map of blob, to compute overlap
+    map,  # boolean map of blob, to compute overlap in comp_blob
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
-    dert__, # comp_i inputs
+    dert__, # comp_v inputs
        
     segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))
     # references down blob formation tree in vertical (horizontal) order, accumulating Dert params
