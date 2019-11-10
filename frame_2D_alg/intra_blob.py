@@ -5,17 +5,18 @@ import operator as op
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob and comp_P.
 
     high internal cross-comp values: +vg (variation) -> der+ comp, +v|-vg| (stability) -> rng+ comp:
-    edge areas: positive deviation of gradient: +vg, is predictive value of gradient, triggers comp_g (der+)
-    flat areas: positive deviation of |negative gradient|: -vvg, is predictive value of input, triggers rng+ comp_p
+    edge areas: positive deviation of gradient: +vg, predictive value of gradient, triggers der+ comp_g 
+    flat areas: positive deviation of |negative gradient|: -vvg, predictive value of input, -> rng+ comp_p
     
     to be added in 1st level 2D alg: 
-    - buffer kernel layers per rng+, forming corresponding sub-blobs?
+    - buffer kernel layers per rng+, forming micro-blobs if min rng?
     - comp_P_: vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each
     
     to be added in 2nd level 2D alg (a prototype for recursive meta-level alg):  
     - merge_blob_: merge weak blobs (with negative summed value) into infra-blob: for comp_blob_ but not intra_blob,
-    - comp_blob_:  cross-comp of same range and derivation blobs within root blob ) frame, 
-    - comp_layer_: cluster | reorder? including comp sub_blobs to higher-blob margin or axis, depending on location
+    - comp_blob_: cross-comp of same range and derivation blobs within root blob ) frame, select elements cross-comp,
+    - comp_layer_ -> cluster | reorder -> bi-hier? sub_blobs comp to higher-blob: contour or axis? 
+    - eval_overlap: redundant reps of combined-core areas, vertical or cross-fork? 
 
     Blob structure:
     
@@ -25,17 +26,17 @@ import operator as op
     # extended per fork: nI + gDert in ifork, + aDert in afork, S: area, Ly: vert dim, defined by criterion sign
     # I: input, G: gradient, M: match, packed in I, Dy, Dx: vert,lat Ds, A: angle, Ga: angle G, Day, Dax: angle Ds  
     
-    crit, # index of clustering criterion in dert and Dert: g | ga for der+ fork, m | ma for rng+ fork 
+    crit, # index of clustering criterion in dert and Dert: g | ga for der+ fork, m | ma for rng+ fork, calls nI 
     sign, # of crit
     rng,  # comp range, also per fork?
     map,  # boolean map of blob, to compute overlap in comp_blob
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert__, # comp_v inputs
        
-    segment_[ seg_params, Py_ [(P_params, dert_)]],  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))
+    segment_[ seg_params, Py_ [(P_params, dert_)]], # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))
     # references down blob formation tree in vertical (horizontal) order, accumulating Dert params
     
-    fork_ # 1|2 derivation trees per blob: g,m sub_blob_s per ilayer, g sub_blob_ per alayer
+    fork_ # 1|2 derivation trees per blob: g, m sub_blob_s per intensity layer or g sub_blob_ per angle layer
         [
          layer_ [(Dert, sub_blob_)]  # alternating g (even) | a (odd) layers across derivation tree
         ]
@@ -86,18 +87,19 @@ gSEG_PARAM_KEYS = gDERT_PARAMS + SEG_PARAMS
 aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 
 # -----------------------------------------------------------------------------------------------------------------------
-# Functions, ALL UNDER REVISION:
+# Functions, ALL WORK-IN-PROGRESS:
 
 
 def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: r+ 0, g+ 1, a+ (4,5), ra+ 7, ga+ 8
 
     dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
-    # if g+ fork: g, dy, dx = 0
-    # if fig: += idy, idx, m  # i is ig
-    #    if nI == 7: += a, ga, day, dax
-    #    elif nI==(4,5): += a, ga, day, dax = 0
-    #    else base dert init?
-
+    ''' 
+    if g+ fork: g, dy, dx = 0
+    if fig: += idy, idx, m  # i is ig
+       if nI == 7: += a, ga, day, dax
+       elif nI==(4,5): += a, ga, day, dax = 0
+       else base dert init? 
+    '''
     if nI == 0 or 1: crit = 1  # primary clustering by g|ga, secondary by crit = i+m | ig:
     else: crit = 8  # a+| ra+
     sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)
@@ -156,7 +158,6 @@ def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -
 
 
 def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering criterion
-
     # if g+: g, dy, dx = 0; if fig: += idy, idx, m; if nI==7: += a, ga, day, dax; elif nI==(4,5): += a, ga, day, dax = 0; else init dert
 
     if fa:  # comp angle of g | ga, then eval ga+ | ra+ forks

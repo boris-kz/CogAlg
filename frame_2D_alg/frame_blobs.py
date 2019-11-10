@@ -1,6 +1,5 @@
 '''
-    frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient. Gradient is estimated 
-    as |dx| + |dy|, then selectively and more precisely as hypot(dx, dy), from cross-comparison among adjacent pixels.
+    frame_blobs() defines blobs: contiguous areas of positive or negative deviation of gradient: hypot(dx,dy) in 3x3 kernel.
     Complemented by intra_blob (recursive search within blobs), it will be a 2D version of first-level core algorithm.
 
     frame_blobs() performs several levels (Le) of encoding, incremental per scan line defined by vertical coordinate y.
@@ -15,10 +14,10 @@
     All 2D functions (y_comp, scan_P_, form_segment, form_blob) input two lines: higher and lower, convert elements of
     lower line into elements of new higher line, then displace elements of old higher line into higher function.
 
-    Higher-line elements include additional variables, derived while they were lower-line elements.
+    Higher-line elements include additional parameters, derived while they were lower-line elements.
     Processing is mostly sequential because blobs are irregular and very difficult to map to matrices.
 
-    prefix '_' denotes higher-line variable or pattern, vs. same-type lower-line variable or pattern,
+    prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
 
@@ -30,19 +29,17 @@ import numpy.ma as ma
 
 from utils import imread
 
-# -----------------------------------------------------------------------------
 # Constants
 
-MAX_G = 256 # 721.2489168102785 without normalization.
+MAX_G = 256 #  721.2489168102785 without normalization.
 
-# -----------------------------------------------------------------------------
 # Adjustable parameters
+
 image_path = "./../images/raccoon_eye.jpg"
 kwidth = 3 # Declare initial kernel size. Tested values are 2 or 3.
 ave = 50
 rng = int(kwidth == 3)
 DEBUG = True
-
 assert kwidth in (2, 3)
 
 # -----------------------------------------------------------------------------
@@ -50,7 +47,7 @@ assert kwidth in (2, 3)
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    dert__ = comp_pixel(image)  # vertically and horizontally bilateral comparison of adjacent pixels
+    dert__ = comp_pixel(image)  # comparison of central pixel to rim pixels in a square kernel
     frame = dict(rng=1,
                  dert__=dert__,
                  mask=None,
@@ -60,19 +57,19 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     height, width = image.shape
 
     for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
+        P_ = form_P_(dert__[:, y].T)      # horizontal clustering
         P_ = scan_P_(P_, seg_, frame)
         seg_ = form_seg_(y, P_, frame)
 
-    while seg_:  form_blob(seg_.popleft(), frame)  # frame ends, last-line segs are merged into their blobs
-    return frame  # frame of 2D patterns
+    while seg_:
+        form_blob(seg_.popleft(), frame)  # frame ends, last-line segs are merged into their blobs
+    return frame  # frame of blobs
 
 
-def comp_pixel(image):  # comparison between pixel and its neighbours within kernel, for the whole image
+def comp_pixel(image):  # comparison of central pixel to rim pixels in a square kernel, for the whole image
 
     # Initialize variables:
     if kwidth == 2:
-
         # Compare:
         dy__ = (image[1:, 1:] - image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
         dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
@@ -82,7 +79,6 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
                + image[:-1, 1:]
                + image[1:, :-1]
                + image[1:, 1:]) * 0.25
-
     else:
         ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
         xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
@@ -107,20 +103,18 @@ def comp_pixel(image):  # comparison between pixel and its neighbours within ker
         dy__ = (d___ * ycoef).sum(axis=2)
         dx__ = (d___ * xcoef).sum(axis=2)
 
-        # Sum pixel values:
         p__ = image[1:-1, 1:-1]
 
-    # Compute gradient magnitudes per kernel:
-    g__ = np.hypot(dy__, dx__) * 0.354801226089485
-    #  no m__ = MAX_G - g__, immediate vm = -vg - Ave
+    # Compute gradients per kernel:
+    g__ = np.hypot(dy__, dx__) * 0.354801226089485  # no m__ = MAX_G - g__
 
     return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
 
-def form_P_(dert_):  # horizontally cluster and sum consecutive pixels and their derivatives into Ps
+def form_P_(dert_):  # horizontal clustering and summation of dert params into P params
 
     P_ = deque()  # row of Ps
-    I, G, Dy, Dx, M, L, x0 = *dert_[0], 0, 1, 0  # P params = first dert .
+    I, G, Dy, Dx, M, L, x0 = *dert_[0], 0, 1, 0  # P params = first dert + init params
     G -= ave
     _s = G > 0  # sign
 
@@ -236,7 +230,7 @@ def form_seg_(y, P_, frame):
                 blob['seg_'].append(new_seg)  # segment is buffered into blob
 
                 if len(fork_) > 1:  # merge blobs of all forks
-                    if fork_[0]['roots'] == 1:  # if roots == 1: fork hasn't been terminated
+                    if fork_[0]['roots'] == 1:  # fork is not terminated
                         form_blob(fork_[0], frame)  # merge seg of 1st fork into its blob
 
                     for fork in fork_[1:len(fork_)]:  # merge blobs of other forks into blob of 1st fork
@@ -259,10 +253,10 @@ def form_seg_(y, P_, frame):
                                     blob['seg_'].append(seg)  # buffer of merged root segments.
                             fork['blob'] = blob
                             blob['seg_'].append(fork)
-                        blob['open_segments'] -= 1  # Shared with merged blob.
+                        blob['open_segments'] -= 1  # overlap with merged blob.
 
-        blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
-        blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
+        blob['box'][1] = min(blob['box'][1], x0)   # extend box x0
+        blob['box'][2] = max(blob['box'][2], xn)   # extend box xn
         new_seg_.append(new_seg)
 
     return new_seg_
@@ -281,15 +275,14 @@ def terminate_segment(seg):
     accum_Dert(blob['Dert'],
                 # Params to update:
                 I=I, G=G, M=M, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
-    blob['open_segments'] += roots - 1  # number of open segments
+    blob['open_segments'] += roots - 1  # number of incomplete segments
     return blob
 
 
 def terminate_blob(blob, last_seg, frame):
 
     Dert, [y0, x0, xn], seg_, s, open_segs = blob.values()
-
-    yn = last_seg['y0'] + last_seg['Ly'] # Compute yn.
+    yn = last_seg['y0'] + last_seg['Ly']
 
     mask = np.ones((yn - y0, xn - x0), dtype=bool)  # local map of blob
     for seg in seg_:
@@ -305,12 +298,12 @@ def terminate_blob(blob, last_seg, frame):
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 dert__=dert__,
-                # Deprecated params: (dert__ and box are sufficient)
+                # Deprecated params, replaced by dert__ and box:
                 # slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
                 # mask=mask,
                 root_fork=frame, # Equivalent of fork in lower layers.
                 root_blob=None,
-                fork_=defaultdict(dict), # Contain sub-blobs that belong to this blob.
+                fork_=defaultdict(dict), # Contains sub-blobs
                 )
 
     # Update frame:
@@ -336,16 +329,20 @@ if __name__ == '__main__':
     start_time = time()
     frame_of_blobs = image_to_blobs(image)
     '''
-    frame_of_blobs = [  # evaluate for deeper sub-clustering within each blob, recursively
-    for blob in frame_of_blobs:
+    from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.?
+    
+    for blob in frame_of_blobs['blob_']:  # evaluate recursive sub-clustering in each blob, via cluster_eval -> intra_fork
 
         if blob['Dert']['G'] > aveB:  # +G blob, exclusive g- sub-clustering for der+ eval
         cluster_eval(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # cluster by g
 
         elif -blob['Dert']['G'] > aveB: # -G blob, exclusive m- sub-clustering for rng+ eval
         cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by m, defined in form_P
-    ]  
+        
+        frame_of_deep_blobs['blob_'].append(blob)
+        frame_of_deep_blobs['params'][:] += blob['params'][:]  # incorrect, for selected blob params only?
     '''
+
     # DEBUG -------------------------------------------------------------------
     if DEBUG:
         from utils import draw, map_frame
