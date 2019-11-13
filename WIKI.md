@@ -9,21 +9,25 @@ The code is divided into three self-contained folders:
 
 **frame_2D_alg:** currently a work-in-progress, will process still images:
 
+ 1st level:
 - [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. This is a basic clustering / segmentation within an image, but resulting blobs contain comparison-derived parameters for future comparison between blobs. This code is functional.
 
-- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs:
+- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): conditional recursively extended search within selected blobs and then sub_blobs, which converts them into master blob and respective sub_blobs, work-in-progress:
 
-  - intra_blob calls intra_fork to perform fork-specific comparison: of input parameter or its angle, over extended range or higher derivation. This comparison forms corresponding root blob + sub_blobs: contiguous areas of same-sign deviation of resulting gradient.
+  - cluster_eval calls intra_fork to perform fork-specific comparison: of input parameter or its angle, over extended range or higher derivation. This comparison forms corresponding root blob + sub_blobs: contiguous areas of same-sign deviation of resulting gradient.
    
     - [comp_v](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_v.py) compares input parameter, or computes and compares angle of resulting gradient, to compute corresponding input gradient or angle gradient, over defined range.
-    
-    - [comp_v_frame](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_i_frame.py) computes and displays gradients of the first three layers of forks over the whole frame. This version is only for debugging, it doesn't form blobs.
-    
+     - [comp_v_frame](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_i_frame.py) computes gradients of the first three layers of forks over the whole frame, for visualization only.
+     - also buffer kernel layers per rng+, forming micro-blobs if min rng?
   - [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): a draft for comparison between vertically consecutive Ps: horizontal slices of blob segments. This will be similar to higher levels of 1D alg.
-
-- comp_blob:
-
-  higher levels of 2D alg will compare between blobs within image, forming incrementally higher-composition super-blobs. There is no code on that yet.
+  
+ 2nd level and a prototype for recursive meta-level algorithm, to be added:
+ 
+   - merge_blob_(): merge weak blobs (with negative summed value) into infra-blob(): for comp_blob_ but not intra_blob,
+    - comp_blob_(): cross-comp of same range and derivation blobs within root blob ) frame, 
+    forms incrementally higher-composition super-blobs, with selective elements cross-comp,
+    - comp_layer_(): cluster | reorder -> bi-hier? sub_blobs comp to higher-blob: contour or axis? 
+    - eval_overlap(): redundant reps of combined-core positive blob areas, vertical or cross-fork? 
   
 **video_3D_alg:**
 

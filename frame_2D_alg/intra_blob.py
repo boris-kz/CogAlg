@@ -8,19 +8,9 @@ import operator as op
     edge areas: positive deviation of gradient: +vg, predictive value of gradient, triggers der+ comp_g 
     flat areas: positive deviation of |negative gradient|: -vvg, predictive value of input, -> rng+ comp_p
     
-    to be added in 1st level 2D alg: 
-    - buffer kernel layers per rng+, forming micro-blobs if min rng?
-    - comp_P_: vectorization of critically elongated blobs, by cross-comparing vertically adjacent Ps within each
-    
-    to be added in 2nd level 2D alg (a prototype for recursive meta-level alg):  
-    - merge_blob_: merge weak blobs (with negative summed value) into infra-blob: for comp_blob_ but not intra_blob,
-    - comp_blob_: cross-comp of same range and derivation blobs within root blob ) frame, select elements cross-comp,
-    - comp_layer_ -> cluster | reorder -> bi-hier? sub_blobs comp to higher-blob: contour or axis? 
-    - eval_overlap: redundant reps of combined-core areas, vertical or cross-fork? 
-
     Blob structure:
     
-    root_fork,  # = root_blob['fork_'][crit]: reference for feedback of blob' Dert params and sub_blob_, up to frame
+    root_fork,  # = root_blob['fork_'][crit]: reference for feedback of blob Dert params and sub_blob_, up to frame
     Dert = I, G, Dy, Dx, if fig: += [iDy, iDx, M, if nI == 7 or (4,5): += [A, Ga, Day, Dax]], S, Ly
       
     # extended per fork: nI + gDert in ifork, + aDert in afork, S: area, Ly: vert dim, defined by criterion sign
@@ -46,10 +36,8 @@ import operator as op
 from collections import deque, defaultdict
 from functools import reduce
 from itertools import groupby, starmap
-
 import numpy as np
 import numpy.ma as ma
-
 from comp_v import comp_v
 from utils import pairwise, flatten
 
@@ -92,7 +80,7 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 
 def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: r+ 0, g+ 1, a+ (4,5), ra+ 7, ga+ 8
 
-    dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+    dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, (idy, idx, m, (a, ga, day, dax)?)?:
     ''' 
     if g+ fork: g, dy, dx = 0
     if fig: += idy, idx, m  # i is ig
@@ -119,6 +107,7 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 0, fig, fa)   # r+ prior, redundant g+ eval:
                     if G > AveB + AveC:
                        cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # parallel cluster by g
+                       # + eval intersections of positive g+ and r+ blobs,-> tertiary rdn?
 
             else:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
                 cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, crit, fig, fa)  # fa=0? eval comp_g only
@@ -134,7 +123,7 @@ def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -
     sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)  # conditional sub-clustering by g|m or ga|ma
     for sub_blob in sub_blob_:
 
-        if fa:  # comp_a evaluation per g-defined sub_blob, alternating between a and i blob layers
+        if fa: # comp_a evaluation per g-defined sub_blob, alternating between a and i blob layers
             if sub_blob['Dert'][0] > AveB + AveF:  # I > Ave_blob, different for a+?
 
                 AveF += aveF; AveC += aveC; AveB += aveB * aveN; Ave += ave
@@ -162,7 +151,8 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
 
     if fa:  # comp angle of g | ga, then eval ga+ | ra+ forks
         blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[])
-        # initialize root_fork with Dyay, Dxay = Day; Dyax, Dxax = Dax  # bPARAMS?  no need for iDy, iDx?
+        # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax
+        # bPARAMS, no iDy, iDx?
     else:
         blob['fork_'][0 if crit == 1 or 8 else 1] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
         # initialize root_fork at ['fork_'][0|1]: only two forks per blob, then possibly two per +g_sub_blob

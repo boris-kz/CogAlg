@@ -12,9 +12,17 @@ from itertools import (
 )
 
 import numpy as np
-
 from imageio import imsave
-from PIL import Image
+
+import cv2
+import argparse
+
+argument_parser = argparse.ArgumentParser()
+argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
+arguments = vars(argument_parser.parse_args())
+
+Image = cv2.imread(arguments['image'], 0).astype(int)
+# vs. from PIL import Image
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -149,7 +157,7 @@ def map_frame(frame, raw=False):
     Parameters
     ----------
     frame : dict
-        Contain blobs that needs to be mapped.
+        Contains blobs that need to be mapped.
     raw : bool
         Draw raw values instead of boolean.
     Return
