@@ -9,23 +9,24 @@ import argparse
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parametrized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
     
-    comp_pixel (lateral, vertical, diagonal) forms derts ) dert__: tuples of pixel + derivatives, over the whole frame. Then 
-    pixel-level and external parameters of row segment Ps, blob segments, and blobs are accumulated per level (Le) of encoding, 
-    incremental per scan line y (vertical coordinate), defined relative to y of current input line, incremented by top-down scan:
+    comp_pixel (lateral, vertical, diagonal) forms derts ) dert__: tuples of pixel + derivatives, over the whole frame. 
+    Then pixel-level and external parameters are accumulated in row segment Ps, blob segments, and blobs per level of encoding.
+    Level of encoding is per row y, defined relative to y of current input row, incremented by top-down scan:
 
-    1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment
+    1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of blob
     2Le, line y-2: scan_P_(P, hP) -> hP, roots: down-connections, fork_: up-connections between Ps
     3Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     4Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively
 
     Higher-line elements include additional parameters, derived while they were lower-line elements.
     Processing is mostly sequential because blobs are irregular, not suited for matrix operations.
-    Resulting blob structure (intra_blob will add crit, rng, map): 
+    Resulting blob structure (intra_blob adds crit, rng): 
     
     - root_fork = frame,  # replaced by blob-level fork in sub_blobs
     - Dert = dict(I, G, Dy, Dx, S, Ly), # summed pixel dert params (I, G, Dy, Dx), surface area S, vertical depth Ly
     - sign = s  # sign of gradient deviation
     - box  = [y0, yn, x0, xn], 
+    - map, #
     - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
     - seg_,  # contains intermediate structures: blob segments ( Ps: row segments
     - fork_, # may contain forks( sub-blobs)
@@ -115,6 +116,7 @@ def comp_pixel(image):  # comparison of central pixel to rim pixels in 2x2 or 3x
 
 
 def form_P_(dert_):  # horizontal clustering and summation of dert params into P params
+    # P is contiguous segment in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
     I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # P params = first dert + init params
@@ -192,7 +194,7 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (forks) between same-sign 
 
 
 def form_seg_(y, P_, frame):
-    """Convert or merge every P into segment, merge blobs."""
+    """Convert or merge every P into blob segment, merge blobs."""
     new_seg_ = deque()
 
     while P_:
@@ -202,7 +204,7 @@ def form_seg_(y, P_, frame):
         xn = x0 + L     # next-P x0
         if not fork_:   # new_seg is initialized with initialized blob
             blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0),
-                        box=[y, x0, xn],
+                        box=[y, x0, xn],  # map = []?
                         seg_=[],
                         sign=s,
                         open_segments=1)
@@ -283,15 +285,18 @@ def terminate_blob(blob, last_seg, frame):
             x_start = P['x0'] - x0
             x_stop = x_start + P['L']
             mask[y, x_start:x_stop] = False
-    dert__ = frame['dert__'][:, y0:yn, x0:xn]  # box of derts
-    dert__ = dert__.mask[:]  # != mask?
+    dert__ = frame['dert__'][:, y0:yn, x0:xn]
+    dert__ = dert__.mask[:]  # dert__ box, includes mask? ! dert__.mask[:] = mask?
 
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
+                map = ~mask, # to compute overlap in comp_blob
+                crit = 1,  # clustering criterion is g
+                rng = 1,   # if 3x3 kernel
                 dert__ = dert__,
                 root_fork = frame,
-                fork_ = defaultdict(dict),  # Contains forks ( sub-blobs
-                # Deprecated params, replaced by dert__ and box: slices=(Ellipsis, slice(y0, yn), slice(x0, xn)), mask=mask
+                fork_ = defaultdict(dict),  # contains forks ( sub-blobs
+                # deprecated params, replaced by dert__ and box: slices=(Ellipsis, slice(y0, yn), slice(x0, xn)), not mask?
                 )
     frame.update(I=frame['I'] + blob['Dert']['I'],
                  G=frame['G'] + blob['Dert']['G'],

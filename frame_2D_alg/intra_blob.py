@@ -99,6 +99,7 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
 
             if fig and nI == 0: # rdn sub-clustering by g & m, eval comp_a|g per gsub_blob, comp_i per msub_blob
                                 # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0
+                                # or low alt value?
                 if G > M + I:
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # g+ prior, redundant r+ eval:
                     if M + I > AveB + AveC:
@@ -107,7 +108,7 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 0, fig, fa)   # r+ prior, redundant g+ eval:
                     if G > AveB + AveC:
                        cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # parallel cluster by g
-                       # + eval intersections of positive g+ and r+ blobs,-> tertiary rdn?
+                       # eval intersections of positive g+ and r+ blobs, tertiary rdn?
 
             else:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
                 cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, crit, fig, fa)  # fa=0? eval comp_g only

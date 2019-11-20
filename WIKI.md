@@ -28,10 +28,12 @@ The code is divided into three self-contained folders:
     forms incrementally higher-composition super-blobs, with selective elements cross-comp,
     - comp_layer_(): cluster | reorder -> bi-hier? sub_blobs comp to higher-blob: contour or axis? 
     - eval_overlap(): redundant reps of combined-core positive blob areas, vertical or cross-fork? 
+    
   
 **video_3D_alg:**
 
 - [video_draft()](https://github.com/boris-kz/CogAlg/blob/master/video_3D_alg/video_draft.py) is obsolete 3D extension of frame_blobs. Eventually, it will extend all of 2D alg with time dimension. This version will be made fully recursive and hopefully effective in real world.
+
 
 Higher levels for each D-cycle alg will process discontinuous search among full-D patterns.
 Complete hierarchical algorithm will have two-level code: 
