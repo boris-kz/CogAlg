@@ -76,7 +76,7 @@ TRANSLATING_SLICES = {
     ],
 }
 
-# Define coefficients for decomposing d into dy and dx:
+# coefficients for decomposing d into dy and dx:
 Y_COEFFS = {
     1:np.array([-0.5, -1. , -0.5,  0. ,  0.5,  1. ,  0.5,  0. ]),
     2:np.array([-0.25, -0.4 , -0.5 , -0.4 , -0.25, -0.2 ,  0.  ,  0.2 ,  0.25,
@@ -103,7 +103,7 @@ X_COEFFS = {
 
 def comp_v(dert__, nI, rng):
     """
-    Compare g or a over predetermined range.
+    Compare g or a over range = rng
     Parameters
     ----------
     dert__ : MaskedArray
@@ -119,7 +119,7 @@ def comp_v(dert__, nI, rng):
     """
     assert isinstance(dert__, ma.MaskedArray)
 
-    if nI in (2, 3, 4, 5): # Input is dy or ay:
+    if nI in (2, 3, 4, 5): # Input is dy or ay, indices are wrong here
         return comp_a(dert__, rng)
     else: # Input is g or ga:
         return comp_i(select_i(dert__, nI), rng)

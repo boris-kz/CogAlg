@@ -49,12 +49,7 @@ aveN = 10  # ave_n_sub_blobs: fixed cost ratio of root_blob / blob: add sub_blob
 aveC = 1000  # ave_clust_eval: cost of eval in cluster_eval,    total cluster_eval cost = Ave_blob + ave_clust_eval
 aveF = 1000  # ave_intra_fork: cost of comp + eval in intra_fork, total intra_fork cost = Ave_blob + ave_intra_fork
 
-''' 
-kwidth = 3   # kernel width, if starting with 2
-if kwidth != 2:  # ave is an opportunity cost per comp:
-    ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
-
-All filters are accumulated in cluster_eval per evaluated fork to account for redundancy: Filter += filter 
+''' All filters are accumulated in cluster_eval per evaluated fork to account for redundancy: Filter += filter 
 Current filters are represented in forks if tree reorder, else redefined at each access? '''
 
 # Other constants
@@ -80,14 +75,8 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 
 def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: r+ 0, g+ 1, a+ (4,5), ra+ 7, ga+ 8
 
-    dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, (idy, idx, m, (a, ga, day, dax)?)?:
-    ''' 
-    if g+ fork: g, dy, dx = 0
-    if fig: += idy, idx, m  # i is ig
-       if nI == 7: += a, ga, day, dax
-       elif nI==(4,5): += a, ga, day, dax = 0
-       else base dert init? 
-    '''
+    dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+
     if nI == 0 or 1: crit = 1  # primary clustering by g|ga, secondary by crit = i+m | ig:
     else: crit = 8  # a+| ra+
     sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)
@@ -118,6 +107,19 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
 
     return dert__
 
+'''
+Angle is external or positional parameter of gradient, it has lower predictive value than magnitude of gradient.
+Thus, angle computation is selective to high-gradient blobs and angle layer is below gradient computation layer. 
+Moreover, angle computation is only needed for angle comparison, which has lower value than gradient comparison.
+So, angle computation layer is also below gradient der+ | rng+ comparison layer.
+Which means that dert should have up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+ 
+    if g+ fork: dert = i, g, dy, dx 
+    if fig: dert += idy, idx, m  # i is higher-layer gradient, idy and idx are preserved to compute its angle
+       if nI == 7: += a, ga, day, dax
+       elif nI==(4,5): += a, ga, day, dax = 0
+       else base dert init? 
+'''
 
 def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -> sub_blob_, next intra_fork eval
 
@@ -567,7 +569,6 @@ def feedback(blob, fork=None): # Add each Dert param to corresponding param of r
                 )),
                 [], # blob_
             ))
-
     """
     # First layer accumulation:
     G, M, Dy, Dx, L, Ly = blob['Dert'].values()
@@ -602,4 +603,9 @@ def feedback(blob, fork=None): # Add each Dert param to corresponding param of r
     else:
         blob['Dert'] = 'G'=0, 'Gg'=0, 'Dy'=0, 'Dx'=0, 'L'=0, 'Ly'=0
         dert___[:] = dert___[:][:], 0, 0, 0, 0  # g -> (g, gg, m, dy, dx)
+        
+    kwidth = 3   # kernel width, if starting with 2
+if kwidth != 2:  # ave is an opportunity cost per comp:
+    ave *= (kwidth ** 2 - 1) / 2  # ave *= ncomp_per_kernel / 2 (base ave is for ncomp = 2 in 2x2)
+
 '''
