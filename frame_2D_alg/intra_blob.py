@@ -1,17 +1,17 @@
 import operator as op
 '''
-    intra_blob evaluates for recursive internal cross-comp and clustering within each blob: der+ and rng+ intra_forks.
-    Which add a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root_blob, etc.
-    2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob and comp_P.
-
-    high internal cross-comp values: +vg (variation) -> der+ comp, +v|-vg| (stability) -> rng+ comp:
-    edge areas: positive deviation of gradient: +vg, predictive value of gradient, triggers der+ comp_g 
-    flat areas: positive deviation of |negative gradient|: -vvg, predictive value of input, -> rng+ comp_p
+    2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.
+    intra_blob recursively evaluates for extended internal cross-comp and divisive sub-clustering within each blob.
     
-    Blob structure:
+    There are two possible intra_forks of extended cross-comp per blob:
+    der+: incremental derivation in high-variation edge areas of +vg: positive deviation of gradient, which triggers comp(g) 
+    rng+: incremental comp range in low-variation flat areas of +v--vg: positive deviation of negated -vg, triggers comp(i) at rng+
+    
+    Each intra_fork adds a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root_blob, etc.    
+    Blob structure, same for all layers of blob hierarchy:
     
     root_fork,  # = root_blob['fork_'][crit]: reference for feedback of blob Dert params and sub_blob_, up to frame
-    Dert = I, G, Dy, Dx, if fig: += [iDy, iDx, M, if nI == 7 or (4,5): += [A, Ga, Day, Dax]], S, Ly
+    Dert = I, G, Dy, Dx, if i is g: += [iDy, iDx, M, if nI == 7 or (4,5): += [A, Ga, Day, Dax]], S, Ly
       
     # extended per fork: nI + gDert in ifork, + aDert in afork, S: area, Ly: vert dim, defined by criterion sign
     # I: input, G: gradient, M: match, packed in I, Dy, Dx: vert,lat Ds, A: angle, Ga: angle G, Day, Dax: angle Ds  
@@ -26,7 +26,7 @@ import operator as op
     segment_[ seg_params, Py_ [(P_params, dert_)]], # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))
     # references down blob formation tree in vertical (horizontal) order, accumulating Dert params
     
-    fork_ # 1|2 derivation trees per blob: g, m sub_blob_s per intensity layer or g sub_blob_ per angle layer
+    fork_ # refs down sub_blob derivation trees, 1|2: g,m sub_blob_s / intensity layer | g sub_blob_ / angle layer
         [
          layer_ [(Dert, sub_blob_)]  # alternating g (even) | a (odd) layers across derivation tree
         ]
@@ -57,7 +57,19 @@ Current filters are represented in forks if tree reorder, else redefined at each
 DERT_PARAMS = "I", "G", "Dy", "Dx"
 gDERT_PARAMS = DERT_PARAMS + ("iDy", "iDx", "M")
 aDERT_PARAMS = gDERT_PARAMS + ("A", "Ga", "Dyay", "Dyax", "Dxay", "Dxax")
+'''
+Angle is external | positional parameter of gradient, with lower predictive value than magnitude of gradient.
+Thus, angle computation is selective to high-gradient blobs: angle layer is below gradient computation layer. 
+Moreover, angle is computed only for angle comparison, which has lower value than gradient comparison.
+So, angle computation layer is also below gradient der+ | rng+ comparison layer. 
 
+Hence, dert has up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+    if g+ fork: dert = i, g, dy, dx 
+    if fig: dert += idy, idx, m  # i is higher-layer gradient, idy and idx are preserved to compute its angle
+       if nI == 7: += a, ga, day, dax
+       elif nI==(4,5): += a, ga, day, dax = 0
+       else base dert init? 
+'''
 P_PARAMS = "L", "x0", "dert_", "root_", "fork_", "y", "sign"
 SEG_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "root_", "fork_", "sign"
 
@@ -86,9 +98,9 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
 
         if G > AveB + AveC:  # +G > clustering cost (variable cluster size) + eval cost (fixed layer rep)
 
-            if fig and nI == 0: # rdn sub-clustering by g & m, eval comp_a|g per gsub_blob, comp_i per msub_blob
+            if fig and nI == 0: # rdn sub-clustering by g and m, eval comp_a|g per g_sub_blob, comp_i per m_sub_blob
                                 # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0
-                                # or low alt value?
+                                # or g+ only, low m | union value?
                 if G > M + I:
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # g+ prior, redundant r+ eval:
                     if M + I > AveB + AveC:
@@ -107,19 +119,6 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
 
     return dert__
 
-'''
-Angle is external or positional parameter of gradient, it has lower predictive value than magnitude of gradient.
-Thus, angle computation is selective to high-gradient blobs and angle layer is below gradient computation layer. 
-Moreover, angle computation is only needed for angle comparison, which has lower value than gradient comparison.
-So, angle computation layer is also below gradient der+ | rng+ comparison layer.
-Which means that dert should have up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
- 
-    if g+ fork: dert = i, g, dy, dx 
-    if fig: dert += idy, idx, m  # i is higher-layer gradient, idy and idx are preserved to compute its angle
-       if nI == 7: += a, ga, day, dax
-       elif nI==(4,5): += a, ga, day, dax = 0
-       else base dert init? 
-'''
 
 def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -> sub_blob_, next intra_fork eval
 
