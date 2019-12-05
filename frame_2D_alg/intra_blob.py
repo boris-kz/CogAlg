@@ -84,8 +84,10 @@ def intra_fork(blob, Ave_clust_eval, Ave_blob, Ave, rng, nI, fig, fa):  # fig: i
 
     dert__ = comp_v(blob['dert__'], rng, nI)  # dert: i, g, ?m, dy, dx; or dert_a: i, g, ?m, dy, dx, a, ga, ?ma, day, dax
 
-    if nI == (3,4) or 5: # a+ | ra+ comp forks
-        g_crit = 6; m_crit = 7  # Ga, Ma
+    if nI in (2, 4): # a+ | ra+ comp forks with m
+        g_crit = 6; m_crit = 7 # Ga, Ma
+    elif nI in (3, 5): # a+ | ra+ comp forks with m
+        g_crit = 7; m_crit = 8 # Ga, Ma
     else:           # g+ | r+ | ga+ comp forks
         g_crit = 1; m_crit = 2  # G, M
 

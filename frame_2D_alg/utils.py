@@ -12,9 +12,7 @@ from itertools import (
 )
 
 import numpy as np
-
 from imageio import imsave
-from PIL import Image
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -44,12 +42,10 @@ def flatten(listOfLists):
 def imread(path):
     '''
     Read an image from file as gray-scale.
-
     Parameters
     ----------
     path : str
         Path of image for reading.
-
     Return
     ------
     out : ndarray
@@ -63,7 +59,6 @@ def imread(path):
 def imwrite(path, image, extension='.bmp'):
     '''
     Output into an image file.
-
     Parameters
     ----------
     path : str
@@ -82,12 +77,10 @@ def imwrite(path, image, extension='.bmp'):
 def slice_to_box(slice):
     """
     Convert slice object to tuple of bounding box.
-
     Parameters
     ----------
     slice : tuple
         A tuple containing slice(start, stop, step) objects.
-
     Return
     ------
     box : tuple
@@ -104,14 +97,12 @@ def localize(box, global_box):
     Compute local coordinates for given bounding box.
     Used for overwriting map of parent structure with
     maps of sub-structure, or other similar purposes.
-
     Parameters
     ----------
     box : tuple
         Bounding box need to be localized.
     global_box : tuple
         Reference to which box is localized.
-
     Return
     ------
     out : tuple
@@ -134,14 +125,12 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     '''
     Given a blob and a traversing path, map image of all sub-blobs
     of a specific branch belonging to that blob into a numpy array.
-
     Parameters
     ----------
     blob : Blob
         Contain all mapped sub-blobs.
     traverse_path : list
         Determine the derivation sequence of target sub-blobs.
-
     Return
     ------
     out : ndarray
@@ -155,11 +144,10 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
 def map_frame(frame, raw=False):
     '''
     Map partitioned blobs into a 2D array.
-
     Parameters
     ----------
     frame : dict
-        Contain blobs that needs to be mapped.
+        Contains blobs that need to be mapped.
     raw : bool
         Draw raw values instead of boolean.
     Return
@@ -185,11 +173,8 @@ def draw_blob(blob, raw=False):
     blob_img = blank_image(blob['box'])
 
     for seg in blob['seg_']:
-
         sub_box = segment_box(seg)
-
         seg_map = draw_segment(seg, sub_box, blob['sign'], raw)
-
         over_draw(blob_img, seg_map, sub_box, blob['box'])
 
     return blob_img
@@ -198,7 +183,6 @@ def draw_segment(seg, box, s, raw=False):
     '''Map a single segment of a blob into an image.'''
 
     seg_img = blank_image(box)
-
     y0, yn, x0, xn = box
 
     for y, P in enumerate(seg['Py_'], start= seg['y0'] - y0):
