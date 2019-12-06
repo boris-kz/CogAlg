@@ -3,8 +3,7 @@ from collections import deque, defaultdict
 import numpy as np
 import numpy.ma as ma
 import cv2
-from utils import imread
-import argparse
+
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
@@ -34,22 +33,13 @@ import argparse
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
-
-# Constants
-
-MAX_G = 256  # 721.2489168102785 without normalization.
-
-# Adjustable parameters
-# image_path = "./../images/raccoon_eye.jpg"
+# Constants: MAX_G = 256  # 721.2489168102785 without normalization.
+# Adjustable parameters:
 
 kwidth = 3  # input-centered, low resolution kernel: frame | blob shrink by 2 pixels,
 # kwidth = 2  # cross-centered, grid shift, frame shrink by 1 pixel: no deriv overlap, 1/4 vs 0 chance of boundary pixel in kernel?
-# kwidth = 2  # quadrant: g = ((dx + dy) * .705 + d_diag) / 2, no norm? signed -> gPs? + orthogonal quadrants for full dual rep?
-# no i res decrement / overlap, but asymmetric, no i/ ders co-location?
+# kwidth = 2 quadrant: g = ((dx + dy) * .705 + d_diag) / 2, signed-> gPs? no i res-, ders co-location, + orthogonal quadrant for full rep?
 ave = 50
-rng = int(kwidth == 3)
-DEBUG = True
-assert kwidth in (2, 3)
 
 # -----------------------------------------------------------------------------
 # Functions
@@ -75,22 +65,21 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     return frame  # frame of blobs
 
 
-def comp_pixel(image):
-    # cross-correlation within image: comparison of central pixel to rim pixels in 3x3 kernel, or diagonally in 2x2 kernel
+def comp_pixel(image):  # cross-correlation within image with 3x3 or 2x2 kernel
 
-    if kwidth == 2:
-        # Cross-compare four adjacent pixels diagonally:
+    if kwidth == 2:  # cross-compare four adjacent pixels diagonally:
+
         dy__ = (image[1:, 1:] - image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
         dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
-        # Sum pixel values:
+        # sum pixel values:
         p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]) * 0.25
 
-    else:   # kwidth == 3, current default option
+    else:  # kwidth == 3, compare central pixel to 8 rim pixels, current default option
+
         ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
         xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
 
-        # Compare by subtracting centered image from translated image:
-        d___ = np.array(list(
+        d___ = np.array(list(  # subtract centered image from translated image:
             map(lambda trans_slices: image[trans_slices] - image[1:-1, 1:-1],
                 [
                     (slice(None, -2), slice(None, -2)),
@@ -111,12 +100,12 @@ def comp_pixel(image):
 
         p__ = image[1:-1, 1:-1]
 
-    # Compute gradients per kernel:
-    g__ = np.hypot(dy__, dx__) * 0.354801226089485  # to convert g values into 0-255 range
+    g__ = np.hypot(dy__, dx__) * 0.354801226089485  # compute gradients per kernel, converted to 0-255 range
 
     return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
-''' Parameterized connectivity clustering functions below:
+''' 
+Parameterized connectivity clustering functions below:
 
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
@@ -127,10 +116,10 @@ def comp_pixel(image):
   
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert is a tuple of dert params summed within composite structure: P, segment, blob, 
-plus dimensions and coordinates of that structure '''
+plus dimensions and coordinates of that structure 
+'''
 
-
-def form_P_(dert_):  # horizontal clustering and summation of dert params into P params
+def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
     # P is contiguous segment in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
@@ -141,11 +130,12 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     for x, (i, g, dy, dx) in enumerate(dert_[1:], start=1):
         vg = g - ave
         s = vg > 0
-        if s != _s:  # P is terminated and new P is initialized
+        if s != _s:
+            # terminate and pack P:
             P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_[x0:x0+L], sign=_s)
             P_.append(P)
+            # initialize new P:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
-
         # accumulate P params:
         I += i
         G += vg  # no M += m: computed only within negative vg blobs
@@ -155,7 +145,7 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
         _s = s  # prior sign
 
     P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_[x0:x0 + L], sign=_s)
-    P_.append(P)  # last P in row
+    P_.append(P)  # terminate last P in a row
     return P_
 
 
@@ -301,17 +291,16 @@ def terminate_blob(blob, last_seg, frame):
             x_stop = x_start + P['L']
             mask[y, x_start:x_stop] = False
     dert__ = frame['dert__'][:, y0:yn, x0:xn]
-    dert__ = dert__.mask[:]  # dert__ box, includes mask? ! dert__.mask[:] = mask?
+    dert__.mask[:] = mask  # default mask is all 0s
 
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 map = ~mask, # to compute overlap in comp_blob
                 crit = 1,  # clustering criterion is g
                 rng = 1,   # if 3x3 kernel
-                dert__ = dert__,
+                dert__ = dert__,  # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
                 root_fork = frame,
-                fork_ = defaultdict(dict),  # contains forks ( sub-blobs
-                # deprecated params, replaced by dert__ and box: slices=(Ellipsis, slice(y0, yn), slice(x0, xn)), not mask?
+                fork_ = defaultdict(dict),  # or []? contains forks ( sub-blobs
                 )
     frame.update(I=frame['I'] + blob['Dert']['I'],
                  G=frame['G'] + blob['Dert']['G'],
@@ -331,14 +320,14 @@ def accum_Dert(Dert : dict, **params) -> None:
 
 if __name__ == '__main__':
 
+    import argparse
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     arguments = vars(argument_parser.parse_args())
     image = cv2.imread(arguments['image'], 0).astype(int)
-    # image = imread(image_path).astype(int)
-
     start_time = time()
     frame_of_blobs = image_to_blobs(image)
+
     '''
     from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.?
     
@@ -358,10 +347,8 @@ if __name__ == '__main__':
     '''
 
     # DEBUG -------------------------------------------------------------------
-    if DEBUG:
-        from utils import draw_blob, map_frame
-        draw_blob("./../visualization/images/blobs", map_frame(frame_of_blobs))
-
+    from utils import map_frame
+    cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
     # END DEBUG ---------------------------------------------------------------
 
     end_time = time() - start_time

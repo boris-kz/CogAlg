@@ -1,32 +1,15 @@
-"""
-Provide utilities for all kinds of operations.
-Categories:
-- General purpose functions
-- Blob slicing
-- Blob drawing
-- Comparison related
-"""
-
-from itertools import (
-    repeat, accumulate, chain, starmap, tee
-)
-
+from itertools import (repeat, accumulate, chain, starmap, tee)
 import numpy as np
 from imageio import imsave
-
 import cv2
-import argparse
 
+import argparse
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 
-Image = cv2.imread(arguments['image'], 0).astype(int)
-# vs. from PIL import Image
-
 # -----------------------------------------------------------------------------
 # Constants
-
 transparent_val = 128 # Pixel at this value are considered transparent
 
 # -----------------------------------------------------------------------------
@@ -48,38 +31,6 @@ def pairwise(iterable):
 def flatten(listOfLists):
     "Flatten one level of nesting"
     return chain.from_iterable(listOfLists)
-
-def imread(path):
-    '''
-    Read an image from file as gray-scale.
-    Parameters
-    ----------
-    path : str
-        Path of image for reading.
-    Return
-    ------
-    out : ndarray
-        A  2D array of gray-scaled pixels.
-    '''
-
-    pil_image = Image.open(path).convert('L')
-    image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
-    return image
-
-def imwrite(path, image, extension='.bmp'):
-    '''
-    Output into an image file.
-    Parameters
-    ----------
-    path : str
-        String contain path for saving image file.
-    image : ndarray
-        Array of image's pixels.
-    extension : str
-        Determine file-type of ouputed image.
-    '''
-
-    imsave(path + extension, image.astype('uint8'))
 
 # -----------------------------------------------------------------------------
 # Blob slicing
@@ -293,3 +244,30 @@ def kernel(rng):
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------
+'''
+def imread(path):
+    # Read an image from file as gray-scale.
+    # path : str
+    # Path of image for reading.
+    # Return
+    # out : ndarray  # 2D array of gray-scaled pixels.
+
+    pil_image = Image.open(path).convert('L')
+    image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
+    return image
+
+def imwrite(path, image, extension='.bmp'):
+    # Output into an image file.
+    # path : str
+    # String contain path for saving image file.
+    # image : ndarray  # Array of image's pixels.
+    # extension : str  # Determine file-type of ouputed image.
+
+    imsave(path + extension, image.astype('uint8'))
+    
+from PIL import Image
+from utils import imread
+
+image_path = "./../images/raccoon.jpg"
+image = cv2.imread(image_path).astype(int)
+'''
