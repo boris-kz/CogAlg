@@ -1,3 +1,4 @@
+# libraries
 import cv2
 import argparse
 from time import time
@@ -133,6 +134,7 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
+## main ##
 
 argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images/raccoon_eye.jpg')
