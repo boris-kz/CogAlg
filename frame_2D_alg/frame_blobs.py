@@ -209,7 +209,7 @@ def form_seg_(y, P_, frame):
         xn = x0 + L     # next-P x0
         if not fork_:   # new_seg is initialized with initialized blob
             blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0),
-                        box=[y, x0, xn],  # + map = []?
+                        box=[y, x0, xn],
                         seg_=[],
                         sign=s,
                         open_segments=1)
@@ -325,9 +325,9 @@ if __name__ == '__main__':
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     arguments = vars(argument_parser.parse_args())
     image = cv2.imread(arguments['image'], 0).astype(int)
+
     start_time = time()
     frame_of_blobs = image_to_blobs(image)
-
     '''
     from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.?
     
@@ -336,11 +336,11 @@ if __name__ == '__main__':
     
     for blob in frame_of_blobs['blob_']:  # evaluate recursive sub-clustering in each blob, via cluster_eval -> intra_fork
 
-        if blob['Dert']['G'] > aveB:  # +G blob, exclusive g- sub-clustering for der+ eval
-        cluster_eval(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # cluster by g
+        if blob['Dert']['G'] > aveB:  # +G blob directly calls intra_fork(comp_g), no sub-clustering
+        intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
 
-        elif -blob['Dert']['G'] > aveB: # -G blob, exclusive m- sub-clustering for rng+ eval
-        cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by m, defined in form_P
+        elif -blob['Dert']['G'] > aveB: # -G blob, sub-clustering by -vg for rng+ eval
+        cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, idiomatic crit=2: not index 
         
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?

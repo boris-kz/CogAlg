@@ -63,9 +63,9 @@ Thus, angle computation is selective to high-gradient blobs: angle layer is belo
 Moreover, angle is computed only for angle comparison, which has lower value than gradient comparison.
 So, angle computation layer is also below gradient der+ | rng+ comparison layer. 
 
-Hence, dert has up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+Hence, dert has up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)): lLe params summed in 2x2 kernel?
     if g+ fork: dert = i, g, dy, dx 
-    if fig: dert += idy, idx, m  # i is higher-layer gradient, idy and idx are preserved to compute its angle
+    if fig: dert += idy, idx, m  # i is higher-layer gradient, with idy and idx to compute angle, min as match
        if nI == 7: += a, ga, day, dax
        elif nI==(4,5): += a, ga, day, dax = 0
        else base dert init? 
@@ -89,7 +89,7 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
 
     dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
 
-    if nI == 0 or 1: crit = 1  # primary clustering by g|ga, secondary by crit = i+m | ig:
+    if nI == 0 or 1: crit = 1  # primary clustering by g|ga, secondary clustering by crit = i+m below
     else: crit = 8  # a+| ra+
     sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)
 
@@ -99,8 +99,7 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
         if G > AveB + AveC:  # +G > clustering cost (variable cluster size) + eval cost (fixed layer rep)
 
             if fig and nI == 0: # rdn sub-clustering by g and m, eval comp_a|g per g_sub_blob, comp_i per m_sub_blob
-                                # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0
-                                # or g+ only, low m | union value?
+                                # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0;   or g+ only, low m value?
                 if G > M + I:
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # g+ prior, redundant r+ eval:
                     if M + I > AveB + AveC:
@@ -172,16 +171,17 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
 
 
 def form_P__(dert__, Ave, crit, fig, fsub, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
-
-    # fsub: sub-clustering,
+    # fsub: sub-clustering?
 
     if fig:  # i = ig, crit = 0 + 6: r+ if fig, | 1: g+|r+, | 8: ra+, vs. nI = 0: i, | 1: g, | 7: a, | 8: ga
-
         if crit == 0 or 1: param_keys = gP_PARAM_KEYS  # nI = i -> r+, | g -> g+
         else: param_keys = aP_PARAM_KEYS  # crit = 8?  nI = (4,5)-> a+ | 7 -> ra+ | 8-> ga+
     else: param_keys = P_PARAM_KEYS
 
-    crit__ = dert__[crit, :, :]  # extract crit__ from dert__ (both are 2D arrays)
+    if crit == 2:
+        crit__ = Ave - dert__[1, :, :]  # crit for initial rng+ is -vg: inverse m, not i + m
+    else:
+        crit__ = dert__[crit, :, :]  # extract crit__ from dert__ (both are 2D arrays)
     if crit == 0 or 8:  # r+ | a+ | ra+ forks
         if fig:
             crit__[:] += dert__[6, :, :]  # m = ig + min?
