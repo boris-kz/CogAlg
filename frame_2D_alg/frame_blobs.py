@@ -13,7 +13,7 @@ import cv2
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of blob
-    2Le, line y-2: scan_P_(P, hP) -> hP, roots: up-connections count, fork_: down-connections list, for each blob segment
+    2Le, line y-2: scan_P_(P, hP) -> hP, up_forks connections count, down_fork_ list, for each blob segment
     3Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     4Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively
 
@@ -36,12 +36,12 @@ import cv2
 # Constants: MAX_G = 256  # 721.2489168102785 without normalization.
 # Adjustable parameters:
 
-kwidth = 3  # input-centered, low resolution kernel: frame | blob shrink by 2 pixels,
-# kwidth = 2  # cross-centered, grid shift, frame shrink by 1 pixel: no deriv overlap, 1/4 vs 0 chance of boundary pixel in kernel?
+kwidth = 3  # input-centered, low resolution kernel: frame | blob shrink by 2 pixels per row,
+# kwidth = 2  # co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 chance of boundary pixel in kernel?
 # kwidth = 2 quadrant: g = ((dx + dy) * .705 + d_diag) / 2, signed-> gPs? no i res-, ders co-location, + orthogonal quadrant for full rep?
 ave = 50
 
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
@@ -115,8 +115,7 @@ Parameterized connectivity clustering functions below:
   then combines terminated blob into whole-frame representation.
   
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
-Dert is a tuple of dert params summed within composite structure: P, segment, blob, 
-plus dimensions and coordinates of that structure 
+Dert is params of a composite structure (P, seg, blob): summed dert params plus dimensions and coordinates 
 '''
 
 def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
@@ -340,7 +339,7 @@ if __name__ == '__main__':
         intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
 
         elif -blob['Dert']['G'] > aveB: # -G blob, sub-clustering by -vg for rng+ eval
-        cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, idiomatic crit=2: not index 
+        cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, special case of crit=2 
         
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?

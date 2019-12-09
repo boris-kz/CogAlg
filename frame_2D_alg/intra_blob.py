@@ -43,7 +43,7 @@ from utils import pairwise, flatten
 
 # -----------------------------------------------------------------------------
 # Filters:
-ave  = 20  # fixed cost per dert, from average g|m, reflects blob definition cost, may be different for comp_a?
+ave  = 50  # fixed cost per dert, from average g|m, reflects blob definition cost, may be different for comp_a?
 aveB = 10000  # fixed cost per blob: clustering + representation?
 aveN = 10  # ave_n_sub_blobs: fixed cost ratio of root_blob / blob: add sub_blobs, adjusted by actual len sub_blob_
 aveC = 1000  # ave_clust_eval: cost of eval in cluster_eval,    total cluster_eval cost = Ave_blob + ave_clust_eval
@@ -85,12 +85,13 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 # Functions, ALL WORK-IN-PROGRESS:
 
 
-def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: r+ 0, g+ 1, a+ (4,5), ra+ 7, ga+ 8
+def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # a recursive version of frame_blobs
 
-    dert__ = comp_v(blob['dert__'], rng, nI)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+    dert__ = comp_v(blob['dert__'], nI, rng)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+    # nI: new input, index of compared param in dert per fork: 0 if r+, 1 if g+, (4,5) if a+, 7 if ra+, 8 if ga+
 
-    if nI == 0 or 1: crit = 1  # primary clustering by g|ga, secondary clustering by crit = i+m below
-    else: crit = 8  # a+| ra+
+    if nI in (0, 1): crit = 1  # primary clustering by g | ga, secondary clustering by crit = i+m below
+    else: crit = 8   # a+ or ra+ fork
     sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)
 
     for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng is incremented in cluster_eval
@@ -108,13 +109,14 @@ def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # comparand nI: 
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 0, fig, fa)   # r+ prior, redundant g+ eval:
                     if G > AveB + AveC:
                        cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # parallel cluster by g
-                       # eval intersections of positive g+ and r+ blobs, tertiary rdn?
 
             else:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
                 cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, crit, fig, fa)  # fa=0? eval comp_g only
 
         elif -G > AveB + AveC:  # exclusive mfork eval in neg_g blobs, m and M defined in comp_P
             cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, crit, fig, fa)  # fa=0, rp+ | ra+ eval by -crit
+
+        # also evaluate intersections of positive g+ and r+ blobs, tertiary rdn?
 
     return dert__
 
@@ -132,7 +134,7 @@ def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -
 
         else:  # comp_i evaluation per g|m-defined sub_blob, crit-defined i, Ave, Ave_blob: rdn-adjusted in intra_fork
 
-            if crit == 1 or 8: rng = irng*2 + 1  # val = est match of i= g|ga at rng*2+1, same as rng+ if rng==0
+            if crit in (1, 8): rng = irng*2 + 1  # val = est match of i= g|ga at rng*2+1, same as rng+ if rng==0
             else: rng = irng + 1  # r+| ra+ comp val = est match of i= i | a at rng+1, irng was redefined in a+ fork?
 
             if crit == 0 and fig: Crit = sub_blob['Dert'][0 + 6]  # r+ fork
@@ -148,14 +150,14 @@ def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -
 
 
 def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering criterion
+
     # if g+: g, dy, dx = 0; if fig: += idy, idx, m; if nI==7: += a, ga, day, dax; elif nI==(4,5): += a, ga, day, dax = 0; else init dert
 
     if fa:  # comp angle of g | ga, then eval ga+ | ra+ forks
         blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[])
-        # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax
-        # bPARAMS, no iDy, iDx?
+        # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax;  # bPARAMS, no iDy, iDx?
     else:
-        blob['fork_'][0 if crit == 1 or 8 else 1] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
+        blob['fork_'][0 if crit in (1, 8) else 1] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
         # initialize root_fork at ['fork_'][0|1]: only two forks per blob, then possibly two per +g_sub_blob
 
     P__ = form_P__(blob['dert__'], Ave, crit, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
@@ -170,21 +172,22 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
 #---------------------------------------------------------------------------------------------------------------------------------------
 
 
-def form_P__(dert__, Ave, crit, fig, fsub, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
-    # fsub: sub-clustering?
+def form_P__(dert__, Ave, crit, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
-    if fig:  # i = ig, crit = 0 + 6: r+ if fig, | 1: g+|r+, | 8: ra+, vs. nI = 0: i, | 1: g, | 7: a, | 8: ga
+    # crit = 1 if g+, 2 if rp+|ra+, 3 if rg+, 8 if ga+?  vs. nI = 0: i, | 1: g, | 7: a, | 8: ga;  fsub if sub-clustering?
+
+    if  fig:  # no need, encoded in crit?
         if crit == 0 or 1: param_keys = gP_PARAM_KEYS  # nI = i -> r+, | g -> g+
         else: param_keys = aP_PARAM_KEYS  # crit = 8?  nI = (4,5)-> a+ | 7 -> ra+ | 8-> ga+
     else: param_keys = P_PARAM_KEYS
 
-    if crit == 2:
-        crit__ = Ave - dert__[1, :, :]  # crit for initial rng+ is -vg: inverse m, not i + m
+    if  crit == 2:  # crit for rp+ | ra+: comparison of intensity or angle over incremented range
+        crit__ = Ave - dert__[1, :, :]  # inverted -vg (not ig), accumulated over comp range
+        crit = 0  # for conversion to nI?
     else:
         crit__ = dert__[crit, :, :]  # extract crit__ from dert__ (both are 2D arrays)
-    if crit == 0 or 8:  # r+ | a+ | ra+ forks
-        if fig:
-            crit__[:] += dert__[6, :, :]  # m = ig + min?
+    if  crit in (0, 8):  # r+ | a+ | ra+ forks
+        crit__[:] += dert__[6, :, :]  # m = i + min, or for all i types, with inverted vg for p and a?
     elif crit == 1:
             crit__ = ~crit__[:]  # and if  m = -g, for r+ only
 
@@ -222,8 +225,7 @@ def form_P__(dert__, Ave, crit, fig, fsub, x0=0, y0=0):  # cluster dert__ into P
     return P__
 
 
-def scan_P__(P__):
-    """Detect forks and roots per P."""
+def scan_P__(P__):  # Detect downward forks and upward roots per P
 
     for _P_, P_ in pairwise(P__): # Iterate through pairs of lines.
         _itP_, itP_ = iter(_P_), iter(P_) # Convert to iterators.
@@ -234,8 +236,8 @@ def scan_P__(P__):
         while True:
             isleft, olp = comp_edge(_P, P) # Check for 4 different cases.
             if olp and _P['sign'] == P['sign']:
-                _P['root_'].append(P)
-                P['fork_'].append(_P)
+                _P['root_'].append(P)  # down-forks
+                P['fork_'].append(_P)  # up-forks
             try: # Check for stopping:
                 _P, P = (next(_itP_), P) if isleft else (_P, next(itP_))
             except StopIteration: # No more fork-root pair.
