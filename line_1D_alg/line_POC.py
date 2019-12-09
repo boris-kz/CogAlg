@@ -108,6 +108,7 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identical name of its elements
     frame_of_patterns_ = []  # output frame of mPs: match patterns, and dPs: difference patterns
 
+    ## question: why start with 2nd pixel (after offset) but not the first?
     for y in range(ini_y +1, Y):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []; P = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, ders_ # initialized at each line
@@ -150,7 +151,9 @@ image = cv2.imread(arguments['image'], 0).astype(int)
 
 # pattern filters: eventually from higher-level feedback, initialized here as constants:
 
+
 ave_m = 10  # min dm for positive dmP
+## question: why 20? Any explanation or theory behind this? 
 ave_d = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_M = 127  # min M for initial incremental-range comparison(t_)
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
