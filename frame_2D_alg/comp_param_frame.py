@@ -10,7 +10,7 @@ import numpy.ma as ma
 
 import frame_blobs
 
-from comp_v import comp_v
+from comp_param import comp_v
 from utils import imread, imwrite
 from intra_blob import ave
 

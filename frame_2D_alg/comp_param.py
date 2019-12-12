@@ -101,7 +101,7 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_v(dert__, nI, rng):
+def comp_param(dert__, nI, rng):
     """
     Compare g or a over range = rng
     Parameters

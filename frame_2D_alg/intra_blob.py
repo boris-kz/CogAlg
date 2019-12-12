@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from itertools import groupby, starmap
 import numpy as np
 import numpy.ma as ma
-from comp_v import comp_v
+from comp_param import comp_param
 from utils import pairwise, flatten
 from functools import reduce
 '''
@@ -30,7 +30,7 @@ from functools import reduce
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert__, # comp_v inputs
        
-    segment_[ seg_params, Py_ [(P_params, dert_)]], # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))
+    segment_[ seg_params, Py_ [(P_params, dert_)]],
     # references down blob formation tree in vertical (horizontal) order, accumulating Dert params
     
     fork_ # refs down sub_blob derivation trees, 1|2: g,m sub_blob_s / intensity layer | g sub_blob_ / angle layer
@@ -39,22 +39,20 @@ from functools import reduce
         ]
         # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob
 
-    Angle is a positional parameter of gradient, with lower predictive value than magnitude of gradient.
-    Thus, angle computation is selective to high-gradient blobs: angle layer is below gradient computation layer. 
-    Moreover, angle is computed only for angle comparison, which has lower value than gradient comparison.
-    So, angle computation layer is also below gradient comparison layer. Each deeper layer is conditional: 
 
-    comp_pixel -> i, g, dy, dx
-    ? comp_gradient -> ig, g, dy, dx, idy, idx, m
-    ? form_and_comp_angle -> ig, g, dy, dx, idy, idx, m, a, ga, day, dax  
-    # angle a of ig is computed from idy, idx; if 2x2 kernel: lower-layer params are summed and averaged?
-
+    Angle is a direction of gradient, its predictive value is proportional to the magnitude of gradient.
+    Thus, angle computation is selective to high-gradient blobs: angle blobs layer is below gradient blobs layer. 
+    Angle blobs are defined by the sign of angle gradient deviation, to be computed in angle comparison.
+    Since angle has lower value than gradient, its comparison should be secondary to gradient comparison:
+    angle form_and_comparison -> ga_blob layer is also below gradient comparison -> gg_blob layer. 
+    
+    Deep blob layers are conditional: 
+    comp pixel | g | ga -> i, g, dy, dx  # i fork 
+    ? comp_g -> i, g, dy, dx, idy, idx, m  # i is gradient of idy, idx, m = min i
+    ? form_and_comp_angle -> i, g, dy, dx, idy, idx, m, a, ga, day, dax  # angle a of ig is computed from idy, idx 
+        
     Hence, dert has up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))  
-    initial dert = i, g, dy, dx 
-    if fig: dert += idy, idx, m  # i is higher-layer gradient, with idy and idx to compute angle, min as match
-       if nI == 7: += a, ga, day, dax
-       elif nI==(4,5): += a, ga, day, dax = 0
-       else base dert init? 
+    if 2x2 kernel: lower-layer params are summed and averaged?
 '''
 # constants:
 
@@ -89,11 +87,11 @@ Current filters are represented in forks if tree reorder, else redefined at each
 
 def intra_fork(blob, AveF, AveC, AveB, Ave, rng, nI, fig, fa):  # a recursive version of frame_blobs
 
-    dert__ = comp_v(blob['dert__'], nI, rng)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
-    # nI (new input): index of compared param in dert per fork: 0 if r+, 1 if g+, (4,5) if a+, 7 if ra+, 8 if ga+
+    dert__ = comp_param(blob['dert__'], nI, rng)  # dert = i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax)):
+    # fork' new input nI: index of comparand in dert: 0 if r+, 1 if g+, (4,5) if a+, 7 if ra+, 8 if ga+
 
-    if nI in (0, 1): crit = 1  # primary clustering by g | ga, secondary clustering by crit = i+m below
-    else: crit = 8   # a+ or ra+ fork
+    if nI in (0, 1): crit = 1  #  r+ or g+ fork: primary clustering by g
+    else: crit = 8       # a+ or ra+ fork: primary clustering by ga
     sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)
 
     for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng is incremented in cluster_eval
@@ -151,11 +149,9 @@ def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -
                 intra_fork(sub_blob, AveF, AveC, AveB, Ave, 7, rng, fig, fa)  # fa=0, comp_i fork is ra+: nI=7?
 
 
-def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering criterion
+def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, fa: flag comp angle, crit: clustering criterion
 
-    # g+: g, dy, dx = 0; if fig: += idy, idx, m; if nI==7: += a, ga, day, dax; elif nI==(4,5): += a, ga, day, dax = 0; else init dert
-    # fa: flag for comp angle fork, then ga+, ra+ forks eval:
-    if fa:
+    if fa:  # cluster by ga from comp angle
         blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[])
         # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax;  # bPARAMS, no iDy, iDx?
     else:
@@ -174,10 +170,13 @@ def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, crit: clustering crit
 #---------------------------------------------------------------------------------------------------------------------------------------
 
 def form_P__(dert__, Ave, crit, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
-
-    # crit = 1: g+, 2: rp+|ra+, 3: rg+, 8: ga+?  vs. nI = 0: i | 1: g | 7: a | 8: ga; fsub if sub-clustering?
-
-    if  fig:  # or replaced by crit?
+    '''
+    crit = 1: g+, 2: rp+ | ra+, 3: rg+, 8: ga+; vs nI: = 0: i | 1: g | 7: a | 8: ga; fsub if sub-clustering?
+    input dert: i, g=0, dy=0, dx=0, if fig: += idy, idx, m;
+    if nI == 7: += a, ga, day, dax  # cross-comp angle over incremented range
+    elif nI==(4,5): += a=0, ga=0, day=0, dax=0: compute angle from idy and idx, cross-compare a within blob
+    '''
+    if  fig:  # replace by crit?
         if crit in (0, 1): param_keys = gP_PARAM_KEYS  # r+ | g+
         else: param_keys = aP_PARAM_KEYS  # crit = 8?  nI = (4,5)-> a+ | 7 -> ra+ | 8-> ga+
     else: param_keys = P_PARAM_KEYS

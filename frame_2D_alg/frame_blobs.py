@@ -65,7 +65,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
     return frame  # frame of blobs
 
 
-def comp_pixel(image):  # cross-correlation within image with 3x3 or 2x2 kernel
+def comp_pixel(image):  # 3x3 or 2x2 pixel cross-correlation within image
 
     if kwidth == 2:  # cross-compare four adjacent pixels diagonally:
 
@@ -76,8 +76,8 @@ def comp_pixel(image):  # cross-correlation within image with 3x3 or 2x2 kernel
 
     else:  # kwidth == 3, compare central pixel to 8 rim pixels, current default option
 
-        ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])  # these coeffs are equivalent to Sobel operator
-        xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
+        ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])  # this is equivalent to Sobel operator, but
+        xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])  # coefs scale diagonal vs. orthogonal pixels
 
         d___ = np.array(list(  # subtract centered image from translated image:
             map(lambda trans_slices: image[trans_slices] - image[1:-1, 1:-1],
@@ -94,7 +94,8 @@ def comp_pixel(image):  # cross-correlation within image with 3x3 or 2x2 kernel
             )
         )).swapaxes(0, 2).swapaxes(0, 1)
 
-        # Decompose differences:
+        # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
+
         dy__ = (d___ * ycoef).sum(axis=2)
         dx__ = (d___ * xcoef).sum(axis=2)
 
@@ -115,7 +116,7 @@ Parameterized connectivity clustering functions below:
   then combines terminated blob into whole-frame representation.
   
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
-Dert is params of a composite structure (P, seg, blob): summed dert params plus dimensions and coordinates 
+Dert is params of a composite structure (P, seg, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
 def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
@@ -344,6 +345,7 @@ if __name__ == '__main__':
     
         if blob['Dert']['G'] > aveB:  # +G blob directly calls intra_fork(comp_g), no immediate sub-clustering
             intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
+        
         elif -blob['Dert']['G'] > aveB: # -G blob, sub-clustering by -vg for rng+ eval
             cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, idiomatic crit=2: not index 
 
