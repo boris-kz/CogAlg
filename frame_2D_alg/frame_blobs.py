@@ -138,7 +138,7 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
         # accumulate P params:
         I += i
-        G += vg  # no M += m: computed only within negative vg blobs
+        G += vg  # M += m only within negative vg blobs
         Dy += dy
         Dx += dx
         L += 1
@@ -149,29 +149,34 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     return P_
 
 
-def scan_P_(P_, seg_, frame):  # integrate x overlaps (up_forks) between same-sign Ps and _Ps into blob segments
+def scan_P_(P_, seg_, frame):  # merge P into same-sign blob segments that contain higher-row _P with x-overlap
+    """
+    Each P in P_ scans higher-row _Ps (packed in seg_) left-to-right, until P.x0 >= _P.xn: no more x-overlap.
+    Then scanning stops and P is packed into its up_fork segs or initializes a new seg.
+    This x-overlap evaluation is also done for each _P, removing those that won't overlap next P.
+    Segment that contains removed _P is packed in blob if its down_fork_cnt==0: no lower-row connections.
+    """
+    next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_seg_
 
-    new_P_ = deque()
-
-    if P_ and seg_:  # if both are not empty
-        P = P_.popleft()  # input-line Ps
-        seg = seg_.popleft()  # higher-line segments,
-        _P = seg['Py_'][-1]  # last element of each segment is higher-line P
-        up_fork_ = []
+    if P_ and seg_: # if both input row and higher row have any Ps / _P left
+        P = P_.popleft()      # load left-most (lowest-x) input-row P
+        seg = seg_.popleft()  # higher-row segments,
+        _P = seg['Py_'][-1]   # last element of each segment is higher-row P
+        up_fork_ = []         # list of same-sign x-overlapping _Ps per P
 
         while True:
-            x0 = P['x0']  # first x in P
+            x0 = P['x0']      # first x in P
             xn = x0 + P['L']  # first x in next P
-            _x0 = _P['x0']  # first x in _P
+            _x0 = _P['x0']    # first x in _P
             _xn = _x0 + _P['L']  # first x in next _P
 
             if (P['sign'] == seg['sign']
-                    and _x0 < xn and x0 < _xn):  # Test for sign match and x overlap.
+                    and _x0 < xn and x0 < _xn):  # test for sign match and x overlap between loaded P and _P
                 seg['down_fork_cnt'] += 1
-                up_fork_.append(seg)  # P-connected segments are buffered into up_fork_
+                up_fork_.append(seg)  # P-connected higher-row segments are buffered into up_fork_ per P
 
             if xn < _xn:  # _P overlaps next P in P_
-                new_P_.append((P, up_fork_))
+                next_P_.append((P, up_fork_))  # recycle _P for the next run of scan_P_
                 up_fork_ = []
                 if P_:
                     P = P_.popleft()  # load next P
@@ -186,49 +191,46 @@ def scan_P_(P_, seg_, frame):  # integrate x overlaps (up_forks) between same-si
                 if seg_:  # load next _P
                     seg = seg_.popleft()
                     _P = seg['Py_'][-1]
-                else:  # if no seg left: terminate loop
-                    new_P_.append((P, up_fork_))
+                else:  # no seg left: terminate loop
+                    next_P_.append((P, up_fork_))
                     break
 
-    while P_:  # terminate Ps and segs that continue at line's end
-        new_P_.append((P_.popleft(), []))  # no up_fork
+    while P_:  # terminate Ps and segs that continue at row's end
+        next_P_.append((P_.popleft(), []))  # no up_fork
     while seg_:
         form_blob(seg_.popleft(), frame)  # down_fork_cnt always == 0
 
-    return new_P_
+    return next_P_  # each element is P + up_fork_ refs
 
 
 def form_seg_(y, P_, frame):
-    """Convert or merge every P into blob segment, merge blobs."""
-    new_seg_ = deque()
+    """ Convert or merge every P into blob segment, merge blobs."""
+    next_seg_ = deque()
 
     while P_:
         P, up_fork_ = P_.popleft()
         s = P.pop('sign')
         I, G, Dy, Dx, L, x0, dert_ = P.values()
-        xn = x0 + L  # next-P x0
-        if not up_fork_:  # new_seg is initialized with initialized blob
-            blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0),
-                        box=[y, x0, xn],
-                        seg_=[],
-                        sign=s,
-                        open_segments=1)
-            new_seg = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
-            blob['seg_'].append(new_seg)
+        xn = x0 + L   # next-P x0
+        if not up_fork_:
+            # initialize blob segments for each input-row P that has no connections in higher row:
+            blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], seg_=[], sign=s, open_segments=1)
+            next_seg = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
+            blob['seg_'].append(next_seg)
         else:
             if len(up_fork_) == 1 and up_fork_[0]['down_fork_cnt'] == 1:  # P has one up_fork and that up_fork has one root
-                # P is merged into its up_fork segment:
-                new_seg = up_fork_[0]
-                accum_Dert(new_seg, I=I, G=G, Dy=Dy, Dx=Dx, S=L, Ly=1)
-                new_seg['Py_'].append(P)  # Py_: vertical buffer of Ps
-                new_seg['down_fork_cnt'] = 0  # reset down_fork_cnt
-                blob = new_seg['blob']
+                # merge P into up_fork segment:
+                next_seg = up_fork_[0]
+                accum_Dert(next_seg, I=I, G=G, Dy=Dy, Dx=Dx, S=L, Ly=1)
+                next_seg['Py_'].append(P)  # Py_: vertical buffer of Ps
+                next_seg['down_fork_cnt'] = 0  # reset down_fork_cnt
+                blob = next_seg['blob']
 
             else:  # if > 1 up_forks, or 1 up_fork that has > 1 down_fork_cnt:
                 blob = up_fork_[0]['blob']
-                # new_seg is initialized with up_fork blob:
-                new_seg = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
-                blob['seg_'].append(new_seg)  # segment is buffered into blob
+                # initialize next_seg with up_fork blob:
+                next_seg = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
+                blob['seg_'].append(next_seg)  # segment is buffered into blob
 
                 if len(up_fork_) > 1:  # merge blobs of all up_forks
                     if up_fork_[0]['down_fork_cnt'] == 1:  # up_fork is not terminated
@@ -256,9 +258,9 @@ def form_seg_(y, P_, frame):
 
         blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
         blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
-        new_seg_.append(new_seg)
+        next_seg_.append(next_seg)
 
-    return new_seg_
+    return next_seg_
 
 
 def form_blob(seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
@@ -294,9 +296,9 @@ def terminate_blob(blob, last_seg, frame):
     blob.pop('open_segments')
     blob.update(box=(y0, yn, x0, xn),  # boundary box
                 map=~mask,  # to compute overlap in comp_blob
-                crit=1,  # clustering criterion is g
-                rng=1,  # if 3x3 kernel
-                dert__=dert__,  # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
+                crit=1,     # clustering criterion is g
+                rng=1,      # if 3x3 kernel
+                dert__=dert__,   # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
                 root_fork=frame,
                 fork_=defaultdict(dict),  # or []? contains forks ( sub-blobs
                 )

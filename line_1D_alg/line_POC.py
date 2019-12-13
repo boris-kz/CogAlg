@@ -26,7 +26,7 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
     pri_s, L, I, D, M, r, e_ = P  # depth of elements in e_ = r: depth of prior comp recursion within P
 
     if ( x > rng * 2 and s != pri_s ) or x == X:  # m sign change, mP is terminated and evaluated for recursive comp
-        if not pri_s:  # negative mP forms dP_, is evaluated for recursion
+        if not pri_s:  # negative mP forms dP_ that replaces e_, then is evaluated for recursion within dPs
             dP_ = []
             dP = int(e_[0][1] > 0), 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, e_
             e_.append( ( 0, 0, 0 ) )
@@ -47,11 +47,12 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                         for j in range(1, Ld + 1):  # bilateral comp between consecutive dj s
                             dj = ed_[j][1]
                             _dj = ed_[j-1][1]
-                            dd = dj - _dj
-                            md = min(dj, _dj) - ave_m  # magnitude of vars derived from d corresponds to predictive value, thus direct match
+                            dd = dj - _dj  # comparison between consecutive differences
+                            md = min(dj, _dj) - ave_m  # evaluation of md: magnitudes derived from d correspond to predictive value, thus m=min
                             fdd += dd  # bilateral difference and match between ds
                             fmd += md
                             if j > 1: mdP, mdP_ = form_pattern(1, mdP, mdP_, _dj, fdd, fmd, rdn+1, rng, j, Ld)
+                            # dderived = 1, m=min, evaluation for deeper recursion within mdPs: patterns defined by match between ds
                             fdd = dd
                             fmd = md
 
