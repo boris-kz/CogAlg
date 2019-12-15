@@ -13,7 +13,7 @@ import cv2
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of blob
-    2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_ connections list, down_forks count, for each blob segment
+    2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_, down_fork_cnt: vertical connections per blob segment
     3Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     4Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively
 
@@ -158,7 +158,7 @@ def scan_P_(P_, seg_, frame):  # merge P into same-sign blob segments that conta
     """
     next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_seg_
 
-    if P_ and seg_: # if both input row and higher row have any Ps / _P left
+    if P_ and seg_: # if both input row and higher row have any Ps / _Ps left
         P = P_.popleft()      # load left-most (lowest-x) input-row P
         seg = seg_.popleft()  # higher-row segments,
         _P = seg['Py_'][-1]   # last element of each segment is higher-row P
@@ -218,8 +218,8 @@ def form_seg_(y, P_, frame):
             next_seg = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
             blob['seg_'].append(next_seg)
         else:
-            if len(up_fork_) == 1 and up_fork_[0]['down_fork_cnt'] == 1:  # P has one up_fork and that up_fork has one root
-                # merge P into up_fork segment:
+            if len(up_fork_) == 1 and up_fork_[0]['down_fork_cnt'] == 1:
+                # P has one up_fork and that up_fork has one root: merge P into up_fork segment:
                 next_seg = up_fork_[0]
                 accum_Dert(next_seg, I=I, G=G, Dy=Dy, Dx=Dx, S=L, Ly=1)
                 next_seg['Py_'].append(P)  # Py_: vertical buffer of Ps

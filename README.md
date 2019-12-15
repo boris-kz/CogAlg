@@ -5,14 +5,12 @@ Full introduction: <www.cognitivealgorithm.info>
 
 Intelligence is a general cognitive ability, ultimately ability to predict. That includes cognitive component of action: planning is technically a self-prediction. Any prediction is interactive projection of known patterns, hence primary cognitive process is pattern discovery. This perspective is well established, pattern recognition is a core of any IQ test. But there is no general and constructive definition of either pattern or recognition (quantified similarity). I define similarity for the simplest inputs, then design hierarchically recursive algorithm to search for similarity patterns in incrementally complex inputs: lower-level patterns.
 
-For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement artificial neural networks, which operate in a very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more selective but still rely on Hebbian learning, with coarse immediate input summation. My approach is outlined below, then compared to ANN, the brain, and CapsNet.
+For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most current researchers implement artificial neural networks, which operate in a very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more selective but still rely on Hebbian learning, coarse due to immediate input summation. My approach is outlined below, then compared to ANN, the brain, and CapsNet.
 
 We need help with design and implementation of this algorithm, in Python or Julia. Current code is explained in [WIKI](https://github.com/boris-kz/CogAlg/wiki). This is an open project, but I do pay a prize for contributions, or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). Contributions should be justified in terms of strictly incremental search for similarity, which forms hierarchical patterns: parameterized nearest-neighbour clusters or capsules.
 
 
-
 ### Outline of my approach
-
 
 
 Proposed algorithm is a first-principles alternative to deep learning, non-neuromorphic and sub-statistical. It performs hierarchical search, cross-comparing inputs over selectively incremental distance and composition, followed by parameterized clustering. First-level comparands are sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. Symbolic data is second-hand, encoded and scrambled by prior processing, thus it shouldn’t be used as primary input in a strictly bottom-up system. 
@@ -45,14 +43,13 @@ Again, autonomous cognition must start with analog inputs, such as video or audi
 
 
 ANN learns via some version of Hebbian “fire together, wire together” coincidence reinforcement. Normally, “neuron’s” inputs are weighed at “synapses”, then summed and thresholded into input to next hidden layer.
-Output of last hidden layer is compared to top-layer template, forming an error. That error backpropagates, converting initially random weights into meaningful values via Stochastic Gradient Descent. 
-I have several basic problems with this whole neural paradigm, listed below along with my alternatives:
+Output of last hidden layer is compared to top-layer template, forming an error. That error backpropagates, converting initially random weights into meaningful values via Stochastic Gradient Descent. I have several basic problems with this whole paradigm, listed below along with my alternatives:
 
-- Hebbian learning is driven by input-to-output comparison, secondary to input summation. This is seductively simple and fast per feedback | backprop cycle, but it takes tens of thousands of cycles to form meaningful representations. That’s because summation is a loss of resolution, which makes learning exponentially more coarse per layer. Parametrized cross-comparison is far more complex per cycle, but is immediately informative. Feedback here only adjusts layer-wide hyper-parameters: thresholds for the last step of pattern segmentation.
+- Hebbian learning is driven by vertical input-to-output comparison, secondary to input summation. This is seductively simple per backprop cycle, but it takes tens of thousands cycles to form meaningful representations. That’s because summation is a loss of resolution, which makes learning exponentially more coarse per layer. Lateral parametrized cross-comparison is far more complex per layer, but output is immediately informative. Feedback here only adjusts layer-wide hyper-parameters: thresholds for the last step of pattern segmentation.  
 
-- Both initial weights and sampling that feeds SGD are randomized, which is a zero-knowledge option. But we do have prior knowledge for raw data in real space-time: proximity predicts similarity, thus search should proceed with incremental distance and input composition. Also driven by random variation are methods like RBM and GAN. There is variation in my model, pattern projection by co-derived miss: projected input = input - (d_input * d_coordinate) / 2. But there is nothing random about that. 
+- Both initial weights and sampling that feeds SGD are randomized, which is a zero-knowledge option. But we do have prior knowledge for any raw data in real space-time: proximity predicts similarity, thus search should proceed with incremental comparison range and input composition. Also driven by random variation are methods like RBM and GAN. There is nothing random in my model, that’s antithetical to intelligence. Rather, variation here is pattern projection by co-derived miss: projected input = input - (d_input * d_coordinate) / 2.
 
-- SGD minimizes error (top-layer miss), which is quantitatively different from maximizing match: compression. And that error is w.r.t. some specific template, while my match is summed over all accumulated input. All inputs represent environment, thus have positive value. But then they are packed (compressed) into patterns, which have different range and precision, thus different representational value per relatively fixed record cost.
+- SGD minimizes error (top-layer miss), which is quantitatively different from maximizing match: compression. And that error is w.r.t. some specific template, while my match is summed over all past input / experience. All inputs represent environment, thus have positive value. But then they are packed (compressed) into patterns, which have different range and precision, thus different representational value per relatively fixed record cost.
 
 - Representation is fully distributed, which mimics the brain. But the brain has no alternative: no substrate for local memory or differentiated program in neurons. We have it now, parallelization in computers is a simple speed vs. efficiency trade-off, useful only for complex semantically isolated nodes. Such nodes are patterns, encapsulating a set of co-derived “what” and “where” parameters. This is similar to neural ensemble, but parameters that are compared together should be localized in memory, not distributed across a network.
 
@@ -60,12 +57,10 @@ Inspiration by the brain kept ANN research going for decades before they became 
 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation (vs. direct parameterized clustering), at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Summation also reduces noise, very important for neurons that often fire at random, to initiate and maintain latent connections. But that’s irrelevant for electronic circuits.
 
-Biological intelligence is a distant side effect of maximizing reproduction. The brain evolved to guide the body, even our abstract thinking is always framed in terms of action. Hence, Hebbian learning is driven by reaction: feedback of summed output. Neurons themselves started as instinctive stimulus-to-response converters, they only do pattern recognition as an instrumental upshot, if integrated into large networks. In my scheme, learning is comparison-defined connectivity clustering within a level, which outputs resulting patterns.
-
+Biological intelligence is a distant side effect of maximizing reproduction. The brain evolved to guide the body, even our abstract thinking is always framed in terms of action. Hence, Hebbian learning is driven by feedback of reaction: output of weighted input sum. Neurons evolved as instinctive stimulus-to-response converters, they only do pattern recognition as an instrumental upshot, if integrated into large networks. Primary learning is comparison-defined connectivity clustering within a level, which outputs immediately meaningful patterns.
 
 
 ### Comparison to Capsule Networks
-
 
 
 The nearest experimentally successful method is recently introduced “capsules”. Some similarities to CogAlg:
