@@ -13,20 +13,17 @@ image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
 # image = misc.face(gray=True).astype(int)
 ''' 
 line_POC is a principal version of 1st-level 1D algorithm: 
-
 - Cross-comparison of consecutive pixels within each row of image, then clustering them by match, forming match patterns mPs.
   Initial match is indirect: m = ave_|d| - |d|: inverse variation, because brightness doesn't correlate with predictive value.
   Each mP represents contiguous spans of pixels that form same-sign m. 
-
 - Negative mPs are sub-clustered into difference patterns dPs: representations of spans of pixels forming same-sign differences.
   Each dP is evaluated for internal cross-comp of element ds, which forms mdPs: spans of ds forming same-sign md = min d. 
   Match is defined directly because predictive value of difference is proportional to its magnitude, although inversely so.
   This sub-clustering is recursive: each mdP is then processed in the same way as initial mPs.
-
 - Positive mPs: spans of pixels forming positive match, are evaluated for pixel cross-comp over incremental range 
   (positive match means that pixels have high predictive value, thus likely match to more distant pixels). 
   Subsequent sub-clustering in selected +mPs forms rng_mPs, which are also processed the same way as initial mPs, recursively. 
-
+  
 So, form_pattern() is conditionally recursive, cross-comparing p | d within a queue of above- minimal length and summed M | D.
 In the code, postfix '_' denotes array name, vs. identical name of array elements '''
 
