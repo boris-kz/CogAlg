@@ -111,8 +111,8 @@ Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_seg combines these overlapping Ps into non-forking blob segment: vertical stack of 1-above to 1-below Ps
-- form_blob and terminate_segment combine terminated forking segments into blob
-- terminate_blob eliminates redundant representations of the same blob by multiple forking segments, 
+- form_blob and terminate_segment combine terminated or forking segments into blob
+- terminate_blob eliminates redundant representations of the same blob by multiple forked segments, 
   then combines terminated blob into whole-frame representation.
   
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
@@ -164,7 +164,8 @@ def scan_P_(P_, seg_, frame):  # merge P into same-sign blob segments that conta
         _P = seg['Py_'][-1]   # last element of each segment is higher-row P
         up_fork_ = []         # list of same-sign x-overlapping _Ps per P
 
-        while True:
+        while True:   # while both P_ and _P_ are not empty
+
             x0 = P['x0']      # first x in P
             xn = x0 + P['L']  # first x in next P
             _x0 = _P['x0']    # first x in _P
@@ -203,9 +204,9 @@ def scan_P_(P_, seg_, frame):  # merge P into same-sign blob segments that conta
     return next_P_  # each element is P + up_fork_ refs
 
 
-def form_seg_(y, P_, frame):
-    """ Convert or merge every P into blob segment, merge blobs."""
-    next_seg_ = deque()
+def form_seg_(y, P_, frame):  # Convert or merge every P into blob segment, merge blobs
+
+    next_seg_ = deque()  # converted to seg_ in the next run of scan_P_
 
     while P_:
         P, up_fork_ = P_.popleft()
@@ -263,52 +264,46 @@ def form_seg_(y, P_, frame):
     return next_seg_
 
 
-def form_blob(seg, frame):  # terminated segment is merged into continued or initialized blob (all connected segments)
+def form_blob(seg, frame):  # increment blob with terminated segment, evaluate blob termination and merger into frame
 
-    blob = terminate_segment(seg)
-    if blob['open_segments'] == 0:  # if number of incomplete segments == 0: blob is terminated and packed in frame
-        terminate_blob(blob, seg, frame)
+    # terminated segment is merged into continued or initialized blob (all connected segments):
 
-
-def terminate_segment(seg):
     I, G, Dy, Dx, S, Ly, y0, Py_, blob, down_fork_cnt, sign = seg.values()
     accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
+    blob['open_segments'] += down_fork_cnt - 1  # incomplete seg cnt + terminated seg down_fork_cnt - 1: seg itself
 
-    blob['open_segments'] += down_fork_cnt - 1  # number of incomplete segments
-    return blob
+    if blob['open_segments'] == 0:  # if number of incomplete segments == 0: blob is terminated and packed in frame
+        last_seg = seg
 
+        Dert, [y0, x0, xn], seg_, s, open_segs = blob.values()
+        yn = last_seg['y0'] + last_seg['Ly']
 
-def terminate_blob(blob, last_seg, frame):
-    Dert, [y0, x0, xn], seg_, s, open_segs = blob.values()
-    yn = last_seg['y0'] + last_seg['Ly']
+        mask = np.ones((yn - y0, xn - x0), dtype=bool)  # map of blob in coord box
+        for seg in seg_:
+            seg.pop('sign')
+            seg.pop('down_fork_cnt')
+            for y, P in enumerate(seg['Py_'], start=seg['y0'] - y0):
+                x_start = P['x0'] - x0
+                x_stop = x_start + P['L']
+                mask[y, x_start:x_stop] = False
+        dert__ = frame['dert__'][:, y0:yn, x0:xn]
+        dert__.mask[:] = mask  # default mask is all 0s
 
-    mask = np.ones((yn - y0, xn - x0), dtype=bool)  # map of blob in coord box
-    for seg in seg_:
-        seg.pop('sign')
-        seg.pop('down_fork_cnt')
-        for y, P in enumerate(seg['Py_'], start=seg['y0'] - y0):
-            x_start = P['x0'] - x0
-            x_stop = x_start + P['L']
-            mask[y, x_start:x_stop] = False
-    dert__ = frame['dert__'][:, y0:yn, x0:xn]
-    dert__.mask[:] = mask  # default mask is all 0s
+        blob.pop('open_segments')
+        blob.update(box=(y0, yn, x0, xn),  # boundary box
+                    map=~mask,  # to compute overlap in comp_blob
+                    crit=1,     # clustering criterion is g
+                    rng=1,      # if 3x3 kernel
+                    dert__=dert__,   # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
+                    root_fork=frame,
+                    fork_=defaultdict(dict),  # or []? contains forks ( sub-blobs
+                    )
+        frame.update(I=frame['I'] + blob['Dert']['I'],
+                     G=frame['G'] + blob['Dert']['G'],
+                     Dy=frame['Dy'] + blob['Dert']['Dy'],
+                     Dx=frame['Dx'] + blob['Dert']['Dx'])
 
-    blob.pop('open_segments')
-    blob.update(box=(y0, yn, x0, xn),  # boundary box
-                map=~mask,  # to compute overlap in comp_blob
-                crit=1,     # clustering criterion is g
-                rng=1,      # if 3x3 kernel
-                dert__=dert__,   # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
-                root_fork=frame,
-                fork_=defaultdict(dict),  # or []? contains forks ( sub-blobs
-                )
-    frame.update(I=frame['I'] + blob['Dert']['I'],
-                 G=frame['G'] + blob['Dert']['G'],
-                 Dy=frame['Dy'] + blob['Dert']['Dy'],
-                 Dx=frame['Dx'] + blob['Dert']['Dx'])
-
-    frame['blob_'].append(blob)
-
+        frame['blob_'].append(blob)
 
 # -----------------------------------------------------------------------------
 # Utilities
@@ -335,7 +330,7 @@ if __name__ == '__main__':
     '''
     frame_of_deep_blobs = {  # initialize frame_of_deep_blobs
         'blob_': [],
-        'params': defaultdict(int, {
+        'params': {
             'I': frame_of_blobs['I'],
             'G': frame_of_blobs['G'],
             'Dy': frame_of_blobs['Dy'],

@@ -52,7 +52,7 @@ def form_pattern(dderived, P, P_, pri_p, d, m, rdn, rng, x, X):  # accumulation,
                         ed_.append((0, 0, 0))
                         fdd, fmd = 0, 0
 
-                        for j in range(1, Ld + 1):  # bilateral comp between consecutive dj s
+                        for j in range(1, Ld + 1):  # der+: bilateral comp between consecutive dj s
                             dj = ed_[j][1]
                             _dj = ed_[j - 1][1]
                             dd = dj - _dj  # comparison between consecutive differences
@@ -119,15 +119,15 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
 
     for y in range(ini_y + 1, Y):
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
-        P_ = []; P = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, ders_ # initialized at each line
-        max_index = min_rng - 1  # max index of rng_ders_
-        ders_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
-        ders_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
+        P_ = []; P = 0, 0, 0, 0, 0, 0, []  # pri_s, L, I, D, M, r, dert_ # initialized at each line
+        max_index = min_rng - 1  # max index of rng_dert_, 0 by default
+        rng_dert_ = deque(maxlen=min_rng)  # array of incomplete ders, within rng from input pixel: summation range < rng
+        rng_dert_.append((0, 0, 0))  # prior tuple, no d, m at x = 0
 
         for x, p in enumerate(
                 pixel_):  # pixel p is compared to rng of prior pixels in horizontal line, summing d and m per prior pixel
             back_fd, back_fm = 0, 0
-            for index, (pri_p, fd, fm) in enumerate(ders_):
+            for index, (pri_p, fd, fm) in enumerate(rng_dert_):
 
                 d = p - pri_p
                 m = ave_d - abs(d)
@@ -137,12 +137,12 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs. identic
                 back_fm += m  # running sum of d and m between pixel and all prior pixels within rng
 
                 if index < max_index:
-                    ders_[index] = (pri_p, fd, fm)
+                    rng_dert_[index] = (pri_p, fd, fm)
 
                 elif x > min_rng * 2 - 1:
                     P, P_ = form_pattern(0, P, P_, pri_p, fd, fm, 1, min_rng, x, X)  # forms mPs: spans of pixels with same-sign m
 
-            ders_.appendleft((p, back_fd, back_fm))  # p + initialized d and m, maxlen displaces completed tuple from rng_t_
+            rng_dert_.appendleft((p, back_fd, back_fm))  # p + initialized d and m, maxlen displaces completed tuple from rng_t_
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns, last incomplete ders are discarded
     return frame_of_patterns_  # frame of patterns is output to level 2
 
