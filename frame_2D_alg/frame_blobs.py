@@ -1,14 +1,14 @@
 from time import time
 from collections import deque, defaultdict
 import numpy as np
-import numpy.ma as ma
 import cv2
+from comp_pixel import comp_pixel
 
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
     
-    comp_pixel (lateral, vertical, diagonal) forms derts ) dert__: tuples of pixel + derivatives, over the whole frame. 
+    comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segments, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
@@ -17,7 +17,7 @@ import cv2
     3Le, line y-3: form_segment(hP, seg) -> seg: merge vertically-connected _Ps in non-forking blob segments
     4Le, line y-4+ seg depth: form_blob(seg, blob): merge connected segments in fork_ incomplete blobs, recursively
 
-    Higher-line elements include additional parameters, derived while they were lower-line elements.
+    Higher-row elements include additional parameters, derived while they were lower-row elements.
     Processing is mostly sequential because blobs are irregular, not suited for matrix operations.
     Resulting blob structure (fixed set of parameters per blob): 
     
@@ -33,25 +33,18 @@ import cv2
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
-# Constants: MAX_G = 256  # 721.2489168102785 without normalization.
 # Adjustable parameters:
 
-kwidth = 3  # input-centered, low resolution kernel: frame | blob shrink by 2 pixels per row,
-# kwidth = 2  # co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 chance of boundary pixel in kernel?
-# kwidth = 2 quadrant: g = ((dx + dy) * .705 + d_diag) / 2, signed-> gPs? no i res-, ders co-location, + orthogonal quadrant for full rep?
-ave = 50
+kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
+ave = 50  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
 
-    dert__ = comp_pixel(image)  # comparison of central pixel to rim pixels in a square kernel
-    frame = dict(rng=1,
-                 dert__=dert__,
-                 mask=None,
-                 I=0, G=0, Dy=0, Dx=0, blob_=[])
-
+    dert__ = comp_pixel(image)  # comparison of central pixel to rim pixels in 3x3 kernel
+    frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob_=[])
     seg_ = deque()  # buffer of running segments
     height, width = image.shape
 
@@ -64,56 +57,14 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array vs elemen
         form_blob(seg_.popleft(), frame)  # frame ends, last-line segs are merged into their blobs
     return frame  # frame of blobs
 
-
-def comp_pixel(image):  # 3x3 or 2x2 pixel cross-correlation within image
-
-    if kwidth == 2:  # cross-compare four adjacent pixels diagonally:
-
-        dy__ = (image[1:, 1:] - image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
-        dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
-        # sum pixel values:
-        p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]) * 0.25
-
-    else:  # kwidth == 3, compare central pixel to 8 rim pixels, current default option
-
-        ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])  # this is equivalent to Sobel operator, but
-        xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])  # coefs scale diagonal vs. orthogonal pixels
-
-        d___ = np.array(list(  # subtract centered image from translated image:
-            map(lambda trans_slices: image[trans_slices] - image[1:-1, 1:-1],
-                [
-                    (slice(None, -2), slice(None, -2)),
-                    (slice(None, -2), slice(1, -1)),
-                    (slice(None, -2), slice(2, None)),
-                    (slice(1, -1), slice(2, None)),
-                    (slice(2, None), slice(2, None)),
-                    (slice(2, None), slice(1, -1)),
-                    (slice(2, None), slice(None, -2)),
-                    (slice(1, -1), slice(None, -2)),
-                ]
-            )
-        )).swapaxes(0, 2).swapaxes(0, 1)
-
-        # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
-
-        dy__ = (d___ * ycoef).sum(axis=2)
-        dx__ = (d___ * xcoef).sum(axis=2)
-
-        p__ = image[1:-1, 1:-1]
-
-    g__ = np.hypot(dy__, dx__) * 0.354801226089485  # compute gradients per kernel, converted to 0-255 range
-
-    return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
-
 ''' 
 Parameterized connectivity clustering functions below:
 
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_seg combines these overlapping Ps into non-forking blob segment: vertical stack of 1-above to 1-below Ps
-- form_blob and terminate_segment combine terminated or forking segments into blob
-- terminate_blob eliminates redundant representations of the same blob by multiple forked segments, 
-  then combines terminated blob into whole-frame representation.
+- form_blob merges terminated or forking segments into blob, removes redundant representations of the same blob 
+  by multiple forked segments, then checks for blob termination and merger into whole-frame representation.
   
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert is params of a composite structure (P, seg, blob): summed dert params + dimensions: vertical Ly and area S
@@ -150,21 +101,23 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
 
 
 def scan_P_(P_, seg_, frame):  # merge P into same-sign blob segments that contain higher-row _P with x-overlap
+
+    next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_seg_
     """
     Each P in P_ scans higher-row _Ps (packed in seg_) left-to-right, until P.x0 >= _P.xn: no more x-overlap.
     Then scanning stops and P is packed into its up_fork segs or initializes a new seg.
     This x-overlap evaluation is also done for each _P, removing those that won't overlap next P.
     Segment that contains removed _P is packed in blob if its down_fork_cnt==0: no lower-row connections.
+    It's a form of breadth-first flood fill, with forks as vertices of graph nodes.
     """
-    next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_seg_
-
     if P_ and seg_: # if both input row and higher row have any Ps / _Ps left
+
         P = P_.popleft()      # load left-most (lowest-x) input-row P
         seg = seg_.popleft()  # higher-row segments,
         _P = seg['Py_'][-1]   # last element of each segment is higher-row P
         up_fork_ = []         # list of same-sign x-overlapping _Ps per P
 
-        while True:   # while both P_ and _P_ are not empty
+        while True:   # while both P_ and seg_ are not empty
 
             x0 = P['x0']      # first x in P
             xn = x0 + P['L']  # first x in next P
@@ -264,13 +217,14 @@ def form_seg_(y, P_, frame):  # Convert or merge every P into blob segment, merg
     return next_seg_
 
 
-def form_blob(seg, frame):  # increment blob with terminated segment, evaluate blob termination and merger into frame
-
-    # terminated segment is merged into continued or initialized blob (all connected segments):
+def form_blob(seg, frame):  # increment blob with terminated segment, check for blob termination and merger into frame
 
     I, G, Dy, Dx, S, Ly, y0, Py_, blob, down_fork_cnt, sign = seg.values()
     accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
+    # terminated segment is merged into continued or initialized blob (all connected segments):
+
     blob['open_segments'] += down_fork_cnt - 1  # incomplete seg cnt + terminated seg down_fork_cnt - 1: seg itself
+    # open segments contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
     if blob['open_segments'] == 0:  # if number of incomplete segments == 0: blob is terminated and packed in frame
         last_seg = seg
@@ -311,7 +265,6 @@ def form_blob(seg, frame):  # increment blob with terminated segment, evaluate b
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
-
 # -----------------------------------------------------------------------------
 # Main
 
@@ -326,7 +279,7 @@ if __name__ == '__main__':
     start_time = time()
     frame_of_blobs = image_to_blobs(image)
 
-    # from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.?
+    # from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.
     '''
     frame_of_deep_blobs = {  # initialize frame_of_deep_blobs
         'blob_': [],
