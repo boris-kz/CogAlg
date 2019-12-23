@@ -8,6 +8,11 @@ from comp_pixel import comp_pixel
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
     
+    Gradient represents pixel-level variation in 2D, which is an inverse measure of partial match (predictive value) here.
+    In vision, initial match must be defined inversely (vs. directly as min input) because intensity of reflected light
+    doesn't correlate with predictive value of observed object. Such predictive value is basically resistance to change: 
+    physical density, hardness, inertia that represent relative stability of object's albedo, shape, position, momentum.  
+
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segments, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
@@ -30,6 +35,7 @@ from comp_pixel import comp_pixel
     - segment_,  # contains intermediate structures: blob segments ( Ps: row segments
     ( intra_blob extends Dert, adds crit, rng, fork_)
     
+    Please see frame_blobs diagrams in Illustrations folder
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
     postfix '_' denotes array name, vs. same-name elements of that array
 '''

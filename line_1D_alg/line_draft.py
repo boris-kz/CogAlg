@@ -58,30 +58,31 @@ def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs identica
     return frame_of_patterns_  # frame of patterns is output to level 2
 
 
-def form_pattern(P, P_, pri_p, d, m, x, X):  # termination, evaluation for recursion, re-initialization, accumulation
+def form_pattern(P, P_, pri_p, d, m, x, X, fd, rng, rdn, typ):  # termination, recursion, re-initialization, accumulation
 
-    # also pass fd, rdn, rng: attach to P_ for decoding;    fd: input is derived, correlates with predictive value
+    # r @ P, typ @ sub_P_ in dert_[-1],  rdn, rng, fd are incremental: seq access, rdn += 1 * typ coef, = r * typ coefs?
+    # fd = 1 if sub_P_ fd or arg fd: flag input is derived, correlates with predictive value
 
-    pri_s, L, I, D, M, r, dert_ = P  # r: dert_ recursion cnt = length of sub_P__ at the end of terminated dert_
-    s = m > 0  # sign
+    pri_s, L, I, D, M, r, dert_ = P  # r: dert_ recursion cnt = number of sub_P_s at the end of terminated dert_
+    s = m > 0  # m sign
 
     if (x > 2 and s != pri_s) or x == X:  # sign change: terminate and evaluate mP for sub-clustering and recursive comp
 
-        if D > ave_D:  # if high accumulated-variation mP: der+ comp fork
+        if D > ave_D:  # high signed variation mP: der_comp over full mP; all forks are exclusive, or ave * rdn?
             P = der_comp(P, rng=1, rdn=1)  # P.dert_ += [dif_mP_]
 
-        elif -M > ave_D:  # if high unsigned-variation mP (M = summed inverse deviation of |d|)
-            P = form_dP(P)  # sub-cluster by d sign (binary match, no recursive comp value), P.dert_ += [dP_]
+        if -M > ave_D:  # high abs variation mP (M = summed inverse deviation of |d|), P.dert_ += [dP_]
+            P = form_dP(P)  # sub-cluster by d sign (direction is not random), recursive der_comp in dPs with Dd > ave_D?
 
-        elif M > ave_M:  # if high-match mP: rng+ comp fork
+        elif M > ave_M:  # high-match mP: rng+ comp fork, or per +mmP after sub-clustering, ~ intra-blob and form_dP?
             P = rng_comp(P, rng=1, rdn=1, fd=0)  # P.dert_ += [rng_mP_]
 
-        P_.append(P)  # fork indicates P type
+        P_.append(P)  # sub_P_s are appended to dert_ with comp fork typ (sub_P type)
         L, I, D, M, dert_ = 0, 0, 0, 0, []  # reset accumulated params
 
     pri_s = s  # current sign is stored as prior sign;
     L += 1     # length of mP | dP
-    I += pri_p  # accumulate params, even if incomplete at X?
+    I += pri_p  # accumulate params, *2 if incomplete at X
     D += d
     M += m
     dert_ += [(pri_p, d, m)]
@@ -90,30 +91,23 @@ def form_pattern(P, P_, pri_p, d, m, x, X):  # termination, evaluation for recur
     return P, P_
 
 
-def form_dP(P):  # simple P sub-clustering by d sign: accumulation, termination, re-initialization
+def form_dP(P):  # mP sub-clustering by d sign: accumulation, termination, re-initialization; same for --m sign?
 
-    P[5] += 1  # r: recursive dert_ sub-clustering cnt;  s, L, I, D, M, r, dert_ = P
-    dert_ = P[6]
+    P[5] += 1  # r: recursive dert_ sub-clustering cnt
+    dert_ = P[6]  # s, L, I, D, M, r, dert_ = P
     dP_ = []
     pri_p, pri_d, pri_m = dert_[0]
     pri_sd = pri_d > 0
-    dP = pri_sd, 1, pri_p, pri_d, pri_m, [(pri_p, pri_d, pri_m)]  # sd, Ld, Id, Dd, Md, ddert_; no rd: no comp in dert_
+    dP = pri_sd, 1, pri_p, pri_d, pri_m, [(pri_p, pri_d, pri_m)]  # initialize dP: sd, Ld, Id, Dd, Md, ddert_
 
     for i, (p, d, m) in enumerate(dert_[1:]):
         sd = d > 0
         if pri_sd != sd:  # terminate dP
             dP_.append(dP)
             dP[1:5] = 0, 0, 0, 0, []  # reset accumulated params
+        dP = sd, dP[1] + 1, dP[2] + p, dP[3] + d, dP[4] + m, dP[5].append((p, d, m))  # accumulate Ld, Id, Dd, Md, ddert_
 
-        # accumulate dP params: Ld, Id, Dd, Md, ddert_:
-        dP = pri_sd, dP[1] + 1, dP[2] + pri_p, dP[3] + pri_d, dP[4] + pri_m, dP[5].append((pri_p, d, m))
-        pri_p = p
-        pri_d = d
-        pri_m = m
-
-    # terminate last dP in P.dert_:
-    dP = sd, dP[1] + 1, dP[2] + p, dP[3] + d, dP[4] + m, dP[5].append((pri_p, d, m))
-    dP_.append(dP)
+    dP_.append(dP)  # pack last dP in P.dert_, no accum:
     P[6].append((2, dP_))  # append deeper layer' typ (rng_mP=0 | dif_mP=1 | dP=2) and P_ to terminated dert_
 
     return P
@@ -124,7 +118,7 @@ def der_comp(P, rng, rdn):  # same as cross_comp for ds in dert_, forming md and
     s, L, I, D, M, r, dert_ = P
     dif_mP_ = []  # new sub-patterns:
     dif_mP = int(dert_[0][2] > 0), 0, 0, 0, 0, 0, []  # pri_sd, Ld, Id, Dd, Md, rd, ddert_
-    r += 1  # dert_ recursion count = length of sub_P__ at the end of terminated dert_
+    r += 1  # dert_ recursion count = number of sub_P_s at the end of terminated dert_
 
     pri_d = dert_[0][1]  # input d
     pri_dd, pri_md = 0, 0  # for bilateral summation, no d, m at x = 0
@@ -133,13 +127,13 @@ def der_comp(P, rng, rdn):  # same as cross_comp for ds in dert_, forming md and
         dd = d - pri_d
         md = min(d, pri_d) - ave_m  # evaluation of md (min d: magnitudes derived from d correspond to predictive value)
         # form dif_mPs: spans of derts with same-sign md:
-        dif_mP, dif_mP_ = form_pattern(dif_mP, dif_mP_, pri_d, dd + pri_dd, md + pri_md, x+1, X)  # fd = 1 if typ?
+        dif_mP, dif_mP_ = form_pattern(dif_mP, dif_mP_, pri_d, dd + pri_dd, md + pri_md, x+1, X)
         pri_d = d
         pri_dd = dd
         pri_md = md
 
-    # terminate last dif_mP in P.dert_:
-    dif_mP, dif_mP_ = form_pattern(dif_mP, dif_mP_, pri_d, dd + pri_dd, md + pri_md, x + 1, X)
+    # terminate last dif_mP in P.dert_: accum &
+    dif_mP, dif_mP_ = form_pattern(dif_mP, dif_mP_, pri_d, dd, md, x + 1, X)
     dert_.append((1, dif_mP_))  # append deeper layer' typ (rng_mP=0 | dif_mP=1 | dP=2) and P_ to terminated dert_
 
     return P
@@ -150,7 +144,7 @@ def rng_comp(P, rng, rdn, fd):  # rng+ fork: cross-comp rng-distant ps in dert_;
     s, L, I, D, M, r, dert_ = P
     rng_mP_ = []  # new sub_patterns:
     rng_mP = int(dert_[0][2] > 0), 0, 0, 0, 0, 0, []  # pri_sr, Lr, Ir, Dr, Mr, rr, rdert_
-    r += 1  # dert_ recursion count = length of sub_P__ at the end of terminated dert_
+    r += 1  # dert_ recursion count = number of sub_P_s at the end of terminated dert_
     rng += 1
 
     for i in range(rng, L + 1):  # comp between rng-distant pixels, also bilateral, if L > rng * 2?
@@ -169,7 +163,7 @@ def rng_comp(P, rng, rdn, fd):  # rng+ fork: cross-comp rng-distant ps in dert_;
         if i >= rng * 2:  # form rng_mPs: spans of pixels with same-sign _acc_m:
             rng_mP, rng_mP_ = form_pattern(rng_mP, rng_mP_, _p, _acc_d, _acc_m, rdn + 1, rng, i, L)
 
-    # terminate last rng_mP in P.dert_
+    # terminate last rng_mP in P.dert_:
     rng_mP, rng_mP_ = form_pattern(rng_mP, rng_mP_, _p, _acc_d, _acc_m, rdn + 1, rng, i, L)
     dert_.append((0, rng_mP_))  # append deeper layer' typ (rng_mP=0 | dif_mP=1 | dP=2) and P_ to terminated dert_
 
