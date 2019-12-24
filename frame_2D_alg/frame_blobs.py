@@ -9,9 +9,8 @@ from comp_pixel import comp_pixel
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
     
     Gradient represents pixel-level variation in 2D, which is an inverse measure of partial match (predictive value) here.
-    In vision, initial match must be defined inversely (vs. directly as min input) because intensity of reflected light
-    doesn't correlate with predictive value of observed object. Such predictive value is basically resistance to change: 
-    physical density, hardness, inertia that represent relative stability of object's albedo, shape, position, momentum.  
+    Initial match is defined inversely (vs. directly as min input) because intensity of reflected light doesn't correlate 
+    with predictive value of observed object: physical density, hardness, inertia that represent resistance to change.  
 
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segments, and blobs,
@@ -35,7 +34,15 @@ from comp_pixel import comp_pixel
     - segment_,  # contains intermediate structures: blob segments ( Ps: row segments
     ( intra_blob extends Dert, adds crit, rng, fork_)
     
-    Please see frame_blobs diagrams in Illustrations folder
+    It's a complex function with a simple purpose: to sum pixel-level params in blob-level params. 
+    These params are predictive because they were derived by cross-comparison, which determines predictive value. 
+    Thus, they should be cross-compared between blobs on the next level of search and composition.
+    
+    Blob is a 2D version of a pattern: connectivity cluster defined by results of cross-comparison (cross-correlation).
+    The range of cross-comp is fixed per level to encode input pose parameters: coordinates, dimensions, orientation. 
+    This is essential because value of prediction = precision of "what" * precision of "where". 
+    
+    Please see frame_blobs diagrams in Illustrations folder.
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
     postfix '_' denotes array name, vs. same-name elements of that array
 '''
@@ -114,7 +121,7 @@ def scan_P_(P_, seg_, frame):  # merge P into same-sign blob segments that conta
     Then scanning stops and P is packed into its up_fork segs or initializes a new seg.
     This x-overlap evaluation is also done for each _P, removing those that won't overlap next P.
     Segment that contains removed _P is packed in blob if its down_fork_cnt==0: no lower-row connections.
-    It's a form of breadth-first flood fill, with forks as vertices of graph nodes.
+    It's a form of breadth-first flood fill, with forks as vertices per segment: a node in connectivity graph.
     """
     if P_ and seg_: # if both input row and higher row have any Ps / _Ps left
 
