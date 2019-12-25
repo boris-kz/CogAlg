@@ -8,10 +8,6 @@ from comp_pixel import comp_pixel
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
     
-    Gradient represents pixel-level variation in 2D, which is an inverse measure of partial match (predictive value) here.
-    Initial match is defined inversely (vs. directly as min input) because intensity of reflected light doesn't correlate 
-    with predictive value of observed object: physical density, hardness, inertia that represent resistance to change.  
-
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segments, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
@@ -31,16 +27,21 @@ from comp_pixel import comp_pixel
     - box  = [y0, yn, x0, xn], 
     - map, # inverted mask
     - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
-    - segment_,  # contains intermediate structures: blob segments ( Ps: row segments
+    - segment_,  # contains intermediate blob composition structures: segments and Ps, not meaningful on their own
     ( intra_blob extends Dert, adds crit, rng, fork_)
     
-    It's a complex function with a simple purpose: to sum pixel-level params in blob-level params. 
-    These params are predictive because they were derived by cross-comparison, which determines predictive value. 
-    Thus, they should be cross-compared between blobs on the next level of search and composition.
-    
-    Blob is a 2D version of a pattern: connectivity cluster defined by results of cross-comparison (cross-correlation).
-    The range of cross-comp is fixed per level to encode input pose parameters: coordinates, dimensions, orientation. 
-    This is essential because value of prediction = precision of "what" * precision of "where". 
+    Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
+    per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
+    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object: 
+    some physical density, hardness, inertia that represent resistance to change in positional parameters.  
+
+    This is a connectivity clustering because distance between clustered pixels should not exceed cross-comparison range.
+    That range is fixed, for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
+    orientation. These params are essential because value of prediction = precision of what * precision of where. 
+        
+    frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
+    were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
+    predictive on a blob level and should be cross-compared between blobs on the next level of search and composition.
     
     Please see frame_blobs diagrams in Illustrations folder.
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
@@ -87,11 +88,11 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     # P is contiguous segment in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
-    I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # P params = first dert + init params
+    I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # initialize P params with 1st dert params
     G -= ave
     _s = G > 0  # sign
 
-    for x, (i, g, dy, dx) in enumerate(dert_[1:], start=1):
+    for x, (p, g, dy, dx) in enumerate(dert_[1:], start=1):
         vg = g - ave
         s = vg > 0
         if s != _s:
@@ -101,7 +102,7 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
             # initialize new P:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
         # accumulate P params:
-        I += i
+        I += p
         G += vg  # M += m only within negative vg blobs
         Dy += dy
         Dx += dx
