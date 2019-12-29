@@ -111,21 +111,19 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
 
 def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P_dert_, range comp if frng, else deriv comp
 
-    sub_P = int(dert_[0][2]) > 0, 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_: same as master P or segment
+    sub_P = int(dert_[0][2] > 0), 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_: same as master P or segment
     sub_P_ = [] # return to replace sub_
-    buff_ = []
+    buff_ = deque([])
     if frng:  # initialize prior-rng derts with _i, _d=0, _m=0
-        for x in range(0, rng):
+        for x in range(rng):
             buff_.append((dert_[x][0], 0, 0))
-    else:   # initialize prior-rng derts with _uni_d, _d=0, _m=0
-        for x in range(0, rng):
+    else:   # initialize prior-rng derts with uni_d, _d=0, _m=0
+        for x in range(rng):
             buff_.append((dert_[x][3], 0, 0))
-    buff_ = deque(buff_)
 
     for x in range(rng, len(dert_) + 1):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
 
         if frng:  # bilateral comp between rng-distant pixels in dert_, forming rng_d and rng_m
-
             i, _bi_d, _bi_m = dert_[x][:2]  # rng-1 dert
             _i, _d, _m = buff_.popleft   # _d, _m include rng-1 bi_d | bi_m values;  vs. [x-rng]
             d = i - _i
@@ -140,7 +138,7 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P_dert
             # P accumulation or termination:
             sub_P, sub_P_ = form_pattern(sub_P, sub_P_, dert, x, len(dert_), fid, rdn + 1, rng)
 
-        else:  # bilateral comp between rng-distant ds in dert_, forming dd and md (may match across d sign)
+        else:  # bilateral comp between rng-distant unilateral ds in dert_, forming dd and md (may match across d sign)
             fid = 1  # flag i is derived
             i = dert_[x][3]  # i is unilateral d
             _i, _d, _m = buff_.popleft
@@ -176,12 +174,12 @@ def sub_segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign
             seg_P = pri_s, L, I, D, M, sub_, dert_  # same as P except no seg_
             if fmm:
                 if M > ave_M / 2 * rdn and L > rng * 2:  # ave_M / 2: reduced because mm filter = m filter * 2
-                    seg_P = intra_comp(seg_P, 1, fid, rdn + 1, rng + 1)  # frng = 1: incremental-range cross-comp
+                    seg_P = intra_comp(dert_, 1, fid, rdn + 1, rng + 1)  # frng = 1: incremental-range cross-comp
                 seg_.append(seg_P)
             else:
                 fid = 1
                 if D > ave_D * rdn and L > rng * 2:  # D of same-d-sign segment may be higher that P.D
-                    seg_P = intra_comp(seg_P, 0, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
+                    seg_P = intra_comp(dert_, 0, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
                 seg_.append(seg_P)
             L, I, D, M, sub_, dert_ = 0, 0, 0, 0, [], []  # reset accumulated seg_P params
 
