@@ -3,21 +3,23 @@ import argparse
 from time import time
 from collections import deque
 
-argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='.//raccoon.jpg')
-arguments = vars(argument_parser.parse_args())
-image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
+# pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
+ave = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
+ave_m = 10  # for m defined as min
+ave_M = 255  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
+ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
+ave_Lm = 20  # min L for sub_cluster(m), higher cost than der_comp?
+ave_Ld = 10  # min L for sub_cluster(d)
+ini_y = 400
+# min_rng = 1  # >1 if fuzzy pixel comparison range, for sensor-specific noise only
 
-# same image loaded online, without cv2:
-# from scipy import misc
-# image = misc.face(gray=True).astype(int)
 ''' 
   line_patterns is a principal version of 1st-level 1D algorithm, contains following operations: 
 
 - Cross-compare consecutive pixels within each row of image, forming dert_ queue of derts: tuples of derivatives per pixel. 
   dert_ is then segmented by match deviation, forming mPs, each a contiguous sequence of pixels that form same-sign m: +mP or -mP. 
   Initial match is inverse deviation of variation: m = ave_|d| - |d|, not min: brightness doesn't correlate with predictive value.
-   
+
 - Positive mPs: spans of pixels forming positive match, are evaluated for cross-comp of dert input param over incremented range 
   (positive match means that pixels have high predictive value, thus likely to match more distant pixels).
 - Negative mPs: high-variation spans, are evaluated for cross-comp of difference, which forms higher derivatives.
@@ -27,139 +29,133 @@ image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
   is segmented by (m-ave) for +mPs and d-sign match for -mPs. Value density of resulting positive segments (seg_Ps) is higher than 
   in full pattern: +mm_seg_ave_M = ave_M / 2, and same-d-sign seg_D is not sign-cancelled (+mm: flat seg, ds: directed seg?)
   Thus, positive m-segments are evaluated for local rng_comp, and positive d-segments are evaluated for local der_comp.     
-  
+
   comp_d eval by D because match of opposite-sign ds is -min: low comp value, but adjacent dd signs may still match?  
   (match = min: rng+ comp value, because predictive value of difference is proportional to its magnitude, although inversely so)
-  
+
   Initial cross-comp here is 1D slice of 2D 3x3 kernel, while single unidirectional d is equivalent to 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
-  The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_comp depth.
-  
-  Always 2x2 comp_d? non-random sign queue
+  The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_comp.
   '''
 
 def cross_comp(frame_of_pixels_):  # postfix '_' denotes array name, vs identical name of its elements; non-fuzzy version
 
+    Y, X = image.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []  # output frame of mPs: match patterns, including sub_patterns from recursive form_pattern
     for y in range(ini_y + 1, Y):
 
-        pixel_ = frame_of_pixels_[y, :]    # y is index of new line pixel_
+        pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []  # row of patterns, initialized at each line
         P = 0, 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_
         pri_p = pixel_[0]
         pri_d, pri_m = 0, 0  # no d, m at x = 0
 
-        for x, p in enumerate(pixel_[1:]):  # pixel p is compared to prior pixel pri_p in a row
+        for x, p in enumerate(pixel_[1:], start=1):  # pixel p is compared to prior pixel pri_p in a row
             d = p - pri_p
             m = ave - abs(d)  # initial match is inverse deviation of |difference|
             bi_d = d + pri_d  # bilateral difference
             bi_m = m + pri_m  # bilateral match
+            dert = pri_p, bi_d, bi_m, d
             # accumulate or terminate mP: span of pixels forming same-sign m:
-            P, P_ = form_pattern(P, P_, pri_p, bi_d, bi_m, x+1, X, fid=0, rdn=1, rng=1)
+            P, P_ = form_pattern(P, P_, dert, x, X, fid=0, rdn=1, rng=1)
             pri_p = p
             pri_d = d
             pri_m = m
-        # terminate last P in a row, with projected incomplete dert:
-        P_ = form_pattern(P, P_, p, d, m, x+1, X, fid=0, rdn=1, rng=1)
+        # terminate last P in row:
+        dert = p, d * 2, m * 2, d  # project unilateral to bilateral values
+        P_ = form_pattern(P, P_, dert, x, X, fid=0, rdn=1, rng=1)
 
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns
 
     return frame_of_patterns_  # frame of patterns is output to level 2
 
 
-def form_pattern(P, P_, pri_p, d, m, x, X, fid, rdn, rng):  # initialization, accumulation, termination, recursion
+def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulation, termination, recursion
     '''
-    rdn, rng are incremental if seq access, rdn += 1 * typ coef, fid: flag input is derived, mag ~predictive value
+    rdn, rng are incremental per layer, seq access, rdn += 1 * typ coef?
+    fid: flag input is derived, magnitude correlates with predictive value
     exclusive forks or eval by ave * rdn?  M = summed (ave |d| - |d|)
     '''
-    pri_s, L, I, D, M, sub_, seg_, dert_ = P  # sub_ and seg_ are nested if recursion, become Le queue if feedback
+    pri_s, L, I, D, M, sub_, seg_, dert_ = P  # sub_ and seg_ are stacks of layers, appended by feedback
+    pri_p, d, m, uni_d = dert
     s = m > 0  # m sign, defines positive | negative mPs
 
     if (x > rng * 2 and s != pri_s) or x == X:  # sign change: terminate mP, evaluate for sub_segment & intra_comp
-
         if s:  # positive mP
             if M > ave_M * rdn and L > rng * 2:  # M > fixed costs of full-P comp_rng, /=2 in sub_segment
-                sub_ = intra_comp(dert_, L, 1, fid, rdn+1, rng+1)  # comp_rng: sub_ = [frng=1, fid, sub_]
+                sub_ = intra_comp(dert_, 1, fid, rdn+1, rng+1)  # comp_rng: sub_ = frng=1, fid, sub_
 
             elif L > ave_Lm * rdn:  # long but weak +mP may contain high-mm segments: comp_rng eval, no M eval?
-                seg_ = sub_segment(dert_, 1, fid, rdn+1, rng)  # segment by mm sign: seg_ = [fmm=1, fid, seg_]
+                seg_ = sub_segment(dert_, 1, fid, rdn+1, rng)  # segment by mm sign: seg_ = fmm=1, fid, seg_
         else:
-            if D > ave_D * rdn and L > rng * 2:  # D > fixed costs of full-P comp_d: sub_ = [frng=0, fid=1, sub_]:
-                sub_ = intra_comp(dert_, L, 0, 1, rdn+1, rng*2-1)  # comp_d, central distance = d accum range * 2
+            if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d: sub_ = frng=0, fid=1, sub_:
+                sub_ = intra_comp(dert_, 0, 1, rdn+1, rng=1)  # comp_d: unidirectional to preserve resolution
 
             elif L > ave_Ld * rdn:  # long but weak -mP may contain high-D segments: comp_d eval, no D eval?
-                seg_ = sub_segment(dert_, 0, 1, rdn+1, rng)  # segment by d sign: seg_ = [fmm=0, fid=1, seg_]
+                seg_ = sub_segment(dert_, 0, 1, rdn+1, rng=1)  # segment by d sign: seg_ = fmm=0, fid=1, seg_
 
-        P[5][:] = sub_; P[6][:] = seg_
-        P_.append(P)  # with possibly filled sub_, seg_
+        P[5][:] = sub_; P[6][:] = seg_  # may have been filled by intra_comp and sub_segment
+        P_.append(P)
         L, I, D, M, sub_, seg_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated params
-
-    if x == X: d *= 2; m *= 2  # project bilateral values from incomplete unilateral values
 
     pri_s = s  # current sign is stored as prior sign
     L += 1     # length of mP | dP
-    I += pri_p   # accumulate params with bilateral values:
+    I += pri_p  # accumulate params with bilateral values:
     D += d
     M += m
-    dert_ += [(pri_p, d, m)]  # separate from temporary _dert_ in intra_comp
+    dert_ += [(pri_p, d, m, uni_d)]  # uni_d is for comp_d and seg_d
     P = pri_s, L, I, D, M, sub_, seg_, dert_  # sub_ and seg_ are accumulated in intra_comp and sub_segment
 
     return P, P_
 
 
-def intra_comp(dert_, L, frng, fid, rdn, rng):  # extended cross_comp within P_dert_, range comp if frng, else deriv comp
+def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P_dert_, range comp if frng, else deriv comp
 
-    sub_P = int(dert_[0][2] > 0), 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_: same as master P or segment
+    sub_P = int(dert_[0][2]) > 0, 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_: same as master P or segment
     sub_P_ = [] # return to replace sub_
-    buff_ = []  # prior derts, needed within rng only: deque popleft, easier than indexing?
+    buff_ = []
+    if frng:  # initialize prior-rng derts with _i, _d=0, _m=0
+        for x in range(0, rng):
+            buff_.append((dert_[x][0], 0, 0))
+    else:   # initialize prior-rng derts with _uni_d, _d=0, _m=0
+        for x in range(0, rng):
+            buff_.append((dert_[x][3], 0, 0))
+    buff_ = deque(buff_)
 
-    # prefix '_' denotes prior of two same-name variables
-    if frng:  # rng+: bilateral comp between rng-distant pixels in dert_, forming rng_d and rng_m
+    for x in range(rng, len(dert_) + 1):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
 
-        # initialize prior-rng derts with _i, _d, _m:
-        buff_[:rng][0] = dert_[rng:rng * 2][0]           # _i_ = i_
-        rng_d_ = dert_[rng:rng * 2][0] - dert_[:rng][0]  # rng_d_ = i_ - _i_
-        buff_[:rng][1] = dert_[:rng][1] + rng_d_         # _d_ = id_ + rng_d_
-        if fid:                                          # _m_ = im_ + min(i_, _i_) - ave_m:
-            buff_[:rng][2] = dert_[:rng][2] + min(dert_[rng:rng * 2][0], dert_[:rng][0]) - ave_m
-        else:                                            # _m_ = im_ + (ave - abs_rng_d_):
-            buff_[:rng][2] = dert_[:rng][2] + (ave - abs(rng_d_))  # incremental normalization per comparison
+        if frng:  # bilateral comp between rng-distant pixels in dert_, forming rng_d and rng_m
 
-        for x in range(rng, L + 1):
-            i, _bi_d, _bi_m = dert_[x]  # rng-1 dert
-            _i, _d, _m = buff_[x-rng]  # _d, _m include rng-1 bi_ders
+            i, _bi_d, _bi_m = dert_[x][:2]  # rng-1 dert
+            _i, _d, _m = buff_.popleft   # _d, _m include rng-1 bi_d | bi_m values;  vs. [x-rng]
             d = i - _i
-            if fid:  # flag input is derived
-                m = min(i, _i) - ave_m  # min because magnitude of derived vars corresponds to predictive value
-            else:
-                m = ave - abs(d)  # inverse match: magnitude of brightness doesn't correlate with stability
-            # future _i, _d, _m:
-            buff_.append((i, d + _bi_d, m + _bi_m))
-            bi_d = _d + d  # accumulated difference between p and all prior and subsequent ps in rng
-            bi_m = _m + m  # accumulated match between p and all prior and subsequent ps in rng
+            if fid: m = min(i, _i) - ave_m  # match=min: magnitude of derived vars correlate with stability
+            else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
+            d += _bi_d
+            m += _bi_m
+            buff_.append((i, d, m))  # future _i, _d, _m
+            bi_d = _d + d  # bilateral difference, accum in rng
+            bi_m = _m + m  # bilateral match, accum in rng
+            dert = _i, bi_d, bi_m, d
             # P accumulation or termination:
-            sub_P, sub_P_ = form_pattern(sub_P, sub_P_, _i, bi_d, bi_m, x, L, fid, rdn + 1, rng)
+            sub_P, sub_P_ = form_pattern(sub_P, sub_P_, dert, x, len(dert_), fid, rdn + 1, rng)
 
-    else:  # der+: bilateral comp between rng-distant ds in dert_, forming dd and md (may match across d sign)
-
-        fid = 1  # initialize prior-rng derts with _i, _d, _m:
-        buff_[:rng][0] = dert_[rng:rng * 2][1]                      # _i_ = d_
-        buff_[:rng][1] = dert_[rng:rng * 2][1] - dert_[:rng][1]     # _dd_ = d_ - _d_
-        buff_[:rng][2] = min(dert_[rng:rng * 2][1], dert_[:rng][1]) # _dm_ = min(d_, _d_)
-
-        for x in range(rng, L + 1):  # backward comparison
-            i = dert_[x][1]  # i is d
-            _i, _d, _m = buff_[x-rng]  # or popleft: saves on len and indexing
+        else:  # bilateral comp between rng-distant ds in dert_, forming dd and md (may match across d sign)
+            fid = 1  # flag i is derived
+            i = dert_[x][3]  # i is unilateral d
+            _i, _d, _m = buff_.popleft
             d = i - _i  # d is dd
             m = min(i, _i) - ave_m  # md, min because magnitude of derived vars corresponds to predictive value
             bi_d = _d + d  # bilateral d-difference per _i
             bi_m = _m + m  # bilateral d-match per _i
-            buff_.append((i, d, m))  # convert to _i, _d, _m
+            buff_.append((i, d, m))  # future _i, _d, _m
+            dert = _i, bi_d, bi_m, d
             # P accumulation or termination:
-            sub_P, sub_P_ = form_pattern(sub_P, sub_P_, _i, bi_d, bi_m, x, L, fid, rdn + 1, rng)
+            sub_P, sub_P_ = form_pattern(sub_P, sub_P_, dert, x, len(dert_), fid, rdn + 1, rng)
 
-    # terminate last sub_P in P_dert_:
-    _, sub_P_ = form_pattern(sub_P, sub_P_, _i, bi_d, bi_m, x+1, L, fid, rdn + 1, rng)
+    # terminate last sub_P in dert_:
+    dert = i, d * 2, m * 2, d  # project unilateral to bilateral values
+    _, sub_P_ = form_pattern(sub_P, sub_P_, dert, x+1, len(dert_), fid, rdn + 1, rng)
 
     return [frng, fid, sub_P_]  # replaces P.sub_
 
@@ -167,52 +163,56 @@ def intra_comp(dert_, L, frng, fid, rdn, rng):  # extended cross_comp within P_d
 def sub_segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: initialization, accumulation, termination
 
     seg_ = []  # replaces P.seg_
-    pri_p, pri_d, pri_m = P_dert_[1]
-    if fmm: pri_s = pri_m - ave > 0
-    else:   pri_s = pri_d > 0
-    L, I, D, M, sub_, dert_ = 1, pri_p, pri_d, pri_m, [], [(pri_p, pri_d, pri_m)]  # initialize seg_P
+    _p, _d, _m, _uni_d = P_dert_[1]
+    if fmm: pri_s = _m - ave > 0
+    else:   pri_s = _uni_d > 0
+    L, I, D, M, sub_, dert_ = 1, _p, _d, _m, [], [(_p, _d, _m, _uni_d)]  # initialize seg_P
 
-    for p, d, m in P_dert_[1:]:
+    for p, d, m, uni_d in P_dert_[1:]:
         if fmm: s = m - ave > 0  # segmentation crit = mm sign
-        else:   s = d > 0  # segmentation crit = d sign
+        else:   s = uni_d > 0  # segmentation crit = uni_d sign
         if pri_s != s:
             # terminate segment:
             seg_P = pri_s, L, I, D, M, sub_, dert_  # same as P except no seg_
             if fmm:
                 if M > ave_M / 2 * rdn and L > rng * 2:  # ave_M / 2: reduced because mm filter = m filter * 2
-                    seg_P = intra_comp(seg_P, L, 1, fid, rdn + 1, rng + 1)  # frng = 1: incremental-range cross-comp
+                    seg_P = intra_comp(seg_P, 1, fid, rdn + 1, rng + 1)  # frng = 1: incremental-range cross-comp
                 seg_.append(seg_P)
             else:
                 fid = 1
                 if D > ave_D * rdn and L > rng * 2:  # D of same-d-sign segment may be higher that P.D
-                    seg_P = intra_comp(seg_P, L, 0, fid, rdn + 1, rng*2-1)  # frng = 0, fid = 1: cross-comp d
+                    seg_P = intra_comp(seg_P, 0, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
                 seg_.append(seg_P)
             L, I, D, M, sub_, dert_ = 0, 0, 0, 0, [], []  # reset accumulated seg_P params
 
-        L += 1; I += p; D += d; M += m; dert_.append((p, d, m))  # accumulate seg_P params
+        L += 1; I += p; D += d; M += m; dert_.append((p, d, m))  # accumulate seg_P params, not uni_d?
         pri_s = s
 
     seg_.append((pri_s, L, I, D, M, sub_, dert_))  # pack last segment, nothing to accumulate
 
     return [fmm, fid, seg_]  # replace P.seg_
 
-# pattern filters / hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
-ave = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
-ave_m = 10  # for m defined as min
-ave_M = 255  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
-ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
-ave_Lm = 20  # min L for sub_cluster(m), higher cost than der_comp?
-ave_Ld = 10  # min L for sub_cluster(d)
-ini_y = 0
-# min_rng = 1  # >1 if fuzzy pixel comparison range, initialized here but eventually adjusted by higher-level feedback
+if __name__ == "__main__":
+    # Parse argument (image)
+    argument_parser = argparse.ArgumentParser()
+    argument_parser.add_argument('-i', '--image',
+                                 help='path to image file',
+                                 default='.//raccoon.jpg')
+    arguments = vars(argument_parser.parse_args())
+    # Read image
+    image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
+    # same image loaded online, without cv2:
+    # from scipy import misc
+    # image = misc.face(gray=True).astype(int)
 
-Y, X = image.shape  # Y: frame height, X: frame width
-
-start_time = time()
-frame_of_patterns_ = cross_comp(image)
-end_time = time() - start_time
-print(end_time)
+    # Initialize timer
+    start_time = time()
+    # Main
+    frame_of_patterns_ = cross_comp(image)
+    # Stop timer and print the result
+    end_time = time() - start_time
+    print(end_time)
 
 '''
 2nd level cross-compares resulting patterns Ps (s, L, I, D, M, r, nested e_) and evaluates them for deeper cross-comparison. 
