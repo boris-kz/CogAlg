@@ -132,9 +132,9 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert
             _i, _d, _m = buff_.popleft()
             d = i - _i
             if fid:  # match = min: magnitude of derived vars correlate with stability
-                m = min(i, _i) - ave_m * rdn + shorter_bi_m - ave_m * (rdn * (rng-1))
+                m = min(i, _i) - ave_m * rdn + shorter_bi_m - ave_m * rng-1
             else:  # inverse match: intensity doesn't correlate with stability
-                m = ave - abs(d) * rdn + shorter_bi_m * - ave * (rdn * (rng-1))
+                m = ave - abs(d) * rdn + shorter_bi_m * - ave * rng-1
 
             d += shorter_bi_d  # _d and _m combine bi_d | bi_m at rng-1
             buff_.append((i, d, m))  # future _i, _d, _m
