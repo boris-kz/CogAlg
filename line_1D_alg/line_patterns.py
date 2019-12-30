@@ -84,12 +84,12 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
     pri_p, d, m, uni_d = dert
     s = m > 0  # m sign, defines positive | negative mPs
 
-    if (x > rng * 2 and s != pri_s) or x == X:  # sign change: terminate mP, evaluate for sub_segment & intra_comp
+    if (x > rng * 2 and s != pri_s) or x == X:  # sign change: terminate mP, evaluate for sub_segment and intra_comp
         if pri_s:  # positive mP
-            if M > ave_M * rdn and L > rng * 2:  # M > fixed costs of full-P comp_rng, /=2 in +mm sub_segment
+            if M > ave_M * rdn and L > rng * 2:  # M > fixed costs of full-P comp_rng, * redundancy to higher layers
                 sub_ = intra_comp(dert_, 1, fid, rdn+1, rng+1)  # comp_rng: sub_ = frng=1, fid, sub_
 
-            elif L > ave_Lm * rdn:  # long but weak +mP may contain high-mm segments: comp_rng eval, no M eval?
+            elif L > ave_Lm * rdn:  # long but weak +mP may contain high +mm segments: comp_rng eval by ave_M/2
                 seg_ = sub_segment(dert_, 1, fid, rdn+1, rng)  # segment by mm sign: seg_ = fmm=1, fid, seg_
         else:
             if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d: sub_ = frng=0, fid=1, sub_:
@@ -121,7 +121,7 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert
     if frng:  # flag comp(rng), initialize prior-rng derts with _i, _d = 0 + rng-1 bi_d, _m = 0 + rng-1 bi_m:
         for x in range(rng):
             buff_.append(dert_[x][:3])
-    else:   # flag comp(d), initialize prior-rng derts with uni_d, _d=0, _m=0:
+    else:   # 0: flag comp(d), initialize prior-rng derts with uni_d, _d=0, _m=0:
         for x in range(rng):
             buff_.append((dert_[x][3], 0, 0))
 
@@ -131,10 +131,12 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert
             i, shorter_bi_d, shorter_bi_m = dert_[x][:3]  # shorter-rng (rng-1) dert
             _i, _d, _m = buff_.popleft()
             d = i - _i
-            if fid: m = min(i, _i) - ave_m  # match=min: magnitude of derived vars correlate with stability
-            else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
-            d += shorter_bi_d  # _d, _m include rng-1 bi_d | bi_m
-            m += shorter_bi_m
+            if fid:  # match = min: magnitude of derived vars correlate with stability
+                m = min(i, _i) - ave_m * rdn + shorter_bi_m - ave_m * (rdn * (rng-1))
+            else:  # inverse match: intensity doesn't correlate with stability
+                m = ave - abs(d) * rdn + shorter_bi_m * - ave * (rdn * (rng-1))
+
+            d += shorter_bi_d  # _d and _m combine bi_d | bi_m at rng-1
             buff_.append((i, d, m))  # future _i, _d, _m
             if x < rng * 2:
                d *= 2; m *= 2  # back-projection for unilateral ders
@@ -148,7 +150,8 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert
             i = dert_[x][3]  # i is unilateral d
             _i, _d, _m = buff_.popleft()
             d = i - _i  # d is dd
-            m = min(i, _i) - ave_m  # md, min because magnitude of derived vars corresponds to predictive value
+            m = min(i, _i) - ave_m * rdn
+            # md = min because magnitude of derived vars corresponds to predictive value
             buff_.append((i, d, m))  # future _i, _d, _m
             if x < rng * 2:
                d *= 2; m *= 2  # back projection for unilateral ders
