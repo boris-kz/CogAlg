@@ -8,7 +8,7 @@ import frame_blobs
 import numpy as np
 
 from utils import imread, draw
-from comp_v import comp_i
+from comp_param import comp_i
 from intra_blob import form_P__, scan_P__
 
 # -----------------------------------------------------------------------------
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     import numpy as np
     import numpy.ma as ma
 
-    from comp_v import (
+    from comp_param import (
         Y_COEFFS, X_COEFFS,
         central_slice,
         rim_mask,
