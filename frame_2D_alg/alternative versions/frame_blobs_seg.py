@@ -320,7 +320,7 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     from utils import map_frame
 
-    cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
+    cv2.imwrite("../images/blobs.bmp", map_frame(frame_of_blobs))
     # END DEBUG ---------------------------------------------------------------
 
     end_time = time() - start_time

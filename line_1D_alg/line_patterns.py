@@ -4,13 +4,14 @@ from time import time
 from collections import deque
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
-ave = 20  # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
-ave_m = 10  # for m defined as min
+
+ave = 10   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
+ave_m = 10   # for m defined as min, same?
 ave_M = 255  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
 ave_Lm = 20  # min L for sub_cluster(m), higher cost than der_comp?
 ave_Ld = 10  # min L for sub_cluster(d)
-ini_y = 400
+ini_y = 500
 # min_rng = 1  # >1 if fuzzy pixel comparison range, for sensor-specific noise only
 
 ''' 
@@ -50,7 +51,7 @@ def cross_comp(frame_of_pixels_):  # non-fuzzy version
 
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []  # row of patterns, initialized at each line
-        P = 0, 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_
+        P = 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, sub_, seg_, dert_
         pri_p = pixel_[0]
         pri_d, pri_m = 0, 0  # no backward d, m at x = 0
 
@@ -67,7 +68,7 @@ def cross_comp(frame_of_pixels_):  # non-fuzzy version
             pri_m = m
         # terminate last P in row:
         dert = p, d * 2, m * 2, d  # forward-project unilateral to bilateral d and m values
-        P_ = form_pattern(P, P_, dert, x, X, fid=0, rdn=1, rng=1)
+        _, P_ = form_pattern(P, P_, dert, x, X, fid=0, rdn=1, rng=1)
 
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns
 
@@ -80,12 +81,12 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
     fid: flag input is derived, magnitude correlates with predictive value
     exclusive forks or eval by ave * rdn?  M = summed (ave |d| - |d|)
     '''
-    pri_s, L, I, D, M, sub_, seg_, dert_ = P  # change sub_ and seg_ to stacks of layers, appended by feedback
+    pri_sign, L, I, D, M, sub_, seg_, dert_ = P  # change sub_ and seg_ to stacks of layers, appended by feedback
     pri_p, d, m, uni_d = dert
-    s = m > 0  # m sign, defines positive | negative mPs
+    sign = m > 0  # m sign, defines positive | negative mPs
 
-    if (x > rng * 2 and s != pri_s) or x == X:  # sign change: terminate mP, evaluate for sub_segment and intra_comp
-        if pri_s:  # positive mP
+    if (x > rng * 2 and sign != pri_sign) or x == X:  # sign change: terminate mP, evaluate for sub_segment and intra_comp
+        if pri_sign:  # positive mP
             if M > ave_M * rdn and L > rng * 2:  # M > fixed costs of full-P comp_rng, * redundancy to higher layers
                 sub_ = intra_comp(dert_, 1, fid, rdn+1, rng+1)  # comp_rng: sub_ = frng=1, fid, sub_
 
@@ -93,7 +94,7 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
                 seg_ = sub_segment(dert_, 1, fid, rdn+1, rng)  # segment by mm sign: seg_ = fmm=1, fid, seg_
         else:
             if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d: sub_ = frng=0, fid=1, sub_:
-                sub_ = intra_comp(dert_, 0, 1, rdn+1, rng=1)  # comp_d: unilateral to preserve resolution
+                sub_ = intra_comp(dert_, 0, 1, rdn+1, rng=1)  # comp_d, unilateral to preserve resolution
 
             elif L > ave_Ld * rdn:  # long but weak -mP may contain high-D same-d-sign segments, no D eval?
                 seg_ = sub_segment(dert_, 0, 1, rdn+1, rng=1)  # segment by d sign: seg_ = fmm=0, fid=1, seg_
@@ -102,20 +103,20 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
         P_.append(P)
         L, I, D, M, sub_, seg_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated params
 
-    pri_s = s  # current sign is stored as prior sign
+    pri_sign = sign  # current sign is stored as prior sign
     L += 1     # length of mP | dP
     I += pri_p  # accumulate params with bilateral values:
     D += d
     M += m
     dert_ += [(pri_p, d, m, uni_d)]  # uni_d for intra_comp(d) and sub_segment(d)
-    P = pri_s, L, I, D, M, sub_, seg_, dert_  # sub_ and seg_ are accumulated in intra_comp and sub_segment
+    P = pri_sign, L, I, D, M, sub_, seg_, dert_  # sub_ and seg_ are accumulated in intra_comp and sub_segment
 
     return P, P_
 
 
 def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert_, comp(rng) if frng, else comp(d)
 
-    sub_P = int(dert_[0][2] > 0), 0, 0, 0, 0, [], [], []  # s, L, I, D, M, sub_, seg_, dert_: same as master P | segment
+    sub_P = int(dert_[0][2] > 0), 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, sub_, seg_, dert_: same as master P
     sub_P_ = []  # return to replace P.sub_
     buff_ = deque([])
     if frng:  # flag comp(rng), initialize prior-rng derts with _i, _d = 0 + rng-1 bi_d, _m = 0 + rng-1 bi_m:
@@ -125,16 +126,16 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert
         for x in range(rng):
             buff_.append((dert_[x][3], 0, 0))
 
-    for x in range(rng, len(dert_) + 1):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
+    for x in range(rng, len(dert_)):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
 
         if frng:  # bilateral comp between rng-distant pixels in dert_, forming rng_d and rng_m
             i, shorter_bi_d, shorter_bi_m = dert_[x][:3]  # shorter-rng (rng-1) dert
             _i, _d, _m = buff_.popleft()
             d = i - _i
-            if fid:  # match = min: magnitude of derived vars correlate with stability
-                m = min(i, _i) - ave_m * rdn + shorter_bi_m - ave_m * rng-1
+            if fid:  # match = min: magnitude of derived vars correlates with stability
+                m = min(i, _i) - ave_m * rdn + shorter_bi_m - ave_m * (rng-1)
             else:  # inverse match: intensity doesn't correlate with stability
-                m = ave - abs(d) * rdn + shorter_bi_m * - ave * rng-1
+                m = ave - abs(d) * rdn + shorter_bi_m - ave * (rng-1)
 
             d += shorter_bi_d  # _d and _m combine bi_d | bi_m at rng-1
             buff_.append((i, d, m))  # future _i, _d, _m
@@ -175,16 +176,17 @@ def sub_segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign
 
     seg_ = []  # replaces P.seg_
     _p, _d, _m, _uni_d = P_dert_[1]
-    if fmm: pri_s = _m - ave > 0
-    else:   pri_s = _uni_d > 0
-    L, I, D, M, sub_, dert_ = 1, _p, _d, _m, [], [(_p, _d, _m, _uni_d)]  # initialize seg_P
+    if fmm: pri_sign = _m - ave > 0
+    else:   pri_sign = _uni_d > 0
+
+    L=1; I=_p; D=_d, M=_m; sub_=[]; dert_ = [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P except no seg_
 
     for p, d, m, uni_d in P_dert_[1:]:
-        if fmm: s = m - ave > 0  # segmentation crit = mm sign
-        else:   s = uni_d > 0  # segmentation crit = uni_d sign
-        if pri_s != s:
+        if fmm: sign = m - ave > 0  # segmentation crit = mm sign
+        else:   sign = uni_d > 0  # segmentation crit = uni_d sign
+        if pri_sign != sign:
             # terminate segment:
-            seg_P = pri_s, L, I, D, M, sub_, dert_  # same as P except no seg_
+            seg_P = pri_sign, L, I, D, M, sub_, dert_
             if fmm:
                 if M > ave_M / 2 * rdn and L > rng * 2:  # ave_M / 2: reduced because mm filter = m filter * 2
                     seg_P = intra_comp(dert_, 1, fid, rdn + 1, rng + 1)  # frng = 1: incremental-range cross-comp
@@ -196,10 +198,10 @@ def sub_segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign
                 seg_.append(seg_P)
             L, I, D, M, sub_, dert_ = 0, 0, 0, 0, [], []  # reset accumulated seg_P params
 
-        L += 1; I += p; D += d; M += m; dert_.append((p, d, m))  # accumulate seg_P params, not uni_d?
-        pri_s = s
+        L += 1; I += p; D += d; M += m; dert_.append((p, d, m, uni_d))  # accumulate seg_P params, not uni_d
+        pri_sign = sign
 
-    seg_.append((pri_s, L, I, D, M, sub_, dert_))  # pack last segment, nothing to accumulate
+    seg_.append((pri_sign, L, I, D, M, sub_, dert_))  # pack last segment, nothing to accumulate
 
     return fmm, fid, seg_  # replace P.seg_
 

@@ -133,42 +133,42 @@ def draw_blob(blob, raw=False):
 
     blob_img = blank_image(blob['box'])
 
-    for seg in blob['seg_']:
-        sub_box = segment_box(seg)
-        seg_map = draw_segment(seg, sub_box, blob['sign'], raw)
-        over_draw(blob_img, seg_map, sub_box, blob['box'])
+    for stack in blob['stack_']:
+        sub_box = stack_box(stack)
+        stack_map = draw_stack(stack, sub_box, blob['sign'], raw)
+        over_draw(blob_img, stack_map, sub_box, blob['box'])
 
     return blob_img
 
-def draw_segment(seg, box, s, raw=False):
-    '''Map a single segment of a blob into an image.'''
+def draw_stack(stack, box, s, raw=False):
+    '''Map a single stack of a blob into an image.'''
 
-    seg_img = blank_image(box)
+    stack_img = blank_image(box)
     y0, yn, x0, xn = box
 
-    for y, P in enumerate(seg['Py_'], start= seg['y0'] - y0):
+    for y, P in enumerate(stack['Py_'], start= stack['y0'] - y0):
         for x, dert in enumerate(P['dert_'], start=P['x0']-x0):
             if raw:
-                seg_img[y, x] = dert[0]
+                stack_img[y, x] = dert[0]
             else:
-                seg_img[y, x] = 255 if s else 0
+                stack_img[y, x] = 255 if s else 0
 
-    return seg_img
+    return stack_img
 
-def segment_box(seg):
-    y0s = seg['y0']            # y0
-    yns = y0s + seg['Ly']     # Ly
-    x0s = min([P['x0'] for P in seg['Py_']])
-    xns = max([P['x0'] + P['L'] for P in seg['Py_']])
+def stack_box(stack):
+    y0s = stack['y0']            # y0
+    yns = y0s + stack['Ly']     # Ly
+    x0s = min([P['x0'] for P in stack['Py_']])
+    xns = max([P['x0'] + P['L'] for P in stack['Py_']])
     return y0s, yns, x0s, xns
 
-def debug_segment(background_shape, *segments):
+def debug_stack(background_shape, *stacks):
     image = blank_image(background_shape)
-    for seg in segments:
-        seg_box = segment_box(seg)
+    for stack in stacks:
+        stack_box = stack_box(stack)
         over_draw(image,
-                  draw_segment(seg, seg_box, seg['sign']),
-                  seg_box)
+                  draw_stack(stack, stack_box, stack['sign']),
+                  stack_box)
     return image
 
 def debug_blob(background_shape, *blobs):

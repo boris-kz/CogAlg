@@ -9,16 +9,16 @@ from comp_pixel import comp_pixel
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
 
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
-    Then pixel-level and external parameters are accumulated in row stack Ps, vertical blob stacks, and blobs,
+    Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
-    1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row stack, a slice of blob
-    2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_, down_fork_cnt: vertical connections per blob stack
-    3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps in non-forking blob stacks
-    4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in fork_ incomplete blobs, recursively
+    1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
+    2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_, down_fork_count: vertical connections per stack of Ps 
+    3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
+    4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_fork_, recursively
 
-    Higher-row elements include additional parameters, derived while they were lower-row elements.
-    Processing is mostly sequential because blobs are irregular, not suited for matrix operations.
+    Higher-row elements include additional parameters, derived while they were lower-row elements. Processing is bottom-up:
+    from input-row to higher-row structures, sequential because blobs are irregular, not suited for matrix operations.
     Resulting blob structure (fixed set of parameters per blob): 
 
     - root_fork = frame,  # replaced by blob-level fork in sub_blobs
@@ -28,20 +28,20 @@ from comp_pixel import comp_pixel
     - map, # inverted mask
     - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
     - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own
-    ( intra_blob extends Dert, adds crit, rng, fork_)
+    ( intra_blob structure extends Dert, adds crit, rng, fork_)
 
     Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
     per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
     is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object: 
     some physical density, hardness, inertia that represent resistance to change in positional parameters.  
 
-    This is a connectivity clustering because distance between clustered pixels should not exceed cross-comparison range.
-    That range is fixed, for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
+    This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range.
+    That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
     orientation. These params are essential because value of prediction = precision of what * precision of where. 
 
     frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
-    predictive on a blob level and should be cross-compared between blobs on the next level of search and composition.
+    predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
 
     Please see frame_blobs diagrams in Illustrations folder.
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
@@ -56,21 +56,21 @@ ave = 50  # filter or hyper-parameter, set as a guess, latter adjusted by feedba
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
 
-def image_to_blobs(
-        image):  # root function, postfix '_' denotes array vs element, prefix '_' denotes higher- vs lower- line variable
+def image_to_blobs(image):  # root function, postfix '_' denotes array, prefix '_' denotes higher- vs lower-line variable
 
     dert__ = comp_pixel(image)  # comparison of central pixel to rim pixels in 3x3 kernel
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob_=[])
-    stack_ = deque()  # buffer of running stacks
+    stack_ = deque()  # buffer of running stacks of Ps
     height, width = image.shape
 
     for y in range(height - kwidth + 1):  # first and last row are discarded
         P_ = form_P_(dert__[:, y].T)  # horizontal clustering
-        P_ = scan_P_(P_, stack_, frame)  # vertical clustering
+        P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
-    while stack_:
-        form_blob(stack_.popleft(), frame)  # frame ends, last-line stacks are merged into their blobs
+    while stack_:  # frame ends, last-line stacks are merged into their blobs:
+        form_blob(stack_.popleft(), frame)
+
     return frame  # frame of blobs
 
 ''' 
@@ -78,9 +78,9 @@ Parameterized connectivity clustering functions below:
 
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
-- form_stack combines these overlapping Ps into non-forking blob stack: vertical stack of 1-above to 1-below Ps
+- form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
-  by multiple forked stacks, then checks for blob termination and merger into whole-frame representation.
+  by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
 
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert is params of a composite structure (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
@@ -116,16 +116,18 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     return P_
 
 
-def scan_P_(P_, stack_, frame):  # merge P into same-sign blob stacks that contain higher-row _P with x-overlap
+def scan_P_(P_, stack_, frame):  # merge P into same-sign stacks of Ps, that contain higher-row _P with x-overlap
+    """
+    Each P in P_ scans higher-row _Ps (packed in stack_) left-to-right, searching for x_coordinate overlaps between
+    Ps and same-sign _Ps. Overlap is represented as up_fork in P and is added to down_fork_cnt in _P. Scan continues
+    until P.x0 >= _P.xn: no more x-overlap. Then P is packed into its up_fork stacks or initializes a new stack.
 
+    This next x_coordinate overlap evaluation is also done for loaded _P, removing those that won't overlap next P.
+    Each stack that contains removed _P is packed in blob if its down_fork_cnt==0: no lower-row connections.
+    It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
+    """
     next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
-    """
-    Each P in P_ scans higher-row _Ps (packed in stack_) left-to-right, until P.x0 >= _P.xn: no more x-overlap.
-    Then scanning stops and P is packed into its up_fork stacks or initializes a new stack.
-    This x-overlap evaluation is also done for each _P, removing those that won't overlap next P.
-    stack that contains removed _P is packed in blob if its down_fork_cnt==0: no lower-row connections.
-    It's a form of breadth-first flood fill, with forks as vertices per stack: a node in connectivity graph.
-    """
+
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
 
         P = P_.popleft()  # load left-most (lowest-x) input-row P
@@ -151,14 +153,14 @@ def scan_P_(P_, stack_, frame):  # merge P into same-sign blob stacks that conta
                 if P_:
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
-                    if stack['down_fork_cnt'] != 1:  # terminate stack
+                    if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
                         form_blob(stack, frame)
                     break
             else:  # no next-P overlap
-                if stack['down_fork_cnt'] != 1:  # terminate stack
+                if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
                     form_blob(stack, frame)
 
-                if stack_:  # load next _P
+                if stack_:  # load stack with next _P
                     stack = stack_.popleft()
                     _P = stack['Py_'][-1]
                 else:  # no stack left: terminate loop
@@ -173,7 +175,7 @@ def scan_P_(P_, stack_, frame):  # merge P into same-sign blob stacks that conta
     return next_P_  # each element is P + up_fork_ refs
 
 
-def form_stack_(y, P_, frame):  # Convert or merge every P into blob stack, merge blobs
+def form_stack_(y, P_, frame):  # Convert or merge every P into its stack of Ps, merge blobs
 
     next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
 
@@ -183,24 +185,24 @@ def form_stack_(y, P_, frame):  # Convert or merge every P into blob stack, merg
         I, G, Dy, Dx, L, x0, dert_ = P.values()
         xn = x0 + L  # next-P x0
         if not up_fork_:
-            # initialize stacks for each input-row P that has no connections in higher row:
+            # initialize new stack for each input-row P that has no connections in higher row:
             blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
-            next_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
-            blob['stack_'].append(next_stack)
+            new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
+            blob['stack_'].append(new_stack)
         else:
             if len(up_fork_) == 1 and up_fork_[0]['down_fork_cnt'] == 1:
                 # P has one up_fork and that up_fork has one root: merge P into up_fork stack:
-                next_stack = up_fork_[0]
-                accum_Dert(next_stack, I=I, G=G, Dy=Dy, Dx=Dx, S=L, Ly=1)
-                next_stack['Py_'].append(P)  # Py_: vertical buffer of Ps
-                next_stack['down_fork_cnt'] = 0  # reset down_fork_cnt
-                blob = next_stack['blob']
+                new_stack = up_fork_[0]
+                accum_Dert(new_stack, I=I, G=G, Dy=Dy, Dx=Dx, S=L, Ly=1)
+                new_stack['Py_'].append(P)  # Py_: vertical buffer of Ps
+                new_stack['down_fork_cnt'] = 0  # reset down_fork_cnt
+                blob = new_stack['blob']
 
             else:  # if > 1 up_forks, or 1 up_fork that has > 1 down_fork_cnt:
                 blob = up_fork_[0]['blob']
-                # initialize next_stack with up_fork blob:
-                next_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
-                blob['stack_'].append(next_stack)  # stack is buffered into blob
+                # initialize new_stack with up_fork blob:
+                new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
+                blob['stack_'].append(new_stack)  # stack is buffered into blob
 
                 if len(up_fork_) > 1:  # merge blobs of all up_forks
                     if up_fork_[0]['down_fork_cnt'] == 1:  # up_fork is not terminated
@@ -229,7 +231,7 @@ def form_stack_(y, P_, frame):  # Convert or merge every P into blob stack, merg
 
         blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
         blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
-        next_stack_.append(next_stack)
+        next_stack_.append(new_stack)
 
     return next_stack_
 
@@ -314,6 +316,7 @@ if __name__ == '__main__':
     
         if blob['Dert']['G'] > aveB:  # +G blob directly calls intra_fork(comp_g), no immediate sub-clustering
             intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
+        
         elif -blob['Dert']['G'] > aveB: # -G blob, sub-clustering by -vg for rng+ eval
             cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, idiomatic crit=2: not index 
 
