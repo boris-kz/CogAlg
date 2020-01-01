@@ -6,12 +6,12 @@ from collections import deque
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
 ave = 10   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
-ave_m = 10   # for m defined as min, same?
+ave_m = 10  # for m defined as min, same?
 ave_M = 255  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 127  # min |D| for initial incremental-derivation comparison(d_)
-ave_Lm = 20  # min L for sub_cluster(m), higher cost than der_comp?
-ave_Ld = 10  # min L for sub_cluster(d)
-ini_y = 500
+ave_Lm = 8  # min L for sub_cluster(m), higher cost than der_comp?
+ave_Ld = 8  # min L for sub_cluster(d)
+ini_y = 664
 # min_rng = 1  # >1 if fuzzy pixel comparison range, for sensor-specific noise only
 
 ''' 
@@ -116,38 +116,43 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
 
 def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert_, comp(rng) if frng, else comp(d)
 
-    sub_P = int(dert_[0][2] > 0), 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, sub_, seg_, dert_: same as master P
+    sub_P = dert_[0][2] > 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, sub_, seg_, dert_: same as master P
     sub_P_ = []  # return to replace P.sub_
     buff_ = deque([])
-    if frng:  # flag comp(rng), initialize prior-rng derts with _i, _d = 0 + rng-1 bi_d, _m = 0 + rng-1 bi_m:
-        for x in range(rng):
+
+    if frng:  # flag comp(rng), bilateral comp between rng-distant pixels in dert_, forming rng_d and rng_m
+              # switch to sparse rng*2-1 cross-comp?
+
+        for x in range(rng):  # initialize prior-rng derts with _i, _d = 0 + rng-1 bi_d, _m = 0 + rng-1 bi_m:
             buff_.append(dert_[x][:3])
-    else:   # 0: flag comp(d), initialize prior-rng derts with uni_d, _d=0, _m=0:
-        for x in range(rng):
-            buff_.append((dert_[x][3], 0, 0))
+        for x in range(rng, len(dert_)):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
 
-    for x in range(rng, len(dert_)):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
-
-        if frng:  # bilateral comp between rng-distant pixels in dert_, forming rng_d and rng_m
             i, shorter_bi_d, shorter_bi_m = dert_[x][:3]  # shorter-rng (rng-1) dert
             _i, _d, _m = buff_.popleft()
             d = i - _i
             if fid:  # match = min: magnitude of derived vars correlates with stability
-                m = min(i, _i) - ave_m * rdn + shorter_bi_m - ave_m * (rng-1)
+                m = min(i, _i) - ave_m * rdn \
+                    + shorter_bi_m - ave_m * (rng - 1)
             else:  # inverse match: intensity doesn't correlate with stability
-                m = ave - abs(d) * rdn + shorter_bi_m - ave * (rng-1)
-
+                m = ave - abs(d) * rdn \
+                    + shorter_bi_m - ave * (rng - 1)  # redundancy-adjusted m is accumulated over comp range per pixel
             d += shorter_bi_d  # _d and _m combine bi_d | bi_m at rng-1
             buff_.append((i, d, m))  # future _i, _d, _m
-            if x < rng * 2:
-               d *= 2; m *= 2  # back-projection for unilateral ders
+
+            if x < rng * 2: d *= 2; m *= 2  # back-projection for unilateral ders
             bi_d = _d + d  # bilateral difference, accum in rng
             bi_m = _m + m  # bilateral match, accum in rng
             dert = _i, bi_d, bi_m, d
             # P accumulation or termination:
             sub_P, sub_P_ = form_pattern(sub_P, sub_P_, dert, x, len(dert_), fid, rdn + 1, rng)
 
-        else:  # bilateral comp between rng-distant unilateral ds in dert_, forming dd and md (may match across d sign)
+    else:   # frng=0: bilateral comp between rng-distant unilateral ds in dert_, forming dd and md (may match across d sign)
+            # adjust for dd redundancy to d?
+
+        for x in range(rng):  # initialize prior-rng derts with uni_d, _d=0, _m=0:
+            buff_.append((dert_[x][3], 0, 0))
+        for x in range(rng, len(dert_)):  # backward rng-distant comp, prefix '_' denotes prior of two same-name variables
+
             i = dert_[x][3]  # i is unilateral d
             _i, _d, _m = buff_.popleft()
             d = i - _i  # d is dd
@@ -179,7 +184,7 @@ def sub_segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign
     if fmm: pri_sign = _m - ave > 0
     else:   pri_sign = _uni_d > 0
 
-    L=1; I=_p; D=_d, M=_m; sub_=[]; dert_ = [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P except no seg_
+    L=1; I=_p; D=_d; M=_m; sub_=[]; dert_ = [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P except no seg_
 
     for p, d, m, uni_d in P_dert_[1:]:
         if fmm: sign = m - ave > 0  # segmentation crit = mm sign
