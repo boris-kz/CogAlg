@@ -116,14 +116,16 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     return P_
 
 
-def scan_P_(P_, stack_, frame):  # merge P into same-sign stacks of Ps, that contain higher-row _P with x-overlap
+def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     """
-    Each P in P_ scans higher-row _Ps (packed in stack_) left-to-right, searching for x_coordinate overlaps between
-    Ps and same-sign _Ps. Overlap is represented as up_fork in P and is added to down_fork_cnt in _P. Scan continues
-    until P.x0 >= _P.xn: no more x-overlap. Then P is packed into its up_fork stacks or initializes a new stack.
+    Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
+    Overlap is represented as up_fork in P and is added to down_fork_cnt in _P. Scan continues until P.x0 >= _P.xn:
+    no x-overlap between P and next _P. Then P is packed into its up_fork stacks or initializes a new stack.
 
-    This next x_coordinate overlap evaluation is also done for loaded _P, removing those that won't overlap next P.
-    Each stack that contains removed _P is packed in blob if its down_fork_cnt==0: no lower-row connections.
+    After such test, loaded _P is also tested for x-overlap to the next P.
+    If negative, a stack with loaded _P is removed from stack_ (buffer of higher-row stacks) and tested for down_fork_cnt==0.
+    If so: no lower-row connections, the stack is packed into connected blobs (referred by its up_fork_),
+    else the stack is recycled into next_stack_, for next-row run of scan_P_.
     It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
     """
     next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
