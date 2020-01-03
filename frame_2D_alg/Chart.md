@@ -5,3 +5,4 @@ The main flowchart:
 
 [1]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_comp_pixel.png <br />
 [2]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_form_P_.png <br /> 
+[2]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_scan_P_.png <br /> 
