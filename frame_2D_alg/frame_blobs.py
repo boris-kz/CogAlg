@@ -87,7 +87,7 @@ Dert is params of a composite structure (P, stack, blob): summed dert params + d
 '''
 
 def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
-    # P is contiguous stack in horizontal slice of a blob
+    # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
     I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # initialize P params with 1st dert params
@@ -117,17 +117,16 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
 
 
 def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
-    """
+    '''
     Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
     Overlap is represented as up_fork in P and is added to down_fork_cnt in _P. Scan continues until P.x0 >= _P.xn:
     no x-overlap between P and next _P. Then P is packed into its up_fork stacks or initializes a new stack.
-
     After such test, loaded _P is also tested for x-overlap to the next P.
     If negative, a stack with loaded _P is removed from stack_ (buffer of higher-row stacks) and tested for down_fork_cnt==0.
     If so: no lower-row connections, the stack is packed into connected blobs (referred by its up_fork_),
     else the stack is recycled into next_stack_, for next-row run of scan_P_.
     It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
-    """
+    '''
     next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
