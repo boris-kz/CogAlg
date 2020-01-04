@@ -1,8 +1,11 @@
 The main flowchart:
 
 
-![Input image](https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_basic.png)
+![frame_blob](https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_high_level%20(precise)/frame_blob.png)
 
-[1]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_comp_pixel.png <br />
-[2]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_form_P_.png <br /> 
-[2]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/frame_blob_scan_P_.png <br /> 
+Further details on each function:
+![#f03c15](https://placehold.it/15/f03c15/000000?text=+) '[1]': https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_comp_pixel.png <br />
+[2]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_form_P_.png <br /> 
+[3]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_scan_P_.png <br /> 
+[4]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_form_stack_.png <br /> 
+[5]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_form_blob_.png <br /> 
