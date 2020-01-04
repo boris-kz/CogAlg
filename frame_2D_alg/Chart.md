@@ -4,7 +4,8 @@ The main flowchart:
 ![frame_blob](https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_high_level%20(precise)/frame_blob.png)
 
 Further details on each function:
-![#f03c15](https://placehold.it/15/f03c15/000000?text=+) '[1]': https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_comp_pixel.png <br />
+```diff
+- [1]#: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_comp_pixel.png <br />
 [2]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_form_P_.png <br /> 
 [3]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_scan_P_.png <br /> 
 [4]: https://github.com/kwcckw/CogAlg/blob/master/frame_2D_alg/charts_low_level%20(detailed)/frame_blob_form_stack_.png <br /> 
