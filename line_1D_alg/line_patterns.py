@@ -90,13 +90,13 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
     if (x > rng * 2 and sign != _sign) or x == X:  # sign change: terminate mP, evaluate for segmentation | intra_comp
 
         if _sign:  # +mP (low-variation): segment by mm, segment(ds) eval per -mm seg, intra_comp(rng) eval per +mm seg:
-            if L > ave_Lm * rdn:  # fixed costs
+            if L > ave_Lm * rdn:  # fixed costs =
+
                 seg_[:], rdn = segment(dert_, True, fid, rdn+1, rng)  # seg_ = fmm=1, fid, seg_
         else:
             if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d -> d_mP_: obviate d_seg_P_?
                 sub_[:], rdn = intra_comp(dert_, False, True, rdn+1, rng=1)  # sub_ = frng=0, fid=1, sub_
 
-        # recursion eval per sub_ | seg_: use adjusted rdn
         P[5][:] = sub_; P[6][:] = seg_  # may have been filled by intra_comp and sub_segment
         P_.append(P)
         L, I, D, M, sub_, seg_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated params
@@ -115,7 +115,7 @@ def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulat
 def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: initialization, accumulation, termination
 
     seg_P_ = []  # replaces P.seg_
-    _p, _d, _m, _uni_d = P_dert_[1]
+    _p, _d, _m, _uni_d = P_dert_[0]
     if fmm: _sign = _m - ave > 0  # flag: segmentation criterion is sign of mm, else sign of uni_d
     else:   _sign = _uni_d > 0
     L = 1; I =_p; D =_d; M =_m; sub_= []; seg_= []; dert_= [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P
@@ -127,8 +127,7 @@ def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: in
             # terminate segment:
             if fmm:
                 if M > ave_M * rdn and L > rng * 2:  # ave * rdn is fixed cost of comp_rng forming len(sub_P_) = ave_nP
-                    sub_[:], rdn = intra_comp(dert_, True, fid, rdn + 1, rng)  # frng=1
-
+                    sub_[:], rdn = intra_comp(dert_, True, fid, rdn + 1, rng)  # frng=True
             elif L > ave_Ld * rdn:  # segment by d sign, der+ eval per seg, merge neg-value segs into nSeg, re-eval rng+
                 fid = True
                 seg_[:], rdn = segment(dert_, False, fid, rdn+1, rng)  # d-sign seg_ = fmm=0, fid, seg_
@@ -183,8 +182,8 @@ def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert
 
         for dert in dert_[1:]:
             i = dert[3]  # unilateral d
-            d = i - _i  # d is dd
-            m = min(i, _i) - ave_m * rdn  # md = min: magnitude of derived vars corresponds to predictive value
+            d = i - _i   # d is dd
+            m = min(i, _i) - ave_m  # md = min: magnitude of derived vars corresponds to predictive value
             if x == 1:
                d *= 2; m *= 2  # back-project unilateral ders
             bi_d = _d + d  # bilateral d-difference per _i
