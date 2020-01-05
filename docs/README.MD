@@ -1,5 +1,3 @@
-test
-test1
+For the complete flowchart, please view the link below:
 
-test
-test2
+https://kwcckw.github.io/CogAlg/
