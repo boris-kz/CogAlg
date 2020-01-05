@@ -2,3 +2,6 @@ theme: jekyll-theme-minimal
 
 title: [Flowchart]
 description: [high level representation of workflow]
+
+include:
+  - "images"
