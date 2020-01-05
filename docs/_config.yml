@@ -1,1 +1,9 @@
 theme: jekyll-theme-minimal
+
+title: [Flowchart]
+description: [high level representation of workflow]
+
+logo: [To be added]
+show_downloads: ["true" or "false" to indicate whether to provide a download URL]
+
+https://github.com/pages-themes/minimal
