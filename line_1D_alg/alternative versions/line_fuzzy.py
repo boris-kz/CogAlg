@@ -12,7 +12,6 @@ image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
 # from scipy import misc
 # image = misc.face(gray=True).astype(int)
 ''' 
-line_POC is a principal version of 1st-level 1D algorithm: 
 - Cross-comparison of consecutive pixels within each row of image, then clustering them by match, forming match patterns mPs.
   Initial match is indirect: m = ave_|d| - |d|: inverse variation, because brightness doesn't correlate with predictive value.
   Each mP represents contiguous spans of pixels that form same-sign m. 

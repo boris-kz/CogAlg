@@ -55,7 +55,7 @@ def cross_comp(frame_of_pixels_):  # non-fuzzy version
 
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []  # row of patterns, initialized at each line
-        P = 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, sub_, seg_, dert_
+        P = 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, seg_, sub_, dert_
         pri_p = pixel_[0]
         pri_d, pri_m = 0, 0  # no backward d, m at x = 0
 
@@ -66,51 +66,80 @@ def cross_comp(frame_of_pixels_):  # non-fuzzy version
             bi_m = m + pri_m  # bilateral match
             dert = pri_p, bi_d, bi_m, d
             # accumulate or terminate mP: span of pixels forming same-sign m:
-            P, P_ = form_pattern(P, P_, dert, x, X, fid=False, rdn=1, rng=1)
+            P, P_ = form_pattern(P, P_, dert, x, X, rng=1)
             pri_p = p
             pri_d = d
             pri_m = m
         # terminate last P in row:
         dert = pri_p, pri_d * 2, pri_m * 2, pri_d  # last d and m are forward-projected to bilateral values
-        P, P_ = form_pattern(P, P_, dert, x+1, X, fid=False, rdn=1, rng=1)
+        P, P_ = form_pattern(P, P_, dert, x+1, X, rng=1)
         P_ += [P]
+        # evaluate sub-recursion per P:
+        P_ = intra_P(P_, fid=False, rdn=1, rng=1)
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns
 
     return frame_of_patterns_  # frame of patterns is output to level 2
 
 
-def form_pattern(P, P_, dert, x, X, fid, rdn, rng):  # initialization, accumulation, termination, recursion
-    '''
-    prefix '_' denotes 'prior'; rdn, rng are incremental per layer, seq access, rdn += 1 * typ coef?
-    fid: flag input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
-    '''
-    _sign, L, I, D, M, sub_, seg_, dert_ = P  # change sub_ and seg_ to stacks of layers, appended by feedback
-    _p, d, m, uni_d = dert
-    sign = m > 0  # m sign defines positive | negative mPs
-    if (x > rng * 2 and sign != _sign) or x == X:  # sign change: terminate mP, evaluate for segmentation | intra_comp
+def form_pattern(P, P_, dert, x, X, rng):  # initialization, accumulation, termination, recursion
 
-        if _sign:  # +mP (low-variation): segment by mm, segment(ds) eval per -mm seg, intra_comp(rng) eval per +mm seg:
-            if L > ave_Lm * rdn:  # fixed costs =
+    sign, L, I, D, M, seg_, sub_, dert_ = P  # change sub_ and seg_ to stacks of layers, appended by feedback
+    p, d, m, uni_d = dert
+    new_sign = m > 0  # m sign defines positive | negative mPs
 
-                seg_[:], rdn = segment(dert_, True, fid, rdn+1, rng)  # seg_ = fmm=1, fid, seg_
-        else:
-            if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d -> d_mP_: obviate d_seg_P_?
-                sub_[:], rdn = intra_comp(dert_, False, True, rdn+1, rng=1)  # sub_ = frng=0, fid=1, sub_
-
-        P[5][:] = sub_; P[6][:] = seg_  # may have been filled by intra_comp and sub_segment
+    if (x > rng * 2 and new_sign != sign) or x == X:  # sign change: terminate mP, evaluate for segmentation | intra_comp
         P_.append(P)
-        L, I, D, M, sub_, seg_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated params
-
-    _sign = sign  # current sign becomes prior sign
-    L += 1   # length of P, + skipped derts: 3-kernel: 1->1, 7-kernel: 3->5?
-    I += _p  # accumulate params with bilateral values:
+        L, I, D, M, seg_, sub_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated params
+    L += rng
+    I += p  # accumulate params with bilateral values:
     D += d
     M += m
-    dert_ += [(_p, d, m, uni_d)]  # uni_d for intra_comp(d) and segment(d)
-    P = _sign, L, I, D, M, sub_, seg_, dert_  # sub_ and seg_ are accumulated in intra_comp and sub_segment
+    dert_ +=  [(p, d, m, uni_d)]  # uni_d for intra_comp(d) and segment(d)
+    P = new_sign, L, I, D, M, seg_, sub_, dert_  # sub_ and seg_ are accumulated in intra_comp and sub_segment
 
     return P, P_
 
+def intra_P(P_, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub_ | seg_, use adjusted rdn
+    '''
+    fid: flag input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
+    rdn, rng are incremental per layer, seq access, rdn += 1 * typ coef?    prefix '_' denotes prior
+    '''
+    for n, (_sign, L, I, D, M, seg_, sub_, dert_) in enumerate(P_):
+        if _sign:  # +mP, low variation: segment by mm, segment(ds) eval/ -mm seg, intra_comp(rng) eval/ +mm seg:
+
+            if L > ave_Lm * rdn:  # fixed costs of new P_ are translated to ave L
+                seg_, rdn = segment(dert_, True, fid, rdn+1, rng)
+                P_[n][5][2][:], rdn = intra_seg(seg_, True, fid, rdn, rng)  # eval per seg_P, P.seg_ = fmm=1, fid, seg_
+        else:
+            if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d -> d_mP_, obviates seg_dP_
+                sub_, rdn = intra_comp(dert_, False, True, rdn+1, rng=1)
+                P_[n][6][2][:], rdn = intra_P(sub_, fid, rdn, rng)  # eval per sub_P, P.sub_ = frng=0, fid=1, sub_
+
+                # make it recursive for merged sseg__, ssub__:
+                # intra_seg(sseg__), intra_P(ssub__): after seg_ | sub_ buffering?
+    return P_
+
+def intra_seg(seg_, fmm, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub_ | seg_, use adjusted rdn
+
+    for n, (sign, L, I, D, M, sseg_, ssub_, dert_) in enumerate(seg_):
+        if fmm:   # comp i over rng incremented as 2**n: 1, 2, 4, 8:
+
+            if M > ave_M * rdn and L > rng * 2:  # ave * rdn is fixed cost of comp_rng forming len(sub_P_) = ave_nP
+                ssub_, rdn = intra_comp(dert_, True, fid, rdn + 1, rng)  # frng=1
+                seg_[n][6][2][:], rdn = intra_P(ssub_, fid, rdn, rng)  # eval per seg_, sub_ = frng=0, fid=1, sub_
+
+        elif L > ave_Ld * rdn:  # sub-segment by d sign, der+ eval per seg, merge neg-value segs into nSeg, re-eval rng+
+            fid = True
+            sseg_, rdn = segment(dert_, False, fid, rdn + 1, rng)  # d-sign seg_ = fmm=0, fid, seg_
+            for sign_d, Ld, Id, Dd, Md, seg_d_, sub_d_, dert_d_ in seg_[2]:  # seg_P in sub_seg_
+
+                if Dd > ave_D * rdn and L > rng * 2:  # D accumulated in same-d-sign segment may be higher that P.D
+                    sub_d_, rdn = intra_comp(dert_, False, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
+
+            seg_[n][5][2][:], rdn = intra_seg(sseg_, False, fid, rdn, rng)  # eval per seg_P, P.seg_ = fmm=0, fid, seg_
+
+            # still unfinished, intra_seg(sseg__), intra_P(ssub__)?
+    return seg_
 
 def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: initialization, accumulation, termination
 
@@ -118,50 +147,41 @@ def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: in
     _p, _d, _m, _uni_d = P_dert_[0]
     if fmm: _sign = _m - ave > 0  # flag: segmentation criterion is sign of mm, else sign of uni_d
     else:   _sign = _uni_d > 0
-    L = 1; I =_p; D =_d; M =_m; sub_= []; seg_= []; dert_= [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P
+    L = rng; I =_p; D =_d; M =_m; seg_= []; sub_= []; dert_= [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P
 
     for p, d, m, uni_d in P_dert_[1:]:
-        if fmm: sign = m - ave > 0  # segmentation crit = mm sign
-        else:   sign = uni_d > 0  # segmentation crit = uni_d sign
+        if fmm:
+            sign = m - ave > 0  # segmentation crit = mm sign
+        else:
+            sign = uni_d > 0  # segmentation crit = uni_d sign
         if _sign != sign:
-            # terminate segment:
-            if fmm:
-                if M > ave_M * rdn and L > rng * 2:  # ave * rdn is fixed cost of comp_rng forming len(sub_P_) = ave_nP
-                    sub_[:], rdn = intra_comp(dert_, True, fid, rdn + 1, rng)  # frng=True
-            elif L > ave_Ld * rdn:  # segment by d sign, der+ eval per seg, merge neg-value segs into nSeg, re-eval rng+
-                fid = True
-                seg_[:], rdn = segment(dert_, False, fid, rdn+1, rng)  # d-sign seg_ = fmm=0, fid, seg_
-                for _sign_d, Ld, Id, Dd, Md, sub_d_, seg_d_, dert_d_ in seg_[2]:  # seg_P in sub_seg_
-
-                    if Dd > ave_D * rdn and L > rng * 2:  # D accumulated in same-d-sign segment may be higher that P.D
-                        sub_[:], rdn = intra_comp(dert_, False, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
-
-            seg_.append((_sign, L, I, D, M, sub_, dert_))  # seg_P, same as sub_P without seg_
-            L, I, D, M, sub_, seg_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated seg_P params
-
-        L += 1; I += p; D += d; M += m; dert_.append((p, d, m, uni_d))  # accumulate seg_P params, not uni_d
+            seg_.append((_sign, L, I, D, M, seg_, sub_, dert_))  # terminate seg_P, same as P
+            L, I, D, M, seg_, sub_, dert_ = 0, 0, 0, 0, [], [], []  # reset accumulated seg_P params
         _sign = sign
+        L += rng; I += p; D += d; M += m; dert_.append((p, d, m, uni_d))  # accumulate seg_P params, not uni_d
 
-    seg_P_.append((_sign, L, I, D, M, sub_, seg_, dert_))  # pack last segment, nothing to accumulate
-    rdn *= len(seg_P_) / ave_nP
+    seg_P_.append((_sign, L, I, D, M, seg_, sub_, dert_))  # pack last segment, nothing to accumulate
+    rdn *= len(seg_P_) / ave_nP  # cost per seg?
+    intra_seg(seg_P_, fmm, fid, rdn, rng)  # evaluate for sub-recursion, different fork of intra_P, pass fmm?
+
     return (fmm, fid, seg_P_), rdn  # replace P.seg_, rdn
 
 
 def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert_, comp(rng) if frng, else comp(d)
 
-    sub_P = dert_[0][2] > 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, sub_, seg_, dert_: same as master P
+    sub_P = dert_[0][2] > 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, seg_, sub_, dert_: same as master P
     sub_P_ = []  # return to replace P.sub_
     x = 1  # for form_pattern only;  prefix '_' denotes prior of two same-name variables:
 
-    if frng:  # flag comp(rng), bilateral comp of rng*2-1- distant pixels in dert_, skip comp of intermediate derts
-        rng = rng * 2 - 1  # to compute L of sparse cross-comp: to avoid overlap between compared kernels
+    if frng:  # flag comp(rng), sparse bilateral comp, 1 pruned dert / 1 extended dert to maintain 2x overlap:
+        rng *= 2  # 1, 2, 4, 8, L+=rng, kernel = rng * 2 + 1: 3, 5, 9, 17
         _i, _d, _m = dert_[0][:3]  # initial _d = 0 + rng-1 bi_d, initial _m = 0 + rng-1 bi_m
 
-        for n in range(2, len(dert_), 2):  # backward comp skipping 1 dert
-            i, short_bi_d, short_bi_m = dert_[n][:3] # shorter-rng (rng-1) dert
+        for n in range(2, len(dert_), 2):  # backward comp, skip 1 dert to maintain overlap rate, that defines ave
+            i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
             d = i - _i
             if fid:  # match = min: magnitude of derived vars correlates with stability
-                m = min(i, _i) - ave_m + short_bi_m   # m accum in comp rng per i
+                m = min(i, _i) - ave_m + short_bi_m   # m accum / i number of comps
             else:  # inverse match: intensity doesn't correlate with stability
                 m = ave - abs(d) + short_bi_m
                 # no ave * rdn, bi_m ave_m * rng-2: comp cost is separate from mP definition for comp_P
@@ -226,91 +246,11 @@ if __name__ == "__main__":
 '''
 2nd level cross-compares resulting patterns Ps (s, L, I, D, M, r, nested e_) and evaluates them for deeper cross-comparison. 
 Depth of cross-comparison (discontinuous if generic) is increased in lower-recursion e_, then between same-recursion e_s:
+
 comp (s)?  # same-sign only
     comp (L, I, D, M)?  # in parallel or L first, equal-weight or I is redundant?  
         comp (r)?  # same-recursion (derivation) order e_
             cross_comp (e_)
             
 Then extend this 2nd level alg to a recursive meta-level algorithm
-
-Deprecated functions:
-
-def der_comp(P, rdn, rng):  # cross_comp of ds in dert_, forming md and dd (may match across d sign)
-
-    s, L, I, D, M, r, dert_ = P  # full P or sub_P from sub-clustering
-    P[5] = 1  # r: recursion flag | count = number of sub_P_s at the end of terminated dert_
-    dif_mP_ = []  # new sub-patterns:
-    dif_mP = int(dert_[0][2] > 0), 0, 0, 0, 0, 0, []  # pri_sd, Ld, Id, Dd, Md, rd, ddert_
-
-    pri_d = dert_[0][1]  # input d;  new dert, no p?
-    pri_dd, pri_md = 0, 0  # for bilateral summation, no d, m at x = 0
-
-    for x, d in enumerate(dert_[1:]):  # pixel p is compared to prior pixel in a row
-        dd = d - pri_d
-        md = min(d, pri_d) - ave_m  # evaluation of md (min d: magnitudes derived from d correspond to predictive value)
-        # form dif_mPs: spans of derts with same-sign md:
-        dif_mP, dif_mP_ = form_pattern(dif_mP, dif_mP_, pri_d, dd + pri_dd, md + pri_md, x+1, X, 1, rng, rdn)
-        pri_d = d
-        pri_dd = dd
-        pri_md = md
-    # terminate last dif_mP in P.dert_:
-    dif_mP, dif_mP_ = form_pattern(dif_mP, dif_mP_, pri_d, dd, md, x + 1, X, 1, rng, rdn)
-    dert_.append((1, dif_mP_))  # append deeper layer' typ (rng_mP=0 | dif_mP=1 | dP=2) and P_ to terminated dert_
-
-    return P
-
-def rng_comp(P, fd, rdn, rng):  # cross-comp of rng-distant ps in dert_; fd: flag dderived
-
-    s, L, I, D, M, r, dert_ = P
-    P[5] = 1  # r: recursion flag | count = number of sub_P_s at the end of terminated dert_
-    rng_mP_ = []  # new sub_patterns:
-    rng_mP = int(dert_[0][2] > 0), 0, 0, 0, 0, 0, []  # pri_sr, Lr, Ir, Dr, Mr, rr, rdert_
-
-    for i in range(rng, L + 1):  # bilateral comp between rng-distant pixels
-        p, acc_d, acc_m = dert_[i]
-        _p, _acc_d, _acc_m = dert_[i - rng]
-        d = p - _p
-        if fd:
-            m = min(p, _p) - ave_m  # magnitude of vars derived from d corresponds to predictive value, thus direct match
-        else:
-            m = ave - abs(d)  # magnitude of brightness doesn't correlate with stability, thus inverse match
-        acc_d += d
-        acc_m += m  # accumulates difference and match between p and all prior ps in extended rng
-        dert_[i] = (p, acc_d, acc_m)
-        _acc_d += d  # accumulates difference and match between p and all prior and subsequent ps in extended rng
-        _acc_m += m
-        if i >= rng * 2:    # form rng_mPs: spans of pixels with same-sign acc_m:
-            rng_mP, rng_mP_ = form_pattern(rng_mP, rng_mP_, _p, _acc_d, _acc_m, i, L, fd, rdn + 1, rng)
-    # terminate last rng_mP in P.dert_:
-    rng_mP, rng_mP_ = form_pattern(rng_mP, rng_mP_, _p, _acc_d, _acc_m, i, L, fd, rdn + 1, rng)
-    dert_.append((0, rng_mP_))  # append deeper layer' typ (rng_mP=0 | dif_mP=1 | dP=2) and P_ to terminated dert_
-
-    return P
-
-def sub_cluster_d(P, rdn, rng):  # d-specific version of sub-clustering, similar m version
-
-    P[5] += 1  # r: recursive dert_ sub-clustering cnt
-    dert_ = P[6]  # s, L, I, D, M, r, dert_ = P
-    dP_ = []
-    pri_p, pri_d, pri_m = dert_[0]
-    pri_sd = pri_d > 0
-    dP = pri_sd, 1, pri_p, pri_d, pri_m, [(pri_p, pri_d, pri_m)]  # initialize dP: sd, Ld, Id, Dd, Md, ddert_
-
-    for p, d, m in dert_[1:]:
-        sd = d > 0
-        if pri_sd != sd:  # terminate dP
-
-            if dP[3] > ave_D:
-                dP = der_comp(dP, rdn + 1, rng * 2 - 1)  # rng between central pixels avoids overlap in d scope
-
-            dP_.append(dP)
-            dP = sd, 0, 0, 0, 0, []  # reset accumulated params
-
-        dP = sd, dP[1] + 1, dP[2] + p, dP[3] + d, dP[4] + m, dP[5].append((p, d, m))  # accumulate Ld, Id, Dd, Md, ddert_
-        pri_sd = sd
-
-    dP_.append(dP)  # pack last dP in P.dert_, nothing to accumulate
-    P[6].append((2, dP_))  # append deeper layer' typ (rng_mP=0 | dif_mP=1 | dP=2) and P_ to terminated dert_
-
-    return P
 '''
