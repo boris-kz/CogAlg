@@ -47,15 +47,15 @@ ini_y = 664
   prefix 'f' denotes binary flag
   '''
 
-def cross_comp(frame_of_pixels_):  # non-fuzzy version
+def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern is nested recursively
 
     Y, X = image.shape  # Y: frame height, X: frame width
-    frame_of_patterns_ = []  # output frame of mPs: match patterns, including sub_patterns from recursive form_pattern
+    frame_of_patterns_ = []
     for y in range(ini_y + 1, Y):
 
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []  # row of patterns, initialized at each line
-        P = 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, seg_, sub_, dert_
+        P = 0, 0, 0, 0, 0, []  # sign, L, I, D, M, dert_; sub_ and layer_ added in intra_P
         pri_p = pixel_[0]
         pri_d, pri_m = 0, 0  # no backward d, m at x = 0
 
@@ -75,15 +75,15 @@ def cross_comp(frame_of_pixels_):  # non-fuzzy version
         P, P_ = form_pattern(P, P_, dert, x+1, X, rng=1)
         P_ += [P]
         # evaluate sub-recursion per P:
-        P_ = intra_P(P_, fid=False, rdn=1, rng=1)
+        P_ = intra_P(P_, fid=False, rdn=1, rng=1)  # calls intra_P for P_layer = depth
         frame_of_patterns_ += [P_]  # line of patterns is added to frame of patterns
 
-    return frame_of_patterns_  # frame of patterns is output to level 2
+    return frame_of_patterns_  # frame of patterns will be output to level 2
 
 
 def form_pattern(P, P_, dert, x, X, rng):  # initialization, accumulation, termination, recursion
 
-    sign, L, I, D, M, seg_, sub_, dert_ = P  # change sub_ and seg_ to stacks of layers, appended by feedback
+    sign, L, I, D, M, layer_, seg_, sub_, dert_ = P  # layer_: P nested to the depth = len(layer_), appended by feedback
     p, d, m, uni_d = dert
     new_sign = m > 0  # m sign defines positive | negative mPs
 
@@ -99,12 +99,30 @@ def form_pattern(P, P_, dert, x, X, rng):  # initialization, accumulation, termi
 
     return P, P_
 
-def intra_P(P_, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub_ | seg_, use adjusted rdn
-    '''
-    fid: flag input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
-    rdn, rng are incremental per layer, seq access, rdn += 1 * typ coef?    prefix '_' denotes prior
-    '''
-    for n, (_sign, L, I, D, M, seg_, sub_, dert_) in enumerate(P_):
+''' Recursive functions extend pattern structure to 1d hierarchy and then 2d hierarchy, same for all layers:
+    sign,  #  of root crit
+    Dert = L, I, D, M,
+    dert_, # recursive comp | segment inputs, maps to higher P for feedback
+           # 1st-order conditional 1d array of next layer:
+    next_, # next-layer sub_ | seg_, characterized by: 
+    fork,  # flag: next is seg_ per segment or sub_ per intra_comp
+    crit,  # flag: mm | d sign segmentation in seg_, or rng+ | der+ comp in sub_
+    fid,   # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
+    rdn,   # redundancy to higher layers, possibly also lateral overlap of rng+, seg_d, der+, rdn += 1 * typ coef?
+    rng,   # comp range
+             # 2nd-order conditional 2d array of deeper layers:
+    layer_,  # each layer has Dert and array of seg_|sub_s, each with fork and crit, nested to different depth
+             # for layer-parallel access and comp, similar to frequency domain representation
+    root_P,  # higher-P reference for layer-sequential feedback 
+
+    orders of composition: 1Le dert ) 2Le P of derts ) 3Le P of sub_Ps ) nLe P of layers? 
+    line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD processing? '''
+
+
+def intra_P(P_, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub_ | seg_, use len(next_)- adjusted rdn?
+
+    for n, (_sign, L, I, D, M, layer_, seg_, sub_, dert_) in enumerate(P_[5][-1]):
+        # in sub_ of lst layer | dert_ of top layer?
         if _sign:  # +mP, low variation: segment by mm, segment(ds) eval/ -mm seg, intra_comp(rng) eval/ +mm seg:
 
             if L > ave_Lm * rdn:  # fixed costs of new P_ are translated to ave L
@@ -115,8 +133,7 @@ def intra_P(P_, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub
                 sub_, rdn = intra_comp(dert_, False, True, rdn+1, rng=1)
                 P_[n][6][2][:], rdn = intra_P(sub_, fid, rdn, rng)  # eval per sub_P, P.sub_ = frng=0, fid=1, sub_
 
-                # make it recursive for merged sseg__, ssub__:
-                # intra_seg(sseg__), intra_P(ssub__): after seg_ | sub_ buffering?
+    intra_P(P_, fid, rdn, rng)  # recursion eval per new layer, in P_.layer_[-1]: array of mixed seg_s and sub_s
     return P_
 
 def intra_seg(seg_, fmm, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub_ | seg_, use adjusted rdn
@@ -144,7 +161,7 @@ def intra_seg(seg_, fmm, fid, rdn, rng):  # evaluate for sub-recursion in P_, fi
 def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: initialization, accumulation, termination
 
     seg_P_ = []  # replaces P.seg_
-    _p, _d, _m, _uni_d = P_dert_[0]
+    _p, _d, _m, _uni_d = P_dert_[0]  # prefix '_' denotes prior
     if fmm: _sign = _m - ave > 0  # flag: segmentation criterion is sign of mm, else sign of uni_d
     else:   _sign = _uni_d > 0
     L = rng; I =_p; D =_d; M =_m; seg_= []; sub_= []; dert_= [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P

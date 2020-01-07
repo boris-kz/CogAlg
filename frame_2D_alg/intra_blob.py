@@ -30,7 +30,7 @@ from functools import reduce
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert__, # comp_v inputs
        
-    segment_[ seg_params, Py_ [(P_params, dert_)]],
+    stack_[ stack_params, Py_ [(P_params, dert_)]],
     # references down blob formation tree in vertical (horizontal) order, accumulating Dert params
     
     fork_ # refs down sub_blob derivation trees, 1|2: g,m sub_blob_s / intensity layer | g sub_blob_ / angle layer
@@ -38,7 +38,6 @@ from functools import reduce
          layer_ [(Dert, sub_blob_)]  # alternating g (even) | a (odd) layers across derivation tree
         ]
         # deeper layers are mixed-fork with nested sub_blob_, Dert params are for layer-parallel comp_blob
-
 
     Angle is a direction of gradient, its predictive value is proportional to the magnitude of gradient.
     Thus, angle computation is selective to high-gradient blobs: angle blobs layer is below gradient blobs layer. 
