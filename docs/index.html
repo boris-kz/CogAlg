@@ -7,8 +7,41 @@
     <body>
         <main>
             <h2 id="frame_blobs">frame_blobs</h2>
-            This is the flowchart for frame_blobs:<br>
+             2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
+            frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
+            comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
+            Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
+            adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
+            1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
+            2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_, down_fork_count: vertical connections per stack of Ps 
+            3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
+            4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_fork_, recursively
+            Higher-row elements include additional parameters, derived while they were lower-row elements. Processing is bottom-up:
+            from input-row to higher-row structures, sequential because blobs are irregular, not suited for matrix operations.
+            Resulting blob structure (fixed set of parameters per blob): 
+            - root_fork = frame,  # replaced by blob-level fork in sub_blobs
+            - Dert = dict(I, G, Dy, Dx, S, Ly), # summed pixel dert params (I, G, Dy, Dx), surface area S, vertical depth Ly
+            - sign = s,  # sign of gradient deviation
+            - box  = [y0, yn, x0, xn], 
+            - map, # inverted mask
+            - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
+            - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own
+            ( intra_blob structure extends Dert, adds crit, rng, fork_)
+            Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
+            per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
+            is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object: 
+            some physical density, hardness, inertia that represent resistance to change in positional parameters.  
+            This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range.
+            That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
+            orientation. These params are essential because value of prediction = precision of what * precision of where. 
+            frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
+            were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
+            predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
+            prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
+            postfix '_' denotes array name, vs. same-name elements of that array <br>
             <br>
+            <br>
+            <h3 id="Flowchart">Flowchart:</h3>
             <img src="https://kwcckw.github.io/CogAlg/assets/frame_blobs.png" width="1024" title="flowchart" usemap="#frame_blobs"/>
             <map name="frame_blobs">
                 <area shape="rect" coords="111,92,227,158" href="https://kwcckw.github.io/CogAlg/assets/comp_pixel.png">
