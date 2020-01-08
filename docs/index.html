@@ -32,19 +32,27 @@
             - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own <br>
             ( intra_blob structure extends Dert, adds crit, rng, fork_) <br>
             <br>
+            
+            
+             <textarea rows="2" cols="20" wrap="hard">
+
             Blob is 2D pattern: <br>
-            connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation <br>
-            per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) <br>
-            is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object: <br>
-            some physical density, hardness, inertia that represent resistance to change in positional parameters.  <br>
-            This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range. <br>
-            That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, <br>
-            orientation. These params are essential because value of prediction = precision of what * precision of where. <br>
-            frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params <br>
-            were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also <br>
-            predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition. <br>
-            prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure <br>
+            connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation 
+            per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
+            is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object:  <br>
+            some physical density, hardness, inertia that represent resistance to change in positional parameters. 
+            This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range. 
+            That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
+            orientation. These params are essential because value of prediction = precision of what * precision of where. 
+            frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
+            were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also 
+            predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition. 
+            prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure 
             postfix '_' denotes array name, vs. same-name elements of that array <br>
+                 
+           
+            </textarea> 
+                 
             <br>
             <br>
             <h3 id="Flowchart">Flowchart:</h3>
