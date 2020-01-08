@@ -34,19 +34,21 @@
             <br>
            
             Blob is 2D pattern: <br>
-            connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation <br>
-            per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) <br>
-            is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object:  <br>
+            connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation per pixel. <br>
+            It is used as inverse measure of partial match (predictive value) because direct match (min intensity)is not meaningful in vision. <br>
+            Intensity of reflected light doesn't correlate with predictive value of observed object:  <br>
             some physical density, hardness, inertia that represent resistance to change in positional parameters. <br>
             This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range. <br>
-            That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, <br>
-            orientation. These params are essential because value of prediction = precision of what * precision of where. <br> 
-            frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params <br>
-            were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also <br>
-            predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition. <br>
+            That range is fixed for each layer of search, to enable encoding of input pose parameters: 
+            coordinates, dimensions, orientation. <br>
+            These params are essential because value of prediction = precision of what * precision of where. <br> 
+            frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. <br>
+            These params were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, <br>
+            so they are also predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition. <br>
+            <br>
+            <br>
             prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure <br>
-            postfix '_' denotes array name, vs. same-name elements of that array <br>
-                 
+            postfix '_' denotes array name, vs. same-name elements of that array <br> 
             <br>
             <br>
             <h3 id="Flowchart">Flowchart:</h3>
