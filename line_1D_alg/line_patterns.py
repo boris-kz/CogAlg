@@ -47,7 +47,7 @@ ini_y = 664
   prefix 'f' denotes binary flag
   '''
 
-def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern is nested recursively
+def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
 
     Y, X = image.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []
@@ -100,38 +100,40 @@ def form_pattern(P, P_, dert, x, X, rng):  # initialization, accumulation, termi
     return P, P_
 
 ''' Recursive functions extend pattern structure to 1d hierarchy and then 2d hierarchy, same for all layers:
+
+    fid,   # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
+    rdn,   # redundancy to higher layers, possibly lateral overlap of rng+, seg_d, der+, rdn += 1 * typ coef?
+    rng,   # comp range
+    crit,  # flag: mm | d sign segmentation in seg_, or rng+ | der+ comp in sub_
     sign,  #  of root crit
     Dert = L, I, D, M,
-    dert_, # recursive comp | segment inputs, maps to higher P for feedback
+    dert_, # input for recursive comp | segment, maps to higher P for feedback
            # 1st-order conditional 1d array of next layer:
-    next_, # next-layer sub_ | seg_, characterized by: 
-    fork,  # flag: next is seg_ per segment or sub_ per intra_comp
-    crit,  # flag: mm | d sign segmentation in seg_, or rng+ | der+ comp in sub_
-    fid,   # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
-    rdn,   # redundancy to higher layers, possibly also lateral overlap of rng+, seg_d, der+, rdn += 1 * typ coef?
-    rng,   # comp range
+    seg_,  # seg_P_ from sub_segment 
+    sub_,  # sub_P_ from intra_comp
              # 2nd-order conditional 2d array of deeper layers:
-    layer_,  # each layer has Dert and array of seg_|sub_s, each with fork and crit, nested to different depth
+    layer_,  # each layer has Dert and array of seg_|sub_s, each with crit and fid, nested to different depth
              # for layer-parallel access and comp, similar to frequency domain representation
-    root_P,  # higher-P reference for layer-sequential feedback 
+    root_P   # reference for layer-sequential feedback 
 
-    orders of composition: 1Le dert ) 2Le P of derts ) 3Le P of sub_Ps ) nLe P of layers? 
+    orders of composition: 1st: dert_, 2nd: sub_P_(derts), 3rd: P layer_(sub_P_(derts))? 
     line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD processing? '''
 
 
-def intra_P(P_, fid, rdn, rng):  # evaluate for sub-recursion in P_, filling sub_ | seg_, use len(next_)- adjusted rdn?
+def intra_P(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, filling sub_ | seg_, len(sub_)- adjusted rdn?
 
-    for n, (_sign, L, I, D, M, layer_, seg_, sub_, dert_) in enumerate(P_[5][-1]):
-        # in sub_ of lst layer | dert_ of top layer?
+    for n, (_sign, L, I, D, M, dert_, seg_, sub_, layer_) in enumerate(P_[-1][-1]):  # sub_ of lst layer
         if _sign:  # +mP, low variation: segment by mm, segment(ds) eval/ -mm seg, intra_comp(rng) eval/ +mm seg:
 
             if L > ave_Lm * rdn:  # fixed costs of new P_ are translated to ave L
-                seg_, rdn = segment(dert_, True, fid, rdn+1, rng)
+                seg_, rdn = sub_segment(dert_, True, fid, rdn+1, rng)
                 P_[n][5][2][:], rdn = intra_seg(seg_, True, fid, rdn, rng)  # eval per seg_P, P.seg_ = fmm=1, fid, seg_
         else:
             if -M > ave_D * rdn and L > rng * 2:  # -M > fixed costs of full-P comp_d -> d_mP_, obviates seg_dP_
-                sub_, rdn = intra_comp(dert_, False, True, rdn+1, rng=1)
+                sub_, rdn = extend_comp(dert_, False, True, rdn+1, rng=1)
                 P_[n][6][2][:], rdn = intra_P(sub_, fid, rdn, rng)  # eval per sub_P, P.sub_ = frng=0, fid=1, sub_
+
+            # else merge short Ps?
 
     intra_P(P_, fid, rdn, rng)  # recursion eval per new layer, in P_.layer_[-1]: array of mixed seg_s and sub_s
     return P_
@@ -142,23 +144,26 @@ def intra_seg(seg_, fmm, fid, rdn, rng):  # evaluate for sub-recursion in P_, fi
         if fmm:   # comp i over rng incremented as 2**n: 1, 2, 4, 8:
 
             if M > ave_M * rdn and L > rng * 2:  # ave * rdn is fixed cost of comp_rng forming len(sub_P_) = ave_nP
-                ssub_, rdn = intra_comp(dert_, True, fid, rdn + 1, rng)  # frng=1
+                ssub_, rdn = extend_comp(dert_, True, fid, rdn + 1, rng)  # frng=1
                 seg_[n][6][2][:], rdn = intra_P(ssub_, fid, rdn, rng)  # eval per seg_, sub_ = frng=0, fid=1, sub_
 
         elif L > ave_Ld * rdn:  # sub-segment by d sign, der+ eval per seg, merge neg-value segs into nSeg, re-eval rng+
             fid = True
-            sseg_, rdn = segment(dert_, False, fid, rdn + 1, rng)  # d-sign seg_ = fmm=0, fid, seg_
+            sseg_, rdn = sub_segment(dert_, False, fid, rdn + 1, rng)  # d-sign seg_ = fmm=0, fid, seg_
             for sign_d, Ld, Id, Dd, Md, seg_d_, sub_d_, dert_d_ in seg_[2]:  # seg_P in sub_seg_
 
                 if Dd > ave_D * rdn and L > rng * 2:  # D accumulated in same-d-sign segment may be higher that P.D
-                    sub_d_, rdn = intra_comp(dert_, False, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
+                    sub_d_, rdn = extend_comp(dert_, False, fid, rdn + 1, rng)  # frng = 0, fid = 1: cross-comp d
 
-            seg_[n][5][2][:], rdn = intra_seg(sseg_, False, fid, rdn, rng)  # eval per seg_P, P.seg_ = fmm=0, fid, seg_
-
-            # still unfinished, intra_seg(sseg__), intra_P(ssub__)?
+    ''' layer cycle or mixed-fork: breadth-first beyond same-fork sub_?
+        rng+, der+, seg_d( der+ | merge-> rng+): fixed cycle? 
+        also merge initial non-selected rng+ | der+?
+        
+        sseg__ += [intra_seg(sseg_, False, fid, rdn, rng)]  # line-wide for caching only?
+    '''
     return seg_
 
-def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: initialization, accumulation, termination
+def sub_segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: initialization, accumulation, termination
 
     seg_P_ = []  # replaces P.seg_
     _p, _d, _m, _uni_d = P_dert_[0]  # prefix '_' denotes prior
@@ -184,7 +189,7 @@ def segment(P_dert_, fmm, fid, rdn, rng):  # mP segmentation by mm or d sign: in
     return (fmm, fid, seg_P_), rdn  # replace P.seg_, rdn
 
 
-def intra_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert_, comp(rng) if frng, else comp(d)
+def extend_comp(dert_, frng, fid, rdn, rng):  # extended cross_comp within P.dert_, comp(rng) if frng, else comp(d)
 
     sub_P = dert_[0][2] > 0, 0, 0, 0, 0, [], [], []  # sign, L, I, D, M, seg_, sub_, dert_: same as master P
     sub_P_ = []  # return to replace P.sub_
