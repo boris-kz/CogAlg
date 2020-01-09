@@ -43,18 +43,18 @@ from comp_pixel import comp_pixel
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
 
-    Please see frame_blobs diagrams in Illustrations folder.
-    prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
-    postfix '_' denotes array name, vs. same-name elements of that array
+    Please see diagrams of frame_blobs on https://kwcckw.github.io/CogAlg/
 '''
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
 ave = 50  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
+
+# prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
+# postfix '_' denotes array name, vs. same-name elements of that array
 
 def image_to_blobs(image):  # root function, postfix '_' denotes array, prefix '_' denotes higher- vs lower-line variable
 
