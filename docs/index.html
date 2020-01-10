@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>frame_blobs</title>
+    </head>
+    <body>
+        <main>
+            <h2 id="frame_blobs">frame_blobs</h2>
+            2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.<br>
+            frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel. <br>   
+            comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. <br>
+            Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,<br>
+            adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:<br>
+            <br>
+            1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob <br>
+            2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_, down_fork_count: vertical connections per stack of Ps <br>
+            3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps <br>
+            4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_fork_, recursively <br>
+            <br>
+            Higher-row elements include additional parameters, derived while they were lower-row elements. Processing is bottom-up: <br>
+            <br>
+            from input-row to higher-row structures, sequential because blobs are irregular, not suited for matrix operations. <br>
+            Resulting blob structure (fixed set of parameters per blob): <br>
+            <br>
+            - root_fork = frame,  # replaced by blob-level fork in sub_blobs <br>
+            - Dert = dict(I, G, Dy, Dx, S, Ly), # summed pixel dert params (I, G, Dy, Dx), surface area S, vertical depth Ly <br>
+            - sign = s,  # sign of gradient deviation <br>
+            - box  = [y0, yn, x0, xn], <br>
+            - map, # inverted mask <br>
+            - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples <br>
+            - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own <br>
+            ( intra_blob structure extends Dert, adds crit, rng, fork_) <br>
+            <br>
+           
+            Blob is 2D pattern: <br>
+            <br>
+            connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation per pixel. <br>
+            It is used as inverse measure of partial match (predictive value) because direct match (min intensity)is not meaningful in vision. <br>
+            Intensity of reflected light doesn't correlate with predictive value of observed object:  <br>
+            some physical density, hardness, inertia that represent resistance to change in positional parameters. <br>
+            This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range. <br>
+            That range is fixed for each layer of search, to enable encoding of input pose parameters: 
+            coordinates, dimensions, orientation. <br>
+            These params are essential because value of prediction = precision of what * precision of where. <br> 
+            frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. <br>
+            These params were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, <br>
+            so they are also predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition. <br>
+            <br>
+            <br>
+            prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure <br>
+            postfix '_' denotes array name, vs. same-name elements of that array <br> 
+            <br>
+            <br>
+            <center><h2 id="Hierarchical Preview">Hierarchy :</h2></center>
+            <br>
+            <center><img src="https://kwcckw.github.io/CogAlg/assets/hierarchical_preview.png" width="614" title="Hierarchical Preview"/></center>
+            <br>
+            <br>
+            <center><h2 id="Flowchart">Flowchart :</h2></center>
+            <br>
+            <center><img src="https://kwcckw.github.io/CogAlg/assets/frame_blobs.png" width="362" title="flowchart" usemap="#frame_blobs"/></center>
+            <map name="frame_blobs">
+                <area shape="rect" coords="111,92,227,158" href="https://kwcckw.github.io/CogAlg/assets/comp_pixel.png">
+                <area shape="rect" coords="111,456,227,513" href="https://kwcckw.github.io/CogAlg/assets/form_P_.png">
+                <area shape="rect" coords="111,563,227,630" href="https://kwcckw.github.io/CogAlg/assets/scan_P_.png">
+                <area shape="rect" coords="111,682,227,749" href="https://kwcckw.github.io/CogAlg/assets/form_stack_.png">
+                <area shape="rect" coords="111,1121,227,1180" href="https://kwcckw.github.io/CogAlg/assets/form_blob.png">
+            </map>
+            <br>
+            <br>
+            <center> Click on the function name (red color) to view the further details of each function. </center>
+        </main>
+    </body>
+</html>
