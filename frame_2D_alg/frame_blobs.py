@@ -7,16 +7,20 @@ from comp_pixel import comp_pixel
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
+
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
+
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
     2Le, line y-2: scan_P_(P, hP) -> hP, up_fork_, down_fork_count: vertical connections per stack of Ps 
     3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
     4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_fork_, recursively
+
     Higher-row elements include additional parameters, derived while they were lower-row elements. Processing is bottom-up:
     from input-row to higher-row structures, sequential because blobs are irregular, not suited for matrix operations.
     Resulting blob structure (fixed set of parameters per blob): 
+
     - root_fork = frame,  # replaced by blob-level fork in sub_blobs
     - Dert = dict(I, G, Dy, Dx, S, Ly), # summed pixel dert params (I, G, Dy, Dx), surface area S, vertical depth Ly
     - sign = s,  # sign of gradient deviation
@@ -25,31 +29,34 @@ from comp_pixel import comp_pixel
     - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
     - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own
     ( intra_blob structure extends Dert, adds crit, rng, fork_)
+
     Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
     per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
     is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object: 
     some physical density, hardness, inertia that represent resistance to change in positional parameters.  
+
     This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range.
     That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
     orientation. These params are essential because value of prediction = precision of what * precision of where. 
+
     frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
-    Please see frame_blobs diagrams in Illustrations folder.
-    prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
-    postfix '_' denotes array name, vs. same-name elements of that array
+
+    Please see diagrams of frame_blobs on https://kwcckw.github.io/CogAlg/
 '''
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
 ave = 50  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
 
-def image_to_blobs(
-        image):  # root function, postfix '_' denotes array, prefix '_' denotes higher- vs lower-line variable
+# prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
+# postfix '_' denotes array name, vs. same-name elements of that array
+
+def image_to_blobs(image):  # root function, postfix '_' denotes array, prefix '_' denotes higher- vs lower-line variable
 
     dert__ = comp_pixel(image)  # comparison of central pixel to rim pixels in 3x3 kernel
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob_=[])
@@ -66,21 +73,21 @@ def image_to_blobs(
 
     return frame  # frame of blobs
 
-
 ''' 
 Parameterized connectivity clustering functions below:
+
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
+
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert is params of a composite structure (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-
 def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
-    # P is contiguous stack in horizontal slice of a blob
+    # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
     I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # initialize P params with 1st dert params
@@ -110,7 +117,7 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
 
 
 def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
-    """
+    '''
     Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
     Overlap is represented as up_fork in P and is added to down_fork_cnt in _P. Scan continues until P.x0 >= _P.xn:
     no x-overlap between P and next _P. Then P is packed into its up_fork stacks or initializes a new stack.
@@ -119,7 +126,7 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
     If so: no lower-row connections, the stack is packed into connected blobs (referred by its up_fork_),
     else the stack is recycled into next_stack_, for next-row run of scan_P_.
     It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
-    """
+    '''
     next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
@@ -307,12 +314,13 @@ if __name__ == '__main__':
         }),
     }
     for blob in frame_of_blobs['blob_']:  # evaluate recursive sub-clustering in each blob, via cluster_eval -> intra_fork
-
+    
         if blob['Dert']['G'] > aveB:  # +G blob directly calls intra_fork(comp_g), no immediate sub-clustering
             intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
-
+        
         elif -blob['Dert']['G'] > aveB: # -G blob, sub-clustering by -vg for rng+ eval
             cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, idiomatic crit=2: not index 
+
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
     '''

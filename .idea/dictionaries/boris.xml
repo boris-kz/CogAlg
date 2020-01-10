@@ -29,6 +29,7 @@
       <w>ddert</w>
       <w>ddirection</w>
       <w>dert</w>
+      <w>dertn</w>
       <w>derts</w>
       <w>diag</w>
       <w>discr</w>
@@ -39,6 +40,7 @@
       <w>dyay</w>
       <w>elong</w>
       <w>fangle</w>
+      <w>fcrit</w>
       <w>fder</w>
       <w>feedforward</w>
       <w>fforks</w>
@@ -63,8 +65,10 @@
       <w>ifork</w>
       <w>iforks</w>
       <w>iidx</w>
+      <w>iinp</w>
       <w>ilayer</w>
       <w>imap</w>
+      <w>increm</w>
       <w>indep</w>
       <w>indexx</w>
       <w>interferance</w>
@@ -91,15 +95,18 @@
       <w>paral</w>
       <w>parallelization</w>
       <w>parallelized</w>
+      <w>parameterization</w>
       <w>pblob</w>
       <w>pdert</w>
       <w>priori</w>
       <w>rblob</w>
       <w>rblobs</w>
+      <w>rdert</w>
       <w>reinput</w>
       <w>restorable</w>
       <w>rrdn</w>
       <w>sblob</w>
+      <w>sdert</w>
       <w>segs</w>
       <w>sseg</w>
       <w>ssub</w>
