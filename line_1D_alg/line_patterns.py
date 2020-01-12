@@ -48,7 +48,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         # initialization per row:
         pixel_ = frame_of_pixels_[y, :]  # y is index of new line pixel_
         P_ = []  # row of patterns
-        __p, _p = pixel_[0, 1]  # each prefix '_' denotes prior
+        __p, _p = pixel_[0:2]  # each prefix '_' denotes prior
         _d = _p - __p  # initial comp
         _m = ave - abs(_d)
         _bi_d = _d * 2  # __d and __m are back-projected as = _d or _m
@@ -58,7 +58,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             else: sign = 1  # medium variation
         else: sign = 2  # high variation
         # initialize P with dert_[0]:
-        P = sign, __p, _bi_d, _bi_m, [(__p, _bi_d, _bi_m, _d)], [], []  # sign, I, D, M, dert_, sub_P_, layer_
+        P = sign, __p, _bi_d, _bi_m, [(__p, _bi_d, _bi_m, _d)], [0,0,0,[]], []  # sign, I, D, M, dert_, sub_P_, layer_
 
         for p in pixel_[2:]:  # pixel p is compared to prior pixel _p in a row
             d = p - _p
@@ -123,23 +123,22 @@ def intra_P(P_, fid, rdn, rng, sD):  # evaluate for sub-recursion in line P_, fi
 
     for n, (sign, I, D, M, dert_, sub_, layer_) in enumerate(P_):  # pack fid, rdn, rng in P_? frng vs. rng?
 
-        if sign == 0:  # low-variation P: eval for rng+ extend_comp
-            if M > ave_M * rdn and len(dert_) > 2:  # eval vs. fixed cost of rng+, @ rdn for len(sub_) = ave_nP
+        if sign == 0:  # low-variation P: eval for rng+
+            if M > ave_M * rdn and len(dert_) > 4:  # eval vs. fixed cost of rng+, @ rdn for len(sub_) = ave_nP
                 sub_ = rng_comp(dert_, fid, rdn+1, rng)  # sub_ = fid, rdn, rng, sub_
-                P_[n][5][2][:] = intra_P(sub_[-1], fid, rdn+1, rng, 0)  # deeper recursion eval
+                P_[n][5][-1][:] = intra_P(sub_[-1], fid, rdn+1, rng, 0)  # deeper recursion eval
 
-        elif sign == 1 and not sD:  # mid-variation P: segment dert_ by d sign
-            if len(dert_) > ave_L * rdn:  # fixed costs of new P_ are translated to ave L
+        elif sign == 1 and not sD:  # mid-variation P: segment dert_ by ds, sign match covers variable cost?
+            if len(dert_) > ave_L * rdn:  # low |M|, filter by L only
                 sub_, sD = segment(dert_, rdn+1, rng)   # P.sub_ = fid=1, rdn, rng, sub_
-                P_[n][5][2][:] = intra_P(sub_[-1], True, rdn+1, rng, sD)  # will trigger last fork:
+                P_[n][5][-1][:] = intra_P(sub_[-1], True, rdn+1, rng, sD)  # will trigger next fork:
 
-        elif sign == 2 or sD:  # high-variation P: eval for der+ extend_comp, if sD: called after segment()
-            if not sD: sD = -M  # no sD accumulated in segment()
-            # or if len(dert_)/len(sub_): same-ds L?
-            if sD > ave_D * rdn and len(dert_) > 2:  # > fixed costs of full-P comp_der+, obviates seg_dP_
+        elif sign == 2 or sD:  # high-variation P: eval for der+, if sD: called after segment()?
+            Ave_D = ave_D * rdn  # or if sD: filter by L: n of consecutive ms?
+            if (-M > Ave_D or sD > Ave_D) and len(dert_) > 3: # > fixed costs of full-P comp, obviates seg_dP_
                 fid = True
                 sub_ = der_comp(dert_, rdn+1, rng)  # sub_ = fid=1, rdn, rng, sub_
-                P_[n][5][2][:] = intra_P(sub_[-1], fid, rdn+1, rng, 0)
+                P_[n][5][-1][:] = intra_P(sub_[-1], fid, rdn+1, rng, 0)
 
         # each: else merge non-selected sub_Ps within P, if in max recursion depth? Eval per P_: same op, !layer
     return fid, rdn, rng, P_
@@ -156,13 +155,13 @@ def segment(P_dert_, rdn, rng):  # mP segmentation by d sign: initialization, ac
     for p, d, m, uni_d in P_dert_[1:]:
         sign = uni_d > 0
         if _sign != sign:
-            sub_D += D
+            sub_D += abs(D)
             P_sub_.append((_sign, I, D, M, dert_, sub_, layer_))  # terminate seg_P, same as P
             I, D, M, dert_, = 0, 0, 0, []  # reset accumulated seg_P params
         _sign = sign
         I += p; D += d; M += m  # accumulate seg_P params, or D += uni_d?
         dert_.append((p, d, m, uni_d))
-    sub_D += D
+    sub_D += abs(D)
     P_sub_.append((_sign, I, D, M, dert_, sub_, layer_))  # pack last segment, nothing to accumulate
     rdn *= ave_nP / len(P_sub_)  # cost of higher layers is distributed over all sub_Ps
 
@@ -174,7 +173,7 @@ def rng_comp(dert_, fid, rdn, rng):  # sparse comp, 1 pruned dert / 1 extended d
     rng *= 2  # 1, 2, 4, 8, L+=rng, kernel = rng * 2 + 1: 3, 5, 9, 17
     sub_P_ = []  # return to replace P.sub_; prefix '_' denotes prior of two same-name variables:
     # initialization:
-    (__i, __short_bi_d, __short_bi_m), (_i, _short_bi_d, _short_bi_m) = dert_[0, 2][:3]
+    (__i, __short_bi_d, __short_bi_m, _), _, (_i, _short_bi_d, _short_bi_m, _) = dert_[0:3]
     _d = _i - __i  # initial comp
     if fid: _m = min(__i, _i) - ave_m + __short_bi_m
     else:   _m = ave - abs(_d) + __short_bi_m
@@ -185,21 +184,21 @@ def rng_comp(dert_, fid, rdn, rng):  # sparse comp, 1 pruned dert / 1 extended d
         else: sign = 1  # medium variation
     else: sign = 2  # high variation
     # initialize P with dert_[0]:
-    sub_P = sign, __i, _bi_d, _bi_m, [(__i, _bi_d, _bi_m, _d)], [], []  # sign, I, D, M, dert_, sub_P_, layer_
+    sub_P = sign, __i, _bi_d, _bi_m, [(__i, _bi_d, _bi_m, _d)], [0,0,0,[]], []  # sign, I, D, M, dert_, sub_P_, layer_
 
     for n in range(4, len(dert_), 2):  # backward comp, skip 1 dert to maintain overlap rate, that defines ave
         i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
         d = i - _i
         if fid:  # match = min: magnitude of derived vars correlates with stability
-            m = min(i, _i) - ave_m + short_bi_m   # m accum / i number of comps
+            m = min(i, _i) - ave_m + _short_bi_m   # m accum / i number of comps
         else:  # inverse match: intensity doesn't correlate with stability
-            m = ave - abs(d) + short_bi_m
+            m = ave - abs(d) + _short_bi_m
             # no ave * rdn, bi_m ave_m * rng-2: comp cost is separate from mP definition for comp_P
-        d += short_bi_d  # _d and _m combine bi_d | bi_m at rng-1
+        d += _short_bi_d  # _d and _m combine bi_d | bi_m at rng-1
         bi_d = _d + d  # bilateral difference, accum in rng
         bi_m = _m + m  # bilateral match, accum in rng
         dert = _i, bi_d, bi_m, d
-        _i, _d, _m = i, d, m
+        _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_d
         # P accumulation or termination:
         sub_P, sub_P_ = form_P(sub_P, sub_P_, dert)
 
@@ -215,7 +214,7 @@ def der_comp(dert_, rdn, rng):  # comp of consecutive uni_ds in dert_, dd and md
 
     # initialization:
     sub_P_ = []  # return to replace P.sub_
-    __i, _i = dert_[0, 1][3]  # each prefix '_' denotes prior
+    _, _, _, __i, _, _, _, _i = dert_[0:2]  # each prefix '_' denotes prior
     _d = _i - __i  # initial comp
     _m = min(__i, _i) - ave_m
     _bi_d = _d * 2  # __d and __m are back-projected as = _d or _m
@@ -225,7 +224,7 @@ def der_comp(dert_, rdn, rng):  # comp of consecutive uni_ds in dert_, dd and md
         else: sign = 1
     else: sign = 2
     # initialize P with dert_[0]:
-    sub_P = sign, __i, _bi_d, _bi_m, [(__i, _bi_d, _bi_m, _d)], [], []  # sign, I, D, M, dert_, sub_P_, layer_
+    sub_P = sign, __i, _bi_d, _bi_m, [(__i, _bi_d, _bi_m, _d)], [0,0,0,[]], []  # sign, I, D, M, dert_, sub_P_, layer_
 
     for dert in dert_[2:]:
         i = dert[3]  # unilateral d
