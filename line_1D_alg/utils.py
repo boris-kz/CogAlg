@@ -1,9 +1,28 @@
-from collections import defaultdict
+"""
+Provide some tools to manipulate CogAlg frames and for debugging.
+"""
 
 import pickle
+from collections import defaultdict
+from itertools import tee
+
+
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+# -----------------------------------------------------------------------------
+# itertools recipes
+
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+
+# -----------------------------------------------------------------------------
+# line_patterns utilities
 
 def save_pkl_file(obj, file_name):
     with open(file_name, "wb") as file:
@@ -16,11 +35,11 @@ def load_pkl_file(file_name):
     return data
 
 
-def save_frame_data(obj, file_name="frame_of_patterns_.pkl"):
+def save_frame_data(obj, file_name="frame.pkl"):
     save_pkl_file(obj, file_name)
 
 
-def load_frame_data(file_name="frame_of_patterns_.pkl"):
+def load_frame_data(file_name="frame.pkl"):
     return load_pkl_file(file_name)
 
 
@@ -60,14 +79,17 @@ def describe_L_distribution(frame):
 def check_for_overflow(param, before, added_value, after,
                        checkpoints=None,
                        file_name=None,
-                       raise_exception=True):
+                       raise_exception=True,
+                       max_value=None):
     """Check for overflow in param accumulation."""
-    if ((added_value > 0) and not (after > before)) or \
-       ((added_value < 0) and not (after < before)):
+    overflow = (abs(after) > max_value) if max_value is not None else \
+               ((added_value > 0) and not (after > before)) or \
+               ((added_value < 0) and not (after < before))
+    if overflow:
         if checkpoints is not None:
             plot_recursion_checkpoints(checkpoints) # plot filters
             if file_name is not None:
-                with open(file_name, "wb") as file: # save to disk
+                with open(file_name + '.pkl', "wb") as file: # save to disk
                     pickle.dump(checkpoints, file)
         if raise_exception:
             raise OverflowError(f'Overflow in {param} accumulation')
@@ -78,23 +100,21 @@ def plot_recursion_checkpoints(checkpoints,
                                ave_D=127,
                                ave_Lm=20,
                                ave_Ld=10,
-                               keys=('L', 'I', 'D', 'M', 'rng', 'rdn', 'typ')):
+                               keys=('L', 'I', 'D', 'M', 'dert_', 'rng', 'rdn', 'typ')):
     """Plot checkpoint value and filter progression."""
     # Filter expressions
     filters = (
-        lambda checkpoints: ave_M * checkpoints['rdn'],
         lambda checkpoints: ave_Lm * checkpoints['rdn'],
         lambda checkpoints: ave_D * checkpoints['rdn'],
-        lambda checkpoints: ave_Ld * checkpoints['rdn'],
         lambda checkpoints: ave_M / 2 * checkpoints['rdn'],
+        lambda checkpoints: ave_Ld * checkpoints['rdn'],
         lambda checkpoints: ave_D * checkpoints['rdn'],
     )
     criterions = (
-        lambda checkpoints: checkpoints['M'],
         lambda checkpoints: checkpoints['L'],
         lambda checkpoints: -checkpoints['M'],
-        lambda checkpoints: checkpoints['L'],
         lambda checkpoints: checkpoints['M'],
+        lambda checkpoints: checkpoints['L'],
         lambda checkpoints: checkpoints['D'],
     )
 
@@ -123,55 +143,61 @@ def plot_recursion_checkpoints(checkpoints,
     plt.show()
 
 
-def draw_P(x0, X, y, P, pattern_images, rng=1, fork_label='p'):
-    image = pattern_images[fork_label]
-    image[y, x0:X] = 255 * P[0]
+def draw_pattern(P, rng, esize=1, sgn_index=0, dert_index=-1):
+    """
+    Take a CogAlg pattern. Return numpy.ndarray as an image
+    represent the pattern.
+    :param P: list, the pattern object to visualize.
+    :param rng: integer, gap between actual elements.
+    :param esize: integer, number of pixels each pattern's element take
+    = esize^2.
+    :param sgn_index: integer, index of sign of pattern in the object P.
+    :param dert_index: integer, index of element list in the object P.
+    :return out_img: numpy.ndarray, image represent the pattern.
+    """
+    sgn = P[sgn_index]
+    value = sgn * 255
+    elements = P[dert_index]
+    height = esize
+    width = esize * ((len(elements) - 1)*rng + 1)
+    out_img = np.full((height, width), value, 'uint8')
 
-    # Deeper P check
-    sP_ = None
-    if len(P[5]) != 0:
-        frng, fid, sub_ = P[5]
-        if P[0]:
-            rng += 1
-            fork_label += '0'
-        else:
-            rng = 1
-            fork_label += '2'
-        sP_ = sub_
-    elif fork_label[-1] not in ('1', '3'): # P is not P_seg
-        if len(P[6]) != 0:
-            fmm, fid, seg_ = P[6]
-            if P[0]:
-                rng = rng
-                fork_label += '1'
-            else:
-                rng = 1
-                fork_label += '3'
-            frng, fid, sP_ = seg_
+    return out_img
 
-    if sP_ is not None:
-        # Compute lost resolution
-        x_lost = (X - x0) - sum([(sP[1]-1)*rng + 1 for sP in sP_])
-        step = x_lost / len(sP_) # as float
-        x_float = float(x0)
-        for sP in sP_:
-            next_x_float = x_float + step
+def place_pattern(img, pattern_img, pos):
+    """
+    Place drawn pattern image onto an existing image
+    :param img: numpy.ndarray, the image to draw on.
+    :param pattern_img: numpy.ndarray, image of the pattern.
+    :param pos: tuple, contain position on horizontal and vertical axes.
+    :return result_img: numpy.ndarray, the result image.
+    """
 
-            x = int(x_float)
-            next_x = int(next_x_float)
-            draw_P(x, next_x, y, sP, pattern_images, rng, fork_label)
+    x, y = pos
+    h, w = pattern_img.shape
+    img[y : y+h, x : x+w] = pattern_img
 
-            x_float = next_x_float
+    return img
 
+def draw_all_patterns(P__, shape, rng,
+                      esize=1, sgn_index=0, dert_index=-1):
+    """
+    Draw all patterns into an image
+    :param P__: list, nested list of patterns' data.
+    :param shape: tuple, contain height and width of the output image.
+    :param rng: int, gaps
+    :param esize:
+    :param sgn_index:
+    :param dert_index:
+    :return img: numpy.ndarray, the result image.
+    """
+    img = np.full(shape, 127, 'uint8')
 
-def visualize_patterns(frame, shape, ini_x=0, ini_y=0):
-
-    pattern_images = defaultdict(lambda: np.full(shape, 0x80, dtype='uint8'))
-    for y, P_ in enumerate(frame, ini_y):
-        x = ini_x
+    for y, P_ in enumerate(P__):
+        x = 0
         for P in P_:
-            next_x = x + P[1] # next P is displaced by L units
-            draw_P(x, next_x, y, P, pattern_images)
-            x = next_x
+            P_img = draw_pattern(P, rng, esize, sgn_index, dert_index)
+            place_pattern(img, P_img, (x, y))
+            x += (len(P[dert_index]) - 1)*rng + 1
 
-    return patterns
+    return img
