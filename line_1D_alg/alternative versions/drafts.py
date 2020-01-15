@@ -79,33 +79,46 @@ def form_P(P, P_, dert):  # initialization, accumulation, termination, recursion
 
 def intra_P(P_, fid, rdn, rng, sD):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
-    for sign, I, D, M, dert_, sub_ in P_:  # sub_ is a list of lower pattern layers, nested to depth = sub_[n]
+    feedback = []
+    if m > 0:
+        if m > ave_m: sign = 0  # low variation: eval comp rng+ per P, ternary sign
+        else: sign = 1  # medium variation: segment P.dert_ by d sign
+    else: sign = 2  # high variation: eval comp der+ per P
+
+    for sign, L, I, D, M, dert_, sub_ in P_:  # sub_: list of lower pattern layers, nested to depth = sub_[n]
 
         if sign == 0:  # low-variation P, rdn+1.2: 1 + (1 / ave_nP): rdn to higher derts + ave rdn to higher sub_
-            if M > ave_M * rdn and len(dert_) > 4:  # rng+ eval vs. fixed cost = ave_M
-                ssub_ = rng_comp(dert_, fid)  # comp rng = 1, 2, 4, kernel = rng * 2 + 1: 3, 5, 9
-                rdn += 1 / len(ssub_) - 0.2   # adjust distributed rdn, estimated in intra_P
-                sub_[0] = 0, fid, rdn, rng*2, ssub_  # 1st layer
-                sub_ += [ intra_P(ssub_, fid, rdn+1.2, rng, 0) ]  # recursion eval and deeper layers feedback
+            if M > ave_M * rdn and L > 4:  # rng+ eval vs. fixed cost = ave_M
+                rng += 1  # n of extensions, mapped comp rng = rng**2: 1, 2, 4.., kernel = rng * 2 + 1: 3, 5, 9
+                lat_sub_ = rng_comp(dert_, fid)
+                lL = len(lat_sub_)  # lateral L, for visibility
+                rdn += 1 / lL - 0.2  # adjust distributed rdn, estimated in intra_P
+                sub_ += [[( 0, lL, fid, rdn, rng, lat_sub_ )]]  # 1st layer, fork = 0, may differ from P sign
+                sub_ += intra_P(lat_sub_, fid, rdn+1.2, rng, 0)  # recursion eval and deeper layers feedback
 
         elif sign == 1 and not sD:  # mid-variation P:
-            if len(dert_) > ave_L * rdn:  # low |M|, filter by L only
-                ssub_, sD = segment(dert_)  # segment dert_ by ds: sign match covers variable cost?
-                rdn += 1 / len(ssub_) - 0.2
-                sub_[0] = 1, True, rdn, rng, ssub_  # 1: ternary fork sign, may differ from P sign
-                sub_ += [ intra_P(ssub_, True, rdn+1.2, rng, sD) ]  # will trigger fork 2:
+            if L > ave_L * rdn:  # low |M|, filter by L only
+                lat_sub_, sD = segment(dert_)  # segment dert_ by ds: sign match covers variable cost?
+                lL = len(lat_sub_); rdn += 1 / lL - 0.2
+                sub_ += [[( 1, lL, True, rdn, rng, lat_sub_)]]  # 1st layer, fork = 1
+                sub_ += intra_P(lat_sub_, True, rdn+1.2, rng, sD)  # will trigger fork 2:
 
-        elif sign == 2 or sD:  # high-variation P or any seg_P:
+        elif sign == 2 or sD:  # high-variation P or any seg_P? ds match is necessary?
             if sD: vD = sD  # called after segment(), or filter by L: n of ms?
             else:  vD = -M
             if (vD > ave_D * rdn) and len(dert_) > 4:  # der+ eval, full-P der_comp obviates seg_dP_
-                ssub_ = der_comp(dert_)  # cross-comp uni_ds in dert[3]
-                rdn += 1 / len(ssub_) - 0.2
-                sub_[0] = 2, True, rdn, rng, ssub_
-                sub_ += [ intra_P(ssub_, True, rdn+1.2, rng, 0) ]  # deeper layers feedback
+                lat_sub_ = der_comp(dert_)  # cross-comp uni_ds in dert[3]
+                lL = len(lat_sub_); rdn += 1 / lL - 0.2
+                sub_ += [[( 2, lL, True, rdn, rng, lat_sub_)]]  # 1st layer, fork = 2
+                sub_ += intra_P(lat_sub_, True, rdn+1.2, rng, 0)  # deeper layers feedback
 
         # each: else merge non-selected sub_Ps within P, if in max recursion depth? Eval per P_: same op, !layer
-    return P_  # add return of Dert and hypers, same in sub_[0]? [] fill if min_nP: L, LL?
+        for i, sub in enumerate(sub_):
+            if sub == []:
+                break
+            try_extend(feedback, i, sub)
+
+    return feedback  # add return of Dert and hypers, same in sub_[0]? [] fill if min_nP: L, LL?
 
 
 def segment(dert_):  # P segmentation by same d sign: initialization, accumulation, termination
