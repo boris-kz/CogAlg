@@ -11,6 +11,20 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+# -----------------------------------------------------------------------------
+# miscs
+
+def try_extend(lol, i, l):
+    """
+    Try to extend lol[i] with l.
+    If IndexError, append [l] to lol instead.
+    """
+    try:
+        lol[i].extend(l)
+    except IndexError:
+        lol.append(l)
+
 # -----------------------------------------------------------------------------
 # itertools recipes
 
@@ -143,7 +157,7 @@ def plot_recursion_checkpoints(checkpoints,
     plt.show()
 
 
-def draw_pattern(P, rng, esize=1, sgn_index=0, dert_index=-1):
+def draw_pattern(P, rng, esize=1, sgn_index=0, dert_index=-2):
     """
     Take a CogAlg pattern. Return numpy.ndarray as an image
     represent the pattern.
@@ -156,13 +170,17 @@ def draw_pattern(P, rng, esize=1, sgn_index=0, dert_index=-1):
     :return out_img: numpy.ndarray, image represent the pattern.
     """
     sgn = P[sgn_index]
-    value = sgn * 255
+    fill_value = [0, 0, 0]
+    fill_value[sgn] = 255 # red, green or blue
+
     elements = P[dert_index]
     height = esize
     width = esize * ((len(elements) - 1)*rng + 1)
-    out_img = np.full((height, width), value, 'uint8')
 
-    return out_img
+    out_img = np.empty((height, width, 3), 'uint8')
+    out_img[:] = fill_value
+
+    return out_img, width
 
 def place_pattern(img, pattern_img, pos):
     """
@@ -174,13 +192,13 @@ def place_pattern(img, pattern_img, pos):
     """
 
     x, y = pos
-    h, w = pattern_img.shape
+    h, w, _ = pattern_img.shape
     img[y : y+h, x : x+w] = pattern_img
 
     return img
 
 def draw_all_patterns(P__, shape, rng,
-                      esize=1, sgn_index=0, dert_index=-1):
+                      esize=1, sgn_index=0, dert_index=-2):
     """
     Draw all patterns into an image
     :param P__: list, nested list of patterns' data.
@@ -191,13 +209,14 @@ def draw_all_patterns(P__, shape, rng,
     :param dert_index:
     :return img: numpy.ndarray, the result image.
     """
-    img = np.full(shape, 127, 'uint8')
+    img = np.full(shape+(3,), 0, 'uint8')
 
-    for y, P_ in enumerate(P__):
+    for row, P_ in enumerate(P__):
+        y = row * esize
         x = 0
         for P in P_:
-            P_img = draw_pattern(P, rng, esize, sgn_index, dert_index)
+            P_img, step = draw_pattern(P, rng, esize, sgn_index, dert_index)
             place_pattern(img, P_img, (x, y))
-            x += (len(P[dert_index]) - 1)*rng + 1
+            x += step
 
     return img
