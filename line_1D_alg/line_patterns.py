@@ -25,9 +25,8 @@ ini_y = 500
 
 - Positive Ps: spans of pixels forming positive match, are evaluated for cross-comp of dert input param over incremented range 
   (positive match means that pixels have high predictive value, thus likely to match more distant pixels).
-- Median Ps: |d| is too weak for immediate comp_d, but d sign (direction) may persist, and d sign match is partial d match.
-  Then dert_ is segmented by same d sign, accumulating segment sD to evaluate der_comp within a segment.  
-- Negative Ps: high-variation spans, are evaluated for cross-comp of difference, which forms higher derivatives.
+- Negative Ps: high-variation spans, are segmented by d sign. Segment is evaluated for der_comp, which forms higher derivatives.
+  No immediate comp d: sign (direction) match is partial d match, thus a precondition of full-d match and comparison.
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
   
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
@@ -102,7 +101,7 @@ def form_P(P, P_, dert):  # initialization, accumulation, termination, recursion
     sign = m > 0
     if sign != _sign:
         # sign change: terminate P
-        P_.append((_sign, LL, L, I, D, M, dert_, sub_))  # LL(depth), L for visibility only
+        P_.append((_sign, LL, L, I, D, M, dert_, sub_))  # LL(sub_ depth), L (len dert_)  for visibility only
         LL, L, I, D, M, dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated params
     # accumulate params with bilateral values:
     L += 1; I += p; D += d; M += m
@@ -118,27 +117,29 @@ def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, 
 
     for sign, LL, L, I, D, M, dert_, sub_ in P_:  # sub_: list of lower pattern layers, nested to depth = sub_[n]
 
-        if sign == 0:  # low-variation P, rdn+1.2: 1 + (1 / ave_nP): rdn to higher derts + ave rdn to higher sub_
+        if sign:  # low-variation P, rdn+1.2: 1 + (1 / ave_nP): rdn to higher derts + ave rdn to higher sub_
             if M > ave_M * rdn and L > 4:  # rng+ eval vs. fixed cost = ave_M
                 rng += 1  # n of extensions, mapped comp rng = rng**2: 1, 2, 4.., kernel = rng * 2 + 1: 3, 5, 9
-                lat_sub_ = rng_comp(dert_, fid)
-                lL = len(lat_sub_)  # lateral L, for visibility
-                rdn += 1 / lL - 0.2  # adjust distributed rdn, estimated in intra_P
-                sub_ += [[( fseg, sign, lL, fid, rdn, rng, lat_sub_ )]]  # 1st layer
-                sub_ += intra_P(lat_sub_, fid, rdn+1.2, rng, fseg=False)  # recursion eval and deep layers feedback
+                lateral_sub_ = rng_comp(dert_, fid)
+                lL = len(lateral_sub_); sub_rdn = rdn
+                if rdn > 1: sub_rdn += 1 / lL - 0.2  # adjust distributed rdn, if estimated in prior intra_P
+                sub_ += [[( sign, lL, fseg, fid, sub_rdn, rng, lateral_sub_ )]]  # 1st layer, add Dert?
+                sub_ += intra_P(lateral_sub_, fid, sub_rdn+1.2, rng, fseg=False) # recursion eval, deep layers feedback
 
         elif fseg:  # P is seg_P: d sign match is partial d match and pre-condition for der_comp:
             if (D > ave_D * rdn) and L > 4:  # der+ fixed cost eval
-                lat_sub_ = der_comp(dert_)   # cross-comp uni_ds in dert[3]
-                lL = len(lat_sub_); rdn += 1 / lL - 0.2
-                sub_ += [[( fseg, sign, lL, True, rdn, rng, lat_sub_)]]  # 1st layer
-                sub_ += intra_P(lat_sub_, True, rdn + 1.2, rng, fseg=False)  # deep layers feedback
+                lateral_sub_ = der_comp(dert_)   # cross-comp uni_ds in dert[3]
+                lL = len(lateral_sub_); sub_rdn = rdn
+                if rdn > 1: sub_rdn += 1 / lL - 0.2  # adjust distributed rdn, if estimated in prior intra_P
+                sub_ += [[( sign, lL, fseg, True, sub_rdn, rng, lateral_sub_ )]]  # 1st layer, add Dert?
+                sub_ += intra_P(lateral_sub_, True, sub_rdn+1.2, rng, fseg=False) # deep layers feedback
 
         elif L > ave_L * rdn:  # high variation, filter by L only because d sign may differ
-            lat_sub_ = segment(dert_)  # segment dert_ by ds: sign match covers variable cost of der+?
-            lL = len(lat_sub_); rdn += 1 / lL - 0.2
-            sub_ += [[( fseg, sign, lL, True, rdn, rng, lat_sub_)]]  # 1st layer
-            sub_ += intra_P(lat_sub_, True, rdn+1.2, rng, fseg=True)  # will trigger der+ eval
+            lateral_sub_ = segment(dert_)  # segment dert_ by ds: sign match covers variable cost of der+?
+            lL = len(lateral_sub_); sub_rdn = rdn
+            if rdn > 1: sub_rdn += 1 / lL - 0.2  # adjust distributed rdn, if estimated in prior intra_P
+            sub_ += [[( sign, lL, fseg, True, sub_rdn, rng, lateral_sub_ )]]  # 1st layer, add Dert?
+            sub_ += intra_P(lateral_sub_, True, sub_rdn+1.2, rng, fseg=True)  # will trigger der+ eval
 
         LL[:] = [len(sub_)]
         # each: else merge non-selected sub_Ps within P, if in max recursion depth? Eval per P_: same op, !layer
@@ -164,7 +165,7 @@ def segment(dert_):  # P segmentation by same d sign: initialization, accumulati
             sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # terminate seg_P, same as P
             LL, L, I, D, M, seg_dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated seg_P params
         _sign = sign
-        L +=1; I += p; D += d; M += m  # accumulate seg_P params, or D += uni_d?
+        L += 1; I += p; D += d; M += m  # accumulate seg_P params, or D += uni_d?
         seg_dert_.append((p, d, m, uni_d))
 
     sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # pack last segment, nothing to accumulate
