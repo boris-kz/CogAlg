@@ -6,10 +6,10 @@ from line_1D_alg.utils import *
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
 ave = 10   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
-ave_m = 15   # for segmentation, or by d sign only?
+# ave_m = 15 # for segmentation, or by d sign only?
 ave_min = 5  # for m defined as min |d|: smaller?
-ave_M = 127  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
-ave_D = 63   # min |D| for initial incremental-derivation comparison(d_)
+ave_M = 100  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
+ave_D = 20   # min |D| for initial incremental-derivation comparison(d_)
 ave_L = 4    # min L for sub_cluster(d)
 ave_nP = 5   # average number of sub_Ps in P, to estimate intra-costs?
 ave_rdn_inc = 1 + 1 / ave_nP  # 1.2
@@ -54,7 +54,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         _d = _p - __p  # initial comp, use d as bi_d, no /2: effectively *2 for back-projection
         _m = ave - abs(_d)
         # initialize P with dert_[0]:
-        P = _m > 0, 1, __p, _d, _m, [(__p, _d, _m, None)], []  # sign, L, I, D, M, dert_, sub_
+        P = _m > 0, [], 1, __p, _d, _m, [(__p, _d, _m, None)], []  # sign, depth, L, I, D, M, dert_, sub_
 
         for p in pixel_[2:]:  # pixel p is compared to prior pixel _p in a row
             d = p - _p
@@ -97,25 +97,26 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
 def form_P(P, P_, dert):  # initialization, accumulation, termination, recursion
 
-    _sign, L, I, D, M, dert_, sub_ = P  # each sub in sub_ is nested to depth = sub_[n]
+    _sign, LL, L, I, D, M, dert_, sub_ = P  # each sub in sub_ is nested to depth = sub_[n]
     p, d, m, uni_d = dert
     sign = m > 0
-    if sign != _sign:  # sign change: terminate P
-        P_.append((_sign, L, I, D, M, dert_, sub_))  # add LL for visibility?
-        L, I, D, M, dert_, sub_ = 0, 0, 0, 0, [], []  # reset accumulated params
+    if sign != _sign:
+        # sign change: terminate P
+        P_.append((_sign, LL, L, I, D, M, dert_, sub_))  # LL(depth), L for visibility only
+        LL, L, I, D, M, dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated params
     # accumulate params with bilateral values:
     L += 1; I += p; D += d; M += m
     dert_ += [(p, d, m, uni_d)]  # uni_d for der_comp and segment
-    P = sign, L, I, D, M, dert_, sub_  # sub_ is accumulated in intra_P
+    P = sign, LL, L, I, D, M, dert_, sub_  # sub_ is accumulated in intra_P
 
     return P, P_
 
 
 def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
-    feedback = []
+    deep_sub_ = []  # sub_ extension feedback from intra_P
 
-    for sign, L, I, D, M, dert_, sub_ in P_:  # sub_: list of lower pattern layers, nested to depth = sub_[n]
+    for sign, LL, L, I, D, M, dert_, sub_ in P_:  # sub_: list of lower pattern layers, nested to depth = sub_[n]
 
         if sign == 0:  # low-variation P, rdn+1.2: 1 + (1 / ave_nP): rdn to higher derts + ave rdn to higher sub_
             if M > ave_M * rdn and L > 4:  # rng+ eval vs. fixed cost = ave_M
@@ -124,14 +125,14 @@ def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, 
                 lL = len(lat_sub_)  # lateral L, for visibility
                 rdn += 1 / lL - 0.2  # adjust distributed rdn, estimated in intra_P
                 sub_ += [[( fseg, sign, lL, fid, rdn, rng, lat_sub_ )]]  # 1st layer
-                sub_ += intra_P(lat_sub_, fid, rdn+1.2, rng, fseg=False)  # recursion eval and deeper layers feedback
+                sub_ += intra_P(lat_sub_, fid, rdn+1.2, rng, fseg=False)  # recursion eval and deep layers feedback
 
-        elif fseg:  # P is seg_P: ds match is pre-condition for der_comp:
-            if (D > ave_D * rdn) and L > 4:  # der+ eval, full-P der_comp obviates seg_dP_
-                lat_sub_ = der_comp(dert_)  # cross-comp uni_ds in dert[3]
+        elif fseg:  # P is seg_P: d sign match is partial d match and pre-condition for der_comp:
+            if (D > ave_D * rdn) and L > 4:  # der+ fixed cost eval
+                lat_sub_ = der_comp(dert_)   # cross-comp uni_ds in dert[3]
                 lL = len(lat_sub_); rdn += 1 / lL - 0.2
                 sub_ += [[( fseg, sign, lL, True, rdn, rng, lat_sub_)]]  # 1st layer
-                sub_ += intra_P(lat_sub_, True, rdn + 1.2, rng, fseg=False)  # deeper layers feedback
+                sub_ += intra_P(lat_sub_, True, rdn + 1.2, rng, fseg=False)  # deep layers feedback
 
         elif L > ave_L * rdn:  # high variation, filter by L only because d sign may differ
             lat_sub_ = segment(dert_)  # segment dert_ by ds: sign match covers variable cost of der+?
@@ -139,13 +140,15 @@ def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, 
             sub_ += [[( fseg, sign, lL, True, rdn, rng, lat_sub_)]]  # 1st layer
             sub_ += intra_P(lat_sub_, True, rdn+1.2, rng, fseg=True)  # will trigger der+ eval
 
+        LL[:] = [len(sub_)]
         # each: else merge non-selected sub_Ps within P, if in max recursion depth? Eval per P_: same op, !layer
-        for i, sub in enumerate(sub_):
-            if sub == []:
-                break
-            try_extend(feedback, i, sub)
 
-    return feedback  # add return of Dert and hypers, same in sub_[0]? [] fill if min_nP: L, LL?
+        for i, sub in enumerate(sub_):
+            if sub == []: break
+            try: deep_sub_[i].extend(sub)
+            except IndexError: deep_sub_.append(sub)
+
+    return deep_sub_  # add return of Dert and hypers, same in sub_[0]? [] fill if min_nP: L, LL?
 
 
 def segment(dert_):  # P segmentation by same d sign: initialization, accumulation, termination
@@ -153,18 +156,18 @@ def segment(dert_):  # P segmentation by same d sign: initialization, accumulati
     sub_ = []  # replaces P.sub_
     _p, _d, _m, _uni_d = dert_[1]  # skip dert_[0]: no uni_d; prefix '_' denotes prior
     _sign = _uni_d > 0
-    L = 1; I =_p; D =_d; M =_m; seg_dert_= [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P
-
+    LL, L, I, D, M, seg_dert_ = [], 1, _p, _d, _m, [(_p, _d, _m, _uni_d)]
+    # initialize seg_P, same as P
     for p, d, m, uni_d in dert_[2:]:
         sign = uni_d > 0
         if _sign != sign:
-            sub_.append((_sign, L, I, D, M, seg_dert_, []))  # terminate seg_P, same as P
-            L, I, D, M, seg_dert_, sub_ = 0, 0, 0, 0, [], []  # reset accumulated seg_P params
+            sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # terminate seg_P, same as P
+            LL, L, I, D, M, seg_dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated seg_P params
         _sign = sign
         L +=1; I += p; D += d; M += m  # accumulate seg_P params, or D += uni_d?
         seg_dert_.append((p, d, m, uni_d))
 
-    sub_.append((_sign, L, I, D, M, seg_dert_, []))  # pack last segment, nothing to accumulate
+    sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # pack last segment, nothing to accumulate
     # also sum Dert in seg_ and sub_?
     return sub_  # replace P.sub_
 
@@ -178,7 +181,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     else:   _m = ave - abs(_d) + __short_bi_m  # accumulate, then ave * rng for sign eval?
     _d += __short_bi_d  # accumulate only?
     # initialize P with dert_[0]:
-    sub_P = _m > 0, 1, __i, _d, _m, [(__i, _d, _m, None)], []  # sign, L, I, D, M, dert_, sub_
+    sub_P = _m > 0, [], 1, __i, _d, _m, [(__i, _d, _m, None)], []  # sign, LL, L, I, D, M, dert_, sub_
 
     for n in range(4, len(dert_), 2):  # backward comp, ave | cumulative ders and filters?
         i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
@@ -211,7 +214,7 @@ def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign m
     _d = _i - __i  # initial comp
     _m = min(__i, _i) - ave_min  # signed,
     # initialize P with dert_[1]:
-    sub_P = _m > 0, 1, __i, _d, _m, [(__i, _d, _m, None)], []  # sign, L, I, D, M, dert_, sub_
+    sub_P = _m > 0, [], 1, __i, _d, _m, [(__i, _d, _m, None)], []  # sign, LL, L, I, D, M, dert_, sub_
 
     for dert in dert_[3:]:  # only within seg: no sign comp?
         i = dert[3]  # unilateral d
