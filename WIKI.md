@@ -5,7 +5,7 @@ The code is divided into three self-contained folders:
 
 **line_1D_alg:**
 
-- [line_POC](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_POC.py) is 1st-level core algorithm for 1D input: horizontal rows of pixels within an image, to demonstrate basic principles. It works, but 1D patterns are not very predictive in our 4D space-time.
+- [line_patterns](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py) is 1st-level core algorithm for 1D input: horizontal rows of pixels within an image, to demonstrate basic principles. But 1D patterns are not terribly informative / predictive in our 4D space-time.
 
 **frame_2D_alg:** currently a work-in-progress, will process still images:
 
