@@ -4,13 +4,10 @@ Provide some tools to manipulate CogAlg frames and for debugging.
 
 import pickle
 from collections import defaultdict
-from itertools import tee
-
-
+from itertools import chain, tee
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-
 
 # -----------------------------------------------------------------------------
 # miscs
@@ -34,6 +31,10 @@ def pairwise(iterable):
     next(b, None)
     return zip(a, b)
 
+
+def flatten(listOfLists):
+    "Flatten one level of nesting"
+    return chain.from_iterable(listOfLists)
 
 # -----------------------------------------------------------------------------
 # line_patterns utilities
@@ -157,21 +158,36 @@ def plot_recursion_checkpoints(checkpoints,
     plt.show()
 
 
-def draw_pattern(P, rng, esize=1, sgn_index=0, dert_index=-2):
+def draw_pattern(P, rng, esize=1,
+                 sgn_index=0, dert_index=-2,
+                 sgn_typ='binary'):
     """
     Take a CogAlg pattern. Return numpy.ndarray as an image
     represent the pattern.
-    :param P: list, the pattern object to visualize.
-    :param rng: integer, gap between actual elements.
-    :param esize: integer, number of pixels each pattern's element take
-    = esize^2.
-    :param sgn_index: integer, index of sign of pattern in the object P.
-    :param dert_index: integer, index of element list in the object P.
-    :return out_img: numpy.ndarray, image represent the pattern.
+    :param P: tuple
+        The pattern object to visualize.
+    :param rng: integer
+        Gap between actual elements.
+    Optional parameters:
+    :param esize: integer
+        Number of pixels each pattern's element take = esize^2.
+    :param sgn_index: integer
+        Index of sign of pattern in the object P.
+    :param dert_index: integer
+        Index of element list in the object P.
+    :param sgn_typ: str
+        'binary' or 'ternary'.
+    :return out_img: numpy.ndarray
+        Image represent the pattern.
     """
     sgn = P[sgn_index]
-    fill_value = [0, 0, 0]
-    fill_value[sgn] = 255 # red, green or blue
+    if sgn_typ == 'binary':
+        fill_value = 255 if sgn else 0
+    elif sgn_typ == 'ternary':
+        fill_value = [0, 0, 0]
+        fill_value[sgn] = 255 # red, green or blue
+    else:
+        raise ValueError('unknown sign type')
 
     elements = P[dert_index]
     height = esize
@@ -185,10 +201,14 @@ def draw_pattern(P, rng, esize=1, sgn_index=0, dert_index=-2):
 def place_pattern(img, pattern_img, pos):
     """
     Place drawn pattern image onto an existing image
-    :param img: numpy.ndarray, the image to draw on.
-    :param pattern_img: numpy.ndarray, image of the pattern.
-    :param pos: tuple, contain position on horizontal and vertical axes.
-    :return result_img: numpy.ndarray, the result image.
+    :param img: numpy.ndarray
+        The image to draw on.
+    :param pattern_img: numpy.ndarray
+        Image of the pattern.
+    :param pos: tuple
+        Contain position on horizontal and vertical axes.
+    :return result_img: numpy.ndarray
+        The result image.
     """
 
     x, y = pos
@@ -197,17 +217,19 @@ def place_pattern(img, pattern_img, pos):
 
     return img
 
-def draw_all_patterns(P__, shape, rng,
-                      esize=1, sgn_index=0, dert_index=-2):
+def draw_all_patterns(P__, shape, rng=1, esize=1,
+                      sgn_index=0, dert_index=-2):
     """
     Draw all patterns into an image
-    :param P__: list, nested list of patterns' data.
-    :param shape: tuple, contain height and width of the output image.
-    :param rng: int, gaps
-    :param esize:
-    :param sgn_index:
-    :param dert_index:
-    :return img: numpy.ndarray, the result image.
+    :param P__: list
+        Nested list of patterns' data.
+    :param shape: tuple
+        Contain height and width of the output image.
+    Optional parameters:
+    :param rng, esize, sgn_index, dert_index:
+        See draw_pattern for more information
+    :return img: numpy.ndarray
+        The result image.
     """
     img = np.full(shape+(3,), 0, 'uint8')
 
@@ -220,3 +242,50 @@ def draw_all_patterns(P__, shape, rng,
             x += step
 
     return img
+
+
+def extract_sub_patterns(P, layers,
+                         sub_index=7,
+                         lateral_sub_keys = (
+                             'sign', 'lL', 'fseg',
+                             'fid', 'sub_rdn', 'rng',
+                             'lateral_sub_'),
+                         **filters,
+                         ):
+    """
+    Get sub patterns of specified layer(s).
+    :param P: tuple
+        Pattern object containing sub patterns to extract.
+    :param layers: int or list
+        Layer or layers to extract.
+    Optional parameters:
+    :param sub_index: int, optional
+        Index of sub_ in the object P.
+    :param lateral_sub_keys: list, optional
+        Index of sub_ in the object P.
+    :param filters: keyword arguments
+        Value of params to be met for example rng = 1, fid = True...
+    :return sub_P_: list
+        A list of sub patterns.
+    """
+    sub_ = P[sub_index]
+    sub_P_ = []
+
+    lat_sub_param_dict = \
+        dict([(k, v) for v, k in enumerate(lateral_sub_keys)])
+
+    if isinstance(layers, int):
+        layers = [layers]
+
+    for layer in layers:
+        try:
+            lat_sub_ = sub_[layer]
+        except IndexError:
+            break
+        sub_P_.extend([*flatten(
+            [lat_sub[lat_sub_param_dict['lateral_sub_']]
+             for lat_sub in lat_sub_
+             if not sum([lat_sub[lat_sub_param_dict[key]] != value
+                         for key, value in filters.items()]) > 0])])
+
+    return sub_P_
