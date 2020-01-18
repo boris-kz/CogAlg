@@ -30,7 +30,7 @@ from line_1D_alg.utils import *
   '''
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
-ave = 10   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
+ave = 15   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_min = 5  # for m defined as min |d|: smaller?
 ave_M = 50   # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 20   # min |D| for initial incremental-derivation comparison(d_)
@@ -57,7 +57,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         for p in pixel_[2:]:  # pixel p is compared to prior pixel _p in a row
             d = p - _p
             m = ave - abs(d)  # initial match is inverse deviation of |difference|
-            bi_d = d + _d  # ave bilateral difference, ave bi_d >>= 1 init only?
+            bi_d = d + _d  # ave bilateral difference
             bi_m = m + _m  # ave bilateral match
             dert = _p, bi_d, bi_m, _d
             # accumulate or terminate mP: span of pixels forming same-sign m:
@@ -74,6 +74,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     return frame_of_patterns_  # frame of patterns will be output to level 2
 
 ''' Recursion extends pattern structure to 1d hierarchy and then 2d hierarchy, to be adjusted by macro-feedback:
+
     P_:
     fseg,  # flag: 0 for rng+ | der+ Ps, 1 for segment Ps
     fid,   # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
@@ -126,7 +127,8 @@ def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, 
                 sub_ += [[( sign, lL, fseg, fid, sub_rdn, sub_rng, lateral_sub_ )]]  # 1st layer, add Dert?
                 sub_ += intra_P(lateral_sub_, fid, sub_rdn+1.2, sub_rng, fseg=False) # recursion eval, feedback
 
-        elif fseg:  # P is seg_P: d sign match is partial d match and pre-condition for der_comp, for any d sign:
+        if fseg:  # P is seg_P: d sign match is partial d match and pre-condition for der_comp, for any d sign
+        # or elif to avoid overlap
             if (abs(D) > ave_D * rdn) and L > 3:  # der+ fixed cost eval
                 lateral_sub_ = der_comp(dert_)  # cross-comp uni_ds in dert[3]
                 lL = len(lateral_sub_); sub_rdn = rdn
@@ -165,13 +167,12 @@ def segment(dert_):  # P segmentation by same d sign: initialization, accumulati
     LL, L, I, D, M, seg_dert_ = [], 1, _p, _uni_d, _m, [(_p, _d, _m, _uni_d)]  # initialize seg_P, same as P
 
     for p, d, m, uni_d in dert_[ini:]:
-        try: sign = uni_d > 0
-        except: break
+        sign = uni_d > 0
         if _sign != sign:
             sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # terminate seg_P, same as P
             LL, L, I, D, M, seg_dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated seg_P params
         _sign = sign
-        L += 1; I += p; D += uni_d; M += m  # D += uni_d to eval for comp uni_d?
+        L += 1; I += p; D += uni_d; M += m  # D += uni_d to eval for comp uni_d
         seg_dert_.append((p, d, m, uni_d))
 
     sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # pack last segment, nothing to accumulate
@@ -185,7 +186,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     (__i, __short_bi_d, __short_bi_m, _), _, (_i, _short_bi_d, _short_bi_m, _) = dert_[0:3]
     _d = _i - __i
     if fid: _m = min(__i, _i) - ave_min;
-    else:   _m = ave - abs(_d)  # no ave * rng: gn eval?
+    else:   _m = ave - abs(_d)  # no ave * rng: actual m and d value is cumulative?
     _bi_d = _d * 2 + __short_bi_d
     _bi_m = _m * 2 + __short_bi_m  # back-project _m and d
     # initialize P with dert_[0]:
@@ -223,8 +224,8 @@ def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign m
     # initialize P with dert_[1]:
     sub_P = _bi_m > 0, [], 1, __i, _bi_d, _bi_m, [(__i, _bi_d, _bi_m, None)], []  # sign, LL, L, I, D, M, dert_, sub_
 
-    for dert in dert_[3:]:  # only within seg: no sign comp?
-        i = abs(dert[3])  # unilateral d in same-d-sign seg
+    for dert in dert_[3:]:
+        i = abs(dert[3])  # unilateral d in same-d-sign seg, no sign comp
         d = i - _i   # d is dd
         m = min(i, _i) - ave_min  # md = min: magnitude of derived vars corresponds to predictive value
         bi_d = _d + d  # bilateral d-difference per _i
@@ -267,8 +268,8 @@ Depth of cross-comparison (discontinuous if generic) is increased in lower-recur
 
 comp (s)?  # same-sign only
     comp (L, I, D, M)?  # in parallel or L first, equal-weight or I is redundant?  
-        comp (r)?  # same-recursion (derivation) order e_
-            cross_comp (e_)
+        cross_comp (sub_)?  # same-recursion (derivation) order e_
+            cross_comp (dert_)
             
 Then extend this 2nd level alg to a recursive meta-level algorithm
 
