@@ -52,22 +52,6 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD processing? 
 '''
 
-def form_P(P, P_, dert):  # initialization, accumulation, termination, recursion
-
-    _sign, LL, L, I, D, M, dert_, sub_ = P  # each sub in sub_ is nested to depth = sub_[n]
-    p, d, m, uni_d = dert
-    sign = m > 0
-    if sign != _sign:
-        # sign change: terminate P
-        P_.append((_sign, LL, L, I, D, M, dert_, sub_))  # LL(sub_ depth), L (len dert_)  for visibility only
-        LL, L, I, D, M, dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated params
-    # accumulate params with bilateral values:
-    L += 1; I += p; D += d; M += m
-    dert_ += [(p, d, m, uni_d)]  # uni_d for der_comp and segment
-    P = sign, LL, L, I, D, M, dert_, sub_  # sub_ is accumulated in intra_P
-
-    return P, P_
-
 
 def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
