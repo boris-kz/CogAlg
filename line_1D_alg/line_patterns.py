@@ -2,6 +2,7 @@ import cv2
 import argparse
 from time import time
 from line_1D_alg.utils import *
+from itertools import chain, tee, zip_longest
 
 ''' 
   line_patterns is a principal version of 1st-level 1D algorithm, contains operations: 
@@ -122,67 +123,53 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
 
 def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
-    # rdn is estimated as rdn += 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
-    # adjust distributed part of estimated rdn: sub_rdn += 1 / lL - 0.2
+    deep_rsub_, deep_dsub_ = [], []  # sub_ hierarchy extension per intra_P: dsub_ if fdP, else rsub_
 
-    for sign, rLL, dLL, L, I, D, M, dert_, r_sub_, d_sub_ in P_:
+    for sign, rLL, dLL, L, I, D, M, dert_, rsub_, dsub_ in P_:
         # each sub_ is a hierarchy of sub_P_ layers, nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
             if (abs(D) > ave_D * rdn) and L > 3:  # cross-comp uni_ds:
-                d_dert_ = der_comp(dert_)
-
-                sub_mP_ = form_P_(d_dert_, False)
-                lL = len(sub_mP_); sub_rdn = rdn
-                if rdn > 1: sub_rdn += 1 / lL - 0.2
-                d_sub_ += [[( fdP, sign, lL, fid, sub_rdn, rng, sub_mP_)]]  # 1st layer
-
-                sub_dP_ = form_P_(d_dert_, True)
-                lL = len(sub_dP_); sub_rdn = rdn
-                if rdn > 1: sub_rdn += 1 / lL - 0.2
-                r_sub_ += [[( fdP, sign, lL, True, sub_rdn, rng, sub_dP_)]]  # 1st layer
-
-                r_deep_sub_, d_deep_sub_ = intra_P(sub_dP_, True, True, sub_rdn+1.2, rng)  # deep layers feedback
-                d_sub_ += (r_deep_sub_, d_deep_sub_)
-                # this is wrong, we need to splice same-layer sub_P_s into single d_sub_ hierarchy
-                r_deep_sub_, d_deep_sub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
-                r_sub_ += (r_deep_sub_, d_deep_sub_)
-
-        elif sign:  # P = +mP: low-variation, eval rng+1 comp: range = rng ** 2: 1, 2, 4..,
+                ddert_ = der_comp(dert_)
+                deep_rsub_, deep_dsub_ = form_deep_sub_(ddert_, sign, fdP, fid, rdn, rng, rsub_, dsub_)
+                # = rsub_, dsub_
+        elif sign:  # P = +mP: low-variation, passed rng+=1: eval comp at range = rng ** 2: 1, 2, 4..,
             if M > ave_M * rdn and L > 4:  # kernel = range * 2 + 1: 3, 5, 9
-                r_dert_ = rng_comp(dert_, fid)
-
-                sub_mP_ = form_P_(r_dert_, False)
-                lL = len(sub_mP_); sub_rdn = rdn
-                if rdn > 1: sub_rdn += 1 / lL - 0.2
-                d_sub_ += [[( fdP, sign, lL, fid, sub_rdn, rng, sub_mP_)]]  # 1st layer
-
-                sub_dP_ = form_P_(r_dert_, True)
-                lL = len(sub_dP_); sub_rdn = rdn
-                if rdn > 1: sub_rdn += 1 / lL - 0.2
-                r_sub_ += [[( fdP, sign, lL, True, sub_rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
-
-                r_deep_sub_, d_deep_sub_ = intra_P(sub_dP_, True, True, sub_rdn+1.2, rng)  # deep layers feedback
-                d_sub_ += (r_deep_sub_, d_deep_sub_)
-                # this is wrong, we need to splice same-layer sub_P_s into single d_sub_ hierarchy
-                r_deep_sub_, d_deep_sub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
-                r_sub_ += (r_deep_sub_, d_deep_sub_)
+                rdert_ = rng_comp(dert_, fid)
+                deep_rsub_, deep_dsub_ = form_deep_sub_(rdert_, sign, fdP, fid, rdn, rng, rsub_, dsub_)
 
         # each: else merge non-selected sub_Ps within P, if in max recursion depth? Eval per P_: same op, !layer
-        rLL[:] = [len(r_sub_)]
-        dLL[:] = [len(d_sub_)]
-        r_deep_sub_ = []  # sub__hierarchy extension feedback per intra_P: d_sub_ if fdP, else r_sub_,
-        for i, sub in enumerate(r_sub_):
-            if sub == []: break
-            try: r_deep_sub_[i].extend(sub)
-            except IndexError: r_deep_sub_.append(sub)
-        d_deep_sub_ = []
-        for i, sub in enumerate(d_sub_):
-            if sub == []: break
-            try: d_deep_sub_[i].extend(sub)
-            except IndexError: d_deep_sub_.append(sub)
+        rLL[:] = [len(rsub_)]
+        dLL[:] = [len(dsub_)]
+        # not needed?:
+        # sub_ hierarchy extension by feedback from intra_P: dsub_ if fdP, else rsub_:
+        # deep_rsub_ = [rsub + dsub for rsub, dsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
+        # deep_dsub_ = [rsub + dsub for rsub, dsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
 
-    return r_deep_sub_, d_deep_sub_  # return is not necessary? fill-in Dert and hypers if min_nP: L, LL?
+    return deep_rsub_, deep_dsub_  # necessary? fill-in Dert and hypers if min_nP: L, LL?
+
+
+def form_deep_sub_(dert_, sign, fdP, fid, rdn, rng, rsub_, dsub_):
+    # rdn was estimated as rdn += 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
+
+    sub_mP_ = form_P_(dert_, False)
+    lL = len(sub_mP_)
+    if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn: sub_rdn += 1 / lL - 0.2
+    dsub_ += [[(fdP, sign, lL, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert[] fill if lL > min?
+
+    sub_dP_ = form_P_(dert_, True)
+    lL = len(sub_dP_)
+    if rdn > 1: rdn += 1 / lL - 0.2
+    rsub_ += [[(fdP, sign, lL, True, rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
+
+    _rsub_, _dsub_ = intra_P(sub_dP_, True, True, rdn + 1.2, rng)  # deep layers feedback
+    dsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
+
+    _rsub_, _dsub_ = intra_P(sub_mP_, False, fid, rdn + 1.2, rng + 1)
+    rsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
+
+    # splice temp _rsub_ and _dsub_ into single r|d sub_ hierarchy
+    return rsub_, dsub_
 
 
 def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
@@ -311,4 +298,33 @@ def form_dP_(dert_):  # P segmentation by same d sign: initialization, accumulat
     sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # pack last segment, nothing to accumulate
     # also Dert in sub_ [], fill if min lLL?
     return sub_  # becomes lateral_sub_
+    
+    def splice(listOfLists, *otherLoLs, fillvalue=[]):
+    "Splice nested lists laterally."
+    return [[*flatten(li)] for li in zip_longest(listOfLists, *otherLoLs, fillvalue=fillvalue)]
+
+    flatten = lambda l: [item for sublist in l for item in sublist]
+    r_deep_sub_, d_deep_sub_ = intra_P(sub_dP_, True, True, sub_rdn + 1.2, rng)  # deep layers feedback
+    d_sub_ += [flatten([flatten(r_deep_sub_), flatten(d_deep_sub_)])]
+
+    r_deep_sub_, d_deep_sub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
+    r_sub_ += [flatten([flatten(r_deep_sub_), flatten(d_deep_sub_)])]
+
+    sub_mP_ = form_P_(rdert_, False)  # form_deep_sub(sub_dert, fdP, fid, dsub_, rsub_)
+    lL = len(sub_mP_); sub_rdn = rdn
+    if rdn > 1: sub_rdn += 1 / lL - 0.2
+    dsub_ += [[( fdP, sign, lL, fid, sub_rdn, rng, sub_mP_)]]  # 1st layer
+
+    sub_dP_ = form_P_(rdert_, True)
+    lL = len(sub_dP_); sub_rdn = rdn
+    if rdn > 1: sub_rdn += 1 / lL - 0.2
+    rsub_ += [[( fdP, sign, lL, True, sub_rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
+
+    _rsub_, _dsub_ = intra_P(sub_dP_, True, True, sub_rdn + 1.2, rng)  # deep layers feedback
+    # splice temp _rsub_ and _dsub_ into single dsub_ hierarchy:
+    dsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
+
+    _rsub_, _dsub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
+    # splice temp _rsub_ and _dsub_ into single rsub_ hierarchy:
+    rsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
 '''
