@@ -142,8 +142,11 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
                 if rdn > 1: sub_rdn += 1 / lL - 0.2
                 r_sub_ += [[( fdP, sign, lL, True, sub_rdn, rng, sub_dP_)]]  # 1st layer
 
-                d_sub_ += intra_P(sub_dP_, True, True, sub_rdn+1.2, rng)  # deep layers feedback
-                r_sub_ += intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
+                r_deep_sub_, d_deep_sub_ = intra_P(sub_dP_, True, True, sub_rdn+1.2, rng)  # deep layers feedback
+                d_sub_ += (r_deep_sub_, d_deep_sub_)
+                # this is wrong, we need to splice same-layer sub_P_s into single d_sub_ hierarchy
+                r_deep_sub_, d_deep_sub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
+                r_sub_ += (r_deep_sub_, d_deep_sub_)
 
         elif sign:  # P = +mP: low-variation, eval rng+1 comp: range = rng ** 2: 1, 2, 4..,
             if M > ave_M * rdn and L > 4:  # kernel = range * 2 + 1: 3, 5, 9
