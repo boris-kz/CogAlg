@@ -83,15 +83,15 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
     else:
         _sign = m > 0
         D = d
-    rLL, dLL, L, I, M, P_dert_, r_sub_, d_sub_ = [], [], 1, p, m, [(p, d, m, uni_d)], [], []
+    dLL, rLL, L, I, M, P_dert_, dsub_, rsub_ = [], [], 1, p, m, [(p, d, m, uni_d)], [], []
     # LL: depth of sub-hierarchy, each sub-pattern in sub_ is nested to depth = sub_[n]
 
     for p, d, m, uni_d in dert_[ini_dert:]:
         if fdP: sign = uni_d > 0
         else:   sign = m > 0
         if sign != _sign:  # sign change: terminate P
-            P_.append((_sign, rLL, dLL, L, I, D, M, P_dert_, r_sub_, d_sub_))  # LL: sub_ depth, L: len dert_
-            rLL, dLL, L, I, D, M, P_dert_, r_sub_, d_sub_ = [], [], 0, 0, 0, 0, [], [], []  # reset accumulated params
+            P_.append((_sign, dLL, rLL, L, I, D, M, P_dert_, dsub_, rsub_))  # LL: sub_ depth, L: len dert_
+            dLL, rLL, L, I, D, M, P_dert_, dsub_, rsub_ = [], [], 0, 0, 0, 0, [], [], []  # reset accumulated params
 
         L += 1; I += p; M += m  # accumulate params with bilateral values
         if fdP: D += uni_d  # value of comp uni_d
@@ -99,7 +99,7 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
         P_dert_ += [(p, d, m, uni_d)]
         _sign = sign
 
-    P_.append((_sign, rLL, dLL, L, I, D, M, P_dert_, r_sub_, d_sub_))  # incomplete P; also sum Dert per P_?
+    P_.append((_sign, dLL, rLL, L, I, D, M, P_dert_, dsub_, rsub_))  # incomplete P; also sum Dert per P_?
     return P_
 
 ''' Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
@@ -111,11 +111,11 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
     P:
     sign,  # of core param: m | d 
     Dert = L, I, D, M, 
-    dert_, # input for extended comp
-    r_sub_,  # multiple layers of (hyper, Dert, sub_P_) from segment or extended comp, nested to depth = sub_[n], 
-    d_sub_,  # for layer-parallel access and comp, similar to frequency domain representation
-             # sub_P_: flat or nested for mapping to higher-layer sub_P_ element?
-    root   # reference to higher P for layer-sequential feedback 
+    dert_,  # input for extended comp
+    dsub_,  # multiple layers of (hyper, Dert, sub_P_) from segment or extended comp, nested to depth = sub_[n], 
+    rsub_,  # for layer-parallel access and comp, similar to frequency domain representation
+            # sub_P_: flat or nested for mapping to higher-layer sub_P_ element?
+    root    # reference to higher P for layer-sequential feedback 
 
     orders of composition: 1st: dert_, 2nd: lateral_sub_( derts), 3rd: sub_( lateral_sub_( derts))? 
     line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD processing? 
@@ -123,53 +123,46 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
 
 def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
-    deep_rsub_, deep_dsub_ = [], []  # sub_ hierarchy extension per intra_P: dsub_ if fdP, else rsub_
+    ext_dert_, deep_dsub_, deep_rsub_ = [], [], []
+    # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
 
-    for sign, rLL, dLL, L, I, D, M, dert_, rsub_, dsub_ in P_:
-        # each sub_ is a hierarchy of sub_P_ layers, nested to depth = sub_[n]
+    for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
-            if (abs(D) > ave_D * rdn) and L > 3:  # cross-comp uni_ds:
-                ddert_ = der_comp(dert_)
-                deep_rsub_, deep_dsub_ = form_deep_sub_(ddert_, sign, fdP, fid, rdn, rng, rsub_, dsub_)
-                # = rsub_, dsub_
+            if (abs(D) > ave_D * rdn) and L > 3:  # cross-comp uni_ds -> extended-comp dert_:
+                ext_dert_ = der_comp(dert_)
+
         elif sign:  # P = +mP: low-variation, passed rng+=1: eval comp at range = rng ** 2: 1, 2, 4..,
-            if M > ave_M * rdn and L > 4:  # kernel = range * 2 + 1: 3, 5, 9
-                rdert_ = rng_comp(dert_, fid)
-                deep_rsub_, deep_dsub_ = form_deep_sub_(rdert_, sign, fdP, fid, rdn, rng, rsub_, dsub_)
+            if M > ave_M * rdn and L > 4:   # kernel = range * 2 + 1: 3, 5, 9
+                ext_dert_ = rng_comp(dert_, fid)
+            # else merge non-selected Ps in P_, if in max recursion depth?
 
-        # each: else merge non-selected sub_Ps within P, if in max recursion depth? Eval per P_: same op, !layer
-        rLL[:] = [len(rsub_)]
-        dLL[:] = [len(dsub_)]
-        # not needed?:
-        # sub_ hierarchy extension by feedback from intra_P: dsub_ if fdP, else rsub_:
-        # deep_rsub_ = [rsub + dsub for rsub, dsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
-        # deep_dsub_ = [rsub + dsub for rsub, dsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
+        if ext_dert_:  # estimated rdn = rdn + 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
 
-    return deep_rsub_, deep_dsub_  # necessary? fill-in Dert and hypers if min_nP: L, LL?
+            sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
+            if rdn > 1: rdn += 1 / lL - 0.2
+            dsub_ += [[(fdP, sign, lL, True, rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
 
+            tmp_dsub_, tmp_rsub_ = intra_P(sub_dP_, True, True, rdn + 1.2, rng)  # deep layers feedback
+            dsub_ += [dsub + rsub for dsub, rsub in zip_longest(tmp_dsub_, tmp_rsub_, fillvalue=[])]
+            # tmp_rsub_ and tmp_dsub_ are spliced into dsub_ hierarchy
+            dLL[:] = [len(dsub_)]
 
-def form_deep_sub_(dert_, sign, fdP, fid, rdn, rng, rsub_, dsub_):
-    # rdn was estimated as rdn += 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
+            sub_mP_ = form_P_(ext_dert_, False); lL = len(sub_mP_)
+            if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn: sub_rdn += 1 / lL - 0.2
+            rsub_ += [[(fdP, sign, lL, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert[] fill if lL > min?
 
-    sub_mP_ = form_P_(dert_, False)
-    lL = len(sub_mP_)
-    if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn: sub_rdn += 1 / lL - 0.2
-    dsub_ += [[(fdP, sign, lL, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert[] fill if lL > min?
+            tmp_dsub_, tmp_rsub_ = intra_P(sub_mP_, False, fid, rdn + 1.2, rng + 1)  # deep layers feedback
+            rsub_ += [dsub + rsub for dsub, rsub in zip_longest(tmp_dsub_, tmp_rsub_, fillvalue=[])]
+            # tmp_rsub_ and tmp_dsub_ are spliced into rsub_ hierarchy
+            rLL[:] = [len(rsub_)]
 
-    sub_dP_ = form_P_(dert_, True)
-    lL = len(sub_dP_)
-    if rdn > 1: rdn += 1 / lL - 0.2
-    rsub_ += [[(fdP, sign, lL, True, rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
+        deep_dsub_ = [dsub + rsub for dsub, rsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
+        # dLL[:] = [len(deep_dsub_)]
+        deep_rsub_ = [dsub + rsub for dsub, rsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
+        # rLL[:] = [len(deep_rsub_)]
 
-    _rsub_, _dsub_ = intra_P(sub_dP_, True, True, rdn + 1.2, rng)  # deep layers feedback
-    dsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
-
-    _rsub_, _dsub_ = intra_P(sub_mP_, False, fid, rdn + 1.2, rng + 1)
-    rsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
-
-    # splice temp _rsub_ and _dsub_ into single r|d sub_ hierarchy
-    return rsub_, dsub_
+    return deep_dsub_, deep_rsub_  # fill-in Dert and hypers if min_nP: L, LL?
 
 
 def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap

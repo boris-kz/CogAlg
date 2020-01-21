@@ -33,26 +33,6 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
     return frame_of_patterns_  # frame of patterns will be output to level 2
 
-''' Recursion extends pattern structure to 1d hierarchy and then 2d hierarchy, to be adjusted by macro-feedback:
-    P_:
-    fseg,  # flag: 0 for rng+ | der+ Ps, 1 for segment Ps
-    fid,   # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
-    rdn,   # redundancy to higher layers, possibly lateral overlap of rng+, seg_d, der+, rdn += 1 * typ coef?
-    rng,   # range expansion count  
-    P:
-    sign,  # 1 -> rng+, 0 -> segment, -> der+ 
-    Dert = L, I, D, M, 
-    dert_, # input for sub_segment or extend_comp
-           # conditional 1d array of next layer:
-    sub_,  # multiple layers of (hyper, Dert, sub_P_) from segment or extended comp, nested to depth = sub_[n] 
-           # for layer-parallel access and comp, similar to frequency domain representation
-           # sub_P_: flat or nested for mapping to higher-layer sub_P_ element?
-    root   # reference to higher P for layer-sequential feedback 
-    orders of composition: 1st: dert_, 2nd: lateral_sub_( derts), 3rd: sub_( lateral_sub_( derts))? 
-    line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD processing? 
-'''
-
-
 def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
     deep_sub_ = []  # sub_ extension feedback from intra_P
@@ -95,6 +75,32 @@ def intra_P(P_, fid, rdn, rng, fseg):  # evaluate for sub-recursion in line P_, 
             except IndexError: deep_sub_.append(sub)
 
     return deep_sub_  # add return of Dert and hypers, same in sub_[0]? [] fill if min_nP: L, LL?
+
+def form_deep_sub_(dert_, sign, fdP, fid, rdn, rng, rsub_, dsub_):
+    # rdn was estimated as rdn += 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
+
+    sub_mP_ = form_P_(dert_, False)
+    lL = len(sub_mP_)
+    if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn: sub_rdn += 1 / lL - 0.2
+    dsub_ += [[(fdP, sign, lL, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert[] fill if lL > min?
+
+    sub_dP_ = form_P_(dert_, True)
+    lL = len(sub_dP_)
+    if rdn > 1: rdn += 1 / lL - 0.2
+    rsub_ += [[(fdP, sign, lL, True, rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
+
+    _rsub_, _dsub_ = intra_P(sub_dP_, True, True, rdn + 1.2, rng)  # deep layers feedback
+    dsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
+
+    _rsub_, _dsub_ = intra_P(sub_mP_, False, fid, rdn + 1.2, rng + 1)
+    rsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
+    # splice temp _rsub_ and _dsub_ into single r|d sub_ hierarchy
+
+    # not needed?:
+    # sub_ hierarchy extension by feedback from intra_P: dsub_ if fdP, else rsub_:
+    # deep_rsub_ = [rsub + dsub for rsub, dsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
+    # deep_dsub_ = [rsub + dsub for rsub, dsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
+    return rsub_, dsub_
 
 
 def segment(dert_):  # P segmentation by same d sign: initialization, accumulation, termination
