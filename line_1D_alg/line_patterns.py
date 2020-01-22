@@ -2,20 +2,20 @@ import cv2
 import argparse
 from time import time
 from line_1D_alg.utils import *
-from itertools import chain, tee, zip_longest
+from itertools import zip_longest
 
 ''' 
   line_patterns is a principal version of 1st-level 1D algorithm, contains operations: 
 
 - Cross-compare consecutive pixels within each row of image, forming dert_ queue of derts: tuples of derivatives per pixel. 
-  dert_ is then segmented by match deviation into patterns Ps: contiguous sequences of pixels that form same-sign m: +P or -P. 
+  dert_ is then segmented into patterns mPs and dPs: contiguous sequences of pixels forming same-sign match or difference. 
   Initial match is inverse deviation of variation: m = ave_|d| - |d|, rather than minimum for directly defined match: 
   albedo or intensity of reflected light doesn't correlate with predictive value of the object that reflects it.
 
-- Positive Ps: spans of pixels forming positive match, are evaluated for cross-comp of dert input param over incremented range 
-  (positive match means that pixels have high predictive value, thus likely to match more distant pixels).
-- Negative Ps: high-variation spans, are segmented by d sign. Segment is evaluated for der_comp, which forms higher derivatives.
-  No immediate comp d: sign (direction) match is partial d match, thus a precondition of full-d match and comparison.
+- Match patterns mPs are spans of inputs forming same-sign match. Positive mPs contain high-match pixels, which are likely 
+  to match more distant pixels. Thus, positive mPs are evaluated for cross-comp of pixels over incremented range.
+- Difference patterns dPs are spans of inputs forming same-sign ds. d sign match is a precondition for d match, so only
+  same-sign spans (dPs) are evaluated for cross-comp of constituent differences, which forms higher derivatives.
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
   
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
@@ -34,8 +34,7 @@ from itertools import chain, tee, zip_longest
 ave = 15   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_min = 5  # for m defined as min |d|: smaller?
 ave_M = 50   # min M for initial incremental-range comparison(t_), higher cost than der_comp?
-ave_D = 20   # min |D| for initial incremental-derivation comparison(d_)
-ave_L = 3    # min L for sub_cluster(d)
+ave_D = 15   # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5   # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ini_y = 500
 
@@ -83,23 +82,23 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
     else:
         _sign = m > 0
         D = d
-    dLL, rLL, L, I, M, P_dert_, dsub_, rsub_ = [], [], 1, p, m, [(p, d, m, uni_d)], [], []
+    dLL, rLL, L, I, M, sub_dert_, dsub_, rsub_ = [], [], 1, p, m, [(p, d, m, uni_d)], [], []
     # LL: depth of sub-hierarchy, each sub-pattern in sub_ is nested to depth = sub_[n]
 
     for p, d, m, uni_d in dert_[ini_dert:]:
         if fdP: sign = uni_d > 0
         else:   sign = m > 0
         if sign != _sign:  # sign change: terminate P
-            P_.append((_sign, dLL, rLL, L, I, D, M, P_dert_, dsub_, rsub_))  # LL: sub_ depth, L: len dert_
-            dLL, rLL, L, I, D, M, P_dert_, dsub_, rsub_ = [], [], 0, 0, 0, 0, [], [], []  # reset accumulated params
+            P_.append((_sign, dLL, rLL, L, I, D, M, sub_dert_, dsub_, rsub_))  # LL: sub_ depth, L: len dert_
+            dLL, rLL, L, I, D, M, sub_dert_, dsub_, rsub_ = [], [], 0, 0, 0, 0, [], [], []  # reset accumulated params
 
         L += 1; I += p; M += m  # accumulate params with bilateral values
         if fdP: D += uni_d  # value of comp uni_d
         else:   D += d
-        P_dert_ += [(p, d, m, uni_d)]
+        sub_dert_ += [(p, d, m, uni_d)]
         _sign = sign
 
-    P_.append((_sign, dLL, rLL, L, I, D, M, P_dert_, dsub_, rsub_))  # incomplete P; also sum Dert per P_?
+    P_.append((_sign, dLL, rLL, L, I, D, M, sub_dert_, dsub_, rsub_))  # incomplete P; also sum Dert per P_?
     return P_
 
 ''' Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
@@ -111,11 +110,11 @@ def form_P_(dert_, fdP):  # pattern initialization, accumulation, termination
     P:
     sign,  # of core param: m | d 
     Dert = L, I, D, M, 
-    dert_,  # input for extended comp
-    dsub_,  # multiple layers of (hyper, Dert, sub_P_) from segment or extended comp, nested to depth = sub_[n], 
-    rsub_,  # for layer-parallel access and comp, similar to frequency domain representation
-            # sub_P_: flat or nested for mapping to higher-layer sub_P_ element?
-    root    # reference to higher P for layer-sequential feedback 
+    dert_, # input for extended comp
+    dsub_, # multiple layers of (hyper, Dert, sub_P_) from segment or extended comp, nested to depth = sub_[n], 
+    rsub_, # for layer-parallel access and comp, similar to frequency domain representation
+           # sub_P_: flat or nested for mapping to higher-layer sub_P_ element?
+    root   # reference to higher P for layer-sequential feedback 
 
     orders of composition: 1st: dert_, 2nd: lateral_sub_( derts), 3rd: sub_( lateral_sub_( derts))? 
     line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD processing? 
@@ -137,44 +136,39 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
                 ext_dert_ = rng_comp(dert_, fid)
             # else merge non-selected Ps in P_, if in max recursion depth?
 
-        if ext_dert_:  # estimated rdn = rdn + 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
+        if ext_dert_: # estimated rdn = rdn + 1.2: 1 (rdn to higher derts) + 1 / ave_nP (ave rdn to higher sub_)
 
             sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
-            if rdn > 1: rdn += 1 / lL - 0.2
-            dsub_ += [[(fdP, sign, lL, True, rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
-
-            tmp_dsub_, tmp_rsub_ = intra_P(sub_dP_, True, True, rdn + 1.2, rng)  # deep layers feedback
-            dsub_ += [dsub + rsub for dsub, rsub in zip_longest(tmp_dsub_, tmp_rsub_, fillvalue=[])]
-            # tmp_rsub_ and tmp_dsub_ are spliced into dsub_ hierarchy
-            dLL[:] = [len(dsub_)]
+            if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn
+            dsub_ += [[(True, lL, True, rdn, rng, sub_dP_)]]  # 1st layer: fdP, lL, fid, rdn, rng, sub_P_
+            dsub_ += intra_P(sub_dP_, True, True, rdn + 1.2, rng)  # deep layers feedback
+            dLL[:] = [len(dsub_)]  # [len(dsub) for dsub in dsub_]
 
             sub_mP_ = form_P_(ext_dert_, False); lL = len(sub_mP_)
-            if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn: sub_rdn += 1 / lL - 0.2
-            rsub_ += [[(fdP, sign, lL, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert[] fill if lL > min?
+            if rdn > 1: rdn += 1 / lL - 0.2
+            rsub_ += [[(False, lL, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
+            rsub_ += intra_P(sub_mP_, False, fid, rdn + 1.2, rng + 1)  # deep layers feedback
+            rLL[:] = [len(rsub_)]  # [len(rsub) for rsub in rsub_]
 
-            tmp_dsub_, tmp_rsub_ = intra_P(sub_mP_, False, fid, rdn + 1.2, rng + 1)  # deep layers feedback
-            rsub_ += [dsub + rsub for dsub, rsub in zip_longest(tmp_dsub_, tmp_rsub_, fillvalue=[])]
-            # tmp_rsub_ and tmp_dsub_ are spliced into rsub_ hierarchy
-            rLL[:] = [len(rsub_)]
+        deep_dsub_ = [deep_dsub + dsub for deep_dsub, dsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
+        deep_rsub_ = [deep_rsub + rsub for deep_rsub, rsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
 
-        deep_dsub_ = [dsub + rsub for dsub, rsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
-        # dLL[:] = [len(deep_dsub_)]
-        deep_rsub_ = [dsub + rsub for dsub, rsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
-        # rLL[:] = [len(deep_rsub_)]
+    deep_sub_ = [dsub + rsub for dsub, rsub in zip_longest(deep_dsub_, deep_rsub_, fillvalue=[])]
+    # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy
 
-    return deep_dsub_, deep_rsub_  # fill-in Dert and hypers if min_nP: L, LL?
+    return deep_sub_  # fill-in Dert and hypers if min_nP: L, LL?
 
 
 def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
-    r_dert_ = []   # prefix '_' denotes the prior of same-name variables, initialization:
+    rdert_ = []   # prefix '_' denotes the prior of same-name variables, initialization:
     (__i, __short_bi_d, __short_bi_m, _), _, (_i, _short_bi_d, _short_bi_m, _) = dert_[0:3]
     _d = _i - __i
     if fid: _m = min(__i, _i) - ave_min;
     else:   _m = ave - abs(_d)  # no ave * rng: actual m and d value is cumulative?
     _bi_d = _d * 2 + __short_bi_d
     _bi_m = _m * 2 + __short_bi_m  # back-project _m and d
-    r_dert_.append((__i, _bi_d, _bi_m, None))
+    rdert_.append((__i, _bi_d, _bi_m, None))
 
     for n in range(4, len(dert_), 2):  # backward comp, ave | cumulative ders and filters?
         i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
@@ -183,23 +177,23 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
         else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
         bi_d = _d + d + _short_bi_d  # bilateral difference, accum in rng
         bi_m = _m + m + _short_bi_m  # bilateral match, accum in rng
-        r_dert_.append((_i, bi_d, bi_m, _d))
+        rdert_.append((_i, bi_d, bi_m, _d))
         _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_d
 
-    r_dert_.append((_i, _d * 2 + _short_bi_d, _m * 2 + _short_bi_m, _d))
+    rdert_.append((_i, _d * 2 + _short_bi_d, _m * 2 + _short_bi_m, _d))
     # forward-project unilateral to bilateral d and m values
-    return r_dert_
+    return rdert_
 
 
 def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign match is partial d match
     # dd and md may match across d sign, but likely in high-match area, spliced by spec in comp_P?
 
-    d_dert_ = []   # initialization:
+    ddert_ = []   # initialization:
     (_, _, _, __i), (_, _, _, _i) = dert_[1:3]  # each prefix '_' denotes prior
     __i = abs(__i); _i = abs(_i)
     _d = _i - __i  # initial comp
     _m = min(__i, _i) - ave_min
-    d_dert_.append((__i, _d * 2, _m * 2, None))  # __d and __m are back-projected as = _d or _m
+    ddert_.append((__i, _d * 2, _m * 2, None))  # __d and __m are back-projected as = _d or _m
 
     for dert in dert_[3:]:
         i = abs(dert[3])  # unilateral d in same-d-sign seg, no sign comp
@@ -207,11 +201,11 @@ def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign m
         m = min(i, _i) - ave_min  # md = min: magnitude of derived vars corresponds to predictive value
         bi_d = _d + d  # bilateral d-difference per _i
         bi_m = _m + m  # bilateral d-match per _i
-        d_dert_.append((_i, bi_d, bi_m, _d))
+        ddert_.append((_i, bi_d, bi_m, _d))
         _i, _d, _m = i, d, m
 
-    d_dert_.append((_i, _d * 2, _m * 2, _d))  # forward-project unilateral to bilateral d and m values
-    return d_dert_
+    ddert_.append((_i, _d * 2, _m * 2, _d))  # forward-project unilateral to bilateral d and m values
+    return ddert_
 
 
 if __name__ == "__main__":
@@ -292,7 +286,7 @@ def form_dP_(dert_):  # P segmentation by same d sign: initialization, accumulat
     # also Dert in sub_ [], fill if min lLL?
     return sub_  # becomes lateral_sub_
     
-    def splice(listOfLists, *otherLoLs, fillvalue=[]):
+def splice(listOfLists, *otherLoLs, fillvalue=[]):
     "Splice nested lists laterally."
     return [[*flatten(li)] for li in zip_longest(listOfLists, *otherLoLs, fillvalue=fillvalue)]
 
@@ -302,22 +296,4 @@ def form_dP_(dert_):  # P segmentation by same d sign: initialization, accumulat
 
     r_deep_sub_, d_deep_sub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
     r_sub_ += [flatten([flatten(r_deep_sub_), flatten(d_deep_sub_)])]
-
-    sub_mP_ = form_P_(rdert_, False)  # form_deep_sub(sub_dert, fdP, fid, dsub_, rsub_)
-    lL = len(sub_mP_); sub_rdn = rdn
-    if rdn > 1: sub_rdn += 1 / lL - 0.2
-    dsub_ += [[( fdP, sign, lL, fid, sub_rdn, rng, sub_mP_)]]  # 1st layer
-
-    sub_dP_ = form_P_(rdert_, True)
-    lL = len(sub_dP_); sub_rdn = rdn
-    if rdn > 1: sub_rdn += 1 / lL - 0.2
-    rsub_ += [[( fdP, sign, lL, True, sub_rdn, rng, sub_dP_)]]  # 1st layer, Dert[] fill if lL > min?
-
-    _rsub_, _dsub_ = intra_P(sub_dP_, True, True, sub_rdn + 1.2, rng)  # deep layers feedback
-    # splice temp _rsub_ and _dsub_ into single dsub_ hierarchy:
-    dsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
-
-    _rsub_, _dsub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
-    # splice temp _rsub_ and _dsub_ into single rsub_ hierarchy:
-    rsub_ += [rsub + dsub for rsub, dsub in zip_longest(_rsub_, _dsub_, fillvalue=[])]
 '''
