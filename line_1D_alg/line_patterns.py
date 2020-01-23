@@ -124,19 +124,21 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination
 
 def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
-    deep_sub_, ext_dert_ = [], []  # new dert_ from extended range or derivation comp
-    deep_dsub_, deep_rsub_ = [], []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
+    deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
+    ext_dert_ = []  # new dert_ from extended range or derivation comp
 
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
             if (abs(D) > ave_D * rdn) and L > 3:  # cross-comp uni_ds -> extended-comp dert_:
                 ext_dert_ = der_comp(dert_)
-
+            else:
+                ext_dert_ = []
         elif sign:  # P = +mP: low-variation, comp range = rng+1 ** 2: 1, 2, 4., kernel = range * 2 + 1: 3, 5, 9
             if M > ave_M * rdn and L > 4:  # else merge not-selected Ps into non_P?
                 ext_dert_ = rng_comp(dert_, fid)
-
+            else:
+                ext_dert_ = []
         if ext_dert_:  # pass rdn + 1 (rdn to higher derts) + 1 / lL (rdn to higher sub_) to deeper intra_P
 
             sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
@@ -149,12 +151,11 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
             rsub_ += intra_P(sub_mP_, False, fid, rdn + 1 + 1 / lL, rng + 1)  # deep layers feedback
             rLL[:] = [len(rsub_)]
 
-            deep_dsub_ = [deep_dsub + dsub for deep_dsub, dsub in zip_longest(deep_dsub_, dsub_, fillvalue=[])]
-            deep_rsub_ = [deep_rsub + rsub for deep_rsub, rsub in zip_longest(deep_rsub_, rsub_, fillvalue=[])]
+            deep_sub_ = [deep_sub + dsub + rsub for deep_sub, dsub, rsub in zip_longest(deep_sub_, dsub_, rsub_, fillvalue=[])]
+            # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy;
+            # fill Dert and filters per layer if n_sub_P > min?
+        #
 
-            deep_sub_ = [dsub + rsub for dsub, rsub in zip_longest(deep_dsub_, deep_rsub_, fillvalue=[])]
-            # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy
-            # add sub_P_ per layer, fill Dert and filters if n_sub_P > min?
     return deep_sub_
 
 
