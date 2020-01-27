@@ -279,13 +279,11 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         frame['blob_'].append(blob)
 
-
 # -----------------------------------------------------------------------------
 # Utilities
 
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
-
 
 # -----------------------------------------------------------------------------
 # Main
@@ -306,20 +304,25 @@ if __name__ == '__main__':
     frame_of_deep_blobs = {  # initialize frame_of_deep_blobs
         'blob_': [],
         'params': {
-            'I': frame_of_blobs['I'],
+            'I': frame_of_blobs['I'],  # none in 2x2 frame?
             'G': frame_of_blobs['G'],
             'Dy': frame_of_blobs['Dy'],
             'Dx': frame_of_blobs['Dx'],
             # deeper params are initialized when they are fetched
         }),
     }
-    for blob in frame_of_blobs['blob_']:  # evaluate recursive sub-clustering in each blob, via cluster_eval -> intra_fork
+    for blob in frame_of_blobs['blob_']:  # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob
     
-        if blob['Dert']['G'] > aveB:  # +G blob directly calls intra_fork(comp_g), no immediate sub-clustering
-            intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
+        if fder:  # 2x2 g blobs
+           if blob['Dert']['G'] > aveB:  # +G blob 
+              ga_blob_ = intra_fork( 1x1 comp_a -> vda); cluster_eval(vda) -> da_blob_: 
+              # if ga < 0 and ga_blob['Dert']['G'] > aveB: 
+              #    ga_blob_ = intra_fork( comp_g -> cosine gg)
+              # project missing derts by doubling differences to diametrically opposite derts? 
+              # intra_fork(blob, aveF, aveC, aveB, ave, rng * 2 + 1, 1, fig=0, fa=0)  # nI = 1: g
         
-        elif -blob['Dert']['G'] > aveB: # -G blob, sub-clustering by -vg for rng+ eval
-            cluster_eval(blob, aveF, aveC, aveB, ave, rng + 1, 2, fig=0, fa=0)  # cluster by -g for rng+, idiomatic crit=2: not index 
+        elif -blob['Dert']['G'] > aveB: # -G blob, 3x3
+            rg_blob_ = intra_fork( comp_i, rng+1): parallel cluster_eval(rng+); cluster_eval(der+)?
 
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?

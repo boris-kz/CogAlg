@@ -19,11 +19,11 @@ from itertools import zip_longest
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
   
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
-  The signs for these forks may be defined independently, for overlaps or gaps in spectrum, but then rdn is far more complex. 
+  Both forks currently process all inputs (full overlap), but they can be exclusive or partly overlapping to reduce redundancy. 
 
   Initial bi-lateral cross-comp here is 1D slice of 2D 3x3 kernel, while uni-lateral d is equivalent to 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
-  The former should be used in comp_rng and the latter in comp_d, which may alternate with intra_comp.
+  The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_P.
   
   postfix '_' denotes array name, vs. same-name elements
   prefix '_' denotes prior of two same-name variables
@@ -73,11 +73,12 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination
     p, d, m, uni_d = P_dert_[0]  # uni_d for der_comp
     ini_dert = 1
     if fdP:  # flag dP, selects between form_dP_ and form_mP_ forks
-        try: _sign = uni_d > 0
-        except:
-            p, d, m, uni_d = P_dert_[1]  # skip dert_[0] if uni_d is None: 1st dert in comp sequence
+        if uni_d is None:
+            p, d, m, uni_d = P_dert_[1]  # skip dert_[0]
             _sign = uni_d > 0
             ini_dert = 2
+        else:
+            _sign = uni_d > 0
         D = uni_d
     else:
         _sign = m > 0
@@ -92,9 +93,8 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination
             P_.append((_sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_))
             dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ = [], [], 0, 0, 0, 0, [], [], []
             # reset accumulated params
-        L += 1; I += p; M += m  # accumulate params with bilateral values
-        if fdP: D += uni_d  # value of comp uni_d
-        else:   D += d
+        L += 1; I += p; D += d; M += m  # accumulate params with bilateral values
+        # uni_D = D - dert_[1][-1] - dert_[-1][-1]?
         dert_ += [(p, d, m, uni_d)]
         _sign = sign
 
@@ -107,8 +107,7 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination
     fdP,  # flag: select dP or mP forks in form_P_ and intra_P
     fid,  # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
     rdn,  # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
-    rng,  # range expansion count  
-
+    rng,  # range extension count  
     P:
     sign,  # of core param: m | d 
     Dert = L, I, D, M, 
@@ -125,26 +124,26 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination
 def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
     deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
-    ext_dert_ = []  # new dert_ from extended range or derivation comp
+    ext_dert_ = []  # new dert_ from extended- range or derivation comp
 
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
-            if (abs(D) > ave_D * rdn) and L > 3:  # cross-comp uni_ds -> extended-comp dert_:
-                ext_dert_ = der_comp(dert_)
+            if (abs(D) > ave_D * rdn) and L > 3: # remove 1st and last uni_d projection?
+                ext_dert_ = der_comp(dert_)  # cross-comp uni_ds
             else:
                 ext_dert_ = []
-        elif sign:  # P = +mP: low-variation, comp range = rng+1 ** 2: 1, 2, 4., kernel = range * 2 + 1: 3, 5, 9
-            if M > ave_M * rdn and L > 4:  # else merge not-selected Ps into non_P?
+        elif sign:  # P = positive mP: low-variation span, evaluate for pixel cross-comp over passed rng + 1:
+            if M > ave_M * rdn and L > 4:  # comp range = rng**2: 1, 2, 4, kernel = range * 2 + 1: 3, 5, 9:
                 ext_dert_ = rng_comp(dert_, fid)
             else:
-                ext_dert_ = []
-        if ext_dert_:  # pass rdn + 1 (rdn to higher derts) + 1 / lL (rdn to higher sub_) to deeper intra_P
+                ext_dert_ = []  # also merge not-selected P into non_P?
+        if ext_dert_:
 
             sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
             dsub_ += [[(lL, True, True, rdn, rng, sub_dP_)]]  # 1st layer: lL, fdP, fid, rdn, rng, sub_P_
             dsub_ += intra_P(sub_dP_, True, True, rdn + 1 + 1 / lL, rng)  # deep layers feedback
-            dLL[:] = [len(dsub_)]
+            dLL[:] = [len(dsub_)]   # deeper P rdn + 1: rdn to higher derts, + 1 / lL: rdn to higher sub_
 
             sub_mP_ = form_P_(ext_dert_, False); lL = len(sub_mP_)
             rsub_ += [[(lL, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
@@ -152,9 +151,7 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
             rLL[:] = [len(rsub_)]
 
             deep_sub_ = [deep_sub + dsub + rsub for deep_sub, dsub, rsub in zip_longest(deep_sub_, dsub_, rsub_, fillvalue=[])]
-            # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy;
-            # fill Dert and filters per layer if n_sub_P > min?
-        #
+            # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy;   fill Dert per layer if n_sub_P > min?
 
     return deep_sub_
 
