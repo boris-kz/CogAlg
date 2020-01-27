@@ -264,7 +264,7 @@ if __name__ == '__main__':
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     arguments = vars(argument_parser.parse_args())
-    # image = cv2.imread(arguments['image'], 0).astype(int)
+    image = cv2.imread(arguments['image'], 0).astype(int)
 
     start_time = time()
     frame_of_blobs = image_to_blobs(image)
@@ -299,9 +299,9 @@ if __name__ == '__main__':
     '''
 
     # DEBUG -------------------------------------------------------------------
-    # from utils import map_frame
+    from utils import map_frame
 
-    # cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
+    cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
     # END DEBUG ---------------------------------------------------------------
 
     end_time = time() - start_time
