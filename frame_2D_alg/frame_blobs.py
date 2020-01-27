@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 import numpy as np
 import cv2
 from comp_pixel import comp_pixel
-
+from f_p import form_P_
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
@@ -64,7 +64,7 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array, prefix '
     height, width = image.shape
 
     for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
+        P_ = deque(form_P_(dert__[:, y].T))  # horizontal clustering
         P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
@@ -85,36 +85,6 @@ Parameterized connectivity clustering functions below:
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert is params of a composite structure (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
-
-def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
-    # P is a segment of same-sign derts in horizontal slice of a blob
-
-    P_ = deque()  # row of Ps
-    I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # initialize P params with 1st dert params
-    G -= ave
-    _s = G > 0  # sign
-
-    for x, (p, g, dy, dx) in enumerate(dert_[1:], start=1):
-        vg = g - ave
-        s = vg > 0
-        if s != _s:
-            # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_[x0:x0 + L], sign=_s)
-            P_.append(P)
-            # initialize new P:
-            I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
-        # accumulate P params:
-        I += p
-        G += vg  # M += m only within negative vg blobs
-        Dy += dy
-        Dx += dx
-        L += 1
-        _s = s  # prior sign
-
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_[x0:x0 + L], sign=_s)
-    P_.append(P)  # terminate last P in a row
-    return P_
-
 
 def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     '''
@@ -294,7 +264,7 @@ if __name__ == '__main__':
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     arguments = vars(argument_parser.parse_args())
-    image = cv2.imread(arguments['image'], 0).astype(int)
+    # image = cv2.imread(arguments['image'], 0).astype(int)
 
     start_time = time()
     frame_of_blobs = image_to_blobs(image)
@@ -329,9 +299,9 @@ if __name__ == '__main__':
     '''
 
     # DEBUG -------------------------------------------------------------------
-    from utils import map_frame
+    # from utils import map_frame
 
-    cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
+    # cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
     # END DEBUG ---------------------------------------------------------------
 
     end_time = time() - start_time
