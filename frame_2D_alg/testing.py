@@ -5,7 +5,6 @@ Currently testing: intra_blob.form_P__
 """
 
 import frame_blobs
-import numpy as np
 
 from utils import imread, draw
 from comp_param import comp_i

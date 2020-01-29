@@ -84,18 +84,20 @@ Current filters are represented in forks if tree reorder, else redefined at each
 # -----------------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_fork(blob, rdn, rng, fder, fig):  # recursive version of frame_blobs
+def intra_fork(blob, rng, newI, fig):  # recursive version of frame_blobs
 
-    dert__ = comp_i(blob['dert__'], fder, rng)  # dert = i, g, dy, dx -> cos comp_g
-    # parallel 3x3 and 2x2 comp? no pre-select by ga: res loss
-    sub_blob_ = cluster(blob, fder, rng, fig)
+    dert__ = comp_param(blob['dert__'], newI, rng)  # dert = i, g, dy, dx -> cos comp_g, no pre-select by ga: res loss
 
-    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, always both?
+    if newI in (0, 1): crit = 1  #  r+ or g+ fork: primary clustering by g
+    else: crit = 8       # a+ or ra+ fork: primary clustering by ga
+    sub_blob_, AveB = cluster(blob, crit, fig)
+
+    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, rng is incremented in cluster_eval
         I, G, M = op.itemgetter('I', 'G', 'M')(sub_blob['Dert'])
 
-        if G > (aveB + aveC) * rdn:  # +G > clustering cost (variable cluster size) + eval cost (fixed layer rep)
+        if G > AveB + AveC:  # +G > clustering cost (variable cluster size) + eval cost (fixed layer rep)
 
-            if fig == 0: # rdn sub-clustering by g and m, eval comp_a|g per g_sub_blob, comp_i per m_sub_blob
+            if fig and newI == 0: # rdn sub-clustering by g and m, eval comp_a|g per g_sub_blob, comp_i per m_sub_blob
                                 # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0;   or g+ only, low m value?
                 if G > M + I:
                     cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # g+ prior, redundant r+ eval:

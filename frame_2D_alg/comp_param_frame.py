@@ -5,9 +5,6 @@ Note: Since these operations performed only on multivariate variables,
 "__" in variable names will be skipped.
 """
 
-import numpy as np
-import numpy.ma as ma
-
 import frame_blobs
 
 from comp_param import comp_v
