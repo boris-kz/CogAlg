@@ -315,11 +315,11 @@ if __name__ == '__main__':
     
         if fder:  # 2x2 g blobs
            if blob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0 
-              gg_blob_ = intra_fork(blob, rdn=1, rng=1, fder=1, fig=1)  # der_comp(g) -> cosine gg
+              gg_blob_ = intra_blob(blob, rdn+1, rng=1, fig=1, fder=1)  # der_comp(g) -> cosine gg
               # project missing dert d: = diametrical dert d * 2? 
         
         elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 g, dert = dert
-           rg_blob_ = intra_fork(blob, rdn=1, rng * 2 + 1, fder=0, fig)  # rng_comp(i)
+           rg_blob_ = intra_blob(blob, rdn+1, rng+1, fig, fder=0)  # rng_comp(i)
            # also calls parallel cluster_eval(rng+) and cluster_eval(der+)?
 
         frame_of_deep_blobs['blob_'].append(blob)

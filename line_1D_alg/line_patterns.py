@@ -175,7 +175,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
         bi_d = _d + d + _short_bi_d  # bilateral difference, accum in rng
         bi_m = _m + m + _short_bi_m  # bilateral match, accum in rng
         rdert_.append((_i, bi_d, bi_m, _d))
-        _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_d
+        _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_m
 
     rdert_.append((_i, _d * 2 + _short_bi_d, _m * 2 + _short_bi_m, _d))
     # forward-project unilateral to bilateral d and m values

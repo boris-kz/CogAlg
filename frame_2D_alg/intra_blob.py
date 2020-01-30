@@ -84,82 +84,38 @@ Current filters are represented in forks if tree reorder, else redefined at each
 # -----------------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_fork(blob, rdn, rng, fder, fig):  # recursive version of frame_blobs
+def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with recursive sub-divisive clustering
 
-    dert__ = comp_i(blob['dert__'], fder, rng)  # dert = i, g, dy, dx -> cos comp_g
-    # parallel 3x3 and 2x2 comp? no pre-select by ga: res loss
-    sub_blob_ = cluster(blob, fder, rng, fig)
+    idert__, gdert__ = comp(blob['dert__'], fder, rng)  # 3x3 comp -> idert = i, g, dy, dx; 2x2 comp -> gdert = g, dy, dx
+    # no select by ga: loss of resolution per direction? or parallel ga_dert__ output, evaluation?
 
-    for sub_blob in sub_blob_:  # evaluate der+ and rng+ sub-clustering forks, always both?
-        I, G, M = op.itemgetter('I', 'G', 'M')(sub_blob['Dert'])
+    sub_gblob_ = cluster(blob, gdert__, rdn, rng, fig, fder=1)
+    for sub_gblob in sub_gblob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
 
-        if G > (aveB + aveC) * rdn:  # +G > clustering cost (variable cluster size) + eval cost (fixed layer rep)
+        if sub_gblob['Dert']['G'] > aveB * rdn:  # +G > intra_blob cost
+            intra_blob(blob, rdn + 1 + 1 / len(sub_gblob_), rng=1, fig=1, fder=1)
 
-            if fig == 0: # rdn sub-clustering by g and m, eval comp_a|g per g_sub_blob, comp_i per m_sub_blob
-                                # r+ comp_g eval by 0+6, not ra+ | ga+: fig = 0;   or g+ only, low m value?
-                if G > M + I:
-                    cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # g+ prior, redundant r+ eval:
-                    if M + I > AveB + AveC:
-                       cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 0, fig, fa)  # parallel cluster by i+?m
-                else:
-                    cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 0, fig, fa)   # r+ prior, redundant g+ eval:
-                    if G > AveB + AveC:
-                       cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, 1, fig, ~fa)  # parallel cluster by g
+    sub_iblob_ = cluster(blob, idert__, rdn, rng, fig, fder=0)
+    for sub_iblob in sub_iblob_:  # evaluate blob for rng+ fork, semi-exclusive with der+:
 
-            else:  # comp_a or comp_p -> exclusive g_sub_blob_, as in frame_blobs, else g_sub_blob_ is conditional
-                cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, crit, fig, fa)  # fa=0? eval comp_g only
+        if -sub_iblob['Dert']['G'] > aveB * rdn:  # -G > intra_blob cost
+            intra_blob(blob, rdn + 1 + 1 / len(sub_iblob_), rng+1, fig, fder=0)
 
-        elif -G > AveB + AveC:  # exclusive mfork eval in neg_g blobs, m and M defined in comp_P
-            cluster_eval(sub_blob, AveF, AveC, AveB, Ave, rng, crit, fig, fa)  # fa=0, rp+ | ra+ eval by -crit
-
-        # also evaluate intersections of positive g+ and r+ blobs, tertiary rdn?
-
-    return dert__
+    # also evaluate intersections of positive g+ and r+ blobs, tertiary rdn?
+    return  blob
 
 
-def cluster_eval(blob, AveF, AveC, AveB, Ave, irng, crit, fig, fa):  # cluster -> sub_blob_, next intra_fork eval
+def cluster(blob, dert__, rdn, rng, fig, fder):  # fig: i=ig, fa: flag comp angle, crit: clustering criterion
 
-    sub_blob_, AveB = cluster(blob, AveB, Ave, crit, fig, fa)  # conditional sub-clustering by g|m or ga|ma
-    for sub_blob in sub_blob_:
+    blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
+    # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax;  # bPARAMS, no iDy, iDx?
 
-        if fa: # comp_a evaluation per g-defined sub_blob, comp_g and comp_a blob layers alternate
-            if sub_blob['Dert'][0] > AveB + AveF:  # I > Ave_blob, different for a+?
-
-                AveF += aveF; AveC += aveC; AveB += aveB * aveN; Ave += ave
-                intra_fork(sub_blob, AveF, AveC, AveB, Ave, (4,5), irng*2+1, fig, fa)  # fa=1: comp_a fork, fig=0
-
-        else:  # comp_i evaluation per g|m-defined sub_blob, crit-defined i, Ave, Ave_blob: rdn-adjusted in intra_fork
-
-            if crit in (1, 8): rng = irng*2 + 1  # der+ val = est match of i= g|ga at rng*2+1, same as rng+ if rng==0
-            else: rng = irng + 1  # r+ | ra+: rng+ val = est match of i= i | a at rng+1, irng was redefined in a+ fork
-
-            if crit == 0 and fig: Crit = sub_blob['Dert'][0 + 6]  # r+ fork
-            else: Crit = sub_blob['Dert'][crit]  # g+ | ga+ fork
-
-            if Crit > AveB + AveF:
-                AveF += aveF; AveC += aveC; AveB += aveB * aveN; Ave += ave
-                intra_fork(sub_blob, AveF, AveC, AveB, Ave, crit, rng, fig, fa)  # fa=0: comp_i fork / nI=crit: 0 | 1 | 8
-
-            elif crit==8 and -Crit > AveB + AveF:
-                AveF += aveF; AveC += aveC; AveB += aveB * aveN; Ave += ave
-                intra_fork(sub_blob, AveF, AveC, AveB, Ave, 7, rng, fig, fa)  # fa=0, comp_i fork is ra+: nI=7?
-
-
-def cluster(blob, AveB, Ave, crit, fig, fa):  # fig: i=ig, fa: flag comp angle, crit: clustering criterion
-
-    if fa:  # cluster by ga from comp angle
-        blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, A=0, Ga=0, Dyay=0, Dyax=0, Dxay=0, Dxax=0, S=0, Ly=0, sub_blob_=[])
-        # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax;  # bPARAMS, no iDy, iDx?
-    else:
-        blob['fork_'][0 if crit in (1, 8) else 1] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
-        # initialize root_fork at ['fork_'][0|1]: only two forks per blob, then possibly two per +g_sub_blob
-
-    P__ = form_P__(blob['dert__'], Ave, crit, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
+    P__ = form_P__(blob['dert__'], rdn, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
     P_ = scan_P__(P__)
     seg_ = form_segment_(P_)  # vertical clustering
     sub_blob_ = form_blob_(seg_, blob['fork_'][crit], crit)  # with feedback to root_fork at blob['fork_'][crit]
 
-    return sub_blob_, AveB * len(sub_blob_) / aveN
+    return sub_blob_
 
 
 # clustering functions, out of date:
