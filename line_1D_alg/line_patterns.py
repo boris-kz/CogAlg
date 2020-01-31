@@ -36,6 +36,7 @@ ave_min = 2  # for m defined as min |d|: smaller?
 ave_M = 50   # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 10   # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5   # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
+ave_rdd =.5  # average dd / d, for projection: uni_d *= 1.5?
 ini_y = 500
 
 def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
@@ -49,14 +50,14 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         __p, _p = pixel_[0:2]  # each prefix '_' denotes prior
         _d = _p - __p  # initial comp
         _m = ave - abs(_d)
-        dert_.append((__p, _d*2, _m*2, None))  # back-project _d and _m to bilateral values
+        dert_.append((__p, _d * 1.5, _m * 1.5, None))  # back-project _d and _m to bilateral values
 
         for p in pixel_[2:]:  # pixel p is compared to prior pixel _p in a row
             d = p - _p
             m = ave - abs(d)  # initial match is inverse deviation of |difference|
             dert_.append((_p, d + _d, m + _m, _d))  # pack prior p, bilateral difference and match, prior d
             _p, _d, _m = p, d, m
-        dert_.append((_p, _d * 2, _m * 2, _d))  # forward-project last d and m to bilateral values
+        dert_.append((_p, _d * 1.5, _m * 1.5, _d))  # forward-project last d and m to bilateral values
 
         mP_ = form_P_(dert_, fdP=False)  # form m-sign patterns
         intra_P(mP_, fdP=False, fid=False, rdn=1, rng=2)  # evaluate sub-recursion per mP
@@ -67,7 +68,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     return frame_of_patterns_  # frame of patterns will be output to level 2
 
 
-def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination
+def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination, parallel der+ and rng+?
 
     P_ = []  # initialization:
     p, d, m, uni_d = P_dert_[0]  # uni_d for der_comp
@@ -163,8 +164,8 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     _d = _i - __i
     if fid: _m = min(__i, _i) - ave_min;
     else:   _m = ave - abs(_d)  # no ave * rng: actual m and d value is cumulative?
-    _bi_d = _d * 2 + __short_bi_d
-    _bi_m = _m * 2 + __short_bi_m  # back-project _m and d
+    _bi_d = _d * 1.5 + __short_bi_d
+    _bi_m = _m * 1.5 + __short_bi_m  # back-project _m and d
     rdert_.append((__i, _bi_d, _bi_m, None))
 
     for n in range(4, len(dert_), 2):  # backward comp, ave | cumulative ders and filters?
@@ -177,7 +178,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
         rdert_.append((_i, bi_d, bi_m, _d))
         _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_m
 
-    rdert_.append((_i, _d * 2 + _short_bi_d, _m * 2 + _short_bi_m, _d))
+    rdert_.append((_i, _d * 1.5 + _short_bi_d, _m * 1.5 + _short_bi_m, _d))
     # forward-project unilateral to bilateral d and m values
     return rdert_
 
@@ -190,7 +191,7 @@ def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign m
     __i = abs(__i); _i = abs(_i)
     _d = _i - __i  # initial comp
     _m = min(__i, _i) - ave_min
-    ddert_.append((__i, _d * 2, _m * 2, None))  # __d and __m are back-projected as = _d or _m
+    ddert_.append((__i, _d * 1.5, _m * 1.5, None))  # __d and __m are back-projected as = _d or _m
 
     for dert in dert_[3:]:
         i = abs(dert[3])  # unilateral d in same-d-sign seg, no sign comp
@@ -201,7 +202,7 @@ def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign m
         ddert_.append((_i, bi_d, bi_m, _d))
         _i, _d, _m = i, d, m
 
-    ddert_.append((_i, _d * 2, _m * 2, _d))  # forward-project unilateral to bilateral d and m values
+    ddert_.append((_i, _d * 1.5, _m * 1.5, _d))  # forward-project unilateral to bilateral d and m values
     return ddert_
 
 

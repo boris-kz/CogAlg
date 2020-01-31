@@ -1,6 +1,6 @@
 import operator as op
 from collections import deque, defaultdict
-from itertools import groupby, starmap
+from itertools import groupby, starmap, zip_longest
 import numpy as np
 import numpy.ma as ma
 from comp_param import comp_param
@@ -46,8 +46,9 @@ from functools import reduce
     angle form_and_comparison -> ga_blob layer is also below gradient comparison -> gg_blob layer. 
     
     Deep blob layers are conditional: 
-    comp pixel | g | ga -> i, g, dy, dx  # i fork 
-    ? comp_g -> i, g, dy, dx, idy, idx, m  # i is gradient of idy, idx, m = min i
+    comp i -> i, g, dy, dx   
+    comp_g -> g, dy, dx, (idy, idx), m, ga, day, dax  # i is lost, next comp of g | a?
+
     ? form_and_comp_angle -> i, g, dy, dx, idy, idx, m, a, ga, day, dax  # angle a of ig is computed from idy, idx 
         
     Hence, dert has up to 3 layers: i, g, dy, dx, ?(idy, idx, m, ?(a, ga, day, dax))  
@@ -84,36 +85,50 @@ Current filters are represented in forks if tree reorder, else redefined at each
 # -----------------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with recursive sub-divisive clustering
+def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-clustering per recursive extended comp
 
-    idert__, gdert__ = comp(blob['dert__'], fder, rng)  # 3x3 comp -> idert = i, g, dy, dx; 2x2 comp -> gdert = g, dy, dx
-    # no select by ga: loss of resolution per direction? or parallel ga_dert__ output, evaluation?
+    deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
+
+    gdert__, rdert__ = comp(blob['dert__'], rng, fig, fder)  # no select by ga: loss of resolution per direction?
+    # 3x3 comp -> rdert, 2x2 comp -> gdert, same structure, rng, fder for both, select per fork only
+    # dert = i, g, dy, dx, if fig: ((idx, idy), m, ga, day, dax): from comp_a in comp_g
 
     sub_gblob_ = cluster(blob, gdert__, rdn, rng, fig, fder=1)
     for sub_gblob in sub_gblob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
 
         if sub_gblob['Dert']['G'] > aveB * rdn:  # +G > intra_blob cost
-            intra_blob(blob, rdn + 1 + 1 / len(sub_gblob_), rng=1, fig=1, fder=1)
+            lL = len(sub_gblob_)
+            blob['gsub_'] += [[(lL, True, True, rdn, rng, sub_gblob_)]]  # 1st layer: lL, fig, fder, rdn, rng
+            blob['gsub_'] += intra_blob(blob, rdn + 1 + 1 / lL, rng=1, fig=1, fder=1)  # deep layers feedback
+            blob['gLL'] = len(blob['gsub_'])
+            # also separate Ga, Gi eval -> sub-clustering -> intra_blob( ga | gi ) eval?
 
-    sub_iblob_ = cluster(blob, idert__, rdn, rng, fig, fder=0)
-    for sub_iblob in sub_iblob_:  # evaluate blob for rng+ fork, semi-exclusive with der+:
+    sub_rblob_ = cluster(blob, rdert__, rdn, rng, fig, fder=0)
+    for sub_rblob in sub_rblob_:  # evaluate blob for rng+ fork, semi-exclusive with der+:
 
-        if -sub_iblob['Dert']['G'] > aveB * rdn:  # -G > intra_blob cost
-            intra_blob(blob, rdn + 1 + 1 / len(sub_iblob_), rng+1, fig, fder=0)
+        if -sub_rblob['Dert']['G'] > aveB * rdn:  # -G > intra_blob cost
+            lL = len(sub_rblob_)
+            blob['rsub_'] += [[(lL, fig, False, rdn, rng, sub_rblob_)]]  # 1st layer: lL, fig, fder, rdn, rng
+            blob['rsub_'] += intra_blob(blob, rdn + 1 + 1 / lL, rng+1, fig, fder=0)  # deep layers feedback
+            blob['rLL'] = len(blob['gsub_'])
 
     # also evaluate intersections of positive g+ and r+ blobs, tertiary rdn?
-    return  blob
+
+    deep_sub_ = [deep_sub + gsub + rsub for deep_sub, gsub, rsub in zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
+    # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy;   fill Dert per layer if n_sub_P > min?
+
+    return deep_sub_
 
 
 def cluster(blob, dert__, rdn, rng, fig, fder):  # fig: i=ig, fa: flag comp angle, crit: clustering criterion
 
-    blob['fork_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
+    blob['sub_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
     # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax;  # bPARAMS, no iDy, iDx?
 
-    P__ = form_P__(blob['dert__'], rdn, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
+    P__ = form_P__(blob, dert__, rdn, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
     P_ = scan_P__(P__)
-    seg_ = form_segment_(P_)  # vertical clustering
-    sub_blob_ = form_blob_(seg_, blob['fork_'][crit], crit)  # with feedback to root_fork at blob['fork_'][crit]
+    seg_ = form_stack_(P_)  # vertical clustering
+    sub_blob_ = form_blob_(seg_, blob['fork_'])  # with feedback to root_fork at blob['fork_'][crit]
 
     return sub_blob_
 
@@ -215,7 +230,7 @@ def comp_edge(_P, P):  # Used in scan_P_().
         return False, _x0 < xn
 
 
-def form_segment_old(P_, fa, noM):
+def form_stack_old(P_, fa, noM):
     """Form segments of vertically contiguous Ps."""
     # Get a list of every segment's first P:
     P0_ = [*filter(lambda P: (len(P['up_fork_']) != 1
@@ -251,7 +266,7 @@ def form_segment_old(P_, fa, noM):
     return seg_
 
 
-def form_segment_(P_, fa):
+def form_stack_(P_, fa):
     """Form segments of vertically contiguous Ps."""
     # Determine params type:
     if "M" not in P_[0]:
