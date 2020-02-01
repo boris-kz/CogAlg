@@ -3,8 +3,7 @@ This is an open project, but I will pay per contribution, or monthly once there 
 
 Contributions:
 
-2010: Todor Arnaudov, $600 for suggestion to buffer old inputs after search. This occurred to me more than once before, but I rejected it as redundant to potential elevation of these inputs. Now that he made me think about it again, I realized that partial redundancy can preserve the detail at much lower cost than elevation.
-The buffer is accessed if coordinates of contents get relatively close to projected inputs (that and justification is mine). It didn’t feel right because brain has no substrate for passive memory, but we do now.
+2010: Todor Arnaudov, $600 for suggestion to buffer old inputs after search.
  
 2011: Todor, $400 consolation prize for understanding some ideas that were not clearly explained here.
 
@@ -40,6 +39,15 @@ Todor Arnaudov, $1600, frequent contributor, March-June
 
 Kok Wei Chee, $900, for diagrams of line_POC and frame_blobs, December 
 
-Khanh Nguyen, $10100, lead debugger and co-designed, January-December
+Khanh Nguyen, $10100, lead debugger and co-designer, January-December
+
+2020:
+
+Mayukh Sarkar, $600 for frame_blobs performance analysis and porting form_P to C++, January
+
+Kok Wei Chee, $1100 for help in debugging line_patterns and its diagrams, January
+
+Khanh Nguyen, $900, lead debugger and co-designer, January
+
 
 

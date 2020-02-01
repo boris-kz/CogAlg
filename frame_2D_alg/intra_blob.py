@@ -74,10 +74,10 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 # filters:
 
 ave  = 50  # fixed cost per dert, from average g|m, reflects blob definition cost, may be different for comp_a?
-aveB = 10000  # fixed cost per blob: clustering + representation?
-aveN = 10  # ave_n_sub_blobs: fixed cost ratio of root_blob / blob: add sub_blobs, adjusted by actual len sub_blob_
-aveC = 1000  # ave_clust_eval: cost of eval in cluster_eval,    total cluster_eval cost = Ave_blob + ave_clust_eval
-aveF = 1000  # ave_intra_fork: cost of comp + eval in intra_fork, total intra_fork cost = Ave_blob + ave_intra_fork
+aveB = 10000  # fixed cost per blob: comp and clustering?
+# aveN = 10  # ave_n_sub_blobs: fixed cost ratio of root_blob / blob: add sub_blobs, adjusted by actual len sub_blob_
+# aveC = 1000  # ave_clust_eval: cost of eval in cluster_eval,    total cluster_eval cost = Ave_blob + ave_clust_eval
+# aveF = 1000  # ave_intra_fork: cost of comp + eval in intra_fork, total intra_fork cost = Ave_blob + ave_intra_fork
 
 ''' All filters are accumulated in cluster_eval per evaluated fork to account for redundancy: Filter += filter 
 Current filters are represented in forks if tree reorder, else redefined at each access? '''
@@ -87,11 +87,12 @@ Current filters are represented in forks if tree reorder, else redefined at each
 
 def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-clustering per recursive extended comp
 
-    deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
+    deep_sub_ = []  # each intra_blob recursion extends rsub_ and dsub_ hierarchies by sub_blob_ layer
+    # dert = i, g, dy, dx, if fig: ((idx, idy), m, ga, day, dax):
+    # comp_a -> da -> ga, day, dax; dg = g - _g * cos(da), comb -> gg, separate ga, abs_gg?
 
-    gdert__, rdert__ = comp(blob['dert__'], rng, fig, fder)  # no select by ga: loss of resolution per direction?
+    gdert__, rdert__ = comp_i(blob['dert__'], rng, fig, fder)  # no select by ga: loss of resolution per direction?
     # 3x3 comp -> rdert, 2x2 comp -> gdert, same structure, rng, fder for both, select per fork only
-    # dert = i, g, dy, dx, if fig: ((idx, idy), m, ga, day, dax): from comp_a in comp_g
 
     sub_gblob_ = cluster(blob, gdert__, rdn, rng, fig, fder=1)
     for sub_gblob in sub_gblob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
@@ -101,7 +102,7 @@ def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-
             blob['gsub_'] += [[(lL, True, True, rdn, rng, sub_gblob_)]]  # 1st layer: lL, fig, fder, rdn, rng
             blob['gsub_'] += intra_blob(blob, rdn + 1 + 1 / lL, rng=1, fig=1, fder=1)  # deep layers feedback
             blob['gLL'] = len(blob['gsub_'])
-            # also separate Ga, Gi eval -> sub-clustering -> intra_blob( ga | gi ) eval?
+            # also separate eval Ga, Gi -> sub-clustering -> eval intra_blob( ga | gi )?
 
     sub_rblob_ = cluster(blob, rdert__, rdn, rng, fig, fder=0)
     for sub_rblob in sub_rblob_:  # evaluate blob for rng+ fork, semi-exclusive with der+:
@@ -114,18 +115,19 @@ def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-
 
     # also evaluate intersections of positive g+ and r+ blobs, tertiary rdn?
 
-    deep_sub_ = [deep_sub + gsub + rsub for deep_sub, gsub, rsub in zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
+    deep_sub_ = [deep_sub + gsub + rsub for deep_sub, gsub, rsub in \
+                 zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
     # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy;   fill Dert per layer if n_sub_P > min?
 
     return deep_sub_
 
 
-def cluster(blob, dert__, rdn, rng, fig, fder):  # fig: i=ig, fa: flag comp angle, crit: clustering criterion
+def cluster(blob, dert__, rdn, rng, fig, fder):  # fder: clustering crit, no rdn, rng?
 
-    blob['sub_'][0] = dict( I=0, G=0, M=0, Dy=0, Dx=0, S=0, Ly=0, sub_blob_=[] )
-    # initialize root_fork with Dyay, Dxay=Day, Dyax, Dxax=Dax;  # bPARAMS, no iDy, iDx?
+    blob['sub_'][0][0] = dict( I=0, G=0, Dy=0, Dx=0, iDy=0, iDx=0, M=0, Ga=0, Day=0, Dax=0, S=0, Ly=0, sub_blob_=[] )
+    # initialize first sub_blob in first sub_layer?  Dyay, Dxay=Day, Dyax, Dxax=Dax
 
-    P__ = form_P__(blob, dert__, rdn, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
+    P__ = form_P__(dert__, rdn, fder, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
     P_ = scan_P__(P__)
     seg_ = form_stack_(P_)  # vertical clustering
     sub_blob_ = form_blob_(seg_, blob['fork_'])  # with feedback to root_fork at blob['fork_'][crit]
@@ -136,12 +138,9 @@ def cluster(blob, dert__, rdn, rng, fig, fder):  # fig: i=ig, fa: flag comp angl
 # clustering functions, out of date:
 #---------------------------------------------------------------------------------------------------------------------------------------
 
-def form_P__(dert__, Ave, crit, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+def form_P__(dert__, rdn, crit, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
     '''
-    crit = 1: g+, 2: rp+ | ra+, 3: rg+, 8: ga+; vs nI: = 0: i | 1: g | 7: a | 8: ga; fsub if sub-clustering?
-    input dert: i, g=0, dy=0, dx=0, if fig: += idy, idx, m;
-    if nI == 7: += a, ga, day, dax  # cross-comp angle over incremented range
-    elif nI==(4,5): += a=0, ga=0, day=0, dax=0: compute angle from idy and idx, cross-compare a within blob
+    crit = 0: iP, | 4: aP?
     '''
     if  fig:  # replace by crit?
         if crit in (0, 1): param_keys = gP_PARAM_KEYS  # r+ | g+

@@ -1,0 +1,213 @@
+## README
+# Building the Native Libraries
+
+- Ensure you have a valid c++11 library
+- Ensure [swig](http://www.swig.org/download.html) is installed on your system
+- Numpy core libraries should be installed
+- Open terminal and give the following command
+
+```sh
+$ bash build.sh
+```
+
+This shall generate many files. 2 most important files are `_f_p.so` and `f_p.py`.
+
+- Make sure you have these two files in your local directory.
+- Now run the `frame_blob.py` file. We have modified the code to accept the native implementation of frame_blobs.
+
+
+# More things to do
+
+- Improve then memory management of the C++ code. (Now we are not deallocating the memory)
+- Implement the `scan_p` in C++ and integrate it too.
+
+
+## form_P_.cpp
+
+#include <iostream>
+#include "f_p.h"
+const float AVE = 50.0;
+
+double at(const double *arr, int r, int c) {
+    int index = r * 4 + c;
+    return arr[index];
+}
+
+std::vector<Bunch*> form_P_(const double *dert_, int row, int col)  {
+
+    std::vector<Bunch*> P_;
+
+    int I = at(dert_, 0, 0); // 0*4 + 0
+    int G = at(dert_, 0, 1); // 0*4 + 1
+    int Dy = at(dert_, 0, 2); // 0*4 + 2
+    int Dx = at(dert_, 0, 3); // 0*4 + 3
+
+    G -= AVE;
+    int x0 = 0;
+    int L = 1;
+
+    bool _s = G > 0;
+
+    for(int i=1; i<row; i++) {
+        int p = at(dert_, i, 0);
+        int g = at(dert_, i, 1);
+        int dy = at(dert_, i, 2);
+        int dx = at(dert_, i, 3);
+        float vg = g - AVE;
+        // std::cout<<"vg:"<<vg<<'\n';
+        bool s = vg > 0.0;
+
+        if (s != _s) {
+            Bunch *P = new Bunch(dert_, I, G, Dy, Dx, x0, L, _s);
+            P_.push_back(P);
+
+            // initialize new P:
+            x0 = i;
+            I = 0.0;
+            G = 0.0;
+            Dy = 0.0;
+            Dx = 0.0;
+            L = 0;
+        }
+
+        I += p;
+        G += vg;
+        Dy += dy;
+        Dx += dx;
+        L += 1;
+        _s = s;
+
+    }
+
+    Bunch *Q = new Bunch(dert_, I, G, Dy, Dx, x0, L, _s);
+    P_.push_back(Q);
+    return P_;
+}
+
+## build.sh
+
+rm -f *.o f_p_wrap.cpp _f_p.so f_p.py
+rm -rf __pycache__
+
+g++ -std=c++11 -O3 -march=native -fPIC -c f_p.cpp
+swig -python -c++ -o f_p_wrap.cpp f_p.i
+
+# Next, compile the wrapper code:
+
+g++ -std=c++11 -O3 -march=native -w -fPIC -c $(pkg-config --cflags --libs python3) -I $( python -c "import numpy ; print(numpy.get_include())" ) f_p.cpp f_p_wrap.cpp
+
+g++ -std=c++11 -O3 -march=native -shared f_p.o f_p_wrap.o -o _f_p.so -lm
+
+
+## form_P_.h
+
+/* File knn.h */
+#ifndef F_P_H
+#define f_P_H
+#define CPP_14 0
+
+#include <memory>
+#include <vector>
+#include <memory>
+#include <algorithm>
+#include <tuple>
+#include <initializer_list>
+#include <iostream>
+
+class Bunch {
+    public:
+
+        float I;
+        float G;
+        float Dy;
+        float Dx;
+        int x0;
+        bool sign;
+        size_t size;
+        std::shared_ptr<float[]> dert_;
+        explicit Bunch(const double *Dert_, float I, float G, float Dy, float Dx, int x0, size_t sz, bool _s) {
+            this->I = I;
+            this->G = G;
+            this->Dy = Dy;
+            this->Dx = Dx;
+            this->size = sz;
+            this->x0 = x0;
+            this->sign = _s;
+            #if CPP_14
+                this->dert_ = std::make_shared<float[]>(this->size*4);
+            #else
+                this->dert_ = std::shared_ptr<float[]>(new float[this->size*4]);
+            #endif
+
+            for(int i=0; i< this->size*4; i++) {
+                this->dert_[i] = Dert_[x0*4+i];
+            }
+        }
+
+};
+/* Define function prototype */
+std::vector<Bunch*> form_P_(const double *dert_, int row, int col)  ;
+#endif
+
+
+## form_P_.i
+
+%module f_p
+#define SWIGPYTHON_BUILTIN
+
+%{
+  #include "numpy/arrayobject.h"
+  #define SWIG_FILE_WITH_INIT  /* To import_array() below */
+  #include "f_p.h"
+%}
+%include "std_map.i"
+%import "std_deque.i"
+%import "std_vector.i"
+
+//%template (mapiv) std::map<char,float>;
+//%template () std::vector<Bunch*>;
+%include "numpy.i"
+
+%init %{
+import_array();
+%}
+
+%apply (double* IN_ARRAY2, int DIM1, int DIM2) {
+  (const double* dert_, int row, int col)
+}
+
+
+%typemap(out) std::vector<Bunch*> {
+
+  for(int i=0; i < $1.size(); ++i) {
+    PyObject *o = PyDict_New();
+
+  int count = 0;
+
+    PyDict_SetItemString(o, "I", PyFloat_FromDouble($1.data()[i]->I));
+    PyDict_SetItemString(o, "G", PyFloat_FromDouble($1.data()[i]->G));
+    PyDict_SetItemString(o, "Dy", PyFloat_FromDouble($1.data()[i]->Dy));
+    PyDict_SetItemString(o, "Dx", PyFloat_FromDouble($1.data()[i]->Dx));
+    PyDict_SetItemString(o, "L", PyLong_FromDouble($1.data()[i]->size));
+    PyDict_SetItemString(o, "x0", PyLong_FromDouble($1.data()[i]->x0));
+    PyDict_SetItemString(o, "sign", PyBool_FromLong($1.data()[i]->sign));
+
+
+    PyObject *outer = PyList_New($1.data()[i]->size);
+    for(int j=0; j < $1.data()[i]->size; ++j) {
+
+      PyObject *inner = PyList_New(4);
+
+      for(int k=0; k < 4; ++k) {
+        PyList_SetItem(inner, k, PyLong_FromDouble($1.data()[i]->dert_[count]));
+        count++;
+      }
+      PyList_SetItem(outer, j, inner);
+    }
+    PyDict_SetItemString(o, "dert_", outer);
+
+
+    $result =  SWIG_Python_AppendOutput($result, o);
+  }
+}
+%include "f_p.h"
