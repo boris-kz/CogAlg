@@ -34,7 +34,7 @@ from itertools import zip_longest
 ave = 15   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
 ave_min = 2  # for m defined as min |d|: smaller?
 ave_M = 50   # min M for initial incremental-range comparison(t_), higher cost than der_comp?
-ave_D = 10   # min |D| for initial incremental-derivation comparison(d_)
+ave_D = 5   # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5   # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdd =.5  # average dd / d, for projection: uni_d *= 1.5?
 ini_y = 500
@@ -75,17 +75,13 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination,
     ini_dert = 1
     if fdP:  # flag dP, selects between form_dP_ and form_mP_ forks
         if uni_d is None:
-            p, d, m, uni_d = P_dert_[1]  # skip dert_[0]
-            _sign = uni_d > 0
+            p, d, m, uni_d = P_dert_[1]  # skip dert_[0], or always?
             ini_dert = 2
-        else:
-            _sign = uni_d > 0
-        D = uni_d
+        _sign = uni_d > 0
     else:
         _sign = m > 0
-        D = d
-    dLL, rLL, L, I, M, dert_, dsub_, rsub_ = [], [], 1, p, m, [(p, d, m, uni_d)], [], []
-    # LL: depth of sub-hierarchy, each sub-pattern in sub_ is nested to depth = sub_[n]
+    dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ = [], [], 1, p, 0, m, [(p, d, m, uni_d)], [], []
+    # LL: depth of sub-hierarchy, each sub-pattern in sub_ is nested to depth = sub_[n], 1st uni_d is skipped
 
     for p, d, m, uni_d in P_dert_[ini_dert:]:
         if fdP: sign = uni_d > 0
@@ -94,8 +90,7 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination,
             P_.append((_sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_))
             dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ = [], [], 0, 0, 0, 0, [], [], []
             # reset accumulated params
-        L += 1; I += p; D += d; M += m  # accumulate params with bilateral values
-        # uni_D = D - dert_[1][-1] - dert_[-1][-1]?
+        L += 1; I += p; D += uni_d; M += m  # accumulate params, bilateral m?
         dert_ += [(p, d, m, uni_d)]
         _sign = sign
 
@@ -130,15 +125,17 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
-            if (abs(D) > ave_D * rdn) and L > 3: # remove 1st and last uni_d projection?
-                ext_dert_ = der_comp(dert_)  # cross-comp uni_ds
-            else:
-                ext_dert_ = []
+            if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds:
+                ext_dert_ = der_comp(dert_)
+
         elif sign:  # P = positive mP: low-variation span, evaluate for pixel cross-comp over passed rng + 1:
-            if M > ave_M * rdn and L > 4:  # comp range = rng**2: 1, 2, 4, kernel = range * 2 + 1: 3, 5, 9:
-                ext_dert_ = rng_comp(dert_, fid)
-            else:
-                ext_dert_ = []  # also merge not-selected P into non_P?
+            if M > ave_M * rdn and L > 4:  # comp range += 2: skip predictable next dert, update rng?
+                ext_dert_ = rng_comp(dert_, fid, fskip=1)
+
+        elif -M + (ave_D - abs(D)) > ave_M * rdn and L > 3: # noisy mP, condition needs a review, probably a bug
+            ext_dert_ = rng_comp(dert_, fid, fskip=0)  # no skipping, next dert is not predictable
+
+        else: ext_dert_ = []  # also merge not-selected P into non_P?
         if ext_dert_:
 
             sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
@@ -157,10 +154,13 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
     return deep_sub_
 
 
-def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
+def rng_comp(dert_, fid, fskip):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
     rdert_ = []   # prefix '_' denotes the prior of same-name variables, initialization:
-    (__i, __short_bi_d, __short_bi_m, _), _, (_i, _short_bi_d, _short_bi_m, _) = dert_[0:3]
+    if fskip:
+        (__i, __short_bi_d, __short_bi_m, _), _, (_i, _short_bi_d, _short_bi_m, _) = dert_[0:3]
+    else:
+        (__i, __short_bi_d, __short_bi_m, _), (_i, _short_bi_d, _short_bi_m, _) = dert_[0:2]
     _d = _i - __i
     if fid: _m = min(__i, _i) - ave_min;
     else:   _m = ave - abs(_d)  # no ave * rng: actual m and d value is cumulative?
@@ -168,15 +168,26 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     _bi_m = _m * 1.5 + __short_bi_m  # back-project _m and d
     rdert_.append((__i, _bi_d, _bi_m, None))
 
-    for n in range(4, len(dert_), 2):  # backward comp, ave | cumulative ders and filters?
-        i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
-        d = i - _i
-        if fid: m = min(i, _i) - ave_min  # match = min: magnitude of derived vars correlates with stability
-        else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
-        bi_d = _d + d + _short_bi_d  # bilateral difference, accum in rng
-        bi_m = _m + m + _short_bi_m  # bilateral match, accum in rng
-        rdert_.append((_i, bi_d, bi_m, _d))
-        _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_m
+    if fskip:
+        for n in range(4, len(dert_), 2):  # backward comp, ave | cumulative ders and filters?
+            i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
+            d = i - _i
+            if fid: m = min(i, _i) - ave_min  # match = min: magnitude of derived vars correlates with stability
+            else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
+            bi_d = _d + d + _short_bi_d  # bilateral difference, accum in rng
+            bi_m = _m + m + _short_bi_m  # bilateral match, accum in rng
+            rdert_.append((_i, bi_d, bi_m, _d))
+            _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_m
+    else:
+        for dert in dert_[2:]:  # backward comp, ave | cumulative ders and filters?
+            i, short_bi_d, short_bi_m = dert[:3]  # shorter-rng dert
+            d = i - _i
+            if fid: m = min(i, _i) - ave_min  # match = min: magnitude of derived vars correlates with stability
+            else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
+            bi_d = _d + d + _short_bi_d  # bilateral difference, accum in rng
+            bi_m = _m + m + _short_bi_m  # bilateral match, accum in rng
+            rdert_.append((_i, bi_d, bi_m, _d))
+            _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_m
 
     rdert_.append((_i, _d * 1.5 + _short_bi_d, _m * 1.5 + _short_bi_m, _d))
     # forward-project unilateral to bilateral d and m values

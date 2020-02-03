@@ -74,8 +74,8 @@ aSEG_PARAM_KEYS = aDERT_PARAMS + SEG_PARAMS
 # filters:
 
 ave  = 50  # fixed cost per dert, from average g|m, reflects blob definition cost, may be different for comp_a?
-aveB = 10000  # fixed cost per blob: comp and clustering?
-# aveN = 10  # ave_n_sub_blobs: fixed cost ratio of root_blob / blob: add sub_blobs, adjusted by actual len sub_blob_
+aveB = 10000  # fixed cost per intra_blob comp and clustering
+# aveN = 10   # ave_n_sub_blobs: fixed cost ratio of root_blob / blob: add sub_blobs, adjusted by actual len sub_blob_
 # aveC = 1000  # ave_clust_eval: cost of eval in cluster_eval,    total cluster_eval cost = Ave_blob + ave_clust_eval
 # aveF = 1000  # ave_intra_fork: cost of comp + eval in intra_fork, total intra_fork cost = Ave_blob + ave_intra_fork
 
@@ -89,12 +89,12 @@ def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-
 
     deep_sub_ = []  # each intra_blob recursion extends rsub_ and dsub_ hierarchies by sub_blob_ layer
     # dert = i, g, dy, dx, if fig: ((idx, idy), m, ga, day, dax):
-    # comp_a -> da -> ga, day, dax; dg = g - _g * cos(da), comb -> gg, separate ga, abs_gg?
+    # comp_a -> da -> ga, day, dax; dg = g - _g * cos(da), comb -> gg, separate abs_gg?   2x2 | 3x3 dert__:
 
-    gdert__, rdert__ = comp_i(blob['dert__'], rng, fig, fder)  # no select by ga: loss of resolution per direction?
-    # 3x3 comp -> rdert, 2x2 comp -> gdert, same structure, rng, fder for both, select per fork only
+    gdert__ = comp_g(blob['dert__'], True, True)  # 2x2 comp, no select by ga: loss of resolution per direction?
+    rdert__ = comp_r(blob['dert__'], rng, fig, False)  # sparse odd rng+2 comp, same dert structure, projection?
 
-    sub_gblob_ = cluster(blob, gdert__, rdn, rng, fig, fder=1)
+    sub_gblob_ = cluster(blob, gdert__, rdn, fig, fder=1)
     for sub_gblob in sub_gblob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
 
         if sub_gblob['Dert']['G'] > aveB * rdn:  # +G > intra_blob cost
@@ -104,7 +104,7 @@ def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-
             blob['gLL'] = len(blob['gsub_'])
             # also separate eval Ga, Gi -> sub-clustering -> eval intra_blob( ga | gi )?
 
-    sub_rblob_ = cluster(blob, rdert__, rdn, rng, fig, fder=0)
+    sub_rblob_ = cluster(blob, rdert__, rdn, fig, fder=0)
     for sub_rblob in sub_rblob_:  # evaluate blob for rng+ fork, semi-exclusive with der+:
 
         if -sub_rblob['Dert']['G'] > aveB * rdn:  # -G > intra_blob cost
@@ -117,23 +117,22 @@ def intra_blob(blob, rdn, rng, fig, fder):  # a version of frame_blobs with sub-
 
     deep_sub_ = [deep_sub + gsub + rsub for deep_sub, gsub, rsub in \
                  zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
-    # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy;   fill Dert per layer if n_sub_P > min?
+    # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy, fill Dert per layer if n_sub_P > min?
 
     return deep_sub_
 
 
-def cluster(blob, dert__, rdn, rng, fig, fder):  # fder: clustering crit, no rdn, rng?
+def cluster(blob, dert__, rdn, fig, fder):  # clustering crit is always g in dert[1], fder is a sign
 
     blob['sub_'][0][0] = dict( I=0, G=0, Dy=0, Dx=0, iDy=0, iDx=0, M=0, Ga=0, Day=0, Dax=0, S=0, Ly=0, sub_blob_=[] )
-    # initialize first sub_blob in first sub_layer?  Dyay, Dxay=Day, Dyax, Dxax=Dax
+    # initialize first sub_blob in first sub_layer,  Dyay, Dxay=Day, Dyax, Dxax=Dax
 
-    P__ = form_P__(dert__, rdn, fder, fig)  # horizontal clustering, if crit == 0 and fig: crit += dert[6]0+6: if ig r+?
+    P__ = form_P__(dert__, rdn, fder, fig)  # horizontal clustering
     P_ = scan_P__(P__)
     seg_ = form_stack_(P_)  # vertical clustering
     sub_blob_ = form_blob_(seg_, blob['fork_'])  # with feedback to root_fork at blob['fork_'][crit]
 
     return sub_blob_
-
 
 # clustering functions, out of date:
 #---------------------------------------------------------------------------------------------------------------------------------------
@@ -148,7 +147,7 @@ def form_P__(dert__, rdn, crit, fig, x0=0, y0=0):  # cluster dert__ into P__, in
     else: param_keys = P_PARAM_KEYS
 
     if  crit == 2:  # crit for rp+ | ra+: comparison of intensity or angle over incremented range
-        crit__ = Ave - dert__[1, :, :]  # inverted -vg (not ig), accumulated over comp range
+        crit__ = ave * rdn - dert__[1, :, :]  # inverted -vg (not ig), accumulated over comp range
         crit = 0  # for conversion to nI?
     else:
         crit__ = dert__[crit, :, :]  # extract crit__ from dert__ (both are 2D arrays)
@@ -157,7 +156,7 @@ def form_P__(dert__, rdn, crit, fig, x0=0, y0=0):  # cluster dert__ into P__, in
     elif crit == 1:
         crit__ = ~crit__[:]  # and if  m = -g, for r+ only
 
-    crit__[:] -= Ave  # crit evaluation, forms vg | vm
+    crit__[:] -= ave * rdn  # crit evaluation, forms vg | vm
 
     # Cluster dert__ into Pdert__:
     s_x_L__ = [*map(

@@ -5,58 +5,66 @@ comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of
 Coefs scale down pixel dy and dx contribution to kernel g in proportion to the ratio of that pixel distance and angle 
 to ortho-pixel distance and angle. This is a proximity-ordered search, comparing ortho-pixels first, thus their coef = 1.  
 
-This is equivalent to Sobel operator, but it and other conventional kernels do the opposite: set diagonal pixel coef = 1, 
-and scale contribution of other pixels up, in proportion to the same ratios (relative contribution of each rim pixel to g 
-is the same in Sobel). This forms integer coefs, vs our fractional coefs, which makes computation a lot faster. 
+This is a more precise equivalent to Sobel operator, but works in reverse, the latter sets diagonal pixel coef = 1, and scales 
+contribution of other pixels up, in proportion to the same ratios (relative contribution of each rim pixel to g in Sobel is 
+similar but lower resolution). This forms integer coefs, vs our fractional coefs, which makes computation a lot faster. 
 We will probably switch to integer coefs for speed, and are open to using Scharr operator in the future.
+
+kwidth = 3: input-centered, low resolution kernel: frame | blob shrink by 2 pixels per row,
+kwidth = 2: co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 chance of boundary pixel in kernel?
+kwidth = 2: quadrant g = ((dx + dy) * .705 + d_diag) / 2, no i res decrement, ders co-location, + orthogonal quadrant for full rep?
 '''
-# Constants: MAX_G = 256  # 721.2489168102785 without normalization.
-# Adjustable parameters:
+# Constants:
+MAX_G = 255  # 721.2489168102785 without normalization.
 
-kwidth = 3  # input-centered, low resolution kernel: frame | blob shrink by 2 pixels per row,
-# kwidth = 2  # co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 chance of boundary pixel in kernel?
-# kwidth = 2 quadrant: g = ((dx + dy) * .705 + d_diag) / 2, signed-> gPs? no i res-, ders co-location, + orthogonal quadrant for full rep?
+G_NORMALIZER_3x3 = 255.9 / (255 * 2**0.5 * 2)
+G_NORMALIZER_2x2 = 255.9 / (255 * 2**0.5)
 
-def comp_pixel(image):  # 3x3 or 2x2 pixel cross-correlation within image
+# Coefficients and translating slices sequence for 3x3 window comparison
+YCOEF = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
+XCOEF = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
 
-    if kwidth == 2:  # cross-compare four adjacent pixels diagonally:
+TRANSLATING_SLICES_SEQUENCE = [
+    (slice(None, -2), slice(None, -2)),
+    (slice(None, -2), slice(1, -1)),
+    (slice(None, -2), slice(2, None)),
+    (slice(1, -1), slice(2, None)),
+    (slice(2, None), slice(2, None)),
+    (slice(2, None), slice(1, -1)),
+    (slice(2, None), slice(None, -2)),
+    (slice(1, -1), slice(None, -2)),
+]
 
-        dy__ = (image[1:, 1:] - image[:-1, 1:]) + (image[1:, :-1] - image[:-1, :-1]) * 0.5
-        dx__ = (image[1:, 1:] - image[1:, :-1]) + (image[:-1, 1:] - image[:-1, :-1]) * 0.5
+def comp_pixel(image):  # 3x3 and 2x2 pixel cross-correlation within image
 
-        # or no coef: distance 1.41 * angle .705 -> 1? and conversion only for extended kernel, if centered?
-        # sum pixel values and reconstruct central pixel as their average:
+    gdert__ = comp_2x2(image)  # cross-compare four adjacent pixels diagonally
+    rdert__ = comp_3x3(image)  # compare each pixel to 8 rim pixels
 
-        p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]) * 0.25
+    return gdert__, rdert__
 
-    else:  # kwidth == 3, compare central pixel to 8 rim pixels, current default option
 
-        ycoef = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
-        xcoef = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
-
-        d___ = np.array(list(  # subtract centered image from translated image:
-            map(lambda trans_slices: image[trans_slices] - image[1:-1, 1:-1],
-                [
-                    (slice(None, -2), slice(None, -2)),
-                    (slice(None, -2), slice(1, -1)),
-                    (slice(None, -2), slice(2, None)),
-                    (slice(1, -1), slice(2, None)),
-                    (slice(2, None), slice(2, None)),
-                    (slice(2, None), slice(1, -1)),
-                    (slice(2, None), slice(None, -2)),
-                    (slice(1, -1), slice(None, -2)),
-                ]
-            )
-        )).swapaxes(0, 2).swapaxes(0, 1)
-
-        # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
-
-        dy__ = (d___ * ycoef).sum(axis=2)
-        dx__ = (d___ * xcoef).sum(axis=2)
-
-        p__ = image[1:-1, 1:-1]
-
-    g__ = np.hypot(dy__, dx__) * 0.354801226089485  # compute gradients per kernel, converted to 0-255 range
-
+def comp_2x2(image):
+    dy__ = (image[1:, 1:] + image[1:, :-1] - image[:-1, 1:] - image[:-1, :-1]) * 0.5
+    dx__ = (image[1:, 1:] + image[:-1, 1:] - image[1:, :-1] - image[:-1, :-1]) * 0.5
+    # sum pixel values and reconstruct central pixel as their average:
+    p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]) * 0.25
+    g__ = np.hypot(dy__, dx__) * G_NORMALIZER_2x2  # compute gradients per kernel, converted to 0-255 range
     return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
 
+
+def comp_3x3(image):
+    d___ = np.array(  # subtract centered image from translated image:
+        [image[trans_slices] - image[1:-1, 1:-1] for trans_slices in TRANSLATING_SLICES_SEQUENCE]
+    ).swapaxes(0, 2).swapaxes(0, 1)  # 3rd dimension: sequence of differences corresponding to:
+    #          |--(clockwise)--+              |--(clockwise)--+
+    # YCOEF: -0.5    -1  -0.5  ¦  XCOEF:    -0.5   0    0.5   ¦
+    #          0           0   ¦             -1          1    ¦
+    #         0.5     1   0.5  ¦            -0.5   0    0.5   ¦
+    #                    <<----+                        <<----+
+    # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
+    dy__ = (d___ * YCOEF).sum(axis=2)
+    dx__ = (d___ * XCOEF).sum(axis=2)
+    p__ = image[1:-1, 1:-1]
+    g__ = np.hypot(dy__, dx__) * G_NORMALIZER_3x3  # compute gradients per kernel, converted to 0-255 range
+
+    return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
