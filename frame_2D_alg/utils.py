@@ -8,11 +8,12 @@ argument_parser = argparse.ArgumentParser()
 argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
 arguments = vars(argument_parser.parse_args())
 
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Constants
+
 transparent_val = 128 # Pixel at this value are considered transparent
 
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # General purpose functions
 
 def bipolar(iterable):
@@ -22,17 +23,42 @@ def bipolar(iterable):
                map(lambda x: None if x is None else -x,
                    reversed(list(it2))))
 
+
 def pairwise(iterable):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
 
+
 def flatten(listOfLists):
     "Flatten one level of nesting"
     return chain.from_iterable(listOfLists)
 
-# -----------------------------------------------------------------------------
+
+def array2image(a):
+    "Rescale array values' range to 0-255."
+    amin = a.min()
+    return (255.99 * (a - amin) / (a.max() - amin)).astype('uint8')
+
+
+def imread(filename, raise_if_not_read=True):
+    "Read an image in grayscale, return array."
+    try:
+        return cv2.imread(filename, 0).astype(int)
+    except AttributeError:
+        if raise_if_not_read:
+            raise SystemError('image is not read')
+        else:
+            print('Warning: image is not read')
+            return None
+
+
+def imwrite(filename, img):
+    "Write image with cv2.imwrite."
+    cv2.imwrite(filename, img)
+
+# ----------------------------------------------------------------------------
 # Blob slicing
 
 def slice_to_box(slice):
@@ -52,6 +78,7 @@ def slice_to_box(slice):
            slice[1].start, slice[1].stop)
 
     return box
+
 
 def localize(box, global_box):
     '''
@@ -74,11 +101,12 @@ def localize(box, global_box):
 
     return y0s - y0, yns - y0, x0s - x0, xns - x0
 
+
 def shrink(shape, x, axes=(0, 1)):
     '''Return shape tuple that is shrunken by x units.'''
     return tuple(X - x if axis in axes else X for axis, X in enumerate(shape))
 
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Blob drawing
 
 def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
@@ -86,6 +114,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     '''
     Given a blob and a traversing path, map image of all sub-blobs
     of a specific branch belonging to that blob into a numpy array.
+    Currently under development.
     Parameters
     ----------
     blob : Blob
@@ -101,6 +130,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     image = blank_image(blob.box)
 
     return image    # return filled image
+
 
 def map_frame(frame, raw=False):
     '''
@@ -128,6 +158,7 @@ def map_frame(frame, raw=False):
 
     return image
 
+
 def draw_blob(blob, raw=False):
     '''Map a single blob into an image.'''
 
@@ -139,6 +170,7 @@ def draw_blob(blob, raw=False):
         over_draw(blob_img, stack_map, sub_box, blob['box'])
 
     return blob_img
+
 
 def draw_stack(stack, box, s, raw=False):
     '''Map a single stack of a blob into an image.'''
@@ -155,6 +187,7 @@ def draw_stack(stack, box, s, raw=False):
 
     return stack_img
 
+
 def stack_box(stack):
     y0s = stack['y0']            # y0
     yns = y0s + stack['Ly']     # Ly
@@ -162,14 +195,16 @@ def stack_box(stack):
     xns = max([P['x0'] + P['L'] for P in stack['Py_']])
     return y0s, yns, x0s, xns
 
+
 def debug_stack(background_shape, *stacks):
     image = blank_image(background_shape)
     for stack in stacks:
-        stack_box = stack_box(stack)
+        sb = stack_box(stack)
         over_draw(image,
-                  draw_stack(stack, stack_box, stack['sign']),
-                  stack_box)
+                  draw_stack(stack, sb, stack['sign']),
+                  sb)
     return image
+
 
 def debug_blob(background_shape, *blobs):
     image = blank_image(background_shape)
@@ -178,6 +213,7 @@ def debug_blob(background_shape, *blobs):
                   draw_blob(blob),
                   blob['box'])
     return image
+
 
 def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
     '''Over-write map of sub-structure onto map of parent-structure.'''
@@ -188,6 +224,7 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
         y0, yn, x0, xn = localize(sub_box, box)
     map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
     return map
+
 
 def blank_image(shape):
     '''Create an empty numpy array of desired shape.'''
@@ -201,7 +238,7 @@ def blank_image(shape):
 
     return np.array([[transparent_val] * width] * height)
 
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Comparison related
 
 def kernel(rng):
@@ -241,33 +278,3 @@ def kernel(rng):
     kx = ky.T  # Compute kernel for dx (transpose of ky).
 
     return np.stack((ky, kx), axis=0)
-
-# ----------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-'''
-def imread(path):
-    # Read an image from file as gray-scale.
-    # path : str
-    # Path of image for reading.
-    # Return
-    # out : ndarray  # 2D array of gray-scaled pixels.
-
-    pil_image = Image.open(path).convert('L')
-    image = np.array(pil_image.getdata()).reshape(*reversed(pil_image.size))
-    return image
-
-def imwrite(path, image, extension='.bmp'):
-    # Output into an image file.
-    # path : str
-    # String contain path for saving image file.
-    # image : ndarray  # Array of image's pixels.
-    # extension : str  # Determine file-type of ouputed image.
-
-    imsave(path + extension, image.astype('uint8'))
-    
-from PIL import Image
-from utils import imread
-
-image_path = "./../images/raccoon.jpg"
-image = cv2.imread(image_path).astype(int)
-'''

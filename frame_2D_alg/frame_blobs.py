@@ -1,8 +1,8 @@
 from time import time
 from collections import deque, defaultdict
 import numpy as np
-import cv2
 from comp_pixel import comp_pixel
+from utils import *
 
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
@@ -48,7 +48,8 @@ from comp_pixel import comp_pixel
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
-ave = 50  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+ave_2x2 = 15  # filters or hyper-parameter, set as a guess, latter adjusted by feedback
+ave_3x3 = 25
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -56,16 +57,23 @@ ave = 50  # filter or hyper-parameter, set as a guess, latter adjusted by feedba
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-def image_to_blobs(image):  # root function, postfix '_' denotes array, prefix '_' denotes higher- vs lower-line variable
+def image_to_blobs(image):
+    gdert__, rdert__ = comp_pixel(image)  # 2x2 and 3x3 cross-comparison / cross-correlation
+    gblob_ = cluster_derts(gdert__, ave_2x2)
+    rblob_ = cluster_derts(rdert__, ave_3x3)
 
-    dert__ = comp_pixel(image)  # comparison of central pixel to rim pixels in 3x3 kernel
+    return gblob_, rblob_
+
+
+def cluster_derts(dert__, ave):  # root function, segments frame into same-sign blobs
+
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob_=[])
-    stack_ = deque()  # buffer of running stacks of Ps
+    stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = image.shape
 
     for y in range(height - kwidth + 1):  # first and last row are discarded
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
-        P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
+        P_ = form_P_(dert__[:, y].T, ave)      # horizontal clustering
+        P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
@@ -75,18 +83,16 @@ def image_to_blobs(image):  # root function, postfix '_' denotes array, prefix '
 
 ''' 
 Parameterized connectivity clustering functions below:
-
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
-
 dert is a tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert is params of a composite structure (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(dert_):  # horizontal clustering and summation of dert params into P params, per row of a frame
+def form_P_(dert_, ave):  # horizontal clustering and summation of dert params into P params, per row of a frame
     # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
@@ -279,6 +285,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         frame['blob_'].append(blob)
 
+
 # -----------------------------------------------------------------------------
 # Utilities
 
@@ -294,43 +301,43 @@ if __name__ == '__main__':
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     arguments = vars(argument_parser.parse_args())
-    image = cv2.imread(arguments['image'], 0).astype(int)
+    image = imread(arguments['image'])
 
     start_time = time()
-    frame_of_blobs = image_to_blobs(image)
+    gblob_, rblob_ = image_to_blobs(image)
 
-    # from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.
     '''
+    from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.
     frame_of_deep_blobs = {  # initialize frame_of_deep_blobs
         'blob_': [],
         'params': {
-            'I': frame_of_blobs['I'],  # none in 2x2 frame?
-            'G': frame_of_blobs['G'],
-            'Dy': frame_of_blobs['Dy'],
-            'Dx': frame_of_blobs['Dx'],
+            'I': rblob_['I'],  # none in 2x2 frame?
+            'G': rblob_['G'],
+            'Dy': rblob_['Dy'],
+            'Dx': rblob_['Dx'],
             # deeper params are initialized when they are fetched
         }),
     }
-    for blob in frame_of_blobs['blob_']:  # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob
-    
+    for blob in gblob_['blob_']:  # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob
+
         if fder:  # 2x2 g blobs
            if blob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0 
               gg_blob_ = intra_blob(blob, rdn+1, rng=1, fig=1, fder=1)  # der_comp(g) -> cosine gg
               # project missing dert d: = diametrical dert d * 2? 
-        
+
         elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 g, dert = dert
            rg_blob_ = intra_blob(blob, rdn+1, rng+1, fig, fder=0)  # rng_comp(i)
            # also calls parallel cluster_eval(rng+) and cluster_eval(der+)?
-
+           
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
     '''
 
-    # DEBUG -------------------------------------------------------------------
-    from utils import map_frame
-
-    cv2.imwrite("./images/blobs.bmp", map_frame(frame_of_blobs))
-    # END DEBUG ---------------------------------------------------------------
-
     end_time = time() - start_time
     print(end_time)
+
+    # DEBUG -------------------------------------------------------------------
+    imwrite("./images/gblobs.bmp", map_frame(gblob_))
+    imwrite("./images/rblobs.bmp", map_frame(rblob_))
+    # END DEBUG ---------------------------------------------------------------
+
