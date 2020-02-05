@@ -101,7 +101,7 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination,
 
 ''' Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
     P_:
-    fdP,  # flag: select dP or mP forks in form_P_ and intra_P
+    fdP,  # flag: select dP vs. mP forks in form_P_ and intra_P
     fid,  # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
     rdn,  # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
     rng,  # comparison range
@@ -135,6 +135,8 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
                 ext_dert_ = rng_comp(dert_, fid)
             else:
                 ext_dert_ = []  # also merge not-selected P into non_P?
+        else:
+            ext_dert_ = []
         if ext_dert_:
 
             sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
