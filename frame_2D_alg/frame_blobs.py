@@ -48,8 +48,8 @@ from utils import *
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
-ave_2x2 = 15  # filters or hyper-parameter, set as a guess, latter adjusted by feedback
-ave_3x3 = 25
+ave_2x2 = 12  # filters or hyper-parameter, set as a guess, latter adjusted by feedback
+ave_3x3 = 20
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions

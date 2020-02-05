@@ -36,7 +36,7 @@ ave_min = 2  # for m defined as min |d|: smaller?
 ave_M = 50   # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 5    # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5   # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
-ave_rdd =.5  # average dd / d, for projection: uni_d *= 1.5?
+ave_rdm =.5  # average dm / m, to project bi_m = m * 1.5
 ini_y = 500
 
 def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
@@ -50,14 +50,14 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         __p, _p = pixel_[0:2]  # each prefix '_' denotes prior
         _d = _p - __p  # initial comp
         _m = ave - abs(_d)
-        dert_.append((__p, _d * 1.5, _m * 1.5, None))  # back-project _d and _m to bilateral values
+        dert_.append((__p, None, _m * 1.5))  # project _m to bilateral m, first dert is for comp_P only?
 
         for p in pixel_[2:]:  # pixel p is compared to prior pixel _p in a row
             d = p - _p
             m = ave - abs(d)  # initial match is inverse deviation of |difference|
-            dert_.append((_p, d + _d, m + _m, _d))  # pack dert: prior p, bilateral difference and match, prior d
+            dert_.append((_p, _d, m + _m))  # pack dert: prior p, prior d, bilateral match
             _p, _d, _m = p, d, m
-        dert_.append((_p, _d * 1.5, _m * 1.5, _d))  # or unilateral d only? forward-project last d and m to bilateral values
+        dert_.append((_p, _d, _m * 1.5))  # unilateral d, forward-project last m to bilateral m
 
         dP_ = form_P_(dert_, fdP=True)  # forms d-sign patterns
         intra_P(dP_, fdP=True, fid=True, rdn=1, rng=2)  # evaluates sub-recursion per dP
@@ -71,26 +71,28 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination, parallel der+ and rng+?
 
     P_ = []  # initialization:
-    if fdP:  # flag dP, selects between form_dP_ and form_mP_ forks, criterion is uni_d vs. m
-        p, d, m, uni_d = P_dert_[1]  # skip dert_[0]: _uni_d is prior dP
-        _sign = uni_d > 0
+    if fdP:  # flag dP, selects between form_dP_ and form_mP_ forks, criterion is d vs. m
+        p, d, m = P_dert_[1]  # skip dert_[0]: d is None
+        _sign = d > 0
         ini_dert = 2
     else:
-        p, d, m, uni_d = P_dert_[0]
+        p, d, m = P_dert_[0]
         _sign = m > 0
         ini_dert = 1
-    dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ = [], [], 1, p, 0, m, [(p, d, m, uni_d)], [], []
-    # LL: depth of sub-hierarchy, each sub-pattern in sub_ is nested to depth = sub_[n], 1st uni_d is skipped
+    if d is None: D = 0
+    else: D = d
+    dLL, rLL, L, I, M, dert_, dsub_, rsub_ = [], [], 1, p, m, [(p, d, m)], [], []
+    # LL: depth of sub-hierarchy, each sub-pattern in sub_ is nested to depth = sub_[n]
 
-    for p, d, m, uni_d in P_dert_[ini_dert:]:  # cluster P_derts by m | uni_d sign
-        if fdP: sign = uni_d > 0
+    for p, d, m in P_dert_[ini_dert:]:  # cluster P_derts by m | d sign
+        if fdP: sign = d > 0
         else:   sign = m > 0
         if sign != _sign:  # sign change: terminate P
             P_.append((_sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_))
             dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ = [], [], 0, 0, 0, 0, [], [], []
             # reset accumulated params
-        L += 1; I += p; D += uni_d; M += m  # accumulate params, bilateral m: for eval per pixel
-        dert_ += [(p, d, m, uni_d)]
+        L += 1; I += p; D += d; M += m  # accumulate params, bilateral m: for eval per pixel
+        dert_ += [(p, d, m)]
         _sign = sign
 
     P_.append((_sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_))  # incomplete P
@@ -124,12 +126,12 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
-            if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds @ rng+1:
+            if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds at rng+1:
                 ext_dert_ = der_comp(dert_)
             else:
                 ext_dert_ = []
-        elif sign:  # P = +mP: low-variation span, eval comp @ rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
-            if M > ave_M * rdn and L > 4:  # skip comp predictable next dert:
+        elif sign:  # P = +mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
+            if M > ave_M * rdn and L > 4:  # skip comp of predictable next dert:
                 ext_dert_ = rng_comp(dert_, fid)
             else:
                 ext_dert_ = []  # also merge not-selected P into non_P?
@@ -154,26 +156,25 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
 def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
     rdert_ = []   # prefix '_' denotes the prior of same-name variables, initialization:
-    (__i, __short_bi_d, __short_bi_m, _), _, (_i, _short_bi_d, _short_bi_m, _) = dert_[0:3]
+    (__i, _, __short_rng_m), _, (_i, _short_rng_d, _short_rng_m) = dert_[0:3]  # no __short_rng_d
     _d = _i - __i
     if fid: _m = min(__i, _i) - ave_min;
-    else:   _m = ave - abs(_d)  # no ave * rng: actual m and d value is cumulative?
-    _bi_d = _d * 1.5 + __short_bi_d
-    _bi_m = _m * 1.5 + __short_bi_m  # back-project _m and d
-    rdert_.append((__i, _bi_d, _bi_m, None))
+    else:   _m = ave - abs(_d)  # no ave * rng: m and d value is cumulative
+    _rng_m = _m * 1.5 + __short_rng_m  # back-project bilateral m
+    rdert_.append((__i, None, _rng_m))  # no _rng_d = _d + __short_rng_d
 
-    for n in range(4, len(dert_), 2):  # backward comp, ave | cumulative ders and filters?
-        i, short_bi_d, short_bi_m = dert_[n][:3]  # shorter-rng dert
+    for n in range(4, len(dert_), 2):  # backward comp
+        i, short_rng_d, short_rng_m = dert_[n]  # shorter-rng dert
         d = i - _i
         if fid: m = min(i, _i) - ave_min  # match = min: magnitude of derived vars correlates with stability
         else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
-        bi_d = _d + d + _short_bi_d  # bilateral difference, accum in rng
-        bi_m = _m + m + _short_bi_m  # bilateral match, accum in rng
-        rdert_.append((_i, bi_d, bi_m, _d))
-        _i, _d, _m, _short_bi_d, _short_bi_m = i, d, m, short_bi_d, short_bi_m
+        rng_d = _d + _short_rng_d      # difference accumulated in rng
+        rng_m = _m + m + _short_rng_m  # bilateral match accumulated in rng
+        rdert_.append((_i, rng_d, rng_m))
+        _i, _d, _m, _short_rng_d, _short_rng_m =\
+            i, d, m, short_rng_d, short_rng_m
 
-    rdert_.append((_i, _d * 1.5 + _short_bi_d, _m * 1.5 + _short_bi_m, _d))
-    # forward-project unilateral to bilateral d and m values
+    rdert_.append((_i, _d + _short_rng_d, _m * 1.5 + _short_rng_m))  # forward-project m to bilateral m
     return rdert_
 
 
@@ -181,22 +182,20 @@ def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign m
     # dd and md may match across d sign, but likely in high-match area, spliced by spec in comp_P?
 
     ddert_ = []   # initialization:
-    (_, _, _, __i), (_, _, _, _i) = dert_[1:3]  # each prefix '_' denotes prior
+    (_, __i, _), (_, _i, _) = dert_[1:3]  # each prefix '_' denotes prior
     __i = abs(__i); _i = abs(_i)
     _d = _i - __i  # initial comp
     _m = min(__i, _i) - ave_min
-    ddert_.append((__i, _d * 1.5, _m * 1.5, None))  # __d and __m are back-projected as = _d or _m
+    ddert_.append((__i, None, _m * 1.5))  # no __d, back-project __m = _m * .5
 
     for dert in dert_[3:]:
-        i = abs(dert[3])  # unilateral d in same-d-sign seg, no sign comp
+        i = abs(dert[1])  # unilateral d, same sign in dP
         d = i - _i   # d is dd
         m = min(i, _i) - ave_min  # md = min: magnitude of derived vars corresponds to predictive value
-        bi_d = _d + d  # bilateral d-difference per _i
-        bi_m = _m + m  # bilateral d-match per _i
-        ddert_.append((_i, bi_d, bi_m, _d))
+        ddert_.append((_i, _d, _m + m))  # unilateral _d and bilateral m per _i
         _i, _d, _m = i, d, m
 
-    ddert_.append((_i, _d * 1.5, _m * 1.5, _d))  # forward-project unilateral to bilateral d and m values
+    ddert_.append((_i, _d, _m * 1.5))  # forward-project bilateral m
     return ddert_
 
 
