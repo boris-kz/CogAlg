@@ -7,7 +7,7 @@ Note: Since these operations performed only on multivariate variables,
 
 import frame_blobs
 
-from comp_param import comp_v
+from extend_comp import comp_v
 from utils import imread, imwrite
 from intra_blob import ave
 

@@ -121,8 +121,6 @@ def form_P_(P_dert_, fdP):  # pattern initialization, accumulation, termination,
 def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
     deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
-    ext_dert_ = []  # new dert_ from extended- range or derivation comp
-
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if fdP:  # P = dP: d sign match is partial d match, precondition for der+, or in -mPs to avoid overlap
@@ -130,13 +128,13 @@ def intra_P(P_, fdP, fid, rdn, rng):  # evaluate for sub-recursion in line P_, f
                 ext_dert_ = der_comp(dert_)
             else:
                 ext_dert_ = []
-        elif sign:  # P = +mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
+        elif sign:  # P = positive mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
             if M > ave_M * rdn and L > 4:  # skip comp of predictable next dert:
                 ext_dert_ = rng_comp(dert_, fid)
             else:
                 ext_dert_ = []  # also merge not-selected P into non_P?
         else:
-            ext_dert_ = []
+            ext_dert_ = []  # new dert_ from extended- range or derivation comp
         if ext_dert_:
 
             sub_dP_ = form_P_(ext_dert_, True); lL = len(sub_dP_)
@@ -163,7 +161,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     if fid: _m = min(__i, _i) - ave_min;
     else:   _m = ave - abs(_d)  # no ave * rng: m and d value is cumulative
     _rng_m = _m * 1.5 + __short_rng_m  # back-project bilateral m
-    rdert_.append((__i, None, _rng_m))  # no _rng_d = _d + __short_rng_d
+    rdert_.append((__i, None, _rng_m))   # no _rng_d = _d + __short_rng_d
 
     for n in range(4, len(dert_), 2):  # backward comp
         i, short_rng_d, short_rng_m = dert_[n]  # shorter-rng dert

@@ -6,7 +6,7 @@ import numpy as np
 import numpy.ma as ma
 
 from frame_blobs import scan_P_, form_seg_
-from comp_param import comp_i
+from extend_comp import comp_i
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.
