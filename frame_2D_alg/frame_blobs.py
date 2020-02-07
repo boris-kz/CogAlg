@@ -305,34 +305,35 @@ if __name__ == '__main__':
 
     start_time = time()
     gblob_, rblob_ = image_to_blobs(image)
-
     '''
     from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.
     frame_of_deep_blobs = {  # initialize frame_of_deep_blobs
         'blob_': [],
-        'params': {
-            'I': rblob_['I'],  # none in 2x2 frame?
-            'G': rblob_['G'],
-            'Dy': rblob_['Dy'],
-            'Dx': rblob_['Dx'],
+        'params': {  # Initial Derts are summed between rblobs and gblobs?
+            'I': rblob_['I'] + gblob['I'],
+            'G': rblob_['G'] + gblob['G'],
+            'Dy': rblob_['Dy'] + gblob['Dy'],
+            'Dx': rblob_['Dx'] + gblob['Dx'],
             # deeper params are initialized when they are fetched
-        }),
+        },
     }
-    for blob in gblob_['blob_']:  # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob
+    # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob:
 
-        if fder:  # 2x2 g blobs
-           if blob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0 
-              gg_blob_ = intra_blob(blob, rdn+1, rng=1, fig=1, fder=1)  # der_comp(g) -> cosine gg
-              # project missing dert d: = diametrical dert d * 2? 
-
-        elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 g, dert = dert
-           rg_blob_ = intra_blob(blob, rdn+1, rng+1, fig, fder=0)  # rng_comp(i)
-           # also calls parallel cluster_eval(rng+) and cluster_eval(der+)?
-           
+    for gblob in gblob_['blob_']: # 2x2 gblobs
+        if gblob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
+            gg_blob_ = intra_blob(gblob, rdn+1, rng=1, fig=1, fder=1)  # der_comp(g) -> cosine gg
+            # project missing d: = diametrically opposed d * .5?
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-    '''
 
+    for rblob in gblob_['blob_']: # 3x3 rblobs
+        if -rblob['Dert']['G'] > aveB: # -G blob, dert = dert
+            rg_blob_ = intra_blob(rblob, rdn+1, rng+1, fig, fder=0)  # rng_comp(i)
+            # also calls parallel cluster_eval(rng+) and cluster_eval(der+)?
+
+        frame_of_deep_blobs['blob_'].append(blob)
+        frame_of_deep_blobs['params'][1:] += blob['params'][1:]
+    '''
     end_time = time() - start_time
     print(end_time)
 
