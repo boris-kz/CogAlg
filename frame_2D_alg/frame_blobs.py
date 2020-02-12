@@ -69,9 +69,9 @@ def cluster_derts(dert__, ave):  # root function, segments frame into same-sign 
 
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob_=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
-    height, width = image.shape
+    height, width = dert__.shape[1:]
 
-    for y in range(height - kwidth + 1):  # first and last row are discarded
+    for y in range(height):  # first and last row are discarded
         P_ = form_P_(dert__[:, y].T, ave)      # horizontal clustering
         P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
@@ -318,19 +318,18 @@ if __name__ == '__main__':
         },
     }
     # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob:
-
+    
     for gblob in gblob_['blob_']: # 2x2 gblobs
         if gblob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
             gg_blob_ = intra_blob(gblob, rdn+1, rng=1, fig=1, fder=1)  # der_comp(g) -> cosine gg
             # project missing d: = diametrically opposed d * .5?
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-
+    
     for rblob in gblob_['blob_']: # 3x3 rblobs
         if -rblob['Dert']['G'] > aveB: # -G blob, dert = dert
             rg_blob_ = intra_blob(rblob, rdn+1, rng+1, fig, fder=0)  # rng_comp(i)
             # also calls parallel cluster_eval(rng+) and cluster_eval(der+)?
-
         frame_of_deep_blobs['blob_'].append(blob)
         frame_of_deep_blobs['params'][1:] += blob['params'][1:]
     '''
@@ -341,4 +340,3 @@ if __name__ == '__main__':
     imwrite("./images/gblobs.bmp", map_frame(gblob_))
     imwrite("./images/rblobs.bmp", map_frame(rblob_))
     # END DEBUG ---------------------------------------------------------------
-

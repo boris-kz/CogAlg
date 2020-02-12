@@ -1,6 +1,6 @@
-"""
-Perform comparison of g or a over predetermined range.
-"""
+'''
+Perform comparison of a and then g over predetermined range.
+'''
 
 import operator as op
 
@@ -101,136 +101,38 @@ X_COEFFS = {
 # -----------------------------------------------------------------------------
 # Functions
 
-def extend_comp(dert__, nI, rng):
-    """
-    Compare g or a over range = rng
+def extend_comp(dert__, rng, fig):
+    '''
+    Compare a and then g over range = rng.
     Parameters
     ----------
     dert__ : MaskedArray
         Contain the arrays: g, m, dy, dx.
-    nI : int
-        Determine comparands.
     rng : int
         Determine translation between comparands.
+    fig : bool
+        Indicate whether input is gradient (has an angle).
     Return
     ------
     out : MaskedArray
-        The array that contain result from comparison.
-    """
+        The array that contain results from comparison.
+    '''
     assert isinstance(dert__, ma.MaskedArray)
 
-    if nI in (2, 3, 4, 5): # Input is dy or ay, indices are wrong here
-        return comp_a(dert__, rng)
-    else: # Input is g or ga:
-        return comp_i(select_i(dert__, nI), rng)
+    return
 
 
-def select_i(dert__, nI):
-    """
-    Select inputs to compare.
-    """
-    i__ = dert__[nI]
-    if nI == 0: # Accumulated m, dy, dx:
-        if len(dert__) == 10:
-            m__, dy__, dx__ = dert__[2:5]
-        else:
-            dy__, dx__ = dert__[2:4]
-            m__ = ma.zeros(i__.shape)
-    else: # Initialized m, dy, dx:
-        m__, dy__, dx__ = [ma.zeros(i__.shape) for _ in range(3)]
-
-    return i__, m__, dy__, dx__
-
+def extend_comp_pixel(dert__, rng):
+    '''
+    Extend comparison of p over predetermined range.
+    '''
+    pass
 
 def comp_i(dert__, rng):
-    """
+    '''
     Compare g over predetermined range.
-    """
-    # Unpack dert__:
-    i__, m__, dy__, dx__ = dert__
-
-    # Compare gs:
-    d__ = translated_operation(i__, rng, op.sub)
-    comp_field = central_slice(rng)
-
-    # Decompose and add to corresponding dy and dx:
-    dy__[comp_field] += (d__ * Y_COEFFS[rng]).sum(axis=-1)
-    dx__[comp_field] += (d__ * X_COEFFS[rng]).sum(axis=-1)
-
-    # Compute ms:
-    m__[comp_field] += translated_operation(i__, rng, ma.minimum).sum(axis=-1)
-
-    # Apply mask:
-    msq = np.ones(i__.shape, dtype=int)  # Rim mask.
-    msq[comp_field] = i__.mask[comp_field] + d__.mask.sum(axis=-1)  # Summed d mask.
-    imsq = msq.nonzero()
-    m__[imsq] = dy__[imsq] = dx__[imsq] = ma.masked # Apply mask.
-
-    # Compute gg:
-    g__ = ma.hypot(dy__, dx__) * SCALER_g[rng]
-
-    return ma.stack((i__, g__, m__, dy__, dx__), axis=0) # ma.stack() for extra array dimension.
-
-
-def comp_a(dert__, rng):
-    """
-    Compute and compare a over predetermined range.
-    """
-    # Unpack dert__:
-    if len(dert__) in (5, 12): # idert or full dert with m.
-        i__, g__, m__, dy__, dx__ = dert__[:5]
-    else: # idert or full dert without m.
-        i__, g__, dy__, dx__ = dert__[:4]
-
-    if len(dert__) > 10: # if ra+:
-        a__ = dert__[-7:-5] # Computed angle (use reverse indexing to avoid m check).
-        day__ = dert__[-4:-2] # Accumulated day__.
-        dax__ = dert__[-2:] # Accumulated day__.
-    else: # if fa:
-        # Compute angles:
-        a__ = ma.stack((dy__, dx__), axis=0) / g__
-        a__.mask = g__.mask
-
-        # Initialize dax, day:
-        day__, dax__ = [ma.zeros((2,) + i__.shape) for _ in range(2)]
-
-    # Compute angle differences:
-    da__ = translated_operation(a__, rng, angle_diff)
-    comp_field = central_slice(rng)
-
-
-    # Decompose and add to corresponding day and dax:
-    day__[comp_field] = (da__ * Y_COEFFS[rng]).mean(axis=-1)
-    dax__[comp_field] = (da__ * X_COEFFS[rng]).mean(axis=-1)
-
-    # Apply mask:
-    msq = np.ones(a__.shape, dtype=int) # Rim mask.
-    msq[comp_field] = a__.mask[comp_field] + da__.mask.sum(axis=-1) # Summed d mask.
-    imsq = msq.nonzero()
-    day__[imsq] = dax__[imsq] = ma.masked # Apply mask.
-
-    # Compute ga:
-    ga__ = ma.hypot(
-        ma.arctan2(*day__),
-        ma.arctan2(*dax__)
-    )[np.newaxis, ...] * SCALER_ga
-
-    try: # dert with m is more common:
-        return ma.concatenate( # Concatenate on the first dimension.
-            (
-                ma.stack((i__, g__, m__, dy__, dx__), axis=0),
-                a__, ga__, day__, dax__,
-            ),
-            axis=0,
-        )
-    except NameError: # m doesn't exist:
-        return ma.concatenate(  # Concatenate on the first dimension.
-            (
-                ma.stack((i__, g__, dy__, dx__), axis=0),
-                a__, ga__, day__, dax__,
-            ),
-            axis=0,
-        )
+    '''
+    pass
 
 # -----------------------------------------------------------------------------
 # Utility functions
@@ -289,15 +191,19 @@ def angle_diff(a2, a1):
     Can be applied to arrays.
     Note: This only works for 2D vectors.
     """
-    # Extend a1 vector(s) into basis/bases:
-    y, x = a1
-    bases = [(x, -y), (y, x)]
-    transform_mat = ma.array(bases)
+    return ma.array([a1[1]*a2[0] - a1[0]*a2[1],
+                     a1[0]*a2[0] + a1[1]*a2[1]])
 
-    # Apply transformation:
-    da = (transform_mat * a2).sum(axis=1)
+    # OLD VERSION OF angle_diff
+    # # Extend a1 vector(s) into basis/bases:
+    # y, x = a1
+    # bases = [(x, -y), (y, x)]
+    # transform_mat = ma.array(bases)
+    #
+    # # Apply transformation:
+    # da = ma.multiply(transform_mat, a2).sum(axis=1)
 
-    return da
+    # return da
 
 # ----------------------------------------------------------------------
 # -----------------------------------------------------------------------------

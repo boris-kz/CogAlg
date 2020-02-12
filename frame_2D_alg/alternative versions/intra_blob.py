@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from itertools import groupby, starmap
 import numpy as np
 import numpy.ma as ma
-from extend_comp import comp_param
+from intra_comp import comp_param
 from utils import pairwise, flatten
 from functools import reduce
 '''

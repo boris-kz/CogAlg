@@ -7,7 +7,7 @@ Currently testing: intra_blob.form_P__
 import frame_blobs
 
 from utils import imread, draw
-from extend_comp import comp_i
+from intra_comp import comp_i
 from intra_blob import form_P__, scan_P__
 
 # -----------------------------------------------------------------------------
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     import numpy as np
     import numpy.ma as ma
 
-    from extend_comp import (
+    from intra_comp import (
         Y_COEFFS, X_COEFFS,
         central_slice,
         rim_mask,
