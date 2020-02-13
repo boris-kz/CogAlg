@@ -43,7 +43,7 @@ from comp_pixel import comp_pixel
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level and should be cross-compared between blobs on the next level of search and composition.
     
-    Please see frame_blobs diagrams in Illustrations folder.
+    Please see frame_blobs diagrams in Illustrations_Chee folder.
     prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
     postfix '_' denotes array name, vs. same-name elements of that array
 '''

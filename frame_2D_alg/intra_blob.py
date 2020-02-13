@@ -64,14 +64,7 @@ def intra_blob(blob, rdn, rng, fig, fder):  # version of frame_blobs with sub-cl
     comp_g: comp_a -> da -> ga, day, dax; dg = g - _g * cos(da), combine in gg
     '''
     gdert__, rdert__ = extend_comp(blob['dert__'], rng, fig)  # 2x2 and 3x3 comp, same dert structure
-    '''
-    if fig:
-        sub_ablob_ = cluster_derts(blob, gdert__, rdn, True, fder=1, fga=1)  # sub-cluster by ga
-        for sub_ablob in sub_ablob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
-            if -sub_ablob['Dert']['Ga'] > aveB * rdn:
-                form_gsub_(), form_rsub_()?     
-    also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
-    '''
+
     sub_gblob_ = cluster_derts(blob, gdert__, rdn, True, fder=1)  # initial clustering by ga only
     for sub_gblob in sub_gblob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
 
@@ -98,14 +91,51 @@ def intra_blob(blob, rdn, rng, fig, fder):  # version of frame_blobs with sub-cl
 
     return deep_sub_
 
+def intra(blob, rdn, rng, fig, ga):  # new version with der+ selection by -ga and cluster_eval
 
-def cluster_derts(blob, dert__, rdn, fig, fder):  # clustering crit is always g in dert[1], fder is a sign
+    deep_sub_ = []  # in cluster_eval? intra_blob recursion extends rsub_ and dsub_ hierarchies by sub_blob_ layer
+    # dert = i, g, dy, dx, if fig: += [idx, idy, m, ga, day, dax]
+    if ga:
+        ga_dert__, ra_dert__ = comp_a(blob['dert__'], rng, fig)  # 2x2 and 3x3 comp_a
+        sub_ga_blob_ = cluster_eval(blob, ga_dert__, rng, rdn, fig, crit=7)  # cluster by 2x2 ga for comp_ga eval
+        sub_ra_blob_ = cluster_eval(blob, ra_dert__, rng, rdn, fig, crit=7)  # cluster by 3x3 ga for comp_g -> ra eval?
+
+        sub_gblob_ = sub_ga_blob_; sub_rblob_= sub_ra_blob_  # for return only
+    else:
+        gdert__, rdert__ = comp_i(blob['dert__'], rng, fig)  # 2x2 comp_g, 3x3 comp_g if fig else comp_p
+        sub_gblob_ = cluster_eval(blob, gdert__, rng, rdn, fig, crit=1)  # cluster by 2x2 g for der_comp eval
+        sub_rblob_ = cluster_eval(blob, rdert__, rng, rdn, fig, crit=(0,6) if fig else 0)  # by 3x3 g for rng_comp
+    '''
+    alternating ga and ~ga layers of intra(); also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
+    '''
+    return sub_gblob_, sub_rblob_
+
+
+def cluster_eval(blob, dert__, rng, rdn, fig, crit):
+
+    sub_blob_ = cluster_derts(blob, dert__, rdn, fig, crit)  # cluster by crit: g | i | i+m | ga?
+    for sub_blob in sub_blob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
+
+        if sub_blob['Dert'][crit] > aveB * rdn:  # +G > intra_blob cost, | Ga:
+            lL = len(sub_blob_)
+            sub_blob['sub_'] += [[(lL, fig, crit, rdn, rng, sub_blob_)]]  # 1st layer: lL, fig, fder, rdn, rng
+            # increment rng depending on crit
+            blob['sub_'] += intra_blob(blob, rdn + 1 + 1 / lL, rng, fig, crit)  # deep layers feedback
+            blob['LL'] = len(blob['sub_'])
+
+        elif crit == 1 and sub_blob['Dert']['Ga'] > aveB * rdn:
+            intra(sub_blob, rdn, rng, fig, ga=1)  # comp_ga
+
+    return sub_blob_
+
+
+def cluster_derts(blob, dert__, rdn, fig, crit):  # clustering crit is always g in dert[1], fder is a sign
 
     blob['sub_'][0][0] = dict( I=0, G=0, Dy=0, Dx=0,  # base Dert
                                iDy=0, iDx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0,  # extend in comp_g
                                S=0, Ly=0, sub_blob_=[] )  # initialize first sub_blob in first sub_layer
 
-    P__ = form_P__(dert__, ave*rdn, fder, fig)  # horizontal clustering
+    P__ = form_P__(dert__, ave*rdn, fig, crit)  # horizontal clustering
     P_ = scan_P__(P__)
     stack_ = form_stack_(P_)  # vertical clustering
     sub_blob_ = form_blob_(stack_, blob['fork_'])  # with feedback to root_fork at blob['fork_']
@@ -115,17 +145,17 @@ def cluster_derts(blob, dert__, rdn, fig, fder):  # clustering crit is always g 
 # clustering functions, out of date:
 #---------------------------------------------------------------------------------------------------------------------------------------
 
-def form_P__(dert__, Ave, fder, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+def form_P__(dert__, Ave, fig, crit, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
     if fig:
         param_keys = gP_PARAM_KEYS
-        if fder:
+        if crit:
             crit__ = dert__[1, :, :] - Ave  # der+ eval by g;  both crit__ and dert__ are 2D arrays
         else:
             crit__ = dert__[0 + 6, :, :] - Ave  # rng+ eval by i + m, accumulated over comp range
     else:
         param_keys = P_PARAM_KEYS
-        if fder:
+        if crit:
             crit__ = dert__[1, :, :] - Ave  # der+ eval by g
         else:
             crit__ = Ave - dert__[1, :, :]  # rng+ eval by inverted g deviation, accumulated over comp range
@@ -133,7 +163,7 @@ def form_P__(dert__, Ave, fder, fig, x0=0, y0=0):  # cluster dert__ into P__, in
     # Cluster dert__ into Pdert__:
     s_x_L__ = [*map(
         lambda crit_: # Each line.
-            [(sign, next(group)[0], len(list(group)) + 1) # (s, x, L)
+            [(sign, next(group)[0], len(list(group)) + 1)  # (s, x, L)
              for sign, group in groupby(enumerate(crit_ > 0),
                                         op.itemgetter(1)) # (x, s): return s.
              if sign is not ma.masked], # Ignore gaps.
@@ -535,6 +565,17 @@ def feedback(blob, fork=None):  # Add each Dert param to corresponding param of 
 
 
 '''
+    for sub_ablob in sub_ablob_:
+        if -sub_ablob['Dert']['Ga'] > aveB * rdn:  # -Ga > intra_blob cost
+            sub_ablob_ = intra(sub_ablob, adert__, rng, rdn, fig, ~ga)  # comp_g
+    if fig:
+        sub_ablob_ = cluster_derts(blob, gdert__, rdn, True, fder=1, fga=1)  # sub-cluster by ga
+        for sub_ablob in sub_ablob_:  # evaluate blob for der+ fork, semi-exclusive with rng+:
+            if -sub_ablob['Dert']['Ga'] > aveB * rdn:
+                form_sub_(g)  # not form_sub_(r): no ga computed
+            else: 
+                form_sub_(ga): from 2x2 ga, also parallel 3x3 and 2x2 compute?     
+
     # initialization before accumulation, Dert only?
     if fa:
         blob['Dert'] = 'G'=0, 'Gg'=0, 'M'=0, 'Dy'=0, 'Dx'=0, 'Ga'=0, 'Day'=0, 'Dax'=0, 'L'=0, 'Ly'=0
