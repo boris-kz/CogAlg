@@ -17,23 +17,32 @@ kwidth = 2: quadrant g = ((dx + dy) * .705 + d_diag) / 2, no i res decrement, de
 # Constants:
 MAX_G = 255  # 721.2489168102785 without normalization.
 
-G_NORMALIZER_3x3 = 255.9 / (255 * 2**0.5 * 2)
-G_NORMALIZER_2x2 = 255.9 / (255 * 2**0.5)
+G_NORMALIZER_3x3 = 255.9 / (255 * 2 ** 0.5 * 2)
+G_NORMALIZER_2x2 = 255.9 / (255 * 2 ** 0.5)
 
 # Coefficients and translating slices sequence for 3x3 window comparison
-YCOEF = np.array([-0.5, -1, -0.5, 0, 0.5, 1, 0.5, 0])
-XCOEF = np.array([-0.5, 0, 0.5, 1, 0.5, 0, -0.5, -1])
+YCOEF = np.array([0.5, 1, 0.5, 0])*0.25  # *0.25 or divide by number of comparisons
+XCOEF = np.array([0.5, 0, -0.5, -1])*0.25
 
-TRANSLATING_SLICES_SEQUENCE = [
-    (slice(None, -2), slice(None, -2)),
-    (slice(None, -2), slice(1, -1)),
-    (slice(None, -2), slice(2, None)),
-    (slice(1, -1), slice(2, None)),
-    (slice(2, None), slice(2, None)),
-    (slice(2, None), slice(1, -1)),
-    (slice(2, None), slice(None, -2)),
-    (slice(1, -1), slice(None, -2)),
+TRANSLATING_SLICES_PAIRS = [
+    (
+        (slice(None, -2), slice(None, -2)),
+        (slice(2, None), slice(2, None)),
+    ),
+    (
+        (slice(None, -2), slice(1, -1)),
+        (slice(2, None), slice(1, -1)),
+    ),
+    (
+        (slice(None, -2), slice(2, None)),
+        (slice(2, None), slice(None, -2)),
+    ),
+    (
+        (slice(1, -1), slice(2, None)),
+        (slice(1, -1), slice(None, -2)),
+    ),
 ]
+
 
 def comp_pixel(image):  # 3x3 and 2x2 pixel cross-correlation within image
 
@@ -48,14 +57,16 @@ def comp_2x2(image):
     dx__ = (image[1:, 1:] + image[:-1, 1:] - image[1:, :-1] - image[:-1, :-1]) * 0.5
     # sum pixel values and reconstruct central pixel as their average:
     p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]) * 0.25
-    g__ = np.hypot(dy__, dx__) * G_NORMALIZER_2x2  # compute gradients per kernel, converted to 0-255 range
-    return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
+    g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
+    return ma.stack((p__, g__, dy__, dx__))
 
 
 def comp_3x3(image):
     d___ = np.array(  # subtract centered image from translated image:
-        [image[trans_slices] - image[1:-1, 1:-1] for trans_slices in TRANSLATING_SLICES_SEQUENCE]
-    ).swapaxes(0, 2).swapaxes(0, 1)  # 3rd dimension: sequence of differences corresponding to:
+        [image[ts2] - image[ts1] for ts1, ts2 in TRANSLATING_SLICES_PAIRS]
+    ).swapaxes(0, 2).swapaxes(0, 1)
+    # 3rd dimension: sequence of differences between pairs of
+    # diametrically opposed pixels corresponding to:
     #          |--(clockwise)--+              |--(clockwise)--+
     # YCOEF: -0.5    -1  -0.5  ¦  XCOEF:    -0.5   0    0.5   ¦
     #          0           0   ¦             -1          1    ¦
@@ -65,6 +76,6 @@ def comp_3x3(image):
     dy__ = (d___ * YCOEF).sum(axis=2)
     dx__ = (d___ * XCOEF).sum(axis=2)
     p__ = image[1:-1, 1:-1]
-    g__ = np.hypot(dy__, dx__) * G_NORMALIZER_3x3  # compute gradients per kernel, converted to 0-255 range
+    g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
 
-    return ma.around(ma.stack((p__, g__, dy__, dx__), axis=0))
+    return ma.stack((p__, g__, dy__, dx__))

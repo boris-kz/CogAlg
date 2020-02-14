@@ -1,12 +1,10 @@
 from itertools import (repeat, accumulate, chain, starmap, tee)
+import numbers
 import numpy as np
+import numpy.ma as ma
+
 from imageio import imsave
 import cv2
-
-import argparse
-argument_parser = argparse.ArgumentParser()
-argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
-arguments = vars(argument_parser.parse_args())
 
 # ----------------------------------------------------------------------------
 # Constants
@@ -15,6 +13,34 @@ transparent_val = 128 # Pixel at this value are considered transparent
 
 # ----------------------------------------------------------------------------
 # General purpose functions
+
+def is_close(x1, x2):
+    '''Recursively check equality of two objects containing floats.'''
+    # Numeric
+    if isinstance(x1, numbers.Number) and isinstance(x2, numbers.Number):
+        return np.isclose(x1, x2)
+    elif isinstance(x1, np.ndarray) and isinstance(x2, np.ndarray):
+        try:
+            return np.allclose(x1, x2)
+        except ValueError as error_message:
+            print(f'\nWarning: Error encountered for:\n{x1}\nand\n{x2}')
+            print(f'Error: {error_message}')
+            return False
+    elif isinstance(x1, str) and isinstance(x2, str):
+        return x1 == x2
+    else:
+        # Iterables
+        try:
+            if len(x1) != len(x2): # will raise an error if not iterable
+                return False
+            for e1, e2 in zip(x1, x2):
+                if not is_close(e1, e2):
+                    return False
+            return True
+        # Other types
+        except TypeError:
+            return x1 == x2
+
 
 def bipolar(iterable):
     "[0, 1, 2, 3] -> [(0, 3), (1, 2), (2, 1), (3, 0)]"
@@ -238,43 +264,5 @@ def blank_image(shape):
 
     return np.array([[transparent_val] * width] * height)
 
+# ---------------------------------------------------------------------
 # ----------------------------------------------------------------------------
-# Comparison related
-
-def kernel(rng):
-    """
-    Return coefficients for decomposition of d
-    (compared over rng) into dy and dx.
-    Here, we assume that kernel width is odd.
-    """
-    # Start with array of indices:
-    indices = np.indices((rng+1, rng+1))
-
-    # Apply computations:
-    quart_kernel = indices / (indices**2).sum(axis=0)
-    quart_kernel[:, 0, 0] = 0
-
-    # Copy quarter of kernel into full kernel:
-    half_ky = np.concatenate(
-        (
-            np.flip(
-                quart_kernel[0, :, 1:],
-                axis=1),
-            quart_kernel[0],
-        ),
-        axis=1,
-    )
-
-    ky = np.concatenate(
-        (
-            -np.flip(
-                half_ky[1:],
-                axis=0),
-            half_ky,
-        ),
-        axis=0,
-    )
-
-    kx = ky.T  # Compute kernel for dx (transpose of ky).
-
-    return np.stack((ky, kx), axis=0)
