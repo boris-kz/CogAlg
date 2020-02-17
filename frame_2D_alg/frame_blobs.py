@@ -317,21 +317,36 @@ if __name__ == '__main__':
             # deeper params are initialized when they are fetched
         },
     }
-    # evaluate each blob per intra_fork: rng+ per 3x3 blob and der+ per 2x2 blob:
-    
+    # call to intra_blob:    
+
     for gblob in gblob_['blob_']: # 2x2 gblobs
         if gblob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
-            gg_blob_ = intra_blob(gblob, rdn+1, rng=1, fig=1, fder=1)  # der_comp(g) -> cosine gg
-            # project missing d: = diametrically opposed d * .5?
-        frame_of_deep_blobs['blob_'].append(blob)
-        frame_of_deep_blobs['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-    
-    for rblob in gblob_['blob_']: # 3x3 rblobs
+            ga_dert__, ra_dert__ = comp_a(blob['dert__'], rng=1, fig)  # 2x2 + 3x3 comp_a
+
+            root_blob['gsub_'] = cluster_eval(blob, ga_dert__, 1, rdn, fig=0, fcr=0, crit=1)  
+            # cluster by 2x2 ga for comp_g eval
+            frame_of_deep_blobs['gblob_'].append(blob)  # extended by cluster_eval
+            frame_of_deep_blobs['params'][1:] += gblob['params'][1:]  # incorrect, for selected blob params only?
+
+            root_blob['rsub_'] = cluster_eval(blob, ra_dert__, rng+1, rdn, fig=0, fcr=1, crit=(0,6) if fig else 1)  
+            # cluster by 3x3 -ga for comp_rng_i eval
+            frame_of_deep_blobs['gblob_'].append(blob)  # extended by cluster_eval
+            frame_of_deep_blobs['gparams'][1:] += gblob['params'][1:]  # incorrect, for selected blob params only?
+
+    for rblob in rblob_['blob_']: # 3x3 rblobs
         if -rblob['Dert']['G'] > aveB: # -G blob, dert = dert
-            rg_blob_ = intra_blob(rblob, rdn+1, rng+1, fig, fder=0)  # rng_comp(i)
-            # also calls parallel cluster_eval(rng+) and cluster_eval(der+)?
-        frame_of_deep_blobs['blob_'].append(blob)
-        frame_of_deep_blobs['params'][1:] += blob['params'][1:]
+            gdert__, rdert__ = comp_i(blob['dert__'], rng=7, fig)  # 2x2 + 3x3 comp_i, angle is not computed
+
+            # or no gdert: that would compute ra?
+            # root_blob['rsub_'] = cluster_eval(blob, gdert__, 1, rdn, fig=0, fcr=0, crit=1)  
+            # cluster by 2x2 ga for comp_g eval
+            # frame_of_deep_blobs['rblob_'].append(blob)  # extended by cluster_eval
+            # frame_of_deep_blobs['rparams'][1:] += rblob['params'][1:]  # incorrect, for selected blob params only?
+
+            root_blob['rsub_'] = cluster_eval(blob, rdert__, rng+1, rdn, fig=0, fcr=1, crit=(0,6) if fig else 1)  
+            # cluster by 3x3 -ga for comp_rng_i eval
+            frame_of_deep_blobs['rblob_'].append(blob)  # extended by cluster_eval
+            frame_of_deep_blobs['rparams'][1:] += rblob['params'][1:]  # incorrect, for selected blob params only?
     '''
     end_time = time() - start_time
     print(end_time)

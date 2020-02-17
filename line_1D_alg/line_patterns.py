@@ -48,7 +48,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         pixel_ = frame_of_pixels_[y, :]
         dert_ = []
         __p, _p = pixel_[0:2]  # each prefix '_' denotes prior
-        _d = _p - __p  # initial comp
+        _d = _p - __p  # initial comparison
         _m = ave - abs(_d)
         dert_.append((__p, None, _m * 1.5))  # project _m to bilateral m, first dert is for comp_P only?
 
