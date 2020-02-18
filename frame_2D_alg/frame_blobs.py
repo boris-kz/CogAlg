@@ -305,49 +305,39 @@ if __name__ == '__main__':
 
     start_time = time()
     gblob_, rblob_ = image_to_blobs(image)
-    '''
-    from intra_blob import cluster_eval, intra_fork, cluster, aveF, aveC, aveB, etc.
-    frame_of_deep_blobs = {  # initialize frame_of_deep_blobs
-        'blob_': [],
-        'params': {  # Initial Derts are summed between rblobs and gblobs?
-            'I': rblob_['I'] + gblob['I'],
-            'G': rblob_['G'] + gblob['G'],
-            'Dy': rblob_['Dy'] + gblob['Dy'],
-            'Dx': rblob_['Dx'] + gblob['Dx'],
-            # deeper params are initialized when they are fetched
-        },
-    }
-    # call to intra_blob:    
 
-    for gblob in gblob_['blob_']: # 2x2 gblobs
-        if gblob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
-            ga_dert__, ra_dert__ = comp_a(blob['dert__'], rng=1, fig)  # 2x2 + 3x3 comp_a
+    intra=0
+    if intra:  # Tentative call to intra_blob, Omit for testing:
 
-            root_blob['gsub_'] = cluster_eval(blob, ga_dert__, 1, rdn, fig=0, fcr=0, crit=1)  
-            # cluster by 2x2 ga for comp_g eval
-            frame_of_deep_blobs['gblob_'].append(blob)  # extended by cluster_eval
-            frame_of_deep_blobs['params'][1:] += gblob['params'][1:]  # incorrect, for selected blob params only?
+        from intra_blob import *
+        frame_deep = {  # initialize frame_of_deep_blobs
+            'blob_': [],
+            'params': {  # Initial Derts are summed between rblobs and gblobs?
+                'I': rblob_['I'] + gblob_['I'],
+                'G': rblob_['G'] + gblob_['G'],
+                'Dy': rblob_['Dy'] + gblob_['Dy'],
+                'Dx': rblob_['Dx'] + gblob_['Dx'],
+                # deeper params are initialized when they are fetched
+            },
+        }
+        for gblob in gblob_['blob_']: # 2x2 gblobs
+            if gblob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
+                ga_dert__ = comp_a(gblob['dert__'], rng=1)  # 2x2, no 3x3 -> ra_dert__: comp with g only?
 
-            root_blob['rsub_'] = cluster_eval(blob, ra_dert__, rng+1, rdn, fig=0, fcr=1, crit=(0,6) if fig else 1)  
-            # cluster by 3x3 -ga for comp_rng_i eval
-            frame_of_deep_blobs['gblob_'].append(blob)  # extended by cluster_eval
-            frame_of_deep_blobs['gparams'][1:] += gblob['params'][1:]  # incorrect, for selected blob params only?
+                frame_deep['gsub_'] = cluster_eval(gblob, ga_dert__, rng=1, rdn=1, fig=0, fcr=0, crit=1)  # cluster by 2x2
+                frame_deep['gblob_'].append(gblob)  # extended by cluster_eval
+                frame_deep['gparams'][1:] += gblob['params'][1:]  # incorrect, for selected blob params only?
+                # next: comp_g if -Ga, comp_ga if +Ga
 
-    for rblob in rblob_['blob_']: # 3x3 rblobs
-        if -rblob['Dert']['G'] > aveB: # -G blob, dert = dert
-            gdert__, rdert__ = comp_i(blob['dert__'], rng=7, fig)  # 2x2 + 3x3 comp_i, angle is not computed
+        for rblob in rblob_['blob_']: # 3x3 rblobs
+            if -rblob['Dert']['G'] > aveB: # -G blob, dert = dert
+                gdert__, rdert__ = comp_i(rblob['dert__'], rng=7)  # 6x6? + 7x7 comp_i, angle is not computed
 
-            # or no gdert: that would compute ra?
-            # root_blob['rsub_'] = cluster_eval(blob, gdert__, 1, rdn, fig=0, fcr=0, crit=1)  
-            # cluster by 2x2 ga for comp_g eval
-            # frame_of_deep_blobs['rblob_'].append(blob)  # extended by cluster_eval
-            # frame_of_deep_blobs['rparams'][1:] += rblob['params'][1:]  # incorrect, for selected blob params only?
+                frame_deep['rsub_'] = cluster_eval(rblob, rdert__, rng=7, rdn=1, fig=0, fcr=1, crit=1)  # cluster by 3x3
+                frame_deep['rblob_'].append(rblob)  # extended by cluster_eval
+                frame_deep['rparams'][1:] += rblob['params'][1:]  # incorrect, for selected blob params only?
+                # next: repeat comp_a and comp_rng eval
 
-            root_blob['rsub_'] = cluster_eval(blob, rdert__, rng+1, rdn, fig=0, fcr=1, crit=(0,6) if fig else 1)  
-            # cluster by 3x3 -ga for comp_rng_i eval
-            frame_of_deep_blobs['rblob_'].append(blob)  # extended by cluster_eval
-            frame_of_deep_blobs['rparams'][1:] += rblob['params'][1:]  # incorrect, for selected blob params only?
-    '''
     end_time = time() - start_time
     print(end_time)
 

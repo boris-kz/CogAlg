@@ -60,21 +60,20 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 
 def intra_blob(root_blob, blob, rdn, rng, fig, fca):  # new version with der+ selection by -ga and cluster_eval
 
-    # dert = i, g, dy, dx, if fig: + [idx, idy, m, ga, day, dax], alternating flag_comp_angle: fca=1 and fca=0 layers:
-    if fca:  # comp angle, form ga blobs, evaluate 2x2 blobs for comp_g, 3x3 blobs for comp_rng_i (flag_comp_rng: fcr=1):
+    # dert = i, g, dy, dx, if fig: + [idx, idy, m, ga, day, dax]
+    # fcr: flag_comp_rng;  alternating fca=1 and fca=0 layers:
 
-        ga_dert__, ra_dert__ = comp_a(blob['dert__'], rng, fig)  # 2x2 + 3x3 comp_a, the 1st call in frame_blobs
+    if fca:  # flag_comp_angle
+        ga_dert__ = comp_a(blob['dert__'], rng, fig)  # 2x2, 1st call in frame_blobs, form ga blobs:
         root_blob['gsub_'] = cluster_eval(blob, ga_dert__, 1, rdn, fig, fcr=0, crit=1)  # cluster by 2x2 ga for comp_g eval
-        root_blob['rsub_'] = cluster_eval(blob, ra_dert__, rng+1, rdn, fig, fcr=1, crit=(0,6) if fig else 1)  # 3x3 -ga -> comp_ri
-
-    else:  # comp_g | comp_rng, form gblobs, evaluate 2x2 blobs for comp_a, 3x3 blobs for comp_rng_a
-
-        gdert__, rdert__ = comp_i(blob['dert__'], rng, fig)  # 2x2 comp_g + 3x3 comp_g if fig else comp_p
-        root_blob['gsub_'] = cluster_eval(blob, gdert__, 1, rdn, fig, fcr=0, crit=7)  # cluster by 2x2 g -> comp_a eval
-        root_blob['rsub_'] = cluster_eval(blob, rdert__, rng+1, rdn, fig, fcr=1, crit=7)  # 3x3 -g -> comp_ra: also low-value ga?
+        root_blob['rsub_'] = cluster_eval(blob, blob['dert__'], rng+1, rdn, fig, fcr=1, crit=(0,6) if fig else 1)
+        # cluster by 3x3 -g (no ga), eval for rng_comp_i: g if fig else p
+    else:
+        gdert__ = comp_i(blob['dert__'], rng, fig)  # comp_g|p, form gblobs, evaluate for comp_a | ga:
+        root_blob['gsub_'] = cluster_eval(blob, gdert__, 1, rdn, fig, fcr=0, crit=7)  # cluster by 2x2 g -> comp_a(gg) eval
+        root_blob['rsub_'] = cluster_eval(blob, blob['dert__'], rng+1, rdn, fig, fcr=1, crit=7)
+        # cluster by 3x3 g + ga -> comp_ga: disoriented variation
     '''
-    select comp_rng_a by -g + ga, comp_rng_i by -ga + g: no consistent variation of a or i?  cos g is not available?  
-    or no independent comp_rng_a?  
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     '''
     # return sub_gblob_, sub_rblob_ or sub_ga_blob_, sub_ra_blob: no need?
