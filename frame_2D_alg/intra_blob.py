@@ -60,16 +60,18 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 
 def intra_blob(root_blob, blob, rdn, rng, fig, fca):  # new version with der+ selection by -ga and cluster_eval
 
-    # dert = i, g, dy, dx, if fig: + [idx, idy, m, ga, day, dax]
-    # fcr: flag_comp_rng;  alternating fca=1 and fca=0 layers:
+    # dert = i, g, dy, dx, i3, g3, dy3, dx3 if fig: + [idx, idy, m, ga, day, dax, idx3, idy3, m3, ga3, day3, dax3]
+    # or gdert, rdert: same syntax, simpler addressing?
+    # fcr: flag_comp_rng, alternating fca=1 and fca=0 layers:
 
-    if fca:  # flag_comp_angle
-        ga_dert__ = comp_a(blob['dert__'], rng, fig)  # 2x2, 1st call in frame_blobs, form ga blobs:
+    if fca:  # flag_comp_angle no negative blobs:
+
+        ga_dert__ = comp_a(blob['dert__'], rng, fig)  # 1st call in frame_blobs, form ga blobs, evaluate them for comp_g|r:
         root_blob['gsub_'] = cluster_eval(blob, ga_dert__, 1, rdn, fig, fcr=0, crit=1)  # cluster by 2x2 ga for comp_g eval
         root_blob['rsub_'] = cluster_eval(blob, blob['dert__'], rng+1, rdn, fig, fcr=1, crit=(0,6) if fig else 1)
-        # cluster by 3x3 -g (no ga), eval for rng_comp_i: g if fig else p
+        # cluster by input 3x3 -g (no ga), eval for rng_comp_i: g if fig else p
     else:
-        gdert__ = comp_i(blob['dert__'], rng, fig)  # comp_g|p, form gblobs, evaluate for comp_a | ga:
+        gdert__ = comp_i(blob['dert__'], rng, fig)  # comp_g|p, form gblobs, evaluate them for comp_a| ga:
         root_blob['gsub_'] = cluster_eval(blob, gdert__, 1, rdn, fig, fcr=0, crit=7)  # cluster by 2x2 g -> comp_a(gg) eval
         root_blob['rsub_'] = cluster_eval(blob, blob['dert__'], rng+1, rdn, fig, fcr=1, crit=7)
         # cluster by 3x3 g + ga -> comp_ga: disoriented variation
@@ -120,7 +122,8 @@ def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is alwa
 
 def form_P__(dert__, Ave, fig, crit, fcr, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
-    # need to add ga if fca?
+    # add ga if fca,
+
     if fig:
         param_keys = gP_PARAM_KEYS
         if crit:
