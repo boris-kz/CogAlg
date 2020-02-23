@@ -1,6 +1,5 @@
 from time import time
 from collections import deque, defaultdict
-import numpy as np
 from comp_pixel import comp_pixel
 from utils import *
 
@@ -48,8 +47,8 @@ from utils import *
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
-ave_2x2 = 12  # filters or hyper-parameter, set as a guess, latter adjusted by feedback
-ave_3x3 = 20
+ave_2x2 = 12  # filters or hyper-parameters, set as a guess, latter adjusted by feedback
+ave_3x3 = 10
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -59,14 +58,15 @@ ave_3x3 = 20
 
 def image_to_blobs(image):  # root function, segments frame into blobs of same ternary sign: der+ | rng+ | null
 
-    gdert__, rdert__ = comp_pixel(image)  # dert__ combines results from 2x2 and 3x3 cross-comparison / cross-correlation
+    gdert__, rdert__ = comp_pixel(image)  # gderts from 2x2 and rderts from 3x3 cross-comparison / cross-correlation
 
     frame = dict(rng=1, gdert__=gdert__, rdert__=rdert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob_=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = gdert__.shape[1:]
 
     for y in range(height):  # first and last row are discarded
-        P_ = form_P_(gdert__[:, y].T, rdert__[:, y].T)  # horizontal clustering
+        print(f'Processing line {y}...')
+        P_ = form_P_(gdert__[:, y].T, rdert__[:, y].T)  # horizontal clustering, + gdert__, y
         P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
@@ -96,7 +96,7 @@ def form_P_(gdert_, rdert_):  # horizontal clustering and summation of dert para
     g3 = ave_3x3 - g3  # initial 3x3 match is inverse deviation of g3
     if g > 0:   # ternary sign:
         _s = 0; I, G, Dy, Dx, L, x0 = *gdert_[0], 1, 0  # initialize P params with 1st dert 2x2 params
-    elif g3 > 0:
+    elif g3 > 0: # and gdert_[1][1] <= 0 and gdert__[1, 0][1] <= 0 and gdert__[1, 1][1] <= 0: four 2x2 gs per 3x3 g
         _s = 1; I, G, Dy, Dx, L, x0 = *rdert_[0], 1, 0  # initialize P params with 1st dert 3x3 params
     else:
         _s = 2; I, G, Dy, Dx, L, x0 = *gdert_[0], 1, 0  # initialize P params with 1st dert 2x2 params
@@ -108,6 +108,7 @@ def form_P_(gdert_, rdert_):  # horizontal clustering and summation of dert para
         if g > 0:
             s = 0; dert_ = gdert_  # ternary sign
         elif g3 > 0:
+            # and gdert_[x+1][1] <= 0 and gdert__[y+1, x][1] <= 0 and gdert__[y+1, x+1][1] <= 0: four 2x2 gs per 3x3 g are <= 0
             s = 1; dert_ = rdert_
         else:
             s = 2; dert_ = gdert_
@@ -275,7 +276,9 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 x_start = P['x0'] - x0
                 x_stop = x_start + P['L']
                 mask[y, x_start:x_stop] = False
-        dert__ = frame['dert__'][:, y0:yn, x0:xn]
+        dert__ = frame['rdert__'][:, y0:yn, x0:xn] \
+            if sign == 1 else \
+            frame['gdert__'][:, y0:yn, x0:xn]
         dert__.mask[:] = mask  # default mask is all 0s
 
         blob.pop('open_stacks')
@@ -346,5 +349,11 @@ if __name__ == '__main__':
     print(end_time)
 
     # DEBUG -------------------------------------------------------------------
-    imwrite("./images/gblobs.bmp", map_frame(blob_))  # black: gblobs, grey: nblobs, white: rblobs
+    imwrite("./images/comb_blobs.bmp",
+            map_frame(frame,
+                      sign_map={  # black: gblobs, grey: nblobs, white: rblobs
+                          0: WHITE,  # 2x2 gblobs
+                          1: BLACK,  # 3x3 rblobs
+                          2: GREY,   # 2x2 nblobs
+                      }))
     # END DEBUG ---------------------------------------------------------------

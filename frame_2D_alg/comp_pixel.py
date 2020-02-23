@@ -1,5 +1,7 @@
+from collections import deque
 import numpy.ma as ma
 import numpy as np
+
 '''
 comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over the whole frame.
 Coefs scale down pixel dy and dx contribution to kernel g in proportion to the ratio of that pixel distance and angle 
@@ -14,56 +16,61 @@ kwidth = 3: input-centered, low resolution kernel: frame | blob shrink by 2 pixe
 kwidth = 2: co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 chance of boundary pixel in kernel?
 kwidth = 2: quadrant g = ((dx + dy) * .705 + d_diag) / 2, no i res decrement, ders co-location, + orthogonal quadrant for full rep?
 '''
-# Constants:
-MAX_G = 255  # 721.2489168102785 without normalization.
-
-G_NORMALIZER_3x3 = 255.9 / (255 * 2 ** 0.5 * 2)
-G_NORMALIZER_2x2 = 255.9 / (255 * 2 ** 0.5)
-
-# Coefficients and translating slices sequence for 3x3 window comparison
-YCOEF = np.array([0.5, 1, 0.5, 0])*0.25  # *0.25 or divide by number of comparisons
-XCOEF = np.array([0.5, 0, -0.5, -1])*0.25
-
-TRANSLATING_SLICES_PAIRS = [
-    (
-        (slice(None, -2), slice(None, -2)),
-        (slice(2, None), slice(2, None)),
-    ),
-    (
-        (slice(None, -2), slice(1, -1)),
-        (slice(2, None), slice(1, -1)),
-    ),
-    (
-        (slice(None, -2), slice(2, None)),
-        (slice(2, None), slice(None, -2)),
-    ),
-    (
-        (slice(1, -1), slice(2, None)),
-        (slice(1, -1), slice(None, -2)),
-    ),
-]
-
 
 def comp_pixel(image):  # 3x3 and 2x2 pixel cross-correlation within image
+    # orthogonal comp
+    orthdy__ = image[1:] - image[:-1]       # vertical
+    orthdx__ = image[:, 1:] - image[:, :-1] # horizontal
 
+    # compute gdert__
+    p__ = (image[:-2, :-2] + image[:-2, 1:-1] + image[1:-1, :-2] + image[1:-1, 1:-1]) * 0.25
+    dy__ = (orthdy__[:-1, 1:-1] + orthdy__[:-1, :-2]) * 0.5
+    dx__ = (orthdx__[1:-1, :-1] + orthdx__[:-2, :-1]) * 0.5
+    g__ = ma.hypot(dy__, dx__)
+    gdert__ = ma.stack((p__, g__, dy__, dx__))
+
+    # diagonal comp
+    diag1__ = image[2:, 2:] - image[:-2, :-2]
+    diag2__ = image[2:, :-2] - image[:-2, 2:]
+
+    # compute rdert__
+    p3__ = image[1:-1, 1:-1]
+    dy3__ = (orthdy__[1:, 1:-1] + orthdy__[:-1, 1:-1]) * 0.25 +\
+            (diag1__ + diag2__) * 0.125
+    dx3__ = (orthdx__[1:-1, 1:] + orthdx__[1:-1, :-1]) * 0.25 + \
+            (diag1__ - diag2__) * 0.125
+    g3__ = ma.hypot(dy3__, dx3__)
+    rdert__ = ma.stack((p3__, g3__, dy3__, dx3__))
+
+    # gdert__ = comp_2x2(image)  # cross-compare four adjacent pixels diagonally
+    # rdert__ = comp_3x3(image)  # compare each pixel to 8 rim pixels
+
+    return gdert__, rdert__
+
+
+def comp_pixel_old(image):  # 3x3 and 2x2 pixel cross-correlation within image
     gdert__ = comp_2x2(image)  # cross-compare four adjacent pixels diagonally
     rdert__ = comp_3x3(image)  # compare each pixel to 8 rim pixels
 
     return gdert__, rdert__
 
-
 def comp_2x2(image):
-    dy__ = (image[1:, 1:] + image[1:, :-1] - image[:-1, 1:] - image[:-1, :-1]) * 0.5
-    dx__ = (image[1:, 1:] + image[:-1, 1:] - image[1:, :-1] - image[:-1, :-1]) * 0.5
+    """Deprecated."""
+    dy__ = (image[1:-1, 1:-1] + image[1:-1, :-2]
+            - image[:-2, 1:-1] - image[:-2, :-2]) * 0.5
+    dx__ = (image[1:-1, 1:-1] + image[:-2, 1:-1]
+            - image[1:-1, :-2] - image[:-2, :-2]) * 0.5
     # sum pixel values and reconstruct central pixel as their average:
-    p__ = (image[:-1, :-1] + image[:-1, 1:] + image[1:, :-1] + image[1:, 1:]) * 0.25
+    p__ = (image[:-2, :-2] + image[:-2, 1:-1]
+           + image[1:-1, :-2] + image[1:-1, 1:-1]) * 0.25
     g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
     return ma.stack((p__, g__, dy__, dx__))
 
 
 def comp_3x3(image):
+    """Deprecated."""
     d___ = np.array(  # subtract centered image from translated image:
-        [image[ts2] - image[ts1] for ts1, ts2 in TRANSLATING_SLICES_PAIRS]
+        [image[ts2] - image[ts1] for ts1, ts2 in TRANSLATING_SLICES_PAIRS_3x3]
     ).swapaxes(0, 2).swapaxes(0, 1)
     # 3rd dimension: sequence of differences between pairs of
     # diametrically opposed pixels corresponding to:
@@ -77,5 +84,46 @@ def comp_3x3(image):
     dx__ = (d___ * XCOEF).sum(axis=2)
     p__ = image[1:-1, 1:-1]
     g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
+
+    return ma.stack((p__, g__, dy__, dx__))
+
+
+def comp_3x3_loop(image):
+    buff_ = deque() # buffer for derts
+    Y, X = image.shape
+
+    for p_ in image: # loop through rows
+        for p in p_: # loop through each pixel
+            dx = dy = 0  # uni-lateral differences
+            # loop through buffers:
+            for k, xcoeff, ycoeff in zip([  0 ,   X-1 ,   X ,  X+1 ], # indices of _dert
+                                         [0.25, -0.125,   0 , 0.125], # x axis coefficient
+                                         [  0 ,  0.125, 0.25, 0.125]): # y axis coefficient
+                try:
+                    _p, _dy, _dx = buff_[k]  # unpack buff_[k]
+                    d = p - _p  # compute difference
+                    dx_buff = d * xcoeff  # decompose difference
+                    dy_buff = d * ycoeff
+                    dx += dx_buff  # accumulate fuzzy difference over the kernel
+                    _dx += dx_buff
+                    dy += dy_buff
+                    _dy += dy_buff
+
+                    buff_[k] = _p, _dy, _dx  # repack buff_[k]
+
+                except TypeError: # buff_[k] is None
+                    pass
+                except IndexError: # k >= len(buff_)
+                    break
+
+            buff_.appendleft((p, dy, dx))  # initialize dert with uni-lateral differences
+        buff_.appendleft(None)  # add empty dert at the end of each row
+
+    # reshape data and compute g (temporary, to perform tests)
+    p__, dy__, dx__ = np.array([buff for buff in reversed(buff_)
+                                if buff is not None])\
+        .reshape(Y, X, 3).swapaxes(1, 2).swapaxes(0, 1)[:, 1:-1, 1:-1]
+
+    g__ = ma.hypot(dy__, dx__)
 
     return ma.stack((p__, g__, dy__, dx__))

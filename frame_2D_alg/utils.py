@@ -9,7 +9,24 @@ import cv2
 # ----------------------------------------------------------------------------
 # Constants
 
+# colors
+WHITE = 255
+GREY = 128
+BLACK = 0
+
 transparent_val = 128 # Pixel at this value are considered transparent
+
+SIGN_MAPS = {
+    'binary': {
+        False: BLACK,
+        True: WHITE,
+    },
+    'ternary': {
+        0: WHITE,
+        1: BLACK,
+        2: GREY
+    },
+}
 
 # ----------------------------------------------------------------------------
 # General purpose functions
@@ -158,7 +175,7 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     return image    # return filled image
 
 
-def map_frame(frame, raw=False):
+def map_frame(frame, *args, **kwargs):
     '''
     Map partitioned blobs into a 2D array.
     Parameters
@@ -173,49 +190,54 @@ def map_frame(frame, raw=False):
         2D array of image's pixel.
     '''
 
-    height, width = frame['dert__'].shape[1:]
+    height, width = frame['gdert__'].shape[1:]
     box = (0, height, 0, width)
     image = blank_image(box)
 
     for i, blob in enumerate(frame['blob_']):
-        blob_map = draw_blob(blob, raw)
+        blob_map = draw_blob(blob, *args, **kwargs)
 
         over_draw(image, blob_map, blob['box'], box)
 
     return image
 
 
-def draw_blob(blob, raw=False):
+def draw_blob(blob, *args, **kwargs):
     '''Map a single blob into an image.'''
 
     blob_img = blank_image(blob['box'])
 
     for stack in blob['stack_']:
         sub_box = stack_box(stack)
-        stack_map = draw_stack(stack, sub_box, blob['sign'], raw)
+        stack_map = draw_stack(stack, sub_box, blob['sign'],
+                               *args, **kwargs)
         over_draw(blob_img, stack_map, sub_box, blob['box'])
 
     return blob_img
 
 
-def draw_stack(stack, box, s, raw=False):
+def draw_stack(stack, box, sign,
+               sign_map='binary'):
     '''Map a single stack of a blob into an image.'''
+
+    if isinstance(sign_map, str) and sign_map in SIGN_MAPS:
+        sign_map = SIGN_MAPS[sign_map]
 
     stack_img = blank_image(box)
     y0, yn, x0, xn = box
 
     for y, P in enumerate(stack['Py_'], start= stack['y0'] - y0):
         for x, dert in enumerate(P['dert_'], start=P['x0']-x0):
-            if raw:
+            if sign_map is None:
                 stack_img[y, x] = dert[0]
             else:
-                stack_img[y, x] = 255 if s else 0
+                stack_img[y, x] = sign_map[sign]
 
     return stack_img
 
 
 def stack_box(stack):
-    y0s = stack['y0']            # y0
+    y0s = stack['y0']           # y0
     yns = y0s + stack['Ly']     # Ly
     x0s = min([P['x0'] for P in stack['Py_']])
     xns = max([P['x0'] + P['L'] for P in stack['Py_']])
@@ -262,7 +284,7 @@ def blank_image(shape):
         height = yn - y0
         width = xn - x0
 
-    return np.array([[transparent_val] * width] * height)
+    return np.full((height, width), transparent_val)
 
 # ---------------------------------------------------------------------
 # ----------------------------------------------------------------------------
