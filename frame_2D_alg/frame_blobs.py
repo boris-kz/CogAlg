@@ -47,8 +47,8 @@ from utils import *
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
-ave_2x2 = 12  # filters or hyper-parameters, set as a guess, latter adjusted by feedback
-ave_3x3 = 10
+ave_2x2 = 20  # filters or hyper-parameters, set as a guess, latter adjusted by feedback
+ave_3x3 = 8
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -66,7 +66,8 @@ def image_to_blobs(image):  # root function, segments frame into blobs of same t
 
     for y in range(height):  # first and last row are discarded
         print(f'Processing line {y}...')
-        P_ = form_P_(gdert__[:, y].T, rdert__[:, y].T)  # horizontal clustering, + gdert__, y
+        P_ = form_P_(gdert__[:, y].T, rdert__[:, y].T)  # horizontal clustering,
+        # or rdert__[-1:, y-1].T, for 2x2 gdert in lower-right?
         P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
@@ -102,13 +103,15 @@ def form_P_(gdert_, rdert_):  # horizontal clustering and summation of dert para
         _s = 2; I, G, Dy, Dx, L, x0 = *gdert_[0], 1, 0  # initialize P params with 1st dert 2x2 params
 
     for x, (p, g, dy, dx) in enumerate(gdert_[1:], start=1):
-        p3, g3, dy3, dx3 = rdert_[x]  # or use zip(gdert_[1:], start=1), rdert_[1:], start=1)?
-        vg = g - ave_2x2
+        p3, g3, dy3, dx3 = rdert_[x]  # rdert_ is shifted at [y-1, x-1] in line 70, for gdert in lower-right quadrant?
+        # or use zip(gdert_[1:], start=1), rdert_[1:], start=1)?
+        vg = g - ave_2x2  # gdert_[x][1] = vg?
         vg3 = ave_3x3 - g3  # initial 3x3 match is inverse deviation of g3, ave_3x3
-        if g > 0:
+        if vg > 0:
             s = 0; dert_ = gdert_  # ternary sign
-        elif g3 > 0:
+        elif vg3 > 0:
             # and gdert_[x+1][1] <= 0 and gdert__[y+1, x][1] <= 0 and gdert__[y+1, x+1][1] <= 0: four 2x2 gs per 3x3 g are <= 0
+            # use map of previously computed vg signs?
             s = 1; dert_ = rdert_
         else:
             s = 2; dert_ = gdert_
@@ -319,7 +322,7 @@ if __name__ == '__main__':
     frame = image_to_blobs(image)
 
     intra=0
-    if intra:  # Tentative call to intra_blob, omit for testing:
+    if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
         frame_deep = frame  # initialize frame_of_deep_blobs, deeper params are initialized when fetched
@@ -327,22 +330,22 @@ if __name__ == '__main__':
         for blob in frame['blob_']:  # interlaced 2x2 gblobs, 3x3 rblobs, 2x2 nblobs
             if blob['sign'] == 0:
                 if blob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
+                    intra_blob(frame, blob, rdn=1, rng=1, fig=0, fca=1)  # comp_a, then comp_g if -Ga, else comp_ga if +Ga3?
+                    '''
                     ga_dert__ = comp_a(blob['dert__'], rng=1)  # 2x2, no 3x3 -> ra_dert__: comp with g only?
-
-                    frame_deep['gsub_'] = cluster_eval(blob, ga_dert__, rng=1, rdn=1, fig=0, fcr=0, crit=1)  # cluster by 2x2 g
+                    frame_deep['gsub_'] = cluster_eval(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  # cluster by 2x2 g
                     frame_deep['gblob_'].append(blob)  # extended by cluster_eval
                     frame_deep['gparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-                    # next: comp_g if -Ga, comp_ga if +Ga
-
+                    '''
             elif blob['sign'] == 1:
-                if -blob['Dert']['G'] > aveB: # 3x3 -G blob, dert = dert
+                if -blob['Dert']['G'] > aveB:  # 3x3 -G blob, dert = dert
+                    intra_blob(frame, blob, rdn=1, rng=7, fig=0, fca=0)  # comp_rng, then comp_a if G, else comp_rng if -G3
+                    '''
                     gdert__, rdert__ = comp_i(blob['dert__'], rng=7)  # 6x6? + 7x7 comp_i, angle is not computed
-
-                    frame_deep['rsub_'] = cluster_eval(blob, rdert__, rng=7, rdn=1, fig=0, fcr=1, crit=1)  # cluster by 3x3 -g
+                    frame_deep['rsub_'] = cluster_eval(blob, rdert__, rng=7, rdn=1, fig=0, fca=0)  # cluster by 3x3 -g
                     frame_deep['rblob_'].append(blob)  # extended by cluster_eval
                     frame_deep['rparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-                    # next: repeat comp_a and comp_rng eval
-
+                    '''
             # else blob['sign'] == 2: no intra_blob call
 
     end_time = time() - start_time
@@ -351,7 +354,7 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     imwrite("./images/comb_blobs.bmp",
             map_frame(frame,
-                      sign_map={  # black: gblobs, grey: nblobs, white: rblobs
+                      sign_map={
                           0: WHITE,  # 2x2 gblobs
                           1: BLACK,  # 3x3 rblobs
                           2: GREY,   # 2x2 nblobs
