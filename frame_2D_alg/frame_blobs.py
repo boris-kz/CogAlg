@@ -103,10 +103,11 @@ def form_P_(gdert_, rdert_):  # horizontal clustering and summation of dert para
         _s = 2; I, G, Dy, Dx, L, x0 = *gdert_[0], 1, 0  # initialize P params with 1st dert 2x2 params
 
     for x, (p, g, dy, dx) in enumerate(gdert_[1:], start=1):
-        p3, g3, dy3, dx3 = rdert_[x]  # rdert_ is shifted at [y-1, x-1] in line 70, for gdert in lower-right quadrant?
+        p3, g3, dy3, dx3 = rdert_[x]
+        # rdert_ is shifted at [y-1, x-1] in line 70, for gdert in lower-right quadrant?
         # or use zip(gdert_[1:], start=1), rdert_[1:], start=1)?
         vg = g - ave_2x2  # gdert_[x][1] = vg?
-        vg3 = ave_3x3 - g3  # initial 3x3 match is inverse deviation of g3, ave_3x3
+        vg3 = ave_3x3 - g3  # rdert_[x][1] = vg3? initial 3x3 match is inverse deviation of g3, ave_3x3
         if vg > 0:
             s = 0; dert_ = gdert_  # ternary sign
         elif vg3 > 0:
