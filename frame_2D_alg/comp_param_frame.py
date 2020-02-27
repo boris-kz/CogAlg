@@ -5,7 +5,7 @@ Note: Since these operations performed only on multivariate variables,
 "__" in variable names will be skipped.
 """
 
-import frame_blobs
+import frame_blobs_ternary
 
 from intra_comp import comp_v
 from utils import imread, imwrite
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     print('Done!')
 
     print('Doing first comp...')
-    derts = frame_blobs.comp_pixel(image)
+    derts = frame_blobs_ternary.comp_pixel(image)
     print('Done!')
 
     print('Doing recursive comps...')

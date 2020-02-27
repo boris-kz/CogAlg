@@ -1,6 +1,6 @@
 Welcome to the CogAlg wiki!
 
-Much of the programming was done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg), according to the principles introduced in README.
+Much of the coding was done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg), according to the principles introduced in README.
 The code is divided into three self-contained folders:
 
 **line_1D_alg:**
@@ -19,7 +19,7 @@ The code is divided into three self-contained folders:
   - [comp_param](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_param.py) compares input parameter, or computes and compares angle of resulting gradient, to compute corresponding input gradient or angle gradient, over defined range (also buffer kernel layers per rng+, forming micro-blobs if min rng?).
   - [comp_param_frame](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_param_frame.py) computes gradients of the first three layers of forks over the whole frame, for visualization only.
   
-  [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): pseudo code for additional fork that cross-compares between vertically consecutive Ps: horizontal slices of blob segments. This will be selective for highly elongated blobs: likely edge contours. It will perform a version line-tracing: 2D -> 1D dimensionality reduction, converting such blobs into vector representations. This is similar to higher levels of 1D alg (not implemented in line_POC).
+  [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): pseudo code for additional fork that cross-compares between vertically consecutive Ps: horizontal slices of blob segments. This will be selective for highly elongated blobs: likely edge contours. It will perform a version line-tracing: 2D -> 1D dimensionality reduction, converting such blobs into vector representations. This is similar to higher levels of 1D alg (not implemented in line_patterns).
   
  2nd level and a prototype for recursive meta-level 2D algorithm, to be added:
  
@@ -35,7 +35,7 @@ The code is divided into three self-contained folders:
 - [video_draft()](https://github.com/boris-kz/CogAlg/blob/master/video_3D_alg/video_draft.py) is obsolete 3D extension of pixel-level cross-correlation, as in frame_blobs. Eventually, it will extend all of 2D alg with time dimension. This version will be made fully recursive and hopefully effective in real world.
 
 
-Higher levels for each D-cycle alg will process discontinuous search among full-D patterns.
+Higher levels for each D-cycle alg will process discontinuous search among dimensionally-complete patterns.
 Complete hierarchical algorithm will have two-level code: 
 - 1st level algorithm: contiguous cross-comparison over full-D cycle, plus feedback to adjust most and least significant bits of the input. 
 - Recurrent increment in complexity, extending current-level alg to next-level alg. This increment will account for increasing internal complexity of input patterns on higher levels, unfolding them for cross-comparison and re-combining the results for evaluation and feedback.

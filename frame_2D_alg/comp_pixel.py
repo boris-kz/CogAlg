@@ -7,17 +7,33 @@ comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of
 Coefs scale down pixel dy and dx contribution to kernel g in proportion to the ratio of that pixel distance and angle 
 to ortho-pixel distance and angle. This is a proximity-ordered search, comparing ortho-pixels first, thus their coef = 1.  
 
-This is a more precise equivalent to Sobel operator, but works in reverse, the latter sets diagonal pixel coef = 1, and scales 
+This is a more precise equivalent of Sobel operator, but works in reverse, the latter sets diagonal pixel coef = 1 and scales 
 contribution of other pixels up, in proportion to the same ratios (relative contribution of each rim pixel to g in Sobel is 
 similar but lower resolution). This forms integer coefs, vs our fractional coefs, which makes computation a lot faster. 
-We will probably switch to integer coefs for speed, and are open to using Scharr operator in the future.
+We may switch to integer coefs for speed, and are open to using Scharr operator in the future.
 
 kwidth = 3: input-centered, low resolution kernel: frame | blob shrink by 2 pixels per row,
 kwidth = 2: co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 chance of boundary pixel in kernel?
 kwidth = 2: quadrant g = ((dx + dy) * .705 + d_diag) / 2, no i res decrement, ders co-location, + orthogonal quadrant for full rep?
 '''
 
-def comp_pixel(image):  # 3x3 and 2x2 pixel cross-correlation within image
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image
+
+    orthdy__ = image[1:] - image[:-1]        # orthogonal vertical comp
+    orthdx__ = image[:, 1:] - image[:, :-1]  # orthogonal horizontal comp
+
+    i__ = image[:-1, :-1]  # upper-left pixel per dert, input for rng+ fork
+    p__ = (image[:-2, :-2] + image[:-2, 1:-1] + image[1:-1, :-2] + image[1:-1, 1:-1]) * 0.25  # mean pixel value
+
+    dy__ = (orthdy__[:-1, 1:-1] + orthdy__[:-1, :-2]) * 0.5  # mean dy per kernel
+    dx__ = (orthdx__[1:-1, :-1] + orthdx__[:-2, :-1]) * 0.5  # mean dx per kernel
+    g__ = ma.hypot(dy__, dx__)  # central gradient of four rim pixels
+    dert__ = ma.stack((p__, g__, dy__, dx__, i__))
+
+    return dert__
+
+
+def comp_pixel_ternary(image):  # 3x3 and 2x2 pixel cross-correlation within image
     # orthogonal comp
     orthdy__ = image[1:] - image[:-1]       # vertical
     orthdx__ = image[:, 1:] - image[:, :-1] # horizontal
