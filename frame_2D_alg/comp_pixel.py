@@ -19,16 +19,14 @@ kwidth = 2: quadrant g = ((dx + dy) * .705 + d_diag) / 2, no i res decrement, de
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image
 
-    orthdy__ = image[1:] - image[:-1]        # orthogonal vertical comp
-    orthdx__ = image[:, 1:] - image[:, :-1]  # orthogonal horizontal comp
+    dy__ = image[1:] - image[:-1]        # orthogonal vertical comp
+    dx__ = image[:, 1:] - image[:, :-1]  # orthogonal horizontal comp
 
-    i__ = image[:-1, :-1]  # upper-left pixel per dert, input for rng+ fork
-    p__ = (image[:-2, :-2] + image[:-2, 1:-1] + image[1:-1, :-2] + image[1:-1, 1:-1]) * 0.25  # mean pixel value
-
-    dy__ = (orthdy__[:-1, 1:-1] + orthdy__[:-1, :-2]) * 0.5  # mean dy per kernel
-    dx__ = (orthdx__[1:-1, :-1] + orthdx__[:-2, :-1]) * 0.5  # mean dx per kernel
-    g__ = ma.hypot(dy__, dx__)  # central gradient of four rim pixels
-    dert__ = ma.stack((p__, g__, dy__, dx__, i__))
+    p__ = (image[:-1, :-1] + image[1:, :-1] + image[1:, 1:] + image[:-1, 1:]) * 0.25 # mean pixel value
+    mean_dy__ = (dy__[:, 1:] + dy__[:, :-1]) * 0.5  # mean dy per kernel
+    mean_dx__ = (dx__[1:, :] + dx__[:-1, :]) * 0.5  # mean dx per kernel
+    g__ = ma.hypot(mean_dy__, mean_dx__)  # central gradient of four rim pixels
+    dert__ = ma.stack((p__, g__, mean_dy__, mean_dx__))
 
     return dert__
 

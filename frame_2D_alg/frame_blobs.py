@@ -64,6 +64,7 @@ def image_to_blobs(image):
     height, width = dert__.shape[1:]
 
     for y in range(height):  # first and last row are discarded
+        print(f'Processing line {y}...')
         P_ = form_P_(dert__[:, y].T)      # horizontal clustering
         P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
@@ -88,10 +89,10 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
-    I, G, Dy, Dx, L, x0 = dert_[0][:4], 1, 0  # initialize P params with 1st dert params
+    I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # initialize P params with 1st dert params
     G -= ave
     _s = G > 0  # sign
-    for x, (p, g, dy, dx, _) in enumerate(dert_[1:], start=1):
+    for x, (p, g, dy, dx) in enumerate(dert_[1:], start=1):
         vg = g - ave
         s = vg > 0
         if s != _s:
@@ -329,7 +330,7 @@ if __name__ == '__main__':
 
     # DEBUG -------------------------------------------------------------------
     imwrite("./images/gblobs.bmp",
-    map_frame(frame,
+    map_frame_binary(frame,
               sign_map={
                   1: WHITE,  # 2x2 gblobs
                   0: BLACK

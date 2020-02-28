@@ -175,6 +175,32 @@ def map_sub_blobs(blob, traverse_path=[]):  # currently a draft
     return image    # return filled image
 
 
+def map_frame_binary(frame, *args, **kwargs):
+    '''
+    Map partitioned blobs into a 2D array.
+    Parameters
+    ----------
+    frame : dict
+        Contains blobs that need to be mapped.
+    raw : bool
+        Draw raw values instead of boolean.
+    Return
+    ------
+    out : ndarray
+        2D array of image's pixel.
+    '''
+    height, width = frame['dert__'].shape[1:]
+    box = (0, height, 0, width)
+    image = blank_image(box)
+
+    for i, blob in enumerate(frame['blob_']):
+        blob_map = draw_blob(blob, *args, **kwargs)
+
+        over_draw(image, blob_map, blob['box'], box)
+
+    return image
+
+
 def map_frame(frame, *args, **kwargs):
     '''
     Map partitioned blobs into a 2D array.
