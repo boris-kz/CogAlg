@@ -301,29 +301,28 @@ if __name__ == '__main__':
     intra=0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob import *
-        frame_deep = frame  # initialize frame_of_deep_blobs, deeper params are initialized when fetched
+        from intra_blob_draft import *
+        frame_deep = frame, frame  # initialize frame_of_deep_blobs, root=frame, deeper params are initialized when fetched
 
-        for blob in frame['blob_']:  # interlaced 2x2 gblobs, 3x3 rblobs, 2x2 nblobs
-            if blob['sign'] == 0:
-                if blob['Dert']['G'] > aveB:  # +G blob, dert = g, 0, 0, 0
-                    intra_blob(frame, blob, rdn=1, rng=1, fig=0, fca=1)  # comp_a, then comp_g if -Ga, else comp_ga if +Ga3?
+        for blob in frame['blob_']:
+            if blob['sign']:
+                if blob['Dert']['G'] > aveB:  # +G blob, 2x2 dert = g, 0, 0, 0
+                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=1)  # comp_a, then comp_g if -Ga, else comp_ga if +Ga
                     '''
                     ga_dert__ = comp_a(blob['dert__'], rng=1)  # 2x2, no 3x3 -> ra_dert__: comp with g only?
-                    frame_deep['gsub_'] = cluster_eval(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  # cluster by 2x2 g
+                    frame_deep['gsub_'] = cluster_eval(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  
                     frame_deep['gblob_'].append(blob)  # extended by cluster_eval
                     frame_deep['gparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
                     '''
-            elif blob['sign'] == 1:
-                if -blob['Dert']['G'] > aveB:  # 3x3 -G blob, dert = dert
-                    intra_blob(frame, blob, rdn=1, rng=3, fig=0, fca=0)  # comp_rng, then comp_a if G, else comp_rng if -G3
+            elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 dert = dert
+                    intra_blob(blob, rdn=1, rng=3, fig=0, fca=0)  # comp_rng, then comp_a if G, else comp_rng if -G3
                     '''
                     gdert__, rdert__ = comp_i(blob['dert__'], rng=7)  # 6x6? + 7x7 comp_i, angle is not computed
-                    frame_deep['rsub_'] = cluster_eval(blob, rdert__, rng=7, rdn=1, fig=0, fca=0)  # cluster by 3x3 -g
+                    frame_deep['rsub_'] = cluster_eval(blob, rdert__, rng=7, rdn=1, fig=0, fca=0)  
                     frame_deep['rblob_'].append(blob)  # extended by cluster_eval
                     frame_deep['rparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
                     '''
-            # else blob['sign'] == 2: no intra_blob call
+            # else no intra_blob call
 
     end_time = time() - start_time
     print(end_time)

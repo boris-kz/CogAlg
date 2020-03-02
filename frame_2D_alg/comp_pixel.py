@@ -22,7 +22,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image
     dy__ = image[1:] - image[:-1]        # orthogonal vertical comp
     dx__ = image[:, 1:] - image[:, :-1]  # orthogonal horizontal comp
 
-    p__ = (image[:-1, :-1] + image[1:, :-1] + image[1:, 1:] + image[:-1, 1:]) * 0.25 # mean pixel value
+    p__ = image[:-1, :-1]  #  top-left pixel
     mean_dy__ = (dy__[:, 1:] + dy__[:, :-1]) * 0.5  # mean dy per kernel
     mean_dx__ = (dx__[1:, :] + dx__[:-1, :]) * 0.5  # mean dx per kernel
     g__ = ma.hypot(mean_dy__, mean_dx__)  # central gradient of four rim pixels

@@ -9,7 +9,7 @@ import frame_blobs_ternary
 
 from intra_comp import comp_v
 from utils import imread, imwrite
-from intra_blob import ave
+from intra_blob_draft import ave
 
 # -----------------------------------------------------------------------------
 # Constants

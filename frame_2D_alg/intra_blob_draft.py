@@ -58,42 +58,42 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # functions, ALL WORK-IN-PROGRESS:
 
 
-def intra_blob(root_blob, blob, rdn, rng, fig, fca):  # fca: flag comp angle: alternating fca=1 and fca=0 blob layers
+def intra_blob(blob, rdn, rng, fig, fca, input):  # fca: flag comp angle: alternating fca=1 and fca=0 blob layers
 
-    # rdert = i3, g3, dy3, dx3, if fig: + [idx3, idy3, m3, ga3, day3, dax3], same syntax:
-    # gdert = i, g, dy, dx, if fig: + [idx, idy, m, ga, day, dax]
+    # dert = i, g, dy, dx, if fig: + [idx, idy, m, ga, day, dax]; same for all forks
     if fca:
-        ga_dert__ = comp_a(blob['dert__'], rng, fig)  # 1st call in frame_blobs, form ga blobs, evaluate them for comp_g|r:
-        cluster_derts(blob, ga_dert__, 1, rdn, fig, 1)  # 2x2 ga -> ga_blobs | 3x3 -ig -> rblobs | nblobs
-        # add forked blob eval: intra_blob comp_g | rng_comp_g if fig else rng_comp_p?
+        ga_dert__ = comp_a(blob['dert__'], rng, fig, input)  # form ga blobs, evaluate for comp_aga | rga:
+        cluster_derts(blob, ga_dert__, 1, rdn, fig, 1)  # 2x2 ga -> ga_blobs | 3x3 -ig -> rblobs
+
+        for sub_blob in blob['blob_']:  # eval intra_blob comp_g | comp_ga: disoriented
+            if sub_blob['sign']:
+                if sub_blob['Dert']['Ga'] > aveB:  # +Ga blob, 2x2 dert = ga, 0, 0, 0
+                    intra_blob(sub_blob, rdn=1, rng=1, fig=0, fca=0, input=7)
+                    # comp_ga
+            elif -sub_blob['Dert']['Ga'] > aveB:  # -Ga blob, 2x2 dert = g, 0, 0, 0
+                 intra_blob(sub_blob, rdn=1, rng=3, fig=0, fca=0, input=1)
+                 # comp_g
     else:
-        gdert__ = comp_i(blob['dert__'], rng, fig)  # comp_g|p, form gblobs, evaluate them for comp_a | comp_ga:
-        cluster_derts(blob, gdert__, 1, rdn, fig, 0)  # 2x2 g -> gblobs | 3x3 g + ga -> rblobs | nblobs
-        # add forked blob eval: intra_blob comp_a(gg) | comp_ga: disoriented variation
+        gdert__ = comp_i(blob['dert__'], rng, fig, input)  # comp_g|p, form gblobs, evaluate for comp_a | comp_ga:
+        cluster_derts(blob, gdert__, 1, rdn, fig, 0)  # 2x2 g -> gblobs | 3x3 i -> rblobs
+
+        for sub_blob in blob['blob_']:  # eval intra_blob comp_g | comp_ga: disoriented
+            if sub_blob['sign']:
+                if sub_blob['Dert']['G'] > aveB:  # +G blob, 2x2 dert = g, 0, 0, 0
+                    intra_blob(sub_blob, rdn=1, rng=1, fig=0, fca=1, input=(2,3))
+                    # comp_a
+            elif -sub_blob['Dert']['G'] > aveB:  # -G blob, 3x3 dert = dert
+                 intra_blob(sub_blob, rdn=1, rng=3, fig=0, fca=0, input=0)
+                 # comp_rng
+
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
-    '''
-    # return sub_blob_: no need?
-
-
-def cluster_eval(root_blob, dert__, rng, rdn, fig, fca):  # use fca and ternary sign in form_P_ for exclusive forking
-    # Deprecated
-
-    root_blob['gsub_'] = cluster_eval(blob, ga_dert__, 1, rdn, fig, fcr=0, crit=1)  # cluster by 2x2 ga for comp_g eval
-    root_blob['rsub_'] = cluster_eval(blob, blob['dert__'], rng + 1, rdn, fig, fcr=1, crit=(0, 6) if fig else 1)
-    # cluster by input 3x3 -g (no ga), eval for rng_comp_i: g if fig else p  fcr: flag_comp_rng,
-    root_blob['gsub_'] = cluster_eval(blob, gdert__, 1, rdn, fig, fcr=0, crit=7)  # cluster by 2x2 g -> comp_a(gg) eval
-    root_blob['rsub_'] = cluster_eval(blob, blob['dert__'], rng + 1, rdn, fig, fcr=1, crit=7)
-    # cluster by 3x3 g + ga -> comp_ga: disoriented variation
-
-    deep_sub_ = []  # in cluster_eval? intra_blob recursion extends rsub_ and dsub_ hierarchies by sub_blob_ layer
-
-    blob_ = cluster_derts(root_blob, dert__, rdn, fig, fca)  # cluster by crit: ga | g | i | i+m? forms 1st layer
-    for blob in blob_:  # evaluate blob for der+ | rng+ comp
-
-        if blob['Dert'][1 + fca*6] > aveB * rdn:  # +|- G|Ga > intra_blob cost:
+    fork_eval with feedback:  
+    
+    for blob in blob_:  # intra_blob recursion extends rsub_ and dsub_ hierarchies by sub_blob_ layer
+        if blob['Dert'][crit] > aveB * rdn:  
             lL = len(blob_)
-            blob['sub_'] += [[(lL, fig, fcr, rdn, rng, blob_)]]  # 1st layer, fca=1 for odd layers?
+            blob['sub_'] += [[(lL, fig, fcr, rdn, rng, blob_)]]  # 1st layer, no flag_comp_rng: indicated by rng?
             # deep layers compute and feedback:
             blob['sub_'] += intra_blob(root_blob, blob, rdn + 1 + 1 / lL, rng, fig, fca=crit!=7)  # or fca inversion?
             blob['LL'] = len(blob['sub_'])
@@ -101,11 +101,11 @@ def cluster_eval(root_blob, dert__, rng, rdn, fig, fca):  # use fca and ternary 
             blob['sub_'] = []
 
         deep_sub_ = [deep_sub + gsub + rsub for deep_sub, gsub, rsub in \
-                     zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
+                    zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
         # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy, fill Dert per layer if n_sub_P > min?
 
     return deep_sub_  # sub_blob['gsub_'] | sub_blob['rsub_']
-
+    '''
 
 def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is always g in dert[1], fder is a sign
 
