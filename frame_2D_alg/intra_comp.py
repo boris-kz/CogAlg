@@ -151,28 +151,41 @@ X_COEFFS = [
 # -----------------------------------------------------------------------------
 # Functions
 
+def comp_g(g__):
+    pass
+
+
+def comp_r(dert__):
+    pass
+
+
 def calc_a(dert__):
     """Compute angles of gradient."""
     return dert__[2:] / dert__[1]
 
+
 def comp_a(a__):
     """Compare angles within 2x2 kernels."""
+
+    # handle mask
     if isinstance(a__, ma.masked_array):
         a__.data[a__.mask] = np.nan
         a__.mask = ma.nomask
-    da__ = np.degrees(
-        ma.arctan2(
-            *translated_operation(a__, rng=0, operator=angle_diff)
-        )
-    )
 
+    # comparison
+    da__ = translated_operation(a__, rng=0, operator=angle_diff)
+
+    # sum within kernels
     day__ = (da__ * Y_COEFFS[0]).sum(axis=-1)
     dax__ = (da__ * X_COEFFS[0]).sum(axis=-1)
 
-    ga__ = ma.hypot(day__, dax__)
+    # compute gradient magnitudes (how fast angles are changing)
+    ga__ = ma.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
+    # pack into dert
     dert__ = ma.stack((*a__[:, :-1, :-1], ga__, day__, dax__), axis=0)
 
+    # handle mask
     dert__.mask = np.isnan(dert__.data)
 
     return dert__
@@ -183,7 +196,6 @@ def comp_a(a__):
 
 def central_slice(k):
     """Return central slice objects (last 2 dimensions)."""
-
     if k < 1:
         return ..., slice(None), slice(None)
     return ..., slice(k, -k), slice(k, -k)

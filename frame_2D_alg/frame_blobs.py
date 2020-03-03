@@ -22,8 +22,8 @@ from utils import *
     Resulting blob structure (fixed set of parameters per blob): 
 
     - root_fork = frame,  # replaced by blob-level fork in sub_blobs
-    - Dert = dict(I, G, Dy, Dx, S, Ly), # summed pixel dert params (I, G, Dy, Dx), surface area S, vertical depth Ly
-    - sign = s,  # sign of gradient deviation
+    - Dert = I, G, Dy, Dx, S, Ly: summed pixel-level dert params I, G, Dy, Dx, surface area S, vertical depth Ly
+    - sign = s: sign of gradient deviation
     - box  = [y0, yn, x0, xn], 
     - map, # inverted mask
     - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
@@ -32,8 +32,8 @@ from utils import *
 
     Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
     per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
-    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object: 
-    some physical density, hardness, inertia that represent resistance to change in positional parameters.  
+    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object 
+    (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)  
 
     This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range.
     That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
@@ -93,7 +93,7 @@ def form_P_(dert_):  # horizontal clustering and summation of dert params into P
     G -= ave
     _s = G > 0  # sign
     for x, (p, g, dy, dx) in enumerate(dert_[1:], start=1):
-        vg = g - ave
+        vg = g - ave  # deviation of g
         s = vg > 0
         if s != _s:
             # terminate and pack P:
@@ -302,23 +302,23 @@ if __name__ == '__main__':
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob_draft import *
-        frame_deep = frame, frame  # initialize frame_of_deep_blobs, root=frame, deeper params are initialized when fetched
+        frame_deep = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 
         for blob in frame['blob_']:
             if blob['sign']:
                 if blob['Dert']['G'] > aveB:  # +G blob, 2x2 dert = g, 0, 0, 0
-                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=1)  # comp_a, then comp_g if -Ga, else comp_ga if +Ga
+                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=1, input=(2,3))  # comp_a, then comp_g if -Ga, else comp_ga if +Ga
                     '''
                     ga_dert__ = comp_a(blob['dert__'], rng=1)  # 2x2, no 3x3 -> ra_dert__: comp with g only?
-                    frame_deep['gsub_'] = cluster_eval(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  
+                    frame_deep['gsub_'] = intra_blob(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  
                     frame_deep['gblob_'].append(blob)  # extended by cluster_eval
                     frame_deep['gparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
                     '''
             elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 dert = dert
-                    intra_blob(blob, rdn=1, rng=3, fig=0, fca=0)  # comp_rng, then comp_a if G, else comp_rng if -G3
+                    intra_blob(blob, rdn=1, rng=3, fig=0, fca=0, input=0)  # comp_rng_p, then comp_a if G, else comp_rng if -G
                     '''
-                    gdert__, rdert__ = comp_i(blob['dert__'], rng=7)  # 6x6? + 7x7 comp_i, angle is not computed
-                    frame_deep['rsub_'] = cluster_eval(blob, rdert__, rng=7, rdn=1, fig=0, fca=0)  
+                    gdert__ = comp_i(blob['dert__'], rng=2)  # 3x3 comp_i, angle is not computed
+                    frame_deep['rsub_'] = intra_blob(blob, rdert__, rng=3, rdn=1, fig=0, fca=0)  
                     frame_deep['rblob_'].append(blob)  # extended by cluster_eval
                     frame_deep['rparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
                     '''
