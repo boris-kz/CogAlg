@@ -1,12 +1,10 @@
 from collections import deque, defaultdict
-from functools import reduce
 from itertools import groupby, starmap
 
 import numpy as np
 import numpy.ma as ma
 
 from frame_blobs_ternary import scan_P_, form_seg_
-from intra_comp import comp_i
 
 '''
     intra_blob() evaluates for recursive frame_blobs() and comp_P() within each blob.

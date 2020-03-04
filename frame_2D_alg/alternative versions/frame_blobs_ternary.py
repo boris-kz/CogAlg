@@ -353,7 +353,7 @@ if __name__ == '__main__':
     print(end_time)
 
     # DEBUG -------------------------------------------------------------------
-    imwrite("./images/comb_blobs.bmp",
+    imwrite("../images/comb_blobs.bmp",
             map_frame(frame,
                       sign_map={
                           0: WHITE,  # 2x2 gblobs

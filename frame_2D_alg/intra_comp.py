@@ -180,10 +180,10 @@ def comp_a(a__):
     dax__ = (da__ * X_COEFFS[0]).sum(axis=-1)
 
     # compute gradient magnitudes (how fast angles are changing)
-    ga__ = ma.hypot(np.arctan2(*day__), np.arctan2(*dax__))
+    ga__ = np.arctan2(*np.hypot(day__, dax__))
 
     # pack into dert
-    dert__ = ma.stack((*a__[:, :-1, :-1], ga__, day__, dax__), axis=0)
+    dert__ = ma.stack((*a__[:, :-1, :-1], ga__, *day__, *dax__), axis=0)
 
     # handle mask
     dert__.mask = np.isnan(dert__.data)
