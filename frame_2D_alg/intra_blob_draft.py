@@ -64,29 +64,32 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
 
     if fca:  # flag comp angle, generic dert = i, g, dy, dx, m, if fca: += ga, day, dax
 
-        ga_dert__ = comp_a(blob['dert__'], rng, fig, input)  # form ga blobs, evaluate for comp_aga | comp_g:
-        cluster_derts(blob, ga_dert__, 1, rdn, fig, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
+        ga_dert__ = comp_a(blob['dert__'], rng, input)  # form ga blobs, evaluate for comp_aga | comp_g:
+        cluster_derts(blob, ga_dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
-                if sub_blob['Dert']['Ga'] > aveB * rdn:  # +Ga blob, new dert = ga, day, dax, None, ga_ga, ga_day, ga_dax
+                if sub_blob['Dert']['Ga'] > aveB * rdn:
+                    # +Ga -> comp_a -> adert = a, ga=0, day=0, dax=0, ma=None
                     intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(6,7))
-                    # comp_aga
-            elif -sub_blob['Dert']['Ga'] > aveB * rdn:  # -Ga blob, new dert = g, 0, 0, 0, 0
-                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
-                 # comp_g
+
+            elif -sub_blob['Dert']['Ga'] > aveB * rdn:
+                # -Ga -> comp_g -> gdert = dert + [ga=0, day, dax]
+                intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
+                # both dert__ and adert__ are passed to comp_g, which will form new gdert
     else:
-        gdert__ = comp_i(blob['dert__'], rng, fig, fcr, input)  # comp_g|p, form gblobs, evaluate for comp_a | comp_rng:
+        gdert__ = comp_i(blob['dert__'], rng, fig, fcr, input)  # comp_g|p, form gblobs, eval for comp_a | comp_r:
         cluster_derts(blob, gdert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
             if sub_blob['sign']:
-                if sub_blob['Dert']['G'] > aveB * rdn:  # +G blob, new dert = dert + [ga, day, dax]
+                if sub_blob['Dert']['G'] > aveB * rdn:
+                    # +G _> comp_a -> adert = dert + [ga, day, dax]
                     intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(2,3))
-                    # comp_a
-            elif -sub_blob['Dert']['G'] > aveB * rdn:  # -G blob, new dert = dert
-                 intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
-                 # comp_rng
+
+            elif -sub_blob['Dert']['G'] > aveB * rdn:
+                # -G -> comp_rng -> rdert = dert: no changes
+                intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     fork with feedback: 

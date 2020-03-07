@@ -307,7 +307,7 @@ if __name__ == '__main__':
         for blob in frame['blob_']:
             if blob['sign']:
                 if blob['Dert']['G'] > aveB:  # +G blob, 2x2 dert = g, 0, 0, 0
-                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=1, input=(2,3))  # comp_a, then comp_g if -Ga, else comp_ga if +Ga
+                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=1, fcr=0, input=(2,3))  # comp_a, then comp_g if -Ga, else comp_ga if +Ga
                     '''
                     ga_dert__ = comp_a(blob['dert__'], rng=1)  # 2x2, no 3x3 -> ra_dert__: comp with g only?
                     frame_deep['gsub_'] = intra_blob(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  
@@ -315,7 +315,7 @@ if __name__ == '__main__':
                     frame_deep['gparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
                     '''
             elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 dert = dert
-                    intra_blob(blob, rdn=1, rng=3, fig=0, fca=0, input=0)  # comp_rng_p, then comp_a if G, else comp_rng if -G
+                    intra_blob(blob, rdn=1, rng=3, fig=0, fca=0, fcr=1, input=0)  # comp_rng_p, then comp_a if G, else comp_rng if -G
                     '''
                     gdert__ = comp_i(blob['dert__'], rng=2)  # 3x3 comp_i, angle is not computed
                     frame_deep['rsub_'] = intra_blob(blob, rdert__, rng=3, rdn=1, fig=0, fca=0)  
