@@ -70,13 +70,12 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
                 if sub_blob['Dert']['Ga'] > aveB * rdn:
-                    # +Ga -> comp_a -> adert = a, ga=0, day=0, dax=0, ma=None
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(6,7))
+                    # +Ga -> comp_a -> adert = aga, gaga=0, ga_day=0, ga_dax=0:
+                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(5,6,7))
 
             elif -sub_blob['Dert']['Ga'] > aveB * rdn:
-                # -Ga -> comp_g -> gdert = dert + [ga=0, day, dax]
+                # -Ga -> comp_g -> gdert = g, 0, 0, 0, 0 if fig else None, ga, day, dax (from dert__, adert__):
                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
-                # both dert__ and adert__ are passed to comp_g, which will form new gdert
     else:
         gdert__ = comp_i(blob['dert__'], rng, fig, fcr, input)  # comp_g|p, form gblobs, eval for comp_a | comp_r:
         cluster_derts(blob, gdert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
@@ -84,11 +83,11 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
             if sub_blob['sign']:
                 if sub_blob['Dert']['G'] > aveB * rdn:
-                    # +G _> comp_a -> adert = dert + [ga, day, dax]
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(2,3))
+                    # +G -> comp_a -> adert = a, ga=0, day=0, dax=0:
+                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(1,2,3))
 
             elif -sub_blob['Dert']['G'] > aveB * rdn:
-                # -G -> comp_rng -> rdert = dert: no changes
+                # -G -> comp_r, dert += aligned 2x2 ga, day, dax -> Dert
                 intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?

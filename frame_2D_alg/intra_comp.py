@@ -131,22 +131,22 @@ TRANSLATING_SLICES_PAIRS_ = [
 ]
 
 # coefficients for decomposing d into dy and dx:
+
 Y_COEFFS = [
     np.array([-1, 1]),
-    np.array([0.5, 1., 0.5, 0.]),
-    np.array([0.25, 0.4, 0.5, 0.4, 0.25, 0.2, 0., -0.2]),
-    np.array([0.167, 0.231, 0.3, 0.333, 0.3, 0.231,
-              0.167, 0.154, 0.1, 0., -0.1, -0.154]),
-]
-X_COEFFS = [
-    np.array([1, 1]),
-    np.array([0.5, 0., -0.5, -1.]),
-    np.array([0.25, 0.2, 0., -0.2, -0.25, -0.4, -0.5, -0.4]),
-    np.array([0.167, 0.154, 0.1, 0., -0.1,
-              -0.154, -0.167, -0.23076923, -0.3, -0.33333333,
-              -0.3, -0.23076923]),
+    np.array([0.5, 0.5, 0.5, 0. ]),
+    np.array([ 0.25,  0.25,  0.25,  0.25,  0.25,  0.5 ,  0.  , -0.5 ]),
+    np.array([ 0.167,  0.167,  0.167,  0.167,  0.167,  0.167,  0.167,  0.25 ,
+        0.5  ,  0.   , -0.5  , -0.25 ]),
 ]
 
+X_COEFFS = [
+    np.array([1, 1]),
+    np.array([ 0.5,  0. , -0.5, -0.5]),
+    np.array([ 0.25,  0.5 ,  0.  , -0.5 , -0.25, -0.25, -0.25, -0.25]),
+    np.array([ 0.167,  0.25 ,  0.5  ,  0.   , -0.5  , -0.25 , -0.167, -0.167,
+       -0.167, -0.167, -0.167, -0.167]),
+]
 
 # -----------------------------------------------------------------------------
 # Functions
@@ -159,12 +159,35 @@ def comp_r(dert__):
     pass
 
 
-def calc_a(dert__):
+def comp_a(dert__, rng, inp):
+    if isinstance(inp, (list, tuple, set)):
+        inp = list(inp)
+    else:
+        raise ValueError("'inp' should be a tuple of integers).")
+    if len(inp) == 3:
+        a__ = calc_a(dert__, inp)
+    elif len(inp) == 5:
+        a__ = calc_aa(dert__, inp)
+    else:
+        raise ValueError("'inp' should contain the index/indices "
+                         "for g, dy, dx in that order.")
+    return comp_angle(a__, rng)
+
+
+def calc_a(dert__, inp):
     """Compute angles of gradient."""
-    return dert__[2:] / dert__[1]
+    return dert__[inp[1:]] / dert__[inp[0]]
 
 
-def comp_a(a__):
+def calc_aa(dert__, inp):
+    """Compute angles of angles of gradient."""
+    g__ = dert__[inp[1]]
+    day__ = np.arctan2(*dert__[inp[1:3]])
+    dax__ = np.arctan2(*dert__[inp[3:]])
+    return np.stack((day__, dax__)) / g
+
+
+def comp_angle(a__, rng):
     """Compare angles within 2x2 kernels."""
 
     # handle mask
@@ -173,17 +196,18 @@ def comp_a(a__):
         a__.mask = ma.nomask
 
     # comparison
-    da__ = translated_operation(a__, rng=0, operator=angle_diff)
+    da__ = translated_operation(a__, rng=rng, operator=angle_diff)
 
     # sum within kernels
-    day__ = (da__ * Y_COEFFS[0]).sum(axis=-1)
-    dax__ = (da__ * X_COEFFS[0]).sum(axis=-1)
+    day__ = (da__ * Y_COEFFS[rng]).sum(axis=-1)
+    dax__ = (da__ * X_COEFFS[rng]).sum(axis=-1)
 
     # compute gradient magnitudes (how fast angles are changing)
-    ga__ = np.arctan2(*np.hypot(day__, dax__))
+    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
     # pack into dert
-    dert__ = ma.stack((*a__[:, :-1, :-1], ga__, *day__, *dax__), axis=0)
+    a__ = a__[central_slice(rng)] if rng != 0 else a__[:, :-1, :-1]
+    dert__ = ma.stack((*a__, ga__, *day__, *dax__), axis=0)
 
     # handle mask
     dert__.mask = np.isnan(dert__.data)
