@@ -62,7 +62,7 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 
 def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | der+ | angle cross-comp within a blob
 
-    if fca:  # flag comp angle, generic dert = i, g, dy, dx, m, if fca: += ga, day, dax
+    if fca:  # flag comp angle, input dert = i, g, dy, dx, m, if fcar: += ga, day, dax (comp_g | comp_r?)
 
         ga_dert__ = comp_a(blob['dert__'], rng, input)  # form ga blobs, evaluate for comp_aga | comp_g:
         cluster_derts(blob, ga_dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
@@ -77,7 +77,7 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
                 # -Ga -> comp_g -> gdert = g, 0, 0, 0, 0 if fig else None, ga, day, dax (from dert__, adert__):
                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
     else:
-        gdert__ = comp_i(blob['dert__'], rng, fig, fcr, input)  # comp_g|p, form gblobs, eval for comp_a | comp_r:
+        gdert__ = comp_i(blob['dert__'], rng, fig, fcr, input)  # comp_g|p, form gblobs, eval comp_a | comp_r:
         cluster_derts(blob, gdert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
@@ -87,8 +87,9 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
                     intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(1,2,3))
 
             elif -sub_blob['Dert']['G'] > aveB * rdn:
-                # -G -> comp_r, dert += aligned 2x2 ga, day, dax -> Dert
+                # -G -> comp_r -> rdert = idert (2x2 ga, day, dax were not computed for -g derts):
                 intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
+                #
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     fork with feedback: 
@@ -126,6 +127,7 @@ def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is alwa
 
 def form_P__(dert__, Ave, fig, crit, fcr, fca, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
+    # outdated
     if fca:
         param_keys = aP_PARAM_KEYS
         if crit:
