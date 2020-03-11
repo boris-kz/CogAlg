@@ -34,7 +34,7 @@ from functools import reduce
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert__, # input: comp i -> i, g, dy, dx, comp_g -> += (idy, idx), m, ga, day, dax 
     stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, vertical (horizontal)
-    sub_  # [(fork_params, Dert, sub_blob_)]: list of layers across sub_blob derivation tree, nested mixed-fork deep layers
+    layer_  # [(fork_params, Dert, sub_blob_)]: list of layers across sub_blob derivation tree, nested mixed-fork deep layers
 '''
 # constants:
 
@@ -62,10 +62,10 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 
 def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | der+ | angle cross-comp within a blob
 
-    if fca:  # flag comp angle, input dert = i, g, dy, dx, m, if fcar: += ga, day, dax (comp_g | comp_r?)
+    if fca:  # flag comp angle, input = g, dy, dx or ga, day, dax
 
-        ga_dert__ = comp_a(blob['dert__'], rng, input)  # form ga blobs, evaluate for comp_aga | comp_g:
-        cluster_derts(blob, ga_dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
+        dert__ = comp_a(blob['dert__'], rng, input)  # form ga blobs, evaluate for comp_aga | comp_g:
+        cluster_derts(blob, dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
@@ -77,8 +77,10 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
                 # -Ga -> comp_g -> gdert = g, 0, 0, 0, 0 if fig else None, ga, day, dax (from dert__, adert__):
                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
     else:
-        gdert__ = comp_i(blob['dert__'], rng, fig, fcr, input)  # comp_g|p, form gblobs, eval comp_a | comp_r:
-        cluster_derts(blob, gdert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
+        if fcr: dert__ = comp_r(blob['dert__'], fig, input)  # comp_rng, form rblobs, eval comp_a | comp_r
+        else:   dert__ = comp_g(blob['dert__'], input)  # comp_gradient, form gblobs, eval comp_a | comp_r
+
+        cluster_derts(blob, dert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
             if sub_blob['sign']:
@@ -89,25 +91,18 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
             elif -sub_blob['Dert']['G'] > aveB * rdn:
                 # -G -> comp_r -> rdert = idert (2x2 ga, day, dax were not computed for -g derts):
                 intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
-                #
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     fork with feedback: 
      
     if blob['Dert'][crit] > aveB * rdn:  # intra_blob recursion extends fork hierarchy by sub_blob_ layer
         lL = len(blob_)        
-        blob['sub_'] += [[(lL, fig, fcr, rdn, rng, blob_)]]  # 1st sub_layer, + deep layers compute and feedback:
-        blob['sub_'] += intra_blob(root_blob, blob, rdn + 1 + 1 / lL, rng, fig, fca=crit!=7)  # or fca inversion?
-        blob['LL'] = len(blob['sub_'])
+        blob['layer_'] += [[(lL, fig, fcr, rdn, rng, blob_)]]  # 1st layer, + deep layers compute and feedback:
+        blob['layer_'] += intra_blob(root_blob, blob, rdn + 1 + 1 / lL, rng, fig, fca)
+        blob['LL'] = len(blob['layer_'])
     else:
-        blob['sub_'] = []
-
-    deep_sub_ = [deep_sub + gsub + rsub for deep_sub, gsub, rsub in \
-                zip_longest(deep_sub_, blob['gsub_'], blob['rsub_'], fillvalue=[])]
-    
-    # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy, fill Dert per layer if n_sub_P > min?
-
-    return deep_sub_  # sub_blob['gsub_'] | sub_blob['rsub_']
+        blob['layer_'] = []
+    return deep_layer_  # sub_blob['layer_']
     '''
 
 def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is always g in dert[1], fder is a sign
