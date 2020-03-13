@@ -308,19 +308,15 @@ if __name__ == '__main__':
             if blob['sign']:
                 if blob['Dert']['G'] > aveB:  # +G blob, 2x2 adert = (g, dy, dx), 0, 0, 0
                     intra_blob(blob, rdn=1, rng=1.41, fig=0, fca=1, fcr=0, input=(1,2,3))  # comp_a -> comp_ga if +Ga, else comp_g if -Ga
-                    '''
-                    ga_dert__ = comp_a(blob['dert__'], rng=0)  # 2x2, no 3x3 -> ra_dert__: comp with g only?
-                    deep_frame['ga_layer_'] = intra_blob(blob, ga_dert__, rng=1, rdn=1, fig=0, fca=0)  
-                    deep_frame['gblob_'].append(blob)  # extended by cluster_eval
-                    deep_frame['gparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-                    '''
+
             elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 rdert = dert
                     intra_blob(blob, rdn=1, rng=1, fig=0, fca=0, fcr=1, input=0)  # comp_rng_p, then comp_a if +G, else comp_rng if -G
                     '''
-                    gdert__ = comp_r(blob['dert__'], rng=1)  # 3x3, angle is not computed
-                    deep_frame['rlayer_'] = intra_blob(blob, rdert__, rng=3, rdn=1, fig=0, fca=0)  
-                    deep_frame['rblob_'].append(blob)  # extended by cluster_eval
-                    deep_frame['rparams'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
+                    with feedback:
+                    dert__ = comp_a|r(blob['dert__'], rng=1)  
+                    deep_frame['layer_'] = intra_blob(blob, dert__, rng=3, rdn=1, fig=0, fca=0)  
+                    deep_frame['blob_'].append(blob)  # extended by cluster_eval
+                    deep_frame['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
                     '''
             # else no intra_blob call
 

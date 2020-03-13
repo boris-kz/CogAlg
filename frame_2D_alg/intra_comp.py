@@ -19,8 +19,8 @@ TRANSLATING_SLICES_ = [
     [
         (Ellipsis, slice(None, -1, None), slice(None, -1, None)),
         (Ellipsis, slice(None, -1, None), slice(1, None, None)),
-        (Ellipsis, slice(1, None, None), slice(None, -1, None)),
         (Ellipsis, slice(1, None, None), slice(1, None, None)),
+        (Ellipsis, slice(1, None, None), slice(None, -1, None)),
     ],
     [
         (Ellipsis, slice(None, -2, None), slice(None, -2, None)),
@@ -32,60 +32,16 @@ TRANSLATING_SLICES_ = [
         (Ellipsis, slice(2, None, None), slice(None, -2, None)),
         (Ellipsis, slice(1, -1, None), slice(None, -2, None)),
     ],
-    [
-        (Ellipsis, slice(None, -4, None), slice(None, -4, None)),
-        (Ellipsis, slice(None, -4, None), slice(1, -3, None)),
-        (Ellipsis, slice(None, -4, None), slice(2, -2, None)),
-        (Ellipsis, slice(None, -4, None), slice(3, -1, None)),
-        (Ellipsis, slice(None, -4, None), slice(4, None, None)),
-        (Ellipsis, slice(1, -3, None), slice(4, None, None)),
-        (Ellipsis, slice(2, -2, None), slice(4, None, None)),
-        (Ellipsis, slice(3, -1, None), slice(4, None, None)),
-        (Ellipsis, slice(4, None, None), slice(4, None, None)),
-        (Ellipsis, slice(4, None, None), slice(3, -1, None)),
-        (Ellipsis, slice(4, None, None), slice(2, -2, None)),
-        (Ellipsis, slice(4, None, None), slice(1, -3, None)),
-        (Ellipsis, slice(4, None, None), slice(None, -4, None)),
-        (Ellipsis, slice(3, -1, None), slice(None, -4, None)),
-        (Ellipsis, slice(2, -2, None), slice(None, -4, None)),
-        (Ellipsis, slice(1, -3, None), slice(None, -4, None)),
-    ],
-    [
-        (Ellipsis, slice(None, -6, None), slice(None, -6, None)),
-        (Ellipsis, slice(None, -6, None), slice(1, -5, None)),
-        (Ellipsis, slice(None, -6, None), slice(2, -4, None)),
-        (Ellipsis, slice(None, -6, None), slice(3, -3, None)),
-        (Ellipsis, slice(None, -6, None), slice(4, -2, None)),
-        (Ellipsis, slice(None, -6, None), slice(5, -1, None)),
-        (Ellipsis, slice(None, -6, None), slice(6, None, None)),
-        (Ellipsis, slice(1, -5, None), slice(6, None, None)),
-        (Ellipsis, slice(2, -4, None), slice(6, None, None)),
-        (Ellipsis, slice(3, -3, None), slice(6, None, None)),
-        (Ellipsis, slice(4, -2, None), slice(6, None, None)),
-        (Ellipsis, slice(5, -1, None), slice(6, None, None)),
-        (Ellipsis, slice(6, None, None), slice(6, None, None)),
-        (Ellipsis, slice(6, None, None), slice(5, -1, None)),
-        (Ellipsis, slice(6, None, None), slice(4, -2, None)),
-        (Ellipsis, slice(6, None, None), slice(3, -3, None)),
-        (Ellipsis, slice(6, None, None), slice(2, -4, None)),
-        (Ellipsis, slice(6, None, None), slice(1, -5, None)),
-        (Ellipsis, slice(6, None, None), slice(None, -6, None)),
-        (Ellipsis, slice(5, -1, None), slice(None, -6, None)),
-        (Ellipsis, slice(4, -2, None), slice(None, -6, None)),
-        (Ellipsis, slice(3, -3, None), slice(None, -6, None)),
-        (Ellipsis, slice(2, -4, None), slice(None, -6, None)),
-        (Ellipsis, slice(1, -5, None), slice(None, -6, None)),
-    ],
 ]
 TRANSLATING_SLICES_PAIRS_ = [
     (  # rng = 0 or 2x2
         (
-            (Ellipsis, slice(1, None, None), slice(None, -1, None)),
-            (Ellipsis, slice(None, -1, None), slice(1, None, None)),
-        ),
-        (
             (Ellipsis, slice(None, -1, None), slice(None, -1, None)),
             (Ellipsis, slice(1, None, None), slice(1, None, None)),
+        ),
+        (
+            (Ellipsis, slice(None, -1, None), slice(1, None, None)),
+            (Ellipsis, slice(1, None, None), slice(None, -1, None)),
         ),
     ),
     (  # rng = 1 or 3x3
@@ -106,90 +62,6 @@ TRANSLATING_SLICES_PAIRS_ = [
             (Ellipsis, slice(1, -1, None), slice(None, -2, None)),
         ),
     ),
-    (  # rng = 2 or 5x5
-        (
-            (Ellipsis, slice(None, -4, None), slice(None, -4, None)),
-            (Ellipsis, slice(4, None, None), slice(4, None, None))
-        ),
-        (
-            (Ellipsis, slice(None, -4, None), slice(1, -3, None)),
-            (Ellipsis, slice(4, None, None), slice(3, -1, None))
-        ),
-        (
-            (Ellipsis, slice(None, -4, None), slice(2, -2, None)),
-            (Ellipsis, slice(4, None, None), slice(2, -2, None))
-        ),
-        (
-            (Ellipsis, slice(None, -4, None), slice(3, -1, None)),
-            (Ellipsis, slice(4, None, None), slice(1, -3, None))
-        ),
-        (
-            (Ellipsis, slice(None, -4, None), slice(4, None, None)),
-            (Ellipsis, slice(4, None, None), slice(None, -4, None))
-        ),
-        (
-            (Ellipsis, slice(1, -3, None), slice(4, None, None)),
-            (Ellipsis, slice(3, -1, None), slice(None, -4, None))
-        ),
-        (
-            (Ellipsis, slice(2, -2, None), slice(4, None, None)),
-            (Ellipsis, slice(2, -2, None), slice(None, -4, None))
-        ),
-        (
-            (Ellipsis, slice(3, -1, None), slice(4, None, None)),
-            (Ellipsis, slice(1, -3, None), slice(None, -4, None))
-        ),
-    ),
-    (  # rng = 3 or 7x7
-        (
-            (Ellipsis, slice(None, -6, None), slice(None, -6, None)),
-            (Ellipsis, slice(6, None, None), slice(6, None, None))
-        ),
-        (
-            (Ellipsis, slice(None, -6, None), slice(1, -5, None)),
-            (Ellipsis, slice(6, None, None), slice(5, -1, None))
-        ),
-        (
-            (Ellipsis, slice(None, -6, None), slice(2, -4, None)),
-            (Ellipsis, slice(6, None, None), slice(4, -2, None))
-        ),
-        (
-            (Ellipsis, slice(None, -6, None), slice(3, -3, None)),
-            (Ellipsis, slice(6, None, None), slice(3, -3, None))
-        ),
-        (
-            (Ellipsis, slice(None, -6, None), slice(4, -2, None)),
-            (Ellipsis, slice(6, None, None), slice(2, -4, None))
-        ),
-        (
-            (Ellipsis, slice(None, -6, None), slice(5, -1, None)),
-            (Ellipsis, slice(6, None, None), slice(1, -5, None))
-        ),
-        (
-            (Ellipsis, slice(None, -6, None), slice(6, None, None)),
-            (Ellipsis, slice(6, None, None), slice(None, -6, None))
-        ),
-        (
-            (Ellipsis, slice(1, -5, None), slice(6, None, None)),
-            (Ellipsis, slice(5, -1, None), slice(None, -6, None))
-        ),
-        (
-            (Ellipsis, slice(2, -4, None), slice(6, None, None)),
-            (Ellipsis, slice(4, -2, None), slice(None, -6, None))
-        ),
-        (
-            (Ellipsis, slice(3, -3, None), slice(6, None, None)),
-            (Ellipsis, slice(3, -3, None), slice(None, -6, None))
-        ),
-        (
-            (Ellipsis, slice(4, -2, None), slice(6, None, None)),
-            (Ellipsis, slice(2, -4, None), slice(None, -6, None))
-        ),
-        (
-            (Ellipsis, slice(5, -1, None), slice(6, None, None)),
-            (Ellipsis, slice(1, -5, None), slice(None, -6, None))
-        ),
-    ),
 ]
 
 # coefficients for decomposing d into dy and dx:
@@ -197,50 +69,61 @@ TRANSLATING_SLICES_PAIRS_ = [
 Y_COEFFS = [
     np.array([-1, -1, 1, 1]),
     np.array([-0.5, -0.5, -0.5,  0. ,  0.5,  0.5,  0.5,  0. ]),
-    np.array([-0.25, -0.25, -0.25, -0.25, -0.25, -0.5 ,  0.  ,  0.5 ,  0.25,
-        0.25,  0.25,  0.25,  0.25,  0.5 ,  0.  , -0.5 ]),
-    np.array([-0.167, -0.167, -0.167, -0.167, -0.167, -0.167, -0.167, -0.25 ,
-       -0.5  ,  0.   ,  0.5  ,  0.25 ,  0.167,  0.167,  0.167,  0.167,
-        0.167,  0.167,  0.167,  0.25 ,  0.5  ,  0.   , -0.5  , -0.25 ]),
 ]
 
 X_COEFFS = [
     np.array([-1, 1, 1, -1]),
     np.array([-0.5,  0. ,  0.5,  0.5,  0.5,  0. , -0.5, -0.5]),
-    np.array([-0.25, -0.5 ,  0.  ,  0.5 ,  0.25,  0.25,  0.25,  0.25,  0.25,
-        0.5 ,  0.  , -0.5 , -0.25, -0.25, -0.25, -0.25]),
-    np.array([-0.167, -0.25 , -0.5  ,  0.   ,  0.5  ,  0.25 ,  0.167,  0.167,
-        0.167,  0.167,  0.167,  0.167,  0.167,  0.25 ,  0.5  ,  0.   ,
-       -0.5  , -0.25 , -0.167, -0.167, -0.167, -0.167, -0.167, -0.167]),
 ]
 
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_g(dert__, rng, inp):
-    pass
+def comp_g(dert__, odd):
+    g__ = dert__[0]
+    a__ = dert__[1:]
+
+    # loop through each pair of comparands in a kernel
+    dgy__ = ma.zeros(np.subtract(g.shape, rng))
+    dgx__ = ma.zeros(np.subtract(g.shape, rng))
+    for x_coeff, y_coeff, (ts, _ts) in zip(X_COEFFS[rng],
+                                           Y_COEFFS[rng],
+                                           TRANSLATING_SLICES_PAIRS_[rng]):
+        # find angle differences
+        da__ = angle_diff(a__[ts], a__[_ts])
+
+        # compute dg: dg = g - _g * cos(da) at each position
+        dg__ = g__[ts] - g__[_ts] * da__[1]
+
+        # accumulate dgy, dgx
+        dgx__ += dg__ * x_coeff
+        dgy__ += dg__ * y_coeff
+
+    gg__ = ma.hypot(dgy__, dgx__)
+
+    return ma.stack((g__, gg__, dgy__, dgx__))
 
 
-def comp_r(dert__, rng, inp):
+def comp_r(dert__, fig):
 
-    i__, dy__, dx__ = dert__[inp]
+    i__, g__, dy__, dx__ = dert__[:]
     dy__ = dy__[:, rng:-rng, rng:-rng]
     dx__ = dx__[:, rng:-rng, rng:-rng]
 
     # comparison
-    d__ = translated_operation(a__, rng=rng, operator=op.sub)
+    d__ = translated_operation(i__, rng=rng, operator=op.sub)
 
     # sum within kernels
     dy__ += (d__ * Y_COEFFS[rng]).sum(axis=-1)
     dx__ += (d__ * X_COEFFS[rng]).sum(axis=-1)
 
     # compute gradient magnitudes
-    g__ = ma.hypot(dy, dx)
+    g__ = ma.hypot(dy__, dx__)
 
     return ma.stack((i__, g__, dy__, dx__))
 
 
-def comp_a(dert__, rng, inp):
+def comp_a(dert__, inp):
     """
     Compare angles within specified rng.
     Parameters
@@ -270,11 +153,11 @@ def comp_a(dert__, rng, inp):
     if len(inp) == 3:
         a__ = calc_a(dert__, inp)
     elif len(inp) == 5:
-        a__ = calc_aa(dert__, inp)
+        a__ = calc_aga(dert__, inp)
     else:
         raise ValueError("'inp' should contain the index/indices "
                          "for g, dy, dx in that order.")
-    return comp_angle(a__, rng)
+    return comp_angle(a__)
 
 
 def calc_a(dert__, inp):
@@ -282,15 +165,15 @@ def calc_a(dert__, inp):
     return dert__[inp[1:]] / dert__[inp[0]]
 
 
-def calc_aa(dert__, inp):
-    """Compute angles of angles of gradient."""
+def calc_aga(dert__, inp):
+    """Compute angles of angle gradients."""
     g__ = dert__[inp[1]]
     day__ = np.arctan2(*dert__[inp[1:3]])
     dax__ = np.arctan2(*dert__[inp[3:]])
     return np.stack((day__, dax__)) / g__
 
 
-def comp_angle(a__, rng):
+def comp_angle(a__):
     """Compare angles."""
 
     # handle mask
@@ -299,7 +182,7 @@ def comp_angle(a__, rng):
         a__.mask = ma.nomask
 
     # comparison
-    da__ = translated_operation(a__, rng=rng, operator=angle_diff)
+    da__,a__ = translated_operation(a__, rng=rng, operator=angle_diff)
 
     # sum within kernels
     day__ = (da__ * Y_COEFFS[rng]).sum(axis=-1)
@@ -309,7 +192,6 @@ def comp_angle(a__, rng):
     ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
     # pack into dert
-    a__ = a__[central_slice(rng)] if rng != 0 else a__[:, :-1, :-1]
     dert__ = ma.stack((*a__, ga__, *day__, *dax__), axis=0)
 
     # handle mask
@@ -340,21 +222,28 @@ def translated_operation(a, rng, operator):
         Array of results where additional dimension correspondent
         to each pair of translated slice.
     """
-    out = ma.masked_array([*starmap(lambda ts1, ts2: operator(a[ts2], a[ts1]),
-                                    TRANSLATING_SLICES_PAIRS_[rng])])
+
+
+    # get centered pixels for 2x2 and 3x3 based on rng
+    a__ = a[:,1:-1,1:-1] if rng != 0 \
+    else (a[:,:-1,:-1]+a[:,:-1,1:]+a[:,1:,1:]+a[:,1:,:-1]) /4
+
+    # compute angle difference
+    out = ma.masked_array([operator(a__, a[ts]) for ts in
+                           TRANSLATING_SLICES_[rng]])
 
     # Rearrange axes:
     for dim1, dim2 in pairwise(range(out.ndim)):
         out = out.swapaxes(dim1, dim2)
 
-    return out
+    return out,a__
 
 
-def translated_slices(a, rng):
+def translated_array(a, rng):
     """
     Like translated_operation, but without applying operation to slices
     """
-    out = ma.stack([*map(lambda ts: a[ts], TRANSLATING_SLICES_[rng])])
+    out = ma.stack([a[ts] for ts in TRANSLATING_SLICES_[rng]])
 
     # Rearrange axes:
     for dim1, dim2 in pairwise(range(out.ndim)):

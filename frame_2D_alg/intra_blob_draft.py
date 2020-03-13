@@ -32,20 +32,20 @@ from functools import reduce
     sign, 
     map,  # boolean map of blob, to compute overlap in comp_blob
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
-    dert__, # input: comp i -> i, g, dy, dx, comp_g -> += (idy, idx), m, ga, day, dax 
+    dert__, # input: comp i -> i, g, dy, dx, comp_g -> += m, ga, day, dax 
     stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, vertical (horizontal)
     layer_  # [(fork_params, Dert, sub_blob_)]: list of layers across sub_blob derivation tree, nested mixed-fork deep layers
 '''
 # constants:
 
-DERT_PARAMS = "I", "G", "Dy", "Dx", "M"
-aDERT_PARAMS = DERT_PARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")
+DERT_PARAMS = "I", "G", "Dy", "Dx", "M"  # angle or range comp
+gDERT_PARAMS = DERT_PARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")
 P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
 S_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
 P_PARAM_KEYS = DERT_PARAMS + P_PARAMS
-aP_PARAM_KEYS = aDERT_PARAMS + P_PARAMS
+gP_PARAM_KEYS = gDERT_PARAMS + P_PARAMS
 S_PARAM_KEYS = DERT_PARAMS + S_PARAMS
-aS_PARAM_KEYS = aDERT_PARAMS + S_PARAMS
+gS_PARAM_KEYS = gDERT_PARAMS + S_PARAMS
 
 # filters:
 
@@ -64,7 +64,7 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
 
     if fca:  # flag comp angle, input = g, dy, dx or ga, day, dax
 
-        dert__ = comp_a(blob['dert__'], rng, input)  # form ga blobs, evaluate for comp_aga | comp_g:
+        dert__ = comp_a(blob['dert__'], input)  # form ga blobs, evaluate for comp_aga | comp_g:
         cluster_derts(blob, dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
@@ -74,11 +74,11 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
                     intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(5,6,7))
 
             elif -sub_blob['Dert']['Ga'] > aveB * rdn:
-                # -Ga -> comp_g -> gdert = g, 0, 0, 0, 0 if fig else None, ga, day, dax (from dert__, adert__):
+                # -Ga -> comp_g -> gdert = g, 0, 0, 0, 0, ga, day, dax (g from dert, ga, day, dax from adert):
                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
     else:
-        if fcr: dert__ = comp_r(blob['dert__'], fig, input)  # comp_rng, form rblobs, eval comp_a | comp_r
-        else:   dert__ = comp_g(blob['dert__'], input)  # comp_gradient, form gblobs, eval comp_a | comp_r
+        if fcr: dert__ = comp_r(blob['dert__'], fig)  # 1-sparse sampling to maintain t-to-1 comp overlap
+        else:   dert__ = comp_g(blob['dert__'], odd=0)  # 2-sparse if odd else 1-sparse comp to avoid overlap
 
         cluster_derts(blob, dert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
 
@@ -120,21 +120,19 @@ def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is alwa
 # clustering functions, out of date:
 #---------------------------------------------------------------------------------------------------------------------------------------
 
-def form_P__(dert__, Ave, fig, crit, fcr, fca, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+def form_P__(dert__, Ave, fig, fcr, fca, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
-    # outdated
+    # compute value (clustering criterion) per each intra_comp fork:
     if fca:
-        param_keys = aP_PARAM_KEYS
-        if crit:
-            crit__ = dert__[1, :, :] - Ave  # der+ eval by g;  both crit__ and dert__ are 2D arrays
-        else:
-            crit__ = dert__[0 + 6, :, :] - Ave  # rng+ eval by i + m, accumulated over comp range
-    else:
+        crit__ = Ave - dert__[1, :, :]  # angle eval by inverted ga deviation; crit__ and dert__ are 2D arrays
         param_keys = P_PARAM_KEYS
-        if crit:
-            crit__ = dert__[1, :, :] - Ave  # der+ eval by g
-        else:
-            crit__ = Ave - dert__[1, :, :]  # rng+ eval by inverted g deviation, accumulated over comp range
+    elif fcr:
+        if fig: crit__ = dert__[0 + 4, :, :] - Ave  # comp_rng eval by i + m, accumulated over comp range
+        else:   crit__ = Ave - dert__[1, :, :]  # comp_rng eval by inverted g, accumulated over comp range
+        param_keys = P_PARAM_KEYS
+    else:
+        crit__ = dert__[1, :, :] - Ave  # comp_g eval by g
+        param_keys = gP_PARAM_KEYS
 
     # Cluster dert__ into Pdert__:
     s_x_L__ = [*map(
