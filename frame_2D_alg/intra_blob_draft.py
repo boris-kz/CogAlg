@@ -78,9 +78,10 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
     else:
         if fcr: dert__ = comp_r(blob['dert__'], fig)  # 1-sparse sampling to maintain t-to-1 comp overlap
-        else:   dert__ = comp_g(blob['dert__'], odd=0)  # 2-sparse if odd else 1-sparse comp to avoid overlap
+        else:   dert__ = comp_g(blob['dert__'], odd=0)  # sparse 3x3 if comp_gr
 
         cluster_derts(blob, dert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
+        # feedback: blob['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['blob_'])]]  # 1st sub_layer
 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
             if sub_blob['sign']:
@@ -93,22 +94,16 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
                 intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
-    fork with feedback: 
-     
-    if blob['Dert'][crit] > aveB * rdn:  # intra_blob recursion extends fork hierarchy by sub_blob_ layer
-        lL = len(blob_)        
-        blob['layer_'] += [[(lL, fig, fcr, rdn, rng, blob_)]]  # 1st layer, + deep layers compute and feedback:
-        blob['layer_'] += intra_blob(root_blob, blob, rdn + 1 + 1 / lL, rng, fig, fca)
-        blob['LL'] = len(blob['layer_'])
-    else:
-        blob['layer_'] = []
-    return deep_layer_  # sub_blob['layer_']
+    feedback per fork:
+    for sub_blob in blob['blob_']:
+        sub_blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)?
     '''
 
 def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is always g in dert[1], fder is a sign
 
-    blob['sub_'][0][0] = dict(I=0, G=0, Dy=0, Dx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0, S=0, Ly=0, sub_blob_=[])
-    # initialize first sub_blob in first sub_layer
+    blob['layer_'][0][0] = dict(I=0, G=0, Dy=0, Dx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0, S=0, Ly=0,
+                                sub_blob_=[])  # to fill with fork params and sub_sub_blobs
+                                # initialize first sub_blob in first layer
 
     P__ = form_P__(dert__, ave*rdn, fig, fcr, crit)  # horizontal clustering
     P_ = scan_P__(P__)

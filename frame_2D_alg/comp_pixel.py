@@ -17,9 +17,24 @@ kwidth = 2: co-centered, grid shift, 1-pixel row shrink, no deriv overlap, 1/4 c
 kwidth = 2: quadrant g = ((dx + dy) * .705 + d_diag) / 2, no i res decrement, ders co-location, + orthogonal quadrant for full rep?
 '''
 
-def comp_pixel(image):  # 2x2 pixel cross-correlation within image
+def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within image
 
-    dy__ = image[1:] - image[:-1]        # orthogonal vertical comp
+    # following four slices provide inputs to a sliding 2x2 kernel:
+    topleft__ = image[:-1, :-1]
+    topright__ = image[:-1, 1:]
+    botleft__ = image[1:, :-1]
+    botright__ = image[1:, 1:]
+
+    dy__ = ((botleft__ + botright__) - (topleft__ + topright__)) * 0.5  # mean dy per kernel
+    dx__ = ((topright__ + botright__) - (topleft__ + botleft__)) * 0.5  # mean dx per kernel
+    g__ = np.hypot(dy__, dx__)  # gradient per kernel
+
+    return ma.stack((topleft__, g__, dy__, dx__))
+
+
+def comp_pixel_old(image):  # 2x2 pixel cross-correlation within image
+
+    dy__ = image[1:] - image[:-1]        # orthogonal vertical com
     dx__ = image[:, 1:] - image[:, :-1]  # orthogonal horizontal comp
 
     p__ = image[:-1, :-1]  #  top-left pixel
@@ -29,6 +44,20 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image
     dert__ = ma.stack((p__, g__, mean_dy__, mean_dx__))
 
     return dert__
+
+
+def comp_pixel_skip(image):  # 2x2 pixel cross-comp without kernel overlap
+
+    p1__ = image[:-1, :-1, 2]
+    p2__ = image[:-1, 1:, 2]
+    p3__ = image[1:, :-1, 2]
+    p4__ = image[1:, 1:, 2]
+
+    dy__ = ((p3__ + p4__) - (p1__ + p2__)) * 0.5
+    dx__ = ((p2__ + p4__) - (p1__ + p3__)) * 0.5
+
+    g__ = np.hypot(dy__, dx__)
+    return (p1__, p2__, p3__, p4__), g__, dy__, dx__
 
 
 def comp_pixel_ternary(image):  # 3x3 and 2x2 pixel cross-correlation within image
@@ -62,7 +91,7 @@ def comp_pixel_ternary(image):  # 3x3 and 2x2 pixel cross-correlation within ima
     return gdert__, rdert__
 
 
-def comp_pixel_old(image):  # 3x3 and 2x2 pixel cross-correlation within image
+def comp_pixel_diag(image):  # 3x3 and 2x2 pixel cross-correlation within image
     gdert__ = comp_2x2(image)  # cross-compare four adjacent pixels diagonally
     rdert__ = comp_3x3(image)  # compare each pixel to 8 rim pixels
 
