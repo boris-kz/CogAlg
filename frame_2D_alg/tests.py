@@ -9,7 +9,7 @@ from comp_pixel import (
     comp_pixel, comp_pixel_old,
     comp_3x3, comp_3x3_loop,
 )
-from intra_comp import (
+from intra_comp_ts import (
     translated_operation, angle_diff,
 )
 from test_sets import (

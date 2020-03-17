@@ -271,7 +271,7 @@ frame_of_blobs = image_to_blobs(image)
 from DEBUG import draw, map_blobs
 # draw('./../debug/root_blobs', map_blobs(frame_of_blobs))
 
-from intra_comp import intra_comp, hypot_g
+from intra_comp_ts import intra_comp, hypot_g
 
 for i, blob in enumerate(frame_of_blobs[1]):
     if blob.Derts[0][-2] > 500:  # L > 20

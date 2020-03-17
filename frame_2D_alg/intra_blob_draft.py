@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from itertools import groupby, starmap, zip_longest
 import numpy as np
 import numpy.ma as ma
-from intra_comp import *
+from intra_comp_ts import *
 from utils import pairwise, flatten
 from functools import reduce
 '''
@@ -70,7 +70,7 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
                 if sub_blob['Dert']['Ga'] > aveB * rdn:
-                    # +Ga -> comp_a -> adert = aga, gaga=0, ga_day=0, ga_dax=0:
+                    # +Ga -> comp_a -> adert = gaga=0, ga_day=0, ga_dax=0:
                     intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(5,6,7))
 
             elif -sub_blob['Dert']['Ga'] > aveB * rdn:
@@ -96,7 +96,7 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | 
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     feedback per fork:
     for sub_blob in blob['blob_']:
-        sub_blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)?
+        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob['layer_']
     '''
 
 def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is always g in dert[1], fder is a sign
