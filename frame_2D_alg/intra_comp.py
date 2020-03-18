@@ -11,12 +11,13 @@ import numpy.ma as ma
 def comp_g(dert__, odd):
     """
     cross-comp of g or ga, in 2x2 kernels unless root fork is comp_r: odd=TRUE
+    or odd: sparse 3x3, is also effectively 2x2 input, recombined from one-line-distant lines?
 
     >>> dert = i, g, dy, dx
     >>> adert = ga, day, dax
     >>> odd = bool  # initially FALSE, set to TRUE for comp_a and comp_g called from comp_r fork
-    # input is not passed, always = dert[1]
-    <<< gdert = g, gg=0, gdy=0, gdx=0, gm=0, ga, day, dax
+    # comparand = dert[1]
+    <<< gdert = g, gg, gdy, gdx, gm, ga, day, dax
     """
     pass
 
@@ -30,8 +31,9 @@ def comp_r(dert__, fig):
     alternating derts as a kernel-central dert at current comparison range,
     which forms increasingly sparse input dert__ for greater range cross-comp,
     while maintaining one-to-one overlap between kernels of compared derts.
-    With increasingly sparse input, unilateral rng between central derts c
-    an only increase as 2^(n + 1), where n starts at 0:
+
+    With increasingly sparse input, unilateral rng (distance between central derts)
+    can only increase as 2^(n + 1), where n starts at 0:
 
     rng = 1 : 3x3 kernel, skip orthogonally alternating derts as centrals,
     rng = 2 : 5x5 kernel, skip diagonally alternating derts as centrals,
@@ -44,26 +46,22 @@ def comp_r(dert__, fig):
         Array containing inputs.
     fig : bool
         Set to True if input is g or derived from g
-    Returns
     -------
-    out : masked_array
-        The results.
-    Example
+    output: masked_array
     -------
     >>> dert = i, g, dy, dx, m
-    <<< rdert = i, g, dy, dx, m
+    <<< dert = i, g, dy, dx, m
     # results are accumulated in the input dert
-    # comparand is always i
+    # comparand = dert[0]
     """
-
 
 def comp_a(dert__, odd, aga):
     """
     cross-comp of a or aga, in 2x2 kernels unless root fork is comp_r: odd=TRUE
     if aga:
-        >>> dert = i, g, dy, dx, m
+        >>> dert = g, gg, gdy, gdx, gm, iga, iday, idax
     else:
-        iga, iday, idax
+        >>> dert = i, g, dy, dx, m
     <<< adert = ga, day, dax
     """
     pass
@@ -78,8 +76,8 @@ def calc_a(dert__, inp):
 def calc_aga(dert__, inp):
     """Compute angles of angles of gradient."""
     g__ = dert__[inp[1]]
-    day__ = np.arctan2(*dert__[inp[1:3]])
-    dax__ = np.arctan2(*dert__[inp[3:]])
+    day__ = np.arctan2(*dert__[inp[1:3]])  # please add comments
+    dax__ = np.arctan2(*dert__[inp[3:]])  # please add comments
     return np.stack((day__, dax__)) / g__
 
 # -----------------------------------------------------------------------------
