@@ -1,8 +1,11 @@
 """
 Cross-comparison of pixels, angles, or gradients, in 2x2 or 3x3 kernels
 """
+
 import numpy as np
 import numpy.ma as ma
+
+
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
@@ -10,14 +13,30 @@ import numpy.ma as ma
 
 def comp_g(dert__, odd):
     """
-    cross-comp of g or ga, in 2x2 kernels unless root fork is comp_r: odd=TRUE
-    or odd: sparse 3x3, is also effectively 2x2 input, recombined from one-line-distant lines?
-
-    >>> dert = i, g, dy, dx
-    >>> adert = ga, day, dax
-    >>> odd = bool  # initially FALSE, set to TRUE for comp_a and comp_g called from comp_r fork
-    # comparand = dert[1]
-    <<< gdert = g, gg, gdy, gdx, gm, ga, day, dax
+    Cross-comp of g or ga, in 2x2 kernels unless root fork is comp_r:
+    odd=True or odd: sparse 3x3, is also effectively 2x2 input,
+    recombined from one-line-distant lines?
+    Parameters
+    ----------
+    dert__ : array-like
+        The structure is (i, g, dy, dx) for dert or (ga, day, dax) for adert.
+    odd : bool
+        Initially False, set to True for comp_a and comp_g called from
+        comp_r fork.
+    Returns
+    -------
+    gdert__ : masked_array
+        Output's structure is (g, gg, gdy, gdx, gm, ga, day, dax).
+    Examples
+    --------
+    >>> # actual python console code
+    >>> dert__ = 'specific value'
+    >>> odd = 'specific value'
+    >>> comp_g(dert__, odd)
+    'specific output'
+    Notes
+    -----
+    Comparand is dert[1]
     """
     pass
 
@@ -31,54 +50,100 @@ def comp_r(dert__, fig):
     alternating derts as a kernel-central dert at current comparison range,
     which forms increasingly sparse input dert__ for greater range cross-comp,
     while maintaining one-to-one overlap between kernels of compared derts.
-
-    With increasingly sparse input, unilateral rng (distance between central derts)
-    can only increase as 2^(n + 1), where n starts at 0:
-
+    With increasingly sparse input, unilateral rng (distance between
+    central derts) can only increase as 2^(n + 1), where n starts at 0:
     rng = 1 : 3x3 kernel, skip orthogonally alternating derts as centrals,
     rng = 2 : 5x5 kernel, skip diagonally alternating derts as centrals,
     rng = 3 : 9x9 kernel, skip orthogonally alternating derts as centrals,
     ...
-    That means configuration of preserved (not skipped) derts will always be 3x3.
+    That means configuration of preserved (not skipped) derts will always
+    be 3x3.
     Parameters
     ----------
     dert__ : array-like
-        Array containing inputs.
+        dert's structure is (i, g, dy, dx, m).
     fig : bool
-        Set to True if input is g or derived from g
+        True if input is g.
+    Returns
     -------
-    output: masked_array
-    -------
-    >>> dert = i, g, dy, dx, m
-    <<< dert = i, g, dy, dx, m
-    # results are accumulated in the input dert
-    # comparand = dert[0]
+    rdert__ : masked_array
+        Output's structure is (i, g, dy, dx, m).
+    Examples
+    --------
+    >>> # actual python console code
+    >>> dert__ = 'specific value'
+    >>> fig = 'specific value'
+    >>> comp_r(dert__, fig)
+    'specific output'
+    Notes
+    -----
+    - Results are accumulated in the input dert.
+    - Comparand is dert[0].
     """
+    pass
 
 def comp_a(dert__, odd, aga):
     """
-    cross-comp of a or aga, in 2x2 kernels unless root fork is comp_r: odd=TRUE
-    if aga:
-        >>> dert = g, gg, gdy, gdx, gm, iga, iday, idax
-    else:
-        >>> dert = i, g, dy, dx, m
-    <<< adert = ga, day, dax
+    cross-comp of a or aga, in 2x2 kernels unless root fork is
+    comp_r: odd=True.
+    Parameters
+    ----------
+    dert__ : array-like
+        dert's structure is dependent to aga
+    odd : bool
+        Is True if root fork is comp_r.
+    aga : bool
+        If aga is True, dert's structure is interpreted as:
+        (g, gg, gdy, gdx, gm, iga, iday, idax)
+        Otherwise it is interpreted as:
+        (i, g, dy, dx, m)
+    Returns
+    -------
+    adert : masked_array
+        adert's structure is (ga, day, dax).
+    Examples
+    --------
+    >>> # actual python console code
+    >>> dert__ = 'specific value'
+    >>> odd = 'specific value'
+    >>> aga = 'specific value'
+    >>> comp_a(dert__, odd, aga)
+    'specific output'
     """
     pass
 
 
-def calc_a(dert__, inp):
-    """Compute angles of gradient."""
-    return dert__[inp[1:]] / dert__[inp[0]]
-    # please add comments
+def calc_a(dert__):
+    """
+    Compute vector representation of gradient angle.
+    It is done by normalizing the vector (dy, dx).
+    Numpy broad-casting is a viable option when the
+    first dimension of input array (dert__) separate
+    different CogAlg parameter (like g, dy, dx).
+    Example
+    -------
+    >>> dert1 = np.array([0, 5, 3, 4])
+    >>> a1 = calc_a(dert1)
+    >>> print(a1)
+    array([0.6, 0.8])
+    >>> # 45 degrees angle
+    >>> dert2 = np.array([0, 450**0.5, 15, 15])
+    >>> a2 = calc_a(dert2)
+    >>> print(a2)
+    array([0.70710678, 0.70710678])
+    >>> print(np.degrees(np.arctan2(*a2)))
+    45.0
+    >>> # -30 (or 330) degrees angle
+    >>> dert3 = np.array([0, 10, -5, 75**0.5])
+    >>> a3 = calc_a(dert3)
+    >>> print(a3)
+    array([-0.5      ,  0.8660254])
+    >>> print(np.rad2deg(np.arctan2(*a3)))
+    -29.999999999999996
+    """
+    return dert__[[2, 3]] / dert__[1]  # np.array([dy, dx]) / g
 
 
-def calc_aga(dert__, inp):
-    """Compute angles of angles of gradient."""
-    g__ = dert__[inp[1]]
-    day__ = np.arctan2(*dert__[inp[1:3]])  # please add comments
-    dax__ = np.arctan2(*dert__[inp[3:]])  # please add comments
-    return np.stack((day__, dax__)) / g__
 
 # -----------------------------------------------------------------------------
 # Utility functions

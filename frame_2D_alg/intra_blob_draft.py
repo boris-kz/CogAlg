@@ -60,38 +60,39 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # functions, ALL WORK-IN-PROGRESS:
 
 
-def intra_blob(blob, rdn, rng, fig, fca, fcr, input):  # recursive input rng+ | der+ | angle cross-comp within a blob
+def intra_blob(blob, rdn, rng, fig, fca, fcr, faga):  # recursive input rng+ | der+ | angle cross-comp within a blob
 
-    if fca:  # flag comp angle, input = g, dy, dx or ga, day, dax
+    # flags: fca: comp angle, faga: comp angle of ga | g, fig: input is gradient | pixel, fcr: comp over rng+ | der+
+    if fca:
 
-        dert__ = comp_a(blob['dert__'], input)  # form ga blobs, evaluate for comp_aga | comp_g:
+        dert__ = comp_a(blob['dert__'], faga)  # form ga blobs, evaluate for comp_aga | comp_g:
         cluster_derts(blob, dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
                 if sub_blob['Dert']['Ga'] > aveB * rdn:
-                    # +Ga -> comp_a -> adert = gaga=0, ga_day=0, ga_dax=0:
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(5,6,7))
+                    # +Ga -> comp_aga -> adert = gaga, ga_day, ga_dax:
+                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, faga=1)
 
             elif -sub_blob['Dert']['Ga'] > aveB * rdn:
-                # -Ga -> comp_g -> gdert = g, 0, 0, 0, 0, ga, day, dax (g from dert, ga, day, dax from adert):
-                intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, input=1)
+                # -Ga -> comp_g -> gdert = g, gg, gdy, gdx, gm, ga, day, dax:
+                intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, faga=1)  # faga passed to comp_agg
     else:
         if fcr: dert__ = comp_r(blob['dert__'], fig)  # 1-sparse sampling to maintain t-to-1 comp overlap
         else:   dert__ = comp_g(blob['dert__'], odd=0)  # sparse 3x3 if comp_gr
 
         cluster_derts(blob, dert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
-        # feedback: blob['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['blob_'])]]  # 1st sub_layer
+        # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer
 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
             if sub_blob['sign']:
                 if sub_blob['Dert']['G'] > aveB * rdn:
                     # +G -> comp_a -> adert = a, ga=0, day=0, dax=0:
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, input=(1,2,3))
+                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, faga=0)
 
             elif -sub_blob['Dert']['G'] > aveB * rdn:
-                # -G -> comp_r -> rdert = idert (2x2 ga, day, dax were not computed for -g derts):
-                intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, input=0)
+                # -G -> comp_r -> rdert = idert (with accumulated derivatives):
+                intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, faga=0)  # faga passed to comp_agr
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     feedback per fork:
