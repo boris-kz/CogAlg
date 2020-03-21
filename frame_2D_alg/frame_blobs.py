@@ -306,11 +306,13 @@ if __name__ == '__main__':
 
         for blob in frame['blob_']:
             if blob['sign']:
-                if blob['Dert']['G'] > aveB:  # +G blob, 2x2 adert = (g, dy, dx), 0, 0, 0
-                    intra_blob(blob, rdn=1, rng=1.41, fig=0, fca=1, fcr=0, input=(1,2,3))  # comp_a -> comp_ga if +Ga, else comp_g if -Ga
+                if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20:
+                    intra_blob(blob, rdn=1, rng=1.41, fig=0, fca=1, fcr=0, fga=0, fc3=0)
+                    # +G blob' comp_a, form 2x2 aderts = ga, day, dax, -> comp_ga if +Ga, else comp_g if -Ga
 
-            elif -blob['Dert']['G'] > aveB:  # -G blob, 3x3 rdert = dert
-                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=0, fcr=1, input=0)  # comp_rng_p, then comp_a if +G, else comp_rng if -G
+            elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 30:
+                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=0, fcr=1, fga=0, fc3=1)
+                    # -G blob' comp_r, form 3x3 rderts = dert, -> comp_a if +G, else comp_rng if -G
                     '''
                     with feedback:
                     dert__ = comp_a|r(blob['dert__'], rng=1)  

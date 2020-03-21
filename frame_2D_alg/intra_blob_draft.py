@@ -9,18 +9,19 @@ from functools import reduce
 '''
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.
     
-    intra_blob recursively evaluates each blob for three forks of extended internal cross-comparison and divisive sub-clustering:
+    intra_blob recursively evaluates each blob for one of three forks of extended internal cross-comparison and sub-clustering:
     angle cross-comp,
-    der+: incremental derivation in high-variation edge areas of +vg: positive deviation of gradient, which triggers comp(g), 
-    rng+: incremental comp range in low-variation flat areas of +v--vg: positive deviation of negated -vg, triggers comp(i) at rng+
-    
-    Each fork adds a layer of sub_blobs and sub_forks per blob, with feedback to root_fork, then root blob, etc.  
+    der+: incremental derivation comp in high-variation edge areas of +vg: positive deviation of gradient triggers comp_g, 
+    rng+: incremental range comp in low-variation flat areas of +v--vg: positive deviation of negated -vg triggers comp_r.
+    Each adds a layer of sub_blobs per blob.  
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_forking_scheme.png
 
     Fork structure:
     fcr, # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork? 
     fca, # flag comp angle, clustering by ga: gradient of angle?
+    fga, # flag comp angle of ga vs. angle of g
     fig, # flag input is g
+    fc3, # flag comp 3x3
     rdn, # redundancy to higher layers
     rng, # comparison range
     Dert, sub_blob_
@@ -60,26 +61,26 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # functions, ALL WORK-IN-PROGRESS:
 
 
-def intra_blob(blob, rdn, rng, fig, fca, fcr, faga):  # recursive input rng+ | der+ | angle cross-comp within a blob
+def intra_blob(blob, rdn, rng, fig, fca, fcr, fga, fc3):  # recursive input rng+ | der+ | angle cross-comp within a blob
 
-    # flags: fca: comp angle, faga: comp angle of ga | g, fig: input is gradient | pixel, fcr: comp over rng+ | der+
+    # flags:
+    # fca: comp angle, fga: comp angle of ga vs g, fig: input is g vs pixel, fcr: comp over rng+ vs der+, fc3: comp 3x3
     if fca:
-
-        dert__ = comp_a(blob['dert__'], faga)  # form ga blobs, evaluate for comp_aga | comp_g:
+        dert__ = comp_a(blob['dert__'], fga, fc3)  # form ga blobs, evaluate for comp_aga | comp_g:
         cluster_derts(blob, dert__, 1, rdn, 0, crit=5)  # cluster by sign of crit=ga -> ga_sub_blobs
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
                 if sub_blob['Dert']['Ga'] > aveB * rdn:
                     # +Ga -> comp_aga -> adert = gaga, ga_day, ga_dax:
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, faga=1)
+                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, fga=1, fc3=0)
 
             elif -sub_blob['Dert']['Ga'] > aveB * rdn:
                 # -Ga -> comp_g -> gdert = g, gg, gdy, gdx, gm, ga, day, dax:
-                intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, faga=1)  # faga passed to comp_agg
+                intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, fga=1, fc3=fc3)  # fga passed to comp_agg
     else:
         if fcr: dert__ = comp_r(blob['dert__'], fig)  # 1-sparse sampling to maintain t-to-1 comp overlap
-        else:   dert__ = comp_g(blob['dert__'], odd=0)  # sparse 3x3 if comp_gr
+        else:   dert__ = comp_g(blob['dert__'], fc3)  # sparse 3x3 if comp_gr
 
         cluster_derts(blob, dert__, 1, rdn, fig, crit=1)  # cluster by sign of crit=g -> g_sub_blobs
         # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer
@@ -88,16 +89,16 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, faga):  # recursive input rng+ | d
             if sub_blob['sign']:
                 if sub_blob['Dert']['G'] > aveB * rdn:
                     # +G -> comp_a -> adert = a, ga=0, day=0, dax=0:
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, faga=0)
+                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, fga=0, fc3=fcr)
 
             elif -sub_blob['Dert']['G'] > aveB * rdn:
                 # -G -> comp_r -> rdert = idert (with accumulated derivatives):
-                intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, faga=0)  # faga passed to comp_agr
+                intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, fga=0, fc3=fcr)  # fga passed to comp_agr
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
-    feedback per fork:
+    with feedback:
     for sub_blob in blob['blob_']:
-        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob['layer_']
+        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob
     '''
 
 def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is always g in dert[1], fder is a sign
