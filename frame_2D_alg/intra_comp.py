@@ -5,24 +5,20 @@ Cross-comparison of pixels, angles, or gradients, in 2x2 or 3x3 kernels
 import numpy as np
 import numpy.ma as ma
 
-
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_g(dert__, odd):
+def comp_g(dert__, fc3):
     """
-    Cross-comp of g or ga, in 2x2 kernels unless root fork is comp_r:
-    odd=True or odd: sparse 3x3, is also effectively 2x2 input,
-    recombined from one-line-distant lines?
+    Cross-comp of g or ga, in 2x2 kernels unless root fork is comp_r: fc3=True, sparse 3x3 comp
     Parameters
     ----------
     dert__ : array-like
         The structure is (i, g, dy, dx) for dert or (ga, day, dax) for adert.
-    odd : bool
-        Initially False, set to True for comp_a and comp_g called from
-        comp_r fork.
+    fc3 : bool
+        Initially False, set to True for comp_a and comp_g called from comp_r fork.
     Returns
     -------
     gdert__ : masked_array
@@ -31,8 +27,8 @@ def comp_g(dert__, odd):
     --------
     >>> # actual python console code
     >>> dert__ = 'specific value'
-    >>> odd = 'specific value'
-    >>> comp_g(dert__, odd)
+    >>> fc3 = 'specific value'
+    >>> comp_g(dert__, fc3)
     'specific output'
     Notes
     -----
@@ -52,12 +48,13 @@ def comp_r(dert__, fig):
     while maintaining one-to-one overlap between kernels of compared derts.
     With increasingly sparse input, unilateral rng (distance between
     central derts) can only increase as 2^(n + 1), where n starts at 0:
+    With increasingly sparse input, unilateral rng (distance between
+    central derts) can only increase as 2^(n + 1), where n starts at 0:
     rng = 1 : 3x3 kernel, skip orthogonally alternating derts as centrals,
     rng = 2 : 5x5 kernel, skip diagonally alternating derts as centrals,
     rng = 3 : 9x9 kernel, skip orthogonally alternating derts as centrals,
     ...
-    That means configuration of preserved (not skipped) derts will always
-    be 3x3.
+    That means configuration of preserved (not skipped) derts will always be 3x3.
     Parameters
     ----------
     dert__ : array-like
@@ -82,18 +79,18 @@ def comp_r(dert__, fig):
     """
     pass
 
-def comp_a(dert__, odd, aga):
+
+def comp_a(dert__, fga, fc3):
     """
-    cross-comp of a or aga, in 2x2 kernels unless root fork is
-    comp_r: odd=True.
+    cross-comp of a or aga, in 2x2 kernels unless root fork is comp_r: fc3=True.
     Parameters
     ----------
     dert__ : array-like
-        dert's structure is dependent to aga
-    odd : bool
+        dert's structure depends on fga
+    fc3 : bool
         Is True if root fork is comp_r.
-    aga : bool
-        If aga is True, dert's structure is interpreted as:
+    fga : bool
+        If True, dert's structure is interpreted as:
         (g, gg, gdy, gdx, gm, iga, iday, idax)
         Otherwise it is interpreted as:
         (i, g, dy, dx, m)
@@ -107,7 +104,7 @@ def comp_a(dert__, odd, aga):
     >>> dert__ = 'specific value'
     >>> odd = 'specific value'
     >>> aga = 'specific value'
-    >>> comp_a(dert__, odd, aga)
+    >>> comp_a(dert__, fga, fc3)
     'specific output'
     """
     pass
@@ -142,7 +139,6 @@ def calc_a(dert__):
     -29.999999999999996
     """
     return dert__[[2, 3]] / dert__[1]  # np.array([dy, dx]) / g
-
 
 
 # -----------------------------------------------------------------------------
