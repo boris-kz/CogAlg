@@ -20,8 +20,7 @@ from functools import reduce
     fcr, # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork? 
     fca, # flag comp angle, clustering by ga: gradient of angle?
     fga, # flag comp angle of ga vs. angle of g
-    fig, # flag input is g
-    fc3, # flag comp 3x3
+    fig, # flag input is gradient
     rdn, # redundancy to higher layers
     rng, # comparison range
     Dert, sub_blob_
@@ -116,9 +115,9 @@ def cluster_derts(blob, dert__, rdn, fig, fcr, crit):  # clustering crit is alwa
 
 def form_P__(dert__, Ave, fig, fcr, fca, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
-    # compute value (clustering criterion) per each intra_comp fork:
+    # compute value (clustering criterion) per each intra_comp fork, crit__ and dert__ are 2D arrays:
     if fca:
-        crit__ = Ave - dert__[1, :, :]  # angle eval by inverted ga deviation; crit__ and dert__ are 2D arrays
+        crit__ = Ave - dert__[1, :, :]  # angle eval by inverted ga deviation, add a coeff to Ave?
         param_keys = P_PARAM_KEYS
     elif fcr:
         if fig: crit__ = dert__[0 + 4, :, :] - Ave  # comp_rng eval by i + m, accumulated over comp range
