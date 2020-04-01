@@ -45,9 +45,9 @@ Khanh Nguyen, $10100, lead debugger and co-designer, January-December
 
 Mayukh Sarkar, $600 for frame_blobs performance analysis and porting form_P to C++, January
 
-Kok Wei Chee, $1830 for diagrams and help with debugging, January-February
+Kok Wei Chee, $2800, team developer, January-March
 
-Khanh Nguyen, $2500, lead debugger and co-designer, January-February
+Khanh Nguyen, $3100, senior developer, January-March
 
 
 

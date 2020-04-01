@@ -4,6 +4,7 @@ Cross-comparison of pixels, angles, or gradients, in 2x2 or 3x3 kernels
 
 import numpy as np
 import numpy.ma as ma
+import math
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
@@ -20,63 +21,36 @@ X_COEFFS = [
 # -----------------------------------------------------------------------------
 # Functions
 
-def comp_g_draft(dert__):
+def comp_g(dert__, odd):
     """
     Cross-comp of g or ga in 2x2 kernels
-    Parameters
     ----------
-    dert__ : array-like, each dert = (i, g, dy, dx, da0, da1, da2, da3)
-    Returns
-    -------
-    gdert__ : masked_array
-        Output dert = (g, gg, gdy, gdx, gm, ga, day, dax).
-    Examples
-    --------
-    >>> # actual python console code
-    >>> dert__ = 'specific value'
-    >>> comp_g(dert__)
-    'specific output'
-    Notes
-    -----
-    Comparand is dert[1]
+    input dert = (i, g, dy, dx, ga, day, dax, da0, da1)
+    output dert = (g, gg, dgy, dgx, gm, ga, day, dax)
     """
-    g__, dy__, dx__ = dert__[1:4]
-    dat__ = dert__[-1]  # tuples of four da s, computed in prior comp_a
+    g__, da0__, da1__ = dert__[1, -2, -1]  # input
 
-    # please check, this is my draft, almost certainly wrong:
+    topleft__ = g__[:-1, :-1]
+    topright__ = g__[:-1, 1:]
+    botleft__ = g__[1:, :-1]
+    botright__ = g__[1:, 1:]
 
-    day = sum([dat__[i][0] * Y_COEFFS[0][i] for i in range(len(dat__))])
-    dax = sum([dat__[i][1] * X_COEFFS[0][i] for i in range(len(dat__))])
+    dgy__ = ((botleft__ + botright__) - (topleft__ * cos(da0__) + topright__ * cos(da1__))) * 0.5
+    # diagonal from left
+    dgx__ = ((topright__ + botright__) - (topleft__ * cos(da0__) + botleft__ * cos(da1__))) * 0.5
+    # diagonal from right
+    gg__ = np.hypot(dgy__, dgx__)
+    # gradient of gradient
 
-    ga = np.hypot(day, dax)
+    gm0__ = min(botleft__, topright__ * cos(da0__))  # g match = min(g, _g*cos(da))
+    gm1__ = min(botright__, topleft__ * cos(da1__))
+    gm__ = gm0__ + gm1__
 
+    gdert = ma.stack(g__, gg__, dgy__, dgx__, gm__, ga__=dert__[4], day_=dert__[5], dax=dert__[6])
     '''
-    a1__ = a__[:, :-1, :-1]                         # top left
-    a2__ = a__[:, :-1, 1:]                          # top right
-    a3__ = a__[:, 1:, 1:]                           # bottom right
-    a4__ = a__[:, 1:, :-1]                          # bottom left
-    a_central = ((a1__ + a2__ + a3__ + a4__) / 4)   # central
-
-    # angle difference
-    da__ = np.stack((angle_diff(a_central, a__1),
-                     angle_diff(a_central, a__2),
-                     angle_diff(a_central, a__3),
-                     angle_diff(a_central, a__4)))
+    next comp_rg will use g, dgy, dgx
+    next comp_agg will use ga, day, dax
     '''
-    # 2x2 cross-comp DRAFT:
-
-    g0__ = g__[:-1, :-1]
-    g1__ = g__[:-1, 1:]
-    g2__ = g__[1:, 1:]
-    g3__ = g__[1:, :-1]
-
-    # compute gg from dg s = g - _g*cos(da)
-    # match = min(g, _g*cos(da))
-    # gm = ma.array(np.ones())
-
-    # pack gdert
-    gdert = ma.stack(g, gg, gdy, gdx, gm, day, dax)
-
     return gdert
 
 
@@ -88,24 +62,24 @@ def comp_r_draft(dert__, fig):
     Such input is predictable enough for selective sampling: skipping current
     rim derts as kernel-central derts in following comparison kernels.
     Skipping forms increasingly sparse output dert__ for greater-range cross-comp,
-    hence rng: distance between central pixels of compared derts,
+    hence rng (distance between central pixels of compared derts)
     increases as 2^n, where n starts at 0:
     rng = 1: 3x3 kernel,
     rng = 2: 5x5 kernel,
     rng = 4: 9x9 kernel,
     ...
-    skipping rim derts as following-comp central derts (forming sparse output dert__)
-    means that configuration of input derts in the next-rng kernel will always be 3x3.
+    skipping rim derts as next-comp central derts forms sparse output dert__,
+    hence configuration of input derts in next-rng kernel will always be 3x3.
     Parameters
     ----------
     dert__ : array-like
-        dert's structure is (i, g, dy, dx, m, ?(idy, idx)).
+        dert's structure is (i, g, dy, dx, m, if fig: + idy, idx).
     fig : bool
         True if input is g.
     Returns
     -------
     rdert__ : masked_array
-        Output's structure is (i, g, dy, dx, m, ?(idy, idx)).
+        Output's structure is (i, g, dy, dx, m, if fig: + idy, idx).
     Examples
     --------
     >>> # actual python console code
@@ -162,27 +136,23 @@ def comp_r_draft(dert__, fig):
         a__bottomleft   = a__[:,2:,:-2]
         a__left         = a__[:,1:-1,:-2]
 
-        # compute opposing diagonals difference for a in 3x3 kernel
+        # compute da s in 3x3 kernel
         dra__ = np.stack((angle_diff(a__topleft, a__bottomright),
                           angle_diff(a__top,     a__bottom),
                           angle_diff(a__topright,a__bottomleft),
                           angle_diff(a__right,   a__left)))
 
-        # g difference  = g - g * cos(da) at each opposing diagonals
+        # g difference  = g - g * cos(da) at each opposing
         dri__ = np.stack( (drg__[0] - drg__[0] * dra__[0][1],
                            drg__[1] - drg__[1] * dra__[1][1],
                            drg__[2] - drg__[2] * dra__[2][1],
                            drg__[3] - drg__[3] * dra__[3][1]) )
 
-    else:  # input is pixel
-
-    #   i difference of each opossing diagonals
-        dri__ = np.stack((ri__topleft-ri__bottomright,
-                          ri__top-ri__bottom,
-                          ri__topright-ri__bottomleft,
-                          ri__right-ri__left))
-
-
+    else:  # input is pixel, diagonal p differences:
+        dri__ = np.stack((ri__topleft - ri__bottomright,
+                          ri__top - ri__bottom,
+                          ri__topright - ri__bottomleft,
+                          ri__right - ri__left))
     dri__ = np.rollaxis(dri__,0,3)
 
     # compute dry and drx
@@ -226,13 +196,11 @@ def comp_a(dert__, fga):
     'specific output'
     """
     # input dert = (i,  g,  dy,  dx,  m, ga, day, dax, dat(da0, da1, da2, da3))
-    i__, g__,dy__,dx__,m__ = dert__[0:5]
+    i__, g__, dy__, dx__, m__ = dert__[0:5]
 
-    if fga:  # if input is adert
-
-        ga__,day__,dax__ = dert__[5:8]
+    if fga: # input is adert
+        ga__, day__, dax__ = dert__[5:8]
         a__ = [day__,dax__] / ga__ # similar to calc_a
-
     else :
         a__ = [dy__,dx__] / g__ # similar to calc_a
 
@@ -246,12 +214,9 @@ def comp_a(dert__, fga):
     a__bottomright = a__[:,1:,1:]
     a__bottomleft = a__[:,1:,:-1]
 
-
-    # get angle difference of each direction
-    da__ = np.stack((angle_diff(a__topleft,   a__bottomright),
-                     angle_diff(a__bottomleft,a__topright),
-                     angle_diff(a__topright,  a__bottomleft)))
-
+    # diagonal angle differences
+    da__ = np.stack((angle_diff(a__topleft,  a__bottomright),
+                     angle_diff(a__topright, a__bottomleft)))
     day__ = (
             Y_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
             Y_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
@@ -265,19 +230,15 @@ def comp_a(dert__, fga):
     ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
     # change adert to tuple as ga__,day__,dax__ would have different dimension compared to inputs
-    adert__ = i__, g__,dy__,dx__,m__,ga__,day__,dax__
+    adert__ = i__, g__, dy__, dx__, m__, ga__, day__, dax__, dat__
 
     return adert__
 
 
-
 def calc_a(dert__):
     """
-    Compute vector representation of gradient angle.
-    It is done by normalizing the vector (dy, dx).
-    Numpy broad-casting is a viable option when the
-    first dimension of input array (dert__) separate
-    different CogAlg parameter (like g, dy, dx).
+    Compute vector representation of angle of gradient by normalizing (dy, dx).
+    Numpy-broadcasted, first dimension of dert__ is a list of parameters: g, dy, dx
     Example
     -------
     >>> dert1 = np.array([0, 5, 3, 4])
@@ -302,9 +263,6 @@ def calc_a(dert__):
     return dert__[[2, 3]] / dert__[1]  # np.array([dy, dx]) / g
 
 
-# -----------------------------------------------------------------------------
-# Utility functions
-
 def angle_diff(a2, a1):
     """
     Return the sine(s) and cosine(s) of the angle between a2 and a1.
@@ -319,7 +277,6 @@ def angle_diff(a2, a1):
     out : MaskedArray
         The first dimension is sine/cosine of the angle(s) between
         a2 and a1.
-    Note
     ----
     This only works for angles in 2D space.
     """
@@ -329,7 +286,7 @@ def angle_diff(a2, a1):
     cos_1 = a1[1]
     cos_2 = a2[1]
 
-    # by the formulas of sine and cosine of difference of angles
+    # sine and cosine of difference between angles:
     sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
     cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
 
