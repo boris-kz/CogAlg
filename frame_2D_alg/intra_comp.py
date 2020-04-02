@@ -36,12 +36,14 @@ def comp_g(dert__):
 
     dgy__ = ((g_botleft__ + g_botright__) - (g_topleft__ * cos_da0__ + g_topright__ * cos_da1__)) * 0.5
     # y-decomposed difference between gs
+
     dgx__ = ((g_topright__ + g_botright__) - (g_topleft__ * cos_da0__ + g_botleft__ * cos_da1__)) * 0.5
     # x-decomposed difference between gs
+
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = min(g_botleft__.min(), g_topright__ * cos_da0__.min())  # g match = min(g, _g*cos(da))
-    mg1__ = min(g_botright__.min(), g_topleft__ * cos_da1__.min())
+    mg0__ = min(g_botleft__, g_topright__ * cos_da0__)  # g match = min(g, _g*cos(da))
+    mg1__ = min(g_botright__, g_topleft__ * cos_da1__)
     mg__  = mg0__ + mg1__
 
     gdert = ma.stack(g__, gg__, dgy__, dgx__, mg__, dert__[4], dert__[5], dert__[6])
@@ -248,12 +250,10 @@ def comp_a(dert__, fga):
                   angle_diff(a__bottomright, a__topright)))
 
     # rate of angle change in y direction
-    # suggested form, please check:
-    day__ = (sin_da0__, sin_da1__ *.5) + (cos_da0__, cos_da1__ *.5)
+    day__ = (-sin_da0__, -sin_da1__) + (-cos_da0__, -cos_da1__)
 
-    # rate of angle change in y direction
-    # current form:
-    dax__ = (X_COEFFS[0][0] * da__[0]) + (X_COEFFS[0][1] * da__[1])
+    # rate of angle change in x direction
+    dax__ = (-sin_da0__, -sin_da1__) + (cos_da0__, cos_da1__)
 
     # compute angle gradient (rate of change):
     ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
