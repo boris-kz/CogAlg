@@ -18,32 +18,42 @@ X_COEFFS = [
     np.array([-1, 1, 1, -1]),
     np.array([-0.5,  0. ,  0.5,  0.5,  0.5,  0. , -0.5, -0.5]),
 ]
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------
 # Functions
 
-def comp_g(dert__):
+def comp_g(dert__):  # add fga, if processing in comp_ga is different?
     """
-    Cross-comp of g or ga in 2x2 kernels
+    Cross-comp of g or ga in 2x2 kernels, between derts accessed from ma.stack dert__:
+
     input dert = (i, g, dy, dx, ga, day, dax, cos_da0, cos_da1)
     output dert = (g, gg, dgy, dgx, gm, ga, day, dax)
     """
     g__, cos_da0__, cos_da1__ = dert__[1, -2, -1]
+
+    # this mask section would need further test later with actual input from frame_blobs
+    if isinstance(g__, ma.masked_array):
+        g__.data[g__.mask] = np.nan
+        g__.mask = ma.nomask
 
     g_topleft__ = g__[:-1, :-1]
     g_topright__ = g__[:-1, 1:]
     g_botleft__ = g__[1:, :-1]
     g_botright__ = g__[1:, 1:]
 
-    dgy__ = ((g_botleft__ + g_botright__) - (g_topleft__ * cos_da0__ + g_topright__ * cos_da1__)) * 0.5
+    # please check, not sure this in the right order, also need to add sign COEFFS:
+
+    dgy__ = ((g_botleft__ + g_botright__) -
+             (g_topleft__ * cos_da0__ + g_topright__ * cos_da1__))
     # y-decomposed difference between gs
 
-    dgx__ = ((g_topright__ + g_botright__) - (g_topleft__ * cos_da0__ + g_botleft__ * cos_da1__)) * 0.5
+    dgx__ = ((g_topright__ + g_botright__) -
+             (g_topleft__ * cos_da0__ + g_botleft__ * cos_da1__))
     # x-decomposed difference between gs
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = min(g_botleft__, g_topright__ * cos_da0__)  # g match = min(g, _g*cos(da))
-    mg1__ = min(g_botright__, g_topleft__ * cos_da1__)
+    mg0__ = np.minimum(g_topleft__, (g_botright__ * cos_da0__))  # g match = min(g, _g*cos(da))
+    mg1__ = np.minimum(g_topright__, (g_botleft__ * cos_da1__))
     mg__  = mg0__ + mg1__
 
     gdert = ma.stack(g__, gg__, dgy__, dgx__, mg__, dert__[4], dert__[5], dert__[6])
@@ -245,22 +255,22 @@ def comp_a(dert__, fga):
     a__bottomleft = a__[:, 1:, :-1]
 
     # diagonal angle differences
-    (sin_da0__, cos_da0__), (sin_da1__, cos_da1__) = \
-        np.stack((angle_diff(a__bottomleft, a__topleft),
-                  angle_diff(a__bottomright, a__topright)))
 
-    # rate of angle change in y direction
+    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__bottomright)
+    sin_da1__, cos_da1__ = angle_diff(a__topright, a__bottomleft)
+
+    # angle change in y direction:
     day__ = (-sin_da0__, -sin_da1__) + (-cos_da0__, -cos_da1__)
 
-    # rate of angle change in x direction
+    # angle change in x direction:
     dax__ = (-sin_da0__, -sin_da1__) + (cos_da0__, cos_da1__)
 
-    # compute angle gradient (rate of change):
+    # angle gradient:
     ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
     # change adert to tuple as ga__,day__,dax__ would have different dimension compared to inputs
 
-    adert__ = i__, g__, dy__, dx__, m__, ga__, day__, dax__, cos_da0__, cos_da1__
+    adert__ = ma.stack(i__, g__, dy__, dx__, m__, ga__, day__, dax__, cos_da0__, cos_da1__)
     '''
     next comp_g will use g, cos_da0__, cos_da1__
     next comp_aga will use ga, day, dax
