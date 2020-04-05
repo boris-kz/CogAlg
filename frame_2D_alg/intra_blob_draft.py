@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from itertools import groupby, starmap, zip_longest
 import numpy as np
 import numpy.ma as ma
-from intra_comp_ts import *
+from intra_comp import *
 from utils import pairwise, flatten
 from functools import reduce
 '''
@@ -47,7 +47,7 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 
 def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):  # recursive input rng+ | der+ | angle cross-comp within a blob
 
-    # flags: fca: comp angle, fga: comp angle of ga vs g, fig: input is g vs pixel, fcr: comp over rng+ vs der+
+    # flags: fca: comp angle, fga: comp angle of ga vs. g, fig: input is g vs. pixel, fcr: comp over rng+ vs. der+
 
     if fca:
         dert__ = comp_a(blob['dert__'], fga)  # form ga blobs, evaluate for comp_aga | comp_g:

@@ -8,8 +8,8 @@ import math
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# Constants
 
+# Coefficients to decompose d into dy and dx, replace with separate sign and magnitude coefs?
 Y_COEFFS = [
     np.array([-1, -1, 1, 1]),
     np.array([-0.5, -0.5, -0.5,  0. ,  0.5,  0.5,  0.5,  0. ]),
@@ -18,17 +18,24 @@ X_COEFFS = [
     np.array([-1, 1, 1, -1]),
     np.array([-0.5,  0. ,  0.5,  0.5,  0.5,  0. , -0.5, -0.5]),
 ]
+''' old scheme:
+day__ = ( Y_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
+          Y_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
+        )
+dax__ = ( X_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
+          X_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
+        )
+'''
 # ------------------------------------------------------------------------------------
 # Functions
 
-def comp_g(dert__):  # add fga, if processing in comp_ga is different?
+def comp_g(dert__):  # add fga if processing in comp_ga is different?
     """
-    Cross-comp of g or ga in 2x2 kernels, between derts accessed from ma.stack dert__:
-
+    Cross-comp of g or ga in 2x2 kernels, between derts in ma.stack dert__:
     input dert = (i, g, dy, dx, ga, day, dax, cos_da0, cos_da1)
     output dert = (g, gg, dgy, dgx, gm, ga, day, dax)
     """
-    g__, cos_da0__, cos_da1__ = dert__[1, -2, -1]
+    g__, cos_da0__, cos_da1__ = dert__[[1, -2, -1]]  # list of indices indicates top dimension of numpy stack
 
     # this mask section would need further test later with actual input from frame_blobs
     if isinstance(g__, ma.masked_array):
@@ -59,8 +66,8 @@ def comp_g(dert__):  # add fga, if processing in comp_ga is different?
     gdert = ma.stack(g__, gg__, dgy__, dgx__, mg__, dert__[4], dert__[5], dert__[6])
     # ga__=dert__[5], day_=dert__[6], dax=dert__[7]
     '''
-    next comp_rg will use g, dgy, dgx
-    next comp_agg will use ga, day, dax
+    next comp_r will use g, dgy, dgx   # comp_rg
+    next comp_a will use ga, day, dax  # comp_agg
     '''
     return gdert
 
@@ -104,7 +111,7 @@ def comp_r_draft(dert__, fig):
     - Comparand is dert[0].
     """
 
-    # input is gdert (g,  gg, gdy, gdx, gm, iga, iday, idax)
+    # if input is gdert (g,  gg, gdy, gdx, gm, iga, iday, idax)
     # input is dert  (i,  g,  dy,  dx,  m)
     # input is rdert (ir, gr, dry, drx, mr)
     i__, g__, dy__, dx__, m__ = dert__[0:5]
@@ -213,19 +220,15 @@ def comp_r_draft(dert__, fig):
 def comp_a(dert__, fga):
     """
     cross-comp of a or aga in 2x2 kernels
-    Parameters
     ----------
-    dert__ : array-like
-        dert's structure depends on fga
+    input dert__ : array-like
     fga : bool
-        If True, dert's structure is interpreted as:
+        If True, dert structure is interpreted as:
         (g, gg, gdy, gdx, gm, iga, iday, idax)
-        Otherwise it is interpreted as:
-        (i, g, dy, dx, m)
-    Returns
-    -------
-    adert : masked_array
-        adert's structure is (i, g, dy, dx, m, ga, day, dax, da).
+        else: (i, g, dy, dx, m)
+    ----------
+    output adert: masked_array of aderts,
+    adert structure is (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
     Examples
     --------
     >>> # actual python console code
@@ -234,7 +237,7 @@ def comp_a(dert__, fga):
     >>> comp_a(dert__, fga)
     'specific output'
     """
-    # input dert = (i,  g,  dy,  dx,  m, ga, day, dax, dat(da0, da1, da2, da3))
+    # input dert = (i,  g,  dy,  dx,  m, ?(ga, day, dax))
     i__, g__, dy__, dx__, m__ = dert__[0:5]
 
     if fga:  # input is adert
@@ -251,29 +254,27 @@ def comp_a(dert__, fga):
     # each shifted a in 2x2 kernel
     a__topleft = a__[:, :-1, :-1]
     a__topright = a__[:, :-1, 1:]
-    a__bottomright = a__[:, 1:, 1:]
-    a__bottomleft = a__[:, 1:, :-1]
+    a__botright = a__[:, 1:, 1:]
+    a__botleft = a__[:, 1:, :-1]
 
     # diagonal angle differences
 
-    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__bottomright)
-    sin_da1__, cos_da1__ = angle_diff(a__topright, a__bottomleft)
+    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
+    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    # angle change in y direction:
-    day__ = (-sin_da0__, -sin_da1__) + (-cos_da0__, -cos_da1__)
+    day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
+    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 
-    # angle change in x direction:
-    dax__ = (-sin_da0__, -sin_da1__) + (cos_da0__, cos_da1__)
+    dax__ = (-sin_da0__ + sin_da1__), (cos_da0__ + cos_da1__)
+    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
 
-    # angle gradient:
-    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
-
-    # change adert to tuple as ga__,day__,dax__ would have different dimension compared to inputs
+    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))  # angle gradient:
 
     adert__ = ma.stack(i__, g__, dy__, dx__, m__, ga__, day__, dax__, cos_da0__, cos_da1__)
+    # i, dy, dx, m is for summation in Dert only?
     '''
     next comp_g will use g, cos_da0__, cos_da1__
-    next comp_aga will use ga, day, dax
+    next comp_a will use ga, day, dax  # comp_aga
     '''
     return adert__
 
