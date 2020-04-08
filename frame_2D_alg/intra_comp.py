@@ -44,23 +44,23 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
 
     g_topleft__ = g__[:-1, :-1]
     g_topright__ = g__[:-1, 1:]
-    g_botleft__ = g__[1:, :-1]
-    g_botright__ = g__[1:, 1:]
+    g_bottomleft__ = g__[1:, :-1]
+    g_bottomright__ = g__[1:, 1:]
 
     # please check, not sure this in the right order, also need to add sign COEFFS:
 
-    dgy__ = ((g_botleft__ + g_botright__) -
+    dgy__ = ((g_bottomleft__ + g_bottomright__) -
              (g_topleft__ * cos_da0__ + g_topright__ * cos_da1__))
     # y-decomposed difference between gs
 
-    dgx__ = ((g_topright__ + g_botright__) -
-             (g_topleft__ * cos_da0__ + g_botleft__ * cos_da1__))
+    dgx__ = ((g_topright__ + g_bottomright__) -
+             (g_topleft__ * cos_da0__ + g_bottomleft__ * cos_da1__))
     # x-decomposed difference between gs
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = np.minimum(g_topleft__, (g_botright__ * cos_da0__))  # g match = min(g, _g*cos(da))
-    mg1__ = np.minimum(g_topright__, (g_botleft__ * cos_da1__))
+    mg0__ = np.minimum(g_topleft__, (g_bottomright__ * cos_da0__))  # g match = min(g, _g*cos(da))
+    mg1__ = np.minimum(g_topright__, (g_bottomleft__ * cos_da1__))
     mg__  = mg0__ + mg1__
 
     gdert = ma.stack(g__, gg__, dgy__, dgx__, mg__, dert__[4], dert__[5], dert__[6])
@@ -72,7 +72,7 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
     return gdert
 
 
-def comp_r_draft(dert__, fig):
+def comp_r_draft(dert__, fig, root_fcr):
     """
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -88,21 +88,14 @@ def comp_r_draft(dert__, fig):
     ...
     skipping rim derts as next-comp central derts forms sparse output dert__,
     hence configuration of input derts in next-rng kernel will always be 3x3.
-    Parameters
-    ----------
-    input and output dert__: array-like, derivatives are accumulated in input dert,
-    each dert is (i, g, dy, dx, m, if fig: + idy, idx)
-    fig: True if input is g.
-    Examples
-    --------
-    >>> # actual python console code
-    >>> dert__ = 'specific value'
-    >>> fig = 'specific value'
-    >>> comp_r(dert__, fig)
-    'specific output'
     """
+    # input:
+    if root_fcr:  # if root fork is comp_r, all params are present in the input:
+        i__, g__, dy__, dx__ = dert__[[0,1,2,3]]  # top dimension of numpy stack must be a list
+    else:  # root fork is comp_g or comp_pixel
+        i__ = dert__[[0]]
+        g__, dy__, dx__ = [],[],[]  # how do we initialize empty np.arrays of len=len(i__)?
 
-    i__, g__, dy__, dx__ = dert__[[0,1,2,3]]  # top dimension of numpy stack must be a list
     # i is ig if fig else pixel
     i__center =      i__[1:-2:2, 1:-2:2]
     i__topleft =     i__[:-2:2, :-2:2]
@@ -114,10 +107,20 @@ def comp_r_draft(dert__, fig):
     i__bottomleft =  i__[2::2, :-2:2]
     i__left =        i__[1:-1:2, :-2:2]
 
+    # remove columns | rows without centrals, instead of step=3 to avoid missing these centrals
+    while i__center.shape[0] > i__topleft.shape[1]:
+
+        i__topleft = i__topleft[:-1, :-1]
+        i__left = i__left[:-1, :-1]
+        i__bottomleft = i__bottomleft[:-1, :-1]
+
     if fig:
-        m__, ga__, idy__, idx__ = dert__[[-4,-3,-2,-1]]  # else not present
-        a__ = [idy__, idx__] / i__
-        # angle of ig
+        if root_fcr:
+            m__, ga__, idy__, idx__ = dert__[[-4,-3,-2,-1]]
+        else:
+            m__, ga__, idy__, idx__ = [],[],[],[]  # how do we initialize empty np.arrays of len=len(i__)?
+        a__ = [idy__, idx__] / i__  # angle of ig
+
         a__center =      a__[1:-2:2, 1:-2:2]
         a__topleft =     a__[:-2:2, :-2:2]
         a__top =         a__[:-2:2, 1:-1:2]
@@ -168,7 +171,7 @@ def comp_r_draft(dert__, fig):
                         (i__center - i__bottomleft * dat__[0][1]),
                         (i__center - i__left * dat__[0][1]))
 
-    else: # i is pixel
+    else:  # i is pixel
         # tuple of simple differences per direction:
         dt__ = np.stack((i__center - i__topleft),
                         (i__center - i__top),
@@ -177,7 +180,9 @@ def comp_r_draft(dert__, fig):
                         (i__center - i__bottomright),
                         (i__center - i__bottom),
                         (i__center - i__bottomleft),
-                        (i__center - i__left))        # d__ = np.rollaxis(d__, 0, 3)?
+                        (i__center - i__left))
+
+    dt__ = np.rollaxis(dt__, 0, 3)
 
     dy__ += (dt__ * Y_COEFFS[1]).sum(axis=-1)
     dx__ += (dt__ * X_COEFFS[1]).sum(axis=-1)
