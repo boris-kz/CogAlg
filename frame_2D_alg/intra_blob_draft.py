@@ -45,9 +45,11 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # -----------------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):  # recursive input rng+ | der+ | angle cross-comp within a blob
+def intra_blob(blob, rdn, rng, fig, fca, fcr, fga, fcrr):  # fcrr is for comp_r only, replace with
 
-    # flags: fca: comp angle, fga: comp angle of ga vs. g, fig: input is g vs. pixel, fcr: comp over rng+ vs. der+
+    # recursive input rng+ | der+ | angle cross-comp within a blob
+    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+, fcrr: root fork is comp_r
+
     if fca:
         dert__ = comp_a(blob['dert__'], fga)  # form ga blobs, evaluate for comp_aga | comp_g:
         cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig=0)  # cluster by sign of crit=ga -> ga_sub_blobs
