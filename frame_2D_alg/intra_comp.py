@@ -76,7 +76,7 @@ def comp_r_draft(dert__, fig, root_fcr):
         dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
     if not fig:
-        # compare 4 diametrically opposed pairs of rim pixels:
+        # compare four diametrically opposed pairs of rim pixels:
 
         dt__ = np.stack(i__topleft - i__bottomright,
                         i__top - i__bottom,
@@ -196,6 +196,103 @@ def comp_r_draft(dert__, fig, root_fcr):
     next comp_a will use g__, dy__, dx__  # comp_agr, or also full dert, for idy, idx?
     '''
     return rdert
+
+
+def comp_a_chee(dert__, fga):
+    """
+    cross-comp of a or aga in 2x2 kernels
+    ----------
+    input dert__ : array-like
+    fga : bool
+        If True, dert structure is interpreted as:
+        (g, gg, gdy, gdx, gm, iga, iday, idax)
+        else: (i, g, dy, dx, m)
+    ----------
+    output adert: masked_array of aderts,
+    adert structure is (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
+    Examples
+    --------
+    >>> # actual python console code
+    >>> dert__ = 'specific value'
+    >>> fga = 'specific value'
+    >>> comp_a(dert__, fga)
+    'specific output'
+    """
+    # input dert = (i,  g,  dy,  dx,  m, ?(ga, day, dax))
+    i__, g__, dy__, dx__, m__ = dert__[0:5]
+
+    if fga:  # input is adert
+        ga__, day__, dax__ = dert__[5:8]
+        a__ = [day__, dax__] / ga__  # similar to calc_a
+    else:
+        a__ = [dy__, dx__] / g__  # similar to calc_a
+
+    # this mask section would need further test later with actual input from frame_blobs
+    if isinstance(a__, ma.masked_array):
+        a__.data[a__.mask] = np.nan
+        a__.mask = ma.nomask
+
+    # each shifted a in 2x2 kernel
+    a__topleft = a__[:, :-1, :-1]
+    a__topright = a__[:, :-1, 1:]
+    a__botright = a__[:, 1:, 1:]
+    a__botleft = a__[:, 1:, :-1]
+
+    a_rim__ = np.stack((a__topleft,
+                        a__topright,
+                        a__botright,
+                        a__botleft))
+
+    # preallocate size of arrays
+    sin_da__ = [None] * 2
+    cos_da__ = [None] * 2
+    day__ = [None] * 2
+    day__[0] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
+    day__[1] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
+    dax__ = [None] * 2
+    dax__[0] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
+    dax__[1] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
+
+    YCOEF_ = -1, -1
+    XCOEF_ = -1, 1
+
+    for i in range(2):
+        # opposing difference
+        sin_da__[i], cos_da__[i] = angle_diff(a_rim__[i], a_rim__[i + 2])
+
+        # sine part of day
+        day__[0] += sin_da__[i] * YCOEF_[i]
+        # cosine part of day
+        day__[1] += cos_da__[i]  # no sign based coefficient for cosine part
+        # sine part of dax
+        dax__[0] += sin_da__[i] * XCOEF_[i]
+        # cosine part of dax
+        dax__[1] += cos_da__[i]  # no sign based coefficient for cosine part
+
+    '''
+    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
+    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
+    '''
+    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
+    # angle gradient, a scalar
+
+    # remove last row and column to solve dimension mismatch issue
+    adert__ = ma.stack((i__[:-1, :-1],  # for summation in Dert
+                        g__[:-1, :-1],
+                        dy__[:-1, :-1],
+                        dx__[:-1, :-1],
+                        m__[:-1, :-1],   # for summation in Dert
+                        ga__,
+                        *day__,
+                        *dax__,
+                        cos_da__[0],
+                        cos_da__[1]))
+    '''
+    next comp_g will use g, cos_da0__, cos_da1__ 
+    next comp_a will use ga, day, dax  # comp_aga
+    maybe passed to deeper comp_rg: dy as idy, dx as idx? 
+    '''
+    return adert__
 
 
 def comp_a(dert__, fga):
