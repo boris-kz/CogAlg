@@ -9,7 +9,7 @@ import math
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 
-# Coefficients to decompose d into dy and dx, replace with separate sign and magnitude coefs?
+''' old, no need for separate 2x2 coeffs?:
 Y_COEFFS = [
     np.array([-2, -2, 2, 2]),  # ? why are they separate from these:
     np.array([-1, -1, -1, 0, 1, 1, 1, 0]),
@@ -17,36 +17,18 @@ Y_COEFFS = [
 X_COEFFS = [
     np.array([-2, 2, 2, -2]),  # ? why are they separate from these:
     np.array([-1, 0, 1, 1, 1, 0, -1, -1]),
-]
+] 
+'''
+# Coefficients to decompose ds into dy and dx:
 
-def comp_3x3(image):  # Deprecated, from frame_blobs' comp_pixel, Khanh
+YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
+XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
 
-    d___ = np.array(  # center pixels - translated rim pixels:
-        [image[ts2] - image[ts1] for ts1, ts2 in TRANSLATING_SLICES_PAIRS_3x3]
-    ).swapaxes(0, 2).swapaxes(0, 1)
-
-    # 3rd dimension: sequence of difference * coef, between pairs of diametrically opposed pixels:
-    #         |--(clockwise)--+       |--(clockwise)--+
-    # YCOEF: -1  -2  -1  ¦     XCOEF: -1   0   1  ¦
-    #         0       0  ¦            -2       2  ¦
-    #         1   2   1  ¦            -1   0   1  ¦
-    #         <<----+                 <<----+
-    # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
-
-    dy__ = (d___ * YCOEF).sum(axis=2)
-    dx__ = (d___ * XCOEF).sum(axis=2)
-    p__ = image[1:-1, 1:-1]
-    g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
-
-    return ma.stack((p__, g__, dy__, dx__))
-
-''' old scheme:
-day__ = ( Y_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
-          Y_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
-        )
-dax__ = ( X_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
-          X_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
-        )
+''' Sobel operator:
+    |--(clockwise)--+  |--(clockwise)--+
+    YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
+            0       0  ¦          -2       2  ¦
+            1   2   1  ¦          -1   0   1  ¦
 '''
 # ------------------------------------------------------------------------------------
 # Functions
@@ -67,15 +49,10 @@ def comp_r_draft(dert__, fig, root_fcr):
     skipping rim derts as next-comp central derts forms sparse output dert__,
     hence configuration of input derts in next-rng kernel will always be 3x3.
     """
-    # input:
-    if root_fcr:  # if
-        # if root fork is comp_r, all params are present in the input:
-        i__, g__, dy__, dx__ = dert__[[0, 1, 2, 3]]  # top dimension of numpy stack must be a list
-    else:  # root fork is comp_g or comp_pixel
-        i__ = dert__[[0]]
-        g__, dy__, dx__ = [], [], []  # how do we initialize empty np.arrays of len=len(i__)?
 
-    # i is ig if fig else pixel
+    i__ = dert__[0]   # i is ig if fig else pixel
+    # sparse aligned i__center and i__rim arrays:
+
     i__center = i__[1:-1:2, 1:-1:2]
     i__topleft = i__[:-2:2, :-2:2]
     i__top = i__[:-2:2, 1:-1: 2]
@@ -86,22 +63,61 @@ def comp_r_draft(dert__, fig, root_fcr):
     i__bottomleft = i__[2::2, :-2:2]
     i__left = i__[1:-1:2, :-2:2]
 
-    if fig:
+    if root_fcr:  # root fork is comp_r, all params are present in the input:
+
+        dy__, dx__ = dert__[[2, 3]]  # top dimension of numpy stack must be a list
+        # g__ is recomputed from accumulated derivatives, sparse:
+        dy__ = dy__[1:-1:2, 1:-1:2]
+        dx__ = dx__[1:-1:2, 1:-1:2]
+
+    else:  # root fork is comp_g or comp_pixel, initialize sparse derivatives:
+
+        dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))
+        dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
+
+    if not fig:
+        # compare 4 diametrically opposed pairs of rim pixels:
+
+        dt__ = np.stack(i__topleft - i__bottomright,
+                        i__top - i__bottom,
+                        i__topright - i__bottomleft,
+                        i__right - i__left
+                        )
+        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):
+            # decompose differences into dy and dx, same as conventional Gy and Gx,
+            # accumulate them across all ranges:
+            dy__ += d__ * YCOEF
+            dx__ += d__ * XCOEF
+
+        g__ = np.hypot(dy__, dx__)
+        ''' 
+        or:
+        for i in range(4):
+            d__ = rim_[i] - rim_[i + 4]
+            dy__ += d__ * YCOEFs[i]
+            dx__ += d__ * XCOEFs[i]
+        '''
+    else:
+        # input is g
         if root_fcr:
             m__, idy__, idx__ = dert__[[-4, -2, -1]]
+            m__ = m__[1:-1:2, 1:-1:2]
         else:
-            m__, idy__, idx__ = [], [], []  # how do we initialize empty np.arrays of len=len(i__)?
-        a__ = [idy__, idx__] / i__  # angle of ig
+            m__   = np.zeros((i__center.shape[0], i__center.shape[1]))
+            idy__ = np.zeros((i__.shape[0], i__.shape[1]))
+            idx__ = np.zeros((i__.shape[0], i__.shape[1]))
 
-        a__center = a__[1:-1:2, 1:-1:2]
-        a__topleft = a__[:-2:2, :-2:2]
-        a__top = a__[:-2:2, 1:-1:2]
-        a__topright = a__[:-2:2, 2::2]
-        a__right = a__[1:-1:2, 2::2]
-        a__bottomright = a__[2::2, 2::2]
-        a__bottom = a__[2::2, 1:-1:2]
-        a__bottomleft = a__[2::2, :-2:2]
-        a__left = a__[1:-1:2, :-2:2]
+        a__ = [idy__, idx__] / i__  # i is input gradient
+
+        a__center = a__[:, 1:-1:2, 1:-1:2]
+        a__topleft = a__[:, :-2:2, :-2:2]
+        a__top = a__[:, :-2:2, 1:-1: 2]
+        a__topright = a__[:, :-2:2, 2::2]
+        a__right = a__[:, 1:-1:2, 2::2]
+        a__bottomright = a__[:, 2::2, 2::2]
+        a__bottom = a__[:, 2::2, 1:-1:2]
+        a__bottomleft = a__[:, 2::2, :-2:2]
+        a__left = a__[:, 1:-1:2, :-2:2]
 
         # tuple of angle differences per direction:
         dat__ = np.stack(angle_diff(a__center, a__topleft),
@@ -113,81 +129,73 @@ def comp_r_draft(dert__, fig, root_fcr):
                          angle_diff(a__center, a__bottomleft),
                          angle_diff(a__center, a__left))
 
-        # y-decomposed angle differences, accumulate?
-        day__ = (dat__ * Y_COEFFS[1]).sum(axis=-1)
+        # roll axis to align COEFFs with dat__,
+        # add comment: what is 0, 4?
+        dat__ = np.rollaxis(dat__, 0, 4)
 
-        # x-decomposed angle differences
-        dax__ = (dat__ * X_COEFFS[1]).sum(axis=-1)
+        # y-decomposed difference between angles to center
+        day__ = (dat__ * YCOEFs).sum(axis=-1)
 
-        # gradient of angle, current range only or accumulated?
+        # x-decomposed difference between angles to center
+        dax__ = (dat__ * XCOEFs).sum(axis=-1)
+
+        # gradient of angle
         ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
-        # sum of matches (cosine similarities) per direction, same kernel as for g:
-        m__ += np.minimum(i__center, (i__topleft * dat__[0][1])) \
-               + np.minimum(i__center, (i__top * dat__[1][1])) \
-               + np.minimum(i__center, (i__topright * dat__[2][1])) \
-               + np.minimum(i__center, (i__right * dat__[2][1])) \
-               + np.minimum(i__center, (i__bottomright * dat__[2][1])) \
-               + np.minimum(i__center, (i__bottom * dat__[2][1])) \
-               + np.minimum(i__center, (i__bottomleft * dat__[2][1])) \
-               + np.minimum(i__center, (i__left * dat__[2][1]))
-
+        # accumulate match across all ranges
+        m__ +=( np.minimum(i__center, (i__topleft * dat__[1][:, :, 0]))
+              + np.minimum(i__center, (i__top * dat__[1][:, :, 1]))
+              + np.minimum(i__center, (i__topright * dat__[1][:, :, 2]))
+              + np.minimum(i__center, (i__right * dat__[1][:, :, 3]))
+              + np.minimum(i__center, (i__bottomright * dat__[1][:, :, 4]))
+              + np.minimum(i__center, (i__bottom * dat__[1][:, :, 5]))
+              + np.minimum(i__center, (i__bottomleft * dat__[1][:, :, 6]))
+              + np.minimum(i__center, (i__left * dat__[1][:, :, 7]))
+              )
         # tuple of cosine differences per direction:
-        dt__ = np.stack((i__center - i__topleft * dat__[0][1]),
-                        (i__center - i__top * dat__[0][1]),
-                        (i__center - i__topright * dat__[0][1]),
-                        (i__center - i__right * dat__[0][1]),
-                        (i__center - i__bottomright * dat__[0][1]),
-                        (i__center - i__bottom * dat__[0][1]),
-                        (i__center - i__bottomleft * dat__[0][1]),
-                        (i__center - i__left * dat__[0][1]))
+        dt__ = np.stack(((i__center - i__topleft * dat__[1][:, :, 0]),
+                         (i__center - i__top * dat__[1][:, :, 1]),
+                         (i__center - i__topright * dat__[1][:, :, 2]),
+                         (i__center - i__right * dat__[1][:, :, 3]),
+                         (i__center - i__bottomright * dat__[1][:, :, 4]),
+                         (i__center - i__bottom * dat__[1][:, :, 5]),
+                         (i__center - i__bottomleft * dat__[1][:, :, 6]),
+                         (i__center - i__left * dat__[1][:, :, 7])))
 
         dt__ = np.rollaxis(dt__, 0, 3)
 
-        dy__ += (dt__ * Y_COEFFS[1]).sum(axis=-1)
-        dx__ += (dt__ * X_COEFFS[1]).sum(axis=-1)
+        # accumulate derivatives across all ranges:
+        # is this correct with new COEFFs?
+        dy__ += (dt__ * YCOEFs).sum(axis=-1)
+        dx__ += (dt__ * XCOEFs).sum(axis=-1)
 
-        g__ = np.hypot(np.arctan2(*dy__), np.arctan2(*dx__))
-
-    else:  # i is pixel
-        '''
-        # |--(clockwise)--+  |--(clockwise)--+
-        # YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
-        #         0       0  ¦          -2       2  ¦
-        #         1   2   1  ¦          -1   0   1  ¦
-        '''
-        YCOEF_ = -1, -2, -1, 0, 1, 2, 1, 0
-        XCOEF_ = -1, 0, 1, 2, 1, 0, -1, -2
-        # these COEFFs are for rim - center, reverse signs for center - rim comp?
-
-        rim_ = np.stack(i__topleft,
-                        i__top,
-                        i__topright,
-                        i__right,
-                        i__bottomright,
-                        i__bottom,
-                        i__bottomleft,
-                        i__left
-                        )
-        for i__rim, YCOEF, XCOEF in zip(rim_, YCOEF_, XCOEF_):
-
+        g__ = np.hypot(dy__, dx__)
+        ''' 
+        unfold 8 directions:
+        rim_ = np.stack((i__topleft,
+                         i__top,
+                         i__topright,
+                         i__right,
+                         i__bottomright,
+                         i__bottom,
+                         i__bottomleft,
+                         i__left
+                         ))
+        for i__rim, YCOEF, XCOEF in zip(rim_, YCOEFs, XCOEFs):
             d__ = i__center - i__rim
-            # decompose differences into dy and dx, same as conventional Gy and Gx:
             dy__ += d__ * YCOEF
-            dx__ += d__ * XCOEF
-
-        g__ = np.hypot(np.arctan2(*dy__), np.arctan2(*dx__))
+            dx__ += d__ * XCOEF  '''
 
     # return dert__ with accumulated derivatives:
     if fig:
-        dert = i__, g__, dy__, dx__, m__, ga__, idy__, idx__
+        rdert = i__, g__, dy__, dx__, m__, ga__, idy__, idx__
     else:
-        dert = i__, g__, dy__, dx__
+        rdert = i__, g__, dy__, dx__
     '''
     next comp_r will use full dert        # comp_rr
     next comp_a will use g__, dy__, dx__  # comp_agr, or also full dert, for idy, idx?
     '''
-    return dert
+    return rdert
 
 
 def comp_a(dert__, fga):
@@ -342,3 +350,27 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
     '''
     return gdert
 
+''' old comp_a:
+
+day__ = ( Y_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
+          Y_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
+        )
+dax__ = ( X_COEFFS[0][0] * angle_diff(a__topleft, a__bottomright) +
+          X_COEFFS[0][1] * angle_diff(a__topright, a__bottomleft)
+        )
+'''
+
+def comp_3x3(image):  # Deprecated, from frame_blobs' comp_pixel, Khanh
+    # comparison between pairs of diametrically opposed pixels:
+
+    d___ = np.array(  # center pixels - translated rim pixels:
+        [image[ts2] - image[ts1] for ts1, ts2 in TRANSLATING_SLICES_PAIRS_3x3]
+    ).swapaxes(0, 2).swapaxes(0, 1)
+
+    # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
+    dy__ = (d___ * YCOEF).sum(axis=2)
+    dx__ = (d___ * XCOEF).sum(axis=2)
+    p__ = image[1:-1, 1:-1]
+    g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
+
+    return ma.stack((p__, g__, dy__, dx__))
