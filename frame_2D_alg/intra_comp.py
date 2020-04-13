@@ -1,14 +1,11 @@
 """
 Cross-comparison of pixels, angles, or gradients, in 2x2 or 3x3 kernels
 """
-
 import numpy as np
 import numpy.ma as ma
-import math
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-
 # Sobel coefficients to decompose ds into dy and dx:
 
 YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
@@ -35,32 +32,31 @@ def comp_r_draft(dert__, fig, root_fcr):
     rng = 2: 5x5 kernel,
     rng = 4: 9x9 kernel,
     ...
-    skipping rim derts as next-comp central derts forms sparse output dert__,
-    hence configuration of input derts in next-rng kernel will always be 3x3.
+    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3.
     """
 
     i__ = dert__[0]   # i is ig if fig else pixel
     # sparse aligned i__center and i__rim arrays:
 
-    i__center = i__[1:-1:2, 1:-1:2]
-    i__topleft = i__[:-2:2, :-2:2]
-    i__top = i__[:-2:2, 1:-1: 2]
-    i__topright = i__[:-2:2, 2::2]
-    i__right = i__[1:-1:2, 2::2]
+    i__center      = i__[1:-1:2, 1:-1:2]
+    i__topleft     = i__[:-2:2, :-2:2]
+    i__top         = i__[:-2:2, 1:-1:2]
+    i__topright    = i__[:-2:2, 2::2]
+    i__right       = i__[1:-1:2, 2::2]
     i__bottomright = i__[2::2, 2::2]
-    i__bottom = i__[2::2, 1:-1:2]
-    i__bottomleft = i__[2::2, :-2:2]
-    i__left = i__[1:-1:2, :-2:2]
+    i__bottom      = i__[2::2, 1:-1:2]
+    i__bottomleft  = i__[2::2, :-2:2]
+    i__left        = i__[1:-1:2, :-2:2]
 
     if root_fcr:  # root fork is comp_r, all params are present in the input:
 
-        dy__, dx__ = dert__[[2, 3]]  # g is computed from accumulated dy, dx
+        dy__, dx__ = dert__[[2, 3]]  # skip g: recomputed, output for summation only?
         dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__ = dx__[1:-1:2, 1:-1:2]
 
     else:  # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
-        dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # why 2 elements?
+        dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
         dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
@@ -70,24 +66,15 @@ def comp_r_draft(dert__, fig, root_fcr):
                          i__topright - i__bottomleft,
                          i__right - i__left
                        ))
-        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):
+        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):  # is [:4] correct here?
 
             dy__ += d__ * YCOEF  # decompose differences into dy and dx,
-            dx__ += d__ * XCOEF  # accumulate with prior-rng dy | dx
+            dx__ += d__ * XCOEF  # accumulate with prior-rng dy, dx
 
         g__ = np.hypot(dy__, dx__)  # gradient
 
-    else:  # input is ig
-
-        if root_fcr:
-            m__, idy__, idx__ = dert__[[-4, -2, -1]]
-            m__ = m__[1:-1:2, 1:-1:2]  # sparse to align with i__center
-        else:
-            m__   = np.zeros((i__center.shape[0], i__center.shape[1]))  # why 2 elements?
-            idy__ = np.zeros((i__.shape[0], i__.shape[1]))
-            idx__ = np.zeros((i__.shape[0], i__.shape[1]))
-
-        a__ = [idy__, idx__] / i__  # i is input gradient
+    else:   # i is ig:
+        a__ = [dy__, dx__] / i__  # dy, dx here are idy, idx: not accumulated yet
 
         a__center =      a__[:, 1:-1:2, 1:-1:2]
         a__topleft =     a__[:, :-2:2, :-2:2]
@@ -99,7 +86,7 @@ def comp_r_draft(dert__, fig, root_fcr):
         a__bottomleft =  a__[:, 2::2, :-2:2]
         a__left =        a__[:, 1:-1:2, :-2:2]
 
-        # tuple of differences between angles per direction:
+        # tuple of differences between center and rim angles per direction:
 
         dat__ = np.stack(angle_diff(a__center, a__topleft),
                          angle_diff(a__center, a__top),
@@ -108,21 +95,25 @@ def comp_r_draft(dert__, fig, root_fcr):
                          angle_diff(a__center, a__bottomright),
                          angle_diff(a__center, a__bottom),
                          angle_diff(a__center, a__bottomleft),
-                         angle_diff(a__center, a__left))
-
-        # what is the 3rd element?
-        day__ = np.zeros((a__center.shape[0], a__center.shape[1], a__center.shape[2]))
-        dax__ = np.zeros((a__center.shape[0], a__center.shape[1], a__center.shape[2]))
+                         angle_diff(a__center, a__left)
+                        )
+        if root_fcr:
+            m__, day__, dax__ = dert__[[-4, -2, -1]]  # skip ga: recomputed, output for summation only?
+            m__ = m__[1:-1:2, 1:-1:2]  # sparse to align with i__center
+        else:
+            m__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
+            day__ = np.zeros((a__center.shape[0], a__center.shape[1], a__center.shape[2]))
+            dax__ = np.zeros((a__center.shape[0], a__center.shape[1], a__center.shape[2]))
 
         for dat_, YCOEF, XCOEF in zip(dat__, YCOEFs, XCOEFs):
 
             day__ += dat_ * YCOEF  # decomposed differences of angle,
-            dax__ += dat_ * YCOEF  # accumulate with prior-rng day, dax?
+            dax__ += dat_ * YCOEF  # accumulate in prior-rng day, dax
 
         # gradient of angle
         ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
 
-        # accumulate match (cosine similarity) with prior-rng m (3x3, 5x5, 9x9):
+        # accumulate match (cosine similarity) in prior-rng m (3x3 -> 5x5 -> 9x9):
 
         m__ +=( np.minimum(i__center, (i__topleft     * dat__[1][:, :, 0]))
               + np.minimum(i__center, (i__top         * dat__[1][:, :, 1]))
@@ -144,21 +135,21 @@ def comp_r_draft(dert__, fig, root_fcr):
                          (i__center - i__bottomleft  * dat__[1][:, :, 6]),
                          (i__center - i__left        * dat__[1][:, :, 7])
                        ))
-        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs, XCOEFs):  # accumulate with prior-rng gy, gx:
+        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs, XCOEFs):  # accumulate in prior-rng dy, dx:
 
-            dy__ += d__ * YCOEF  # y-decomposed center to rim difference
-            dx__ += d__ * XCOEF  # x-decomposed center to rim difference
+            dy__ += d__ * YCOEF  # y-decomposed center-to-rim difference
+            dx__ += d__ * XCOEF  # x-decomposed center-to-rim difference
 
         g__ = np.hypot(dy__, dx__)
 
     # return dert__ with accumulated derivatives:
     if fig:
-        rdert = i__, g__, dy__, dx__, m__, ga__, idy__, idx__
+        rdert = i__, g__, dy__, dx__, m__, ga__, *day__, *dax__
     else:
         rdert = i__, g__, dy__, dx__
     '''
     next comp_r will use full dert        # comp_rr
-    next comp_a will use g__, gy__, gx__  # comp_agr, or also full dert, for igy, igx?
+    next comp_a will use g__, dy__, dx__  # comp_agr, preserve dy, dx as idy, idx?
     '''
     return rdert
 
@@ -218,7 +209,7 @@ def comp_a(dert__, fga):
     # angle gradient, a scalar
 
     adert__ = ma.stack((i__[:-1, :-1],   # for summation in Dert
-                        g__[:-1, :-1],
+                        g__[:-1, :-1],   # for summation in Dert
                         dy__[:-1, :-1],  # passed on as idy
                         dx__[:-1, :-1],  # passed on as idx
                         m__[:-1, :-1],   # for summation in Dert
@@ -380,8 +371,8 @@ def angle_diff(a2, a1):
 def comp_g(dert__):  # add fga if processing in comp_ga is different?
     """
     Cross-comp of g or ga in 2x2 kernels, between derts in ma.stack dert__:
-    input dert = (i, g, dy, dx, ga, day, dax, cos_da0, cos_da1)
-    output dert = (g, gg, dgy, dgx, gm, ga, day, dax)
+    input dert  = (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
+    output dert = (g, gg, dgy, dgx, gm, ga, day, dax, dy, dx)
     """
     g__, cos_da0__, cos_da1__ = dert__[[1, -2, -1]]  # top dimension of numpy stack must be a list
 
@@ -409,8 +400,17 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
     mg1__ = np.minimum(g_topright__, (g_bottomleft__ * cos_da1__))
     mg__  = mg0__ + mg1__
 
-    gdert = ma.stack(g__[:-1, :-1], gg__, dgy__, dgx__, mg__, dert__[4], dert__[5], dert__[6])
-    # ga__=dert__[5], day_=dert__[6], dax=dert__[7]
+    gdert = ma.stack(g__[:-1, :-1],  # remove last row and column to align with derived params
+                     gg__,
+                     dgy__,
+                     dgx__,
+                     mg__,
+                     dert__[5],  # ga__
+                     dert__[6],  # day__
+                     dert__[7],  # dax__
+                     dert__[8][:-1, :-1],  # idy__
+                     dert__[9][:-1, :-1]   # idx__
+                    )
     '''
     next comp_r will use g, idy, idx   # comp_rg
     next comp_a will use ga, day, dax  # comp_agg, also dgy__, dgx__ as idy, idx?
