@@ -6,16 +6,14 @@ Change quickly in parallel with development.
 from time import time
 import operator as op
 from comp_pixel import (
-    comp_pixel, comp_pixel_old,
-    comp_3x3, comp_3x3_loop,
+    comp_pixel, comp_3x3_loop,
 )
 from intra_comp_ts import (
     translated_operation, angle_diff,
 )
 from test_sets import (
     comp_pixel_test_pairs,
-    pixels, rderts, gderts,
-)
+    pixels, rderts, )
 from utils import *
 
 

@@ -1,13 +1,12 @@
 """
-For testing comparison operations and sub-blobs of different depths.
-Requirements: numpy, frame_blobs, comp_v, utils.
+For testing intra_comp operations and sub-blobs of different depths.
+Requirements: numpy, frame_blobs, intra_comp, utils.
 Note: Since these operations performed only on multivariate variables,
 "__" in variable names will be skipped.
 """
 
-import frame_blobs_ternary
-
-from intra_comp_ts import comp_v
+import frame_blobs
+from intra_comp import *
 from utils import imread, imwrite
 from intra_blob_draft import ave
 
@@ -28,59 +27,56 @@ ANGLE_AVE = 100
 # Maximum recursion depth:
 MAX_DEPTH = 3
 
-# How ave is increased:
-increase_ave = lambda ave: ave * rave
-
 # -----------------------------------------------------------------------------
 # Functions
 
-def recursive_comp(derts, rng, Ave, fork_history, depth, fa, nI):
+def recursive_comp(dert_, rng, Ave, fork_history, depth, fca, nI):  # replace nI with flags
     """Comparisons under a fork."""
-    derts = comp_v(derts, nI, rng)
+    dert_ = comp_g(dert_)  # add other comp forks
     Ave += ave
 
-    dscope = len(derts)
+    dscope = len(dert_)
     assert (dscope in (4, 5, 11, 12))
     has_m = dscope in (5, 12)
     # 0 1 2 3 4 5 6 7 8 9 0 1
     # i g d d a a g d d d d
     # i g m d d a a g d d d d
-    if not fa:
-        assert len(derts) in (4, 5)
-        recursive_comp(derts, rng, Ave, fork_history, depth-1, fa=1,
+    if not fca:
+        assert len(dert_) in (4, 5)
+        recursive_comp(dert_, rng, Ave, fork_history, depth-1, fca=1,
                        nI=2+has_m)
     else:
-        assert len(derts) in (11, 12)
+        assert len(dert_) in (11, 12)
         # Ongoing forks will have i outputed while
         # terminated forks will have all i, g and ga outputed.
-        imwrite_fork(derts, 'i', Ave, fork_history)
+        imwrite_fork(dert_, 'i', Ave, fork_history)
         if depth == 0 or rng*2 + 1 > 3:
-            imwrite_fork(derts, 'g', Ave, fork_history+"g")
-            imwrite_fork(derts, 'ga', Ave, fork_history+"ga")
+            imwrite_fork(dert_, 'g', Ave, fork_history+"g")
+            imwrite_fork(dert_, 'ga', Ave, fork_history+"ga")
             return
 
-        recursive_comp(derts, rng+1, Ave, fork_history+"r", depth,
-                       fa=0, nI=0)
-        recursive_comp(derts, rng*2+1, Ave, fork_history+"g", depth,
-                       fa=0, nI=1)
-        recursive_comp(derts, rng*2+1, Ave, fork_history+"ga", depth,
-                       fa=0, nI=7+has_m)
-        recursive_comp(derts, rng+1, Ave, fork_history + "ra", depth,
-                       fa=1, nI=4+has_m)
+        recursive_comp(dert_, rng+1, Ave, fork_history+"r", depth,
+                       fca=0, nI=0)
+        recursive_comp(dert_, rng*2+1, Ave, fork_history+"g", depth,
+                       fca=0, nI=1)
+        recursive_comp(dert_, rng*2+1, Ave, fork_history+"ga", depth,
+                       fca=0, nI=7+has_m)
+        recursive_comp(dert_, rng+1, Ave, fork_history + "ra", depth,
+                       fca=1, nI=4+has_m)
 
 
-def imwrite_fork(derts, param, Ave, fork_history):
+def imwrite_fork(dert_, param, Ave, fork_history):
     """Output fork's gradient image."""
-    # Select derts to draw:
+    # Select dert_ to draw:
     if param == 'i':
-        o = derts[0]
+        o = dert_[0]
     elif param == 'g':
-        o = derts[1]
+        o = dert_[1]
     elif param == 'm':
-        assert len(derts) in (5, 12)
-        o = derts[2]
+        assert len(dert_) in (5, 12)
+        o = dert_[2]
     elif param == 'ga':
-        o = derts[7] if len(derts) == 12 else derts[6]
+        o = dert_[7] if len(dert_) == 12 else dert_[6]
     else:
         o = None
 
@@ -104,14 +100,14 @@ if __name__ == "__main__":
     print('Done!')
 
     print('Doing first comp...')
-    derts = frame_blobs_ternary.comp_pixel(image)
+    dert_ = frame_blobs.comp_pixel(image)
     print('Done!')
 
     print('Doing recursive comps...')
     # Recursive comps:
-    recursive_comp(derts=derts,
+    recursive_comp(dert_=dert_,
                    rng=1,
-                   fa=1,
+                   fca=1,
                    nI=2,
                    Ave=ave,
                    fork_history="i",

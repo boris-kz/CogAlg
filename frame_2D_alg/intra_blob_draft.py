@@ -15,28 +15,28 @@ from functools import reduce
     rng+: incremental range comp in low-variation flat areas of +v--vg: positive deviation of negated -vg triggers comp_r.
     Each adds a layer of sub_blobs per blob.  
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_forking_scheme.png
-
-    Fork structure:
-    fcr, # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork? 
-    fca, # flag comp angle, clustering by ga: gradient of angle?
-    fga, # flag comp angle of ga vs. angle of g
-    fig, # flag input is gradient
-    rdn, # redundancy to higher layers
-    rng, # comparison range
-    Dert, sub_blob_
     
     Blob structure, for all layers of blob hierarchy:
+    
     root_blob,  # reference for feedback of blob Dert params and sub_blob_, up to frame
-    Dert = I, G, Dy, Dx, M, if comp_angle: + [Ga, Day, Dax], S (area), Ly (vertical dimension)
+    Dert = I, G, Dy, Dx; comp_a: + Ga, Day, Dax; comp_g: + M;  S (area), Ly (vertical dimension)
     # I: input, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match, Ga: angle G, Day, Dax: angle Ds  
     sign, 
     map,  # boolean map of blob, to compute overlap in comp_blob
     box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
     dert__, # comp r | comp_g -> i, g, dy, dx, m; comp_a -> i, g, dy, dx, m, ga, day, dax, da0, da1 
     stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, in vertical (horizontal) order
-    layer_  # [(fork_params, Dert, sub_blob_)]: list of layers across sub_blob derivation tree, nested mixed-fork deep layers
+    
+    # fork structure of next layer:
+    fcr, # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork? 
+    fca, # flag comp angle, clustering by ga: gradient of angle?
+    fga, # flag comp angle of ga vs. angle of g
+    fig, # flag input is gradient
+    rdn, # redundancy to higher layers
+    rng, # comp range
+    layer_ # [(Dert, sub_blob_)]: list of layers across sub_blob derivation tree
+           # deeper layers are nested, multiple forks: no single set of fork params?
 '''
-
 # filters, All *= rdn:
 
 ave  = 50  # fixed cost per dert, from average g|m, reflects blob definition cost, may be different for comp_a?
@@ -45,10 +45,10 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # -----------------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fca, fcr, fga, fcrr):  # fcrr is for comp_r only, replace with
+def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
 
     # recursive input rng+ | der+ | angle cross-comp within a blob
-    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+, fcrr: root fork is comp_r
+    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
 
     if fca:
         dert__ = comp_a(blob['dert__'], fga)  # form ga blobs, evaluate for comp_aga | comp_g:
@@ -64,7 +64,7 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, fga, fcrr):  # fcrr is for comp_r 
                 # -Ga -> comp_g -> dert = g, gg, gdy, gdx, gm:
                 intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, fga=1)  # fga passed to comp_agg
     else:
-        if fcr: dert__ = comp_r(blob['dert__'], fig)  # 3x3, sparse sampling to avoid kernel center overlap
+        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  # 3x3, sparse to avoid center overlap
         else:   dert__ = comp_g(blob['dert__'])
 
         cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig)  # cluster by sign of crit=g -> g_sub_blobs
@@ -88,16 +88,18 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, fga, fcrr):  # fcrr is for comp_r 
     '''
 # constants:
 
-DERT_PARAMS = "I", "G", "Dy", "Dx", "M"  # formed by comp_r or comp_g, input to comp_a or comp_r
-aDERT_PARAMS = DERT_PARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")  # extension is formed by comp_a, input to comp_g
+iPARAMS = "I", "G", "Dy", "Dx"  # formed by comp_pixel
+aPARAMS = iPARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")  # (or sin, cos), formed by comp_a
+gPARAMS = iPARAMS + "M" + aPARAMS  # formed by comp_g
+rPARAMS = iPARAMS  # if fig: + gPARAMS  # formed by comp_r
 
 P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
 S_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
 
-P_PARAM_KEYS = DERT_PARAMS + P_PARAMS
-aP_PARAM_KEYS = aDERT_PARAMS + P_PARAMS
-S_PARAM_KEYS = DERT_PARAMS + S_PARAMS
-aS_PARAM_KEYS = aDERT_PARAMS + S_PARAMS
+P_PARAM_KEYS = iPARAMS + P_PARAMS
+aP_PARAM_KEYS = aPARAMS + P_PARAMS
+S_PARAM_KEYS = iPARAMS + S_PARAMS
+aS_PARAM_KEYS = aPARAMS + S_PARAMS
 
 
 def cluster_derts(blob, dert__, Ave, fca, fcr, fig):  # clustering crit is always g in dert[1], fder is a sign

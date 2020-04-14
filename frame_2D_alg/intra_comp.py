@@ -18,7 +18,7 @@ XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
 '''
 # ------------------------------------------------------------------------------------
 # Functions
-def comp_r_draft(dert__, fig, root_fcr):
+def comp_r(dert__, fig, root_fcr):
     """
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -32,7 +32,8 @@ def comp_r_draft(dert__, fig, root_fcr):
     rng = 2: 5x5 kernel,
     rng = 4: 9x9 kernel,
     ...
-    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3.
+    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, see:
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     """
 
     i__ = dert__[0]   # i is ig if fig else pixel
@@ -50,9 +51,9 @@ def comp_r_draft(dert__, fig, root_fcr):
 
     if root_fcr:  # root fork is comp_r, all params are present in the input:
 
-        dy__, dx__ = dert__[[2, 3]]  # skip g: recomputed, output for summation only?
-        dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
-        dx__ = dx__[1:-1:2, 1:-1:2]
+        idy__, idx__ = dert__[[2, 3]]  # skip g: recomputed, output for summation only?
+        dy__ = idy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
+        dx__ = idx__[1:-1:2, 1:-1:2]
 
     else:  # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
@@ -66,15 +67,20 @@ def comp_r_draft(dert__, fig, root_fcr):
                          i__topright - i__bottomleft,
                          i__right - i__left
                        ))
-        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):  # is [:4] correct here?
+        for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):
 
             dy__ += d__ * YCOEF  # decompose differences into dy and dx,
             dx__ += d__ * XCOEF  # accumulate with prior-rng dy, dx
 
         g__ = np.hypot(dy__, dx__)  # gradient
 
-    else:   # i is ig:
-        a__ = [dy__, dx__] / i__  # dy, dx here are idy, idx: not accumulated yet
+    else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
+
+        if not root_fcr:
+            idy__, idx__ = dert__[[-2, -1]]  # root fork is comp_g, not sparse
+
+        a__ = [idy__, idx__] / i__  # i = ig
+        # sparse aligned a__center and a__rim arrays:
 
         a__center =      a__[:, 1:-1:2, 1:-1:2]
         a__topleft =     a__[:, :-2:2, :-2:2]
@@ -86,17 +92,17 @@ def comp_r_draft(dert__, fig, root_fcr):
         a__bottomleft =  a__[:, 2::2, :-2:2]
         a__left =        a__[:, 1:-1:2, :-2:2]
 
-        # tuple of differences between center and rim angles per direction:
+        # 8-tuple of differences between center dert angle and rim dert angle:
 
-        dat__ = np.stack(angle_diff(a__center, a__topleft),
-                         angle_diff(a__center, a__top),
-                         angle_diff(a__center, a__topright),
-                         angle_diff(a__center, a__right),
-                         angle_diff(a__center, a__bottomright),
-                         angle_diff(a__center, a__bottom),
-                         angle_diff(a__center, a__bottomleft),
-                         angle_diff(a__center, a__left)
-                        )
+        dat__ = np.stack((angle_diff(a__center, a__topleft),
+                          angle_diff(a__center, a__top),
+                          angle_diff(a__center, a__topright),
+                          angle_diff(a__center, a__right),
+                          angle_diff(a__center, a__bottomright),
+                          angle_diff(a__center, a__bottom),
+                          angle_diff(a__center, a__bottomleft),
+                          angle_diff(a__center, a__left)
+                        ))
         if root_fcr:
             m__, day__, dax__ = dert__[[-4, -2, -1]]  # skip ga: recomputed, output for summation only?
             m__ = m__[1:-1:2, 1:-1:2]  # sparse to align with i__center
@@ -124,7 +130,7 @@ def comp_r_draft(dert__, fig, root_fcr):
               + np.minimum(i__center, (i__bottomleft  * dat__[1][:, :, 6]))
               + np.minimum(i__center, (i__left        * dat__[1][:, :, 7]))
               )
-        # tuple of cosine differences per direction:
+        # 8-tuple of cosine differences per direction:
 
         dt__ = np.stack(((i__center - i__topleft     * dat__[1][:, :, 0]),
                          (i__center - i__top         * dat__[1][:, :, 1]),
@@ -226,103 +232,6 @@ def comp_a(dert__, fga):
     return adert__
 
 
-def comp_a_chee(dert__, fga):
-    """
-    cross-comp of a or aga in 2x2 kernels
-    ----------
-    input dert__ : array-like
-    fga : bool
-        If True, dert structure is interpreted as:
-        (g, gg, gdy, gdx, gm, iga, iday, idax)
-        else: (i, g, dy, dx, m)
-    ----------
-    output adert: masked_array of aderts,
-    adert structure is (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
-    Examples
-    --------
-    >>> # actual python console code
-    >>> dert__ = 'specific value'
-    >>> fga = 'specific value'
-    >>> comp_a(dert__, fga)
-    'specific output'
-    """
-    # input dert = (i,  g,  dy,  dx,  m, ?(ga, day, dax))
-    i__, g__, dy__, dx__, m__ = dert__[0:5]
-
-    if fga:  # input is adert
-        ga__, day__, dax__ = dert__[5:8]
-        a__ = [day__, dax__] / ga__  # similar to calc_a
-    else:
-        a__ = [dy__, dx__] / g__  # similar to calc_a
-
-    # this mask section would need further test later with actual input from frame_blobs
-    if isinstance(a__, ma.masked_array):
-        a__.data[a__.mask] = np.nan
-        a__.mask = ma.nomask
-
-    # each shifted a in 2x2 kernel
-    a__topleft = a__[:, :-1, :-1]
-    a__topright = a__[:, :-1, 1:]
-    a__botright = a__[:, 1:, 1:]
-    a__botleft = a__[:, 1:, :-1]
-
-    a_rim__ = np.stack((a__topleft,
-                        a__topright,
-                        a__botright,
-                        a__botleft))
-
-    # preallocate size of arrays
-    sin_da__ = [None] * 2
-    cos_da__ = [None] * 2
-    day__ = [None] * 2
-    day__[0] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
-    day__[1] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
-    dax__ = [None] * 2
-    dax__[0] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
-    dax__[1] = np.zeros((a__topleft.shape[1], a__topleft.shape[2]))
-
-    YCOEF_ = -1, -1
-    XCOEF_ = -1, 1
-
-    for i in range(2):
-        # opposing difference
-        sin_da__[i], cos_da__[i] = angle_diff(a_rim__[i], a_rim__[i + 2])
-
-        # sine part of day
-        day__[0] += sin_da__[i] * YCOEF_[i]
-        # cosine part of day
-        day__[1] += cos_da__[i]  # no sign based coefficient for cosine part
-        # sine part of dax
-        dax__[0] += sin_da__[i] * XCOEF_[i]
-        # cosine part of dax
-        dax__[1] += cos_da__[i]  # no sign based coefficient for cosine part
-
-    '''
-    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
-    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    '''
-    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
-    # angle gradient, a scalar
-
-    # remove last row and column to solve dimension mismatch issue
-    adert__ = ma.stack((i__[:-1, :-1],  # for summation in Dert
-                        g__[:-1, :-1],
-                        dy__[:-1, :-1],
-                        dx__[:-1, :-1],
-                        m__[:-1, :-1],   # for summation in Dert
-                        ga__,
-                        *day__,
-                        *dax__,
-                        cos_da__[0],
-                        cos_da__[1]))
-    '''
-    next comp_g will use g, cos_da0__, cos_da1__ 
-    next comp_a will use ga, day, dax  # comp_aga
-    maybe passed to deeper comp_rg: dy as idy, dx as idx? 
-    '''
-    return adert__
-
-
 def calc_a(dert__):
     """
     Compute vector representation of angle of gradient by normalizing (dy, dx).
@@ -352,16 +261,12 @@ def calc_a(dert__):
 
 
 def angle_diff(a2, a1):
-    """
-    a1, a2: array-like, each contains sine and cosine of corresponding angle
-    """
-    sin_1 = a1[0]
-    sin_2 = a2[0]
 
-    cos_1 = a1[1]
-    cos_2 = a2[1]
+    sin_1, cos_1 = a1[0, 1]
+    sin_2, cos_2 = a2[0, 1]
 
     # sine and cosine of difference between angles:
+
     sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
     cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
 
@@ -388,11 +293,11 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
 
     dgy__ = ((g_bottomleft__ + g_bottomright__) -
              (g_topleft__ * cos_da0__ + g_topright__ * cos_da1__))
-    # y-decomposed difference between gs
+    # y-decomposed cosine difference between gs
 
     dgx__ = ((g_topright__ + g_bottomright__) -
              (g_topleft__ * cos_da0__ + g_bottomleft__ * cos_da1__))
-    # x-decomposed difference between gs
+    # x-decomposed cosine difference between gs
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 

@@ -5,7 +5,7 @@ import numpy as np
 import numpy.ma as ma
 from intra_comp_ts import comp_param
 from utils import pairwise, flatten
-from functools import reduce
+
 '''
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.
     intra_blob recursively evaluates for extended internal cross-comp and divisive sub-clustering within each blob.
