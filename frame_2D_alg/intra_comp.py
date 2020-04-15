@@ -34,6 +34,12 @@ def comp_r(dert__, fig, root_fcr):
     ...
     Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
+
+    Where do we fit this mask check?
+    # this mask section would need further test later with actual input from frame_blobs
+    if isinstance(a__, ma.masked_array):
+        a__.data[a__.mask] = np.nan
+        a__.mask = ma.nomask
     """
 
     i__ = dert__[0]   # i is ig if fig else pixel
@@ -51,14 +57,16 @@ def comp_r(dert__, fig, root_fcr):
 
     if root_fcr:  # root fork is comp_r, all params are present in the input:
 
-        idy__, idx__ = dert__[[2, 3]]  # skip g: recomputed, output for summation only?
+        idy__, idx__, m__ = dert__[[2, 3, 4]]  # skip g: recomputed, output for summation only?
         dy__ = idy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__ = idx__[1:-1:2, 1:-1:2]
+        m__  = m__[1:-1:2, 1:-1:2]
 
     else:  # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
         dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
         dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
+        m__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
 
@@ -73,6 +81,18 @@ def comp_r(dert__, fig, root_fcr):
             dx__ += d__ * XCOEF  # accumulate with prior-rng dy, dx
 
         g__ = np.hypot(dy__, dx__)  # gradient
+        '''
+        separate match = inverse SAD, direction doesn't matter:
+        '''
+        m__ += ((abs(i__center - i__topleft)
+               + abs(i__center - i__top)
+               + abs(i__center - i__topright)
+               + abs(i__center - i__right)
+               + abs(i__center - i__bottomright)
+               + abs(i__center - i__bottom)
+               + abs(i__center - i__bottomleft)
+               + abs(i__center - i__left)
+               ))
 
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
 
@@ -152,10 +172,10 @@ def comp_r(dert__, fig, root_fcr):
     if fig:
         rdert = i__, g__, dy__, dx__, m__, ga__, *day__, *dax__
     else:
-        rdert = i__, g__, dy__, dx__
+        rdert = i__, g__, dy__, dx__, m__
     '''
     next comp_r will use full dert        # comp_rr
-    next comp_a will use g__, dy__, dx__  # comp_agr, preserve dy, dx as idy, idx?
+    next comp_a will use g__, dy__, dx__  # comp_agr, preserve dy, dx as idy, idx
     '''
     return rdert
 
@@ -178,7 +198,7 @@ def comp_a(dert__, fga):
     >>> fga = 'specific value'
     >>> comp_a(dert__, fga)
     """
-    # input dert = (i,  g,  dy,  dx, ?( m, ga, day, dax))
+    # input dert = (i, g, dy, dx, m, ?(ga, day, dax))
     i__, g__, dy__, dx__, m__ = dert__[0:5]
 
     if fga:  # input is adert
@@ -262,8 +282,8 @@ def calc_a(dert__):
 
 def angle_diff(a2, a1):
 
-    sin_1, cos_1 = a1[0, 1]
-    sin_2, cos_2 = a2[0, 1]
+    sin_1, cos_1 = a1[:]
+    sin_2, cos_2 = a2[:]
 
     # sine and cosine of difference between angles:
 

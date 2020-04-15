@@ -19,7 +19,7 @@ from functools import reduce
     Blob structure, for all layers of blob hierarchy:
     
     root_blob,  # reference for feedback of blob Dert params and sub_blob_, up to frame
-    Dert = I, G, Dy, Dx; comp_a: + Ga, Day, Dax; comp_g: + M;  S (area), Ly (vertical dimension)
+    Dert = I, G, Dy, Dx, M, comp_a: + [Ga, Dyy, Dxy, Dyx, Dxx], S (area), Ly (vertical dimension)
     # I: input, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match, Ga: angle G, Day, Dax: angle Ds  
     sign, 
     map,  # boolean map of blob, to compute overlap in comp_blob
@@ -88,9 +88,8 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
     '''
 # constants:
 
-iPARAMS = "I", "G", "Dy", "Dx"  # formed by comp_pixel
-aPARAMS = iPARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")  # (or sin, cos), formed by comp_a
-gPARAMS = iPARAMS + "M" + aPARAMS  # formed by comp_g
+iPARAMS = "I", "G", "Dy", "Dx", "M"  # formed by comp_pixel
+aPARAMS = iPARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")  # (sin, cos), formed by comp_a, same for comp_g
 rPARAMS = iPARAMS  # if fig: + gPARAMS  # formed by comp_r
 
 P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
