@@ -11,8 +11,8 @@ from functools import reduce
     
     intra_blob recursively evaluates each blob for one of three forks of extended internal cross-comparison and sub-clustering:
     angle cross-comp,
-    der+: incremental derivation comp in high-variation edge areas of +vg: positive deviation of gradient triggers comp_g, 
-    rng+: incremental range comp in low-variation flat areas of +v--vg: positive deviation of negated -vg triggers comp_r.
+    der+: incremental derivation cross-comp in high-variation edge areas of +vg: positive deviation of gradient triggers comp_g, 
+    rng+: incremental range cross-comp in low-variation flat areas of +v--vg: positive deviation of negated -vg triggers comp_r.
     Each adds a layer of sub_blobs per blob.  
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_forking_scheme.png
     
@@ -39,10 +39,10 @@ from functools import reduce
 '''
 # filters, All *= rdn:
 
-ave  = 50  # fixed cost per dert, from average g|m, reflects blob definition cost, may be different for comp_a?
+ave  = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 10000  # fixed cost per intra_blob comp and clustering
 
-# -----------------------------------------------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
 def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
@@ -51,35 +51,34 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
     # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
 
     if fca:
-        dert__ = comp_a(blob['dert__'], fga)  # form ga blobs, evaluate for comp_aga | comp_g:
-        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig=0)  # cluster by sign of crit=ga -> ga_sub_blobs
+        dert__ = comp_a(blob['dert__'], fga)  # form ga blobs, evaluate for comp_g | comp_aga:
+        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig=0)  # -> sub_blobs by ma sign
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
-                if sub_blob['Dert']['Ga'] > aveB * rdn:
-                    # +Ga -> comp_aga -> dert + gaga, ga_day, ga_dax:
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, fga=1)
+                if sub_blob['Dert']['Ma'] > aveB * rdn:
+                    # +Ma -> comp_g -> dert = g, gg, gdy, gdx, gm:
+                    intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=0, fcr=0, fga=1)  # fga for comp_agg
 
-            elif -sub_blob['Dert']['Ga'] > aveB * rdn:
-                # -Ga -> comp_g -> dert = g, gg, gdy, gdx, gm:
-                intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=0, fcr=0, fga=1)  # fga passed to comp_agg
+            elif sub_blob['Dert']['Ga'] > aveB * rdn:
+                # +Ga -> comp_aga -> dert + gaga, ga_day, ga_dax:
+                intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=1)
     else:
-        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  # 3x3, sparse to avoid center overlap
-        else:   dert__ = comp_g(blob['dert__'])
+        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  #-> sub_blobs by m sign
+        else:   dert__ = comp_g(blob['dert__'])  #-> sub_blobs by g sign:
 
-        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig)  # cluster by sign of crit=g -> g_sub_blobs
+        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig)
         # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer
 
         for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
             if sub_blob['sign']:
-                if sub_blob['Dert']['G'] > aveB * rdn:
-                    # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
-                    intra_blob(sub_blob, rdn+1, rng=1, fig=1, fca=1, fcr=0, fga=0)
+                if sub_blob['Dert']['M'] > aveB * rdn:
+                    # +M -> comp_r -> dert with accumulated derivatives:
+                    intra_blob(sub_blob, rdn + 1, rng + 1, fig=fig, fca=0, fcr=1, fga=0)  # fga for comp_agr
 
-            elif -sub_blob['Dert']['G'] > aveB * rdn:
-                # -G -> comp_r -> dert with accumulated derivatives:
-                intra_blob(sub_blob, rdn+1, rng+1, fig=fig, fca=0, fcr=1, fga=0)
-                # fga is passed to comp_agr
+            elif sub_blob['Dert']['G'] > aveB * rdn:
+                # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
+                intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=0)
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     with feedback:
@@ -103,7 +102,7 @@ aS_PARAM_KEYS = aPARAMS + S_PARAMS
 
 def cluster_derts(blob, dert__, Ave, fca, fcr, fig):  # clustering crit is always g in dert[1], fder is a sign
 
-    blob['layer_'][0][0] = dict(I=0, G=0, Dy=0, Dx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0, S=0, Ly=0,
+    blob['layer_'][0][0] = dict(I=0, G=0, Dy=0, Dx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0, Ma=0, S=0, Ly=0,
                                 sub_blob_=[])  # to fill with fork params and sub_sub_blobs
                                 # initialize first sub_blob in first layer
 
@@ -115,13 +114,13 @@ def cluster_derts(blob, dert__, Ave, fca, fcr, fig):  # clustering crit is alway
     return sub_blob_
 
 # clustering functions, out of date:
-#---------------------------------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------------
 
 def form_P__(dert__, Ave, fca, fcr, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
     # compute value (clustering criterion) per each intra_comp fork, crit__ and dert__ are 2D arrays:
     if fca:
-        crit__ = Ave - dert__[5, :, :]  # comp_a output eval by inverted ga deviation, add a coeff to Ave?
+        crit__ = Ave - dert__[-1, :, :]  # comp_a output eval by inverse deviation of ma, add a coeff to Ave?
         param_keys = aP_PARAM_KEYS  # comp_a output params
     elif fcr:
         if fig: crit__ = dert__[0 + 4, :, :] - Ave  # comp_r output eval by i + m, accumulated over comp range
