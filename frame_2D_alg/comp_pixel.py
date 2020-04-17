@@ -25,11 +25,14 @@ def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within 
     botleft__ = image[1:, :-1]
     botright__ = image[1:, 1:]
 
-    dy__ = ((botleft__ + botright__) - (topleft__ + topright__)) * 0.5  # diagonal from left
-    dx__ = ((topright__ + botright__) - (topleft__ + botleft__)) * 0.5  # diagonal from right
+    dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # sane as diagonal from left
+    dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # same as diagonal from right
     g__ = np.hypot(dy__, dx__)  # gradient per kernel
 
-    return ma.stack((topleft__, g__, dy__, dx__))
+    # inverse match = SAD: measure of variation within kernel
+    m__ = ( abs(topleft__ - botright__) + abs(topright__ - botleft__))
+
+    return ma.stack((topleft__, g__, dy__, dx__, m__))
 
 
 def comp_pixel_old(image):  # 2x2 pixel cross-correlation within image

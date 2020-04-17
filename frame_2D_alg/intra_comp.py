@@ -52,7 +52,7 @@ def comp_r(dert__, fig, root_fcr):
 
     if root_fcr:  # root fork is comp_r, all params are present in the input:
 
-        idy__, idx__, m__ = dert__[[2, 3, 4]]  # skip g: recomputed, output for summation only?
+        idy__, idx__, m__ = dert__[[2, 3, 4]]  # skip g: recomputed, output for Dert only
         dy__ = idy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__ = idx__[1:-1:2, 1:-1:2]
         m__  = m__[1:-1:2, 1:-1:2]
@@ -78,6 +78,7 @@ def comp_r(dert__, fig, root_fcr):
         g__ = np.hypot(dy__, dx__)  # gradient
         '''
         inverse match = SAD, more precise measure of variation than g, direction doesn't matter:
+        (all diagonal derivatives can be imported from prior 2x2 comp)
         '''
         m__ += ( abs(i__center - i__topleft)
                + abs(i__center - i__top)
@@ -172,11 +173,12 @@ def comp_r(dert__, fig, root_fcr):
         g__ = np.hypot(dy__, dx__)
 
     if fig:
-        rdert = i__, g__, dy__, dx__, m__, ga__, *day__, *dax__
+        rdert = ma.stack((i__center, g__, dy__, dx__, m__, ga__, *day__, *dax__))
     else:
-        rdert = i__, g__, dy__, dx__, m__
+        rdert = ma.stack((i__center, g__, dy__, dx__, m__))
     '''
     return input dert__ with accumulated derivatives,
+    
     next comp_r will use full dert        # comp_rr
     next comp_a will use g__, dy__, dx__  # comp_agr, preserve dy, dx as idy, idx
     '''
@@ -201,8 +203,9 @@ def comp_a(dert__, fga):
     >>> fga = 'specific value'
     >>> comp_a(dert__, fga)
     """
-    # input dert = (i, g, dy, dx, m, ?(ga, day, dax))
-    i__, g__, dy__, dx__, m__ = dert__[0:5]
+
+    dert__ = shape_check(dert__)  # remove derts of incomplete kernels
+    i__, g__, dy__, dx__, m__ = dert__[0:5]  # input dert = i, g, dy, dx, m, ?(ga, day, dax)
 
     if fga:  # input is adert
         ga__, day__, dax__ = dert__[5:8]
@@ -220,9 +223,8 @@ def comp_a(dert__, fga):
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    m__ = (sin_da0__ + cos_da0__) + (sin_da1__ + cos_da1__)
-    # is this correct as a measure of angle variation?
-    # inverse m, all positive, compute inverse deviation to evaluate for comp_g
+    ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
+    # ma = SAD: angle variation in kernel is inverse measure of angle match
 
     day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
@@ -244,6 +246,7 @@ def comp_a(dert__, fga):
                         ga__,
                         *day__,
                         *dax__,
+                        ma__,
                         cos_da0__,
                         cos_da1__
                       ))
@@ -301,6 +304,8 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
     input dert  = (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
     output dert = (g, gg, dgy, dgx, gm, ga, day, dax, dy, dx)
     """
+
+    dert__ = shape_check(dert__)  # remove derts of incomplete kernels
     g__, cos_da0__, cos_da1__ = dert__[[1, -2, -1]]  # top dimension of numpy stack must be a list
 
     g_topleft__ = g__[:-1, :-1]
@@ -330,6 +335,7 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
                      dert__[5],  # ga__
                      dert__[6],  # day__
                      dert__[7],  # dax__
+                     dert__[8],  # ma__
                      dert__[8][:-1, :-1],  # idy__
                      dert__[9][:-1, :-1]   # idx__
                     )
@@ -338,6 +344,17 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
     next comp_a will use ga, day, dax  # comp_agg, also dgy__, dgx__ as idy, idx?
     '''
     return gdert
+
+
+def shape_check(dert__):
+    # for 2x2 kernel comparison
+
+    if dert__[0].shape[0] % 2 != 0:
+        dert__ = dert__[:, :-1, :]
+    if dert__[0].shape[1] % 2 != 0:
+        dert__ = dert__[:, :, :-1]
+
+    return dert__
 
 ''' old comp_a:
 
