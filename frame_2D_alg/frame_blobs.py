@@ -47,7 +47,7 @@ from utils import *
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
-ave = 25  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -91,10 +91,10 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
 
     P_ = deque()  # row of Ps
     I, G, Dy, Dx, L, x0 = *dert__[0], 1, 0  # initialize P params with 1st dert params
-    G -= ave
+    G = int(G) - ave
     _s = G > 0  # sign
     for x, (p, g, dy, dx) in enumerate(dert__[1:], start=1):
-        vg = g - ave  # deviation of g
+        vg = int(g) - ave  # deviation of g
         s = vg > 0
         if s != _s:
             # terminate and pack P:
@@ -104,7 +104,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
         # accumulate P params:
         I += p
-        G += vg  # M += m only within negative vg blobs
+        G += vg
         Dy += dy
         Dx += dx
         L += 1
@@ -245,7 +245,8 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
     blob['open_stacks'] += down_fork_cnt - 1  # incomplete stack cnt + terminated stack down_fork_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
-    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0: blob is terminated and packed in frame
+    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0
+        # blob is terminated and packed in frame:
         last_stack = stack
 
         Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()

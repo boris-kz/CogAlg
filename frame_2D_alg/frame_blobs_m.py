@@ -47,7 +47,7 @@ from utils import *
 # Adjustable parameters:
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
-ave_g = 15  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+ave_g = 28  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 ave = 28    # main criterion for forking
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
@@ -92,11 +92,11 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
 
     P_ = deque()  # row of Ps
     I, G, Dy, Dx, M, L, x0 = *dert__[0], 1, 0  # initialize P params with 1st dert params
-    G -= ave_g
+    G = int(G) - ave_g
     M = ave - M
     _s = M > 0  # sign
     for x, (p, g, dy, dx, m) in enumerate(dert__[1:], start=1):
-        vg = g - ave_g  # deviation of g
+        vg = int(g) - ave_g  # deviation of g
         vm = ave - m  # inverse deviation of variation
         s = vm > 0
         if s != _s:
@@ -189,7 +189,7 @@ def form_stack_(y, P_, frame):  # Convert or merge every P into its stack of Ps,
         I, G, Dy, Dx, M, L, x0, dert__ = P.values()
         xn = x0 + L  # next-P x0
         if not up_fork_:
-            # initialize new stack for each input-row P that has no connections in higher row:
+            # initialize blob for each input-row P that has no connections in higher row:
             blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, M=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
             new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, M=M, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_fork_cnt=0, sign=s)
             blob['stack_'].append(new_stack)
@@ -249,7 +249,8 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
     blob['open_stacks'] += down_fork_cnt - 1  # incomplete stack cnt + terminated stack down_fork_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
-    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0: blob is terminated and packed in frame
+    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0:
+        # blob is terminated and packed in frame
         last_stack = stack
 
         Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()

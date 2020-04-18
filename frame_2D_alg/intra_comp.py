@@ -225,6 +225,7 @@ def comp_a(dert__, fga):
 
     ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
     # ma = SAD: angle variation in kernel is inverse measure of angle match
+    # need to covert sin and cos da to 0->2 range?
 
     day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
