@@ -18,7 +18,7 @@ OUTPUT_PATH = "./visualization/images/"
 # -----------------------------------------------------------------------------
 # Functions
 
-def draw_gg(img_out, g_):
+def draw_g(img_out, g_):
     # loop in each row
     for y in range(g_.shape[0]):
         # loop across each dert
@@ -145,41 +145,41 @@ if __name__ == "__main__":
     g_rrr  = np.zeros((size_y,size_x))
 
     # draw each dert
-    img_g = draw_gg(g,dert_[1])
+    img_g = draw_g(g,dert_[1])
     # 1st layer
     img_ga = draw_ga(ga, ga_dert_[5])
     img_gr = draw_gr(gr, gr_dert_[1], rng=2)
     # 2nd layer
     img_gaga = draw_ga(gaga, gaga_dert_[5])
-    img_gg =   draw_gg(gg, gaga_dert_[1])
-    img_gagr = draw_gr(gagr, gagr_dert_[5], rng=2)
+    img_gg =   draw_g(gg, gaga_dert_[1])
+    img_gagr = draw_gar(gagr, gagr_dert_[5], rng=2)
     img_grr =  draw_gr(grr, gagr_dert_[1], rng=4)
     # 3rd layer
     img_ga_gaga = draw_ga(ga_gaga, gaga_dert_[5])
-    img_g_ga    = draw_ga(g_ga, gaga_dert_[1])
+    img_g_ga    = draw_g(g_ga, gaga_dert_[1])
     img_ga_gg   = draw_ga(ga_gg, gg_dert_[5])
     img_g_rg    = draw_gr(g_rg, gg_dert_[1], rng=2)
-    img_ga_gagr = draw_gr(ga_gagr, gagr_dert_[5], rng=2)
+    img_ga_gagr = draw_gar(ga_gagr, gagr_dert_[5], rng=2)
     img_g_gr    = draw_gr(g_gr, gagr_dert_[1], rng=2)
-    img_ga_grr  = draw_gr(ga_grr, grr_dert_[5], rng=4)
+    img_ga_grr  = draw_gar(ga_grr, grr_dert_[5], rng=4)
     img_g_rrr   = draw_gr(g_rrr, grr_dert_[1], rng=8)
 
     # save to disk
-    cv2.imwrite('./images/g.png', img_g)
-    cv2.imwrite('./images/ga.png', img_ga)
-    cv2.imwrite('./images/gr.png', img_gr)
-    cv2.imwrite('./images/gaga.png',img_gaga)
-    cv2.imwrite('./images/gg.png', img_gg)
-    cv2.imwrite('./images/gagr.png',img_gagr)
-    cv2.imwrite('./images/grr.png',img_grr)
-    cv2.imwrite('./images/ga_gaga.png',img_ga_gaga)
-    cv2.imwrite('./images/g_ga.png',img_g_ga)
-    cv2.imwrite('./images/ga_gg.png',img_ga_gg)
-    cv2.imwrite('./images/g_rg.png',img_g_rg)
-    cv2.imwrite('./images/ga_gagr.png',img_ga_gagr)
-    cv2.imwrite('./images/g_gr.png',img_g_gr)
-    cv2.imwrite('./images/ga_grr.png',img_ga_grr)
-    cv2.imwrite('./images/g_rrr.png',img_g_rrr)
+    cv2.imwrite('./images/intra_comp/g.png', img_g)
+    cv2.imwrite('./images/intra_comp/ga.png', img_ga)
+    cv2.imwrite('./images/intra_comp/gr.png', img_gr)
+    cv2.imwrite('./images/intra_comp/gaga.png', img_gaga)
+    cv2.imwrite('./images/intra_comp/gg.png', img_gg)
+    cv2.imwrite('./images/intra_comp/gagr.png', img_gagr)
+    cv2.imwrite('./images/intra_comp/grr.png', img_grr)
+    cv2.imwrite('./images/intra_comp/ga_gaga.png', img_ga_gaga)
+    cv2.imwrite('./images/intra_comp/g_ga.png', img_g_ga)
+    cv2.imwrite('./images/intra_comp/ga_gg.png', img_ga_gg)
+    cv2.imwrite('./images/intra_comp/g_rg.png', img_g_rg)
+    cv2.imwrite('./images/intra_comp/ga_gagr.png', img_ga_gagr)
+    cv2.imwrite('./images/intra_comp/g_gr.png', img_g_gr)
+    cv2.imwrite('./images/intra_comp/ga_grr.png', img_ga_grr)
+    cv2.imwrite('./images/intra_comp/g_rrr.png', img_g_rrr)
 
     print('Done!')
     print('Terminating...')
@@ -199,11 +199,6 @@ def add_colour(img_comp,size_y,size_x):
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-
-
-
-
-
 #    # size of image
 #    size_y = image.shape[0]
 #    size_x = image.shape[1]
@@ -214,14 +209,11 @@ def add_colour(img_comp,size_y,size_x):
 #    plt.figure()
 #    plt.imshow(dert_)
 #
-#
-#
 #    # initialize each image for visualization
 #    img_comp_pixel = np.zeros((size_y,size_x))
 #    img_adert_ag = np.zeros((size_y,size_x))
 #    img_adert_aga = np.zeros((size_y,size_x))
 #    img_gdert_g = np.zeros((size_y,size_x))
-#
 #
 #    # loop in each row
 #    for y in range(size_y):
@@ -229,16 +221,13 @@ def add_colour(img_comp,size_y,size_x):
 #        for x in range(size_x):
 #
 #            try:
-#
 #                # derts' g
 #                g = dert_[1][y,x] - ave
-#
 #                # +g fork
 #                if g>=0:
 #
 #                    # add value to +g
 #                    img_comp_pixel[y,x] = 255;
-#
 #                    # adert's ga
 #                    ga = adert_ag[1][y,x] - ave_adert_ag
 #
@@ -247,17 +236,14 @@ def add_colour(img_comp,size_y,size_x):
 #
 #                        # add value to +ga
 #                        img_adert_ag[y,x] = 255
-#
 #                        # adert's gaga
 #                        gaga = adert_aga[1][y,x] - ave_adert_aga
-#
 #
 #                        # +gaga fork
 #                        if gaga>=0:
 #
 #                            # add value to +gaga
 #                            img_adert_aga[y,x] = 255
-#
 #                            # comp_aga_ga
 #
 #                        # -gaga fork
@@ -282,7 +268,6 @@ def add_colour(img_comp,size_y,size_x):
 #
 #                            # add value to +gg
 #                            img_gdert_g[y,x] = 255
-#
 #                            # comp_agg
 #
 #                        # -gg fork
@@ -290,7 +275,6 @@ def add_colour(img_comp,size_y,size_x):
 #
 #                            # add value to -gg
 #                            img_gdert_g[y,x] = 128
-#
 #                            # comp_rng_g
 #
 #                # -g fork
@@ -299,23 +283,15 @@ def add_colour(img_comp,size_y,size_x):
 #                    # add value to -g
 #                    img_comp_pixel[y,x] = 128;
 #
-#
 #                    # comp_rng_p
 #                    # comp_agr
 #                    # comp_rrp
 #
-#
 #            except:
 #                pass
 #
-#
-#
-#
 #    print('Done!')
-#
-#
 #    print('Saving images to disk...')
-#
 #
 #    # add colour
 #    # where red = +g, green = -g
