@@ -119,21 +119,21 @@ if __name__ == "__main__":
     g_rrr_   = draw_gr(ini_,  g_rrr_dert_[1], rng=8)
 
     # save to disk
-    cv2.imwrite('./images/intra_comp/g.png', g_)
-    cv2.imwrite('./images/intra_comp/ga.png', ga_)
-    cv2.imwrite('./images/intra_comp/gr.png', gr_)
-    cv2.imwrite('./images/intra_comp/gaga.png', gaga_)
-    cv2.imwrite('./images/intra_comp/gg.png', gg_)
-    cv2.imwrite('./images/intra_comp/gagr.png', gagr_)
-    cv2.imwrite('./images/intra_comp/grr.png', grr_)
-    cv2.imwrite('./images/intra_comp/ga_gaga.png', ga_gaga_)
-    cv2.imwrite('./images/intra_comp/g_ga.png', g_ga_)
-    cv2.imwrite('./images/intra_comp/ga_gg.png', ga_gg_)
-    cv2.imwrite('./images/intra_comp/g_rg.png', g_rg_)
-    cv2.imwrite('./images/intra_comp/ga_gagr.png', ga_gagr_)
-    cv2.imwrite('./images/intra_comp/g_gr.png', g_gr_)
-    cv2.imwrite('./images/intra_comp/ga_grr.png', ga_grr_)
-    cv2.imwrite('./images/intra_comp/g_rrr.png', g_rrr_)
+    cv2.imwrite('./images/intra_comp/0_g.png', g_)
+    cv2.imwrite('./images/intra_comp/1_ga.png', ga_)
+    cv2.imwrite('./images/intra_comp/2_gr.png', gr_)
+    cv2.imwrite('./images/intra_comp/3_gaga.png', gaga_)
+    cv2.imwrite('./images/intra_comp/4_gg.png', gg_)
+    cv2.imwrite('./images/intra_comp/5_gagr.png', gagr_)
+    cv2.imwrite('./images/intra_comp/6_grr.png', grr_)
+    cv2.imwrite('./images/intra_comp/7_ga_gaga.png', ga_gaga_)
+    cv2.imwrite('./images/intra_comp/8_g_ga.png', g_ga_)
+    cv2.imwrite('./images/intra_comp/9_ga_gg.png', ga_gg_)
+    cv2.imwrite('./images/intra_comp/10_g_rg.png', g_rg_)
+    cv2.imwrite('./images/intra_comp/11_ga_gagr.png', ga_gagr_)
+    cv2.imwrite('./images/intra_comp/12_g_gr.png', g_gr_)
+    cv2.imwrite('./images/intra_comp/13_ga_grr.png', ga_grr_)
+    cv2.imwrite('./images/intra_comp/14_g_rrr.png', g_rrr_)
 
     print('Terminating...')
 
@@ -150,7 +150,7 @@ def add_colour(img_comp,size_y,size_x):
 
     return img_colour
 
-'''   
+''' 
     dertm_ = np.zeros((5, dert_.shape[1], dert_.shape[2])) # add extra m channel 
     dert_[0:4] = dert_[:]
     

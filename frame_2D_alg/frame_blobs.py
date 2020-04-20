@@ -327,8 +327,8 @@ if __name__ == '__main__':
     print(end_time)
 
     # DEBUG -------------------------------------------------------------------
-    imwrite("./images/gblobs.bmp",
-    map_frame_binary(frame,
+    imwrite("images/gblobs.bmp",
+            map_frame_binary(frame,
               sign_map={
                   1: WHITE,  # 2x2 gblobs
                   0: BLACK
