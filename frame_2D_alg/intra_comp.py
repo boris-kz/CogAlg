@@ -61,7 +61,6 @@ def comp_r(dert__, fig, root_fcr):
 
         dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
         dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
-        m__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
 
@@ -80,6 +79,8 @@ def comp_r(dert__, fig, root_fcr):
         inverse match = SAD, more precise measure of variation than g, direction doesn't matter:
         (all diagonal derivatives can be imported from prior 2x2 comp)
         '''
+        if not root_fcr:
+            m__ = np.zeros((i__center.shape[0], i__center.shape[1]))
         m__ += ( abs(i__center - i__topleft)
                + abs(i__center - i__top)
                + abs(i__center - i__topright)
@@ -125,7 +126,7 @@ def comp_r(dert__, fig, root_fcr):
             day__ = day__ [1:-1:2, 1:-1:2]
             dax__ = dax__ [1:-1:2, 1:-1:2]
         else:
-            m__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
+            m__   = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
             day__ = np.zeros((a__center.shape[0], a__center.shape[1], a__center.shape[2]))
             dax__ = np.zeros((a__center.shape[0], a__center.shape[1], a__center.shape[2]))
 
@@ -205,10 +206,10 @@ def comp_a(dert__, fga):
     """
 
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-    i__, g__, dy__, dx__, m__ = dert__[0:5]  # input dert = i, g, dy, dx, m, ?(ga, day, dax)
+    i__, g__, dy__, dx__, = dert__[0:4]  # input dert = i, g, dy, dx, ?m, ?(ga, day, dax)
 
     if fga:  # input is adert
-        ga__, day__, dax__ = dert__[5:8]
+        ga__, day__, dax__ = dert__[4:7]
         a__ = [day__, dax__] / ga__
     else:
         a__ = [dy__, dx__] / g__  # similar to calc_a
@@ -223,8 +224,8 @@ def comp_a(dert__, fga):
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
-    # ma = SAD: angle variation in kernel is inverse measure of angle match
+    # ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
+    # ma = SAD: angle variation is inverse measure of angle match
     # need to covert sin and cos da to 0->2 range?
 
     day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
@@ -243,13 +244,13 @@ def comp_a(dert__, fga):
                         g__[:-1, :-1],   # for summation in Dert
                         dy__[:-1, :-1],  # passed on as idy
                         dx__[:-1, :-1],  # passed on as idx
-                        m__[:-1, :-1],   # next fork criterion
+                        # m__[:-1, :-1],   # next fork criterion
                         ga__,
                         day__[0],
                         day__[1],
                         dax__[0],
                         dax__[1],
-                        ma__,
+                        # ma__,
                         cos_da0__,
                         cos_da1__
                       ))
@@ -391,18 +392,3 @@ if isinstance(a__, ma.masked_array):
     a__.data[a__.mask] = np.nan
     a__.mask = ma.nomask
 '''
-
-def comp_3x3(image):  # Deprecated, from frame_blobs' comp_pixel, Khanh
-    # comparison between pairs of diametrically opposed pixels:
-
-    d___ = np.array(  # center pixels - translated rim pixels:
-        [image[ts2] - image[ts1] for ts1, ts2 in TRANSLATING_SLICES_PAIRS_3x3]
-    ).swapaxes(0, 2).swapaxes(0, 1)
-
-    # Decompose differences into dy and dx, same as Gy and Gx in conventional edge detection operators:
-    dy__ = (d___ * YCOEF).sum(axis=2)
-    dx__ = (d___ * XCOEF).sum(axis=2)
-    p__ = image[1:-1, 1:-1]
-    g__ = np.hypot(dy__, dx__)  # compute gradients per kernel, converted to 0-255 range
-
-    return ma.stack((p__, g__, dy__, dx__))

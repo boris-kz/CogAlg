@@ -19,34 +19,27 @@ OUTPUT_PATH = "./visualization/images/"
 # Functions
 
 def draw_g(img_out, g_):
-    # loop in each row
-    for y in range(g_.shape[0]):
-        # loop across each dert
-        for x in range(g_.shape[1]):
-            # assign g to image
+
+    for y in range(g_.shape[0]):  # loop rows, skip 1st row
+        for x in range(g_.shape[1]):  # loop columns
             img_out[y,x] = g_[y,x]
 
     return img_out.astype('uint8')
 
 def draw_ga(img_out, g_):
-    # loop in each row
+
     for y in range(g_.shape[0]):
-        # loop across each dert
         for x in range(g_.shape[1]):
-            # assign g to image
             img_out[y,x] = g_[y,x]
 
-    # convert to degree
-    img_out = img_out * 180/np.pi
-    # scale 0 to 180 degree into 0 to 255
-    img_out = (img_out /180 )*255
+    img_out = img_out * 180/np.pi  # convert to degrees
+    img_out = (img_out /180 )*255  # scale 0 to 180 degree into 0 to 255
 
     return img_out.astype('uint8')
 
 def draw_gr(img_out, g_, rng):
-    # loop in each row, skip 1st row
+
     for y in range(g_.shape[0]):
-        # loop across each dert, skip 1st dert
         for x in range(g_.shape[1]):
             # project central dert to surrounding rim derts
             img_out[(y*rng)+1:(y*rng)+1+rng,(x*rng)+1:(x*rng)+1+rng] = g_[y,x]
@@ -54,17 +47,14 @@ def draw_gr(img_out, g_, rng):
     return img_out.astype('uint8')
 
 def draw_gar(img_out, g_, rng):
-    # loop in each row, skip 1st row
+
     for y in range(g_.shape[0]):
-        # loop across each dert, skip 1st dert
         for x in range(g_.shape[1]):
             # project central dert to surrounding rim derts
             img_out[(y*rng)+1:(y*rng)+3,(x*rng)+1:(x*rng)+3] = g_[y,x]
 
-   # convert to degree
-    img_out = img_out * 180/np.pi
-    # scale 0 to 180 degree into 0 to 255
-    img_out = (img_out /180 )*255
+    img_out = img_out * 180/np.pi  # convert to degrees
+    img_out = (img_out /180 )*255  # scale 0 to 180 degree into 0 to 255
 
     return img_out.astype('uint8')
 
@@ -72,29 +62,18 @@ def draw_gar(img_out, g_, rng):
 # Main
 
 if __name__ == "__main__":
-    # Initial comp:
+
     print('Reading image...')
     image = imread(IMAGE_PATH)
-    print('Done!')
 
-    ## root layer #############################################################
-
-    print('Doing first comp...')
-    dert_tem_ = frame_blobs.comp_pixel(image)
-
-    # add extra m channel to make the code run-able, comp pixel doesn't have m
-    dert_ = np.zeros((5,dert_tem_.shape[1],dert_tem_.shape[2]))
-    dert_[0:4] = dert_tem_[:]
-    print('Done!')
+    dert_ = frame_blobs.comp_pixel(image)
 
     print('Processing first layer comps...')
 
     ga_dert_ = comp_a(dert_, fga = 0)  # if +G
     gr_dert_ = comp_r(dert_, fig = 0, root_fcr = 0)  # if -G
 
-    print('Done!')
     print('Processing second layer comps...')
-
     # comp_a ->
     gaga_dert_ = comp_a(ga_dert_, fga = 1)  # if +Ga
     gg_dert_   = comp_g(ga_dert_)           # if -Ga
@@ -102,9 +81,7 @@ if __name__ == "__main__":
     gagr_dert_ = comp_a(gr_dert_, fga = 0)                # if +Gr
     grr_dert_  = comp_r(gr_dert_, fig = 0, root_fcr = 1)  # if -Gr
 
-    print('Done!')
     print('Processing third layer comps...')
-
     # comp_aga ->
     ga_gaga_dert_ = comp_a(gaga_dert_, fga = 1) # if +Gaga
     g_ga_dert_    = comp_g(gaga_dert_)          # if -Gaga
@@ -118,13 +95,65 @@ if __name__ == "__main__":
     ga_grr_dert_ = comp_a(grr_dert_, fga = 0)                # if +Grr
     g_rrr_dert_  = comp_r(grr_dert_, fig = 0, root_fcr = 1)  # if -Grr：
 
-    print('Done!')
     print('Drawing forks...')
+    ini_ = np.zeros((image.shape[0], image.shape[1]))  # initialize image y, x
 
-    # initialize images:
-    size_y = image.shape[0]
-    size_x = image.shape[1]
+    # 0th layer
+    g_ = draw_g(ini_, dert_[1])
+    # 1st layer
+    ga_ = draw_ga(ini_, ga_dert_[5])
+    gr_ = draw_gr(ini_, gr_dert_[1], rng=2)
+    # 2nd layer
+    gaga_ = draw_ga(ini_, gaga_dert_[5])
+    gg_ =   draw_g(ini_,  gg_dert_[1])
+    gagr_ = draw_gar(ini_, gagr_dert_[5], rng=2)
+    grr_ =  draw_gr(ini_,  grr_dert_[1], rng=4)
+    # 3rd layer
+    ga_gaga_ = draw_ga(ini_, ga_gaga_dert_[5])
+    g_ga_    = draw_g(ini_,  g_ga_dert_[1])
+    ga_gg_   = draw_ga(ini_, ga_gg_dert_[5])
+    g_rg_    = draw_gr(ini_, g_rg_dert_[1], rng=2)
+    ga_gagr_ = draw_gar(ini_, ga_gagr_dert_[5], rng=2)
+    g_gr_    = draw_gr(ini_,  g_gr_dert_[1], rng=2)
+    ga_grr_  = draw_gar(ini_, ga_grr_dert_[5], rng=4)
+    g_rrr_   = draw_gr(ini_,  g_rrr_dert_[1], rng=8)
 
+    # save to disk
+    cv2.imwrite('./images/intra_comp/g.png', g_)
+    cv2.imwrite('./images/intra_comp/ga.png', ga_)
+    cv2.imwrite('./images/intra_comp/gr.png', gr_)
+    cv2.imwrite('./images/intra_comp/gaga.png', gaga_)
+    cv2.imwrite('./images/intra_comp/gg.png', gg_)
+    cv2.imwrite('./images/intra_comp/gagr.png', gagr_)
+    cv2.imwrite('./images/intra_comp/grr.png', grr_)
+    cv2.imwrite('./images/intra_comp/ga_gaga.png', ga_gaga_)
+    cv2.imwrite('./images/intra_comp/g_ga.png', g_ga_)
+    cv2.imwrite('./images/intra_comp/ga_gg.png', ga_gg_)
+    cv2.imwrite('./images/intra_comp/g_rg.png', g_rg_)
+    cv2.imwrite('./images/intra_comp/ga_gagr.png', ga_gagr_)
+    cv2.imwrite('./images/intra_comp/g_gr.png', g_gr_)
+    cv2.imwrite('./images/intra_comp/ga_grr.png', ga_grr_)
+    cv2.imwrite('./images/intra_comp/g_rrr.png', g_rrr_)
+
+    print('Terminating...')
+
+
+def add_colour(img_comp,size_y,size_x):
+    img_colour = np.zeros((3,size_y,size_x))
+    img_colour[2] = img_comp
+    img_colour[2][img_colour[2]<255] = 0
+    img_colour[2][img_colour[2]>0] = 205
+    img_colour[1] = img_comp
+    img_colour[1][img_colour[1]==255] = 0
+    img_colour[1][img_colour[1]>0] = 255
+    img_colour = np.rollaxis(img_colour,0,3).astype('uint8')
+
+    return img_colour
+
+'''   
+    dertm_ = np.zeros((5, dert_.shape[1], dert_.shape[2])) # add extra m channel 
+    dert_[0:4] = dert_[:]
+    
     g = np.zeros((size_y,size_x))
     # 1st layer
     ga = np.zeros((size_y,size_x))
@@ -145,7 +174,7 @@ if __name__ == "__main__":
     g_rrr  = np.zeros((size_y,size_x))
 
     # draw each dert
-    img_g = draw_g(g,dert_[1])
+    img_g = draw_g(ini_, dert_[1])
     # 1st layer
     img_ga = draw_ga(ga, ga_dert_[5])
     img_gr = draw_gr(gr, gr_dert_[1], rng=2)
@@ -164,39 +193,7 @@ if __name__ == "__main__":
     img_ga_grr  = draw_gar(ga_grr, grr_dert_[5], rng=4)
     img_g_rrr   = draw_gr(g_rrr, grr_dert_[1], rng=8)
 
-    # save to disk
-    cv2.imwrite('./images/intra_comp/g.png', img_g)
-    cv2.imwrite('./images/intra_comp/ga.png', img_ga)
-    cv2.imwrite('./images/intra_comp/gr.png', img_gr)
-    cv2.imwrite('./images/intra_comp/gaga.png', img_gaga)
-    cv2.imwrite('./images/intra_comp/gg.png', img_gg)
-    cv2.imwrite('./images/intra_comp/gagr.png', img_gagr)
-    cv2.imwrite('./images/intra_comp/grr.png', img_grr)
-    cv2.imwrite('./images/intra_comp/ga_gaga.png', img_ga_gaga)
-    cv2.imwrite('./images/intra_comp/g_ga.png', img_g_ga)
-    cv2.imwrite('./images/intra_comp/ga_gg.png', img_ga_gg)
-    cv2.imwrite('./images/intra_comp/g_rg.png', img_g_rg)
-    cv2.imwrite('./images/intra_comp/ga_gagr.png', img_ga_gagr)
-    cv2.imwrite('./images/intra_comp/g_gr.png', img_g_gr)
-    cv2.imwrite('./images/intra_comp/ga_grr.png', img_ga_grr)
-    cv2.imwrite('./images/intra_comp/g_rrr.png', img_g_rrr)
-
-    print('Done!')
-    print('Terminating...')
-
-
-def add_colour(img_comp,size_y,size_x):
-    img_colour = np.zeros((3,size_y,size_x))
-    img_colour[2] = img_comp
-    img_colour[2][img_colour[2]<255] = 0
-    img_colour[2][img_colour[2]>0] = 205
-    img_colour[1] = img_comp
-    img_colour[1][img_colour[1]==255] = 0
-    img_colour[1][img_colour[1]>0] = 255
-    img_colour = np.rollaxis(img_colour,0,3).astype('uint8')
-
-    return img_colour
-
+'''
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 #    # size of image
