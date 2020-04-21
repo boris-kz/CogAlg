@@ -51,8 +51,8 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
     # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
 
     if fca:
-        dert__ = comp_a(blob['dert__'], fga)  # form ga blobs, evaluate for comp_g | comp_aga:
-        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig=0)  # -> sub_blobs by ma sign
+        dert__ = comp_a(blob['dert__'], fga)  #-> ma sub_blobs evaluate for comp_g | comp_aga:
+        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig=0)
 
         for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
             if sub_blob['sign']:
@@ -64,8 +64,8 @@ def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
                 # +Ga -> comp_aga -> dert + gaga, ga_day, ga_dax:
                 intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=1)
     else:
-        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  #-> sub_blobs by m sign
-        else:   dert__ = comp_g(blob['dert__'])  #-> sub_blobs by g sign:
+        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  #-> m sub_blobs
+        else:   dert__ = comp_g(blob['dert__'])  #-> g sub_blobs:
 
         cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig)
         # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer

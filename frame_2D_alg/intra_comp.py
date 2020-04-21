@@ -61,6 +61,7 @@ def comp_r(dert__, fig, root_fcr):
 
         dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
         dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
+        m__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
 
@@ -79,8 +80,6 @@ def comp_r(dert__, fig, root_fcr):
         inverse match = SAD, more precise measure of variation than g, direction doesn't matter:
         (all diagonal derivatives can be imported from prior 2x2 comp)
         '''
-        if not root_fcr:
-            m__ = np.zeros((i__center.shape[0], i__center.shape[1]))
         m__ += ( abs(i__center - i__topleft)
                + abs(i__center - i__top)
                + abs(i__center - i__topright)
@@ -137,7 +136,7 @@ def comp_r(dert__, fig, root_fcr):
             day__ += dat_ * YCOEF  # decomposed differences of angle,
             dax__ += dat_ * YCOEF  # accumulate in prior-rng day, dax
         '''
-        gradient of angle:
+        gradient of angle: not needed in comp_r?
         '''
         ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
         '''
@@ -187,29 +186,16 @@ def comp_r(dert__, fig, root_fcr):
 
 
 def comp_a(dert__, fga):
-    """
+    '''
     cross-comp of a or aga in 2x2 kernels
-    ----------
-    input dert__ : array-like
-    fga : bool
-        If True, dert structure is interpreted as:
-        (g, gg, dgy, dgx, gm, iga, iday, idax)
-        else: (i, g, dy, dx, m)
-    ----------
-    output adert: masked_array of aderts,
-    adert: (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
-    --------
-    >>> # actual python console code
-    >>> dert__ = 'specific value'
-    >>> fga = 'specific value'
-    >>> comp_a(dert__, fga)
-    """
-
+    if fga: dert = (g, gg, dgy, dgx, gm, ?(iga, iday, idax)
+    else: dert = (i, g, dy, dx, ?m)
+    '''
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-    i__, g__, dy__, dx__, = dert__[0:4]  # input dert = i, g, dy, dx, ?m, ?(ga, day, dax)
+    i__, g__, dy__, dx__, = dert__[0:4]
 
     if fga:  # input is adert
-        ga__, day__, dax__ = dert__[4:7]
+        ga__, day__, dax__ = dert__[-1]
         a__ = [day__, dax__] / ga__
     else:
         a__ = [dy__, dx__] / g__  # similar to calc_a
@@ -224,7 +210,7 @@ def comp_a(dert__, fga):
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    # ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
+    ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
     # ma = SAD: angle variation is inverse measure of angle match
     # need to covert sin and cos da to 0->2 range?
 
@@ -243,14 +229,13 @@ def comp_a(dert__, fga):
     adert__ = ma.stack((i__[:-1, :-1],   # for summation in Dert
                         g__[:-1, :-1],   # for summation in Dert
                         dy__[:-1, :-1],  # passed on as idy
-                        dx__[:-1, :-1],  # passed on as idx
-                        # m__[:-1, :-1],   # next fork criterion
+                        dx__[:-1, :-1],  # passed on as idx  # no use for m__[:-1, :-1]?
                         ga__,
                         day__[0],
                         day__[1],
                         dax__[0],
                         dax__[1],
-                        # ma__,
+                        ma__,
                         cos_da0__,
                         cos_da1__
                       ))
@@ -259,34 +244,6 @@ def comp_a(dert__, fga):
     next comp_a will use ga, day, dax  # comp_aga
     '''
     return adert__
-
-
-def calc_a(dert__):
-    """
-    Compute vector representation of angle of gradient by normalizing (dy, dx).
-    Numpy-broadcasted, first dimension of dert__ is a list of parameters: g, dy, dx
-    Example
-    -------
-    >>> dert1 = np.array([0, 5, 3, 4])
-    >>> a1 = calc_a(dert1)
-    >>> print(a1)
-    array([0.6, 0.8])
-    >>> # 45 degrees angle
-    >>> dert2 = np.array([0, 450**0.5, 15, 15])
-    >>> a2 = calc_a(dert2)
-    >>> print(a2)
-    array([0.70710678, 0.70710678])
-    >>> print(np.degrees(np.arctan2(*a2)))
-    45.0
-    >>> # -30 (or 330) degrees angle
-    >>> dert3 = np.array([0, 10, -5, 75**0.5])
-    >>> a3 = calc_a(dert3)
-    >>> print(a3)
-    array([-0.5      ,  0.8660254])
-    >>> print(np.rad2deg(np.arctan2(*a3)))
-    -29.999999999999996
-    """
-    return dert__[[2, 3]] / dert__[1]  # np.array([dy, dx]) / g
 
 
 def angle_diff(a2, a1):
@@ -338,13 +295,12 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
                      gg__,
                      dgy__,
                      dgx__,
-                     mg__,
-                     dert__[5][:-1, :-1],  # ga__
-                     dert__[6][:-1, :-1],  # dyy: dy_dy
-                     dert__[7][:-1, :-1],  # dxy: dd_dy
-                     dert__[8][:-1, :-1],  # dyx: dy_dx
-                     dert__[9][:-1, :-1],  # dxx: dx_dx
-                     dert__[10][:-1, :-1],  # ma__
+                     dert__[4][:-1, :-1],  # ga__
+                     dert__[5][:-1, :-1],  # dyy: dy_dy
+                     dert__[6][:-1, :-1],  # dxy: dd_dy
+                     dert__[7][:-1, :-1],  # dyx: dy_dx
+                     dert__[8][:-1, :-1],  # dxx: dx_dx
+                     dert__[9][:-1, :-1],  # ma__, if any?
                      dert__[2][:-1, :-1],  # idy__
                      dert__[3][:-1, :-1]   # idx__
                     ))
@@ -363,6 +319,35 @@ def shape_check(dert__):
         dert__ = dert__[:, :, :-1]
 
     return dert__
+
+
+def calc_a(dert__):
+    """
+    Compute vector representation of angle of gradient by normalizing (dy, dx).
+    Numpy-broadcasted, first dimension of dert__ is a list of parameters: g, dy, dx
+    Example
+    -------
+    >>> dert1 = np.array([0, 5, 3, 4])
+    >>> a1 = calc_a(dert1)
+    >>> print(a1)
+    array([0.6, 0.8])
+    >>> # 45 degrees angle
+    >>> dert2 = np.array([0, 450**0.5, 15, 15])
+    >>> a2 = calc_a(dert2)
+    >>> print(a2)
+    array([0.70710678, 0.70710678])
+    >>> print(np.degrees(np.arctan2(*a2)))
+    45.0
+    >>> # -30 (or 330) degrees angle
+    >>> dert3 = np.array([0, 10, -5, 75**0.5])
+    >>> a3 = calc_a(dert3)
+    >>> print(a3)
+    array([-0.5      ,  0.8660254])
+    >>> print(np.rad2deg(np.arctan2(*a3)))
+    -29.999999999999996
+    """
+    return dert__[[2, 3]] / dert__[1]  # np.array([dy, dx]) / g
+
 
 ''' old comp_a:
 
