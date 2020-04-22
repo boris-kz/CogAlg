@@ -45,7 +45,33 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fca, fcr, fga):
+def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp in a blob
+    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
+
+    if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  #-> m sub_blobs
+    else:   dert__ = comp_g(blob['dert__'])  #-> g sub_blobs:
+
+    cluster_derts(blob, dert__, ave*rdn, fcr, fig)
+    # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer
+
+    for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
+        if sub_blob['sign']:
+            if sub_blob['Dert']['M'] > aveB * rdn:
+                # +M -> comp_r -> dert with accumulated derivatives:
+                intra_blob(sub_blob, rdn + 1, rng + 1, fig=fig, fcr=1)  # fga for comp_agr
+
+        elif sub_blob['Dert']['G'] > aveB * rdn:
+            # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
+            intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fcr=0)
+    '''
+    also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
+    with feedback:
+    for sub_blob in blob['blob_']:
+        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob
+    '''
+
+
+def intra_blob_a(blob, rdn, rng, fig, fca, fcr, fga):
 
     # recursive input rng+ | der+ | angle cross-comp within a blob
     # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+

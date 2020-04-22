@@ -110,14 +110,14 @@ def comp_r(dert__, fig, root_fcr):
         '''
         8-tuple of differences between center dert angle and rim dert angle:
         '''
-        dat__ = np.stack((angle_diff(a__center, a__topleft),
-                          angle_diff(a__center, a__top),
-                          angle_diff(a__center, a__topright),
-                          angle_diff(a__center, a__right),
-                          angle_diff(a__center, a__bottomright),
-                          angle_diff(a__center, a__bottom),
-                          angle_diff(a__center, a__bottomleft),
-                          angle_diff(a__center, a__left)
+        dat__ = np.stack((angle_diff(a__center, a__topleft, 0),
+                          angle_diff(a__center, a__top, 0),
+                          angle_diff(a__center, a__topright, 0),
+                          angle_diff(a__center, a__right, 0),
+                          angle_diff(a__center, a__bottomright, 0),
+                          angle_diff(a__center, a__bottom, 0),
+                          angle_diff(a__center, a__bottomleft, 0),
+                          angle_diff(a__center, a__left, 0)
                         ))
         if root_fcr:
             m__, day__, dax__ = dert__[[-4, -2, -1]]  # skip ga: recomputed, output for summation only?
@@ -195,8 +195,8 @@ def comp_a(dert__, fga):
     i__, g__, dy__, dx__, = dert__[0:4]
 
     if fga:  # input is adert
-        ga__, day__, dax__ = dert__[-1]
-        a__ = [day__, dax__] / ga__
+        ga__, day__, dax__ = dert__[5:8]
+        a__ = [[day__], [dax__]] / ga__
     else:
         a__ = [dy__, dx__] / g__  # similar to calc_a
 
@@ -207,12 +207,11 @@ def comp_a(dert__, fga):
     a__botleft = a__[:, 1:, :-1]
 
     # diagonal angle differences:
-    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
-    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
+    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright, fga)
+    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft, fga)
 
-    ma__ = np.hypot(sin_da0__, cos_da0__) + np.hypot(sin_da1__, cos_da1__)
-    # ma = SAD: angle variation is inverse measure of angle match
-    # need to covert sin and cos da to 0->2 range?
+    ma__ = np.hypot(sin_da0__+1, cos_da0__+1) + np.hypot(sin_da1__+1, cos_da1__+1)
+    # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
 
     day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
@@ -231,10 +230,8 @@ def comp_a(dert__, fga):
                         dy__[:-1, :-1],  # passed on as idy
                         dx__[:-1, :-1],  # passed on as idx  # no use for m__[:-1, :-1]?
                         ga__,
-                        day__[0],
-                        day__[1],
-                        dax__[0],
-                        dax__[1],
+                        *day__,
+                        *dax__,
                         ma__,
                         cos_da0__,
                         cos_da1__
@@ -246,15 +243,21 @@ def comp_a(dert__, fga):
     return adert__
 
 
-def angle_diff(a2, a1):
+def angle_diff(a2, a1, fga):  # compare angle_1 to angle_2
 
-    sin_1, cos_1 = a1[:]
-    sin_2, cos_2 = a2[:]
+    if fga:
+        dyy1, dxy1, dyx1, dxx1 = a1[:]
+        dyy2, dxy2, dyx2, dxx2 = a2[:]
+        # replace: sine and cosine of difference between angles of angles:
+        sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
+        cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
 
-    # sine and cosine of difference between angles:
+    else:
+        sin_1, cos_1 = a1[:];  sin_2, cos_2 = a2[:]
+        # sine and cosine of difference between angles:
 
-    sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
-    cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
+        sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
+        cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
 
     return ma.array([sin_da, cos_da])
 
@@ -262,7 +265,7 @@ def angle_diff(a2, a1):
 def comp_g(dert__):  # add fga if processing in comp_ga is different?
     """
     Cross-comp of g or ga in 2x2 kernels, between derts in ma.stack dert__:
-    input dert  = (i, g, dy, dx, m, ga, dyy, dxy, dyx, dxx, cos_da0, cos_da1)
+    input dert  = (i, g, dy, dx, m, ga, day, dax, cos_da0, cos_da1)
     output dert = (g, gg, dgy, dgx, gm, ga, day, dax, dy, dx)
     """
 
@@ -295,12 +298,11 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
                      gg__,
                      dgy__,
                      dgx__,
+                     mg__,
                      dert__[4][:-1, :-1],  # ga__
-                     dert__[5][:-1, :-1],  # dyy: dy_dy
-                     dert__[6][:-1, :-1],  # dxy: dd_dy
-                     dert__[7][:-1, :-1],  # dyx: dy_dx
-                     dert__[8][:-1, :-1],  # dxx: dx_dx
-                     dert__[9][:-1, :-1],  # ma__, if any?
+                     dert__[5][:-1, :-1],  # day
+                     dert__[6][:-1, :-1],  # dax
+                     dert__[7][:-1, :-1],  # ma__
                      dert__[2][:-1, :-1],  # idy__
                      dert__[3][:-1, :-1]   # idx__
                     ))
