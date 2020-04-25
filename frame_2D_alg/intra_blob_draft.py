@@ -45,8 +45,8 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp in a blob
-    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
+def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
+    # fig: flag input is g, fcr: flag comp over rng+
 
     if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  #-> m sub_blobs
     else:   dert__ = comp_g(blob['dert__'])  #-> g sub_blobs:
@@ -58,7 +58,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
         if sub_blob['sign']:
             if sub_blob['Dert']['M'] > aveB * rdn:
                 # +M -> comp_r -> dert with accumulated derivatives:
-                intra_blob(sub_blob, rdn + 1, rng + 1, fig=fig, fcr=1)  # fga for comp_agr
+                intra_blob(sub_blob, rdn + 1, rng + 1, fig=fig, fcr=1)
 
         elif sub_blob['Dert']['G'] > aveB * rdn:
             # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
@@ -126,13 +126,13 @@ S_PARAM_KEYS = iPARAMS + S_PARAMS
 aS_PARAM_KEYS = aPARAMS + S_PARAMS
 
 
-def cluster_derts(blob, dert__, Ave, fca, fcr, fig):  # clustering crit is always g in dert[1], fder is a sign
+def cluster_derts(blob, dert__, Ave, fcr, fig):  # clustering crit is always g in dert[1], fder is a sign
 
     blob['layer_'][0][0] = dict(I=0, G=0, Dy=0, Dx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0, Ma=0, S=0, Ly=0,
                                 sub_blob_=[])  # to fill with fork params and sub_sub_blobs
                                 # initialize first sub_blob in first layer
 
-    P__ = form_P__(dert__, Ave, fca, fcr, fig)  # horizontal clustering
+    P__ = form_P__(dert__, Ave, fcr, fig)  # horizontal clustering
     P_ = scan_P__(P__)
     stack_ = form_stack_(P_)  # vertical clustering
     sub_blob_ = form_blob_(stack_, blob['fork_'])  # with feedback to root_fork at blob['fork_']
@@ -142,7 +142,7 @@ def cluster_derts(blob, dert__, Ave, fca, fcr, fig):  # clustering crit is alway
 # clustering functions, out of date:
 #-------------------------------------------------------------------------------------------------------------------
 
-def form_P__(dert__, Ave, fca, fcr, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+def form_P__(dert__, Ave, fcr, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
     # compute value (clustering criterion) per each intra_comp fork, crit__ and dert__ are 2D arrays:
     if fca:
