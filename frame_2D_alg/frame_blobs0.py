@@ -1,7 +1,6 @@
 from time import time
 from collections import deque, defaultdict
 import numpy as np
-from comp_pixel import comp_pixel
 from utils import *
 
 '''
@@ -49,30 +48,47 @@ from utils import *
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
+
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
 
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-def image_to_blobs(image):
+def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within image
 
+    # four slices are inputs to a sliding 2x2 kernel:
+    topleft__ = image[:-1, :-1]
+    topright__ = image[:-1, 1:]
+    botleft__ = image[1:, :-1]
+    botright__ = image[1:, 1:]
+
+    dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # decomposed diagonal from left
+    dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # decomposed diagonal from right
+    g__  = np.hypot(dy__, dx__)  # gradient per kernel
+
+    return ma.stack((topleft__, g__, dy__, dx__))
+
+
+def image_to_blobs(image):
     dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
 
-    frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob__=[])
+    frame = dict(rng=1, dert__=dert__, I=0, G=0, Dy=0, Dx=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
 
     for y in range(height):  # first and last row are discarded
         print(f'Processing line {y}...')
-        P_ = form_P_(dert__[:, y].T)      # no .T? horizontal clustering
-        P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
+
+        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
+        P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         form_blob(stack_.popleft(), frame)
 
     return frame  # frame of blobs
+
 
 ''' 
 Parameterized connectivity clustering functions below:
@@ -81,36 +97,39 @@ Parameterized connectivity clustering functions below:
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
-  
+
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g, i), will be extended in intra_blob
 Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
+
 
 def form_P_(dert__):  # horizontal clustering and summation of dert params into P params, per row of a frame
     # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
-    I, G, Dy, Dx, L, x0 = *dert__[0], 1, 0  # initialize P params with 1st dert params
+    I, G, Dy, Dx, L, x0, dert_ = *dert__[0], 1, 0, []  # initialize P params with 1st dert params
     G = int(G) - ave
-    _s = G > 0  # sign
+    _sign = G > 0
+
     for x, (p, g, dy, dx) in enumerate(dert__[1:], start=1):
         vg = int(g) - ave  # deviation of g
-        s = vg > 0
-        if s != _s:
+        sign = vg > 0
+        if sign != _sign:
             # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_, sign=_sign)
             P_.append(P)
             # initialize new P:
-            I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
+            I, G, Dy, Dx, L, x0, dert_ = 0, 0, 0, 0, 0, x, []
         # accumulate P params:
         I += p
         G += vg
         Dy += dy
         Dx += dx
         L += 1
-        _s = s  # prior sign
+        dert_.append((p, vg, dy, dx))
+        _sign = sign  # prior sign
 
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_, sign=_sign)
     P_.append(P)  # terminate last P in a row
     return P_
 
@@ -285,6 +304,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
+
 # -----------------------------------------------------------------------------
 # Main
 
@@ -299,28 +319,27 @@ if __name__ == '__main__':
     start_time = time()
     frame = image_to_blobs(image)
 
-    intra=0
+    intra = 0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob_draft import *
+
         deep_frame = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 
         for blob in frame['blob__']:
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20:
-                    intra_blob(blob, rdn=1, rng=.0, fig=0, fca=1, fcr=0, fga=0)
-                    # +G blob' comp_a, form 2x2 aderts = ga, day, dax, -> comp_ga if +Ga, else comp_g if -Ga
+                    intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
             elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 30:
-                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=0, fcr=1, fga=0)
-                    # -G blob' comp_r, form 3x3 rderts = dert, -> comp_a if +G, else comp_rng if -G
-                    '''
-                    with feedback:
-                    dert__ = comp_a|r(blob['dert__'], rng=1)  
-                    deep_frame['layer_'] = intra_blob(blob, dert__, rng=3, rdn=1, fig=0, fca=0)  
-                    deep_frame['blob_'].append(blob)  # extended by cluster_eval
-                    deep_frame['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-                    '''
+                intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
+                '''
+                with feedback:
+                dert__ = comp_a|r(blob['dert__'], rng=1)  
+                deep_frame['layer_'] = intra_blob(blob, dert__, rng=3, rdn=1, fig=0, fca=0)  
+                deep_frame['blob_'].append(blob)  # extended by cluster_eval
+                deep_frame['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
+                '''
             # else no intra_blob call
 
     end_time = time() - start_time
@@ -329,9 +348,9 @@ if __name__ == '__main__':
     # DEBUG -------------------------------------------------------------------
     imwrite("images/gblobs.bmp",
             map_frame_binary(frame,
-              sign_map={
-                  1: WHITE,  # 2x2 gblobs
-                  0: BLACK
-              }))
+                             sign_map={
+                                 1: WHITE,  # 2x2 gblobs
+                                 0: BLACK
+                             }))
 
     # END DEBUG ---------------------------------------------------------------
