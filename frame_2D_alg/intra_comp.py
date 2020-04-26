@@ -95,7 +95,7 @@ def comp_r(dert__, fig, root_fcr):
             dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
             dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
-        a__ = [idy__, idx__] / i__  # i = ig
+        a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
         '''
         sparse aligned a__center and a__rim arrays:
         '''

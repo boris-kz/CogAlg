@@ -18,8 +18,8 @@ from functools import reduce
     
     Blob structure, for all layers of blob hierarchy:
     
-    root_blob,  # reference for feedback of blob Dert params and sub_blob_, up to frame
-    Dert = I, G, Dy, Dx, M, comp_a: + [Ga, Dyy, Dxy, Dyx, Dxx], S (area), Ly (vertical dimension)
+    root,  # reference to root blob, for feedback of blob Dert params and sub_blob_, up to frame
+    Dert = I, G, Dy, Dx, M, if fig: + [iDy, iDx], A (area), Ly (vertical dimension)
     # I: input, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match, Ga: angle G, Day, Dax: angle Ds  
     sign, 
     map,  # boolean map of blob, to compute overlap in comp_blob
@@ -56,93 +56,181 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
 
     for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
         if sub_blob['sign']:
-            if sub_blob['Dert']['M'] > aveB * rdn:
-                # +M -> comp_r -> dert with accumulated derivatives:
-                intra_blob(sub_blob, rdn + 1, rng + 1, fig=fig, fcr=1)
+            if sub_blob['Dert']['M'] > aveB * rdn:  # +M -> comp_r:
+                intra_blob(sub_blob, rdn + 1, rng**2, fig=fig, fcr=1)  # rng is not correct, start=1
 
-        elif sub_blob['Dert']['G'] > aveB * rdn:
-            # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
-            intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fcr=0)
+        elif sub_blob['Dert']['G'] > aveB * rdn:  # +G -> comp_g:
+            intra_blob(sub_blob, rdn + 1, rng=rng, fig=1, fcr=0)
     '''
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     with feedback:
     for sub_blob in blob['blob_']:
-        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob
+        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lA, rng, fig, fca)  # redundant to sub_blob
     '''
 
-
-def intra_blob_a(blob, rdn, rng, fig, fca, fcr, fga):
-
-    # recursive input rng+ | der+ | angle cross-comp within a blob
-    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
-
-    if fca:
-        dert__ = comp_a(blob['dert__'], fga)  #-> ma sub_blobs evaluate for comp_g | comp_aga:
-        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig=0)
-
-        for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
-            if sub_blob['sign']:
-                if sub_blob['Dert']['Ma'] > aveB * rdn:
-                    # +Ma -> comp_g -> dert = g, gg, gdy, gdx, gm:
-                    intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=0, fcr=0, fga=1)  # fga for comp_agg
-
-            elif sub_blob['Dert']['Ga'] > aveB * rdn:
-                # +Ga -> comp_aga -> dert + gaga, ga_day, ga_dax:
-                intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=1)
-    else:
-        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  #-> m sub_blobs
-        else:   dert__ = comp_g(blob['dert__'])  #-> g sub_blobs:
-
-        cluster_derts(blob, dert__, ave*rdn, fca, fcr, fig)
-        # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer
-
-        for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
-            if sub_blob['sign']:
-                if sub_blob['Dert']['M'] > aveB * rdn:
-                    # +M -> comp_r -> dert with accumulated derivatives:
-                    intra_blob(sub_blob, rdn + 1, rng + 1, fig=fig, fca=0, fcr=1, fga=0)  # fga for comp_agr
-
-            elif sub_blob['Dert']['G'] > aveB * rdn:
-                # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
-                intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=0)
-    '''
-    also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
-    with feedback:
-    for sub_blob in blob['blob_']:
-        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob
-    '''
 # constants:
 
 iPARAMS = "I", "G", "Dy", "Dx", "M"  # formed by comp_pixel
-aPARAMS = iPARAMS + ("Ga", "Dyy", "Dxy", "Dyx", "Dxx")  # (sin, cos), formed by comp_a, same for comp_g
-rPARAMS = iPARAMS  # if fig: + gPARAMS  # formed by comp_r
+gPARAMS = iPARAMS + ("iDy", "iDx")  # angle of input g
 
 P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
-S_PARAMS = "S", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
+S_PARAMS = "A", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
 
 P_PARAM_KEYS = iPARAMS + P_PARAMS
-aP_PARAM_KEYS = aPARAMS + P_PARAMS
+gP_PARAM_KEYS = gPARAMS + P_PARAMS
 S_PARAM_KEYS = iPARAMS + S_PARAMS
-aS_PARAM_KEYS = aPARAMS + S_PARAMS
+gS_PARAM_KEYS = gPARAMS + S_PARAMS
 
 
-def cluster_derts(blob, dert__, Ave, fcr, fig):  # clustering crit is always g in dert[1], fder is a sign
-
-    blob['layer_'][0][0] = dict(I=0, G=0, Dy=0, Dx=0, M=0, Ga=0, Dyy=0, Dxy=0, Dyx=0, Dxx=0, Ma=0, S=0, Ly=0,
-                                sub_blob_=[])  # to fill with fork params and sub_sub_blobs
-                                # initialize first sub_blob in first layer
+def cluster_derts(blob, dert__, Ave, fcr, fig):  # fig selects param keys
 
     P__ = form_P__(dert__, Ave, fcr, fig)  # horizontal clustering
     P_ = scan_P__(P__)
-    stack_ = form_stack_(P_)  # vertical clustering
-    sub_blob_ = form_blob_(stack_, blob['fork_'])  # with feedback to root_fork at blob['fork_']
+    stack_ = form_stack_(P_, fig)  # vertical clustering
+    sub_blob_ = form_blob_(stack_, blob['root'])  # with feedback to root_fork at blob['fork_']
 
     return sub_blob_
 
 # clustering functions, out of date:
 #-------------------------------------------------------------------------------------------------------------------
 
-def form_P__(dert__, Ave, fcr, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+def form_P__(dert__, Ave, fcr, fig):  # segment dert__ into P__, in horizontal ) vertical order
+
+    # compute intra_comp fork clustering criterion, crit__ and dert__ are 2D arrays:
+    if fcr:
+        if fig: crit__ = dert__[0] + dert__[4] - Ave  # comp_r output eval by i + m, accumulated
+        else:   crit__ = Ave - dert__[1]  # comp_r output eval by inverted g, accumulated
+    else:
+        crit__ = dert__[4] - Ave  # comp_g output eval by m, or clustering is always by m?
+
+    P__ = []
+    for y in range(dert__.shape[1]):  # segment horizontal dert_ into same-sign Ps
+        # current row:
+        # while not_masked loop: skip masked segments,
+        # or: for dert in segment: no use for numpy beyond frame_blobs?
+
+        i_  = dert__[0][y, :]
+        g_  = dert__[1][y, :]
+        dy_ = dert__[2][y, :]
+        dx_ = dert__[3][y, :]
+        m_  = dert__[4][y, :]
+        if fig:
+            idy_ = dert__[5][y, :]
+            idx_ = dert__[6][y, :]
+        P_ = []
+        sign_ = crit__[y, :] > 0
+        _sign = sign_[0]
+
+        # initialize P params:
+        I, G, Dy, Dx, M, L, x0 = i_[0], g_[0], dy_[0], dx_[0], m_[0], 1, 0
+        if fig: iDy, iDx = idy_[0], idx_[0]
+
+        for x in range(1, dert__.shape[2]):  # loop left to right in each line
+            sign = sign_[x]
+            if sign_ != _sign:  # sign changed, terminate and pack P:
+
+                P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, dert_=dert__[:, y, x0:x0 + L], sign=_sign)
+                if fig: P.update(iDy=iDy, iDx=iDx)
+                P_.append(P)
+                # initialize P params:
+                I, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, x
+                if fig: iDy, iDx = 0, 0
+
+            # accumulate P params:
+            I += i_[x]
+            G += g_[x]
+            Dy += dy_[x]
+            Dx += dx_[x]
+            M += m_[x]
+            if fig: iDy, iDx = idy_[x], idx_[x]
+            L += 1
+            _sign = sign  # prior sign
+
+        # terminate last P in a row
+        P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, dert_=dert__[:, y, x0:x0 + L], sign=_sign)
+        if fig: P.update(iDy=iDy, iDx=iDx)
+        P_.append(P)
+        # pack P_row in P_blob:
+        P__[y] = P_
+
+    return P__
+
+
+def scan_P__(P__):
+    """Detect up_forks and down_forks per P."""
+
+    for _P_, P_ in pairwise(P__):  # Iterate through pairs of lines.
+        _iter_P_, iter_P_ = iter(_P_), iter(P_)  # Convert to iterators.
+        try:
+            _P, P = next(_iter_P_), next(iter_P_)  # First pair to check.
+        except StopIteration:  # No more up_fork-down_fork pair.
+            continue  # To next pair of _P_, P_.
+        while True:
+            isleft, olp = comp_edge(_P, P)  # Check for 4 different cases.
+            if olp and _P['sign'] == P['sign']:
+                _P['down_fork_'].append(P)
+                P['up_fork_'].append(_P)
+            try:  # Check for stopping:
+                _P, P = (next(_iter_P_), P) if isleft else (_P, next(iter_P_))
+            except StopIteration:  # No more up_fork - down_fork pair.
+                break  # To next pair of _P_, P_.
+
+    return [*flatten(P__)]  # Flatten P__ before return.
+
+
+def comp_edge(_P, P):  # Used in scan_P_().
+    """
+    Check for end-point relative position and overlap
+    """
+    _x0 = _P['x0']
+    _xn = _x0 + _P['L']
+    x0 = P['x0']
+    xn = x0 + P['L']
+
+    if _xn < xn:  # End-point relative position.
+        return True, x0 < _xn  # Overlap.
+    else:
+        return False, _x0 < xn
+
+
+def form_stack_(P_, fig):
+    """Form stacks of vertically contiguous Ps."""
+    # list of first Ps in stacks:
+    P0_ = [*filter(lambda P: (len(P['up_fork_']) != 1
+                              or len(P['up_fork_'][0]['down_fork_']) != 1),
+                   P_)]
+    if fig:
+        param_keys = gS_PARAM_KEYS
+    else:
+        param_keys = S_PARAM_KEYS
+
+    # Form segments:
+    seg_ = [dict(zip(param_keys,  # segment's params as keys
+                     # Accumulated params:
+                     [*map(sum,
+                           zip(*map(op.itemgetter(*param_keys[:-6]),
+                                    Py_))),
+                      len(Py_), Py_[0].pop('y'), Py_,  # Ly, y0, Py_ .
+                      Py_[-1].pop('down_fork_'), Py_[0].pop('up_fork_'),  # down_fork_, up_fork_ .
+                      Py_[0].pop('sign')]))
+            # cluster_vertical(P): traverse segment from first P:
+            for Py_ in map(cluster_vertical, P0_)]
+
+    for seg in seg_:  # Update segs' refs.
+        seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
+
+    for seg in seg_:  # Update down_fork_ and up_fork_ .
+        seg.update(down_fork_=[*map(lambda P: P['seg'], seg['down_fork_'])],
+                   up_fork_=[*map(lambda P: P['seg'], seg['up_fork_'])])
+
+    for i, seg in enumerate(seg_):  # Remove segs' refs.
+        del seg['Py_'][0]['seg']
+
+    return seg_
+
+# old -------------------------------------------------------------------------------------------------------:
+
+def form_P__old(dert__, Ave, fcr, fig, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
 
     # compute value (clustering criterion) per each intra_comp fork, crit__ and dert__ are 2D arrays:
     if fca:
@@ -185,81 +273,6 @@ def form_P__(dert__, Ave, fcr, fig, x0=0, y0=0):  # cluster dert__ into P__, in 
     ]
 
     return P__
-
-
-def scan_P__(P__):
-    """Detect up_forks and down_forks per P."""
-
-    for _P_, P_ in pairwise(P__):  # Iterate through pairs of lines.
-        _iter_P_, iter_P_ = iter(_P_), iter(P_)  # Convert to iterators.
-        try:
-            _P, P = next(_iter_P_), next(iter_P_)  # First pair to check.
-        except StopIteration:  # No more up_fork-down_fork pair.
-            continue  # To next pair of _P_, P_.
-        while True:
-            isleft, olp = comp_edge(_P, P)  # Check for 4 different cases.
-            if olp and _P['sign'] == P['sign']:
-                _P['down_fork_'].append(P)
-                P['up_fork_'].append(_P)
-            try:  # Check for stopping:
-                _P, P = (next(_iter_P_), P) if isleft else (_P, next(iter_P_))
-            except StopIteration:  # No more up_fork - down_fork pair.
-                break  # To next pair of _P_, P_.
-
-    return [*flatten(P__)]  # Flatten P__ before return.
-
-
-def comp_edge(_P, P):  # Used in scan_P_().
-    """
-    Check for end-point relative position and overlap.
-    Used in scan_P__().
-    """
-    _x0 = _P['x0']
-    _xn = _x0 + _P['L']
-    x0 = P['x0']
-    xn = x0 + P['L']
-
-    if _xn < xn:  # End-point relative position.
-        return True, x0 < _xn  # Overlap.
-    else:
-        return False, _x0 < xn
-
-
-def form_stack_(P_, fig):
-    """Form segments of vertically contiguous Ps."""
-    # Get a list of every segment's first P:
-    P0_ = [*filter(lambda P: (len(P['up_fork_']) != 1
-                              or len(P['up_fork_'][0]['down_fork_']) != 1),
-                   P_)]
-
-    if fig:
-        param_keys = gS_PARAM_KEYS
-    else:
-        param_keys = S_PARAM_KEYS
-
-    # Form segments:
-    seg_ = [dict(zip(param_keys,  # segment's params as keys
-                     # Accumulated params:
-                     [*map(sum,
-                           zip(*map(op.itemgetter(*param_keys[:-6]),
-                                    Py_))),
-                      len(Py_), Py_[0].pop('y'), Py_,  # Ly, y0, Py_ .
-                      Py_[-1].pop('down_fork_'), Py_[0].pop('up_fork_'),  # down_fork_, up_fork_ .
-                      Py_[0].pop('sign')]))
-            # cluster_vertical(P): traverse segment from first P:
-            for Py_ in map(cluster_vertical, P0_)]
-
-    for seg in seg_:  # Update segs' refs.
-        seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
-
-    for seg in seg_:  # Update down_fork_ and up_fork_ .
-        seg.update(down_fork_=[*map(lambda P: P['seg'], seg['down_fork_'])],
-                   up_fork_=[*map(lambda P: P['seg'], seg['up_fork_'])])
-
-    for i, seg in enumerate(seg_):  # Remove segs' refs.
-        del seg['Py_'][0]['seg']
-
-    return seg_
 
 
 def form_stack_(P_, fa):
