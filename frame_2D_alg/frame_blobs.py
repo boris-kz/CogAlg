@@ -99,6 +99,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         if s != _s:
             # terminate and pack P:
             P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)
+            # no need for P_dert_?
             P_.append(P)
             # initialize new P:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
@@ -265,11 +266,10 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         blob.pop('open_stacks')
         blob.update(box=(y0, yn, x0, xn),  # boundary box
-                    map=~mask,  # to compute overlap in comp_blob
-                    rng=1,  # if 3x3 kernel
-                    dert__=dert__,  # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
-                    root_fork=frame,
-                    fork_=defaultdict(dict),  # or []? contains forks ( sub-blobs
+                    map__=~mask,  # to compute overlap in comp_blob
+                    dert__=dert__,  # includes mask, no need for map?
+                    root=frame,
+                    fork=defaultdict(dict),  # will contain fork params, layer_
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
@@ -277,7 +277,6 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                      Dx=frame['Dx'] + blob['Dert']['Dx'])
 
         frame['blob__'].append(blob)
-
 
 # -----------------------------------------------------------------------------
 # Utilities
@@ -299,28 +298,27 @@ if __name__ == '__main__':
     start_time = time()
     frame = image_to_blobs(image)
 
-    intra=0
+    intra = 0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob_draft import *
+
         deep_frame = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 
         for blob in frame['blob__']:
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20:
-                    intra_blob(blob, rdn=1, rng=.0, fig=0, fca=1, fcr=0, fga=0)
-                    # +G blob' comp_a, form 2x2 aderts = ga, day, dax, -> comp_ga if +Ga, else comp_g if -Ga
+                    intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
             elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 30:
-                    intra_blob(blob, rdn=1, rng=1, fig=0, fca=0, fcr=1, fga=0)
-                    # -G blob' comp_r, form 3x3 rderts = dert, -> comp_a if +G, else comp_rng if -G
-                    '''
-                    with feedback:
-                    dert__ = comp_a|r(blob['dert__'], rng=1)  
-                    deep_frame['layer_'] = intra_blob(blob, dert__, rng=3, rdn=1, fig=0, fca=0)  
-                    deep_frame['blob_'].append(blob)  # extended by cluster_eval
-                    deep_frame['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
-                    '''
+                intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
+                '''
+                with feedback:
+                dert__ = comp_a|r(blob['dert__'], rng=1)  
+                deep_frame['layer_'] = intra_blob(blob, dert__, rng=3, rdn=1, fig=0, fca=0)  
+                deep_frame['blob_'].append(blob)  # extended by cluster_eval
+                deep_frame['params'][1:] += blob['params'][1:]  # incorrect, for selected blob params only?
+                '''
             # else no intra_blob call
 
     end_time = time() - start_time
@@ -328,10 +326,10 @@ if __name__ == '__main__':
 
     # DEBUG -------------------------------------------------------------------
     imwrite("images/gblobs.bmp",
-            map_frame_binary(frame,
-              sign_map={
-                  1: WHITE,  # 2x2 gblobs
-                  0: BLACK
-              }))
+        map_frame_binary(frame,
+                         sign_map={
+                             1: WHITE,  # 2x2 gblobs
+                             0: BLACK
+                         }))
 
     # END DEBUG ---------------------------------------------------------------

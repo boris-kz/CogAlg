@@ -27,7 +27,7 @@ from utils import *
     - map, # inverted mask
     - dert__,  # 2D array of pixel-level derts: (p, g, dy, dx) tuples
     - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own
-    ( intra_blob structure extends Dert, adds crit, rng, fork_)
+    ( intra_blob structure extends Dert, adds next and layer_)
 
     Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
     per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
@@ -89,7 +89,6 @@ def image_to_blobs(image):
 
     return frame  # frame of blobs
 
-
 ''' 
 Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
@@ -116,7 +115,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         sign = vg > 0
         if sign != _sign:
             # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_, sign=_sign)
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_sign, dert_=dert_)
             P_.append(P)
             # initialize new P:
             I, G, Dy, Dx, L, x0, dert_ = 0, 0, 0, 0, 0, x, []
@@ -129,7 +128,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         dert_.append((p, vg, dy, dx))
         _sign = sign  # prior sign
 
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert_, sign=_sign)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_sign, dert_=dert_)
     P_.append(P)  # terminate last P in a row
     return P_
 
@@ -283,12 +282,11 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         dert__.mask[:] = mask  # default mask is all 0s
 
         blob.pop('open_stacks')
-        blob.update(box=(y0, yn, x0, xn),  # boundary box
-                    map=~mask,  # to compute overlap in comp_blob
-                    rng=1,  # if 3x3 kernel
-                    dert__=dert__,  # dert__ + box replace slices=(Ellipsis, slice(y0, yn), slice(x0, xn))
-                    root_fork=frame,
-                    fork_=defaultdict(dict),  # or []? contains forks ( sub-blobs
+        blob.update(box= (y0, yn, x0, xn),  # boundary box
+                    map__= ~mask,  # to compute overlap in comp_blob
+                    dert__ =dert__,  # add map__ as dert__[0]?
+                    root = frame,
+                    fork = defaultdict(dict),  # feedback, will contain fork params, layer_
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
@@ -297,13 +295,11 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         frame['blob__'].append(blob)
 
-
 # -----------------------------------------------------------------------------
 # Utilities
 
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
-
 
 # -----------------------------------------------------------------------------
 # Main

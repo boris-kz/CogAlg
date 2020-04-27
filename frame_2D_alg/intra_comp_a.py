@@ -424,6 +424,9 @@ def intra_blob_a(blob, rdn, rng, fig, fca, fcr, fga):
                 # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
                 intra_blob(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=0)
     '''
+    fca, # flag comp angle, clustering by ga: gradient of angle?
+    fga, # flag comp angle of ga vs. angle of g
+    
     also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
     with feedback:
     for sub_blob in blob['blob_']:
