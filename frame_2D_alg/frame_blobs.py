@@ -265,11 +265,10 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         dert__.mask[:] = mask  # default mask is all 0s
 
         blob.pop('open_stacks')
-        blob.update(box=(y0, yn, x0, xn),  # boundary box
-                    map__=~mask,  # to compute overlap in comp_blob
-                    dert__=dert__,  # includes mask, no need for map?
-                    root=frame,
-                    fork=defaultdict(dict),  # will contain fork params, layer_
+        blob.update(root=frame,
+                    box=(y0, yn, x0, xn),  # boundary box
+                    dert__=dert__,  # includes mask, no need for map
+                    fork=defaultdict(dict)  # will contain fork params, layer_
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
@@ -303,9 +302,11 @@ if __name__ == '__main__':
 
         from intra_blob_draft import *
 
-        deep_frame = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
+        deep_frame = frame, frame
+        # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 
         for blob in frame['blob__']:
+
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20:
                     intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g

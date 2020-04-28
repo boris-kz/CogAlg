@@ -22,9 +22,8 @@ from functools import reduce
     Dert = I, G, Dy, Dx, M, if fig: + [iDy, iDx], A (area), Ly (vertical dimension)
     # I: input, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match, Ga: angle G, Day, Dax: angle Ds  
     sign, 
-    map,  # boolean map of blob, to compute overlap in comp_blob
-    box,  # boundary box: y0, yn, x0, xn; selective map, box in lower Layers
-    dert__, # comp r | comp_g -> i, g, dy, dx, m; comp_a -> i, g, dy, dx, m, ga, day, dax, da0, da1 
+    box,  # y0, yn, x0, xn
+    dert__,  # box of derts, each = i, g, dy, dx, m, ? idy, idx 
     stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, in vertical (horizontal) order
     
     # fork structure of next layer:
@@ -39,6 +38,7 @@ from functools import reduce
 
 ave  = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 10000  # fixed cost per intra_blob comp and clustering
+new_mask = []  # to use in form_blob
 
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
@@ -54,11 +54,11 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
 
     for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
         if sub_blob['sign']:
-            if sub_blob['Dert']['M'] > aveB * rdn:  # +M -> comp_r:
+            if sub_blob['Dert']['M'] > aveB * rdn:  # -> comp_r:
                 intra_blob(sub_blob, rdn + 1, rng**2, fig=fig, fcr=1)  # rng=1 in first call
 
-        elif sub_blob['Dert']['G'] > aveB * rdn:  # +G -> comp_g:
-            intra_blob(sub_blob, rdn + 1, rng=rng, fig=1, fcr=0)
+        elif sub_blob['Dert']['G'] > aveB * rdn:
+            intra_blob(sub_blob, rdn + 1, rng=rng, fig=1, fcr=0)  # -> comp_g
     '''
     feedback:
     for sub_blob in blob['blob_']:
@@ -93,34 +93,42 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # fig selects param keys
 def form_P__(dert__, Ave, fcr, fig):  # segment dert__ into P__, in horizontal ) vertical order
 
     # compute fork clustering criterion, crit__ and dert__ are 2D arrays:
-    if fcr:
-        if fig: crit__ = dert__[0] + dert__[4] - Ave  # comp_r output eval by i + m, accumulated
-        else:   crit__ = Ave - dert__[1]  # comp_r output eval by inverted g, accumulated
-    else:
+
+    if fcr:   # comp_r output
+        if fig: crit__ = dert__[0] + dert__[4] - Ave  # eval by i + m, accumulated in rng
+        else:   crit__ = Ave - dert__[1]              # eval by -g, accumulated
+    else:     # comp_g output
         crit__ = dert__[4] - Ave  # comp_g output eval by m, or clustering is always by m?
 
     P__ = []
+    new_mask = np.ones[dert__.shape]
+
     for y in range(dert__.shape[1]):  # segment row dert_ into same-sign Ps:
 
-        mask_ = dert__.mask[0][y, :]
-        i_  = dert__[1][y, :]
-        g_  = dert__[2][y, :]
-        dy_ = dert__[3][y, :]
-        dx_ = dert__[4][y, :]
-        m_  = dert__[5][y, :]
+        mask_ = dert__[0].mask[y, :]
+        i_  = dert__[0][y, :]
+        g_  = dert__[1][y, :]
+        dy_ = dert__[2][y, :]
+        dx_ = dert__[3][y, :]
+        m_  = dert__[4][y, :]
         if fig:
-            idy_ = dert__[6][y, :]
-            idx_ = dert__[7][y, :]
+            idy_ = dert__[5][y, :]
+            idx_ = dert__[6][y, :]
         P_ = []
         sign_ = crit__[y, :] > 0
-        _sign = sign_[0]
-        _mask = mask_[0]
 
+        for x in range(len(i_)-1):  # -1 because x starts with 0
+            if not i_.mask[x]:
+                x0 = x  # coordinate of first not-masked dert in line
+                break
         # initialize P params:
-        I, G, Dy, Dx, M, L, x0 = i_[0], g_[0], dy_[0], dx_[0], m_[0], 1, 0
-        if fig: iDy, iDx = idy_[0], idx_[0]
+        I, G, Dy, Dx, M, L = i_[x0], g_[x0], dy_[x0], dx_[x0], m_[x0], 1
+        if fig:
+            iDy, iDx = idy_[x0], idx_[x0]
+        _sign = sign_[x0]
+        _mask = False
 
-        for x in range(1, dert__.shape[2]):  # loop left to right in each row
+        for x in range(x0+1, dert__.shape[2]):  # loop left to right in each row
             sign = sign_[x]
             mask = mask_[x]
             if (~_mask and mask) or sign_ != _sign:
@@ -129,13 +137,14 @@ def form_P__(dert__, Ave, fcr, fig):  # segment dert__ into P__, in horizontal )
                 P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign)
                 if fig:
                     P.update(iDy=iDy, iDx=iDx)
-                # no need for dert_, derts can be accessed from blob.dert__
+                new_mask[x0: x0+L-1] = np.zeros  # for terminated blob' dert__.mask = new_mask
+                # no dert_, derts are accessed from blob.dert__
                 P_.append(P)
                 # initialize P params:
                 I, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, x
                 if fig: iDy, iDx = 0, 0
 
-            if map:  # accumulate P params:
+            if ~mask:  # accumulate P params:
                 I += i_[x]
                 G += g_[x]
                 Dy += dy_[x]
@@ -144,12 +153,15 @@ def form_P__(dert__, Ave, fcr, fig):  # segment dert__ into P__, in horizontal )
                 if fig: iDy, iDx = idy_[x], idx_[x]
                 L += 1
                 _sign = sign  # prior sign
+            _mask = mask
 
         # terminate last P in a row
         P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign)
-        if fig: P.update(iDy=iDy, iDx=iDx)
+        if fig:
+            P.update(iDy=iDy, iDx=iDx)
+        new_mask[x0: x0+L-1] = np.zeros
         P_.append(P)
-        P__[y] = P_  # pack P_row in P_blob
+        P__[y] = P_  # pack P row in P box
 
     return P__
 
