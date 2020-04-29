@@ -47,7 +47,7 @@ from utils import *
 
 kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
-
+mask = []
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
@@ -71,16 +71,19 @@ def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within 
 
 
 def image_to_blobs(image):
-    dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
 
-    frame = dict(rng=1, dert__=dert__, I=0, G=0, Dy=0, Dx=0, blob__=[])
+    dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
+    mask = np.ones((dert__.shape[1], dert__.shape[2]))
+    # how to make it global?
+
+    frame = dict(dert__=dert__, I=0, G=0, Dy=0, Dx=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
 
-    for y in range(height):  # first and last row are discarded
+    for y in range(height):  # last row is discarded
         print(f'Processing line {y}...')
 
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
+        P_ = form_P_(dert__[:, y].T, y)  # horizontal clustering
         P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
@@ -101,21 +104,20 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g, i), will be exten
 Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-
-def form_P_(dert__):  # horizontal clustering and summation of dert params into P params, per row of a frame
-    # P is a segment of same-sign derts in horizontal slice of a blob
+def form_P_(dert_, y):  # horizontal clustering and summation of dert params into P params, per row of a frame
 
     P_ = deque()  # row of Ps
-    I, G, Dy, Dx, L, x0, dert_ = *dert__[0], 1, 0, []  # initialize P params with 1st dert params
+    I, G, Dy, Dx, L, x0 = *dert_[0], 1, 0  # initialize P params with 1st dert params
     G = int(G) - ave
     _sign = G > 0
 
-    for x, (p, g, dy, dx) in enumerate(dert__[1:], start=1):
+    for x, (p, g, dy, dx) in enumerate(dert_[1:], start=1):
         vg = int(g) - ave  # deviation of g
         sign = vg > 0
         if sign != _sign:
             # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_sign, dert_=dert_)
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_sign)
+            mask[y, x0: x0 + L] = 0
             P_.append(P)
             # initialize new P:
             I, G, Dy, Dx, L, x0, dert_ = 0, 0, 0, 0, 0, x, []
@@ -125,11 +127,13 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         Dy += dy
         Dx += dx
         L += 1
-        dert_.append((p, vg, dy, dx))
         _sign = sign  # prior sign
 
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_sign, dert_=dert_)
-    P_.append(P)  # terminate last P in a row
+    # terminate and pack last P in row
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_sign)
+    mask[y, x0: x0 + L] = 0
+    P_.append(P)
+
     return P_
 
 
@@ -144,6 +148,7 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
     else the stack is recycled into next_stack_, for next-row run of scan_P_.
     It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
     '''
+
     next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
@@ -283,8 +288,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         blob.pop('open_stacks')
         blob.update(box= (y0, yn, x0, xn),  # boundary box
-                    map__= ~mask,  # to compute overlap in comp_blob
-                    dert__ =dert__,  # add map__ as dert__[0]?
+                    dert__ =dert__,
                     root = frame,
                     fork = defaultdict(dict),  # feedback, will contain fork params, layer_
                     )

@@ -65,7 +65,7 @@ def image_to_blobs(image):
 
     for y in range(height):  # first and last row are discarded
         print(f'Processing line {y}...')
-        P_ = form_P_(dert__[:, y].T)      # no .T? horizontal clustering
+        P_ = form_P_(dert__[:, y].T)      # horizontal clustering
         P_ = scan_P_(P_, stack_, frame)   # vertical clustering, adds up_forks per P and down_fork_cnt per stack
         stack_ = form_stack_(y, P_, frame)
 
