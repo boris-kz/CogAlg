@@ -38,7 +38,6 @@ from functools import reduce
 
 ave  = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 10000  # fixed cost per intra_blob comp and clustering
-new_mask = []  # to use in form_blob
 
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
@@ -69,8 +68,6 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
-    new_mask = np.ones((dert__.shape[1], dert__.shape[2]))
-    # how to make it global?
 
     # compute fork clustering criterion:
     if fcr:   # comp_r output
@@ -82,21 +79,22 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
     for y in range(height):  # last row is discarded
         print(f'Processing line {y}...')
 
-        P_ = form_P_(dert__[:, y].T, crit__[:, y], fig, y)  # horizontal clustering
+        P_ = form_P_(dert__[:, y].T, crit__[:, y], fig)  # horizontal clustering
         P_ = scan_P_(P_, stack_, blob['root'])  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
-        stack_ = form_stack_(y, P_, blob['root'], fig)
+        stack_ = form_stack_(P_, blob['root'], fig, y)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         sub_blob_ = form_blob(stack_.popleft(), blob['root'])  # with feedback to root_fork at blob['fork_']
 
-    return sub_blob_
+    return sub_blob_  # not needed, feedback to root is in form_blob?
 
 # clustering functions:
 #-------------------------------------------------------------------------------------------------------------------
 
-def form_P_(dert_, crit_, fig, y):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
+    new_mask = np.ones(dert_.shape[1])
     mask_ = dert_.mask
     sign_ = crit_ > 0
     x0 = -1
@@ -105,7 +103,7 @@ def form_P_(dert_, crit_, fig, y):  # segment dert__ into P__, in horizontal ) v
             x0 = x  # coordinate of first unmasked dert in line
             break
     # initialize P params:
-    I, G, Dy, Dx, M, iDy, iDx,  L = *dert_[x0], 1  # iDy, iDx maybe None
+    I, G, Dy, Dx, M, iDy, iDx, L = *dert_[x0], 1  # iDy, iDx maybe None
     _sign = sign_[x0]
     _mask = False
 
@@ -114,10 +112,8 @@ def form_P_(dert_, crit_, fig, y):  # segment dert__ into P__, in horizontal ) v
         mask = mask_[x]
         if (~_mask and mask) or sign_ != _sign:
             # (P exists and input is not in blob) or sign changed, terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign)
-            if fig:
-                P.update(iDy=iDy, iDx=iDx)
-            new_mask[y, x0: x0+L] = 0  # for terminated blob dert__.mask = new_mask
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign, mask = new_mask)
+            new_mask[x0: x0+L] = 0  # for terminated blob dert__.mask = new_mask
             P_.append(P)
             # initialize P params:
             I, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, x
@@ -135,10 +131,10 @@ def form_P_(dert_, crit_, fig, y):  # segment dert__ into P__, in horizontal ) v
         _mask = mask
 
     # terminate and pack last P in a row
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign, mask = new_mask)
     if fig:
         P.update(iDy=iDy, iDx=iDx)
-    new_mask[y, x0: x0+L] = 0
+    new_mask[x0: x0+L] = 0
     P_.append(P)
 
     return P_
