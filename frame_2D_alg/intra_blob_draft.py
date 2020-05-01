@@ -94,7 +94,6 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    new_mask = np.ones(dert_.shape[1])
     mask_ = dert_.mask
     sign_ = crit_ > 0
     x0 = -1
@@ -112,8 +111,7 @@ def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vert
         mask = mask_[x]
         if (~_mask and mask) or sign_ != _sign:
             # (P exists and input is not in blob) or sign changed, terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign, mask = new_mask)
-            new_mask[x0: x0+L] = 0  # for terminated blob dert__.mask = new_mask
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
             P_.append(P)
             # initialize P params:
             I, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, x
@@ -131,10 +129,9 @@ def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vert
         _mask = mask
 
     # terminate and pack last P in a row
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign, mask = new_mask)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign)
     if fig:
         P.update(iDy=iDy, iDx=iDx)
-    new_mask[x0: x0+L] = 0
     P_.append(P)
 
     return P_

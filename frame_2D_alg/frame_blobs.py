@@ -253,7 +253,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()
         yn = last_stack['y0'] + last_stack['Ly']
 
-        mask = np.ones((yn - y0, xn - x0), dtype=bool)  # map of blob in coord box
+        mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
         for stack in stack_:
             stack.pop('sign')
             stack.pop('down_fork_cnt')
@@ -261,8 +261,9 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 x_start = P['x0'] - x0
                 x_stop = x_start + P['L']
                 mask[y, x_start:x_stop] = False
+
         dert__ = frame['dert__'][:, y0:yn, x0:xn]
-        dert__.mask[:] = mask  # default mask is all 0s
+        dert__.mask[:] = mask  # overwrite default mask=0s
 
         blob.pop('open_stacks')
         blob.update(root=frame,
