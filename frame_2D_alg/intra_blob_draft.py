@@ -1,6 +1,6 @@
 import operator as op
 from collections import deque, defaultdict
-from itertools import groupby, starmap, zip_longest
+from itertools import groupby, starmap, zip_longest, repeat, accumulate, chain, starmap, tee
 import numpy as np
 import numpy.ma as ma
 from intra_comp import *
@@ -80,7 +80,7 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
         print(f'Processing line {y}...')
 
         P_ = form_P_(dert__[:, y].T, crit__[:, y], fig)  # horizontal clustering
-        P_ = scan_P_(P_, stack_, blob['root'])  # vertical clustering, adds up_forks per P and down_fork_cnt per stack
+        P_ = scan_P_(P_, stack_, blob['root'])  # vertical clustering, adds P up_forks per P and stack down_fork_cnt
         stack_ = form_stack_(P_, blob['root'], fig, y)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
@@ -101,10 +101,9 @@ def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vert
         if ~mask_[x]:
             x0 = x  # coordinate of first unmasked dert in line
             break
-    # initialize P params:
-    I, G, Dy, Dx, M, iDy, iDx, L = *dert_[x0], 1  # iDy, iDx maybe None
+    I, G, Dy, Dx, M, iDy, iDx, L = *dert_[x0], 1  # initialize P params
     _sign = sign_[x0]
-    _mask = False
+    _mask = False  # mask bit per dert
 
     for x in range(x0+1, dert_.shape[2]):  # loop left to right in each row of derts
         sign = sign_[x]
@@ -114,8 +113,7 @@ def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vert
             P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
             P_.append(P)
             # initialize P params:
-            I, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, x
-            if fig: iDy, iDx = 0, 0
+            I, G, Dy, Dx, M, iDy, iDx, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x
 
         if ~mask:  # accumulate P params:
             I += dert_[x][0]
@@ -123,22 +121,26 @@ def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vert
             Dy += dert_[x][2]
             Dx += dert_[x][3]
             M += dert_[x][4]
-            if fig: iDy, iDx = dert_[x][5], dert_[x][6]
+            iDy += dert_[x][5]
+            iDx += dert_[x][6]
             L += 1
             _sign = sign  # prior sign
         _mask = mask
 
     # terminate and pack last P in a row
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, L=L, x0=x0, sign=_sign)
-    if fig:
-        P.update(iDy=iDy, iDx=iDx)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
     P_.append(P)
 
     return P_
 
 
+def pairwise(iterable):  # s -> (s0,s1), (s1,s2), (s2, s3), ...
+    a, b = tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
 def scan_P_(P__, stack_, frame):
-    """Detect up_forks and down_forks per P."""
+    """ Detect up_forks and down_forks per P."""
 
     for _P_, P_ in pairwise(P__):  # Iterate through pairs of lines.
         _iter_P_, iter_P_ = iter(_P_), iter(P_)  # Convert to iterators.

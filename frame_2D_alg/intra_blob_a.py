@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from itertools import groupby, starmap, zip_longest
 import numpy as np
 import numpy.ma as ma
-from intra_comp import *
+from intra_comp_a import *
 from utils import pairwise, flatten
 from functools import reduce
 
@@ -39,36 +39,52 @@ from functools import reduce
 
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 10000  # fixed cost per intra_blob comp and clustering
-new_mask = []  # to use in form_blob
-
 
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
-    # fig: flag input is g, fcr: flag comp over rng+
+def intra_blob_a(blob, rdn, rng, fig, fca, fcr, fga):
+    # recursive input rng+ | der+ | angle cross-comp within a blob
+    # flags: fca: comp angle, fga: comp angle of ga, fig: input is g, fcr: comp over rng+
 
-    if fcr:
-        dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  # -> m sub_blobs
+    if fca:
+        dert__ = comp_a(blob['dert__'], fga)  # -> ma sub_blobs evaluate for comp_g | comp_aga:
+        cluster_derts(blob, dert__, ave * rdn, fca, fcr, fig=0)
+
+        for sub_blob in blob['blob_']:  # eval intra_blob: if disoriented g: comp_aga, else comp_g
+            if sub_blob['sign']:
+                if sub_blob['Dert']['Ma'] > aveB * rdn:
+                    # +Ma -> comp_g -> dert = g, gg, gdy, gdx, gm:
+                    intra_blob_a(sub_blob, rdn + 1, rng=1, fig=1, fca=0, fcr=0, fga=1)  # fga for comp_agg
+
+            elif sub_blob['Dert']['Ga'] > aveB * rdn:
+                # +Ga -> comp_aga -> dert + gaga, ga_day, ga_dax:
+                intra_blob_a(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=1)
     else:
-        dert__ = comp_g(blob['dert__'])  # -> g sub_blobs:
+        if fcr: dert__ = comp_r(blob['dert__'], fig, blob['root']['fcr'])  # -> m sub_blobs
+        else:   dert__ = comp_g(blob['dert__'])  # -> g sub_blobs:
 
-    cluster_derts(blob, dert__, ave * rdn, fcr, fig)
-    # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st layer
+        cluster_derts(blob, dert__, ave * rdn, fca, fcr, fig)
+        # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st sub_layer
 
-    for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
-        if sub_blob['sign']:
-            if sub_blob['Dert']['M'] > aveB * rdn:  # -> comp_r:
-                intra_blob(sub_blob, rdn + 1, rng ** 2, fig=fig, fcr=1)  # rng=1 in first call
+        for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
+            if sub_blob['sign']:
+                if sub_blob['Dert']['M'] > aveB * rdn:
+                    # +M -> comp_r -> dert with accumulated derivatives:
+                    intra_blob_a(sub_blob, rdn + 1, rng + 1, fig=fig, fca=0, fcr=1, fga=0)  # fga for comp_agr
 
-        elif sub_blob['Dert']['G'] > aveB * rdn:
-            intra_blob(sub_blob, rdn + 1, rng=rng, fig=1, fcr=0)  # -> comp_g
+            elif sub_blob['Dert']['G'] > aveB * rdn:
+                # +G -> comp_a -> dert + a, ga=0, day=0, dax=0:
+                intra_blob_a(sub_blob, rdn + 1, rng=1, fig=1, fca=1, fcr=0, fga=0)
     '''
-    feedback:
+    fca, # flag comp angle, clustering by ga: gradient of angle?
+    fga, # flag comp angle of ga vs. angle of g
+
+    also cluster_derts(crit=gi): abs_gg (no * cos(da)) -> abs_gblobs, no eval by Gi?
+    with feedback:
     for sub_blob in blob['blob_']:
-        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lA, rng, fig, fcr) 
+        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lL, rng, fig, fca)  # redundant to sub_blob
     '''
-
 
 # constants:
 

@@ -1,7 +1,8 @@
 from time import time
 from collections import deque, defaultdict
 import numpy as np
-from comp_pixel import comp_pixel
+from copy import copy
+# from comp_pixel import comp_pixel
 from utils import *
 
 '''
@@ -55,6 +56,22 @@ ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedba
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
+
+def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within image
+
+    # following four slices provide inputs to a sliding 2x2 kernel:
+    topleft__ = image[:-1, :-1]
+    topright__ = image[:-1, 1:]
+    botleft__ = image[1:, :-1]
+    botright__ = image[1:, 1:]
+
+    dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # same as diagonal from left
+    dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # same as diagonal from right
+    g__ = np.hypot(dy__, dx__)  # gradient per kernel
+
+    return ma.stack((topleft__, g__, dy__, dx__))
+
+
 def image_to_blobs(image):
 
     dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
@@ -98,10 +115,9 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         s = vg > 0
         if s != _s:
             # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)
-            # no need for P_dert_?
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)  # no need for dert_
             P_.append(P)
-            # initialize new P:
+            # initialize new P params:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
         # accumulate P params:
         I += p
@@ -131,16 +147,16 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
 
-        P = P_.popleft()  # load left-most (lowest-x) input-row P
-        stack = stack_.popleft()  # higher-row stacks,
-        _P = stack['Py_'][-1]  # last element of each stack is higher-row P
-        up_fork_ = []  # list of same-sign x-overlapping _Ps per P
+        P = P_.popleft()          # load left-most (lowest-x) input-row P
+        stack = stack_.popleft()  # higher-row stacks
+        _P = stack['Py_'][-1]     # last element of each stack is higher-row P
+        up_fork_ = []             # list of same-sign x-overlapping _Ps per P
 
         while True:  # while both P_ and stack_ are not empty
 
-            x0 = P['x0']  # first x in P
-            xn = x0 + P['L']  # first x in next P
-            _x0 = _P['x0']  # first x in _P
+            x0 = P['x0']         # first x in P
+            xn = x0 + P['L']     # first x in next P
+            _x0 = _P['x0']       # first x in _P
             _xn = _x0 + _P['L']  # first x in next _P
 
             if (P['sign'] == stack['sign']
@@ -192,7 +208,7 @@ def form_stack_(y, P_, frame):  # Convert or merge every P into its stack of Ps,
             blob['stack_'].append(new_stack)
         else:
             if len(up_fork_) == 1 and up_fork_[0]['down_fork_cnt'] == 1:
-                # P has one up_fork and that up_fork has one root: merge P into up_fork stack:
+                # P has one up_fork and that up_fork has one down_fork=P: merge P into up_fork stack:
                 new_stack = up_fork_[0]
                 accum_Dert(new_stack, I=I, G=G, Dy=Dy, Dx=Dx, S=L, Ly=1)
                 new_stack['Py_'].append(P)  # Py_: vertical buffer of Ps
@@ -207,7 +223,7 @@ def form_stack_(y, P_, frame):  # Convert or merge every P into its stack of Ps,
 
                 if len(up_fork_) > 1:  # merge blobs of all up_forks
                     if up_fork_[0]['down_fork_cnt'] == 1:  # up_fork is not terminated
-                        form_blob(up_fork_[0], frame)  # merge stack of 1st up_fork into its blob
+                        form_blob(up_fork_[0], frame)      # merge stack of 1st up_fork into its blob
 
                     for up_fork in up_fork_[1:len(up_fork_)]:  # merge blobs of other up_forks into blob of 1st up_fork
                         if up_fork['down_fork_cnt'] == 1:
@@ -262,13 +278,15 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 x_stop = x_start + P['L']
                 mask[y, x_start:x_stop] = False
 
-        dert__ = frame['dert__'][:, y0:yn, x0:xn]
-        dert__.mask[:] = mask  # overwrite default mask=0s
+        dert__ = (frame['dert__'][:, y0:yn, x0:xn]).copy()  # copy mask as dert.mask
+        dert__.mask[:] = True
+        dert__.mask[:] = mask  # overwrite default mask 0s
+        frame['dert__'][:, y0:yn, x0:xn] = dert__.copy()  # assign mask back to frame dert__
 
         blob.pop('open_stacks')
         blob.update(root=frame,
-                    box=(y0, yn, x0, xn),  # boundary box
-                    dert__=dert__,  # includes mask, no need for map
+                    box=(y0, yn, x0, xn),   # boundary box
+                    dert__=dert__,          # includes mask
                     fork=defaultdict(dict)  # will contain fork params, layer_
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
@@ -327,11 +345,13 @@ if __name__ == '__main__':
     print(end_time)
 
     # DEBUG -------------------------------------------------------------------
+
+'''
     imwrite("images/gblobs.bmp",
         map_frame_binary(frame,
                          sign_map={
                              1: WHITE,  # 2x2 gblobs
                              0: BLACK
                          }))
-
+'''
     # END DEBUG ---------------------------------------------------------------

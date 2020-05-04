@@ -158,7 +158,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     rdert_ = []   # prefix '_' denotes the prior of same-name variables, initialization:
     (__i, _, __short_rng_m), _, (_i, _short_rng_d, _short_rng_m) = dert_[0:3]  # no __short_rng_d
     _d = _i - __i
-    if fid: _m = min(__i, _i) - ave_min;
+    if fid: _m = min(__i, _i) - ave_min
     else:   _m = ave - abs(_d)  # no ave * rng: m and d value is cumulative
     _rng_m = _m * 1.5 + __short_rng_m  # back-project bilateral m
     rdert_.append((__i, None, _rng_m))   # no _rng_d = _d + __short_rng_d
