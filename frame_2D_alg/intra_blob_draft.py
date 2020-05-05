@@ -68,6 +68,7 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
+    dert__ = dert__[:, :, :].T
 
     # compute fork clustering criterion:
     if fcr:   # comp_r output
@@ -79,9 +80,9 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
     for y in range(height):  # last row is discarded
         print(f'Processing line {y}...')
 
-        P_ = form_P_(dert__[:, y].T, crit__[:, y], fig)  # horizontal clustering
-        P_ = scan_P_(P_, stack_, blob['root'])  # vertical clustering, adds P up_forks per P and stack down_fork_cnt
-        stack_ = form_stack_(P_, blob['root'], fig, y)
+        P_ = form_P_(dert__[:, y], crit__[:, y])  # horizontal clustering
+        P_ = scan_P_(P_, stack_, blob['root'])   # vertical clustering, adds P up_forks and down_fork_cnt
+        stack_ = form_stack_(P_, blob['root'], y)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         sub_blob_ = form_blob(stack_.popleft(), blob['root'])  # with feedback to root_fork at blob['fork_']
@@ -91,7 +92,7 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 # clustering functions:
 #-------------------------------------------------------------------------------------------------------------------
 
-def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
     mask_ = dert_.mask
@@ -105,7 +106,7 @@ def form_P_(dert_, crit_, fig):  # segment dert__ into P__, in horizontal ) vert
     _sign = sign_[x0]
     _mask = False  # mask bit per dert
 
-    for x in range(x0+1, dert_.shape[2]):  # loop left to right in each row of derts
+    for x in range(x0+1, dert_.shape[0]):  # loop left to right in each row of derts
         sign = sign_[x]
         mask = mask_[x]
         if (~_mask and mask) or sign_ != _sign:

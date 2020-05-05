@@ -132,29 +132,27 @@ def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, par
     line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD? 
 '''
 
-def intra_mP(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
+def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
 
     sub_H_ = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_H_ by feedback
-    adjacent_PM = 0
-    
+    adj_M_proj = 0  # project adjacent P M on current P span, contrast value
+
     for sign, L, I, D, M, dert_, sub_H_ in P_:  # each sub in sub_H_ is nested to depth = sub_H_[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
 
-            extend_ = rng_comp(dert_, fid)  # rng+ comp, skip predictable next dert
-            sub_mP_ = form_mP_(extend_); lL = len(sub_mP_)
+            r_dert_ = rng_comp(dert_, fid)  # rng+ comp, skip predictable next dert
+            sub_mP_ = form_mP_(r_dert_); lL = len(sub_mP_)
             sub_H_ += [[(lL, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_H_ += intra_mP(sub_mP_, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
+            sub_H_ += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
 
-        elif min(adjacent_PM, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM, local?
+        elif ~sign and min(adj_M_proj, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM projected on neg_mP
 
-            extend_, lL = form_dP_(dert_)  # cluster by d sign match: partial d match, precondition for der+
-            sub_H_, dP_ = intra_dP_(extend_, adjacent_PM, rdn + 1 + 1 / lL, rng+1)  # feedback, LL[:] = [len(sub_H_)]
-            # der_comp eval per dP in intra_dP_
-        else:
-            extend_ = []  # also merge not-selected P into non_P?
+            sub_dP_ = form_dP_(dert_); lL = len(sub_dP_)  # cluster by d sign match: partial d match, else no der+
+            sub_H_ += [[(lL, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
+            sub_H_ += intra_dP_(sub_dP_, adj_M_proj, rdn + 1 + 1 / lL, rng+1)  # der_comp eval per dP
 
-    return sub_H_  # fill layer Dert if n_sub_P > min?
+    return sub_H_  # or deep_sub_H_?
 
 def intra_dP_(P_, adjacent_PM, rdn, rng):
 
@@ -162,15 +160,16 @@ def intra_dP_(P_, adjacent_PM, rdn, rng):
     for sign, L, I, D, M, dert_, sub_H_ in P_:  # each sub in sub_H_ is nested to depth = sub_H_[n]
 
         if min(adjacent_PM, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM
-            extend_ = der_comp(dert_)
-            sub_mP_ = form_mP_(extend_); lL = len(sub_mP_)
+
+            d_dert_ = der_comp(dert_)
+            sub_mP_ = form_mP_(d_dert_); lL = len(sub_mP_)
             sub_H_ += [[(lL, False, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_H_ += intra_mP(sub_mP_, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
+            sub_H_ += intra_mP_(sub_mP_, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
 
     return sub_H_  # fill layer Dert if n_sub_P > min?
 
 
-def intra_P_(P_, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
+def intra_P_(P_, rdn, rng, fdP, fid):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
     deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
@@ -191,16 +190,16 @@ def intra_P_(P_, rdn, rng):  # evaluate for sub-recursion in line P_, filling it
 
             sub_dP_ = form_dP_(ext_dert_); lL = len(sub_dP_)
             dsub_ += [[(lL, True, True, rdn, rng, sub_dP_)]]  # 1st layer: lL, fdP, fid, rdn, rng, sub_P_
-            dsub_ += intra_P(sub_dP_, True, True, rdn + 1 + 1 / lL, rng+1)  # deep layers feedback
+            dsub_ += intra_P_(sub_dP_, True, True, rdn + 1 + 1 / lL, rng+1)  # deep layers feedback
             dLL[:] = [len(dsub_)]   # deeper P rdn + 1: rdn to higher derts, + 1 / lL: rdn to higher sub_
 
             sub_mP_ = form_mP_(ext_dert_); lL = len(sub_mP_)
             rsub_ += [[(lL, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            rsub_ += intra_P(sub_mP_, False, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # deep layers feedback
+            rsub_ += intra_P_(sub_mP_, False, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # deep layers feedback
             rLL[:] = [len(rsub_)]
 
-            deep_sub_ = [deep_sub + dsub + rsub for deep_sub, dsub, rsub in zip_longest(deep_sub_, dsub_, rsub_, fillvalue=[])]
-            # deep_rsub_ and deep_dsub_ are spliced into deep_sub_ hierarchy
+            deep_sub_ = [deep_sub + sub_H_ for deep_sub, sub_H_ in zip_longest(deep_sub_, sub_H_, fillvalue=[])]
+            # deep_sub_ and deep_dsub_ are spliced into deep_sub_ hierarchy
             # fill layer Dert if n_sub_P > min
     return deep_sub_
 

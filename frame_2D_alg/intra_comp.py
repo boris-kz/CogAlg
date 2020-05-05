@@ -79,15 +79,15 @@ def comp_r(dert__, fig, root_fcr):
         inverse match = SAD, more precise measure of variation than g, direction doesn't matter:
         (all diagonal derivatives can be imported from prior 2x2 comp)
         '''
-        m__ += (abs(i__center - i__topleft)
-                + abs(i__center - i__top)
-                + abs(i__center - i__topright)
-                + abs(i__center - i__right)
-                + abs(i__center - i__bottomright)
-                + abs(i__center - i__bottom)
-                + abs(i__center - i__bottomleft)
-                + abs(i__center - i__left)
-                )
+        m__ +=( abs(i__center - i__topleft)
+              + abs(i__center - i__top)
+              + abs(i__center - i__topright)
+              + abs(i__center - i__right)
+              + abs(i__center - i__bottomright)
+              + abs(i__center - i__bottom)
+              + abs(i__center - i__bottomleft)
+              + abs(i__center - i__left)
+              )
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
         if not root_fcr:
             idy__, idx__ = dert__[[-2, -1]]  # root fork is comp_g, not sparse
@@ -139,14 +139,14 @@ def comp_r(dert__, fig, root_fcr):
         '''
         8-tuple of cosine differences per direction:
         '''
-        dt__ = np.stack(((i__center - i__topleft *     cos_da[0]),
-                         (i__center - i__top *         cos_da[1]),
-                         (i__center - i__topright *    cos_da[2]),
-                         (i__center - i__right *       cos_da[3]),
+        dt__ = np.stack(((i__center - i__topleft     * cos_da[0]),
+                         (i__center - i__top         * cos_da[1]),
+                         (i__center - i__topright    * cos_da[2]),
+                         (i__center - i__right       * cos_da[3]),
                          (i__center - i__bottomright * cos_da[4]),
-                         (i__center - i__bottom *      cos_da[5]),
-                         (i__center - i__bottomleft *  cos_da[6]),
-                         (i__center - i__left *        cos_da[7])
+                         (i__center - i__bottom      * cos_da[5]),
+                         (i__center - i__bottomleft  * cos_da[6]),
+                         (i__center - i__left        * cos_da[7])
                          ))
 
         for d__, YCOEF, XCOEF in zip(dt__, YCOEFs, XCOEFs):
@@ -157,16 +157,11 @@ def comp_r(dert__, fig, root_fcr):
             accumulate in prior-rng (3x3 -> 5x5 -> 9x9) dy, dx
             '''
         g__ = np.hypot(dy__, dx__)
-
-    if fig:
-        rdert = ma.stack((i__center, g__, dy__, dx__, m__, idy__[1:-1:2, 1:-1:2], idx__[1:-1:2, 1:-1:2]))
-    else:
-        rdert = ma.stack((i__center, g__, dy__, dx__, m__))  # return input with accumulated derivatives
     '''
     next comp_r will use full dert       
     next comp_g will use g__, dy__, dx__
     '''
-    return rdert
+    return ma.stack((i__center, g__, dy__, dx__, m__, idy__[1:-1:2, 1:-1:2], idx__[1:-1:2, 1:-1:2]))
 
 
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
@@ -183,10 +178,10 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     g2__, dy2__, dx2__ = g__[1:, 1:],   dy__[1:, 1:],   dx__[1:, 1:]    # bottom right
     g3__, dy3__, dx3__ = g__[1:, :-1],  dy__[1:, :-1],  dx__[1:, :-1]   # bottom left
 
-    sin0__ = dy0__ / g0__; cos0__ = dx0__ / g0__
-    sin1__ = dy1__ / g1__; cos1__ = dx1__ / g1__
-    sin2__ = dy2__ / g2__; cos2__ = dx2__ / g2__
-    sin3__ = dy3__ / g3__; cos3__ = dx3__ / g3__
+    sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
+    sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
+    sin2__ = dy2__ / g2__;  cos2__ = dx2__ / g2__
+    sin3__ = dy3__ / g3__;  cos3__ = dx3__ / g3__
     '''
     cosine of difference between diagonally opposed angles, in vector representation:
     '''
