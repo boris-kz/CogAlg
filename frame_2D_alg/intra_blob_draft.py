@@ -68,7 +68,7 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
-    dert__ = dert__[:, :, :].T
+    ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape of [y,x,params)]
 
     # compute fork clustering criterion:
     if fcr:   # comp_r output
