@@ -13,7 +13,7 @@ import numpy as np
 # Input:
 IMAGE_PATH = "./images/raccoon.jpg"
 # Outputs:
-OUTPUT_PATH = "./images/intra_comp/"
+OUTPUT_PATH = "./images/intra_comp0/"
 
 # -----------------------------------------------------------------------------
 # Functions

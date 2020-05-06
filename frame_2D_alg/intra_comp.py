@@ -49,14 +49,18 @@ def comp_r(dert__, fig, root_fcr):
     i__bottomleft =  i__[2::2, :-2:2]
     i__left =        i__[1:-1:2, :-2:2]
 
-    if root_fcr:  # root fork is comp_r, all params are present in the input:
+    idy__, idx__ = dert__[[5, 6]]  # skip g: recomputed, output for Dert only
+    idy__ = idy__[1:-1:2, 1:-1:2]
+    idx__ = idx__[1:-1:2, 1:-1:2]
 
-        dy__, dx__, m__ = dert__[[2, 3, 4]]  # skip g: recomputed, output for Dert only
+    if root_fcr:  # root fork is comp_r, accumulate derivatives:
+
+        dy__, dx__, m__ = dert__[[2, 3, 4]]
         dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__ = dx__[1:-1:2, 1:-1:2]
-        m__ = m__[1:-1:2, 1:-1:2]
+        m__  =  m__[1:-1:2, 1:-1:2]
 
-    else:  # root fork is comp_g or comp_pixel, initialize sparse derivatives:
+    else:   # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
         dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
         dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
@@ -76,7 +80,7 @@ def comp_r(dert__, fig, root_fcr):
 
         g__ = np.hypot(dy__, dx__)  # gradient
         '''
-        inverse match = SAD, more precise measure of variation than g, direction doesn't matter:
+        inverse match = SAD, more precise measure of variation than g, direction-invariant
         (all diagonal derivatives can be imported from prior 2x2 comp)
         '''
         m__ +=( abs(i__center - i__topleft)
@@ -89,11 +93,6 @@ def comp_r(dert__, fig, root_fcr):
               + abs(i__center - i__left)
               )
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
-        if not root_fcr:
-            idy__, idx__ = dert__[[-2, -1]]  # root fork is comp_g, not sparse
-
-            dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
-            dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
 
         a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
         '''
@@ -121,20 +120,17 @@ def comp_r(dert__, fig, root_fcr):
                   ((a__center[0] * a__center[1]) + (a__bottomleft[0] * a__bottomleft[1])),
                   ((a__center[0] * a__center[1]) + (a__left[0] * a__left[1]))
                 ))
-        if root_fcr:
-            m__, day__, dax__ = dert__[[-4, -2, -1]]  # skip ga: recomputed, output for summation only?
-            m__ = m__[1:-1:2, 1:-1:2]  # sparse to align with i__center
-        else:
-            m__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
-
-        m__ += (  np.minimum(i__center, (i__topleft *     cos_da[0]))
-                + np.minimum(i__center, (i__top *         cos_da[1]))
-                + np.minimum(i__center, (i__topright *    cos_da[2]))
-                + np.minimum(i__center, (i__right *       cos_da[3]))
-                + np.minimum(i__center, (i__bottomright * cos_da[4]))
-                + np.minimum(i__center, (i__bottom *      cos_da[5]))
-                + np.minimum(i__center, (i__bottomleft *  cos_da[6]))
-                + np.minimum(i__center, (i__left *        cos_da[7]))
+        '''
+        8-tuple of cosine matches per direction:
+        '''
+        m__ += (  np.minimum(i__center, i__topleft)    * cos_da[0]
+                + np.minimum(i__center, i__top )       * cos_da[1]
+                + np.minimum(i__center, i__topright)   * cos_da[2]
+                + np.minimum(i__center, i__right)      * cos_da[3]
+                + np.minimum(i__center, i__bottomright)* cos_da[4]
+                + np.minimum(i__center, i__bottom)     * cos_da[5]
+                + np.minimum(i__center, i__bottomleft) * cos_da[6]
+                + np.minimum(i__center, i__left)       * cos_da[7]
                 )
         '''
         8-tuple of cosine differences per direction:
@@ -161,16 +157,12 @@ def comp_r(dert__, fig, root_fcr):
     next comp_r will use full dert       
     next comp_g will use g__, dy__, dx__
     '''
-    return ma.stack((i__center, g__, dy__, dx__, m__, idy__[1:-1:2, 1:-1:2], idx__[1:-1:2, 1:-1:2]))
+    return ma.stack((i__center, g__, dy__, dx__, m__, idy__, idx__))
 
 
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
-    '''
-    input dert  = (i, g, dy, dx, m)
-    output dert = (g, gg, dgy, dgx, gm, dy, dx)
-    '''
-    dert__ = shape_check(dert__)  # remove derts of incomplete kernels
 
+    dert__ = shape_check(dert__)  # remove derts of incomplete kernels
     g__, dy__, dx__ = dert__[[1, 2, 3]]  # top dimension of numpy stack must be a list
 
     g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
@@ -198,9 +190,9 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = np.minimum(g0__, (g2__ * cos_da0__))  # g match = min(g, _g*cos(da))
-    mg1__ = np.minimum(g1__, (g3__ * cos_da1__))
-    mg__ = mg0__ + mg1__
+    mg0__ = np.minimum(g0__, g2__) * cos_da0__  # g match = min(g, _g) *cos(da)
+    mg1__ = np.minimum(g1__, g3__) * cos_da1__
+    mg__  = mg0__ + mg1__
 
     gdert = ma.stack((g__[:-1, :-1],  # remove last row and column to align with derived params
                       gg__,

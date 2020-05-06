@@ -49,7 +49,7 @@ Khanh Nguyen, $3100, senior developer, January-March
 
 Kok Wei Chee, $4000, team developer, January-April
 
-Maria Parshakova, $860, team developer, March-April 
+Maria Parshakova, $1060, team developer, March-April 
 
 
 

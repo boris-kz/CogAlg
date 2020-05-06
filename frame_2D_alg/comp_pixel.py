@@ -47,7 +47,10 @@ def comp_pixel_m(image):  # current version of 2x2 pixel cross-correlation withi
     # inverse match = SAD: measure of variation within kernel
     m__ = ( abs(topleft__ - botright__) + abs(topright__ - botleft__))
 
-    return ma.stack((topleft__, g__, dy__, dx__, m__))
+    idy__ = np.zeros((g__.shape[0], g__.shape[1]))
+    idx__ = np.zeros((g__.shape[0], g__.shape[1]))
+
+    return ma.stack((topleft__, g__, dy__, dx__, m__, idy__, idx__))
 
 
 def comp_pixel_old(image):  # 2x2 pixel cross-correlation within image

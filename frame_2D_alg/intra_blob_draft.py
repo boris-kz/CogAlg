@@ -68,26 +68,27 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
-    ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape of [y,x,params)]
+    dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
 
     # compute fork clustering criterion:
     if fcr:   # comp_r output
-        if fig: crit__ = dert__[0] + dert__[4] - Ave  # eval by i + m, accumulated in rng
-        else:   crit__ = Ave - dert__[1]              # eval by -g, accumulated in rng
+        if fig: crit__ = dert__[:,:,0] + dert__[:,:,4] - Ave  # eval by i + m, accumulated in rng
+        else:   crit__ = Ave - dert__[:,:,1]              # eval by -g, accumulated in rng
     else:     # comp_g output
-        crit__ = dert__[4] - Ave  # comp_g output eval by m, or clustering is always by m?
+        crit__ = dert__[:,:,4] - Ave  # comp_g output eval by m, or clustering is always by m?
 
     for y in range(height):  # last row is discarded
         print(f'Processing line {y}...')
 
-        P_ = form_P_(dert__[:, y], crit__[:, y])  # horizontal clustering
+        P_ = form_P_(dert__[y,:], crit__[y,:])  # horizontal clustering
         P_ = scan_P_(P_, stack_, blob['root'])   # vertical clustering, adds P up_forks and down_fork_cnt
         stack_ = form_stack_(P_, blob['root'], y)
 
-    while stack_:  # frame ends, last-line stacks are merged into their blobs:
+    while stack_:  # root box ends, last-line stacks are merged into their blobs:
         sub_blob_ = form_blob(stack_.popleft(), blob['root'])  # with feedback to root_fork at blob['fork_']
 
     return sub_blob_  # not needed, feedback to root is in form_blob?
+
 
 # clustering functions:
 #-------------------------------------------------------------------------------------------------------------------
@@ -95,7 +96,7 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
 def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    mask_ = dert_.mask
+    mask_ = dert_[:,0].mask
     sign_ = crit_ > 0
     x0 = -1
     for x in range(len(dert_)):
@@ -175,6 +176,56 @@ def comp_edge(_P, P):  # Used in scan_P_().
         return True, x0 < _xn  # Overlap.
     else:
         return False, _x0 < xn
+
+
+def scan_P_(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
+
+    next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
+
+    if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
+
+        P = P_.popleft()          # load left-most (lowest-x) input-row P
+        stack = stack_.popleft()  # higher-row stacks
+        _P = stack['Py_'][-1]     # last element of each stack is higher-row P
+        up_fork_ = []             # list of same-sign x-overlapping _Ps per P
+
+        while True:  # while both P_ and stack_ are not empty
+
+            x0 = P['x0']         # first x in P
+            xn = x0 + P['L']     # first x in next P
+            _x0 = _P['x0']       # first x in _P
+            _xn = _x0 + _P['L']  # first x in next _P
+
+            if (P['sign'] == stack['sign']
+                    and _x0 < xn and x0 < _xn):  # test for sign match and x overlap between loaded P and _P
+                stack['down_fork_cnt'] += 1
+                up_fork_.append(stack)  # P-connected higher-row stacks are buffered into up_fork_ per P
+
+            if xn < _xn:  # _P overlaps next P in P_
+                next_P_.append((P, up_fork_))  # recycle _P for the next run of scan_P_
+                up_fork_ = []
+                if P_:
+                    P = P_.popleft()  # load next P
+                else:  # terminate loop
+                    if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
+                        form_blob(stack, blob_root)
+                    break
+            else:  # no next-P overlap
+                if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
+                    form_blob(stack, blob_root)
+                if stack_:  # load stack with next _P
+                    stack = stack_.popleft()
+                    _P = stack['Py_'][-1]
+                else:  # no stack left: terminate loop
+                    next_P_.append((P, up_fork_))
+                    break
+
+    while P_:  # terminate Ps and stacks that continue at row's end
+        next_P_.append((P_.popleft(), []))  # no up_fork
+    while stack_:
+        form_blob(stack_.popleft(), blob_root)  # down_fork_cnt always == 0
+
+    return next_P_  # each element is P + up_fork_ refs
 
 
 def form_stack_(P_, fig):
