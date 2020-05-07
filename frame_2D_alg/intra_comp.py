@@ -49,13 +49,11 @@ def comp_r(dert__, fig, root_fcr):
     i__bottomleft =  i__[2::2, :-2:2]
     i__left =        i__[1:-1:2, :-2:2]
 
-    idy__, idx__ = dert__[[5, 6]]  # skip g: recomputed, output for Dert only
-    idy__ = idy__[1:-1:2, 1:-1:2]
-    idx__ = idx__[1:-1:2, 1:-1:2]
+    idy__, idx__ = dert__[[1, 2]]
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
-        dy__, dx__, m__ = dert__[[2, 3, 4]]
+        dy__, dx__, m__ = dert__[[4, 5, 6]]
         dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__ = dx__[1:-1:2, 1:-1:2]
         m__  =  m__[1:-1:2, 1:-1:2]
@@ -92,6 +90,7 @@ def comp_r(dert__, fig, root_fcr):
               + abs(i__center - i__bottomleft)
               + abs(i__center - i__left)
               )
+
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
 
         a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
@@ -157,13 +156,19 @@ def comp_r(dert__, fig, root_fcr):
     next comp_r will use full dert       
     next comp_g will use g__, dy__, dx__
     '''
-    return ma.stack((i__center, g__, dy__, dx__, m__, idy__, idx__))
-
+    return ma.stack((i__center,
+                     idy__[1:-1:2, 1:-1:2],  # i__center.shape
+                     idx__[1:-1:2, 1:-1:2],  # i__center.shape
+                     g__,
+                     dy__,
+                     dx__,
+                     m__
+                     ))
 
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-    g__, dy__, dx__ = dert__[[1, 2, 3]]  # top dimension of numpy stack must be a list
+    g__, dy__, dx__ = dert__[[3, 4, 5]]  # local i, idy, idx
 
     g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
     g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right
@@ -180,7 +185,7 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     cos_da0__ = (sin0__ * cos0__) + (sin2__ * cos2__)  # top left to bottom right
     cos_da1__ = (sin1__ * cos1__) + (sin3__ * cos3__)  # top right to bottom left
 
-    print(cos_da1__.shape, type(cos_da1__))
+    # print(cos_da1__.shape, type(cos_da1__))
 
     dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
     # y-decomposed cosine difference between gs
@@ -194,20 +199,18 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     mg1__ = np.minimum(g1__, g3__) * cos_da1__
     mg__  = mg0__ + mg1__
 
-    gdert = ma.stack((g__[:-1, :-1],  # remove last row and column to align with derived params
-                      gg__,
-                      dgy__,
-                      dgx__,
-                      mg__,
-                      dy__[:-1, :-1],
-                      dx__[:-1, :-1]  # to compute cos for comp rg
-                      ))
     '''
     next comp_rg will use g, dy, dx     
     next comp_gg will use gg, dgy, dgx  
     '''
-    return gdert
-
+    return  ma.stack((g__ [:-1, :-1],  # remove last row and column to align with derived params
+                      dy__[:-1, :-1],
+                      dx__[:-1, :-1],  # -> idy, idx to compute cos for comp rg
+                      gg__,
+                      dgy__,
+                      dgx__,
+                      mg__
+                      ))
 
 def shape_check(dert__):
     # remove derts of 2x2 kernels that are missing some other derts

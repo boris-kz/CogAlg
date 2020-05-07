@@ -19,11 +19,11 @@ from functools import reduce
     Blob structure, for all layers of blob hierarchy:
     
     root,  # reference to root blob, for feedback of blob Dert params and sub_blob_, up to frame
-    Dert = I, G, Dy, Dx, M, if fig: + [iDy, iDx], A (area), Ly (vertical dimension)
-    # I: input, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match, Ga: angle G, Day, Dax: angle Ds  
+    Dert = I, iDy, iDx, G, Dy, Dx, M, S (area), Ly (vertical dimension)
+    # I: input, (iDy, iDx): angle of input gradient, if any, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match  
     sign, 
     box,  # y0, yn, x0, xn
-    dert__,  # box of derts, each = i, g, dy, dx, m, ? idy, idx 
+    dert__,  # box of derts, each = i, idy, idx, g, dy, dx, m
     stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, in vertical (horizontal) order
     
     # fork structure of next layer:
@@ -51,7 +51,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     cluster_derts(blob, dert__, ave*rdn, fcr, fig)
     # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st layer
 
-    for sub_blob in blob['blob_']:  # eval intra_blob comp_a | comp_rng if low gradient
+    for sub_blob in blob['blob_']:  # eval intra_blob comp_g | comp_rng if low gradient
         if sub_blob['sign']:
             if sub_blob['Dert']['M'] > aveB * rdn:  # -> comp_r:
                 intra_blob(sub_blob, rdn + 1, rng**2, fig=fig, fcr=1)  # rng=1 in first call
@@ -103,14 +103,14 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
         if ~mask_[x]:
             x0 = x  # coordinate of first unmasked dert in line
             break
-    I, G, Dy, Dx, M, iDy, iDx, L = *dert_[x0], 1  # initialize P params
+    I, iDy, iDx, G, Dy, Dx, M, L = *dert_[x0], 1  # initialize P params
     _sign = sign_[x0]
     _mask = False  # mask bit per dert
 
     for x in range(x0+1, dert_.shape[0]):  # loop left to right in each row of derts
         sign = sign_[x]
         mask = mask_[x]
-        if (~_mask and mask) or sign_ != _sign:
+        if (~_mask and mask) or sign != _sign:
             # (P exists and input is not in blob) or sign changed, terminate and pack P:
             P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
             P_.append(P)
@@ -142,7 +142,7 @@ def pairwise(iterable):  # s -> (s0,s1), (s1,s2), (s2, s3), ...
     return zip(a, b)
 
 def scan_P_(P__, stack_, frame):
-    """ Detect up_forks and down_forks per P."""
+    """ add up_forks per P and down_forks per _P."""
 
     for _P_, P_ in pairwise(P__):  # Iterate through pairs of lines.
         _iter_P_, iter_P_ = iter(_P_), iter(P_)  # Convert to iterators.
@@ -151,7 +151,7 @@ def scan_P_(P__, stack_, frame):
         except StopIteration:  # No more up_fork-down_fork pair.
             continue  # To next pair of _P_, P_.
         while True:
-            isleft, olp = comp_edge(_P, P)  # Check for 4 different cases.
+            isleft, olp = comp_end(_P, P)  # Check for 4 different cases.
             if olp and _P['sign'] == P['sign']:
                 _P['down_fork_'].append(P)
                 P['up_fork_'].append(_P)
@@ -163,7 +163,7 @@ def scan_P_(P__, stack_, frame):
     return [*flatten(P__)]  # Flatten P__ before return.
 
 
-def comp_edge(_P, P):  # Used in scan_P_().
+def comp_end(_P, P):  # Used in scan_P_().
     """
     Check for end-point relative position and overlap
     """

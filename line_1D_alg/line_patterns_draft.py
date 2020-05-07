@@ -148,8 +148,8 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil 
 
         elif ~sign and min(adj_M_proj, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM projected on neg_mP
 
-            # abs because match is not directional, but ?
-            # adj_M/l - M/L -> contrast as 1D difference, from cross-sign comp?
+            # complem_M / comb_S: spread value, * v|D| or ~M -> der+ value?
+            # cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
 
             sub_dP_ = form_dP_(dert_); lL = len(sub_dP_)  # cluster by d sign match: partial d match, else no der+
             sub_H_ += [[(lL, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
