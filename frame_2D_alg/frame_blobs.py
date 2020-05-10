@@ -115,7 +115,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         s = vg > 0
         if s != _s:
             # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)  # no need for dert_
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert__[x0:x0 + L], sign=_s)  # no need for dert_
             P_.append(P)
             # initialize new P params:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
@@ -127,7 +127,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         L += 1
         _s = s  # prior sign
 
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert__=dert__[x0:x0 + L], sign=_s)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert__[x0:x0 + L], sign=_s)
     P_.append(P)  # terminate last P in a row
     return P_
 

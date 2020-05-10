@@ -61,7 +61,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         dert_.append((_p, _d, _m * 1.5))  # unilateral d, forward-project last m to bilateral m
 
         mP_ = form_mP_(dert_)  # forms m-sign patterns
-        intra_mP(mP_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
+        intra_mP_(mP_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
 
         frame_of_patterns_ += [[mP_]]  # line of patterns is added to frame of patterns
 
@@ -148,7 +148,9 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil 
 
         elif ~sign and min(adj_M_proj, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM projected on neg_mP
 
-            # complem_M / comb_S: spread value, * v|D| or ~M -> der+ value?
+            # kM = comb_M / comb_S: ave complemented span m,
+            # not co-derived but co-projected because ?
+            # rdn edge projection value|cost = kM * |D| -> der+, doesn't affect rng+: local and primary?
             # cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
 
             sub_dP_ = form_dP_(dert_); lL = len(sub_dP_)  # cluster by d sign match: partial d match, else no der+

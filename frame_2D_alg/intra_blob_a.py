@@ -213,6 +213,56 @@ def scan_P__(P__):
     return [*flatten(P__)]  # Flatten P__ before return.
 
 
+def scan_P_2(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
+
+    next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
+
+    if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
+
+        P = P_.popleft()          # load left-most (lowest-x) input-row P
+        stack = stack_.popleft()  # higher-row stacks
+        _P = stack['Py_'][-1]     # last element of each stack is higher-row P
+        up_fork_ = []             # list of same-sign x-overlapping _Ps per P
+
+        while True:  # while both P_ and stack_ are not empty
+
+            x0 = P['x0']         # first x in P
+            xn = x0 + P['L']     # first x in next P
+            _x0 = _P['x0']       # first x in _P
+            _xn = _x0 + _P['L']  # first x in next _P
+
+            if (P['sign'] == stack['sign']
+                    and _x0 < xn and x0 < _xn):  # test for sign match and x overlap between loaded P and _P
+                stack['down_fork_cnt'] += 1
+                up_fork_.append(stack)  # P-connected higher-row stacks are buffered into up_fork_ per P
+
+            if xn < _xn:  # _P overlaps next P in P_
+                next_P_.append((P, up_fork_))  # recycle _P for the next run of scan_P_
+                up_fork_ = []
+                if P_:
+                    P = P_.popleft()  # load next P
+                else:  # terminate loop
+                    if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
+                        form_blob_(stack, blob_root)
+                    break
+            else:  # no next-P overlap
+                if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
+                    form_blob_(stack, blob_root)
+                if stack_:  # load stack with next _P
+                    stack = stack_.popleft()
+                    _P = stack['Py_'][-1]
+                else:  # no stack left: terminate loop
+                    next_P_.append((P, up_fork_))
+                    break
+
+    while P_:  # terminate Ps and stacks that continue at row's end
+        next_P_.append((P_.popleft(), []))  # no up_fork
+    while stack_:
+        form_blob_(stack_.popleft(), blob_root)  # down_fork_cnt always == 0
+
+    return next_P_  # each element is P + up_fork_ refs
+
+
 def comp_edge(_P, P):  # Used in scan_P_().
     """
     Check for end-point relative position and overlap

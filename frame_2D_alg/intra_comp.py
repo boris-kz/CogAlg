@@ -19,7 +19,6 @@ XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
 
 def comp_r(dert__, fig, root_fcr):
     """
-    conversion to 2-fork version is not finished
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
     where input intensity didn't vary much in shorter-range cross-comparison.
@@ -168,7 +167,7 @@ def comp_r(dert__, fig, root_fcr):
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-    g__, dy__, dx__ = dert__[[3, 4, 5]]  # local i, idy, idx
+    g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
 
     g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
     g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right
@@ -180,12 +179,11 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     sin2__ = dy2__ / g2__;  cos2__ = dx2__ / g2__
     sin3__ = dy3__ / g3__;  cos3__ = dx3__ / g3__
     '''
-    cosine of difference between diagonally opposed angles, in vector representation:
+    cosine of difference between diagonally opposed angles, in vector representation
+    print(cos_da1__.shape, type(cos_da1__))
     '''
     cos_da0__ = (sin0__ * cos0__) + (sin2__ * cos2__)  # top left to bottom right
     cos_da1__ = (sin1__ * cos1__) + (sin3__ * cos3__)  # top right to bottom left
-
-    # print(cos_da1__.shape, type(cos_da1__))
 
     dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
     # y-decomposed cosine difference between gs
