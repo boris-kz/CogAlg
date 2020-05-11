@@ -191,6 +191,25 @@ def form_P__(dert__, Ave, fcr, fig):  # segment dert__ into P__, in horizontal )
     return P__
 
 
+def scan_P_(P__):  # add up_forks per P and down_forks per _P
+
+    for y in range(1, len(P__)):  # loop vertically
+        _P_ = P__[y - 1]  # current line Ps
+        P_ = P__[y]  # prior line Ps
+
+        for i in range(len(P_)):  # loop in current line Ps
+            P = P_[i]
+
+            for j in range(len(_P_)):  # loop in prior line _Ps
+                _P = _P_[j]
+
+                _, folp = comp_end(_P, P)  # test for x overlap between P and P_
+                if folp and _P['sign'] == P['sign']:  # if same sign and overlap
+
+                    _P['down_fork_'].append(P)
+                    P['up_fork_'].append(_P)
+    return P__
+
 def scan_P__(P__):
     """Detect up_forks and down_forks per P."""
 

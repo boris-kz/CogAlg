@@ -31,8 +31,8 @@ from functools import reduce
     fig, # flag input is gradient
     rdn, # redundancy to higher layers
     rng, # comp range
-    layer_ # [(Dert, sub_blob_)]: list of layers across sub_blob derivation tree
-           # deeper layers are nested, multiple forks: no single set of fork params?
+    sub_layers  # [(Dert, sub_blobs)]: list of layers across sub_blob derivation tree
+                # deeper layers are nested, multiple forks: no single set of fork params?
 '''
 # filters, All *= rdn:
 
@@ -65,28 +65,29 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     '''
 
 def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
+    # clustering criterion per fork:
 
-    height, width = dert__.shape[1:]
-    dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
-
-    # compute fork clustering criterion:
     if fcr:  # comp_r output
         if fig: crit__ = dert__[:, :, 0] + dert__[:, :, 4] - Ave  # eval by i + m, accumulated in rng
         else:   crit__ = Ave - dert__[:, :, 1]  # eval by -g, accumulated in rng
     else:  # comp_g output
         crit__ = dert__[:, :, 4] - Ave  # comp_g output eval by m, or clustering is always by m?
 
-    P__ = []
-    for y in range(height):
-        P__.append(form_P_(dert__[y, :], crit__[y, :]))  # horizontal clustering, adds a row of Ps
+    height, width = dert__.shape[1:]
+    dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
+    stack_ = deque()  # buffer of running vertical stacks of Ps
 
-    P__ = scan_P_(P__)  # vertical clustering, adds P up_forks and down_fork_cnt
-    stack_ = form_stack_(P__)
+    for y in range(height):  # first and last row are discarded
 
-    while stack_:  # root box ends, last-line stacks are merged into their blobs:
-        sub_blob_ = form_blob(stack_.popleft(), blob['root'])  # with feedback to root_fork at blob['fork_']
+        print(f'Processing line {y}...')
+        P_ = form_P_(dert__[y, :], crit__[y, :])  # horizontal clustering, adds a row of Ps
+        P_ = scan_P_(P_, stack_, blob['root'])    # vertical clustering, adds up_forks per P and down_fork_cnt per stack
+        stack_ = form_stack_(P_, blob['root'], y)
 
-    return sub_blob_  # not needed, feedback to root is in form_blob?
+    while stack_:  # frame ends, last-line stacks are merged into their blobs:
+        form_blob(stack_.popleft(), blob['root'])
+
+    # return sub_blob_  # not needed, feedback to root is in form_blob?
 
 
 # clustering functions:
@@ -111,7 +112,7 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
         mask = mask_[x]
         if (~_mask and mask) or sign != _sign:
             # (P exists and input is not in blob) or sign changed, terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign, down_fork_ = [], up_fork_ = [])
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
             P_.append(P)
             # initialize P params:
             I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x
@@ -129,83 +130,11 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
         _mask = mask
 
     # terminate and pack last P in a row
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign, down_fork_ = [], up_fork_ = [])
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
     P_.append(P)
 
     return P_
 
-
-def scan_P_(P__):  # add up_forks per P and down_forks per _P
-
-    for y in range(1, len(P__)):  # loop vertically
-        _P_ = P__[y - 1]  # current line Ps
-        P_ = P__[y]  # prior line Ps
-
-        for i in range(len(P_)):  # loop in current line Ps
-            P = P_[i]
-
-            for j in range(len(_P_)):  # loop in prior line _Ps
-                _P = _P_[j]
-
-                _, folp = comp_end(_P, P)  # test for x overlap between P and P_
-                if folp and _P['sign'] == P['sign']:  # if same sign and overlap
-
-                    _P['down_fork_'].append(P)
-                    P['up_fork_'].append(_P)
-    return P__
-
-
-def comp_end(_P, P):  # Check for end-point relative position and overlap
-
-    _x0 = _P['x0']
-    _xn = _x0 + _P['L']
-    x0 = P['x0']
-    xn = x0 + P['L']
-
-    if _xn < xn:  # End-point relative position.
-        return True, x0 < _xn  # Overlap.
-    else:
-        return False, _x0 < xn
-
-
-def form_stack_(P__):
-    """Form stacks of vertically contiguous Ps."""
-    """ Work in progress """
-
-    stack_ = []
-    Py = []
-
-    for y in range(len(P__)):  # loop vertically
-        P_ = P__[y]
-        for i in range(len(P_)):  # loop horizontally
-            P = P_[i]
-'''
-    We need to add looping in stack_, same as in frame_blobs. 
-    The rest of form_stack should be very similar too
-    
-    
-            # if down fork or up fork not empty
-            if len(P['down_fork_']) > 0 or len(P['up_fork_']) > 0:
-
-                # accumulate params
-                # set up fork of down fork to empty
-                if len(P['down_fork_']) > 0:
-                    # add P and down fork P to stack's Py
-                    Py.append(P)
-                    Py.append(P['down_fork_'])
-
-                # accumulate params
-                # set down fork of up fork to empty
-                elif len(P['up_fork_']) > 0:
-                    # add P and up fork P to stack's Py
-                    Py.append(P)
-                    Py.append(P['down_fork_'])
-
-            # terminate stack
-            else:
-
-                stack_.append(new_stack)
-'''
 
 def scan_P_(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
 
@@ -221,9 +150,9 @@ def scan_P_(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which
         while True:  # while both P_ and stack_ are not empty
 
             x0 = P['x0']         # first x in P
-            xn = x0 + P['L']     # first x in next P
+            xn = x0 + P['L']     # first x beyond P
             _x0 = _P['x0']       # first x in _P
-            _xn = _x0 + _P['L']  # first x in next _P
+            _xn = _x0 + _P['L']  # first x beyond _P
 
             if (P['sign'] == stack['sign']
                     and _x0 < xn and x0 < _xn):  # test for sign match and x overlap between loaded P and _P
@@ -256,6 +185,69 @@ def scan_P_(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which
 
     return next_P_  # each element is P + up_fork_ refs
 
+
+def comp_end(_P, P):  # Check for end-point relative position and overlap
+
+    _x0 = _P['x0']
+    _xn = _x0 + _P['L']
+    x0 = P['x0']
+    xn = x0 + P['L']
+
+    if _xn < xn:  # End-point relative position.
+        return True, x0 < _xn  # Overlap.
+    else:
+        return False, _x0 < xn
+
+# constants:
+
+iPARAMS = "I", "G", "Dy", "Dx", "M"  # formed by comp_pixel
+gPARAMS = iPARAMS + ("iDy", "iDx")  # angle of input g
+
+P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
+S_PARAMS = "A", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
+
+P_PARAM_KEYS = iPARAMS + P_PARAMS
+gP_PARAM_KEYS = gPARAMS + P_PARAMS
+S_PARAM_KEYS = iPARAMS + S_PARAMS
+gS_PARAM_KEYS = gPARAMS + S_PARAMS
+
+
+# old -------------------------------------------------------------------------------------------------------:
+
+def form_P__khanh(dert__, Ave, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+
+    crit__ = Ave - dert__[-1, :, :]  # eval by inverse deviation of g
+    param_keys = P_PARAM_KEYS  # comp_g output params
+
+    # Cluster dert__ into Pdert__:
+    s_x_L__ = [*map(
+        lambda crit_:  # Each line
+            [(sign, next(group)[0], len(list(group)) + 1)  # (s, x, L)
+             for sign, group in groupby(enumerate(crit_ > 0),
+                                        op.itemgetter(1))  # (x, s): return s
+             if sign is not ma.masked],  # Ignore gaps.
+        crit__,  # blob slices in line
+    )]
+    Pdert__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
+                for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
+
+    # Accumulate Dert = P param_keys:
+    PDert__ = map(lambda Pdert_:
+                       map(lambda Pdert_: Pdert_.sum(axis=0),
+                           Pdert_),
+                   Pdert__)
+    P__ = [
+        [
+            dict(zip( # Key-value pairs:
+                param_keys,
+                [*PDerts, L, x+x0, Pderts, [], [], y, s]  # why Pderts?
+            ))
+            for PDerts, Pderts, (s, x, L) in zip(*Pparams_)
+        ]
+        for y, Pparams_ in enumerate(zip(PDert__, Pdert__, s_x_L__), start=y0)
+    ]
+
+    return P__
 
 def form_stack_(P_, fig):
     """Form stacks of vertically contiguous Ps."""
@@ -291,58 +283,6 @@ def form_stack_(P_, fig):
         del seg['Py_'][0]['seg']
 
     return seg_
-
-# constants:
-
-iPARAMS = "I", "G", "Dy", "Dx", "M"  # formed by comp_pixel
-gPARAMS = iPARAMS + ("iDy", "iDx")  # angle of input g
-
-P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
-S_PARAMS = "A", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
-
-P_PARAM_KEYS = iPARAMS + P_PARAMS
-gP_PARAM_KEYS = gPARAMS + P_PARAMS
-S_PARAM_KEYS = iPARAMS + S_PARAMS
-gS_PARAM_KEYS = gPARAMS + S_PARAMS
-
-
-# old -------------------------------------------------------------------------------------------------------:
-
-def form_P__group(dert__, Ave, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
-
-    crit__ = Ave - dert__[-1, :, :]  # eval by inverse deviation of g
-    param_keys = P_PARAM_KEYS  # comp_g output params
-
-    # Cluster dert__ into Pdert__:
-    s_x_L__ = [*map(
-        lambda crit_:  # Each line
-            [(sign, next(group)[0], len(list(group)) + 1)  # (s, x, L)
-             for sign, group in groupby(enumerate(crit_ > 0),
-                                        op.itemgetter(1))  # (x, s): return s
-             if sign is not ma.masked],  # Ignore gaps.
-        crit__,  # blob slices in line
-    )]
-    Pdert__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
-                for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
-
-    # Accumulate Dert = P param_keys:
-    PDert__ = map(lambda Pdert_:
-                       map(lambda Pdert_: Pdert_.sum(axis=0),
-                           Pdert_),
-                   Pdert__)
-    P__ = [
-        [
-            dict(zip( # Key-value pairs:
-                param_keys,
-                [*PDerts, L, x+x0, Pderts, [], [], y, s]  # why Pderts?
-            ))
-            for PDerts, Pderts, (s, x, L) in zip(*Pparams_)
-        ]
-        for y, Pparams_ in enumerate(zip(PDert__, Pdert__, s_x_L__), start=y0)
-    ]
-
-    return P__
-
 
 def form_stack_(P_, fa):
     """Form segments of vertically contiguous Ps."""

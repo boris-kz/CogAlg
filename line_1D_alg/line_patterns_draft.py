@@ -147,11 +147,15 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil 
             sub_H_ += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
 
         elif ~sign and min(adj_M_proj, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM projected on neg_mP
-
-            # kM = comb_M / comb_S: ave complemented span m,
-            # not co-derived but co-projected because ?
-            # rdn edge projection value|cost = kM * |D| -> der+, doesn't affect rng+: local and primary?
-            # cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+            ''' 
+            comb_m = comb_M / comb_S: 
+            ave m/ complemented span, combined rdn projection: cross-sign M cancels-out?
+            not co-derived but co-projected m?
+            edge projection value|cost = comb_m * |D| -> der+, doesn't affect rng+: local and primary?
+            
+            same-sign comp: parallel edges?
+            cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+            '''
 
             sub_dP_ = form_dP_(dert_); lL = len(sub_dP_)  # cluster by d sign match: partial d match, else no der+
             sub_H_ += [[(lL, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
@@ -285,68 +289,8 @@ Depth of cross-comparison (discontinuous if generic) is increased in lower-recur
 
 comp (s)?  # same-sign only
     comp (L, I, D, M)?  # in parallel or L first, equal-weight or I is redundant?  
-        cross_comp (sub_)?  # same-recursion (derivation) order e_
+        cross_comp (sub_)?  # same-recursion (derivation) order elements
             cross_comp (dert_)
             
-Then extend this 2nd level alg to a recursive meta-level algorithm
-
-for partial overlap:
-
-def form_mP_(dert_):  # initialization, accumulation, termination
-
-    _sign, LL, L, I, D, M, dert_, sub_ = P  # each sub in sub_ is nested to depth = sub_[n]
-    p, d, m, uni_d = dert
-    sign = m > 0
-    if sign != _sign:
-        # sign change: terminate P
-        P_.append((_sign, LL, L, I, D, M, dert_, sub_))  # LL(sub_ depth), L (len dert_)  for visibility only
-        LL, L, I, D, M, dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated params
-    # accumulate params with bilateral values:
-    L += 1; I += p; D += d; M += m
-    dert_ += [(p, d, m, uni_d)]  # uni_d for der_comp and segment
-    P = sign, LL, L, I, D, M, dert_, sub_  # sub_ is accumulated in intra_P
-
-    return P, P_
-
-def form_dP_(dert_):  # P segmentation by same d sign: initialization, accumulation, termination
-
-    sub_ = []  # becomes lateral_sub_
-    _p, _d, _m, _uni_d = dert_[0]  # prefix '_' denotes prior
-    try:
-        _sign = _uni_d > 0; ini = 1
-    except:
-        _p, _d, _m, _uni_d = dert_[1]  # skip dert_[0] if uni_d is None: 1st dert in comp sequence
-        _sign = _uni_d > 0; ini = 2
-        
-    if _uni_d > min_d: md_sign = 1  # > variable cost of der+
-    else: md_sign = 0  # no der+ eval
-
-    LL, L, I, D, M, seg_dert_ = [], 1, _p, _uni_d, _m, [(_p, _d, _m, _uni_d)]  # initialize dP
-
-    for p, d, m, uni_d in dert_[ini:]:
-        sign = uni_d > 0
-        if _sign != sign:
-            sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # terminate seg_P, same as P
-            LL, L, I, D, M, seg_dert_, sub_ = [], 0, 0, 0, 0, [], []  # reset accumulated seg_P params
-        _sign = sign
-        L += 1; I += p; D += uni_d; M += m  # D += uni_d to eval for comp uni_d
-        seg_dert_.append((p, d, m, uni_d))
-
-    sub_.append((_sign, LL, L, I, D, M, seg_dert_, []))  # pack last segment, nothing to accumulate
-    # also Dert in sub_ [], fill if min lLL?
-    return sub_  # becomes lateral_sub_
-    
-def splice(listOfLists, *otherLoLs, fillvalue=[]):
-    "Splice nested lists laterally."
-    return [[*flatten(li)] for li in zip_longest(listOfLists, *otherLoLs, fillvalue=fillvalue)]
-
-    flatten = lambda l: [item for sublist in l for item in sublist]
-    r_deep_sub_, d_deep_sub_ = intra_P(sub_dP_, True, True, sub_rdn + 1.2, rng)  # deep layers feedback
-    d_sub_ += [flatten([flatten(r_deep_sub_), flatten(d_deep_sub_)])]
-
-    r_deep_sub_, d_deep_sub_ = intra_P(sub_mP_, False, fid, sub_rdn + 1.2, rng + 1)
-    r_sub_ += [flatten([flatten(r_deep_sub_), flatten(d_deep_sub_)])]
-    
-    if rdn > 1: rdn += 1 / lL - 0.2  # adjust distributed part of estimated rdn
-    [len(rsub) for rsub in rsub_]
+Then extend this 2nd level alg to a recursive meta-level algorithm 
 '''

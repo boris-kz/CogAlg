@@ -1,5 +1,4 @@
 from math import hypot
-
 import numpy as np
 import numpy.ma as ma
 
@@ -21,9 +20,7 @@ XCOEFs = [[-1, 0, 1],
 '''
 max = 55
 
-
-
-def unpack_dert(dert__):
+def dert_lists(dert__):
 
     mask__ = dert__[0].mask.astype('int').tolist()
     list_dert__ = [mask__]
@@ -36,23 +33,16 @@ def unpack_dert(dert__):
     return list_dert__
 
 
-def comp_sin_cos(g, dy, dx):
-    # if element is unmasked and denominator is not 0
+def sin_cos(g, dy, dx):
+
     if g != 0:
         sin = (dy / g)
         cos = (dx / g)
-
-    # if element is unmasked but denominator is 0
-    elif g == 0:
-        if dy == 0:
-            sin = 0
-        else:
-            sin = max
-
-        if dx == 0:
-            cos = 0
-        else:
-            cos = max
+    else:
+        if dy == 0: sin = 0
+        else:       sin = max
+        if dx == 0: cos = 0
+        else:       cos = max
 
     return sin, cos
 
@@ -63,37 +53,14 @@ def diff_cos(sin0, cos0, sin1, cos1, sin2, cos2, sin3, cos3):
 
     return cos_da0, cos_da1
 
-
-def decompose_difference(g1, g2, g3, g4, cos0, cos1):
-    '''g3__, g2__, g0__ g1__ for dgy
-       g1__, g2__, g0__ g3__ for dgx'''
-
-    dec_diff = ((g1 + g2) - (g3 * cos0 + g4 * cos1))
-
-    return dec_diff
-
-
-def match_comp(g0, g1, g2, g3, cos0, cos1):
-    # g match = min(g, _g) *cos(da)
-    mg0 = min(g0, g2) * cos0
-    mg1 = min(g1, g3) * cos1
-    mg = mg0 + mg1
-
-    return mg
-
-
-def comp_g_loop(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
+def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
     if isinstance(dert__, np.ndarray):
-        dert__ = unpack_dert(dert__)
-
-    # remove derts of incomplete kernels
-    dert__ = shape_check(dert__)
+        dert__ = dert_lists(dert__)
+    dert__ = shape_check(dert__)  # remove derts of incomplete kernels
 
     g__, dy__, dx__ = dert__[4:7]
-    default_mask = dert__[0]
-
-    # initialise the lists of new parametes
+    mask__ = dert__[0]
     dgy__ = []
     dgx__ = []
     gg__ = []
@@ -108,42 +75,27 @@ def comp_g_loop(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.
 
         for x in range(len(g__[y]) - 1):
 
-            # check for masking:
-            if default_mask[y][x] == 1:
+            if mask__[y][x] == 1:
                 dgy = dgx = gg = mg = 0
-
-            # if the element is real
             else:
-                # computing cos and sin
-                sin0, cos0 = comp_sin_cos(g__[y][x],
-                                          dy__[y][x],
-                                          dx__[y][x])
+                sin0, cos0 = sin_cos(g__[y][x],     dy__[y][x],     dx__[y][x])
+                sin1, cos1 = sin_cos(g__[y][x+1],   dy__[y][x+1],   dx__[y][x+1])
+                sin2, cos2 = sin_cos(g__[y+1][x+1], dy__[y+1][x+1], dx__[y+1][x+1])
+                sin3, cos3 = sin_cos(g__[y+1][x],   dy__[y+1][x],   dx__[y+1][x])
 
-                sin1, cos1 = comp_sin_cos(g__[y][x + 1],
-                                          dy__[y][x + 1],
-                                          dx__[y][x + 1])
-
-                sin2, cos2 = comp_sin_cos(g__[y + 1][x + 1],
-                                          dy__[y + 1][x + 1],
-                                          dx__[y + 1][x + 1])
-
-                sin3, cos3 = comp_sin_cos(g__[y + 1][x],
-                                          dy__[y + 1][x],
-                                          dx__[y + 1][x])
                 # computing cosine difference
                 cos_da0, cos_da1 = diff_cos(sin0, cos0, sin1, cos1, sin2, cos2, sin3, cos3)
 
                 # y-decomposed cosine difference between gs
-                dgy = decompose_difference(g__[y + 1][x], g__[y + 1][x + 1], g__[y][x],
-                                           g__[y][x + 1], cos0, cos1)
+                dgy = ((g__[y+1][x] + g__[y+1][x+1]) - (g__[y][x] * cos0 + g__[y][x+1] * cos1))
+
                 # x-decomposed cosine difference between gs
-                dgx = decompose_difference(g__[y][x + 1], g__[y + 1][x + 1], g__[y][x],
-                                           g__[y + 1][x], cos0, cos1)
+                dgx = ((g__[y][x+1] + g__[y+1][x+1]) - (g__[y][x] * cos0 + g__[y+1][x] * cos1))
+
                 # gradient of gradient
                 gg = hypot(dgy,  dgx)
                 # match computation
-                mg = match_comp(g__[y][x], g__[y][x + 1], g__[y + 1][x + 1], g__[y + 1][x],
-                                cos_da0, cos_da1)
+                mg = match(g__[y][x], g__[y][x + 1], g__[y + 1][x + 1], g__[y + 1][x], cos_da0, cos_da1)
 
             # pack computed values in row
             dgy_row.append(dgy)
@@ -167,7 +119,7 @@ def comp_g_loop(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.
     dy__.pop()
     dx__.pop()
 
-    return [default_mask,
+    return [mask__,
             g__,
             dy__,
             dx__,
@@ -180,7 +132,7 @@ def comp_g_loop(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.
 def comp_r_loop(dert__, fig, root_fcr):
 
     if isinstance(dert__, np.ndarray):
-        dert__ = unpack_dert(dert__)
+        dert__ = dert_lists(dert__)
 
     i__ = dert__[1]  # i is ig if fig else pixel
     idy__ = dert__[2]
@@ -220,7 +172,7 @@ def comp_r_loop(dert__, fig, root_fcr):
                 idx_center = idx__[y + 1][x + 1]
 
                 if root_fcr:
-                    m = m__[y][col]
+                    m = m__[y][x]
                 else:
                     m = 0
 
@@ -250,32 +202,23 @@ def comp_r_loop(dert__, fig, root_fcr):
 
                 else: # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
                     # center
-                    a_sin0, a_cos0 = comp_sin_cos(i_center, idy_center, idx_center)
-
+                    a_sin0, a_cos0 = sin_cos(i_center, idy_center, idx_center)
                     # topleft
-                    a_sin1, a_cos1 = comp_sin_cos(i__[y][x],
-                                                  idy__[y][x], idx__[y][x])
+                    a_sin1, a_cos1 = sin_cos(i__[y][x], idy__[y][x], idx__[y][x])
                     # top
-                    a_sin2, a_cos2 = comp_sin_cos(i__[y][x + 1],
-                                                  idy__[y][x + 1], idx__[y][x + 1])
+                    a_sin2, a_cos2 = sin_cos(i__[y][x + 1], idy__[y][x + 1], idx__[y][x + 1])
                     # topright
-                    a_sin3, a_cos3 = comp_sin_cos(i__[y][x + 2],
-                                                  idy__[y][x + 2], idx__[y][x + 2])
+                    a_sin3, a_cos3 = sin_cos(i__[y][x + 2], idy__[y][x + 2], idx__[y][x + 2])
                     # right
-                    a_sin4, a_cos4 = comp_sin_cos(i__[y + 1][x  + 2],
-                                                  idy__[y + 1][x  + 2], idx__[y + 1][x  + 2])
+                    a_sin4, a_cos4 = sin_cos(i__[y + 1][x  + 2], idy__[y + 1][x  + 2], idx__[y + 1][x  + 2])
                     # bottomright
-                    a_sin5, a_cos5 = comp_sin_cos(i__[y + 2][x + 2],
-                                                  idy__[y + 2][x + 2], idx__[y + 2][x + 2])
+                    a_sin5, a_cos5 = sin_cos(i__[y + 2][x + 2], idy__[y + 2][x + 2], idx__[y + 2][x + 2])
                     # bottom
-                    a_sin6, a_cos6 = comp_sin_cos(i__[y + 2][x + 1],
-                                                  idy__[y + 2][x + 1], idx__[y + 2][x + 1])
+                    a_sin6, a_cos6 = sin_cos(i__[y + 2][x + 1], idy__[y + 2][x + 1], idx__[y + 2][x + 1])
                     # bottomleft
-                    a_sin7, a_cos7 = comp_sin_cos(i__[y + 2][x],
-                                                  idy__[y + 2][x], idx__[y + 2][x])
+                    a_sin7, a_cos7 = sin_cos(i__[y + 2][x], idy__[y + 2][x], idx__[y + 2][x])
                     # left
-                    a_sin8, a_cos8 = comp_sin_cos(i__[y + 1][x],
-                                                  idy__[y + 1][x], idx__[y + 1][x])
+                    a_sin8, a_cos8 = sin_cos(i__[y + 1][x], idy__[y + 1][x], idx__[y + 1][x])
 
                     # differences between center dert angle and rim dert angle
                     cos_da1 = (a_sin0 * a_cos0) + (a_sin1 * a_cos1)
@@ -345,7 +288,6 @@ def comp_r_loop(dert__, fig, root_fcr):
         new_m__]
 
 
-
 def shape_check(dert__):
     # remove derts of 2x2 kernels that are missing some other derts
 
@@ -355,3 +297,14 @@ def shape_check(dert__):
         dert__ = dert__[:, :, :-1]
 
     return dert__
+
+
+def decompose_difference(g1, g2, g3, g4, cos0, cos1):
+    dec_diff = ((g1 + g2) - (g3 * cos0 + g4 * cos1))
+    '''
+    g3__, g2__, g0__ g1__ for dgy:
+    dgy = dec_diff(g__[y + 1][x], g__[y + 1][x + 1], g__[y][x], g__[y][x + 1], cos0, cos1)
+    g1__, g2__, g0__ g3__ for dgx:
+    dgx = dec_diff(g__[y][x + 1], g__[y + 1][x + 1], g__[y][x], g__[y + 1][x], cos0, cos1)
+    '''
+    return dec_diff
