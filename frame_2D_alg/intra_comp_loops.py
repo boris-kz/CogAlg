@@ -12,12 +12,6 @@ XCOEFs = [[-1, 0, 1],
           [-2, 1, 2],
           [-1, 0, 1]]
 
-''' 
-    |--(clockwise)--+  |--(clockwise)--+
-    YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
-            0       0  ¦          -2       2  ¦
-            1   2   1  ¦          -1   0   1  ¦
-'''
 max = 55
 
 def dert_lists(dert__):
@@ -47,12 +41,6 @@ def sin_cos(g, dy, dx):
     return sin, cos
 
 
-def diff_cos(sin0, cos0, sin1, cos1, sin2, cos2, sin3, cos3):
-    cos_da0 = (sin0 * cos0) + (sin2 * cos2)  # top left to bottom right
-    cos_da1 = (sin1 * cos1) + (sin3 * cos3)  # top right to bottom left
-
-    return cos_da0, cos_da1
-
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
     if isinstance(dert__, np.ndarray):
@@ -61,47 +49,46 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
     g__, dy__, dx__ = dert__[4:7]
     mask__ = dert__[0]
-    dgy__ = []
-    dgx__ = []
-    gg__ = []
-    mg__ = []
+
+    dgy__, dgx__, gg__, mg__ = [],[],[],[]
 
     for y in range((len(g__) - 1)):
-        # create lists for each sin and cos row to add into final list
-        dgy_row = []
-        dgx_row = []
-        gg_row = []
-        mg_row = []
+        dgy_, dgx_, gg_, mg_ = [],[],[],[]
 
         for x in range(len(g__[y]) - 1):
+            '''
+            no dgy = dgx = gg = mg = 0:  masked values should be skipped, here and in the future
+            '''
+            if mask__[y][x] == 0:
 
-            if mask__[y][x] == 1:
-                dgy = dgx = gg = mg = 0
-            else:
                 sin0, cos0 = sin_cos(g__[y][x],     dy__[y][x],     dx__[y][x])
                 sin1, cos1 = sin_cos(g__[y][x+1],   dy__[y][x+1],   dx__[y][x+1])
                 sin2, cos2 = sin_cos(g__[y+1][x+1], dy__[y+1][x+1], dx__[y+1][x+1])
                 sin3, cos3 = sin_cos(g__[y+1][x],   dy__[y+1][x],   dx__[y+1][x])
 
-                # computing cosine difference
-                cos_da0, cos_da1 = diff_cos(sin0, cos0, sin1, cos1, sin2, cos2, sin3, cos3)
+                # compute cosine difference
+
+                cos_da0 = (sin0 * cos0) + (sin2 * cos2)  # top left to bottom right
+                cos_da1 = (sin1 * cos1) + (sin3 * cos3)  # top right to bottom left
 
                 # y-decomposed cosine difference between gs
-                dgy = ((g__[y+1][x] + g__[y+1][x+1]) - (g__[y][x] * cos0 + g__[y][x+1] * cos1))
+                dgy = ((g__[y+1][x] + g__[y+1][x+1]) - (g__[y][x] * cos_da0 + g__[y][x+1] * cos_da1))
 
                 # x-decomposed cosine difference between gs
-                dgx = ((g__[y][x+1] + g__[y+1][x+1]) - (g__[y][x] * cos0 + g__[y+1][x] * cos1))
+                dgx = ((g__[y][x+1] + g__[y+1][x+1]) - (g__[y][x] * cos_da0 + g__[y+1][x] * cos_da1))
 
                 # gradient of gradient
                 gg = hypot(dgy,  dgx)
-                # match computation
-                mg = match(g__[y][x], g__[y][x + 1], g__[y + 1][x + 1], g__[y + 1][x], cos_da0, cos_da1)
 
-            # pack computed values in row
-            dgy_row.append(dgy)
-            dgx_row.append(dgx)
-            gg_row.append(gg)
-            mg_row.append(mg)
+                mg0 = min(g__[y][x], g__[y+1][x+1]) * cos0  # g match = min(g, _g) *cos(da)
+                mg1 = min(g__[y][x+1], g__[y+1][x]) * cos1
+                mg = mg0 + mg1
+
+                # pack computed values in row
+                dgy_.append(dgy)
+                dgx_.append(dgx)
+                gg_.append(gg)
+                mg_.append(mg)
 
         # remove last column from every row of input parameters
         g__[y].pop()
@@ -109,24 +96,17 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
         dx__[y].pop()
 
         # add a new row into list of rows
-        dgy__.append(dgy_row)
-        dgx__.append(dgx_row)
-        gg__.append(gg_row)
-        mg__.append(mg_row)
+        dgy__.append(dgy_)
+        dgx__.append(dgx_)
+        gg__.append(gg_)
+        mg__.append(mg_)
 
     # remove last row from input parameters
     g__.pop()
     dy__.pop()
     dx__.pop()
 
-    return [mask__,
-            g__,
-            dy__,
-            dx__,
-            gg__,
-            dgy__,
-            dgx__,
-            mg__]
+    return [mask__, g__, dy__, dx__, gg__, dgy__, dgx__, mg__]
 
 
 def comp_r_loop(dert__, fig, root_fcr):
@@ -137,36 +117,25 @@ def comp_r_loop(dert__, fig, root_fcr):
     i__ = dert__[1]  # i is ig if fig else pixel
     idy__ = dert__[2]
     idx__ = dert__[3]
-    default_mask = dert__[0]
+    mask__ = dert__[0]
 
-    i__center = []
-    idy__center = []
-    idx__center = []
-    g__ = []
-    dy__ = []
-    dx__ = []
-    new_m__ = []
+    i__center, idy__center, idx__center = [],[],[]
+    g__, dy__, dx__, new_m__ = [],[],[],[]
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
         dy__, dx__, m__ = dert__[5:8]
 
-
     for y in range(0, len(i__ - 2), 2):
-        i_cent_row = []
-        idy_cent_row = []
-        idx_cent_row = []
-        g_row = []
-        dy_row = []
-        dx_row = []
-        m_row = []
+
+        i_cent_, idy_cent_, idx_cent_ = [],[],[]
+        g_, dy_, dx_, m_ = [],[],[],[]
 
         for x in range(0, len(i__[y]) - 2, 2):
+            '''
+            masked values should be skipped, here and in the future
+            '''
+            if mask__[y][x] == 0:
 
-            # check for masking:
-            if default_mask[y][x] == 1:
-                i_center = idy_center = idx_center = m = g = dy = dx = 0
-
-            else:
                 i_center = i__[y + 1][x + 1]
                 idy_center = idy__[y + 1][x + 1]
                 idx_center = idx__[y + 1][x + 1]
@@ -189,8 +158,9 @@ def comp_r_loop(dert__, fig, root_fcr):
 
                     # gradient
                     g = hypot(dy, dx)
-
-                    '''inverse match = SAD, more precise measure of variation than g, direction-invariant)'''
+                    '''
+                    inverse match = SAD, more precise measure of variation than g, direction-invariant)
+                    '''
                     m += (abs(i_center - i__[y][x]) +
                           abs(i_center - i__[y][x + 1]) +
                           abs(i_center - i__[y][x + 2]) +
@@ -221,6 +191,7 @@ def comp_r_loop(dert__, fig, root_fcr):
                     a_sin8, a_cos8 = sin_cos(i__[y + 1][x], idy__[y + 1][x], idx__[y + 1][x])
 
                     # differences between center dert angle and rim dert angle
+
                     cos_da1 = (a_sin0 * a_cos0) + (a_sin1 * a_cos1)
                     cos_da2 = (a_sin0 * a_cos0) + (a_sin2 * a_cos2)
                     cos_da3 = (a_sin0 * a_cos0) + (a_sin3 * a_cos3)
@@ -231,6 +202,7 @@ def comp_r_loop(dert__, fig, root_fcr):
                     cos_da8 = (a_sin0 * a_cos0) + (a_sin8 * a_cos8)
 
                     # cosine matches per direction
+
                     m += (min(i_center, i__[y][x])          * cos_da1) +  \
                          (min(i_center, i__[y][x + 1])      * cos_da2) +  \
                          (min(i_center, i__[y][x + 2])      * cos_da3) +  \
@@ -241,6 +213,7 @@ def comp_r_loop(dert__, fig, root_fcr):
                          (min(i_center, i__[y + 1][x])      * cos_da8)
 
                     # cosine differences per direction
+
                     dt1 = i_center - i__[y][x]          * cos_da1
                     dt2 = i_center - i__[y][x + 1]      * cos_da2
                     dt3 = i_center - i__[y][x + 2]      * cos_da3
@@ -262,30 +235,23 @@ def comp_r_loop(dert__, fig, root_fcr):
 
                     g = hypot(dy, dx)
 
-            i_cent_row.append(i_center)
-            idy_cent_row.append(idy_center)
-            idx_cent_row.append(idx_center)
-            g_row.append(g)
-            dy_row.append(dy)
-            dx_row.append(dx)
-            m_row.append(m)
+                i_cent_.append(i_center)
+                idy_cent_.append(idy_center)
+                idx_cent_.append(idx_center)
+                g_.append(g)
+                dy_.append(dy)
+                dx_.append(dx)
+                m_.append(m)
 
-        i__center.append(i_cent_row)
-        idy__center.append(idy_cent_row)
-        idx__center.append(idx_cent_row)
-        g__.append(g_row)
-        dy__.append(dy_row)
-        dx__.append(dx_row)
-        new_m__.append(m_row)
+        i__center.append(i_cent_)
+        idy__center.append(idy_cent_)
+        idx__center.append(idx_cent_)
+        g__.append(g_)
+        dy__.append(dy_)
+        dx__.append(dx_)
+        new_m__.append(m_)
 
-    return [
-        i__center,
-        idy__center,
-        idx__center,
-        g__,
-        dy__,
-        dx__,
-        new_m__]
+    return [ i__center, idy__center, idx__center, g__, dy__, dx__, new_m__]
 
 
 def shape_check(dert__):

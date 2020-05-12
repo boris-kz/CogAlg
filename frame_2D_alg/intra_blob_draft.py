@@ -1,11 +1,6 @@
-import operator as op
 from collections import deque, defaultdict
-from itertools import groupby, starmap, zip_longest, repeat, accumulate, chain, starmap, tee
-import numpy as np
-import numpy.ma as ma
 from intra_comp import *
-from utils import pairwise, flatten
-from functools import reduce
+
 '''
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.
     
@@ -20,7 +15,7 @@ from functools import reduce
     
     root,  # reference to root blob, for feedback of blob Dert params and sub_blob_, up to frame
     Dert = I, iDy, iDx, G, Dy, Dx, M, S (area), Ly (vertical dimension)
-    # I: input, (iDy, iDx): angle of input gradient, if any, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match  
+    # I: input, (iDy, iDx): angle of input gradient, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match  
     sign, 
     box,  # y0, yn, x0, xn
     dert__,  # box of derts, each = i, idy, idx, g, dy, dx, m
@@ -31,7 +26,7 @@ from functools import reduce
     fig, # flag input is gradient
     rdn, # redundancy to higher layers
     rng, # comp range
-    sub_layers  # [(Dert, sub_blobs)]: list of layers across sub_blob derivation tree
+    sub_layers  # [sub_blobs ]: list of layers across sub_blob derivation tree
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
 # filters, All *= rdn:
@@ -42,6 +37,7 @@ aveB = 10000  # fixed cost per intra_blob comp and clustering
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
+
 def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
     # fig: flag input is g, fcr: flag comp over rng+
 
@@ -51,7 +47,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     cluster_derts(blob, dert__, ave*rdn, fcr, fig)
     # feedback: root['layer_'] += [[(lL, fig, fcr, rdn, rng, blob['sub_blob_'])]]  # 1st layer
 
-    for sub_blob in blob['blob_']:  # eval intra_blob comp_g | comp_rng if low gradient
+    for sub_blob in blob['sub_blobs']:  # eval intra_blob comp_g | comp_rng if low gradient
         if sub_blob['sign']:
             if sub_blob['Dert']['M'] > aveB * rdn:  # -> comp_r:
                 intra_blob(sub_blob, rdn + 1, rng**2, fig=fig, fcr=1)  # rng=1 in first call
@@ -60,8 +56,8 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
             intra_blob(sub_blob, rdn + 1, rng=rng, fig=1, fcr=0)  # -> comp_g
     '''
     feedback:
-    for sub_blob in blob['blob_']:
-        blob['layer_'] += intra_blob(sub_blob, rdn + 1 + 1 / lA, rng, fig, fcr) 
+    for sub_blob in blob['sub_blobs']:
+        blob['layers'] += intra_blob(sub_blob, rdn + 1 + 1 / lA, rng, fig, fcr) 
     '''
 
 def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
@@ -77,12 +73,15 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
     dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
     stack_ = deque()  # buffer of running vertical stacks of Ps
 
+    # add extra dicts to blob
+    blob.update({'fcr':0,'blob_':[],'I':0,'G':0,'Dy':0,'Dx':0,'iDy':0,'iDx':0,'M':0})
+
     for y in range(height):  # first and last row are discarded
 
         print(f'Processing line {y}...')
         P_ = form_P_(dert__[y, :], crit__[y, :])  # horizontal clustering, adds a row of Ps
-        P_ = scan_P_(P_, stack_, blob['root'])    # vertical clustering, adds up_forks per P and down_fork_cnt per stack
-        stack_ = form_stack_(P_, blob['root'], y)
+        P_ = scan_P_(P_, stack_, blob)    # vertical clustering, adds up_connects per P and down_connect_cnt per stack
+        stack_ = form_stack_(P_, blob, y)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         form_blob(stack_.popleft(), blob['root'])
@@ -138,14 +137,14 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
 
 def scan_P_(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
 
-    next_P_ = deque()  # to recycle P + up_fork_ that finished scanning _P, will be converted into next_stack_
+    next_P_ = deque()  # to recycle P + up_connect_ that finished scanning _P, will be converted into next_stack_
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
 
         P = P_.popleft()          # load left-most (lowest-x) input-row P
         stack = stack_.popleft()  # higher-row stacks
         _P = stack['Py_'][-1]     # last element of each stack is higher-row P
-        up_fork_ = []             # list of same-sign x-overlapping _Ps per P
+        up_connect_ = []             # list of same-sign x-overlapping _Ps per P
 
         while True:  # while both P_ and stack_ are not empty
 
@@ -156,429 +155,139 @@ def scan_P_(P_, stack_, blob_root):  # merge P into higher-row stack of Ps which
 
             if (P['sign'] == stack['sign']
                     and _x0 < xn and x0 < _xn):  # test for sign match and x overlap between loaded P and _P
-                stack['down_fork_cnt'] += 1
-                up_fork_.append(stack)  # P-connected higher-row stacks are buffered into up_fork_ per P
+                stack['down_connect_cnt'] += 1
+                up_connect_.append(stack)  # P-connected higher-row stacks are buffered into up_connect_ per P
 
             if xn < _xn:  # _P overlaps next P in P_
-                next_P_.append((P, up_fork_))  # recycle _P for the next run of scan_P_
-                up_fork_ = []
+                next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
+                up_connect_ = []
                 if P_:
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
-                    if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
+                    if stack['down_connect_cnt'] != 1:  # terminate stack, merge it into up_connects' blobs
                         form_blob(stack, blob_root)
                     break
             else:  # no next-P overlap
-                if stack['down_fork_cnt'] != 1:  # terminate stack, merge it into up_forks' blobs
+                if stack['down_connect_cnt'] != 1:  # terminate stack, merge it into up_connects' blobs
                     form_blob(stack, blob_root)
                 if stack_:  # load stack with next _P
                     stack = stack_.popleft()
                     _P = stack['Py_'][-1]
                 else:  # no stack left: terminate loop
-                    next_P_.append((P, up_fork_))
+                    next_P_.append((P, up_connect_))
                     break
 
     while P_:  # terminate Ps and stacks that continue at row's end
-        next_P_.append((P_.popleft(), []))  # no up_fork
+        next_P_.append((P_.popleft(), []))  # no up_connect
     while stack_:
-        form_blob(stack_.popleft(), blob_root)  # down_fork_cnt always == 0
+        form_blob(stack_.popleft(), blob_root)  # down_connect_cnt always == 0
 
-    return next_P_  # each element is P + up_fork_ refs
-
-
-def comp_end(_P, P):  # Check for end-point relative position and overlap
-
-    _x0 = _P['x0']
-    _xn = _x0 + _P['L']
-    x0 = P['x0']
-    xn = x0 + P['L']
-
-    if _xn < xn:  # End-point relative position.
-        return True, x0 < _xn  # Overlap.
-    else:
-        return False, _x0 < xn
-
-# constants:
-
-iPARAMS = "I", "G", "Dy", "Dx", "M"  # formed by comp_pixel
-gPARAMS = iPARAMS + ("iDy", "iDx")  # angle of input g
-
-P_PARAMS = "L", "x0", "dert_", "down_fork_", "up_fork_", "y", "sign"
-S_PARAMS = "A", "Ly", "y0", "x0", "xn", "Py_", "down_fork_", "up_fork_", "sign"
-
-P_PARAM_KEYS = iPARAMS + P_PARAMS
-gP_PARAM_KEYS = gPARAMS + P_PARAMS
-S_PARAM_KEYS = iPARAMS + S_PARAMS
-gS_PARAM_KEYS = gPARAMS + S_PARAMS
+    return next_P_  # each element is P + up_connect_ refs
 
 
-# old -------------------------------------------------------------------------------------------------------:
+def form_stack_(P_, blob_root, y):  # Convert or merge every P into its stack of Ps, merge blobs
 
-def form_P__khanh(dert__, Ave, x0=0, y0=0):  # cluster dert__ into P__, in horizontal ) vertical order
+    next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
 
-    crit__ = Ave - dert__[-1, :, :]  # eval by inverse deviation of g
-    param_keys = P_PARAM_KEYS  # comp_g output params
+    while P_:
+        P, up_connect_ = P_.popleft()
+        s = P.pop('sign')
+        I, G, Dy, Dx, M, iDy, iDx, L, x0 = P.values()
+        xn = x0 + L  # next-P x0
+        if not up_connect_:
+            # initialize new stack for each input-row P that has no connections in higher row:
+            blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, M=0, iDy=0, iDx=0, S=0, Ly=0),
+                        box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
+            new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=L, Ly=1,
+                             y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+            blob['stack_'].append(new_stack)
+        else:
+            if len(up_connect_) == 1 and up_connect_[0]['down_connect_cnt'] == 1:
+                # P has one up_connect and that up_connect has one down_connect=P: merge P into up_connect stack:
+                new_stack = up_connect_[0]
+                accum_Dert(new_stack, I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=L, Ly=1)
+                new_stack['Py_'].append(P)  # Py_: vertical buffer of Ps
+                new_stack['down_connect_cnt'] = 0  # reset down_connect_cnt
+                blob = new_stack['blob']
 
-    # Cluster dert__ into Pdert__:
-    s_x_L__ = [*map(
-        lambda crit_:  # Each line
-            [(sign, next(group)[0], len(list(group)) + 1)  # (s, x, L)
-             for sign, group in groupby(enumerate(crit_ > 0),
-                                        op.itemgetter(1))  # (x, s): return s
-             if sign is not ma.masked],  # Ignore gaps.
-        crit__,  # blob slices in line
-    )]
-    Pdert__ = [[dert_[:, x : x+L].T for s, x, L in s_x_L_]
-                for dert_, s_x_L_ in zip(dert__.swapaxes(0, 1), s_x_L__)]
+            else:  # if > 1 up_connects, or 1 up_connect that has > 1 down_connect_cnt:
+                blob = up_connect_[0]['blob']
+                # initialize new_stack with up_connect blob:
+                new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, M=M, iDy=iDy, iDx=iDx,S=L, Ly=1,
+                                 y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+                blob['stack_'].append(new_stack)  # stack is buffered into blob
 
-    # Accumulate Dert = P param_keys:
-    PDert__ = map(lambda Pdert_:
-                       map(lambda Pdert_: Pdert_.sum(axis=0),
-                           Pdert_),
-                   Pdert__)
-    P__ = [
-        [
-            dict(zip( # Key-value pairs:
-                param_keys,
-                [*PDerts, L, x+x0, Pderts, [], [], y, s]  # why Pderts?
-            ))
-            for PDerts, Pderts, (s, x, L) in zip(*Pparams_)
-        ]
-        for y, Pparams_ in enumerate(zip(PDert__, Pdert__, s_x_L__), start=y0)
-    ]
+                if len(up_connect_) > 1:  # merge blobs of all up_connects
+                    if up_connect_[0]['down_connect_cnt'] == 1:  # up_connect is not terminated
+                        form_blob(up_connect_[0], blob_root)      # merge stack of 1st up_connect into its blob
 
-    return P__
+                    for up_connect in up_connect_[1:len(up_connect_)]:  # merge blobs of other up_connects into blob of 1st up_connect
+                        if up_connect['down_connect_cnt'] == 1:
+                            form_blob(up_connect, blob_root)
 
-def form_stack_(P_, fig):
-    """Form stacks of vertically contiguous Ps."""
-    # list of first Ps in stacks:
-    P0_ = [*filter(lambda P: (len(P['up_fork_']) != 1
-                              or len(P['up_fork_'][0]['down_fork_']) != 1),
-                   P_)]
-    if fig:
-        param_keys = gS_PARAM_KEYS
-    else:
-        param_keys = S_PARAM_KEYS
+                        if not up_connect['blob'] is blob:
+                            Dert, box, stack_, s, open_stacks = up_connect['blob'].values()  # merged blob
+                            I, G, Dy, Dx, M, iDy, iDx, S, Ly = Dert.values()
+                            accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=S, Ly=Ly)
+                            blob['open_stacks'] += open_stacks
+                            blob['box'][0] = min(blob['box'][0], box[0])  # extend box y0
+                            blob['box'][1] = min(blob['box'][1], box[1])  # extend box x0
+                            blob['box'][2] = max(blob['box'][2], box[2])  # extend box xn
+                            for stack in stack_:
+                                if not stack is up_connect:
+                                    stack[
+                                        'blob'] = blob  # blobs in other up_connects are references to blob in the first up_connect.
+                                    blob['stack_'].append(stack)  # buffer of merged root stacks.
+                            up_connect['blob'] = blob
+                            blob['stack_'].append(up_connect)
+                        blob['open_stacks'] -= 1  # overlap with merged blob.
 
-    # Form segments:
-    seg_ = [dict(zip(param_keys,  # segment's params as keys
-                     # Accumulated params:
-                     [*map(sum,
-                           zip(*map(op.itemgetter(*param_keys[:-6]),
-                                    Py_))),
-                      len(Py_), Py_[0].pop('y'), Py_,  # Ly, y0, Py_ .
-                      Py_[-1].pop('down_fork_'), Py_[0].pop('up_fork_'),  # down_fork_, up_fork_ .
-                      Py_[0].pop('sign')]))
-            # cluster_vertical(P): traverse segment from first P:
-            for Py_ in map(cluster_vertical, P0_)]
+        blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
+        blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
+        next_stack_.append(new_stack)
 
-    for seg in seg_:  # Update segs' refs.
-        seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
+    return next_stack_
 
-    for seg in seg_:  # Update down_fork_ and up_fork_ .
-        seg.update(down_fork_=[*map(lambda P: P['seg'], seg['down_fork_'])],
-                   up_fork_=[*map(lambda P: P['seg'], seg['up_fork_'])])
+def form_blob(stack, blob_root):  # increment blob with terminated stack, check for blob termination and merger into blob root
 
-    for i, seg in enumerate(seg_):  # Remove segs' refs.
-        del seg['Py_'][0]['seg']
+    I, G, Dy, Dx, M, iDy, iDx, S, Ly, y0, Py_, blob, down_connect_cnt, sign = stack.values()
+    accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=S, Ly=Ly)
+    # terminated stack is merged into continued or initialized blob (all connected stacks):
 
-    return seg_
+    blob['open_stacks'] += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
+    # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
-def form_stack_(P_, fa):
-    """Form segments of vertically contiguous Ps."""
-    # Determine params type:
-    if "M" not in P_[0]:
-        seg_param_keys = (*aSEG_PARAM_KEYS[:2], *aSEG_PARAM_KEYS[3:])
-        Dert_keys = (*aDERT_PARAMS[:2], *aDERT_PARAMS[3:], "L")
-    elif fa:  # segment params: I G M Dy Dx Ga Dyay Dyax Dxay Dxax S Ly y0 Py_ down_fork_ up_fork_ sign
-        seg_param_keys = aSEG_PARAM_KEYS
-        Dert_keys = aDERT_PARAMS + ("L",)
-    else:  # segment params: I G M Dy Dx S Ly y0 Py_ down_fork_ up_fork_ sign
-        seg_param_keys = gSEG_PARAM_KEYS
-        Dert_keys = gDERT_PARAMS + ("L",)
+    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0
+        # blob is terminated and packed in blob root:
+        last_stack = stack
 
-    # Get a list of every segment's top P:
-    P0_ = [*filter(lambda P: (len(P['up_fork_']) != 1
-                              or len(P['up_fork_'][0]['down_fork_']) != 1),
-                   P_)]
+        Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()
+        yn = last_stack['y0'] + last_stack['Ly']
 
-    # Form segments:
-    seg_ = [dict(zip(seg_param_keys,  # segment's params as keys
-                     # Accumulated params:
-                     [*map(sum,
-                           zip(*map(op.itemgetter(*Dert_keys),
-                                    Py_))),
-                      len(Py_), Py_[0].pop('y'),  # Ly, y0
-                      min(P['x0'] for P in Py_),
-                      max(P['x0'] + P['L'] for P in Py_),
-                      Py_,  # Py_ .
-                      Py_[-1].pop('down_fork_'), Py_[0].pop('up_fork_'),  # down_fork_, up_fork_ .
-                      Py_[0].pop('sign')]))
-            # cluster_vertical(P): traverse segment from first P:
-            for Py_ in map(cluster_vertical, P0_)]
-
-    for seg in seg_:  # Update segs' refs.
-        seg['Py_'][0]['seg'] = seg['Py_'][-1]['seg'] = seg
-
-    for seg in seg_:  # Update down_fork_ and up_fork_ .
-        seg.update(down_fork_=[*map(lambda P: P['seg'], seg['down_fork_'])],
-                   up_fork_=[*map(lambda P: P['seg'], seg['up_fork_'])])
-
-    for i, seg in enumerate(seg_):  # Remove segs' refs.
-        del seg['Py_'][0]['seg']
-
-    return seg_
-
-
-def cluster_vertical(P):  # Used in form_segment_().
-    """
-    Cluster P vertically, stop at the end of segment
-    """
-    if len(P['down_fork_']) == 1 and len(P['down_fork_'][0]['up_fork_']) == 1:
-        down_fork = P.pop('down_fork_')[0]  # Only 1 down_fork.
-        down_fork.pop('up_fork_')  # Only 1 up_fork.
-        down_fork.pop('y')
-        down_fork.pop('sign')
-        return [P] + cluster_vertical(down_fork)  # Plus next P in segment
-
-    return [P]  # End of segment
-
-
-def form_blob_old(seg_, root_blob, dert___, rng, fork_type):
-    encountered = []
-    blob_ = []
-    for seg in seg_:
-        if seg in encountered:
-            continue
-
-        q = deque([seg])
-        encountered.append(seg)
-
-        s = seg['Py_'][0]['sign']
-        G, M, Dy, Dx, L, Ly, blob_seg_ = 0, 0, 0, 0, 0, 0, []
-        x0, xn = 9999999, 0
-        while q:
-            blob_seg = q.popleft()
-            for ext_seg in blob_seg['up_fork_'] + blob_seg['down_fork_']:
-                if ext_seg not in encountered:
-                    encountered.append(ext_seg)
-            G += blob_seg['G']
-            M += blob_seg['M']
-            Dy += blob_seg['Dy']
-            Dx += blob_seg['Dx']
-            L += blob_seg['L']
-            Ly += blob_seg['Ly']
-            blob_seg_.append(blob_seg)
-
-            x0 = min(x0, min(map(op.itemgetter('x0'), blob_seg['Py_'])))
-            xn = max(xn, max(map(lambda P: P['x0'] + P['L'], blob_seg['Py_'])))
-
-        y0 = min(map(op.itemgetter('y0'), blob_seg_))
-        yn = max(map(lambda segment: segment['y0'] + segment['Ly'], blob_seg_))
-
-        mask = np.ones((yn - y0, xn - x0), dtype=bool)
-        for blob_seg in blob_seg_:
-            for y, P in enumerate(blob_seg['Py_'], start=blob_seg['y0']):
+        mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
+        for stack in stack_:
+            stack.pop('sign')
+            stack.pop('down_connect_cnt')
+            for y, P in enumerate(stack['Py_'], start=stack['y0'] - y0):
                 x_start = P['x0'] - x0
                 x_stop = x_start + P['L']
-                mask[y - y0, x_start:x_stop] = False
+                mask[y, x_start:x_stop] = False
 
-        # Form blob:
-        blob = dict(
-            Dert=dict(G=G, M=M, Dy=Dy, Dx=Dx, L=L, Ly=Ly),
-            sign=s,
-            box=(y0, yn, x0, xn),  # boundary box
-            slices=(Ellipsis, slice(y0, yn), slice(x0, xn)),
-            seg_=blob_seg_,
-            rng=rng,
-            dert___=dert___,
-            mask=mask,
-            root_blob=root_blob,
-            hDerts=np.concatenate(
-                (
-                    [[*root_blob['Dert'].values()]],
-                    root_blob['hDerts'],
-                ),
-                axis=0
-            ),
-            forks=defaultdict(list),
-            fork_type=fork_type,
-        )
+        dert__ = (blob_root['dert__'][:,y0:yn, x0:xn]).copy()  # copy mask as dert.mask
+        dert__.mask= True
+        dert__.mask = mask  # overwrite default mask 0s
+        blob_root['dert__'][:,y0:yn, x0:xn] = dert__.copy()  # assign mask back to blob root dert__
 
-        feedback(blob)
+        blob.pop('open_stacks')
+        blob.update(root=blob_root,
+                    box=(y0, yn, x0, xn),   # boundary box
+                    dert__=dert__,          # includes mask
+                    fork=defaultdict(dict)  # will contain fork params, layer_
+                    )
 
-        blob_.append(blob)
-
-    return blob_
+        blob_root['blob_'].append(blob)  # this maybe replaced by return, as in line_patterns and line 52
 
 
-def form_blob(seg_, root_fork):
-    """
-    Form blobs from given list of segments.
-    Each blob is formed from a number of connected segments.
-    """
+def accum_Dert(Dert: dict, **params) -> None:
+    Dert.update({param: Dert[param] + value for param, value in params.items()})
 
-    # Determine params type:
-    if 'M' not in seg_[0]:  # No M.
-        Dert_keys = (*aDERT_PARAMS[:2], *aDERT_PARAMS[3:], "S", "Ly")
-    else:
-        Dert_keys = (*aDERT_PARAMS, "S", "Ly") if nI != 1 \
-            else (*gDERT_PARAMS, "S", "Ly")
-
-    # Form blob:
-    blob_ = []
-    for blob_seg_ in cluster_segments(seg_):
-        # Compute boundary box in batch:
-        y0, yn, x0, xn = starmap(
-            lambda func, x_: func(x_),
-            zip(
-                (min, max, min, max),
-                zip(*[(
-                    seg['y0'],  # y0_ .
-                    seg['y0'] + seg['Ly'],  # yn_ .
-                    seg['x0'],  # x0_ .
-                    seg['xn'],  # xn_ .
-                ) for seg in blob_seg_]),
-            ),
-        )
-
-        # Compute mask:
-        mask = np.ones((yn - y0, xn - x0), dtype=bool)
-        for blob_seg in blob_seg_:
-            for y, P in enumerate(blob_seg['Py_'], start=blob_seg['y0']):
-                x_start = P['x0'] - x0
-                x_stop = x_start + P['L']
-                mask[y - y0, x_start:x_stop] = False
-
-        dert__ = root_fork['dert__'][:, y0:yn, x0:xn]
-        dert__.mask[:] = mask
-
-        blob = dict(
-            Dert=dict(
-                zip(
-                    Dert_keys,
-                    [*map(sum,
-                          zip(*map(op.itemgetter(*Dert_keys),
-                                   blob_seg_)))],
-                )
-            ),
-            box=(y0, yn, x0, xn),
-            seg_=blob_seg_,
-            sign=blob_seg_[0].pop('sign'),  # Pop the remaining segment's sign.
-            dert__=dert__,
-            root_fork=root_fork,
-            fork_=defaultdict(list),
-        )
-        blob_.append(blob)
-
-        # feedback(blob)
-
-    return blob_
-
-
-def cluster_segments(seg_):
-    blob_seg__ = []  # list of blob's segment lists.
-    owned_seg_ = []  # list blob-owned segments.
-
-    # Iterate through list of all segments:
-    for seg in seg_:
-        # Check whether seg has already been owned:
-        if seg in owned_seg_:
-            continue  # Skip.
-
-        blob_seg_ = [seg]  # Initialize list of blob segments.
-        q_ = deque([seg])  # Initialize queue of filling segments.
-
-        while len(q_) > 0:
-            blob_seg = q_.pop()
-            for ext_seg in blob_seg['up_fork_'] + blob_seg['down_fork_']:
-                if ext_seg not in blob_seg_:
-                    blob_seg_.append(ext_seg)
-                    q_.append(ext_seg)
-                    ext_seg.pop("sign")  # Remove all blob_seg's signs except for the first one.
-
-        owned_seg_ += blob_seg_
-        blob_seg__.append(blob_seg_)
-
-    return blob_seg__
-
-
-def feedback_old(blob, sub_fork_type=None):  # Add each Dert param to corresponding param of recursively higher root_blob.
-
-    root_blob = blob['root_blob']
-    if root_blob is None:  # Stop recursion.
-        return
-    fork_type = blob['fork_type']
-
-    # blob Layers is deeper than root_blob Layers:
-    len_sub_layers = max(0, 0, *map(len, blob['forks'].values()))
-    while len(root_blob['forks'][fork_type]) <= len_sub_layers:
-        root_blob['forks'][fork_type].append((0, 0, 0, 0, 0, 0, []))
-
-    # First layer accumulation:
-    G, M, Dy, Dx, L, Ly = blob['Dert'].values()
-    Gr, Mr, Dyr, Dxr, Lr, Lyr, sub_blob_ = root_blob['forks'][fork_type][0]
-    root_blob['forks'][fork_type][0] = (
-        Gr + G, Mr + M, Dyr + Dy, Dxr + Dx, Lr + L, Lyr + Ly,
-        sub_blob_ + [blob],
-    )
-
-    # Accumulate deeper layers:
-    root_blob['forks'][fork_type][1:] = \
-        [*starmap(  # Like map() except for taking multiple arguments.
-            # Function (with multiple arguments):
-            lambda Dert, sDert:
-            (*starmap(op.add, zip(Dert, sDert)),),  # Dert and sub_blob_ accum
-            # Mapped iterables:
-            zip(
-                root_blob['forks'][fork_type][1:],
-                blob['forks'][sub_fork_type][:],
-            ),
-        )]
-    # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)
-    # root_blob['forks'][fork_type][1:] += blob['forks'][fork_type]
-
-    feedback(root_blob, fork_type)
-
-
-def feedback(blob, fork=None):  # Add each Dert param to corresponding param of recursively higher root_blob.
-
-    root_fork = blob['root_fork']
-
-    # fork layers is deeper than root_fork Layers:
-    if fork is not None:
-        if len(root_fork['layer_']) <= len(fork['layer_']):
-            root_fork['layer_'].append((
-                dict(zip(  # Dert
-                    root_fork['layer_'][0][0],  # keys
-                    repeat(0),  # values
-                )),
-                [],  # blob_
-            ))
-    """
-    # First layer accumulation:
-    G, M, Dy, Dx, L, Ly = blob['Dert'].values()
-    Gr, Mr, Dyr, Dxr, Lr, Lyr, sub_blob_ = root_blob['forks'][fork_type][0]
-    root_blob['forks'][fork_type][0] = (
-        Gr + G, Mr + M, Dyr + Dy, Dxr + Dx, Lr + L, Lyr + Ly,
-        sub_blob_ + [blob],
-    )
-    # Accumulate deeper layers:
-    root_blob['forks'][fork_type][1:] = \
-        [*starmap( # Like map() except for taking multiple arguments.
-            # Function (with multiple arguments):
-            lambda Dert, sDert:
-                (*starmap(op.add, zip(Dert, sDert)),), # Dert and sub_blob_ accum
-            # Mapped iterables:
-            zip(
-                root_blob['forks'][fork_type][1:],
-                blob['forks'][sub_fork_type][:],
-            ),
-        )]
-    # Dert-only numpy.ndarray equivalent: (no sub_blob_ accumulation)
-    # root_blob['forks'][fork_type][1:] += blob['forks'][fork_type]
-    
-    dert_=dert__[:, y, x0:x0 + L]
-    """
-    if root_fork['root_blob'] is not None:  # Stop recursion if false.
-        feedback(root_fork['root_blob'])

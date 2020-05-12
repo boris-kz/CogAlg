@@ -134,37 +134,38 @@ def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, par
 
 def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
 
-    deep_sub_ = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_H_ by feedback
-    adj_M_proj = 0  # project adjacent P M on current P span, contrast value
+    deep_sub_layers = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_layers
+    cm = 0  # complemented-span m = M/L + pri_M / 2*pri_L + post_M / 2*post_L
 
-    for sign, L, I, D, M, dert_, sub_H_ in P_:  # each sub in sub_H_ is nested to depth = sub_H_[n]
+    for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub in sub_H_ is nested to depth = sub_layers[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
 
             r_dert_ = rng_comp(dert_, fid)  # rng+ comp, skip predictable next dert
             sub_mP_ = form_mP_(r_dert_); lL = len(sub_mP_)
-            sub_H_ += [[(lL, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_H_ += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
+            sub_layers += [[(lL, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
+            sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_layers)]
 
-        elif ~sign and min(adj_M_proj, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM projected on neg_mP
+        elif ~sign and cm * abs(D) > ave_D * rdn and L > 3:  # value of |D| or neg_M is proportional to complemented m
             ''' 
-            comb_m = comb_M / comb_S: 
-            ave m/ complemented span, combined rdn projection: cross-sign M cancels-out?
-            not co-derived but co-projected m?
-            edge projection value|cost = comb_m * |D| -> der+, doesn't affect rng+: local and primary?
+            if ~fid: abs(D) = M + ave*L
             
-            same-sign comp: parallel edges?
-            cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+            comb_m = comb_M / comb_S: combined-span gain - comp cost, cross-sign cancel, not co-derived but co-projected?
+            if fid: comb_m -= comb_|d|: comb_|D| / comb_S: alt rep cost, else no separate m
+            
+            edge ~M -> der+, doesn't affect rng+: local and primary?
+            same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
             '''
 
             sub_dP_ = form_dP_(dert_); lL = len(sub_dP_)  # cluster by d sign match: partial d match, else no der+
-            sub_H_ += [[(lL, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_H_ += intra_dP_(sub_dP_, adj_M_proj, rdn + 1 + 1 / lL, rng+1)  # der_comp eval per dP
+            sub_layers += [[(lL, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
+            sub_layers += intra_dP_(sub_dP_, cm, rdn + 1 + 1 / lL, rng+1)  # der_comp eval per dP
 
-        deep_sub_ = [deep_sub + sub_H_ for deep_sub, sub_H_ in zip_longest(deep_sub_, sub_H_, fillvalue=[])]
+        deep_sub_ = [deep_sub + sub_H_ for deep_sub, sub_H_ in zip_longest(deep_sub_layers, sub_layers, fillvalue=[])]
         # deep_sub_ and deep_dsub_ are spliced into deep_sub_ hierarchy
 
-    return sub_H_  # or deep_sub_H_?
+    return sub_layers  # or deep_sub_layers?
+
 
 def intra_dP_(P_, adjacent_PM, rdn, rng):
 

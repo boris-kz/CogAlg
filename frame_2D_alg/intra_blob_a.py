@@ -282,7 +282,7 @@ def scan_P_2(P_, stack_, blob_root):  # merge P into higher-row stack of Ps whic
     return next_P_  # each element is P + up_fork_ refs
 
 
-def comp_edge(_P, P):  # Used in scan_P_().
+def comp_end(_P, P):  # Used in scan_P_().
     """
     Check for end-point relative position and overlap
     """
