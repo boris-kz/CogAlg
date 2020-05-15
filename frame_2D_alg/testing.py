@@ -8,7 +8,7 @@ import frame_blobs_ternary
 
 from utils import imread, draw
 from intra_comp_ts import comp_i
-from intra_blob_draft import form_P__, scan_P__
+from intra_blob import form_P__, scan_P__
 
 # -----------------------------------------------------------------------------
 # Adjustable parameters

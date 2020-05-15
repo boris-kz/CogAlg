@@ -6,7 +6,7 @@ Note: Since these operations performed only on multivariate variables,
 """
 
 import frame_blobs
-from intra_blob_draft import ave
+from intra_blob import ave
 from intra_comp import *
 from comp_pixel import comp_pixel
 from utils import imwrite, imread, map_frame_binary

@@ -61,7 +61,9 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         dert_.append((_p, _d, _m * 1.5))  # unilateral d, forward-project last m to bilateral m
 
         mP_ = form_mP_(dert_)  # forms m-sign patterns
-        intra_mP_(mP_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
+        adj_M_ = cross_sign_comb(mP_)  # combines adjacent +Ms and -Ms
+
+        intra_mP_(mP_, adj_M_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
 
         frame_of_patterns_ += [[mP_]]  # line of patterns is added to frame of patterns
 
@@ -91,7 +93,6 @@ def form_mP_(P_dert_):  # initialization, accumulation, termination
 
     return P_
 
-
 def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, parallel der+ and rng+?
 
     P_ = []  # initialization:
@@ -114,60 +115,81 @@ def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, par
 
 
 ''' Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
-    P_:
-    fdP,  # flag: select dP vs. mP forks in form_P_ and intra_P
-    fid,  # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
-    rdn,  # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
-    rng,  # comparison range
+
+    root: reference to higher P for layer-sequential feedback 
     P:
     sign,  # of core param: m | d 
     Dert = L, I, D, M, 
-    dert_, # input for extended comp
-    dsub_, # multiple layers of (hyper, Dert, sub_P_) from segment or extended comp, nested to depth = sub_[n], 
-    rsub_, # for layer-parallel access and comp, similar to frequency domain representation
-           # sub_P_: flat or nested for mapping to higher-layer sub_P_ element?
-    root   # reference to higher P for layer-sequential feedback 
+    dert_, # input for extended cross-comp
+    # next fork:
+    fdP, # flag: select dP vs. mP forks in form_P_ and intra_P
+    fid, # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
+    rdn, # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
+    rng, # comparison range
 
-    orders of composition: 1st: dert_, 2nd: lateral_sub_( derts), 3rd: sub_( lateral_sub_( derts))? 
-    line-wide layer-sequential recursion and feedback, for clarity and slice-mapped SIMD? 
+    sub_layers, # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
+    # for layer-parallel access and comp, as in frequency domain representation
+    # sub_P_: flat or nested, map to higher-layer sub_Ps?
+
+    orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
 '''
 
-def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
+def cross_sign_comb(P_):
+
+    pri_M = P_[0][4]  # adjacent opposite-sign Ms, which lend to comp_g value but cancel comp_r value
+    M = P_[1][4]
+    adj_M_ = [pri_M + M ]  # projection for first P
+
+    for _, _, _, _, nxt_M, _, _ in P_[2:]:
+
+        adj_M_.append( (M + pri_M / 2 + nxt_M / 2) )
+        pri_M = M
+        M = nxt_M
+
+    adj_M_.append((M + nxt_M))  # projection for last P
+    ''' 
+    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
+    always combined co-projected M, but max adjustment is by first cross-sign comb? 
+
+    edge ~M -> der+, doesn't affect rng+: local and primary?
+    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+    
+    if fid: abs(D), else: M + ave*L  # inverted diff m vs. more precise complementary m 
+    '''
+    return adj_M_
+
+
+def intra_mP_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
 
     deep_sub_layers = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_layers
-    cm = 0  # complemented-span m = M/L + pri_M / 2*pri_L + post_M / 2*post_L
 
-    for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub in sub_H_ is nested to depth = sub_layers[n]
+    for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sub_layers[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
 
             r_dert_ = rng_comp(dert_, fid)  # rng+ comp, skip predictable next dert
-            sub_mP_ = form_mP_(r_dert_); lL = len(sub_mP_)
-            sub_layers += [[(lL, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_layers)]
+            sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
+            sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
 
-        elif ~sign and cm * abs(D) > ave_D * rdn and L > 3:  # value of |D| or neg_M is proportional to complemented m
-            ''' 
-            if ~fid: abs(D) = M + ave*L
-            
-            comb_m = comb_M / comb_S: combined-span gain - comp cost, cross-sign cancel, not co-derived but co-projected?
-            if fid: comb_m -= comb_|d|: comb_|D| / comb_S: alt rep cost, else no separate m
-            
-            edge ~M -> der+, doesn't affect rng+: local and primary?
-            same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
-            '''
+            adj_Ms_ = cross_sign_comb(sub_mP_)  # combines adjacent +Ms and -Ms
+            sub_layers += intra_mP_(sub_mP_, adj_Ms_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
 
-            sub_dP_ = form_dP_(dert_); lL = len(sub_dP_)  # cluster by d sign match: partial d match, else no der+
-            sub_layers += [[(lL, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_layers += intra_dP_(sub_dP_, cm, rdn + 1 + 1 / lL, rng+1)  # der_comp eval per dP
+        elif ~sign and min(abs(D), adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, * decay per span?
 
-        deep_sub_ = [deep_sub + sub_H_ for deep_sub, sub_H_ in zip_longest(deep_sub_layers, sub_layers, fillvalue=[])]
-        # deep_sub_ and deep_dsub_ are spliced into deep_sub_ hierarchy
+            sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
+            sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
+            sub_layers += intra_dP_(sub_dP_, adj_M, rdn + 1 + 1 / Ls, rng+1)  # der_comp eval per dP
 
-    return sub_layers  # or deep_sub_layers?
+        deep_sub_layers = [deep_sub_layers + sub_layers for deep_sub_layers, sub_layers in
+                           zip_longest(deep_sub_layers, sub_layers, fillvalue=[])]
+                           # splice deep_sub_layers
+
+    return deep_sub_layers
 
 
 def intra_dP_(P_, adjacent_PM, rdn, rng):
+
+    ''' just a draft '''
 
     sub_H_ = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_H_ by feedback
     for sign, L, I, D, M, dert_, sub_H_ in P_:  # each sub in sub_H_ is nested to depth = sub_H_[n]

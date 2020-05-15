@@ -18,7 +18,7 @@ XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
 '''
 
 def comp_r(dert__, fig, root_fcr):
-    """
+    '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
     where input intensity didn't vary much in shorter-range cross-comparison.
@@ -32,7 +32,7 @@ def comp_r(dert__, fig, root_fcr):
     ...
     Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
-    """
+    '''
 
     i__ = dert__[0]  # i is ig if fig else pixel
     '''
@@ -50,12 +50,19 @@ def comp_r(dert__, fig, root_fcr):
 
     idy__, idx__ = dert__[[1, 2]]
 
+    i__center.mask, i__topleft.mask, i__top.mask, i__topright.mask, i__right.mask, i__bottomright.mask, i__bottom.mask, \
+    i__bottomleft.mask, i__left.mask = \
+        mask_OR(
+        [i__center.mask, i__topleft.mask, i__top.mask, i__topright.mask, i__right.mask, i__bottomright.mask,
+         i__bottom.mask, i__bottomleft.mask, i__left.mask])
+
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
         dy__, dx__, m__ = dert__[[4, 5, 6]]
         dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__ = dx__[1:-1:2, 1:-1:2]
         m__  =  m__[1:-1:2, 1:-1:2]
+        dy__.mask = dx__.mask = m__.mask = i__center.mask
 
     else:   # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
@@ -91,6 +98,8 @@ def comp_r(dert__, fig, root_fcr):
               )
 
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
+        # TODO replace i__ == 0 -> min == 1, max == 255 scale values for output if values are floats
+        # replace float with int
 
         a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
         '''
@@ -105,6 +114,13 @@ def comp_r(dert__, fig, root_fcr):
         a__bottom =      a__[:, 2::2, 1:-1:2]
         a__bottomleft =  a__[:, 2::2, :-2:2]
         a__left =        a__[:, 1:-1:2, :-2:2]
+
+        a__center.mask, a__topleft.mask, a__top.mask, a__topright.mask, a__right.mask, a__bottomright.mask, \
+        a__bottom.mask, a__bottomleft.mask, a__left.mask = \
+            mask_OR(
+            [a__center.mask, a__topleft.mask, a__top.mask, a__topright.mask, a__right.mask, a__bottomright.mask,
+             a__bottom.mask, a__bottomleft.mask, a__left.mask])
+
         '''
         8-tuple of differences between center dert angle and rim dert angle:
         '''
@@ -164,10 +180,14 @@ def comp_r(dert__, fig, root_fcr):
                      m__
                      ))
 
-def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
+def comp_g(dert__, fip):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-    g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
+
+    if fip:  # flag i is pixel: dert = i_topleft, g, dy, dx
+        g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
+    else:
+        g__, dy__, dx__ = dert__[[1, 2, 3]]
 
     g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
     g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right
@@ -220,3 +240,37 @@ def shape_check(dert__):
 
     return dert__
 
+
+def normalization(array):
+    start = 1
+    end = 255
+    width = end - start
+    res = (array - array.min()) / (array.max() - array.min()) * width + start
+    return res
+
+
+def mask_OR(list_or_arrays):
+
+    # make separate numpy version: a lot simpler?
+
+    # for comp_g
+    if len(list_or_arrays) == 4:
+        for y in range(len(list_or_arrays[0])):
+            for x in range(len(list_or_arrays[0][y])):
+                if list_or_arrays[0][y][x] or list_or_arrays[1][y][x] or \
+                        list_or_arrays[2][y][x] or list_or_arrays[3][y][x]:
+                    list_or_arrays[0][y][x] = list_or_arrays[1][y][x] = \
+                        list_or_arrays[2][y][x] = list_or_arrays[3][y][x] = True
+
+    # for comp_r
+    if len(list_or_arrays) == 9:
+        for y in range(len(list_or_arrays[0])):
+            for x in range(len(list_or_arrays[0][y])):
+                if list_or_arrays[0][y][x] or list_or_arrays[1][y][x] or list_or_arrays[2][y][x] or \
+                        list_or_arrays[3][y][x] or list_or_arrays[4][y][x] or list_or_arrays[5][y][x] or \
+                        list_or_arrays[6][y][x] or list_or_arrays[7][y][x] or list_or_arrays[8][y][x]:
+                    list_or_arrays[0][y][x] = list_or_arrays[1][y][x] = list_or_arrays[2][y][x] = \
+                        list_or_arrays[3][y][x] = list_or_arrays[4][y][x] = list_or_arrays[5][y][x] = \
+                        list_or_arrays[6][y][x] = list_or_arrays[7][y][x] = list_or_arrays[8][y][x] = True
+
+    return list_or_arrays

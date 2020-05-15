@@ -302,12 +302,12 @@ if __name__ == '__main__':
 
     start_time = time()
     frame = image_to_blobs(image)
-    from intra_blob_draft import *
+    from intra_blob import *
 
     intra=0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob_draft import *
+        from intra_blob import *
         deep_frame = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 
         for blob in frame['blob__']:
