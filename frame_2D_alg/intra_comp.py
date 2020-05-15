@@ -194,6 +194,10 @@ def comp_g(dert__, fip):  # cross-comp of g in 2x2 kernels, between derts in ma.
     g2__, dy2__, dx2__ = g__[1:, 1:],   dy__[1:, 1:],   dx__[1:, 1:]    # bottom right
     g3__, dy3__, dx3__ = g__[1:, :-1],  dy__[1:, :-1],  dx__[1:, :-1]   # bottom left
 
+    g0__.mask, g1__.mask, g2__.mask, g3__.mask = \
+        mask_OR([g0__.mask, g1__.mask, g2__.mask, g3__.mask])
+    dy0__.mask = dx0__.mask = dy1__.mask = dx1__.mask = dy2__.mask = dx2__.mask = dy3__.mask = dx3__.mask = g0__.mask
+
     sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
     sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
     sin2__ = dy2__ / g2__;  cos2__ = dx2__ / g2__
