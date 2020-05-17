@@ -22,7 +22,6 @@ from utils import *
     from input-row to higher-row structures, sequential because blobs are irregular, not suited for matrix operations.
     Resulting blob structure (fixed set of parameters per blob): 
 
-    - root = frame,  # replaced by blob-level fork in sub_blobs
     - Dert = I, G, Dy, Dx, S, Ly: summed pixel-level dert params I, G, Dy, Dx, surface area S, vertical depth Ly
     - sign = s: sign of gradient deviation
     - box  = [y0, yn, x0, xn], 
@@ -284,7 +283,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['dert__'][:, y0:yn, x0:xn] = dert__.copy()  # assign mask back to frame dert__
 
         blob.pop('open_stacks')
-        blob.update(root=frame,
+        blob.update(root_dert__=dert__,
                     box=(y0, yn, x0, xn),
                     dert__=dert__
                     )
@@ -322,23 +321,27 @@ if __name__ == '__main__':
         deep_frame = frame, frame
         bcount=0
         deep_blob_i_ = []
+        deep_layers = []
+        layer_count = 0
 
         for blob in frame['blob__']:
             bcount += 1
-            print('Processing blob number ' + str(bcount))
-
-            blob.update({'fcr': 0, 'fig': 0, 'rdn': 0, 'rng': 1, 'ls': 0, 'deep_sub_layers': [], 'sub_layers': [], 'sub_blobs': []})
+#            print('Processing blob number ' + str(bcount))
+#            blob.update({'fcr': 0, 'fig': 0, 'rdn': 0, 'rng': 1, 'ls': 0, 'sub_layers': []})
 
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20 and blob['dert__'].shape[1] > 4 and blob['dert__'].shape[2] > 4:
-                    intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
+                    deep_layers.append(intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0, fip = 0))  # +G blob' dert__' comp_g
+                    layer_count+=1
 
             elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 6 and blob['dert__'].shape[1] > 4 and blob['dert__'].shape[2] > 4:
 
-                intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
+                deep_layers.append(intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1, fip = 0))  # -G blob' dert__' comp_r in 3x3 kernels
+                layer_count+=1
 
-            if len(blob['deep_sub_layers']) > 0:
-                deep_blob_i_.append(bcount)  # indices of blob with deep layers
+            if len(deep_layers) > 0:
+                if len(deep_layers[layer_count-1]) > 2:
+                    deep_blob_i_.append(bcount)  # indices of blobs with deep layers
 
 
     end_time = time() - start_time

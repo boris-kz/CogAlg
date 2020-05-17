@@ -61,9 +61,8 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         dert_.append((_p, _d, _m * 1.5))  # unilateral d, forward-project last m to bilateral m
 
         mP_ = form_mP_(dert_)  # forms m-sign patterns
-        adj_M_ = cross_sign_comb(mP_)  # combines adjacent +Ms and -Ms
-
-        intra_mP_(mP_, adj_M_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
+        mP_ = intra_mP_(mP_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
+        mP_ = intra_nmP_(mP_, rdn=1, rng=3)  # evaluates negative mPs for internal clustering in dPs
 
         frame_of_patterns_ += [[mP_]]  # line of patterns is added to frame of patterns
 
@@ -93,12 +92,12 @@ def form_mP_(P_dert_):  # initialization, accumulation, termination
 
     return P_
 
-def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, parallel der+ and rng+?
+def form_dP_(P_dert_):  # redefine by same-sign AND min mag?
 
     P_ = []  # initialization:
     p, d, m = P_dert_[1]  # skip dert_[0]: d is None
     _sign = d > 0
-    L, I, D, M, dert_, sub_H = 1, p, 0, m, [(p, d, m)], []  # sub_Le in sub_H is nested to depth = sub_H[n]
+    L, I, D, M, dert_, sub_H = 1, p, 0, m, [(p, d, m)], []
 
     for p, d, m in P_dert_[2]:  # cluster P_derts by d sign
         sign = d > 0
@@ -116,7 +115,6 @@ def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, par
 
 ''' Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
 
-    root: reference to higher P for layer-sequential feedback 
     P:
     sign,  # of core param: m | d 
     Dert = L, I, D, M, 
@@ -134,77 +132,62 @@ def form_dP_(P_dert_):  # pattern initialization, accumulation, termination, par
     orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
 '''
 
-def cross_sign_comb(P_):
+def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
 
-    pri_M = P_[0][4]  # adjacent opposite-sign Ms, which lend to comp_g value but cancel comp_r value
-    M = P_[1][4]
-    adj_M_ = [pri_M + M ]  # projection for first P
+    deep_layers = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_layers
 
-    for _, _, _, _, nxt_M, _, _ in P_[2:]:
-
-        adj_M_.append( (M + pri_M / 2 + nxt_M / 2) )
-        pri_M = M
-        M = nxt_M
-
-    adj_M_.append((M + nxt_M))  # projection for last P
-    ''' 
-    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
-    always combined co-projected M, but max adjustment is by first cross-sign comb? 
-
-    edge ~M -> der+, doesn't affect rng+: local and primary?
-    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
-    
-    if fid: abs(D), else: M + ave*L  # inverted diff m vs. more precise complementary m 
-    '''
-    return adj_M_
-
-
-def intra_mP_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line P_, fil sub_P_ with results
-
-    deep_sub_layers = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_layers
-
-    for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sub_layers[n]
+    for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub_layer is nested to depth = sub_layers[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
 
             r_dert_ = rng_comp(dert_, fid)  # rng+ comp, skip predictable next dert
             sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
             sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
+            sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
 
-            adj_Ms_ = cross_sign_comb(sub_mP_)  # combines adjacent +Ms and -Ms
-            sub_layers += intra_mP_(sub_mP_, adj_Ms_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
+        deep_layers = [deep_sub_layers + sub_layers for deep_sub_layers, sub_layers in
+                       zip_longest(deep_layers, sub_layers, fillvalue=[])]  # splice deep_layers
 
-        elif ~sign and min(abs(D), adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, * decay per span?
+    return deep_layers
+
+
+def intra_nmP_(mP_, rdn, rng):
+    ''' just a draft '''
+
+    pri_M = mP_[0][4]  # adjacent opposite-sign Ms, which lend to comp_g value but cancel comp_r value
+    M = mP_[1][4]
+    adj_M_ = [pri_M + M]  # projection for first P
+
+    for _, _, _, _, nxt_M, _, _ in mP_[2:]:
+        adj_M_.append( (M + pri_M / 2 + nxt_M / 2) )
+        pri_M = M
+        M = nxt_M
+    adj_M_.append((M + nxt_M))  # projection for last P
+
+    for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):
+
+        if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, * decay per span?
+            deep_layers = []
 
             sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
             sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_layers += intra_dP_(sub_dP_, adj_M, rdn + 1 + 1 / Ls, rng+1)  # der_comp eval per dP
+            sub_layers += intra_dP_(sub_dP_, rdn + 1 + 1 / Ls, rng+1)  # der_comp eval per nmP
 
-        deep_sub_layers = [deep_sub_layers + sub_layers for deep_sub_layers, sub_layers in
-                           zip_longest(deep_sub_layers, sub_layers, fillvalue=[])]
-                           # splice deep_sub_layers
+            deep_layers = [deep_sub_layers + sub_layers for deep_sub_layers, sub_layers in
+                           zip_longest(deep_layers, sub_layers, fillvalue=[])]  # splice deep_layers
+            
+    ''' 
+    maximal M adjustment is initial cross-sign comb, doesn't affect primary rng+ eval per mP
+    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
 
-    return deep_sub_layers
+    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+    if fid: abs(D), else: M + ave*L  # inverted diff m vs. more precise complementary m 
+    '''
+    return deep_layers  # fill layer Dert if n_sub_P > min?
 
 
-def intra_dP_(P_, adjacent_PM, rdn, rng):
-
+def intra_dP_(P_, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
     ''' just a draft '''
-
-    sub_H_ = []  # intra_P initializes sub_hierarchy with 1st sub_P_ layer, extending root sub_H_ by feedback
-    for sign, L, I, D, M, dert_, sub_H_ in P_:  # each sub in sub_H_ is nested to depth = sub_H_[n]
-
-        if min(adjacent_PM, abs(D)) > ave_D * rdn and L > 3:  # max value of abs_D is PM
-
-            d_dert_ = der_comp(dert_)
-            sub_mP_ = form_mP_(d_dert_); lL = len(sub_mP_)
-            sub_H_ += [[(lL, False, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if lL > min?
-            sub_H_ += intra_mP_(sub_mP_, rdn + 1 + 1 / lL, rng*2 + 1)  # feedback, LL[:] = [len(sub_H_)]
-
-    return sub_H_  # fill layer Dert if n_sub_P > min?
-
-
-def intra_P_(P_, rdn, rng, fdP, fid):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
     deep_sub_ = []  # intra_P recursion extends rsub_ and dsub_ hierarchies by sub_P_ layer
     for sign, dLL, rLL, L, I, D, M, dert_, dsub_, rsub_ in P_:  # each sub in sub_ is nested to depth = sub_[n]
