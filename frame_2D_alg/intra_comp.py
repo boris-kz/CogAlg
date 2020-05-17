@@ -180,14 +180,11 @@ def comp_r(dert__, fig, root_fcr):
                      m__
                      ))
 
-def comp_g(dert__, fip):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
+def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
 
-    if fip:  # flag i is pixel: dert = i_topleft, g, dy, dx
-        g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
-    else:
-        g__, dy__, dx__ = dert__[[1, 2, 3]]
+    g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
 
     g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
     g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right

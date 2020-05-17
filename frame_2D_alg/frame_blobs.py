@@ -283,7 +283,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['dert__'][:, y0:yn, x0:xn] = dert__.copy()  # assign mask back to frame dert__
 
         blob.pop('open_stacks')
-        blob.update(root_dert__=dert__,
+        blob.update(root_dert__=frame['dert__'],
                     box=(y0, yn, x0, xn),
                     dert__=dert__
                     )
@@ -331,12 +331,43 @@ if __name__ == '__main__':
 
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20 and blob['dert__'].shape[1] > 4 and blob['dert__'].shape[2] > 4:
-                    deep_layers.append(intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0, fip = 0))  # +G blob' dert__' comp_g
+
+                    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))
+                    mask = blob['dert__'][0].mask
+
+                    new_dert__[0] = blob['dert__'][0]  # i
+                    new_dert__[1] = 0; new_dert__[1].mask = mask  # idy
+                    new_dert__[2] = 0; new_dert__[2].mask = mask  # idx
+                    new_dert__[3] = blob['dert__'][1]  # g
+                    new_dert__[4] = blob['dert__'][2]  # dy
+                    new_dert__[5] = blob['dert__'][3]  # dx
+                    new_dert__[6] = 0; new_dert__[6].mask = mask  # m
+
+                    blob['dert__'] = new_dert__.copy()
+                    '''
+                    or:
+                    for (p, dy, dx, g), i in enumerate( blob['dert__'] ):
+                        blob['dert__'][i] = p, 0, 0, g, dy, dx, 0  # idt, idx, m = 0
+                    '''
+                    deep_layers.append(intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0))  # +G blob' dert__' comp_g
                     layer_count+=1
 
             elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 6 and blob['dert__'].shape[1] > 4 and blob['dert__'].shape[2] > 4:
 
-                deep_layers.append(intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1, fip = 0))  # -G blob' dert__' comp_r in 3x3 kernels
+                new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))
+                mask = blob['dert__'][0].mask
+
+                new_dert__[0] = blob['dert__'][0]  # i
+                new_dert__[1] = 0; new_dert__[1].mask = mask  # idy
+                new_dert__[2] = 0; new_dert__[2].mask = mask  # idx
+                new_dert__[3] = blob['dert__'][1]  # g
+                new_dert__[4] = blob['dert__'][2]  # dy
+                new_dert__[5] = blob['dert__'][3]  # dx
+                new_dert__[6] = 0; new_dert__[6].mask = mask  # m
+
+                blob['dert__'] = new_dert__.copy()
+
+                deep_layers.append(intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1))  # -G blob' dert__' comp_r in 3x3 kernels
                 layer_count+=1
 
             if len(deep_layers) > 0:

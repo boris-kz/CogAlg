@@ -65,6 +65,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         intra_P(mP_, fdP=False, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
 
         frame_of_patterns_ += [(dP_, mP_)]  # line of patterns is added to frame of patterns
+
     return frame_of_patterns_  # frame of patterns will be output to level 2
 
 

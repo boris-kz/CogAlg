@@ -63,8 +63,8 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     ext_dert__.mask = True  # set all mask to true
     ext_dert__[:, ystart:yend, xstart:xend] = blob['dert__'].copy()
 
-    if fcr: dert__ = comp_r(ext_dert__, fig, blob['fcr'], 0)  # -> m sub_blobs
-    else:   dert__ = comp_g(ext_dert__, 0)  # -> g sub_blobs:
+    if fcr: dert__ = comp_r(ext_dert__, fig, blob['fcr'])  # -> m sub_blobs
+    else:   dert__ = comp_g(ext_dert__)  # -> g sub_blobs:
 
     if dert__.shape[1] >2 and dert__.shape[2] >2:  # min size in y and x
 
