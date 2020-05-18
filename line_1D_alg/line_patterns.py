@@ -132,6 +132,7 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
 
 def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fill sub_mP_ with results
 
+    comb_layers = []  #-> root P sub_layers[1:]
     for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub_layer is nested to depth = sub_layers[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
@@ -142,7 +143,10 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fil
             sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
             sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
 
-    return sub_layers
+            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
+                           # splice sub_layers across sub_Ps for return as root sub_layers[1:]
+    return comb_layers
 
 def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-clustering by d sign
 
@@ -156,6 +160,7 @@ def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-cluste
         M = nxt_M
     adj_M_.append((M + nxt_M))  # projection for last P
 
+    comb_layers = []
     for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):
 
         if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, not per L: decay is separate?
@@ -164,10 +169,14 @@ def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-cluste
             sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if Ls > min?
             sub_layers += intra_dP_(sub_dP_, rdn + 1 + 1 / Ls, rng+1)  # der_comp eval per nmP
 
-    return sub_layers
+            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
+
+    return comb_layers
 
 def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
 
+    comb_layers = []
     for sign, L, I, D, M, dert_, sub_layers in dP_:  # each sub in sub_ is nested to depth = sub_[n]
 
         if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds at rng+1:
@@ -178,19 +187,15 @@ def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, filling 
             sub_layers += [[(Ls, 1, 1, rdn, rng, sub_dP_)]]  # 1st layer: Ls, fdP, fid, rdn, rng, sub_P_
             sub_layers += intra_mP_(sub_dP_, 1, rdn + 1 + 1 / Ls, rng+1)
 
-    return sub_layers
+            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
+    return comb_layers
 
 ''' maximal M adjustment is initial cross-sign comb, doesn't affect primary rng+ eval per mP
     no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
 
     same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
     if fid: abs(D), else: M + ave*L  # inverted diff m vs. more precise complementary m 
-    
-    no need to splice deep_layers, it's a single hierarchy?:  
-    deep_layers = []  # sub_layers[1:]
-
-    deep_layers = [deep_layers + sub_layers for deep_layers, sub_layers in
-                   zip_longest(deep_layers, sub_layers, fillvalue=[])]
 '''
 
 def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
