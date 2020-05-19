@@ -132,7 +132,7 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
 
 def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fill sub_mP_ with results
 
-    comb_layers = []  #-> root P sub_layers[1:]
+    comb_layers = []  # combine into root P sub_layers[1:]
     for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub_layer is nested to depth = sub_layers[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
@@ -189,6 +189,7 @@ def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, filling 
 
             comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
                            zip_longest(comb_layers, sub_layers, fillvalue=[])]
+
     return comb_layers
 
 ''' maximal M adjustment is initial cross-sign comb, doesn't affect primary rng+ eval per mP

@@ -43,21 +43,16 @@ from utils import *
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
     Please see diagrams of frame_blobs on https://kwcckw.github.io/CogAlg/
 '''
-# Adjustable parameters:
 
-kwidth = 3  # smallest input-centered kernel: frame | blob shrink by 2 pixels per row
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-# ----------------------------------------------------------------------------------------------------------------------------------------
 # Functions
-
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-
 def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within image
 
-    # following four slices provide inputs to a sliding 2x2 kernel:
+    # input slices to a sliding 2x2 kernel:
     topleft__ = image[:-1, :-1]
     topright__ = image[:-1, 1:]
     botleft__ = image[1:, :-1]
@@ -300,6 +295,26 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
+
+def convert_dert(blob):  # Update blob dert with new param
+
+    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))  # initialize with 0
+    new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
+    new_dert__.mask = blob['dert__'][0].mask
+
+    new_dert__[0] = blob['dert__'][0]  # i
+    new_dert__[1] = 0  # idy
+    new_dert__[2] = 0  # idx
+    new_dert__[3] = blob['dert__'][1]  # g
+    new_dert__[4] = blob['dert__'][2]  # dy
+    new_dert__[5] = blob['dert__'][3]  # dx
+    new_dert__[6] = 0  # m
+
+    blob['dert__'] = new_dert__.copy()
+
+    return blob
+
+
 # -----------------------------------------------------------------------------
 # Main
 
@@ -314,71 +329,44 @@ if __name__ == '__main__':
     start_time = time()
     frame = image_to_blobs(image)
 
-    intra = 0
+    intra = 1
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
+
         deep_frame = frame, frame
-        bcount=0
+        bcount = 0
         deep_blob_i_ = []
         deep_layers = []
         layer_count = 0
 
         for blob in frame['blob__']:
             bcount += 1
-#            print('Processing blob number ' + str(bcount))
-#            blob.update({'fcr': 0, 'fig': 0, 'rdn': 0, 'rng': 1, 'ls': 0, 'sub_layers': []})
+            # print('Processing blob number ' + str(bcount))
+            # blob.update({'fcr': 0, 'fig': 0, 'rdn': 0, 'rng': 1, 'ls': 0, 'sub_layers': []})
 
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20 and blob['dert__'].shape[1] > 4 and blob['dert__'].shape[2] > 4:
+                    blob = convert_dert(blob)
 
-                    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))
-                    mask = blob['dert__'][0].mask
-
-                    new_dert__[0] = blob['dert__'][0]  # i
-                    new_dert__[1] = 0; new_dert__[1].mask = mask  # idy
-                    new_dert__[2] = 0; new_dert__[2].mask = mask  # idx
-                    new_dert__[3] = blob['dert__'][1]  # g
-                    new_dert__[4] = blob['dert__'][2]  # dy
-                    new_dert__[5] = blob['dert__'][3]  # dx
-                    new_dert__[6] = 0; new_dert__[6].mask = mask  # m
-
-                    blob['dert__'] = new_dert__.copy()
-                    '''
-                    or:
-                    for (p, dy, dx, g), i in enumerate( blob['dert__'] ):
-                        blob['dert__'][i] = p, 0, 0, g, dy, dx, 0  # idt, idx, m = 0
-                    '''
                     deep_layers.append(intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0))  # +G blob' dert__' comp_g
-                    layer_count+=1
+                    layer_count += 1
 
             elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 6 and blob['dert__'].shape[1] > 4 and blob['dert__'].shape[2] > 4:
 
-                new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))
-                mask = blob['dert__'][0].mask
-
-                new_dert__[0] = blob['dert__'][0]  # i
-                new_dert__[1] = 0; new_dert__[1].mask = mask  # idy
-                new_dert__[2] = 0; new_dert__[2].mask = mask  # idx
-                new_dert__[3] = blob['dert__'][1]  # g
-                new_dert__[4] = blob['dert__'][2]  # dy
-                new_dert__[5] = blob['dert__'][3]  # dx
-                new_dert__[6] = 0; new_dert__[6].mask = mask  # m
-
-                blob['dert__'] = new_dert__.copy()
+                blob = convert_dert(blob)
 
                 deep_layers.append(intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1))  # -G blob' dert__' comp_r in 3x3 kernels
-                layer_count+=1
+                layer_count += 1
 
             if len(deep_layers) > 0:
-                if len(deep_layers[layer_count-1]) > 2:
+                if len(deep_layers[layer_count - 1]) > 2:
                     deep_blob_i_.append(bcount)  # indices of blobs with deep layers
-
 
     end_time = time() - start_time
     print(end_time)
 
-    # DEBUG -------------------------------------------------------------------
+# DEBUG -------------------------------------------------------------------
 
 '''
     imwrite("images/gblobs.bmp",

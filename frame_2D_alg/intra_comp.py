@@ -1,10 +1,10 @@
-  
 """
 Cross-comparison of pixels or gradients, in 2x2 or 3x3 kernels
 """
 
 import numpy as np
 import numpy.ma as ma
+import functools
 
 # Sobel coefficients to decompose ds into dy and dx:
 
@@ -50,11 +50,15 @@ def comp_r(dert__, fig, root_fcr):
 
     idy__, idx__ = dert__[[1, 2]]
 
-    i__center.mask, i__topleft.mask, i__top.mask, i__topright.mask, i__right.mask, i__bottomright.mask, i__bottom.mask, \
-    i__bottomleft.mask, i__left.mask = \
-        mask_OR(
+    '''
+    Unmasking is not needed here, comp_r is only done in large low-variation areas, where border won't make any difference
+     
+    i__center.mask = i__topleft.mask = i__top.mask = i__topright.mask = i__right.mask = i__bottomright.mask = i__bottom.mask= \
+    i__bottomleft.mask = i__left.mask = \
+        mask_SUM(
         [i__center.mask, i__topleft.mask, i__top.mask, i__topright.mask, i__right.mask, i__bottomright.mask,
          i__bottom.mask, i__bottomleft.mask, i__left.mask])
+    '''
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
@@ -98,9 +102,9 @@ def comp_r(dert__, fig, root_fcr):
               )
 
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
-        # TODO replace i__ == 0 -> min == 1, max == 255 scale values for output if values are floats
         # replace float with int
 
+        i__[np.where(i__ == 0)] = .001
         a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
         '''
         sparse aligned a__center and a__rim arrays:
@@ -114,12 +118,6 @@ def comp_r(dert__, fig, root_fcr):
         a__bottom =      a__[:, 2::2, 1:-1:2]
         a__bottomleft =  a__[:, 2::2, :-2:2]
         a__left =        a__[:, 1:-1:2, :-2:2]
-
-        a__center.mask, a__topleft.mask, a__top.mask, a__topright.mask, a__right.mask, a__bottomright.mask, \
-        a__bottom.mask, a__bottomleft.mask, a__left.mask = \
-            mask_OR(
-            [a__center.mask, a__topleft.mask, a__top.mask, a__topright.mask, a__right.mask, a__bottomright.mask,
-             a__bottom.mask, a__bottomleft.mask, a__left.mask])
 
         '''
         8-tuple of differences between center dert angle and rim dert angle:
@@ -191,14 +189,25 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     g2__, dy2__, dx2__ = g__[1:, 1:],   dy__[1:, 1:],   dx__[1:, 1:]    # bottom right
     g3__, dy3__, dx3__ = g__[1:, :-1],  dy__[1:, :-1],  dx__[1:, :-1]   # bottom left
 
-    g0__.mask, g1__.mask, g2__.mask, g3__.mask = \
-        mask_OR([g0__.mask, g1__.mask, g2__.mask, g3__.mask])
-    dy0__.mask = dx0__.mask = dy1__.mask = dx1__.mask = dy2__.mask = dx2__.mask = dy3__.mask = dx3__.mask = g0__.mask
+    g0__.mask  = mask_SUM([g0__.mask, g1__.mask, g2__.mask, g3__.mask])
+    # aren't the masks below identical?:
+    dy0__.mask = mask_SUM([dy0__.mask, dy1__.mask, dy2__.mask, dy3__.mask])
+    dx0__.mask = mask_SUM([dx0__.mask, dx1__.mask, dx2__.mask, dx3__.mask])
+
+    g1__.mask = g2__.mask = g3__.mask = g0__.mask
+    dy1__.mask = dy2__.mask = dy3__.mask = dy0__.mask
+    dx1__.mask = dx2__.mask = dx3__.mask = dx0__.mask
+
+    g0__[np.where(g0__ == 0)] = .001
+    g1__[np.where(g1__ == 0)] = .001
+    g2__[np.where(g2__ == 0)] = .001
+    g3__[np.where(g3__ == 0)] = .001
 
     sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
     sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
     sin2__ = dy2__ / g2__;  cos2__ = dx2__ / g2__
     sin3__ = dy3__ / g3__;  cos3__ = dx3__ / g3__
+
     '''
     cosine of difference between diagonally opposed angles, in vector representation
     print(cos_da1__.shape, type(cos_da1__))
@@ -222,6 +231,8 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     next comp_rg will use g, dy, dx     
     next comp_gg will use gg, dgy, dgx  
     '''
+    # Do we need shape adjustment after mask_SUM?:
+
     return  ma.stack((g__ [:-1, :-1],  # remove last row and column to align with derived params
                       dy__[:-1, :-1],
                       dx__[:-1, :-1],  # -> idy, idx to compute cos for comp rg
@@ -250,49 +261,21 @@ def normalization(array):
     return res
 
 
-def mask_OR(list_or_arrays):
-    # for comp_g
-    if len(list_or_arrays) == 4:
-        for y in range(len(list_or_arrays[0])):
-            for x in range(len(list_or_arrays[0][y])):
-                if list_or_arrays[0][y][x] or list_or_arrays[1][y][x] or \
-                        list_or_arrays[2][y][x] or list_or_arrays[3][y][x]:
-                    list_or_arrays[0][y][x] = list_or_arrays[1][y][x] = \
-                        list_or_arrays[2][y][x] = list_or_arrays[3][y][x] = True
+def mask_SUM(list_of_arrays):  # sum of masks converted to int
 
-    # for comp_r
-    if len(list_or_arrays) == 9:
-        for y in range(len(list_or_arrays[0][0])):
-            for x in range(len(list_or_arrays[0][0][y])):
-                if list_or_arrays[0][0][y][x] or list_or_arrays[1][0][y][x] or list_or_arrays[2][0][y][x] or \
-                        list_or_arrays[3][0][y][x] or list_or_arrays[4][0][y][x] or list_or_arrays[5][0][y][x] or \
-                        list_or_arrays[6][0][y][x] or list_or_arrays[7][0][y][x] or list_or_arrays[8][0][y][x]:
-                    list_or_arrays[0][:][y][x] = list_or_arrays[1][:][y][x] = list_or_arrays[2][:][y][x] = \
-                        list_or_arrays[3][:][y][x] = list_or_arrays[4][:][y][x] = list_or_arrays[5][:][y][x] = \
-                        list_or_arrays[6][:][y][x] = list_or_arrays[7][:][y][x] = list_or_arrays[8][:][y][x] = True
+    sum = functools.reduce(lambda x1, x2: x1.astype('int') + x2.astype('int'), list_of_arrays)
+    mask = sum > 1  # mask output if more than 1 input is masked
 
-    return list_or_arrays
+    return mask
 
-
-def mask_projection(list_of_arrays):
-    # top_left, top_right, bottom_right, bottom_left
-
-    for y in range(len(list_of_arrays[0])):
-        for x in range(len(list_of_arrays[0][y])):
-            if [list_of_arrays[0].mask[y][x], list_of_arrays[1].mask[y][x], list_of_arrays[2].mask[y][x],
-                    list_of_arrays[3].mask[y][x]].count(True) == 1:
-
-                    if list_of_arrays[0].mask[y][x] == True:
-                        list_of_arrays[0][y][x] = list_of_arrays[2][y][x] / 2
-                        list_of_arrays[0].mask[y][x] = list_of_arrays[1].mask[y][x] = \
-                            list_of_arrays[2].mask[y][x] = list_of_arrays[3].mask[y][x] = False
-
-                    elif list_of_arrays[3].mask[y][x] == True:
-                        list_of_arrays[3][y][x] = list_of_arrays[1][y][x] / 2
-                        list_of_arrays[0].mask[y][x] = list_of_arrays[1].mask[y][x] = \
-                            list_of_arrays[2].mask[y][x] = list_of_arrays[3].mask[y][x] = False
-                    else:
-                        list_of_arrays[0].mask[y][x] = list_of_arrays[1].mask[y][x] = \
-                            list_of_arrays[2].mask[y][x] = list_of_arrays[3].mask[y][x] = True
-
-    return list_of_arrays
+'''
+OR_mask=  functools.reduce(np.logical_or, (i__center, i__topleft, i__top,\
+                                           i__topright, i__right, i__bottomright,\
+                                           i__bottom, i__bottomleft, i__left ))
+                                           
+a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
+a__bottom.mask = a__bottomleft.mask = a__left.mask = \
+    mask_SUM(
+    [a__center.mask, a__topleft.mask, a__top.mask, a__topright.mask, a__right.mask, a__bottomright.mask,
+     a__bottom.mask, a__bottomleft.mask, a__left.mask])
+'''

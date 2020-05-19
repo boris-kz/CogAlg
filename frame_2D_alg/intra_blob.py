@@ -37,15 +37,11 @@ aveB = 1  # fixed cost per intra_blob comp and clustering
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-
-def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
-
-    # fig: flag input is g | p, fcr: flag comp over rng+ | der+
-    deep_layers = []  # to extend root_blob sub_layers
+def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob['box']  # extend dert box:
     _, rY, rX = blob['root_dert__'].shape  # higher dert size
-    _, cY, cX = blob['dert__'].shape  # current dert size
+    cP, cY, cX = blob['dert__'].shape  # current dert size
 
     y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1
 
@@ -59,11 +55,26 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     if xne > rX: xne = rX; xend = xstart + cX
     else:        xend = xstart + cX
 
-    ext_dert__ = blob['root_dert__'][:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
-    ext_dert__.mask = True  # set all mask to true
-    ext_dert__[:, ystart:yend, xstart:xend] = blob['dert__'].copy()
+    ini_dert = blob['root_dert__'][:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
 
-    if fcr: dert__ = comp_r(ext_dert__, fig, blob['fcr'])  # -> m sub_blobs
+    ext_dert__ = ma.array(np.zeros((cP, ini_dert.shape[1], ini_dert.shape[2])))
+    ext_dert__[0, ystart:yend, xstart:xend] = blob['dert__'][0].copy() # update i
+    ext_dert__[3, ystart:yend, xstart:xend] = blob['dert__'][1].copy() # update g
+    ext_dert__[4, ystart:yend, xstart:xend] = blob['dert__'][2].copy() # update dy
+    ext_dert__[5, ystart:yend, xstart:xend] = blob['dert__'][3].copy() # update dx
+    ext_dert__.mask = blob['dert__'].mask   # set all masks to blob dert mask
+
+    return ext_dert__
+
+
+def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
+
+    # fig: flag input is g | p, fcr: flag comp over rng+ | der+
+
+    spliced_layers = []  # to extend root_blob sub_layers
+    ext_dert__ = extend_dert(blob)
+
+    if fcr: dert__ = comp_r(ext_dert__, fig, fcr)  # -> m sub_blobs
     else:   dert__ = comp_g(ext_dert__)  # -> g sub_blobs:
 
     if dert__.shape[1] >2 and dert__.shape[2] >2:  # min size in y and x
@@ -72,7 +83,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
 
         blob.update({'fcr': fcr, 'fig': fig, 'rdn': rdn, 'rng': rng,  # fork params
                      'Ls': len(sub_blobs),  # for visibility and next-fork rdn
-                     'sub_layers': [sub_blobs] })  # 1st layer of sub blobs
+                     'sub_layers': [sub_blobs] })  # 1st layer of sub_blobs
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
             if sub_blob['sign']:
@@ -84,10 +95,10 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
                 blob['sub_layers'] += \
                     intra_blob(sub_blob, rdn + 1 + 1 / blob['Ls'], rng=rng, fig=1, fcr=0)
 
-        deep_layers = [deep_layers + sub_layers for deep_layers, sub_layers in
-                       zip_longest(deep_layers, blob['sub_layers'], fillvalue=[])]
-
-    return deep_layers
+        spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
+                          zip_longest(spliced_layers, blob['sub_layers'], fillvalue=[])
+                          ]
+    return spliced_layers
 
 
 def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
@@ -101,7 +112,7 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
     dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
     stack_ = deque()  # buffer of running vertical stacks of Ps
 
-    for y in range(dert__.shape[1]):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
+    for y in range(dert__.shape[0]):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
 
         P_ = form_P_(dert__[y, :], crit__[y, :])  # horizontal clustering, adds a row of Ps
         P_ = scan_P_(P_, stack_, blob['dert__'])  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
