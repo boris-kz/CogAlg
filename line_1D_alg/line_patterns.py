@@ -267,13 +267,14 @@ if __name__ == "__main__":
     print(end_time)
 
 '''
-2nd level cross-compares resulting patterns Ps (s, L, I, D, M, r, nested e_) and evaluates them for deeper cross-comparison. 
+2nd level cross-compares resulting patterns Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison. 
 Depth of cross-comparison (discontinuous if generic) is increased in lower-recursion e_, then between same-recursion e_s:
 
-comp (s)?  # same-sign only
-    comp (L, I, D, M)?  # in parallel or L first, equal-weight or I is redundant?  
-        cross_comp (sub_)?  # same-recursion (derivation) order elements
-            cross_comp (dert_)
-            
-Then extend this 2nd level alg to a recursive meta-level algorithm 
+comp (s):  same-sign only?
+    comp (L, I, D, M): or div L first, equal-weight or I is redundant?  
+        comp (dert_):  after layers: lower composition?
+    comp (layer_):  same-derivation order elements
+        comp (P_):  sub_Ps
+                            
+This 2nd level alg should be extended to a recursive meta-level algorithm 
 '''
