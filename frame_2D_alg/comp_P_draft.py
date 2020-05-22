@@ -2,19 +2,24 @@ from collections import deque
 from math import hypot
 from time import time
 '''
-    comp_P_ will be a fork of intra_blob, currently a draft.
+    comp_P_ is a terminal fork of intra_blob.
     
-    It traces blob axis (ridge?) by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
-    This effectively vectorizes the blob
-    Cross-comparison forms dPPs and vPPs: clusters of Ps with same-sign vertical difference or match deviation: 
+    comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
+    This is selective for high-gradient, high aspect-ratio blobs: likely edges. It should perform dimensionality 
+    reduction: vectorize these blob representations into outlines of adjacent flat areas (low-gradient blobs).
+    
+    High aspect-ratio: high (box area / blob area) * (blob area / stack number) 
+    
+    P cross-comparison forms dPPs and vPPs: clusters of Ps with same-sign vertical difference or match deviation: 
     Pd | Pv is formed by summing difference | match deviation per P param between all compared params within P.  
     
-    there may be par_coefs per level: match|dev rate fb, also per pattern, for form par_P, after full-blob comp_P_ 
-    also sub_coefs per sub_blob, if recurrent in super_blob from comp_blob: stable parts per object combination?  
-
-    comp_P is potentially micro and macro recursive: 
-    - resulting param derivatives are evaluated for inc_deriv and inc_range cross-comparison, to form par_Ps and so on
+    comp_P is potentially intra- and inter- recursive: 
+    - resulting param derivatives are evaluated for der+ and rng+ cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+
+    Aves (integer filters) and coefs (ratio filters) per parameter type trigger forming parameter_Ps, 
+    after full-blob comp_P_ sums match and miss per parameter. 
+    also sub_coefs per sub_blob, if recurrent in super_blob from comp_blob: stable parts per object combination?  
 
     pre comp_P: 
     intra_comp(dx) -> sub_blob_ per dx in der+ blob or v - ig in rng+ blob: ig is different dim?

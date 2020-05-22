@@ -38,41 +38,40 @@ def comp_r(dert__, fig, root_fcr):
     '''
     sparse aligned i__center and i__rim arrays:
     '''
-    i__center =      i__[1:-1:2, 1:-1:2]
-    i__topleft =     i__[:-2:2, :-2:2]
-    i__top =         i__[:-2:2, 1:-1:2]
-    i__topright =    i__[:-2:2, 2::2]
-    i__right =       i__[1:-1:2, 2::2]
-    i__bottomright = i__[2::2, 2::2]
-    i__bottom =      i__[2::2, 1:-1:2]
-    i__bottomleft =  i__[2::2, :-2:2]
-    i__left =        i__[1:-1:2, :-2:2]
+    i__center =      i__[1:-1:2, 1:-1:2].copy()
+    i__topleft =     i__[:-2:2, :-2:2].copy()
+    i__top =         i__[:-2:2, 1:-1:2].copy()
+    i__topright =    i__[:-2:2, 2::2].copy()
+    i__right =       i__[1:-1:2, 2::2].copy()
+    i__bottomright = i__[2::2, 2::2].copy()
+    i__bottom =      i__[2::2, 1:-1:2].copy()
+    i__bottomleft =  i__[2::2, :-2:2].copy()
+    i__left =        i__[1:-1:2, :-2:2].copy()
     ''' 
-    mask ORing to align masks of outputs from operations that don't have common inputs
-    (could be replaced with mask_SUM, but it's not necessary in comp_r)
-    not needed if fig: all operations include center, so all masks are ORed with center.mask? 
+    remove mask from kernels with only one masked dert 
     '''
-    i__center.mask = i__topleft.mask = i__top.mask = i__topright.mask = i__right.mask = i__bottomright.mask = i__bottom.mask= \
-    i__bottomleft.mask = i__left.mask = \
-    functools.reduce(np.logical_or, (i__center, i__topleft, i__top,
-                                     i__topright, i__right, i__bottomright,
-                                     i__bottom, i__bottomleft, i__left ))
+    mask_i = mask_SUM([i__center.mask, i__topleft.mask, i__top.mask,
+                       i__topright.mask, i__right.mask, i__bottomright.mask,
+                       i__bottom.mask, i__bottomleft.mask, i__left.mask])
+
+    i__center.mask = i__topleft.mask = i__top.mask = i__topright.mask = i__right.mask = i__bottomright.mask = \
+    i__bottom.mask = i__bottomleft.mask = i__left.mask = mask_i
 
     idy__, idx__ = dert__[[1, 2]]
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
         dy__, dx__, m__ = dert__[[4, 5, 6]]
-        dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
-        dx__ = dx__[1:-1:2, 1:-1:2]
-        m__  =  m__[1:-1:2, 1:-1:2]
-        dy__.mask = dx__.mask = m__.mask = i__center.mask
+        dy__ = dy__[1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
+        dx__ = dx__[1:-1:2, 1:-1:2].copy()
+        m__  =  m__[1:-1:2, 1:-1:2].copy()
+        dy__.mask = dx__.mask = m__.mask = mask_i
 
     else:   # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
-        dy__ = np.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
-        dx__ = np.zeros((i__center.shape[0], i__center.shape[1]))
-        m__ = np.zeros((i__center.shape[0], i__center.shape[1]))
+        dy__ = ma.zeros((i__center.shape[0], i__center.shape[1]))  # row, column
+        dx__ = ma.zeros((i__center.shape[0], i__center.shape[1]))
+        m__ = ma.zeros((i__center.shape[0], i__center.shape[1]))
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
 
@@ -81,6 +80,8 @@ def comp_r(dert__, fig, root_fcr):
                          i__topright - i__bottomleft,
                          i__right - i__left
                          ))
+        # dt__.mask = mask_i: not needed?
+
         for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):
 
             dy__ += d__ * YCOEF  # decompose differences into dy and dx,
@@ -104,26 +105,31 @@ def comp_r(dert__, fig, root_fcr):
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
         # replace float with int
 
-        i__[np.where(i__ == 0)] = .001  # 1 if int
+        i__[ma.where(i__ == 0)] = .001  # 1 if int
         a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
         '''
         sparse aligned a__center and a__rim arrays:
         '''
-        a__center =      a__[:, 1:-1:2, 1:-1:2]
-        a__topleft =     a__[:, :-2:2, :-2:2]
-        a__top =         a__[:, :-2:2, 1:-1: 2]
-        a__topright =    a__[:, :-2:2, 2::2]
-        a__right =       a__[:, 1:-1:2, 2::2]
-        a__bottomright = a__[:, 2::2, 2::2]
-        a__bottom =      a__[:, 2::2, 1:-1:2]
-        a__bottomleft =  a__[:, 2::2, :-2:2]
-        a__left =        a__[:, 1:-1:2, :-2:2]
+        a__center = a__[:, 1:-1:2, 1:-1:2].copy()
+        a__topleft = a__[:, :-2:2, :-2:2].copy()
+        a__top = a__[:, :-2:2, 1:-1: 2].copy()
+        a__topright = a__[:, :-2:2, 2::2].copy()
+        a__right = a__[:, 1:-1:2, 2::2].copy()
+        a__bottomright = a__[:, 2::2, 2::2].copy()
+        a__bottom = a__[:, 2::2, 1:-1:2].copy()
+        a__bottomleft = a__[:, 2::2, :-2:2].copy()
+        a__left = a__[:, 1:-1:2, :-2:2].copy()
 
-        a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = a__bottom.mask = \
-        a__bottomleft.mask = a__left.mask = \
-        functools.reduce(np.logical_or, (a__center, a__topleft, a__top,
-                                         a__topright, a__right, a__bottomright,
-                                         a__bottom, a__bottomleft, a__left))  # mask ORing for consistency
+        ''' 
+        mask kernels with more than one masked dert 
+        '''
+        mask_a = mask_SUM([a__center.mask, a__topleft.mask, a__top.mask,
+                           a__topright.mask, a__right.mask, a__bottomright.mask,
+                           a__bottom.mask, a__bottomleft.mask, a__left.mask])
+
+        a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
+            a__bottom.mask = a__bottomleft.mask = a__left.mask = mask_a
+
         '''
         8-tuple of differences between center dert angle and rim dert angle:
         '''
@@ -167,12 +173,12 @@ def comp_r(dert__, fig, root_fcr):
             dy__ += d__ * YCOEF  # decompose differences into dy and dx,
             dx__ += d__ * XCOEF  # accumulate with prior-rng dy, dx
             '''
-            accumulate in prior-rng (3x3 -> 5x5 -> 9x9) dy, dx
+            accumulate in prior-range dy, dx: 3x3 -> 5x5 -> 9x9 
             '''
         g__ = np.hypot(dy__, dx__)
 
-        idy__ = idy__[1:-1:2, 1:-1:2]  # i__center.shape
-        idx__ = idx__[1:-1:2, 1:-1:2]  # i__center.shape
+        idy__ = idy__[1:-1:2, 1:-1:2].copy()  # i__center.shape, add .copy()?
+        idx__ = idx__[1:-1:2, 1:-1:2].copy()  # i__center.shape
         idy__.mask = idx__.mask = i__center.mask  # align shifted masks
     '''
     next comp_r will use full dert       
@@ -186,27 +192,19 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
 
     g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
+    g__[ma.where(g__ == 0)] = 1  # replace 0 values with 1, is this correct? no need to re-insert mask now?
 
-    g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
-    g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right
-    g2__, dy2__, dx2__ = g__[1:, 1:],   dy__[1:, 1:],   dx__[1:, 1:]    # bottom right
-    g3__, dy3__, dx3__ = g__[1:, :-1],  dy__[1:, :-1],  dx__[1:, :-1]   # bottom left
+    g0__, dy0__, dx0__ = g__[:-1, :-1].copy(), dy__[:-1, :-1].copy(), dx__[:-1, :-1].copy()  # top left
+    g1__, dy1__, dx1__ = g__[:-1, 1:].copy(),  dy__[:-1, 1:].copy(),  dx__[:-1, 1:].copy()   # top right
+    g2__, dy2__, dx2__ = g__[1:, 1:].copy(),   dy__[1:, 1:].copy(),   dx__[1:, 1:].copy()    # bottom right
+    g3__, dy3__, dx3__ = g__[1:, :-1].copy(),  dy__[1:, :-1].copy(),  dx__[1:, :-1].copy()   # bottom left
 
-    g0__.mask  = mask_SUM( [g0__.mask, g1__.mask, g2__.mask, g3__.mask])
-    dy0__.mask = mask_SUM( [dy0__.mask, dy1__.mask, dy2__.mask, dy3__.mask])
-    dx0__.mask = mask_SUM( [dx0__.mask, dx1__.mask, dx2__.mask, dx3__.mask])
-
-    g1__.mask = g2__.mask = g3__.mask = g0__.mask
-    dy1__.mask = dy2__.mask = dy3__.mask = dy0__.mask
-    dx1__.mask = dx2__.mask = dx3__.mask = dx0__.mask
-
-    # replace 0 values with 1, re-insert mask
-    # need to initialize every array without mask first to replace values with new mask
-
-    g0__ = ma.where(g0__ == 0, 1, g0__);  g0__.mask = dx0__.mask
-    g1__ = ma.where(g1__ == 0, 1, g1__);  g1__.mask = dx1__.mask
-    g2__ = ma.where(g2__ == 0, 1, g2__);  g2__.mask = dx2__.mask
-    g3__ = ma.where(g3__ == 0, 1, g3__);  g3__.mask = dx3__.mask
+    # is this correct:
+    dy0__.mask = dx0__.mask = dy1__.mask = dx1__.mask = dy2__.mask = dx2__.mask = dy3__.mask = dx3__.mask = \
+    functools.reduce(lambda x1, x2:
+                     x1.astype('int') + x2.astype('int'),
+                     [g0__.mask, g1__.mask, g2__.mask, g3__.mask]
+                     ) > 1
 
     sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
     sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
@@ -232,11 +230,11 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     mg1__ = np.minimum(g1__, g3__) * cos_da1__
     mg__  = mg0__ + mg1__
 
-    g__ = g__[:-1, :-1]  # remove last row and column to align with derived params
-    dy__= dy__[:-1, :-1]
-    dx__= dx__[:-1, :-1]  # -> idy, idx to compute cos for comp rg
-    g__.mask = dy__.mask = dx__.mask = gg__.mask
+    g__ = g__ [:-1, :-1].copy()  # remove last row and column to align with derived params
+    dy__= dy__[:-1, :-1].copy()
+    dx__= dx__[:-1, :-1].copy()  # -> idy, idx to compute cos for comp rg
 
+    # no longer needed: g__.mask = dy__.mask = dx__.mask = gg__.mask?
     '''
     next comp_rg will use g, dy, dx     
     next comp_gg will use gg, dgy, dgx  
@@ -272,10 +270,12 @@ def mask_SUM(list_of_arrays):  # sum of masks converted to int
 '''
 Unpack in code:
 
-a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
-a__bottom.mask = a__bottomleft.mask = a__left.mask = \
-functools.reduce(lambda x1, x2: x1.astype('int') + x2.astype('int'), 
-                 [a__center.mask, a__topleft.mask, a__top.mask, a__topright.mask, a__right.mask, 
-                  a__bottomright.mask, a__bottom.mask, a__bottomleft.mask, a__left.mask]
-                 ) > 1
+        a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
+        a__bottom.mask = a__bottomleft.mask = a__left.mask = \
+        functools.reduce(lambda x1, x2:
+                         x1.astype('int') + x2.astype('int'),
+                         [a__center, a__topleft, a__top,
+                         a__topright, a__right, a__bottomright,
+                         a__bottom, a__bottomleft, a__left]
+                         ) > 1
 '''
