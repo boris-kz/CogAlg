@@ -60,7 +60,7 @@ def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within 
 
     dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # same as diagonal from left
     dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # same as diagonal from right
-    g__ = np.hypot(dy__, dx__)  # gradient per kernel
+    g__ = np.hypot(dy__, dx__).astype('int')   # gradient per kernel
 
     return ma.stack((topleft__, g__, dy__, dx__))
 
@@ -93,7 +93,7 @@ Parameterized connectivity clustering functions below:
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
   
-dert: tuple of derivatives per pixel, initially (p, dy, dx, g, i), will be extended in intra_blob
+dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
@@ -109,7 +109,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         s = vg > 0
         if s != _s:
             # terminate and pack P:
-            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert__[x0:x0 + L], sign=_s)  # no need for dert_
+            P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s)  # no need for dert_
             P_.append(P)
             # initialize new P params:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
@@ -121,7 +121,7 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
         L += 1
         _s = s  # prior sign
 
-    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, dert_=dert__[x0:x0 + L], sign=_s)
+    P = dict(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s)
     P_.append(P)  # terminate last P in a row
     return P_
 

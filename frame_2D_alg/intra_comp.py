@@ -105,7 +105,7 @@ def comp_r(dert__, fig, root_fcr):
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
         # replace float with int
 
-        i__[ma.where(i__ == 0)] = .001  # 1 if int
+        i__[ma.where(i__ == 0)] = 1  # if g is int
         a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
         '''
         sparse aligned a__center and a__rim arrays:
@@ -177,9 +177,9 @@ def comp_r(dert__, fig, root_fcr):
             '''
         g__ = np.hypot(dy__, dx__)
 
-        idy__ = idy__[1:-1:2, 1:-1:2].copy()  # i__center.shape, add .copy()?
-        idx__ = idx__[1:-1:2, 1:-1:2].copy()  # i__center.shape
-        idy__.mask = idx__.mask = i__center.mask  # align shifted masks
+    idy__ = idy__[1:-1:2, 1:-1:2].copy()  # i__center.shape, add .copy()?
+    idx__ = idx__[1:-1:2, 1:-1:2].copy()  # i__center.shape
+    idy__.mask = idx__.mask = i__center.mask  # align shifted masks
     '''
     next comp_r will use full dert       
     next comp_g will use g__, dy__, dx__
@@ -192,14 +192,13 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
 
     g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
-    g__[ma.where(g__ == 0)] = 1  # replace 0 values with 1, is this correct? no need to re-insert mask now?
+    g__[ma.where(g__ == 0)] = 1  # replace 0 values with 1 to avoid error, not needed in high-g blobs?
 
     g0__, dy0__, dx0__ = g__[:-1, :-1].copy(), dy__[:-1, :-1].copy(), dx__[:-1, :-1].copy()  # top left
     g1__, dy1__, dx1__ = g__[:-1, 1:].copy(),  dy__[:-1, 1:].copy(),  dx__[:-1, 1:].copy()   # top right
     g2__, dy2__, dx2__ = g__[1:, 1:].copy(),   dy__[1:, 1:].copy(),   dx__[1:, 1:].copy()    # bottom right
     g3__, dy3__, dx3__ = g__[1:, :-1].copy(),  dy__[1:, :-1].copy(),  dx__[1:, :-1].copy()   # bottom left
 
-    # is this correct:
     dy0__.mask = dx0__.mask = dy1__.mask = dx1__.mask = dy2__.mask = dx2__.mask = dy3__.mask = dx3__.mask = \
     functools.reduce(lambda x1, x2:
                      x1.astype('int') + x2.astype('int'),
