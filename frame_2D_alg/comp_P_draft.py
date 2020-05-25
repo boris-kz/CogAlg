@@ -5,37 +5,28 @@ from time import time
     comp_P_ is a terminal fork of intra_blob.
     
     comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
-    This is selective for high-gradient, high aspect-ratio blobs: likely edges. It should perform dimensionality 
-    reduction: vectorize these blob representations into outlines of adjacent flat areas (low-gradient blobs).
+    It should reduce dimensionality | vectorize edges: low-g blobs, into outlines of adjacent flats: low-g blobs.
+    This is selective for high aspect ratio blobs: 
+    G * (box area / blob area) * (P number / blob area / stack number) > ave? 
     
-    High aspect-ratio: high (box area / blob area) * (blob area / stack number) 
+    Pre-processing: dert__ re-clustering by dx -> dxP, intra_comp(dx) -> ddx, dmx, md, mm -> sub_mdP, sub_ddP...
+    scan_comp_P_ -> stack..: vertical clustering by Pm
+    P cross-comparison forms dPPs and mPPs: P clusters of same-sign vertical difference or match deviation: 
     
-    P cross-comparison forms dPPs and vPPs: clusters of Ps with same-sign vertical difference or match deviation: 
-    Pd | Pv is formed by summing difference | match deviation per P param between all compared params within P.  
-    
-    comp_P is potentially intra- and inter- recursive: 
+    Pd | Pm formed by summing difference | match deviation per P param between all compared params within P.  
     - resulting param derivatives are evaluated for der+ and rng+ cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-
-    Aves (integer filters) and coefs (ratio filters) per parameter type trigger forming parameter_Ps, 
+   
+    Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
     after full-blob comp_P_ sums match and miss per parameter. 
-    also sub_coefs per sub_blob, if recurrent in super_blob from comp_blob: stable parts per object combination?  
+    Also coefs per blob, if recurrent in super_blob from comp_blob: stable parts per object combination?  
 
-    pre comp_P: 
-    intra_comp(dx) -> sub_blob_ per dx in der+ blob or v - ig in rng+ blob: ig is different dim?
-    intra_P comp -> vdP, ddP, ortho? then blobs redefine per ddx, dvx, vd, vv..? 
-    comp_P will be selective for strongly oriented (dimensionally asymmetric) blobs:
-
-    orientation = (Ly / Lx) * (|Dx| / |Dy|) / 2  
-    # vert ! horizontal match coef = elongation * 1/ ddirection / 2 
+    orientation = (Ly / Lx) * (|Dx| / |Dy|) / 2  # vert ! horiz match coef = elongation * 1/ ddirection / 2 
     if orientation < 1: 
         orientation = 1 / orientation; flip_cost = flip_ave
     else: flip_cost = 0;  # vs. separate L, D max/min orientation
 
-    comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P;   
-     
-    if nested Ps: map seg,P -> sub-seg,P, comp_P -> nested PPs, consolidated after comp_P or intra_blob: 
-    hier_comp if PP or blob layers(len and G+M): comp_layer -> blob_hier ders, sums
+    comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P
     
     rng+ should preserve resolution: rng+_dert_ is dert layers, 
     rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 

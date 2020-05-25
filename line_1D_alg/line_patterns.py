@@ -150,15 +150,15 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fil
 
 def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-clustering by d sign
 
-    pri_M = mP_[0][4]  # adjacent opposite-sign Ms, which lend to comp_g value
+    prev_M = mP_[0][4]  # adjacent opposite-sign Ms, which lend to comp_g value
     M = mP_[1][4]
-    adj_M_ = [pri_M + M]  # projection for first P
+    adj_M_ = [prev_M + M]  # projection for first P
 
-    for _, _, _, _, nxt_M, _, _ in mP_[2:]:
-        adj_M_.append( (M + pri_M / 2 + nxt_M / 2) )
-        pri_M = M
-        M = nxt_M
-    adj_M_.append((M + nxt_M))  # projection for last P
+    for _, _, _, _, next_M, _, _ in mP_[2:]:
+        adj_M_.append( (M + prev_M / 2 + next_M / 2) )
+        prev_M = M
+        M = next_M
+    adj_M_.append((M + next_M))  # projection for last P
 
     comb_layers = []
     for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):
