@@ -296,8 +296,7 @@ def form_blob(stack, root_dert__):  # increment blob with terminated stack, chec
     blob['open_stacks'] += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
-    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0
-        # blob is terminated and packed in blob root:
+    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0, blob is terminated:
         last_stack = stack
 
         Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()

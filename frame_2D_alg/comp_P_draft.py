@@ -6,22 +6,25 @@ from time import time
     
     comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
     It should reduce dimensionality | vectorize edges: low-g blobs, into outlines of adjacent flats: low-g blobs.
-    This is selective for high aspect ratio blobs: 
-    G * (box area / blob area) * (P number / blob area / stack number) > ave? 
+    This is selective for high aspect blobs: G * (box area / blob area) * (P number / blob area / stack number) 
     
-    Pre-processing: dert__ re-clustering by dx -> dxP, intra_comp(dx) -> ddx, dmx, md, mm -> sub_mdP, sub_ddP...
-    scan_comp_P_ -> stack..: vertical clustering by Pm
-    P cross-comparison forms dPPs and mPPs: P clusters of same-sign vertical difference or match deviation: 
+    Pre-processing: dert__ re-clustering by dx -> dxP, intra_comp(dx) -> ddx, dmx, md, mm -> sub_mdP, sub_ddP
+    scan_comp_P_ -> dPPs and mPPs: clusters of same-sign deviation in vertical difference or match per P.
+    These PPs replace vertical clustering by g. They may continue across forking: by match ! contiguity?
+        
+    These Pd and Pm are ds | ms per param summed in P. Primary comparison by subtraction, div if PD, vs s match?
+    div_comp L if compressing par * rL adjustment, eval per dPP'PD (signed): DL * DS > min? comp d?
     
-    Pd | Pm formed by summing difference | match deviation per P param between all compared params within P.  
     - resulting param derivatives are evaluated for der+ and rng+ cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
    
     Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
     after full-blob comp_P_ sums match and miss per parameter. 
-    Also coefs per blob, if recurrent in super_blob from comp_blob: stable parts per object combination?  
+    Also coefs per sub_blob from comp_blob_: potential parts of a higher object?  
 
-    orientation = (Ly / Lx) * (|Dx| / |Dy|) / 2  # vert ! horiz match coef = elongation * 1/ ddirection / 2 
+    orientation = (Ly / Lx) * (|Dx| / |Dy|): vert ! horiz match coef = elongation * ddirection?
+    or after comp_P: initially partial edge tracing to segment by primary orientation?
+     
     if orientation < 1: 
         orientation = 1 / orientation; flip_cost = flip_ave
     else: flip_cost = 0;  # vs. separate L, D max/min orientation
