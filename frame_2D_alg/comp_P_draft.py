@@ -12,18 +12,22 @@ from time import time
     scan_comp_P_ -> dPPs and mPPs: clusters of same-sign deviation in vertical difference or match per P.
     These PPs replace vertical clustering by g. They may continue across forking: by match ! contiguity?
         
-    These Pd and Pm are ds | ms per param summed in P. Primary comparison by subtraction, div if PD, vs s match?
+    These Pd and Pm are ds | ms per param summed in P. Primary comparison by subtraction, div if PD, | sm?
     div_comp L if compressing par * rL adjustment, eval per dPP'PD (signed): DL * DS > min? comp d?
     
     - resulting param derivatives are evaluated for der+ and rng+ cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+   
+   Double edge lines: assumed edge match for high-deviation intensity, 
+   secondary cross-comp for low-deviation blobs? 
+   Same-sign adjacent: adj_adj?
    
     Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
     after full-blob comp_P_ sums match and miss per parameter. 
     Also coefs per sub_blob from comp_blob_: potential parts of a higher object?  
 
     orientation = (Ly / Lx) * (|Dx| / |Dy|): vert ! horiz match coef = elongation * ddirection?
-    or after comp_P: initially partial edge tracing to segment by primary orientation?
+    or after comp_P: initial partial edge tracing to segment by primary orientation?
      
     if orientation < 1: 
         orientation = 1 / orientation; flip_cost = flip_ave
