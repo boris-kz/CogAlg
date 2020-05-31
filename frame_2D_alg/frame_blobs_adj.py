@@ -79,8 +79,8 @@ def image_to_blobs(image):
         P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
 
-    while stack_:  # frame ends, last-line stacks are merged into their blobs:
-        pri_term = 0
+    pri_term = 0  # frame ends, last-line stacks are merged into their blobs:
+    while stack_:
         stack = stack_.popleft()
         pri_blob = stack['blob']['pri_blob']
         pri_term = form_blob(stack, pri_blob, pri_term, frame)  # prior blob can be internal or external
@@ -141,7 +141,7 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
     It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
     '''
     next_P_ = deque()  # to recycle P + up_connect_ that finished scanning _P, will be converted into next_stack_
-    pri_blob = []  # passed from prior stack, assigned as internal or external adj_blob
+    pri_blob = []  # then passed from prior stack, assigned as internal or external adj_blob
     pri_term = 0
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
@@ -207,8 +207,8 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
 def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps, merge blobs
 
     pri_blob = []  # then passed from prior stack, assigned as internal or external adj_blob
-    next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
     pri_term = 0
+    next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
 
     while P_:
         P, up_connect_ = P_.popleft()
@@ -246,7 +246,8 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                             pri_term = form_blob(up_connect, pri_blob, pri_term, frame)
 
                         if not up_connect['blob'] is blob:
-                            Dert, box, stack_, s, open_stacks, _ = up_connect['blob'].values()  # merged blob
+                            Dert, box, stack_, s, open_stacks, adj_blob_ = up_connect['blob'].values()  # merged blob
+                            blob['adj_blob_'] += adj_blob_  # adjacent blobs are always unique
                             I, G, Dy, Dx, S, Ly = Dert.values()
                             accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
                             blob['open_stacks'] += open_stacks
@@ -262,7 +263,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                             blob['stack_'].append(up_connect)
                         blob['open_stacks'] -= 1  # overlap with merged blob.
 
-        pri_blob = stack['blob']
+        pri_blob = new_stack['blob']
 
         blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
         blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
@@ -286,10 +287,11 @@ def form_blob(stack, pri_blob, pri_term, frame):  # increment blob with terminat
     if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0: blob is terminated and packed in frame:
         pri_term = 1
         last_stack = stack
-        if pri_blob:  # else terminated blob has no internal blobs, but be assigned as internal to the next blob, ln 282
+        if pri_blob:  # else terminated blob has no internal blobs, but will be assigned as internal to the next blob, ln 282
 
             pri_blob['adj_blob_'].append(blob)  # assign blob as internal adj_blob to pri_blob
-            blob['adj_blob_'].append(pri_blob)  # assign pri_blob as external adj_blob to blob, always the last one
+            if not pri_term:
+                blob['adj_blob_'].append(pri_blob)  # assign pri_blob as external adj_blob to blob, always the last one
 
         Dert, [y0, x0, xn], stack_, s, open_stacks, adj_blob_ = blob.values()
         yn = last_stack['y0'] + last_stack['Ly']
@@ -365,7 +367,7 @@ if __name__ == '__main__':
     start_time = time()
     frame = image_to_blobs(image)
 
-    intra = 1
+    intra = 0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob_adj import *

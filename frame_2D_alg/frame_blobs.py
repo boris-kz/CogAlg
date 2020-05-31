@@ -194,7 +194,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
     while P_:
         P, up_fork_ = P_.popleft()
         s = P.pop('sign')
-        I, G, Dy, Dx, L, x0, dert__ = P.values()
+        I, G, Dy, Dx, L, x0 = P.values()
         xn = x0 + L  # next-P x0
         if not up_fork_:
             # initialize new stack for each input-row P that has no connections in higher row, including all in top row:
@@ -329,7 +329,7 @@ if __name__ == '__main__':
     start_time = time()
     frame = image_to_blobs(image)
 
-    intra = 1
+    intra = 0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
