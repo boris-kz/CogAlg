@@ -4,7 +4,7 @@ import numpy as np
 from comp_pixel import comp_pixel
 from utils import *
 #from frame_blobs_adj import *
-from frame_blobs_adj2 import *
+from frame_blobs_adj import *
 import argparse
 
 
@@ -58,6 +58,6 @@ for i, blob in enumerate(frame['blob__']):
             else:
                 break
 
-            cv2.imwrite("images/adj_blob_mask2/mask_adj_blob_"+str(i)+".png", img_blob_.astype('uint8'))
-            cv2.imwrite("images/adj_blob_mask2/mask_adj_blob_"+str(i)+"_box.png", img_blob_box.astype('uint8'))
+            cv2.imwrite("images/adj_blob_masks/mask_adj_blob_"+str(i)+".png", img_blob_.astype('uint8'))
+            cv2.imwrite("images/adj_blob_masks/mask_adj_blob_"+str(i)+"_box.png", img_blob_box.astype('uint8'))
 

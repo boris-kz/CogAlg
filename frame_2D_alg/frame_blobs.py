@@ -179,9 +179,9 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
                     next_P_.append((P, up_fork_))
                     break
 
-    while P_:  # terminate Ps and stacks in top row, or those that continue at row's end
+    while P_:  # terminate Ps that continue at row's end, or in top row
         next_P_.append((P_.popleft(), []))  # no up_fork
-    while stack_:
+    while stack_:  # terminate stacks that continue at row's end, or in top row
         form_blob(stack_.popleft(), frame)  # down_fork_cnt always == 0
 
     return next_P_  # each element is P + up_fork_ refs, converted to stacks in following form_stack_:

@@ -80,10 +80,11 @@ def image_to_blobs(image):
         stack_ = form_stack_(P_, frame, y)
 
     pri_term = 0  # frame ends, last-line stacks are merged into their blobs:
+    pri_blob = []
     while stack_:
         stack = stack_.popleft()
-        pri_blob = stack['blob']['pri_blob']
         pri_term = form_blob(stack, pri_blob, pri_term, frame)  # prior blob can be internal or external
+        pri_blob = stack['blob']
 
     return frame  # frame of blobs
 
@@ -141,8 +142,8 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
     It's a form of breadth-first flood fill, with forks as vertices per stack of Ps: a node in connectivity graph.
     '''
     next_P_ = deque()  # to recycle P + up_connect_ that finished scanning _P, will be converted into next_stack_
-    pri_blob = []  # then passed from prior stack, assigned as internal or external adj_blob
     pri_term = 0
+    pri_blob = []  # then passed from prior stack, assigned as internal or external adj_blob
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
 
@@ -190,16 +191,15 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
                     next_P_.append((P, up_connect_))
                     break
 
-            pri_blob = stack['blob']
+            pri_blob = stack['blob']  # for the next loop instance
 
-    while P_:  # terminate Ps and stacks that continue at row's end
+    # terminate Ps and stacks that continue at row's end
+    while P_:
         next_P_.append((P_.popleft(), []))  # no up_connect
-
-    pri_term = 0
     while stack_:
         stack = stack_.popleft()
-        pri_blob = stack['blob']['pri_blob']
-        pri_term = form_blob(stack, pri_blob, pri_term, frame)  # down_connect_cnt==0, pri_blob is internal or external
+        pri_term = form_blob(stack, pri_blob, pri_term, frame)  # down_connect_cnt==0
+        pri_blob = stack['blob']  # pri_blob can be internal or external adjacent blob
 
     return next_P_  # each element is P + up_connect_ refs
 
@@ -263,13 +263,14 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                             blob['stack_'].append(up_connect)
                         blob['open_stacks'] -= 1  # overlap with merged blob.
 
-        pri_blob = new_stack['blob']
+        pri_blob = new_stack['blob']  # for the next instance of the loop
 
         blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
         blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
+
         next_stack_.append(new_stack)
 
-    return next_stack_
+    return next_stack_  # input for the next line of scan_P_
 
 
 def form_blob(stack, pri_blob, pri_term, frame):  # increment blob with terminated stack, check for blob termination and merger into frame
@@ -278,20 +279,19 @@ def form_blob(stack, pri_blob, pri_term, frame):  # increment blob with terminat
     # terminated stack is merged into continued or initialized blob (all connected stacks):
     accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
 
-    if pri_blob and pri_term:
-        blob['adj_blob_'].append(pri_blob)  # terminated pri_blob is assigned as internal to current blob
-
     blob['open_stacks'] += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
-    if blob['open_stacks'] == 0:  # if number of incomplete stacks == 0: blob is terminated and packed in frame:
-        pri_term = 1
+    if blob['open_stacks'] == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
         last_stack = stack
-        if pri_blob:  # else terminated blob has no internal blobs, but will be assigned as internal to the next blob, ln 282
-
-            pri_blob['adj_blob_'].append(blob)  # assign blob as internal adj_blob to pri_blob
+        if pri_blob:
+            pri_blob['adj_blob_'].append(blob)  # assign blob as internal to pri_blob;  else no internal blobs
             if not pri_term:
-                blob['adj_blob_'].append(pri_blob)  # assign pri_blob as external adj_blob to blob, always the last one
+                blob['adj_blob_'].append(pri_blob)  # assign pri_blob as external to blob, always the last one
+                next_pri_term = 0  # no further assignment
+            else:
+                next_pri_term = 1  # else next blob will be external, in ln 327
+        else: next_pri_term = 1
 
         Dert, [y0, x0, xn], stack_, s, open_stacks, adj_blob_ = blob.values()
         yn = last_stack['y0'] + last_stack['Ly']
@@ -323,9 +323,12 @@ def form_blob(stack, pri_blob, pri_term, frame):  # increment blob with terminat
 
         frame['blob__'].append(blob)
 
-    else: pri_term = 0  # blob is not terminated
+    else:
+        next_pri_term = 0  # blob was not terminated
+        if pri_term:
+            blob['adj_blob_'].append(pri_blob)  # terminated prior blob is internal to current blob
 
-    return pri_term
+    return next_pri_term
 
 # -----------------------------------------------------------------------------
 # Utilities
