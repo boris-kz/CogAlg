@@ -12,8 +12,8 @@ from time import time
     scan_comp_P_ -> dPPs and mPPs: clusters of same-sign deviation in vertical difference or match per P.
     These PPs replace vertical clustering by g. They may continue across forking: by match ! contiguity?
         
-    These Pd and Pm are ds | ms per param summed in P. Primary comparison by subtraction, div if PD, | sm?
-    div_comp L if compressing par * rL adjustment, eval per dPP'PD (signed): DL * DS > min? comp d?
+    Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
+    DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
     
     - resulting param derivatives are evaluated for der+ and rng+ cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
