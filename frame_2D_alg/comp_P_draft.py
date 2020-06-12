@@ -15,8 +15,10 @@ from time import time
     Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
     DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
     
-    - resulting param derivatives are evaluated for der+ and rng+ cross-comparison, to form par_Ps and so on
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+    - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
+    or only top level of Ps is added by default, 
+    if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer?
    
    Double edge lines: assumed edge match for high-deviation intensity, 
    secondary cross-comp for low-deviation blobs? 

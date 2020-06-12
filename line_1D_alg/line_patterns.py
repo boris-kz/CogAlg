@@ -119,7 +119,7 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
     Dert = L, I, D, M, 
     dert_, # input for extended cross-comp
     # next fork:
-    fdP, # flag: select dP vs. mP forks in form_P_ and intra_P
+    fdP, # flag: select dP vs. mP forks in form_P_
     fid, # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
     rdn, # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
     rng, # comp range
@@ -254,7 +254,7 @@ if __name__ == "__main__":
     arguments = vars(argument_parser.parse_args())
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
-    assert image is not None, "Couldn't find image in the path!"
+    assert image is not None, "No image in the path"
     image = image.astype(int)
     # same image loaded online, without cv2:
     # from scipy import misc
@@ -271,10 +271,10 @@ if __name__ == "__main__":
 Depth of cross-comparison (discontinuous if generic) is increased in lower-recursion e_, then between same-recursion e_s:
 
 comp (s):  same-sign only?
-    comp (L, I, D, M): or div L first, equal-weight or I is redundant?  
-        comp (dert_):  after layers: lower composition?
-    comp (layer_):  same-derivation order elements
-        comp (P_):  sub_Ps
+    comp (L, I, D, M): then select redundant I | (D,M) and evaluate for div L
+        comp (dert_):  lower composition than layers, if any
+    comp (layer_):  same-derivation elements
+        comp (P_):  sub patterns
                             
 This 2nd level alg should be extended to a recursive meta-level algorithm 
 '''
