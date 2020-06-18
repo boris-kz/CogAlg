@@ -123,11 +123,9 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
     fid, # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
     rdn, # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
     rng, # comp range
-    sub_layers:
-    
-  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
-  # for layer-parallel access and comp, as in frequency domain representation
-  # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
+    sub_layers: # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
+                # for layer-parallel access and comp, as in frequency domain representation
+                # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
 '''
 
 def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fill sub_mP_ with results

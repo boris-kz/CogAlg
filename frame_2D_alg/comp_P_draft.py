@@ -2,27 +2,28 @@ from collections import deque
 from math import hypot
 from time import time
 '''
-    comp_P_ is a terminal fork of intra_blob.
+   comp_P_ is a terminal fork of intra_blob.
     
-    comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
-    It should reduce dimensionality | vectorize edges: low-g blobs, into outlines of adjacent flats: low-g blobs.
-    This is selective for high aspect blobs: G * (box area / blob area) * (P number / blob area / stack number) 
+   comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
+   It should reduce dimensionality | vectorize edges: low-g blobs, into outlines of adjacent flats: low-g blobs.
+   This is selective for high aspect blobs: G * (box area / blob area) * (P number / blob area / stack number) 
     
-    Pre-processing: dert__ re-clustering by dx -> dxP, intra_comp(dx) -> ddx, dmx, md, mm -> sub_mdP, sub_ddP
-    scan_comp_P_ -> dPPs and mPPs: clusters of same-sign deviation in vertical difference or match per P.
-    These PPs replace vertical clustering by g. They may continue across forking: by match ! contiguity?
+   Pre-processing: dert__ re-clustering by dx -> dxP, intra_comp(dx) -> ddx, dmx, md, mm -> sub_mdP, sub_ddP
+   scan_comp_P_ -> dPPs and mPPs: clusters of same-sign deviation in vertical difference or match per P.
+   These PPs replace vertical clustering by g. They may continue across forking: by match ! contiguity?
         
-    Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
-    DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
+   Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
+   DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
     
-    - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-    - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
-    or only top level of Ps is added by default, 
-    if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer?
+   - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+   - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
+   | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer?
+      
+   Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
+   secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    
-   Double edge lines: assumed edge match for high-deviation intensity, 
-   secondary cross-comp for low-deviation blobs? 
-   Same-sign adjacent: adj_adj?
+   Next same-sign comp: prox + internal match -> merge, external match -> new composition level?
+   Isolation = distance + contrast -> radial comp extension, per all co-internals? 
    
     Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
     after full-blob comp_P_ sums match and miss per parameter. 

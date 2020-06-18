@@ -125,7 +125,6 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
 
     return P_
 
-
 def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     '''
     Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
@@ -141,16 +140,16 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
 
     if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
 
-        P = P_.popleft()          # load left-most (lowest-x) input-row P
+        P = P_.popleft()  # load left-most (lowest-x) input-row P
         stack = stack_.popleft()  # higher-row stacks
-        _P = stack['Py_'][-1]     # last element of each stack is higher-row P
-        up_connect_ = []          # list of same-sign x-overlapping _Ps per P
+        _P = stack['Py_'][-1]  # last element of each stack is higher-row P
+        up_connect_ = []  # list of same-sign x-overlapping _Ps per P
 
         while True:  # while both P_ and stack_ are not empty
 
-            x0 = P['x0']         # first x in P
-            xn = x0 + P['L']     # first x in next P
-            _x0 = _P['x0']       # first x in _P
+            x0 = P['x0']  # first x in P
+            xn = x0 + P['L']  # first x in next P
+            _x0 = _P['x0']  # first x in _P
             _xn = _x0 + _P['L']  # first x in next _P
 
             if stack['G'] > 0:  # check for overlaps in 8 directions, else a blob may leak through its external blob
@@ -232,7 +231,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                             form_blob(up_connect, frame)
 
                         if not up_connect['blob'] is blob:
-                            Dert, box, stack_, s, open_stacks, adj_blob_ = up_connect['blob'].values()  # merged blob
+                            Dert, box, stack_, s, open_stacks, _ = up_connect['blob'].values()  # merged blob
                             I, G, Dy, Dx, S, Ly = Dert.values()
                             accum_Dert(blob['Dert'], I=I, G=G, Dy=Dy, Dx=Dx, S=S, Ly=Ly)
                             blob['open_stacks'] += open_stacks
@@ -251,8 +250,6 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
         blob['box'][1] = min(blob['box'][1], x0)  # extend box x0
         blob['box'][2] = max(blob['box'][2], xn)  # extend box xn
 
-        if next_stack_:
-            new_stack['pri_blob'] = next_stack_[-1]['blob']
         next_stack_.append(new_stack)
 
     return next_stack_  # input for the next line of scan_P_
@@ -268,7 +265,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
     if blob['open_stacks'] == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
         last_stack = stack
-        Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()
+        Dert, [y0, x0, xn], stack_, s, open_stacks, _ = blob.values()
         yn = last_stack['y0'] + last_stack['Ly']
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
@@ -285,10 +282,25 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         dert__.mask[:] = mask  # overwrite default mask 0s
         frame['dert__'][:, y0:yn, x0:xn] = dert__.copy()  # assign mask back to frame dert__
 
+        blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
+        blob_map[y0:yn, x0:xn] = mask
+        if blob['sign']:
+            extended_map, blob_map = add_margin(frame, blob_map, diag=1)  # orthogonal + diagonal margin
+        else:
+            extended_map, blob_map = add_margin(frame, blob_map, diag=0)  # orthogonal margin
+
+        fopen = 0  # flag for blobs on frame boundary
+        if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
+            fopen = 1
+
         blob.pop('open_stacks')
         blob.update(root_dert__=frame['dert__'],
                     box=(y0, yn, x0, xn),
                     dert__=dert__,
+                    adj_blob_ = [[], []],
+                    fopen=fopen,
+                    extended_map=extended_map
+                    # shouldn't this be margin alone?
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
@@ -298,32 +310,129 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['blob__'].append(blob)
 
 
-def find_adjacent(blob__):  # scan_blob__? draft, adjacents are blobs directly next to _blob
+def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly next to _blob
     '''
     2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
     '''
-    y0, yn, x0, xn = 0, 0, 0, 0
-    # add checking for x overlap in 1D blob_, if min n blobs per line?
+    blob__ = []  # initialization
+    while frame['blob__']:  # outer loop
 
-    for _blob in blob__.popleft:  # get core blob, in increasing yn (xn)
+        _blob = frame['blob__'].pop(0)  # pop left outer loop's blob
         _y0, _yn, _x0, _xn = _blob['box']
-        adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
+        _adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
 
-        while(_y0 < xn+1 and y0 < _yn+1):  # vertical overlap between _blob and blob, including border
-            for i, blob in enumerate(blob__):  # get proximate blob
-                if blob['sign'] != _blob['sign']:  # adjacent must have opposite sign
-                    y0, yn, x0, xn = blob['box']
-                    # resizing draft:
-                    # blob['dert__'] = root dert__[min(y0,_y0), max(yn,_yn), min(x0,_x0), max(xn,_xn)]?
+        y0, yn, x0, xn = 0, 0, 0, 0  # initialization
+        i = 0  # counter for inner loop
+        # buggy on this condition, need to recheck or redefine
+        # while (y0 < _yn-1) and i<= len(frame['blob__'])-1:  # vertical overlap between _blob and blob, including border
+        while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob, including border
 
-                    if np.logical_or( ~blob['dert__'].mask, ~_blob['border'].mask):
-                        # if any mask bit is false in unmasked area of _blob' border?
-                        adj_blob_[0].append(blob)
-                        blob['adj_blob'][0].append(_blob)
+            blob = frame['blob__'][i]  # inner loop's blob
+            y0, yn, x0, xn = blob['box']
 
-        _blob.update(adj_blob_ = adj_blob_)  # pack adj_blob_ to blob
+            if blob['sign'] != _blob['sign']: #  adjacent blobs have opposite sign and vertical overlap with _blob + margin
+                # form common map for blob and _blob
+                empty_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
+                blob_map = empty_map.copy(); _blob_map = empty_map.copy()
+
+                blob_map[blob['box'][0]:blob['box'][1], blob['box'][2]:blob['box'][3]] = blob['dert__'].mask[0]
+                _blob_map[_blob['box'][0]:_blob['box'][1], _blob['box'][2]:_blob['box'][3]] = _blob['dert__'].mask[0]
+
+                if blob['sign']:
+                    extended_map, blob_map = add_margin(frame, blob_map, diag=1)  # add diagonal + orthogonal margin
+                else:
+                    extended_map, blob_map = add_margin(frame, blob_map, diag=0)  # add orthogonal margin
+
+                margin_map = np.logical_xor(extended_map, blob_map)
+                margin_AND = np.logical_and(margin_map, ~ _blob_map)  # AND blob margin and _blob area
+
+                if margin_AND.any():  # at least one margin element is in _blob: blob is adjacent
+                    if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
+                        # all of blob margin is in _blob: _blob is external
+                        if blob not in _adj_blob_[0]:
+                            _adj_blob_[0].append(blob)
+                            if blob['fopen'] == 1:  # check open blob
+                                _adj_blob_[1].append(2)  # open blob cannot be internal
+                            else:
+                                _adj_blob_[1].append(0)  # 0 for internal
+                        if _blob not in blob['adj_blob_'][0]:
+                            blob['adj_blob_'][0].append(_blob)
+                            blob['adj_blob_'][1].append(1)  # 1 for external
+
+                    else:  # _blob is internal
+                        if blob not in _adj_blob_[0]:
+                            _adj_blob_[0].append(blob)
+                            _adj_blob_[1].append(1)  # 1 for external
+                        if _blob not in blob['adj_blob_'][0]:
+                            blob['adj_blob_'][0].append(_blob)
+                            if _blob['fopen'] == 1:  # check open _blob
+                                blob['adj_blob_'][1].append(2)  # open _blob cannot be internal
+                            else:
+                                blob['adj_blob_'][1].append(0)  # 0 for internal
+
+            frame['blob__'][i] = blob  # reassign blob in inner loop
+            _blob['adj_blob_'] = _adj_blob_  # pack _adj_blob_ to _blob
+            i += 1  # increase inner loop counter
+        blob__.append(_blob)  # repack processed _blob into blob__
+    frame['blob__'] = blob__  # update empty frame['blob__'] with blob__
 
     return frame
+
+
+def add_margin(frame, blob_map, diag):  # get 1-pixel margin of blob, orthogonally or orthogonally and diagonally
+
+    c_dert_loc = np.where(blob_map == False)  # masked area
+
+    # extend each dert by 1 for 4 different directions (excluding diagonal directions)
+    c_dert_loc_top = (c_dert_loc[0] - 1, c_dert_loc[1])
+    c_dert_loc_right = (c_dert_loc[0], c_dert_loc[1] + 1)
+    c_dert_loc_bottom = (c_dert_loc[0] + 1, c_dert_loc[1])
+    c_dert_loc_left = (c_dert_loc[0], c_dert_loc[1] - 1)
+
+    # remove location of <0 or > image boundary (we cannot set the value to 0 or image boundary since those area is not the margin)
+    ind_top = ~(c_dert_loc_top[0] < 0)  # if y < 0
+    c_dert_loc_top = (c_dert_loc_top[0][ind_top], c_dert_loc_top[1][ind_top])  # (y,x)
+
+    ind_right = ~(c_dert_loc_right[1] > frame['dert__'].shape[2] - 1)  # if x > X, -1 because index starts from 0, while shape starts from 1
+    c_dert_loc_right = (c_dert_loc_right[0][ind_right], c_dert_loc_right[1][ind_right])
+
+    ind_bottom = ~(c_dert_loc_bottom[0] > frame['dert__'].shape[1] - 1)  # if y > Y
+    c_dert_loc_bottom = (c_dert_loc_bottom[0][ind_bottom], c_dert_loc_bottom[1][ind_bottom])
+
+    ind_left = ~(c_dert_loc_left[1] < 0)  # if x < 0
+    c_dert_loc_left = (c_dert_loc_left[0][ind_left], c_dert_loc_left[1][ind_left])
+
+    extended_map = blob_map.copy()
+    extended_map[c_dert_loc_top] = False
+    extended_map[c_dert_loc_right] = False
+    extended_map[c_dert_loc_bottom] = False
+    extended_map[c_dert_loc_left] = False
+
+    if diag:  # extend by one dert diagonally
+        c_dert_loc_topleft = (c_dert_loc[0] - 1, c_dert_loc[1] - 1)
+        c_dert_loc_topright = (c_dert_loc[0] - 1, c_dert_loc[1] + 1)
+        c_dert_loc_bottomleft = (c_dert_loc[0] + 1, c_dert_loc[1] - 1)
+        c_dert_loc_bottomright = (c_dert_loc[0] + 1, c_dert_loc[1] + 1)
+
+        ind_topleft = ~np.logical_or(c_dert_loc_topleft[0] < 0, c_dert_loc_topleft[1] < 0)  # if y < 0 or x < 0
+        c_dert_loc_topleft = (c_dert_loc_topleft[0][ind_topleft], c_dert_loc_topleft[1][ind_topleft])
+
+        ind_topright = ~np.logical_or(c_dert_loc_topright[0] < 0, c_dert_loc_topright[1] > frame['dert__'].shape[2] - 1)  # if y < 0 or x > X
+        c_dert_loc_topright = (c_dert_loc_topright[0][ind_topright], c_dert_loc_topright[1][ind_topright])
+
+        ind_bottomleft = ~np.logical_or(c_dert_loc_bottomleft[0] > frame['dert__'].shape[1] - 1, c_dert_loc_bottomleft[1] < 0)  # if y > Y or x < 0
+        c_dert_loc_bottomleft = (c_dert_loc_bottomleft[0][ind_bottomleft], c_dert_loc_bottomleft[1][ind_bottomleft])
+
+        ind_bottomright = ~np.logical_or(c_dert_loc_bottomright[0] > frame['dert__'].shape[1] - 1, c_dert_loc_bottomright[1] > frame['dert__'].shape[2] - 1)
+        # if y > Y or x > X
+        c_dert_loc_bottomright = (c_dert_loc_bottomright[0][ind_bottomright], c_dert_loc_bottomright[1][ind_bottomright])
+
+        extended_map[c_dert_loc_topleft] = False
+        extended_map[c_dert_loc_topright] = False
+        extended_map[c_dert_loc_bottomleft] = False
+        extended_map[c_dert_loc_bottomright] = False
+
+    return extended_map, blob_map
 
 
 # -----------------------------------------------------------------------------
@@ -350,7 +459,6 @@ def update_dert(blob):  # Update blob dert with new params
     blob['dert__'] = new_dert__.copy()
 
     return blob
-
 
 # -----------------------------------------------------------------------------
 # Main
