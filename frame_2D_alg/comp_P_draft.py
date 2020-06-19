@@ -22,7 +22,8 @@ from time import time
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    
-   Next same-sign comp: prox + internal match -> merge, external match -> new composition level?
+   Merge if weak, else: 
+   next same-sign comp: prox + internal match -> extend, | external match -> compose? 
    Isolation = distance + contrast -> radial comp extension, per all co-internals? 
    
     Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
