@@ -265,7 +265,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
     if blob['open_stacks'] == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
         last_stack = stack
-        Dert, [y0, x0, xn], stack_, s, open_stacks= blob.values()
+        Dert, [y0, x0, xn], stack_, s, open_stacks = blob.values()
         yn = last_stack['y0'] + last_stack['Ly']
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
@@ -284,14 +284,9 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
         blob_map[y0:yn, x0:xn] = mask
-        if blob['sign']:
-            extended_map, map = add_margin(frame, blob_map, diag=1)  # orthogonal + diagonal margin
-            # we already have dert__.mask, blob_map is redundant?
-            # also, get the margin instead of extended_map?
-        else:
-            extended_map, map = add_margin(frame, blob_map, diag=0)  # orthogonal margin
+        margin_map, margin_coords = form_margin(frame, blob_map, blob['sign'])
 
-        fopen = 0  # flag for blobs on frame boundary
+        fopen = 0  # flag: blob on frame boundary
         if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
             fopen = 1
 
@@ -299,10 +294,9 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.update(root_dert__=frame['dert__'],
                     box=(y0, yn, x0, xn),
                     dert__=dert__,
-                    adj_blob_ = [[], []],
+                    adj_blob_=[[], []],
                     fopen=fopen,
-                    extended_map = extended_map,  # for find_adjacent
-                    map = blob_map
+                    margin=[blob_map, margin_map, margin_coords]  # margin coordinates are not currently used
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
@@ -316,18 +310,18 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
     '''
     2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
     '''
-    blob__ = []  # initialization
+    blob_adj__ = []  # [(blob, adj_blob__)] to replace blob__
     while frame['blob__']:  # outer loop
 
         _blob = frame['blob__'].pop(0)  # pop left outer loop's blob
         _y0, _yn, _x0, _xn = _blob['box']
-        if 'adj_blob_' in _blob:  # reuse the adj_blob_ from _blob, else we will wipe out the existing adj_blob_
-            # _blob should be repacked in new_blob__, not in blob__, then no need to check?
+        if 'adj_blob_' in _blob:  # reuse adj_blob_ if any
             _adj_blob_ = _blob['adj_blob_']
         else:
             _adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-
+        # y0, yn, x0, xn = 0, 0, 0, 0  # initialization
         i = 0  # inner loop counter
+
         while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob, including border
 
             blob = frame['blob__'][i]  # inner loop's blob
@@ -337,60 +331,67 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
                 adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
             y0, yn, x0, xn = blob['box']
 
-            if y0 <= _yn and blob['sign'] != _blob['sign']: #  adjacent blobs have opposite sign and vertical overlap with _blob + margin
+            if y0 <= _yn and blob['sign'] != _blob['sign']:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
 
-                margin_map = np.logical_xor(blob['extended_map'], blob['map'])  # get blob margin area only?
-                # replace map with _blob['dert__'].mask?
-                margin_AND = np.logical_and(margin_map, ~_blob['map'])  # AND blob margin and _blob area
+                _blob_map = _blob['margin'][0]
+                margin_map = blob['margin'][1]
+                margin_AND = np.logical_and(margin_map, ~ _blob_map)  # AND blob margin and _blob area
 
                 if margin_AND.any():  # at least one blob's margin element is in _blob: blob is adjacent
                     if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
                         # all of blob margin is in _blob: _blob is external
                         if blob not in _adj_blob_[0]:
                             _adj_blob_[0].append(blob)
-                            if blob['fopen'] == 1:
-                            # this condition is not possible?
-                                _adj_blob_[1].append(2)  # adj_blob is open, can't be internal
+                            if blob['fopen'] == 1:  # check open blob
+                                _adj_blob_[1].append(2)  # open blob cannot be internal
                             else:
-                                _adj_blob_[1].append(0)  # adj_blob is internal
+                                _adj_blob_[1].append(0)  # 0 for internal
                         if _blob not in adj_blob_[0]:
                             adj_blob_[0].append(_blob)
-                            adj_blob_[1].append(1)  # adj_blob is external
+                            adj_blob_[1].append(1)  # 1 for external
 
-                    else:  # _blob is internal or open
+                    else:  # _blob is internal
                         if blob not in _adj_blob_[0]:
                             _adj_blob_[0].append(blob)
-                            _adj_blob_[1].append(1)  # _adj_blob is external
+                            _adj_blob_[1].append(1)  # 1 for external
                         if _blob not in adj_blob_[0]:
                             adj_blob_[0].append(_blob)
-                            if _blob['fopen'] == 1:
-                                adj_blob_[1].append(2)  # _adj_blob is open
+                            if _blob['fopen'] == 1:  # check open _blob
+                                adj_blob_[1].append(2)  # open _blob cannot be internal
                             else:
-                                adj_blob_[1].append(0)  # _adj_blob is internal
+                                adj_blob_[1].append(0)  # 0 for internal
 
-            blob['adj_blob_'] =  adj_blob_  # pack adj_blob_ in blob
+            blob['adj_blob_'] = adj_blob_  # pack adj_blob_ to _blob
             frame['blob__'][i] = blob  # reassign blob in inner loop
-            _blob['adj_blob_'] = _adj_blob_  # pack _adj_blob_ in _blob
+            _blob['adj_blob_'] = _adj_blob_  # pack _adj_blob_ to _blob
             i += 1  # inner loop counter
+        blob_adj__.append(_blob)  # repack processed _blob into blob__
 
-        blob__.append(_blob)  # repack processed _blob into blob__
-        # this should be new_blob__, else ?
-    frame['blob__'] = blob__
+    frame['blob__'] = blob_adj__  # update empty frame['blob__']
 
     return frame
 
 
-def add_margin(frame, blob_map, diag):  # get 1-pixel margin of blob, orthogonally or orthogonally and diagonally
+def form_margin(frame, blob_map, diag):  # get 1-pixel margin of blob, orthogonally or orthogonally and diagonally
 
-    c_dert_loc = np.where(blob_map == False)  # unmasked area
-    # rename "margin": get the margin only, we already have dert__.mask?
+    c_dert_loc = np.where(blob_map == False)  # get unmasked area (unmasked area = false)
     # extend each dert by 1 for 4 different directions (excluding diagonal directions)
     c_dert_loc_top = (c_dert_loc[0] - 1, c_dert_loc[1])
     c_dert_loc_right = (c_dert_loc[0], c_dert_loc[1] + 1)
     c_dert_loc_bottom = (c_dert_loc[0] + 1, c_dert_loc[1])
     c_dert_loc_left = (c_dert_loc[0], c_dert_loc[1] - 1)
+    '''
+    why not get the margin directly:
 
+    blob_area = np.where(blob_map == False)  
+    up_margin =    np.where( np.logical_xor( blob_area[0], blob_area[0] - 1))  # blob_area[0] - 1 is a shift?
+    down_margin =  np.where( np.logical_xor( blob_area[0], blob_area[0] + 1))
+    right_margin = np.where( np.logical_xor( blob_area[1], blob_area[1] - 1))  
+    left_margin =  np.where( np.logical_xor( blob_area[1], blob_area[1] + 1))
+    '''
     # remove location of <0 or > image boundary (we cannot set the value to 0 or image boundary since those area is not the margin)
+    # why not, just extend the box?
+
     ind_top = ~(c_dert_loc_top[0] < 0)  # if y < 0
     c_dert_loc_top = (c_dert_loc_top[0][ind_top], c_dert_loc_top[1][ind_top])  # (y,x)
 
@@ -433,7 +434,13 @@ def add_margin(frame, blob_map, diag):  # get 1-pixel margin of blob, orthogonal
         extended_map[c_dert_loc_bottomleft] = False
         extended_map[c_dert_loc_bottomright] = False
 
-    return extended_map, blob_map
+    margin_map = np.logical_xor(extended_map, blob_map)  # get blob's margin area only
+
+    # why not get the margin immediately, without extended_map?
+
+    margin_coords = np.where(margin_map == True)  # get margin only coordinates
+
+    return margin_map, margin_coords
 
 
 # -----------------------------------------------------------------------------
