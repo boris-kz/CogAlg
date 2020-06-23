@@ -379,24 +379,24 @@ def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 direct
     up_margin = np.where( np.logical_and( blob_map, ~blob_map[1:, :]) )
     ?
     '''
-    up_margin = np.ones_like(blob_map);     up_margin  [:-1, :] = blob_map[1:, :].copy()
-    down_margin = np.ones_like(blob_map);   down_margin [1:, :] = blob_map[:-1, :].copy()
-    left_margin = np.ones_like(blob_map);   left_margin[:, :-1] = blob_map[:, 1:].copy()
-    right_margin = np.ones_like(blob_map);  right_margin[:, 1:] = blob_map[:, :-1].copy()
+    up_map = np.ones_like(blob_map);     up_map  [:-1, :] = blob_map[1:, :].copy()
+    down_map = np.ones_like(blob_map);   down_map [1:, :] = blob_map[:-1, :].copy()
+    left_map = np.ones_like(blob_map);   left_map[:, :-1] = blob_map[:, 1:].copy()
+    right_map = np.ones_like(blob_map);  right_map[:, 1:] = blob_map[:, :-1].copy()
     # combine:
-    mapped_margin = ~blob_map + ~up_margin + ~down_margin + ~left_margin + ~right_margin
+    mapped_margin = ~blob_map + ~up_map + ~down_map + ~left_map + ~right_map
     # add blob_map to make sure a consistent output in all cases (in the cases whether unmasked area = 1 pixel or >1 pixel)
     # if unmasked area =  1 pixel, shifted pixel doesn't cover the original unmasked area
     # if unmasked area > 1 pixel, shifted pixels cover partically the original unmasked area
 
     if diag:  # add diagonal margins
 
-        upleft_margin = np.ones_like(blob_map);     upleft_margin [:-1, :-1] = blob_map[1:, 1:].copy()
-        upright_margin = np.ones_like(blob_map);    upright_margin [:-1, 1:] = blob_map[1:, :-1].copy()
-        downleft_margin = np.ones_like(blob_map);   downleft_margin[1:, :-1] = blob_map[:-1, 1:].copy()
-        downright_margin = np.ones_like(blob_map);  downright_margin[1:, 1:] = blob_map[:-1, :-1].copy()
+        upleft_map = np.ones_like(blob_map);     upleft_map [:-1, :-1] = blob_map[1:, 1:].copy()
+        upright_map = np.ones_like(blob_map);    upright_map [:-1, 1:] = blob_map[1:, :-1].copy()
+        downleft_map = np.ones_like(blob_map);   downleft_map[1:, :-1] = blob_map[:-1, 1:].copy()
+        downright_map = np.ones_like(blob_map);  downright_map[1:, 1:] = blob_map[:-1, :-1].copy()
         # combine:
-        mapped_margin = mapped_margin + ~upleft_margin + ~upright_margin + ~downleft_margin + ~downright_margin
+        mapped_margin = mapped_margin + ~upleft_map + ~upright_map + ~downleft_map + ~downright_map
 
     margin_map = ~(mapped_margin ^ blob_map)  # bitwise xor to get the margin only
 
