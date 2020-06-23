@@ -284,7 +284,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
         blob_map[y0:yn, x0:xn] = mask
-        margin_map, margin_coords = form_margin(frame, blob_map, blob['sign'])
+        margin_map = form_margin(blob_map, diag=blob['sign'])
 
         fopen = 0  # flag: blob on frame boundary
         if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
@@ -296,7 +296,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                     dert__=dert__,
                     adj_blob_=[[], []],
                     fopen=fopen,
-                    margin=[blob_map, margin_map, margin_coords]  # margin coordinates are not currently used
+                    margin=[blob_map, margin_map]
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
@@ -372,76 +372,35 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
     return frame
 
 
-def form_margin(frame, blob_map, diag):  # get 1-pixel margin of blob, orthogonally or orthogonally and diagonally
-
-    c_dert_loc = np.where(blob_map == False)  # get unmasked area (unmasked area = false)
-    # extend each dert by 1 for 4 different directions (excluding diagonal directions)
-    c_dert_loc_top = (c_dert_loc[0] - 1, c_dert_loc[1])
-    c_dert_loc_right = (c_dert_loc[0], c_dert_loc[1] + 1)
-    c_dert_loc_bottom = (c_dert_loc[0] + 1, c_dert_loc[1])
-    c_dert_loc_left = (c_dert_loc[0], c_dert_loc[1] - 1)
+def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 directions, to find adjacent blobs
     '''
-    why not get the margin directly:
-
-    blob_area = np.where(blob_map == False)  
-    up_margin =    np.where( np.logical_xor( blob_area[0], blob_area[0] - 1))  # blob_area[0] - 1 is a shift?
-    down_margin =  np.where( np.logical_xor( blob_area[0], blob_area[0] + 1))
-    right_margin = np.where( np.logical_xor( blob_area[1], blob_area[1] - 1))  
-    left_margin =  np.where( np.logical_xor( blob_area[1], blob_area[1] + 1))
+    why not get the margin directly, something like this:
+    up_margin = np.ones_like(blob_map)
+    up_margin = np.where( np.logical_and( blob_map, ~blob_map[1:, :]) )
+    ?
     '''
-    # remove location of <0 or > image boundary (we cannot set the value to 0 or image boundary since those area is not the margin)
-    # why not, just extend the box?
+    up_margin = np.ones_like(blob_map);     up_margin  [:-1, :] = blob_map[1:, :].copy()
+    down_margin = np.ones_like(blob_map);   down_margin [1:, :] = blob_map[:-1, :].copy()
+    left_margin = np.ones_like(blob_map);   left_margin[:, :-1] = blob_map[:, 1:].copy()
+    right_margin = np.ones_like(blob_map);  right_margin[:, 1:] = blob_map[:, :-1].copy()
+    # combine:
+    mapped_margin = ~blob_map + ~up_margin + ~down_margin + ~left_margin + ~right_margin
+    # add blob_map to make sure a consistent output in all cases (in the cases whether unmasked area = 1 pixel or >1 pixel)
+    # if unmasked area =  1 pixel, shifted pixel doesn't cover the original unmasked area
+    # if unmasked area > 1 pixel, shifted pixels cover partically the original unmasked area
 
-    ind_top = ~(c_dert_loc_top[0] < 0)  # if y < 0
-    c_dert_loc_top = (c_dert_loc_top[0][ind_top], c_dert_loc_top[1][ind_top])  # (y,x)
+    if diag:  # add diagonal margins
 
-    ind_right = ~(c_dert_loc_right[1] > frame['dert__'].shape[2] - 1)  # if x > X, -1 because index starts from 0, while shape starts from 1
-    c_dert_loc_right = (c_dert_loc_right[0][ind_right], c_dert_loc_right[1][ind_right])
+        upleft_margin = np.ones_like(blob_map);     upleft_margin [:-1, :-1] = blob_map[1:, 1:].copy()
+        upright_margin = np.ones_like(blob_map);    upright_margin [:-1, 1:] = blob_map[1:, :-1].copy()
+        downleft_margin = np.ones_like(blob_map);   downleft_margin[1:, :-1] = blob_map[:-1, 1:].copy()
+        downright_margin = np.ones_like(blob_map);  downright_margin[1:, 1:] = blob_map[:-1, :-1].copy()
+        # combine:
+        mapped_margin = mapped_margin + ~upleft_margin + ~upright_margin + ~downleft_margin + ~downright_margin
 
-    ind_bottom = ~(c_dert_loc_bottom[0] > frame['dert__'].shape[1] - 1)  # if y > Y
-    c_dert_loc_bottom = (c_dert_loc_bottom[0][ind_bottom], c_dert_loc_bottom[1][ind_bottom])
+    margin_map = ~(mapped_margin ^ blob_map)  # bitwise xor to get the margin only
 
-    ind_left = ~(c_dert_loc_left[1] < 0)  # if x < 0
-    c_dert_loc_left = (c_dert_loc_left[0][ind_left], c_dert_loc_left[1][ind_left])
-
-    extended_map = blob_map.copy()
-    extended_map[c_dert_loc_top] = False
-    extended_map[c_dert_loc_right] = False
-    extended_map[c_dert_loc_bottom] = False
-    extended_map[c_dert_loc_left] = False
-
-    if diag:  # extend by one dert diagonally
-        c_dert_loc_topleft = (c_dert_loc[0] - 1, c_dert_loc[1] - 1)
-        c_dert_loc_topright = (c_dert_loc[0] - 1, c_dert_loc[1] + 1)
-        c_dert_loc_bottomleft = (c_dert_loc[0] + 1, c_dert_loc[1] - 1)
-        c_dert_loc_bottomright = (c_dert_loc[0] + 1, c_dert_loc[1] + 1)
-
-        ind_topleft = ~np.logical_or(c_dert_loc_topleft[0] < 0, c_dert_loc_topleft[1] < 0)  # if y < 0 or x < 0
-        c_dert_loc_topleft = (c_dert_loc_topleft[0][ind_topleft], c_dert_loc_topleft[1][ind_topleft])
-
-        ind_topright = ~np.logical_or(c_dert_loc_topright[0] < 0, c_dert_loc_topright[1] > frame['dert__'].shape[2] - 1)  # if y < 0 or x > X
-        c_dert_loc_topright = (c_dert_loc_topright[0][ind_topright], c_dert_loc_topright[1][ind_topright])
-
-        ind_bottomleft = ~np.logical_or(c_dert_loc_bottomleft[0] > frame['dert__'].shape[1] - 1, c_dert_loc_bottomleft[1] < 0)  # if y > Y or x < 0
-        c_dert_loc_bottomleft = (c_dert_loc_bottomleft[0][ind_bottomleft], c_dert_loc_bottomleft[1][ind_bottomleft])
-
-        ind_bottomright = ~np.logical_or(c_dert_loc_bottomright[0] > frame['dert__'].shape[1] - 1, c_dert_loc_bottomright[1] > frame['dert__'].shape[2] - 1)
-        # if y > Y or x > X
-        c_dert_loc_bottomright = (c_dert_loc_bottomright[0][ind_bottomright], c_dert_loc_bottomright[1][ind_bottomright])
-
-        extended_map[c_dert_loc_topleft] = False
-        extended_map[c_dert_loc_topright] = False
-        extended_map[c_dert_loc_bottomleft] = False
-        extended_map[c_dert_loc_bottomright] = False
-
-    margin_map = np.logical_xor(extended_map, blob_map)  # get blob's margin area only
-
-    # why not get the margin immediately, without extended_map?
-
-    margin_coords = np.where(margin_map == True)  # get margin only coordinates
-
-    return margin_map, margin_coords
-
+    return margin_map
 
 # -----------------------------------------------------------------------------
 # Utilities
