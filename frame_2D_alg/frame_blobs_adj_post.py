@@ -282,13 +282,13 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         dert__.mask[:] = mask  # overwrite default mask 0s
         frame['dert__'][:, y0:yn, x0:xn] = dert__.copy()  # assign mask back to frame dert__
 
-        blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
-        blob_map[y0:yn, x0:xn] = mask
-        margin_map = form_margin(blob_map, diag=blob['sign'])
-
         fopen = 0  # flag: blob on frame boundary
         if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
             fopen = 1
+
+        blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
+        blob_map[y0:yn, x0:xn] = mask
+        margin_map = form_margin(blob_map, diag=blob['sign'])
 
         blob.pop('open_stacks')
         blob.update(root_dert__=frame['dert__'],
@@ -319,10 +319,9 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
             _adj_blob_ = _blob['adj_blob_']
         else:
             _adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-        # y0, yn, x0, xn = 0, 0, 0, 0  # initialization
-        i = 0  # inner loop counter
 
-        while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob, including border
+        i = 0  # inner loop counter
+        while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob + margin
 
             blob = frame['blob__'][i]  # inner loop's blob
             if 'adj_blob_' in blob:
@@ -335,29 +334,28 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
 
                 _blob_map = _blob['margin'][0]
                 margin_map = blob['margin'][1]
-                margin_AND = np.logical_and(margin_map, ~ _blob_map)  # AND blob margin and _blob area
+                margin_AND = np.logical_and(margin_map, ~_blob_map)
 
                 if margin_AND.any():  # at least one blob's margin element is in _blob: blob is adjacent
                     if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
                         # all of blob margin is in _blob: _blob is external
                         if blob not in _adj_blob_[0]:
                             _adj_blob_[0].append(blob)
-                            if blob['fopen'] == 1:  # check open blob
-                                _adj_blob_[1].append(2)  # open blob cannot be internal
+                            if blob['fopen'] == 1:  # this should not happen, internal blob cannot be open?
+                                _adj_blob_[1].append(2)  # 2 for open
                             else:
                                 _adj_blob_[1].append(0)  # 0 for internal
                         if _blob not in adj_blob_[0]:
                             adj_blob_[0].append(_blob)
                             adj_blob_[1].append(1)  # 1 for external
-
-                    else:  # _blob is internal
+                    else:  # _blob is internal or open
                         if blob not in _adj_blob_[0]:
                             _adj_blob_[0].append(blob)
                             _adj_blob_[1].append(1)  # 1 for external
                         if _blob not in adj_blob_[0]:
                             adj_blob_[0].append(_blob)
-                            if _blob['fopen'] == 1:  # check open _blob
-                                adj_blob_[1].append(2)  # open _blob cannot be internal
+                            if _blob['fopen'] == 1:  # this should not happen, internal blob cannot be open?
+                                adj_blob_[1].append(2)  # 2 for open
                             else:
                                 adj_blob_[1].append(0)  # 0 for internal
 
@@ -385,9 +383,9 @@ def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 direct
     right_map = np.ones_like(blob_map);  right_map[:, 1:] = blob_map[:, :-1].copy()
     # combine:
     mapped_margin = ~blob_map + ~up_map + ~down_map + ~left_map + ~right_map
-    # add blob_map to make sure a consistent output in all cases (in the cases whether unmasked area = 1 pixel or >1 pixel)
-    # if unmasked area =  1 pixel, shifted pixel doesn't cover the original unmasked area
-    # if unmasked area > 1 pixel, shifted pixels cover partically the original unmasked area
+    # + blob_map for consistent output in both 1-pixel and >1-pixel unmasked areas:
+    # if unmasked area = 1 pixel, shifted pixel doesn't cover unshifted area
+    # if unmasked area > 1 pixel, shifted pixels cover some of unshifted area
 
     if diag:  # add diagonal margins
 

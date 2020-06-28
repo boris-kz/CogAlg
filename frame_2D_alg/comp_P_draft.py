@@ -22,28 +22,30 @@ from time import time
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    
-   Merge if weak, else next same-sign comp, radial extension per all co-internals: 
-   internal match - isolation -> extend, - external match: rdn?   
+   radial extension per all co-internals: merge if weak, else cross-sign adjacent comp_blob:
+   core params comp only: S distance and G contrast, global decay rate * local cancel rate 
+   
+   -> isolation, evaluate for intra_comp, borrow = dG * rS: relative area only?   
+   -> blob merge or composition: 
+   internal match - isolation -> extend, rdn external match:  
    external match + isolation -> compose, 
    
-   isolation = distance: global decay rate, + contrast: local cancel rate?
-   
-    Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
-    after full-blob comp_P_ sums match and miss per parameter. 
-    Also coefs per sub_blob from comp_blob_: potential parts of a higher object?  
+   Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
+   after full-blob comp_P_ sums match and miss per parameter. 
+   Also coefs per sub_blob from comp_blob_: potential parts of a higher object?  
 
-    orientation = (Ly / Lx) * (|Dx| / |Dy|): vert ! horiz match coef = elongation * ddirection?
-    or after comp_P: initial partial edge tracing to segment by primary orientation?
+   orientation = (Ly / Lx) * (|Dx| / |Dy|): vert ! horiz match coef = elongation * ddirection?
+   or after comp_P: initial partial edge tracing to segment by primary orientation?
      
-    if orientation < 1: 
-        orientation = 1 / orientation; flip_cost = flip_ave
-    else: flip_cost = 0;  # vs. separate L, D max/min orientation
+   if orientation < 1: 
+       orientation = 1 / orientation; flip_cost = flip_ave
+   else: flip_cost = 0;  # vs. separate L, D max/min orientation
 
-    comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P
+   comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P
     
-    rng+ should preserve resolution: rng+_dert_ is dert layers, 
-    rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 
-    rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr? 
+   rng+ should preserve resolution: rng+_dert_ is dert layers, 
+   rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 
+   rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr? 
 '''
 
 ave = 20
