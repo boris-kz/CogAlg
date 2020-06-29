@@ -22,13 +22,15 @@ from time import time
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    
-   radial extension per all co-internals: merge if weak, else cross-sign adjacent comp_blob:
-   core params comp only: S distance and G contrast, global decay rate * local cancel rate 
+   radial comp x co-internal blobs: 
+   ! sign comp x sum( adj_blob_) -> isolation, ?intra_comp, cross-sign merge if weak, else:
+   = sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
    
-   -> isolation, evaluate for intra_comp, borrow = dG * rS: relative area only?   
-   -> blob merge or composition: 
-   internal match - isolation -> extend, rdn external match:  
-   external match + isolation -> compose, 
+   isolation = rS: relative area ? trans-projection, * G: borrow, vs raG: contrast for merge|compos?  
+   core params comp only: S distance and G contrast, global decay rate * local cancel rate? 
+   -> 
+   blob merger if internal match - isolation, rdn external match:  
+   blob compos if external match + isolation, 
    
    Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
    after full-blob comp_P_ sums match and miss per parameter. 
