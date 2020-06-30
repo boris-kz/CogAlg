@@ -41,7 +41,7 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     _, rY, rX = blob['root_dert__'].shape  # higher dert size
     cP, cY, cX = blob['dert__'].shape  # current dert size
 
-    y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1
+    y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e for extended
 
     # prevent boundary <0 or >image size:
     if y0e < 0:  y0e = 0; ystart = 0
@@ -86,10 +86,12 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
             if sub_blob['sign']:
                 if sub_blob['Dert']['M'] > aveB * rdn:  # -> comp_r:
+                    # subtract adj_G * rS of adj_blob_
                     blob['sub_layers'] += \
                         intra_blob(sub_blob, rdn + 1 + 1 / blob['Ls'], rng*2, fig=fig, fcr=1)
 
             elif sub_blob['Dert']['G'] > aveB * rdn:  # -> comp_g
+                # add adj_G * rS of adj_blob_
                 blob['sub_layers'] += \
                     intra_blob(sub_blob, rdn + 1 + 1 / blob['Ls'], rng=rng, fig=1, fcr=0)
 
@@ -99,7 +101,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     return spliced_layers
 
 
-def cluster_derts(blob, dert__, Ave, fcr, fig):  # analog of frame_to_blobs
+def cluster_derts(blob, dert__, Ave, fcr, fig):  # similar to frame_to_blobs
 
     if fcr:  # comp_r output;  form clustering criterion:
         if fig: crit__ = dert__[0] + dert__[4] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed

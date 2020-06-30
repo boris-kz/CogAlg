@@ -26,9 +26,11 @@ from time import time
    ! sign comp x sum( adj_blob_) -> isolation, ?intra_comp, cross-sign merge if weak, else:
    = sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
    
-   isolation = rS: relative area ? trans-projection, * G: borrow, vs raG: contrast for merge|compos?  
-   core params comp only: S distance and G contrast, global decay rate * local cancel rate? 
-   -> 
+   borrow = adj_G * rS: div_comp S -> relative area = distance to adjj_blob_
+   default cross-sum comp is external (S), with internal comp conditional on mS, such as with thin lines?
+   div_comp G -> raG: contrast for adjj merge | composition,   
+   isolation / core comp: G + (rS * global decay rate) * (raG * local cancel rate: contrast)? 
+   ->
    blob merger if internal match - isolation, rdn external match:  
    blob compos if external match + isolation, 
    

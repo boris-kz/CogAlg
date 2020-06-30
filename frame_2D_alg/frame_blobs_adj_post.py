@@ -334,10 +334,9 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
                 _blob_map = _blob['margin'][0]
                 margin_map = blob['margin'][1]
                 margin_AND = np.logical_and(margin_map, ~_blob_map)
-
                 if margin_AND.any():  # at least one blob's margin element is in _blob: blob is adjacent
-                    if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
 
+                    if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
                         # all of blob margin is in _blob: _blob is external
                         if blob not in _adj_blob_[0]:
                             _adj_blob_[0].append(blob)
