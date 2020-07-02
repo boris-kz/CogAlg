@@ -1,5 +1,4 @@
 import numpy as np
-from utils import imread
 
 pixels = [
     # pure vertical edge

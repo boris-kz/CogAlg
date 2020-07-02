@@ -3,18 +3,17 @@ For testing intra_comp operations and 3 layers of intra_comp's forks
 Visualize each comp's output with image output
 """
 
-import frame_blobs
-from comp_pixel import comp_pixel_m
+from comp_pixel_versions import comp_pixel_m
 from intra_comp_a import *
-from utils import imread, imwrite
+from utils import imread
 import cv2
 import numpy as np
 
 # -----------------------------------------------------------------------------
 # Input:
-IMAGE_PATH = "./images/raccoon.jpg"
+IMAGE_PATH = "../images/raccoon.jpg"
 # Outputs:
-OUTPUT_PATH = "./images/intra_comp_a/"
+OUTPUT_PATH = "../images/intra_comp_a/"
 
 # -----------------------------------------------------------------------------
 # Functions

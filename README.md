@@ -17,7 +17,7 @@ This is an open project, we need help with design and implementation: [WIKI](htt
 ### Outline of my approach
 
 
-Proposed algorithm is a first-principles alternative to deep learning, hierarchical but not neuromorphic and sub-statistical. Each level has two feedforward stages:
+Proposed algorithm is a first-principles alternative to deep learning, neither neuromorphic nor statistical. It performs hierarchical pattern discovery in recursively extended pipeline of incremental input encoding. Each level of this pipeline has two feedforward stages:
 - input cross-comparison over selectively incremental distance and derivation,
 - pattern composition: parameterized connectivity clustering by resulting match.
 
@@ -35,7 +35,7 @@ It's a form of hierarchical connectivity clustering, defined by the results of f
 
 Resulting hierarchy is a dynamic pipeline: terminated patterns are outputted for comparison on the next level, hence a new level must be formed for a pattern terminated by current top level. Which continues as long as the system receives novel inputs. As distinct from autoencoders, there is no need for decoding: comparison and clustering is done on each level. Patterns are also hierarchical: each level of search adds a level of composition and sub-level of differentiation. To avoid combinatorial explosion, search is selective per input pattern.
 
-*Many readers see a gap between this outline and algorithm, or a lack of the latter. It’s true that the algorithm is far from complete, but above-explained principles are stable and we are translating them into code. Final algorithm will be a meta-level of search: 1st level operations plus recursive increment in input complexity, which generate next-level alg. We are in a space-time continuum, thus each level will be  3D or 4D cycle. Another complaint is that I don't use mathematical notation, but it doesn't have the flexibility to express deeply conditional incrementally complex process.*
+*Many readers see a gap between this outline and algorithm, or a lack of the latter. It’s true that the algorithm is far from complete, but above-explained principles are stable and we are translating them into code. Final algorithm will be a meta-level of search: 1st level operations plus recursive increment in input complexity, which generate next-level alg. We are in a space-time continuum, thus each level will be  3D or 4D cycle. Another complaint is that I don't use mathematical notation, but it simply doesn't have the flexibility to express deeply conditional, incrementally complex process.*
 
 
 

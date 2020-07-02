@@ -1,7 +1,6 @@
 from time import time
 from collections import deque, defaultdict
-import numpy as np
-from comp_pixel import comp_pixel_m
+from comp_pixel_versions import comp_pixel_m
 from utils import *
 
 '''
@@ -302,12 +301,12 @@ if __name__ == '__main__':
 
     start_time = time()
     frame = image_to_blobs(image)
-    from intra_blob import *
+    from intra_blob_alone import *
 
     intra=0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob import *
+        from intra_blob_alone import *
         deep_frame = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 
         for blob in frame['blob__']:
@@ -332,7 +331,7 @@ if __name__ == '__main__':
     print(end_time)
 
     # DEBUG -------------------------------------------------------------------
-    imwrite("images/mblobs.bmp",
+    imwrite("../images/mblobs.bmp",
             map_frame_binary(frame,
               sign_map={
                   1: BLACK,  # 2x2 gblobs

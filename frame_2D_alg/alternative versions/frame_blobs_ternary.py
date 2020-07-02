@@ -1,6 +1,6 @@
 from time import time
 from collections import deque, defaultdict
-from comp_pixel import comp_pixel_ternary
+from comp_pixel_versions import comp_pixel_ternary
 from utils import *
 
 '''
@@ -325,7 +325,7 @@ if __name__ == '__main__':
     intra=0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob import *
+        from intra_blob_alone import *
         frame_deep = frame  # initialize frame_of_deep_blobs, deeper params are initialized when fetched
 
         for blob in frame['blob_']:  # interlaced 2x2 gblobs, 3x3 rblobs, 2x2 nblobs

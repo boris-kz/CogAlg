@@ -1,11 +1,10 @@
 import operator as op
 from collections import deque, defaultdict
-from itertools import groupby, starmap, zip_longest
+from itertools import groupby, starmap
 import numpy as np
 import numpy.ma as ma
 from intra_comp_a import *
 from utils import pairwise, flatten
-from functools import reduce
 
 '''
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.

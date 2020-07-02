@@ -2,8 +2,6 @@
 Perform comparison of a and then g over predetermined range.
 """
 
-from itertools import starmap
-
 import operator as op
 
 import numpy as np

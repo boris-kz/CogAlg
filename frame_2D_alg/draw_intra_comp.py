@@ -1,11 +1,9 @@
 """
-For testing intra_comp operations and 3 layers of intra_comp's forks
-Visualize each comp's output with image output
+Visualize output of first 3 layers of intra_comp forks, for testing
 """
 
-from frame_2D_alg.comp_pixel import comp_pixel_m
+from frame_2D_alg.comp_pixel_versions import comp_pixel_m
 from frame_2D_alg.intra_comp import *
-from frame_2D_alg.utils import imread, imwrite
 import cv2
 import numpy as np
 
@@ -35,9 +33,19 @@ def draw_gr(img_out, g_, rng):
 
     return img_out.astype('uint8')
 
+def imread(filename, raise_if_not_read=True):
+    "Read an image in grayscale, return array."
+    try:
+        return cv2.imread(filename, 0).astype(int)
+    except AttributeError:
+        if raise_if_not_read:
+            raise SystemError('image is not read')
+        else:
+            print('Warning: image is not read')
+            return None
+
 # -----------------------------------------------------------------------------
 # Main
-
 
 if __name__ == "__main__":
 
@@ -161,3 +169,4 @@ def add_colour(img_comp,size_y,size_x):
     img_colour = np.rollaxis(img_colour,0,3).astype('uint8')
 
     return img_colour
+

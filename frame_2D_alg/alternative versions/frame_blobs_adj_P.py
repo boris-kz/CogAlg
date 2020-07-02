@@ -1,7 +1,4 @@
 from time import time
-from collections import deque, defaultdict
-import numpy as np
-from copy import copy
 # from comp_pixel import comp_pixel
 from utils import *
 
@@ -453,7 +450,7 @@ if __name__ == '__main__':
     intra = 1
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob_adj import *
+        from intra_blob import *
 
         deep_frame = frame, frame
         bcount = 0

@@ -1,6 +1,5 @@
 from time import time
 from collections import deque, defaultdict
-import numpy as np
 from utils import *
 
 '''
@@ -320,7 +319,7 @@ if __name__ == '__main__':
     intra = 0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob import *
+        from intra_blob_alone import *
 
         deep_frame = frame, frame  # initialize deep_frame with root=frame, ini params=frame, initialize deeper params when fetched
 

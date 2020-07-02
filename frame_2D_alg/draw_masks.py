@@ -1,9 +1,5 @@
-from time import time
-from collections import deque, defaultdict
-import numpy as np
-from comp_pixel import comp_pixel
 from utils import *
-from frame_blobs import *
+from frame_blobs_alone import *
 import argparse
 
 def draw_masks(frame):
@@ -26,8 +22,6 @@ frame = image_to_blobs(image)
 draw_masks(frame)
 
 # Draw blobs --------------------------------------------------------------
-
-from matplotlib import pyplot as plt
 
 IMAGE_PATH = "./images/raccoon_eye.jpeg"
 image = imread(IMAGE_PATH)

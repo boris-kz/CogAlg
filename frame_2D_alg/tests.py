@@ -5,7 +5,7 @@ Change quickly in parallel with development.
 
 from time import time
 import operator as op
-from comp_pixel import (
+from comp_pixel_versions import (
     comp_pixel, comp_3x3_loop,
 )
 from intra_comp_ts import (

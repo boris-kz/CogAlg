@@ -5,12 +5,12 @@ Note: Since these operations performed only on multivariate variables,
 "__" in variable names will be skipped.
 """
 
-import frame_blobs
-from intra_blob import ave
+import frame_blobs_alone
+from intra_blob_alone import ave
 from intra_comp import *
-from comp_pixel import comp_pixel
+from comp_pixel_versions import comp_pixel
 from utils import imwrite, imread, map_frame_binary
-import cv2
+
 # -----------------------------------------------------------------------------
 # Constants
 
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     print('Done!')
 
     print('Doing first comp...')
-    dert_ = frame_blobs.comp_pixel(image)
+    dert_ = frame_blobs_alone.comp_pixel(image)
     print('Done!')
 
     print('Doing recursive comps...')

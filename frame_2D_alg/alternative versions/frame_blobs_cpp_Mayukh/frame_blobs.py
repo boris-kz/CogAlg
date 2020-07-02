@@ -2,7 +2,7 @@ from time import time
 from collections import deque, defaultdict
 import numpy as np
 import cv2
-from comp_pixel import comp_pixel
+from comp_pixel_versions import comp_pixel
 from f_p import form_P_
 
 # Adjustable parameters:

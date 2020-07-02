@@ -1,7 +1,3 @@
-from time import time
-from collections import deque, defaultdict
-import numpy as np
-from comp_pixel import comp_pixel
 from utils import *
 from frame_blobs_adj_pri import *
 import argparse

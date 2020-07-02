@@ -2,7 +2,7 @@ from time import time
 from collections import deque, defaultdict
 import numpy as np
 import cv2
-from comp_pixel import comp_pixel
+from comp_pixel_versions import comp_pixel
 
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
