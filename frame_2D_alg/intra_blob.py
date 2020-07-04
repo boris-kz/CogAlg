@@ -46,8 +46,8 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     if fcr: dert__ = comp_r(ext_dert__, fig, fcr)  # -> m sub_blobs
     else:   dert__ = comp_g(ext_dert__)  # -> g sub_blobs:
 
-    if dert__.shape[1] >2 and dert__.shape[2] >2:  # min size in y and x
-
+    if dert__.shape[1] >2 and dert__.shape[2] >2 and False in dert__.mask:
+        # min size in y and x, at least 1 unmasked dert dert__
         sub_blobs = cluster_derts(blob, dert__, ave*rdn, fcr, fig)
 
         blob.update({'fcr': fcr, 'fig': fig, 'rdn': rdn, 'rng': rng,  # fork params
@@ -85,21 +85,20 @@ def cluster_derts(blob, dert__, Ave, fcr, fig):  # similar to frame_to_blobs
     stack_ = deque()  # buffer of running vertical stacks of Ps
 
     for y in range(dert__.shape[0]):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
+        if False in dert__[0,y,:].mask:  # there is at least one dert in line
 
-        P_ = form_P_(dert__[y, :], crit__[y, :])  # horizontal clustering, adds a row of Ps
-        P_ = scan_P_(P_, stack_, blob['dert__'])  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
-        stack_ = form_stack_(P_, blob['dert__'], y)
+            P_ = form_P_(dert__[y, :], crit__[y, :])  # horizontal clustering, adds a row of Ps
+            P_ = scan_P_(P_, stack_, blob['dert__'])  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
+            stack_ = form_stack_(P_, blob['dert__'], y)
 
     sub_blobs =[]  # from form_blob:
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         sub_blobs.append ( form_blob(stack_.popleft(), blob['dert__']))
 
-
-    find_adjacent(sub_blobs)
+    sub_blobs = find_adjacent(sub_blobs)
 
     return sub_blobs
-
 
 # clustering functions:
 #-------------------------------------------------------------------------------------------------------------------
@@ -115,16 +114,19 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
             x0 = x  # coordinate of first unmasked dert in line
             break
     I, iDy, iDx, G, Dy, Dx, M, L = *dert_[x0], 1  # initialize P params
-    # need to find solution where all dert's are masked, the sign would be empty if all derts are masked
-    # probably the unmasked area are removed in comps operation
     _sign = sign_[x0]
     _mask = False  # mask bit per dert
 
     for x in range(x0+1, dert_.shape[0]):  # loop left to right in each row of derts
-        sign = sign_[x]
+        term = 0  # P termination flag
         mask = mask_[x]
-        if (~_mask and mask) or sign != _sign:
-            # (P exists and input is not in blob) or sign changed, terminate and pack P:
+        if ~mask:  # input is in blob
+            sign = sign_[x]
+            if ~_mask and sign != _sign:  # P exists and sign changed
+                term = 1
+        else: term = 1  # input is not in blob
+        if term:
+            # terminate and pack P:
             P = dict(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
             P_.append(P)
             # initialize P params:
@@ -167,11 +169,17 @@ def scan_P_(P_, stack_, root_dert__):  # merge P into higher-row stack of Ps wit
             _x0 = _P['x0']       # first x in _P
             _xn = _x0 + _P['L']  # first x beyond _P
 
-            # we need to check for overlaps in 8 directions here, as in frame_blobs
-            if _x0 < xn and x0 < _xn:  # x overlap between loaded P and _P
-                if P['sign'] == stack['sign']:  # sign match
-                    stack['down_connect_cnt'] += 1
-                    up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
+            if stack['G'] > 0:  # check for overlaps in 8 directions, else a blob may leak through its external blob
+                if _x0 - 1 < xn and x0 < _xn + 1:  # x overlap between loaded P and _P
+                    if P['sign'] == stack['sign']:  # sign match
+                        stack['down_connect_cnt'] += 1
+                        up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
+
+            else:  # -G, check for orthogonal overlaps only: 4 directions, edge blobs are more selective
+                if _x0 < xn and x0 < _xn:  # x overlap between loaded P and _P
+                    if P['sign'] == stack['sign']:  # sign match
+                        stack['down_connect_cnt'] += 1
+                        up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
 
             if xn < _xn:  # _P overlaps next P in P_
                 next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
@@ -296,7 +304,10 @@ def form_blob(stack, root_dert__):  # increment blob with terminated stack, chec
             fopen = 1
 
         blob_map = np.ones((root_dert__.shape[1], root_dert__.shape[2])).astype('bool')
+        #  try:
         blob_map[y0:yn, x0:xn] = mask
+        #  except:
+        #  a = 1
         margin = form_margin(blob_map, diag=blob['sign'])
 
         blob.pop('open_stacks')
@@ -330,7 +341,7 @@ def find_adjacent(sub_blobs):  # adjacents are blobs connected to _blob
             if 'adj_blob_' in blob:
                 adj_blob_ = blob['adj_blob_']
             else:
-                adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
+                adj_blob_ = [[], []]  # [adj_blobs], [positions: 0 = internal to current blob, 1 = external, 2 = open]
             y0, yn, x0, xn = blob['box']
 
             if y0 <= _yn and blob['sign'] != _blob['sign']:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
@@ -414,10 +425,9 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob['box']  # extend dert box:
     _, rY, rX = blob['root_dert__'].shape  # higher dert size
-    cP, cY, cX = blob['dert__'].shape  # current dert size
+    cP, cY, cX = blob['dert__'].shape  # current dert params and size
 
     y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e is for extended
-
     # prevent boundary <0 or >image size:
     if y0e < 0:  y0e = 0; ystart = 0
     else:        ystart = 1

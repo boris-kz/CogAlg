@@ -1,6 +1,7 @@
 from time import time
 # from comp_pixel import comp_pixel
 from utils import *
+from collections import deque
 
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
@@ -78,6 +79,7 @@ def image_to_blobs(image):
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
+    find_adjacent(frame)  # add adj_blob_ to each blob
 
     return frame  # frame of blobs
 

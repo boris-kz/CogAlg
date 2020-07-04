@@ -17,7 +17,7 @@ This is an open project, we need help with design and implementation: [WIKI](htt
 ### Outline of my approach
 
 
-Proposed algorithm is a first-principles alternative to deep learning, neither neuromorphic nor statistical. It performs hierarchical pattern discovery in recursively extended pipeline of incremental input encoding. Each level of this pipeline has two feedforward stages:
+Proposed algorithm is a first-principles alternative to deep learning, neither statistical nor neuromorphic. It is designed to discover hierarchical patterns in recursively extended pipeline, with higher-composition patterns encoded on higher stages. Each stage of this pipeline has two feedforward sub-stages:
 - input cross-comparison over selectively incremental distance and derivation,
 - pattern composition: parameterized connectivity clustering by resulting match.
 
