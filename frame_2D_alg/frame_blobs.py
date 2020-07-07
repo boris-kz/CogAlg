@@ -414,17 +414,15 @@ def accum_Dert(Dert: dict, **params) -> None:
 
 def update_dert(blob):  # Update blob dert with new params
 
-    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))  # initialize with 0
+    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))
+    # initialize all params with 0s, including dert__[1]: idy, dert__[2]: idx, dert__[6]: m
     new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
     new_dert__.mask = blob['dert__'][0].mask
 
     new_dert__[0] = blob['dert__'][0]  # i
-    new_dert__[1] = 0  # idy
-    new_dert__[2] = 0  # idx
     new_dert__[3] = blob['dert__'][1]  # g
     new_dert__[4] = blob['dert__'][2]  # dy
     new_dert__[5] = blob['dert__'][3]  # dx
-    new_dert__[6] = 0  # m
 
     blob['dert__'] = new_dert__.copy()
 
@@ -448,7 +446,6 @@ if __name__ == '__main__':
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
-
         deep_frame = frame, frame
         bcount = 0
         deep_blob_i_ = []
