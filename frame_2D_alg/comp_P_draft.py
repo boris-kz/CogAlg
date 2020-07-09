@@ -60,7 +60,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     _s, _x0, (_G, _M, _Dx, _Dy, _L), _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
 
     # or redefine Ps by recomputed dx: different from decomposed, no vertical comp?
-    # no immediate redirection by input P d_ave_x: may not be in blob? then skip?
+    # scan direction by input P d_ave_x: skip if not in blob?
 
     xn = x0 + L-1;  _xn = _x0 + _L-1
     mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:

@@ -11,7 +11,7 @@ For excellent popular introductions to cognition-as-prediction thesis see “On
 
 In the next section, I define similarity for the simplest inputs, then describe hierarchically recursive algorithm 
 of search for similarity among incrementally complex inputs: lower-level patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. 
-This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I have a prize for contributions or monthly payment if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I have awards for contributions or monthly payment if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline of my approach
@@ -20,6 +20,8 @@ This is an open project, we need help with design and implementation: [WIKI](htt
 Proposed algorithm is a first-principles alternative to deep learning, neither statistical nor neuromorphic. It is designed to discover hierarchical patterns in recursively extended pipeline, with higher-composition patterns encoded on higher stages. Each stage of this pipeline has two feedforward sub-stages:
 - input cross-comparison over selectively incremental distance and derivation,
 - pattern composition: parameterized connectivity clustering by resulting match.
+
+Please see [whole-system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png)
 
 First-level comparands must be sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All symbolic data is encoded by some prior cognitive process. To discover meaningful patterns in a set of symbols, they must be decoded before being cross-compared. The difficulty of decoding is exponential with the level of encoding, thus hierarchical learning that starts with raw sensory input is by far the easiest to implement (part 0).
 

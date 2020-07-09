@@ -79,7 +79,7 @@ def image_to_blobs(image):
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
-    find_adjacent(frame)  # add adj_blob_ to each blob
+    find_adjacent(frame)  # add adj_blobs to each blob
 
     return frame  # frame of blobs
 
@@ -90,7 +90,6 @@ Parameterized connectivity clustering functions below:
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
-
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
@@ -293,7 +292,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.update(root_dert__=frame['dert__'],
                     box=(y0, yn, x0, xn),
                     dert__=dert__,
-                    adj_blob_=[[], []],
+                    adj_blobs = [[], [], [0], [0]],
                     fopen=fopen,
                     margin=[blob_map, margin]
                     )
@@ -309,24 +308,24 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
     '''
     2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
     '''
-    blob_adj__ = []  # [(blob, adj_blob__)] to replace blob__
+    blob_adj__ = []  # [(blob, adj_blobs)] to replace blob__
     while frame['blob__']:  # outer loop
 
         _blob = frame['blob__'].pop(0)  # pop left outer loop's blob
         _y0, _yn, _x0, _xn = _blob['box']
-        if 'adj_blob_' in _blob:  # reuse adj_blob_ if any
-            _adj_blob_ = _blob['adj_blob_']
+        if 'adj_blobs' in _blob:  # reuse adj_blobs if any
+            _adj_blobs = _blob['adj_blobs']
         else:
-            _adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
+            _adj_blobs = [[], [], 0, 0]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
 
         i = 0  # inner loop counter
         while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob + margin
 
             blob = frame['blob__'][i]  # inner loop's blob
-            if 'adj_blob_' in blob:
-                adj_blob_ = blob['adj_blob_']
+            if 'adj_blobs' in blob:
+                adj_blobs = blob['adj_blobs']
             else:
-                adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
+                adj_blobs = [[], [], 0, 0]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
             y0, yn, x0, xn = blob['box']
 
             if y0 <= _yn and blob['sign'] != _blob['sign']:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
@@ -337,30 +336,39 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
 
                     if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
                         # all of blob margin is in _blob: _blob is external
-                        if blob not in _adj_blob_[0]:
-                            _adj_blob_[0].append(blob)
+                        if blob not in _adj_blobs[0]:
+                            _adj_blobs[0].append(blob)
+                            _adj_blobs[2][0]+=blob['Dert']['S'] # sum adjacent blob's S
+                            _adj_blobs[3][0]+=blob['Dert']['G'] # sum adjacent blob's G
+
                             if blob['fopen'] == 1:  # this should not happen, internal blob cannot be open?
-                                _adj_blob_[1].append(2)  # 2 for open
+                                _adj_blobs[1].append(2)  # 2 for open
                             else:
-                                _adj_blob_[1].append(0)  # 0 for internal
-                        if _blob not in adj_blob_[0]:
-                            adj_blob_[0].append(_blob)
-                            adj_blob_[1].append(1)  # 1 for external
+                                _adj_blobs[1].append(0)  # 0 for internal
+                        if _blob not in adj_blobs[0]:
+                            adj_blobs[0].append(_blob)
+                            adj_blobs[1].append(1)  # 1 for external
+                            adj_blobs[2][0]+=_blob['Dert']['S'] # sum adjacent blob's S
+                            adj_blobs[3][0]+=_blob['Dert']['G'] # sum adjacent blob's G
 
                     else:  # _blob is internal or open
-                        if blob not in _adj_blob_[0]:
-                            _adj_blob_[0].append(blob)
-                            _adj_blob_[1].append(1)  # 1 for external
-                        if _blob not in adj_blob_[0]:
-                            adj_blob_[0].append(_blob)
+                        if blob not in _adj_blobs[0]:
+                            _adj_blobs[0].append(blob)
+                            _adj_blobs[1].append(1)  # 1 for external
+                            _adj_blobs[2]+=blob['Dert']['S']
+                            _adj_blobs[3]+=blob['Dert']['G']
+                        if _blob not in adj_blobs[0]:
+                            adj_blobs[0].append(_blob)
+                            adj_blobs[2]+=_blob['Dert']['S']
+                            adj_blobs[3]+=_blob['Dert']['G']
                             if _blob['fopen'] == 1:
-                                adj_blob_[1].append(2)  # 2 for open
+                                adj_blobs[1].append(2)  # 2 for open
                             else:
-                                adj_blob_[1].append(0)  # 0 for internal
+                                adj_blobs[1].append(0)  # 0 for internal
 
-            blob['adj_blob_'] = adj_blob_  # pack adj_blob_ to _blob
+            blob['adj_blobs'] = adj_blobs  # pack adj_blobs to _blob
             frame['blob__'][i] = blob  # reassign blob in inner loop
-            _blob['adj_blob_'] = _adj_blob_  # pack _adj_blob_ into _blob
+            _blob['adj_blobs'] = _adj_blobs  # pack _adj_blobs into _blob
             i += 1
         blob_adj__.append(_blob)  # repack processed _blob into blob__
 
@@ -414,15 +422,17 @@ def accum_Dert(Dert: dict, **params) -> None:
 
 def update_dert(blob):  # Update blob dert with new params
 
-    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))
-    # initialize all params with 0s, including dert__[1]: idy, dert__[2]: idx, dert__[6]: m
+    new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))  # initialize with 0
     new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
     new_dert__.mask = blob['dert__'][0].mask
 
     new_dert__[0] = blob['dert__'][0]  # i
+  # new_dert__[1] = idy
+  # new_dert__[2] = idx
     new_dert__[3] = blob['dert__'][1]  # g
     new_dert__[4] = blob['dert__'][2]  # dy
     new_dert__[5] = blob['dert__'][3]  # dx
+  # new_dert__[6] = m
 
     blob['dert__'] = new_dert__.copy()
 
@@ -442,38 +452,30 @@ if __name__ == '__main__':
     start_time = time()
     frame = image_to_blobs(image)
 
-    intra = 0
+    intra = 1
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
-        deep_frame = frame, frame
-        bcount = 0
-        deep_blob_i_ = []
-        deep_layers = []
-        layer_count = 0
 
-        for blob in frame['blob__']:
-            bcount += 1
+        deep_frame = frame, frame # why 2 instance of frame to deep_frame initialization?
+        deep_blob_i_ = []  # index of a blob with deep layers
+        deep_layers = [[]]*len(frame['blob__'])  # for visibility only
+
+        for i, blob in enumerate(frame['blob__']):
+
             # print('Processing blob number ' + str(bcount))
-            # blob.update({'fcr': 0, 'fig': 0, 'rdn': 0, 'rng': 1, 'ls': 0, 'sub_layers': []})
 
             if blob['sign']:
                 if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20 and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
-                    blob = update_dert(blob)
-
-                    deep_layers.append(intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0))  # +G blob' dert__' comp_g
-                    layer_count += 1
+                    blob = update_dert(blob) # update blob's derts with new params such as idy,idx and m
+                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
             elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 6 and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
+                blob = update_dert(blob) # update blob's derts with new params such as idy,idx and m
+                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
-                blob = update_dert(blob)
-
-                deep_layers.append(intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1))  # -G blob' dert__' comp_r in 3x3 kernels
-                layer_count += 1
-
-            if len(deep_layers) > 0:
-                if len(deep_layers[layer_count - 1]) > 2:
-                    deep_blob_i_.append(bcount)  # indices of blobs with deep layers
+            if deep_layers[i]: # if there are deeper layers
+                deep_blob_i_.append(i)  # indices of blobs with deep layers
 
     end_time = time() - start_time
     print(end_time)
