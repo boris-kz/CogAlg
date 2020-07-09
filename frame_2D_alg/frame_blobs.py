@@ -204,7 +204,6 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
             new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
             blob['stack_'].append(new_stack)
-
         else:
             if len(up_connect_) == 1 and up_connect_[0]['down_connect_cnt'] == 1:
                 # P has one up_connect and that up_connect has one down_connect=P: merge P into up_connect stack:
@@ -213,8 +212,8 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                 new_stack['Py_'].append(P)  # Py_: vertical buffer of Ps
                 new_stack['down_connect_cnt'] = 0  # reset down_connect_cnt
                 blob = new_stack['blob']
-
-            else:  # P has >1 up_connects, or 1 up_connect that has >1 down_connect_cnt:
+            else:
+                # P has >1 up_connects, or 1 up_connect that has >1 down_connect_cnt:
                 blob = up_connect_[0]['blob']
                 # initialize new_stack with up_connect blob:
                 new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
@@ -286,16 +285,22 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
         blob_map[y0:yn, x0:xn] = mask
+
+        blob_map_y,blob_map_x = np.where(blob_map==False)  # set unmasked area = false
+        blob_map_yx = [ [y,x] for y,x in zip(blob_map_y,blob_map_x)]  # x and y coordinates of unmasked area
+
         margin = form_margin(blob_map, diag=blob['sign'])
+        margin_y,margin_x = np.where(margin==True)  # margin is true
+        margin_yx = [[y,x] for y,x in zip(margin_y,margin_x)]  # x and y coordinates of margin
 
         blob.pop('open_stacks')
         blob.update(root_dert__=frame['dert__'],
                     box=(y0, yn, x0, xn),
                     dert__=dert__,
-                    adj_blobs = [[], [], [0], [0]],
+                    adj_blobs = [[], [], 0, 0],
                     fopen=fopen,
-                    margin=[blob_map, margin]
-                    )
+                    margin=[blob_map_yx, margin_yx])
+
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
                      Dy=frame['Dy'] + blob['Dert']['Dy'],
@@ -317,9 +322,10 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
             _adj_blobs = _blob['adj_blobs']
         else:
             _adj_blobs = [[], [], 0, 0]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-
         i = 0  # inner loop counter
-        while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob + margin
+        yn = frame['dert__'].shape[1] # initialize with image y size
+
+        while i <= len(frame['blob__']) - 1 and _yn<=yn:  # vertical overlap between _blob and blob + margin
 
             blob = frame['blob__'][i]  # inner loop's blob
             if 'adj_blobs' in blob:
@@ -331,16 +337,15 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
             if y0 <= _yn and blob['sign'] != _blob['sign']:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
                 _blob_map = _blob['margin'][0]
                 margin_map = blob['margin'][1]
-                margin_AND = np.logical_and(margin_map, ~_blob_map)
-                if margin_AND.any():  # at least one blob's margin element is in _blob: blob is adjacent
+                check_overlap = any(margin in _blob_map  for margin in margin_map)  # any of blob's margin is in _blob's derts
+                if check_overlap:  # at least one blob's margin element is in _blob: blob is adjacent
 
-                    if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
-                        # all of blob margin is in _blob: _blob is external
+                    check_external = all(margin in _blob_map  for margin in margin_map)  # all blob's margin is in _blob's dert
+                    if check_external:  # _blob is external
                         if blob not in _adj_blobs[0]:
                             _adj_blobs[0].append(blob)
-                            _adj_blobs[2][0]+=blob['Dert']['S'] # sum adjacent blob's S
-                            _adj_blobs[3][0]+=blob['Dert']['G'] # sum adjacent blob's G
-
+                            _adj_blobs[2]+=blob['Dert']['S']  # sum adjacent blob's S
+                            _adj_blobs[3]+=blob['Dert']['G']  # sum adjacent blob's G
                             if blob['fopen'] == 1:  # this should not happen, internal blob cannot be open?
                                 _adj_blobs[1].append(2)  # 2 for open
                             else:
@@ -348,8 +353,8 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
                         if _blob not in adj_blobs[0]:
                             adj_blobs[0].append(_blob)
                             adj_blobs[1].append(1)  # 1 for external
-                            adj_blobs[2][0]+=_blob['Dert']['S'] # sum adjacent blob's S
-                            adj_blobs[3][0]+=_blob['Dert']['G'] # sum adjacent blob's G
+                            adj_blobs[2]+=_blob['Dert']['S'] # sum adjacent blob's S
+                            adj_blobs[3]+=_blob['Dert']['G'] # sum adjacent blob's G
 
                     else:  # _blob is internal or open
                         if blob not in _adj_blobs[0]:
@@ -427,12 +432,12 @@ def update_dert(blob):  # Update blob dert with new params
     new_dert__.mask = blob['dert__'][0].mask
 
     new_dert__[0] = blob['dert__'][0]  # i
-  # new_dert__[1] = idy
-  # new_dert__[2] = idx
+    # new_dert__[1] = idy
+    # new_dert__[2] = idx
     new_dert__[3] = blob['dert__'][1]  # g
     new_dert__[4] = blob['dert__'][2]  # dy
     new_dert__[5] = blob['dert__'][3]  # dx
-  # new_dert__[6] = m
+    # new_dert__[6] = m
 
     blob['dert__'] = new_dert__.copy()
 
@@ -445,7 +450,7 @@ if __name__ == '__main__':
     import argparse
 
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_head.jpg')
     arguments = vars(argument_parser.parse_args())
     image = imread(arguments['image'])
 
@@ -462,15 +467,20 @@ if __name__ == '__main__':
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
 
         for i, blob in enumerate(frame['blob__']):
-
             # print('Processing blob number ' + str(bcount))
 
             if blob['sign']:
-                if blob['Dert']['G'] > aveB and blob['Dert']['S'] > 20 and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
+                # G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S)):
+                if blob['Dert']['G'] + blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S']) \
+                    > aveB and blob['Dert']['S'] > 20 \
+                        and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
                     blob = update_dert(blob) # update blob's derts with new params such as idy,idx and m
                     deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-            elif -blob['Dert']['G'] > aveB and blob['Dert']['S'] > 6 and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
+            # Match - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S)):
+            elif -blob['Dert']['G']  - blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S'])\
+                > aveB and blob['Dert']['S'] > 6 \
+                    and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
                 blob = update_dert(blob) # update blob's derts with new params such as idy,idx and m
                 deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
