@@ -48,19 +48,24 @@ ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedba
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within image
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image,
+    # see comp_pixel_versions file for other versions and more explanation
 
-    # input slices to a sliding 2x2 kernel:
+    # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
     topleft__ = image[:-1, :-1]
     topright__ = image[:-1, 1:]
-    botleft__ = image[1:, :-1]
-    botright__ = image[1:, 1:]
+    bottomleft__ = image[1:, :-1]
+    bottomright__ = image[1:, 1:]
 
-    dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # same as diagonal from left
-    dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # same as diagonal from right
-    g__ = np.hypot(dy__, dx__)  # gradient per kernel
+    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))
+    # decomposition of two diagonal differences into Gy, same as diagonal from left
+    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))
+    # decomposition of two diagonal differences into Gx, same as diagonal from right
 
-    return ma.stack((topleft__, g__, dy__, dx__))  # 2D dert array
+    G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, logically at diagonal crossing between vertex pixels
+
+    return ma.stack((topleft__, G__, Gy__, Gx__))  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__= (i__, g__, dy__, dx__) for readability in functions below
 
 
 def image_to_blobs(image):
@@ -466,22 +471,22 @@ if __name__ == '__main__':
         deep_blob_i_ = []  # index of a blob with deep layers
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
 
-        for i, blob in enumerate(frame['blob__']):
-            # print('Processing blob number ' + str(bcount))
-
+        for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             if blob['sign']:
-                # G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S)):
-                if blob['Dert']['G'] + blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S']) \
-                    > aveB and blob['Dert']['S'] > 20 \
-                        and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
-                    blob = update_dert(blob) # update blob's derts with new params such as idy,idx and m
+                # if G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S)):
+                if blob['Dert']['G'] \
+                    + blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S']) \
+                        > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
+                        # min dimensions replace min S?
+                    blob = update_dert(blob)  # add idy, idx, m to dert__
                     deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-            # Match - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S)):
-            elif -blob['Dert']['G']  - blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S'])\
-                > aveB and blob['Dert']['S'] > 6 \
-                    and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
-                blob = update_dert(blob) # update blob's derts with new params such as idy,idx and m
+            # if M - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S)):
+            elif -blob['Dert']['G'] \
+                - blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S'])\
+                    > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
+                    # min dimensions replace min S?
+                blob = update_dert(blob)  # add idy, idx, m to dert__
                 deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]: # if there are deeper layers
