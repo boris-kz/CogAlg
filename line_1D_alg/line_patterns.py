@@ -3,9 +3,9 @@ import argparse
 from time import time
 from line_1D_alg.utils import *
 from itertools import zip_longest
-
 ''' 
-  line_patterns is a principal version of 1st-level 1D algorithm, contains operations: 
+  line_patterns is a principal version of 1st-level 1D algorithm
+  Operations: 
 
 - Cross-compare consecutive pixels within each row of image, forming dert_ queue of derts: tuples of derivatives per pixel. 
   dert_ is then segmented into patterns mPs and dPs: contiguous sequences of pixels forming same-sign match or difference. 
@@ -112,8 +112,8 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
     P_.append((_sign, L, I, D, M, dert_, sub_H))  # incomplete P
     return P_
 
-
-''' Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
+''' 
+    Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
     P:
     sign,  # of m | d 
     Dert = L, I, D, M, 
@@ -128,7 +128,7 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
                 # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
 '''
 
-def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fill sub_mP_ with results
+def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, pack results into sub_mP_
 
     comb_layers = []  # combine into root P sub_layers[1:]
     for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub_layer is nested to depth = sub_layers[n]
@@ -148,15 +148,15 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, fil
 
 def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-clustering by d sign
 
-    prev_M = mP_[0][4]  # adjacent opposite-sign Ms, which lend to comp_g value
+    pri_M = mP_[0][4]  # adjacent opposite-sign Ms lend to comp_g value
     M = mP_[1][4]
-    adj_M_ = [prev_M + M]  # projection for first P
+    adj_M_ = [pri_M + M]  # projection for first P
 
     for _, _, _, _, next_M, _, _ in mP_[2:]:
-        adj_M_.append( (M + prev_M / 2 + next_M / 2) )
-        prev_M = M
+        adj_M_.append( (M + pri_M / 2 + next_M / 2) )  # why include M?
+        pri_M = M
         M = next_M
-    adj_M_.append((M + next_M))  # projection for last P
+    adj_M_.append((M + next_M))  # projection for last P  # why include M?
 
     comb_layers = []
     for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):
@@ -172,7 +172,7 @@ def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-cluste
 
     return comb_layers
 
-def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, filling its sub_P_ with the results
+def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, packing results in sub_P_
 
     comb_layers = []
     for sign, L, I, D, M, dert_, sub_layers in dP_:  # each sub in sub_ is nested to depth = sub_[n]

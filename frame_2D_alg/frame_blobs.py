@@ -430,7 +430,7 @@ def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
 
-def update_dert(blob):  # Update blob dert with new params
+def update_dert(blob):  # add idy, idx, m to dert__
 
     new_dert__ = np.zeros((7, blob['dert__'].shape[1], blob['dert__'].shape[2]))  # initialize with 0
     new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
@@ -472,21 +472,25 @@ if __name__ == '__main__':
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
 
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
+            '''
+            Blob G: -|+ predictive value, should be lent to or borrowed from the value of adjacent blobs. 
+            High-G "edge" blobs are low-match, they are only valuable as contrast: 
+            to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
+            '''
+            adj_S, adj_G = blob['adj_blobs'][2,3];  S, G = blob['Dert']['S','G']
+            # value borrow from flat blob to edge blob = min of values:
+            borrow_G = min(G, adj_G * (1 - S / (S + adj_S)))
+            
+            # or decay is proportional to relative adj_S,
+            # contrast is proportional to relative adj_G: * (1 - G / (G + adj_G))?
+
             if blob['sign']:
-                # if G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S)):
-                if blob['Dert']['G'] \
-                    + blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S']) \
-                        > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
-                        # min dimensions replace min S?
-                    blob = update_dert(blob)  # add idy, idx, m to dert__
+                if G + borrow_G > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:  # min dimensions replace min S
+                    blob = update_dert(blob)
                     deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-            # if M - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S)):
-            elif -blob['Dert']['G'] \
-                - blob['adj_blobs'][3] * (blob['adj_blobs'][2] / blob['Dert']['S'])\
-                    > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:
-                    # min dimensions replace min S?
-                blob = update_dert(blob)  # add idy, idx, m to dert__
+            elif -G - borrow_G > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:  # min dimensions replace min S
+                blob = update_dert(blob)
                 deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]: # if there are deeper layers

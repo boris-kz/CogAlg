@@ -12,12 +12,12 @@ We have three self-contained folders:
  1st level:
 - [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. It's a basic cross-correlation and connectivity clustering within an image, but resulting blobs also contain comparison-derived parameters for future comparison between blobs, which I haven't seen elsewhere. This code is functional.
 
-- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): Recursive calls to cluster_eval() cross-comparison (intra_comp) at extended range or higher derivation within selected blobs and then sub_blobs.  convert input blob into root blob and form respective sub_blobs: contiguous areas of same-sign deviation of new gradient.
+- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): Recursive calls to cluster_eval()' cross-comparison (intra_comp) at extended range or higher derivation within selected blobs and then sub_blobs.  convert input blob into root blob and form respective sub_blobs: contiguous areas of same-sign deviation of new gradient. Functionally complete, working-out bugs and optimization.
    
   - [intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp.py) cross-compares input parameter over extended range and forms new gradient.
   - [draw_intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/draw_intra_comp.py) computes gradients of the first three layers of forks over the whole frame, for visualization only.
   
-  [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): pseudo code for additional fork that cross-compares between vertically consecutive Ps: horizontal slices of blob segments. This will be selective for highly elongated blobs: likely edge contours. It will perform a version line-tracing: 2D -> 1D dimensionality reduction, converting such blobs into vector representations. This is similar to higher levels of 1D alg (not implemented in line_patterns).
+  [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): pseudo code for the next stage of the project. This is terminal fork of inta_blob, cross-comparing between vertically consecutive Ps: horizontal slices of blob segments. It will be selective for highly elongated blobs: likely edge contours. Comp_P is a version line-tracing: 2D -> 1D dimensionality reduction, converting edge blobs into vector representations. This is similar to higher levels of 1D alg (not implemented in line_patterns).
   
  2nd level and a prototype for recursive meta-level 2D algorithm, to be added:
  
