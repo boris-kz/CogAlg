@@ -1,9 +1,7 @@
 from itertools import (repeat, accumulate, chain, starmap, tee)
 import numbers
 import numpy as np
-import numpy.ma as ma
 
-from imageio import imsave
 import cv2
 
 # ----------------------------------------------------------------------------
@@ -11,10 +9,12 @@ import cv2
 
 # colors
 WHITE = 255
-GREY = 128
 BLACK = 0
+GREY = 128
+DGREY = 64
+LGREY = 192
 
-transparent_val = 128 # Pixel at this value are considered transparent
+masking_val = 128  # Pixel at this value can be over-written
 
 SIGN_MAPS = {
     'binary': {
@@ -196,7 +196,7 @@ def map_frame_binary(frame, *args, **kwargs):
     for i, blob in enumerate(frame['blob__']):
         blob_map = draw_blob(blob, *args, **kwargs)
 
-        over_draw(image, blob_map, blob['box'], box)
+        over_draw(image, blob_map, blob.box, box)
 
     return image
 
@@ -223,22 +223,22 @@ def map_frame(frame, *args, **kwargs):
     for i, blob in enumerate(frame['blob__']):
         blob_map = draw_blob(blob, *args, **kwargs)
 
-        over_draw(image, blob_map, blob['box'], box)
+        over_draw(image, blob_map, blob.box, box)
 
     return image
 
 
-def draw_blob(blob, *args, **kwargs):
+def draw_blob(blob, *args, blob_box=None, **kwargs):
     '''Map a single blob into an image.'''
+    if blob_box is None:
+        blob_box = blob.box
+    blob_img = blank_image(blob_box)
 
-    blob_img = blank_image(blob['box'])
-
-    for stack in blob['stack_']:
+    for stack in blob.stack_:
         sub_box = stack_box(stack)
-        stack_map = draw_stack(stack, sub_box, blob['sign'],
+        stack_map = draw_stack(stack, sub_box, blob.sign,
                                *args, **kwargs)
-        over_draw(blob_img, stack_map, sub_box, blob['box'])
-
+        over_draw(blob_img, stack_map, sub_box, blob_box)
     return blob_img
 
 
@@ -252,21 +252,25 @@ def draw_stack(stack, box, sign,
     stack_img = blank_image(box)
     y0, yn, x0, xn = box
 
-    for y, P in enumerate(stack['Py_'], start= stack['y0'] - y0):
-        for x, dert in enumerate(P['dert__'], start=P['x0']-x0):
-            if sign_map is None:
-                stack_img[y, x] = dert[0]
-            else:
+    for y, P in enumerate(stack.Py_, start= stack.y0 - y0):
+        try:
+            for x, dert in enumerate(P.dert__, start=P.x0-x0):
+                if sign_map is None:
+                    stack_img[y, x] = dert[0]
+                else:
+                    stack_img[y, x] = sign_map[sign]
+        except AttributeError:
+            for x in range(P.x0-x0, P.x0 - x0 + P.L):
                 stack_img[y, x] = sign_map[sign]
 
     return stack_img
 
 
 def stack_box(stack):
-    y0s = stack['y0']           # y0
-    yns = y0s + stack['Ly']     # Ly
-    x0s = min([P['x0'] for P in stack['Py_']])
-    xns = max([P['x0'] + P['L'] for P in stack['Py_']])
+    y0s = stack.y0           # y0
+    yns = y0s + stack.Ly     # Ly
+    x0s = min([P.x0 for P in stack.Py_])
+    xns = max([P.x0 + P.L for P in stack.Py_])
     return y0s, yns, x0s, xns
 
 
@@ -275,7 +279,7 @@ def debug_stack(background_shape, *stacks):
     for stack in stacks:
         sb = stack_box(stack)
         over_draw(image,
-                  draw_stack(stack, sb, stack['sign']),
+                  draw_stack(stack, sb, stack.sign),
                   sb)
     return image
 
@@ -285,18 +289,22 @@ def debug_blob(background_shape, *blobs):
     for blob in blobs:
         over_draw(image,
                   draw_blob(blob),
-                  blob['box'])
+                  blob.box)
     return image
 
 
-def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
+def over_draw(map, sub_map, sub_box,
+              box=None, mask=None, mv=masking_val):
     '''Over-write map of sub-structure onto map of parent-structure.'''
 
     if  box is None:
         y0, yn, x0, xn = sub_box
     else:
         y0, yn, x0, xn = localize(sub_box, box)
-    map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
+    if mask is None:
+        map[y0:yn, x0:xn][sub_map != mv] = sub_map[sub_map != mv]
+    else:
+        map[y0:yn, x0:xn][~mask] = sub_map[~mask]
     return map
 
 
@@ -310,7 +318,7 @@ def blank_image(shape):
         height = yn - y0
         width = xn - x0
 
-    return np.full((height, width), transparent_val)
+    return np.full((height, width, 3), masking_val, 'uint8')
 
 # ---------------------------------------------------------------------
 # ----------------------------------------------------------------------------
