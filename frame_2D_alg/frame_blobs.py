@@ -21,7 +21,8 @@ import sys
 import numpy as np
 import numpy.ma as ma
 
-import Cluster, AdjBinder, NoneType
+from class_cluster import ClusterStructure, NoneType
+from class_bind import AdjBinder
 # from comp_pixel import comp_pixel
 from class_stream import Img2BlobStreamer
 from utils import (
@@ -32,8 +33,8 @@ from utils import (
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
-
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
+
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
@@ -58,10 +59,10 @@ from utils import (
     is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object 
     (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)  
 
-    This is clustering by nearest-neighbor connectivity to avoid overlap / redundancy  exceed cross-comparison range.
-    That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
+    Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
     orientation. These params are essential because value of prediction = precision of what * precision of where.
-     
+    Clustering is by nearest-neighbor connectivity only, to avoid overlap among the blobs.
+
     frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
@@ -70,7 +71,7 @@ from utils import (
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-class CP(Cluster):
+class CP(ClusterStructure):
     I = int  # default type at initialization
     G = int
     Dy = int
@@ -79,7 +80,7 @@ class CP(Cluster):
     x0 = int
     sign = NoneType
 
-class Cstack(Cluster):
+class Cstack(ClusterStructure):
     I = int
     G = int
     Dy = int
@@ -92,7 +93,7 @@ class Cstack(Cluster):
     down_connect_cnt = int
     sign = NoneType
 
-class CBlob(Cluster):
+class CBlob(ClusterStructure):
     Dert = dict
     box = list
     stack_ = list
@@ -108,7 +109,7 @@ class CBlob(Cluster):
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-def comp_pixel(image):  # 2x2 pixel cross-correlation within image,
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
     # see comp_pixel_versions file for other versions and more explanation
 
     # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
@@ -148,7 +149,8 @@ def image_to_blobs(image, verbose=False, render=False):
 
     for y in range(height):  # first and last row are discarded
         if verbose:
-            print(f"\rProcessing line {y+1}/{height}", end="")
+            print(f"\rProcessing line {y+1}/{height}, ", end="")
+            print(f"{len(frame['blob__'])} blobs converted", end="")
             sys.stdout.flush()
 
         P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
@@ -173,14 +175,19 @@ def image_to_blobs(image, verbose=False, render=False):
 
     if verbose:
         nblobs = len(frame['blob__'])
-        print(f"\nImage has been successfully converted to "
+        print(f"\rImage has been successfully converted to "
               f"{nblobs} blob{'s' if nblobs != 1 else 0} in "
-              f"{time() - start_time:.3} seconds")
+              f"{time() - start_time:.3} seconds", end="")
+        blob_ids = [blob_id for blob_id in range(CBlob.instance_cnt)]
+        merged_percentage = len([*filter(lambda bid: CBlob.get_instance(bid) is None, blob_ids)]) / len(blob_ids)
+        print(f"\nPercentage of merged blobs: {merged_percentage}")
+
     if render:
         streamer.update(y)
         print("Press Q to quit...")
+        streamer.init_adj_disp()
         while streamer.render() != ord('q'):    # press Q key to qut
-            streamer.update_after_conversion()
+            streamer.update_adj_disp()
         streamer.stop()
         streamer.writeframe(output_path(arguments['image'],
                                         suffix='.out.jpg'))
@@ -495,16 +502,16 @@ if __name__ == '__main__':
 
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             '''
-            Blob G: -|+ predictive value, should be lent to or borrowed from the value of adjacent blobs. 
-            High-G "edge" blobs are low-match, they are only valuable as contrast: 
-            to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
+            Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
+            +G "edge" blobs are low-match, they are only valuable as contrast: to the extent that 
+            their negative value cancels the value of adjacent -G "flat" blobs:
             '''
             G = blob.Dert.G; adj_G = blob.adj_blobs[2]
 
-            borrow_G = min(G, adj_G)  # only the value present in both parties can be borrowed from one to another
+            borrow_G = min(abs(G), abs(adj_G))  # comp(G,_G): value present in both parties can be borrowed from one to another
             if blob.sign:
-                borrow_G *= min(G, adj_G) / max( G, adj_G)  # still tentative:
-                # borrow from adj_blobs to blob is reduced because it's not exclusive, adj_blobs may also lend to other blobs?
+                borrow_G /= 4  # borrow from adj_blobs to blob /= len(adj_blob_) / n_adj_adj_blobs they may lend to, init at 4
+            # borrow_G may also be reduced by potential lending beyond adj_blobs?
 
             if blob.sign:
                 if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions
@@ -520,7 +527,7 @@ if __name__ == '__main__':
 
     end_time = time() - start_time
     if verbose:
-        print(f"\nSession ended in {end_time:.2} seconds")
+        print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
     pass

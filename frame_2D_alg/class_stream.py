@@ -1,7 +1,7 @@
 """
 Provide streaming methods to monitor some of frame_2D_alg operations.
 """
-
+import sys
 import numpy as np
 import cv2 as cv
 
@@ -35,6 +35,8 @@ class Streamer:
 
         # initialize window
         def mouse_call(event, x, y, flags, param):
+            x = min(self.window_size[0]-1, max(x, 0))
+            y = min(self.window_size[1]-1, max(y, 0))
             self.x = x
             self.y = y
 
@@ -92,7 +94,8 @@ class Streamer:
     def _zoomed_render(self):
         self.view = cv.resize(self.view[self.y1:self.y2,
                                         self.x1:self.x2],
-                              self.window_size)
+                              self.window_size,
+                              interpolation=cv.INTER_NEAREST)
         self._render()
 
 
@@ -103,16 +106,29 @@ class Img2BlobStreamer(Streamer):
     sign_map = {False: BLACK, True: WHITE}  # sign_map for terminated blobs
     sign_map_unterminated = {False: DGREY, True: LGREY}  # sign_map for unterminated blobs
 
-    def __init__(self, blob_cls, frame, winname='image_to_blobs',
+    def __init__(self, blob_cls, frame,
+                 window_size=None,
+                 winname='image_to_blobs',
                  record_path=None):
         self.blob_cls = blob_cls
         height, width = frame['dert__'].shape[1:]
-        Streamer.__init__(self, window_size=(width, height),
+        if window_size is None:
+            if height < 480:
+                window_size = 640, 480
+            else:
+                window_size = width, height
+        Streamer.__init__(self, window_size=window_size,
                           winname=winname,
                           record_path=record_path)
         self.img = blank_image((height, width))
         self.incomplete_blob_ids = set()
         self.first_id = 0
+
+        # for interactive adj highlight after conversion
+        self.background = None
+        self.id_map = None
+        self._id_map = np.empty((height, width), 'uint64')
+        self.pointing_blob_id = None
 
     def update(self, y, P_=()):
         """Call this method each update."""
@@ -130,19 +146,114 @@ class Img2BlobStreamer(Streamer):
         # iterate through incomplete blobs
         for blob_id in set(self.incomplete_blob_ids):
             blob = self.blob_cls.get_instance(blob_id)
-            if blob is None:
+            if blob is None:  # blob has been merged, remove its ref
                 self.incomplete_blob_ids.remove(blob_id)
                 continue
-            elif blob.open_stacks == 0:  # terminated blob has no open_stack
-                blob_box = blob.box
+            elif blob.open_stacks == 0:
+                # has no open_stack, has been terminated,
+                # re-draw with normal colors, remove ref
                 self.incomplete_blob_ids.remove(blob_id)
-                blob_img = draw_blob(blob, blob_box=blob_box,
+                blob_img = draw_blob(blob, blob_box=blob.box,
                                      sign_map=Img2BlobStreamer.sign_map)
-                over_draw(self.img, blob_img, blob_box)
+                over_draw(self.img, blob_img, blob.box)
+
+                # add to id_map
+                over_draw(self._id_map, None, blob.box,
+                          mask=blob.dert__.mask[0],
+                          fill_color=blob.id)
 
         # resize window to display
-        self.frame = cv.resize(self.img, self.window_size)
+        self.frame = cv.resize(self.img, self.window_size,
+                               interpolation=cv.INTER_NEAREST)
         super().update()
 
-    def update_after_conversion(self):
+    def init_adj_disp(self):
+        # image to blob conversion end,
+        # return to default display mode
+        self.is_zooming = False
+        self.render = self._render
+        self.background = self.img  # stay constant from here
+        self.background[self.background == 255] = 32
+
+        # id_map act like a hash table to look for blob id,
+        # given mouse position
+        self._id_map = cv.resize(self._id_map, self.window_size,
+                                 interpolation=cv.INTER_NEAREST)
+        self.id_map = self._id_map
+
+        # New mouse callback, extra adj highlighting utility
+        def mouse_call(event, x, y, flags, param):
+            x = min(self.window_size[0]-1, max(x, 0))
+            y = min(self.window_size[1]-1, max(y, 0))
+            self.x = x
+            self.y = y
+
+            if event == cv.EVENT_LBUTTONDOWN and not self.is_zooming:
+                self.x1 = x
+                self.y1 = y
+                self.render = self._render_draw_rectangle
+            elif event == cv.EVENT_LBUTTONUP:
+                if not self.is_zooming:
+                    if x != self.x1 and y != self.y1:
+                        self.x2 = x
+                        self.y2 = y
+                        if x < self.x1:
+                            self.x1, self.x2 = x, self.x1
+                        if y < self.y1:
+                            self.y1, self.y2 = y, self.y1
+                        self.render = self._zoomed_render
+                        self.is_zooming = True
+                        self.id_map = cv.resize(self._id_map[self.y1:self.y2,
+                                                             self.x1:self.x2],
+                                                self.window_size,
+                                                interpolation=cv.INTER_NEAREST)
+
+                else:
+                    self.is_zooming = False
+                    self.render = self._render
+                    self.id_map = self._id_map
+
+            elif event == cv.EVENT_MOUSEMOVE:
+                if self.pointing_blob_id != self.id_map[y, x]:
+                    self.pointing_blob_id = self.id_map[y, x]
+                    # override color of the blob
+                    self.img = np.copy(self.background)
+                    blob = self.blob_cls.get_instance(self.pointing_blob_id)
+                    over_draw(self.img, None, blob.box,
+                              mask=blob.dert__.mask[0],
+                              fill_color=(255, 255, 255))  # gray
+                    # ... and its adjacents
+                    for adj_blob, pose in blob.adj_blobs[0]:
+                        if pose == 0:  # internal
+                            color = (0, 0, 255)  # red
+                        elif pose == 1:  # external
+                            color = (0, 255, 0)  # green
+                        elif pose == 2:  # open
+                            color = (255, 0, 0)  # blue
+                        else:
+                            raise ValueError("adj pose id incorrect. Something is wrong")
+                        over_draw(self.img, None, adj_blob.box,
+                                  mask=adj_blob.dert__.mask[0],
+                                  fill_color=color)
+                    # ... print blobs properties.
+                    print("\rblob:",
+                          "id =", blob.id,
+                          "sign =", "'+'" if blob.sign else "'-'",
+                          "I =", blob.Dert['I'],
+                          "G =", blob.Dert['G'],
+                          "Dy =", blob.Dert['Dy'],
+                          "Dx =", blob.Dert['Dx'],
+                          "S =", blob.Dert['S'],
+                          "Ly =", blob.Dert['Ly'],
+                          end="              ")
+                    sys.stdout.flush()
+
+        cv.setMouseCallback(self.winname, mouse_call)
+
+
+    def update_adj_disp(self):
+
+        # resize window to display
+        self.frame = cv.resize(self.img, self.window_size,
+                               interpolation=cv.INTER_NEAREST)
         super().update()

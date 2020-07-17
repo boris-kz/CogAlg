@@ -294,7 +294,8 @@ def debug_blob(background_shape, *blobs):
 
 
 def over_draw(map, sub_map, sub_box,
-              box=None, mask=None, mv=masking_val):
+              box=None, mask=None, mv=masking_val,
+              fill_color=None):
     '''Over-write map of sub-structure onto map of parent-structure.'''
 
     if  box is None:
@@ -302,9 +303,15 @@ def over_draw(map, sub_map, sub_box,
     else:
         y0, yn, x0, xn = localize(sub_box, box)
     if mask is None:
-        map[y0:yn, x0:xn][sub_map != mv] = sub_map[sub_map != mv]
+        if fill_color is None:
+            map[y0:yn, x0:xn][sub_map != mv] = sub_map[sub_map != mv]
+        else:
+            map[y0:yn, x0:xn][sub_map != mv] = fill_color
     else:
-        map[y0:yn, x0:xn][~mask] = sub_map[~mask]
+        if fill_color is None:
+            map[y0:yn, x0:xn][~mask] = sub_map[~mask]
+        else:
+            map[y0:yn, x0:xn][~mask] = fill_color
     return map
 
 

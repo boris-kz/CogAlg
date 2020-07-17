@@ -45,7 +45,7 @@ Resulting hierarchy is a dynamic pipeline: terminated patterns are outputted for
 
 
 
-From a pattern discovery perspective, all learning consists of input comparison followed by future input selection: clustering. In my scheme both are primarily lateral: within a level, while in statistical learning both comparison and clustering are vertical: between the layers. That makes it some form of [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering), which conceptually includes neural nets.
+From a pattern discovery perspective, all learning is input comparison followed by future input selection: clustering. In my scheme both are primarily lateral: within a level, while in statistical learning comparison and clustering are vertical: between the layers of composition. That makes it some form of [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering), which conceptually includes neural nets.
 
 Basic ANN is multi-layer perceptron: each node weighs the inputs at synapses, then sums and thresholds them into output. This normalized sum of inputs is their centroid, which becomes an input to next layer. Output of top layer is compared to some template, forming an error. With Stochastic Gradient Descent, that error backpropagates, converting initially random weights into meaningful values. This is a form of learning, but I have basic problems with the process:
 
