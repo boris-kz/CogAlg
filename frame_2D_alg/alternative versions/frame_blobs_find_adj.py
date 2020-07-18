@@ -465,7 +465,7 @@ if __name__ == '__main__':
     intra = 1
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob import *
+        from intra_blob_dict import *
 
         deep_frame = frame, frame # why 2 instance of frame to deep_frame initialization?
         deep_blob_i_ = []  # index of a blob with deep layers
