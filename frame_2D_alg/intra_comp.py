@@ -214,12 +214,11 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     cosine of difference between diagonally opposed angles, in vector representation
     print(cos_da1__.shape, type(cos_da1__))
     '''
-    cos_da0__ = (sin0__ * cos0__) + (sin2__ * cos2__)  # top left to bottom right
-    cos_da1__ = (sin1__ * cos1__) + (sin3__ * cos3__)  # top right to bottom left
+    cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
+    cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
     dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
     # y-decomposed cosine difference between gs
-
     dgx__ = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
     # x-decomposed cosine difference between gs
 

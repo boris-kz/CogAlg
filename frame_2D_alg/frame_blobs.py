@@ -124,7 +124,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, between its four vertex pixels
 
     return ma.stack((topleft__, G__, Gy__, Gx__))  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__= (p__, g__, dy__, dx__) for readability in functions below
+    # renamed as dert__ = (p__, g__, dy__, dx__) for readability in functions below
 
 
 def image_to_blobs(image, verbose=False, render=False):
@@ -446,22 +446,6 @@ def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
         blob1.adj_blobs[2] += blob2.Dert['G']
         blob2.adj_blobs[2] += blob1.Dert['G']
 
-def compute_borrow_G(frame):
-    '''
-    Compute borrow_G of each blob by using ratio of min(current G & adj G) to the sum of all adj blob' adj blob's min(G and adj G)
-    '''
-    for blob in frame['blob__']:
-        sum_min_G_pair = 0
-        for adj_blob in blob.adj_blobs[0]: # loop in each adj blob
-            for adj_adj_blob in adj_blob[0].adj_blobs[0]: # loop in each adj adj blob
-                sum_min_G_pair += adj_adj_blob[2] # get sum of min G per adj adj blob pair
-
-        # borrow G = current min G per pair / sum of all adj adj blob's min G per pair
-        if sum_min_G_pair:
-            blob.borrow_G = blob.adj_blobs[2] * (blob.adj_blobs[2] / sum_min_G_pair)
-        else: # sum_min_G_pair = 0
-            blob.borrow_G  = blob.adj_blobs[2]
-            # value divided by zero should be very large, in this case, borrow G will getting the highest (G/sum G) ratio which is 1
 
 # -----------------------------------------------------------------------------
 # Utilities
@@ -528,16 +512,19 @@ if __name__ == '__main__':
             their negative value cancels the value of adjacent -G "flat" blobs:
             '''
             G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
+            borrow_G = min(abs(G), abs(adj_G))  # comp(G,_G): value present in both parties can be borrowed from one to another
+
+            if blob.sign:  # borrowing is from adj_blobs to blob, needs to be divided by Min_G: total lending by adj_blobs:
+                Min_G = 0
+                for adj_blob in blob.adj_blobs[0]:  # adj_blob_
+                    Min_G += min(abs(adj_blob.Dert['G']), abs(adj_blob.adj_blobs[2]))  # adj_G of adj_blob
+                    # total lending by adj_G?
+                borrow_G *= borrow_G / Min_G  # borrow_G *= min_G / Min_G (min_Gs summed for adj_blobs)
 
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
                              sign=blob.sign, root_dert__=frame['dert__'],
                              dert__=blob.dert__, adj_blobs=blob.adj_blobs,
                              fopen=blob.fopen, margin=blob.margin)
-
-            borrow_G = min(abs(G), abs(adj_G))  # comp(G,_G): value present in both parties can be borrowed from one to another
-            if blob.sign:
-                borrow_G /= 4  # to be replaced with borrow_G *= min_G / Min_G (min_Gs summed for adj_blobs)
-
             if blob.sign:
                 if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions
                     blob = update_dert(blob)
