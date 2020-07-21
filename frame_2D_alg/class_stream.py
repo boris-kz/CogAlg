@@ -120,7 +120,13 @@ class Img2BlobStreamer(Streamer):
         Streamer.__init__(self, window_size=window_size,
                           winname=winname,
                           record_path=record_path)
+        # set background with g__
         self.img = blank_image((height, width))
+        g = frame['dert__'][1]
+        self.img[:, :, 0] = (255 * (g - g.min()) / (g.max() - g.min()))
+        self.img[:, :, 2] = self.img[:, :, 1] = self.img[:, :, 0]
+
+        # initialize other variables
         self.incomplete_blob_ids = set()
         self.first_id = 0
 
