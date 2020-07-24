@@ -97,7 +97,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     if dert__.shape[1] >2 and dert__.shape[2] >2 and False in dert__.mask:  # min size in y and x, least one dert in dert__
         sub_blobs = cluster_derts(dert__, ave*rdn, fcr, fig)
 
-        blob.fcr = fcr
+        blob.fcr = fcr  # this should be
         blob.fig = fig
         blob.rdn = rdn
         blob.rng = rng  # fork params
@@ -512,6 +512,69 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     ext_dert__[4, ystart:yend, xstart:xend] = blob.dert__[2].copy() # update dy
     ext_dert__[5, ystart:yend, xstart:xend] = blob.dert__[3].copy() # update dx
     ext_dert__.mask = ext_dert__[0].mask # set all masks to blob dert mask
+
+    return ext_dert__
+
+
+def extend_dert_diag(blob, ext_num=1, unmask_ext=1, diag=1):
+    ''' extend derts
+        input       = blob input
+        ext_num     = number of dert extension
+        unmask_ext  = enable unmasking the extended dert
+        diag        = enable dert extension in diagonal direction
+    '''
+
+    y0, yn, x0, xn = blob.box  # dert box:
+    _, rY, rX = blob.root_dert__.shape  # higher dert size
+    cP, cY, cX = blob.dert__.shape  # current dert params and size
+
+    y0e = y0 - ext_num; yne = yn + ext_num; x0e = x0 - ext_num; xne = xn + ext_num  # e is for extended
+    # prevent boundary <0 or >image size:
+    if y0e < 0:
+        y0e = 0; ystart = 0
+    else:
+        ystart = 1
+    if yne > rY:
+        yne = rY; yend = ystart + cY
+    else:
+        yend = ystart + cY
+    if x0e < 0:
+        x0e = 0; xstart = 0
+    else:
+        xstart = 1
+    if xne > rX:
+        xne = rX; xend = xstart + cX
+    else:
+        xend = xstart + cX
+
+    ini_dert = blob.root_dert__[:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
+    ext_dert__ = ma.array(np.zeros((cP, ini_dert.shape[1], ini_dert.shape[2])))  # initialize extended 2D array
+    ext_dert__.mask = True  # set default mask = true
+    ext_mask = ext_dert__.mask[0].copy()  # get extended mask
+    ext_mask[ystart:yend, xstart:xend] = blob.dert__[0].mask  # get mask from blob's dert and assign it into the new extended mask
+
+    if unmask_ext:  # unmask extended derts, almost similar with previous margin operation
+
+        mask_tem = ext_mask.copy()  # temporary mask for shifting operation
+
+        # orthogonal 4 directions
+        ext_mask[:-1, :] = ext_mask[:-1, :] * ~np.logical_or(~mask_tem[1:, :], ~mask_tem[:-1, :])  # up
+        ext_mask[1:, :] = ext_mask[1:, :] * ~np.logical_or(~mask_tem[:-1, :], ~mask_tem[1:, :])  # down
+        ext_mask[:, :-1] = ext_mask[:, :-1] * ~np.logical_or(~mask_tem[:, 1:], ~mask_tem[:, :-1])  # left
+        ext_mask[:, 1:] = ext_mask[:, 1:] * ~np.logical_or(~mask_tem[:, :-1], ~mask_tem[:, 1:])  # right
+
+        if diag:
+            # diagonal 4 directions
+            ext_mask[:-1, :-1] = ext_mask[:-1, :-1] * ~np.logical_or(~mask_tem[1:, 1:], ~mask_tem[:-1, :-1])  # top left
+            ext_mask[:-1, 1:] = ext_mask[:-1, 1:] * ~np.logical_or(~mask_tem[1:, :-1], ~mask_tem[:-1, 1:])  # top right
+            ext_mask[1:, :-1] = ext_mask[1:, :-1] * ~np.logical_or(~mask_tem[:-1, 1:], ~mask_tem[1:, :-1])  # bottom left
+            ext_mask[1:, 1:] = ext_mask[1:, 1:] * ~np.logical_or(~mask_tem[:-1, :-1], ~mask_tem[1:, 1:])  # bottom left
+
+    ext_dert__[0, ystart:yend, xstart:xend] = blob.dert__[0].copy()  # update i
+    ext_dert__[3, ystart:yend, xstart:xend] = blob.dert__[1].copy()  # update g
+    ext_dert__[4, ystart:yend, xstart:xend] = blob.dert__[2].copy()  # update dy
+    ext_dert__[5, ystart:yend, xstart:xend] = blob.dert__[3].copy()  # update dx
+    ext_dert__.mask = ext_mask  # set all masks to extended mask
 
     return ext_dert__
 
