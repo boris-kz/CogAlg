@@ -517,7 +517,9 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
 
 def extend_dert_diag(blob, ext_num=1, unmask_ext=1, diag=1):
-    ''' extend derts
+    '''
+        only if unmask more than one dert in mask_SUM: any kernel missing diagonal dert also misses orthogonal derts
+        extend derts
         input       = blob input
         ext_num     = number of dert extension
         unmask_ext  = enable unmasking the extended dert

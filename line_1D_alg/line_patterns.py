@@ -7,7 +7,7 @@ from itertools import zip_longest
   line_patterns is a principal version of 1st-level 1D algorithm
   Operations: 
 
-- Cross-compare consecutive pixels within each row of image, forming dert_ queue of derts: tuples of derivatives per pixel. 
+- Cross-compare consecutive pixels within each row of image, forming dert_: queue of derts, each a tuple of derivatives per pixel. 
   dert_ is then segmented into patterns mPs and dPs: contiguous sequences of pixels forming same-sign match or difference. 
   Initial match is inverse deviation of variation: m = ave_|d| - |d|, rather than minimum for directly defined match: 
   albedo or intensity of reflected light doesn't correlate with predictive value of the object that reflects it.
@@ -19,7 +19,7 @@ from itertools import zip_longest
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
   
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
-  Both forks currently process all inputs (full overlap), but they can be exclusive or partly overlapping to reduce redundancy. 
+  Both forks are currently exclusive per P to avoid redundancy, but they can be made partly or fully overlapping.  
 
   Initial bi-lateral cross-comp here is 1D slice of 2D 3x3 kernel, while uni-lateral d is equivalent to 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
@@ -134,8 +134,9 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, pac
     for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub_layer is nested to depth = sub_layers[n]
 
         if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
+            # or M adjusted for borrow to neg mP_: all comps are to form params for hLe comp?
 
-            r_dert_ = rng_comp(dert_, fid)  # rng+ comp, skip predictable next dert
+            r_dert_ = range_comp(dert_, fid)  # rng+ comp, skip predictable next dert
             sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
 
             sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
@@ -148,12 +149,12 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, pac
 
 def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-clustering by d sign
 
-    pri_M = mP_[0][4]  # adjacent opposite-sign Ms lend to comp_g value
+    pri_M = mP_[0][4]  # adjacent opposite-sign Ms lend to comp_g value. all abs?
     M = mP_[1][4]
     adj_M_ = [pri_M + M]  # projection for first P
 
     for _, _, _, _, next_M, _, _ in mP_[2:]:
-        adj_M_.append( (M + pri_M / 2 + next_M / 2) )  # why include M?
+        adj_M_.append( (M + pri_M / 2 + next_M / 2) )  # why include M? abs(M) if bilateral adjustment?
         pri_M = M
         M = next_M
     adj_M_.append((M + next_M))  # projection for last P  # why include M?
@@ -179,7 +180,7 @@ def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, packing 
 
         if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds at rng+1:
 
-            d_dert_ = der_comp(dert_)
+            d_dert_ = deriv_comp(dert_)
             sub_dP_ = form_mP_(d_dert_); Ls = len(sub_dP_)   # cluster dP derts by md, won't happen
 
             sub_layers += [[(Ls, 1, 1, rdn, rng, sub_dP_)]]  # 1st layer: Ls, fdP, fid, rdn, rng, sub_P_
@@ -197,7 +198,7 @@ def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, packing 
     if fid: abs(D), else: M + ave*L  # inverted diff m vs. more precise complementary m 
 '''
 
-def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
+def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
     rdert_ = []   # prefix '_' denotes the prior of same-name variables, initialization:
     (__i, _, __short_rng_m), _, (_i, _short_rng_d, _short_rng_m) = dert_[0:3]  # no __short_rng_d
@@ -222,7 +223,7 @@ def rng_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add
     return rdert_
 
 
-def der_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign match is partial d match
+def deriv_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign match is partial d match
     # dd and md may match across d sign, but likely in high-match area, spliced by spec in comp_P?
 
     ddert_ = []   # initialization:
@@ -269,7 +270,7 @@ if __name__ == "__main__":
 Depth of cross-comparison (discontinuous if generic) is increased in lower-recursion e_, then between same-recursion e_s:
 
 comp (s):  same-sign only?
-    comp (L, I, D, M): then select redundant I | (D,M) and evaluate for div L
+    comp (L, I, D, M), select redundant I | (D,M),  div L if V_var * D_vars, and same-sign d_vars?
         comp (dert_):  lower composition than layers, if any
     comp (layer_):  same-derivation elements
         comp (P_):  sub patterns

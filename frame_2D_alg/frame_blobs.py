@@ -508,14 +508,16 @@ if __name__ == '__main__':
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             '''
             Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
-            +G "edge" blobs are low-match, they are only valuable as contrast: to the extent that 
-            their negative value cancels positive value of adjacent -G "flat" blobs:
+            +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
+            positive value of adjacent -G "flat" blobs.
             '''
             G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
-            borrow_G = min(abs(G), abs(adj_G))
-            # comp(G,_G): only value present in both parties can be borrowed from one to another
-            # although borrowing may be reduced by some inductive leaking across external blob?
-
+            borrow_G = min(abs(G), abs(adj_G) / 2)
+            '''
+            int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, same as pri_M and next_M in line patterns
+            borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
+            Also borrow_G -= inductive leaking across external blob?
+            '''
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
                              sign=blob.sign, root_dert__=frame['dert__'],
                              dert__=blob.dert__, adj_blobs=blob.adj_blobs,
@@ -565,7 +567,7 @@ if __name__ == '__main__':
     """
     # END DEBUG ---------------------------------------------------------------
     ''' 
-    below may not be needed as external borrow is likely cancelled-out by extra-external lend:
+    This may not be needed as external borrow is likely cancelled-out by extra-external lend:
 
     if blob.sign:  # borrow is from adj_blobs, which may lend to multiple blobs, current blob borrow is reduced accordingly:
 
