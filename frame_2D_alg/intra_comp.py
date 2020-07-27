@@ -15,6 +15,10 @@ XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
     YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
             0       0  ¦          -2       2  ¦
             1   2   1  ¦          -1   0   1  ¦
+            
+Or Scharr coefs:
+# YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
+# XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 '''
 
 def comp_r(dert__, fig, root_fcr):
@@ -72,11 +76,9 @@ def comp_r(dert__, fig, root_fcr):
 
         dy__[:] = dert__[4, 1:-1:2, 1:-1:2]  # sparse to align with i__center
         dx__[:] = dert__[5, 1:-1:2, 1:-1:2]
-        m__[:]  =  dert__[6, 1:-1:2, 1:-1:2]
-        dy__.mask = dx__.mask = m__.mask = mask_i
+        m__[:] = dert__[6, 1:-1:2, 1:-1:2]
 
-    else:   # root fork is comp_g or comp_pixel, initialize sparse derivatives:
-        pass
+    dy__.mask = dx__.mask = m__.mask = mask_i
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
 

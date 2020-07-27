@@ -149,15 +149,16 @@ def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, pac
 
 def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-clustering by d sign
 
-    pri_M = mP_[0][4]  # adjacent opposite-sign Ms lend to comp_g value. all abs?
+    # same for pos_mP: intra_comp value = projected extra_comp value, but then borrow adjustment?
+
+    pri_M = mP_[0][4]  # comp_g value is borrowed from adjacent opposite-sign Ms
     M = mP_[1][4]
-    adj_M_ = [pri_M + M]  # projection for first P
+    adj_M_ = [abs(M)]  # initial next_M, no / 2: projection for first P, abs for bilateral adjustment?
 
     for _, _, _, _, next_M, _, _ in mP_[2:]:
-        adj_M_.append( (M + pri_M / 2 + next_M / 2) )  # why include M? abs(M) if bilateral adjustment?
+        adj_M_.append( (abs( pri_M / 2) + abs( next_M / 2)) )  # exclude M
         pri_M = M
-        M = next_M
-    adj_M_.append((M + next_M))  # projection for last P  # why include M?
+    adj_M_.append( abs(pri_M))  # no / 2: projection for last P
 
     comb_layers = []
     for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):

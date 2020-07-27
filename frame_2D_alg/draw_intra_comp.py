@@ -4,7 +4,9 @@ Visualize output of first 3 layers of intra_comp forks, for testing
 
 from frame_2D_alg.comp_pixel_versions import comp_pixel_m
 from frame_2D_alg.intra_comp import *
+
 import cv2
+import argparse
 import numpy as np
 
 # -----------------------------------------------------------------------------
@@ -17,21 +19,30 @@ OUTPUT_PATH = "./images/intra_comp/"
 # Functions
 
 def draw_g(img_out, g_):
+    endy = min(img_out.shape[0], g_.shape[0])
+    endx = min(img_out.shape[1], g_.shape[1])
+    img_out[:endy, :endx] = normalization(g_[:endy, :endx])
 
-    for y in range(g_.shape[0]):  # loop rows, skip last row
-        for x in range(g_.shape[1]):  # loop columns, skip last column
-            img_out[y,x] = g_[y,x]
+    # normalization stretches min-max to 0-255?
+    # We only need to set max=255 and linear scaling, so anything less than max / 255 is 0
 
-    return img_out.astype('uint8')
+    # for y in range(g_.shape[0]):  # loop rows, skip last row
+    #     for x in range(g_.shape[1]):  # loop columns, skip last column
+    #         img_out[y,x] = g_[y,x]
+    # return img_out.astype('uint8')
+
+    return img_out
 
 def draw_gr(img_out, g_, rng):
+    img_out[:] = cv2.resize(normalization(g_) ,(img_out.shape[1], img_out.shape[0]),
+                            interpolation=cv2.INTER_NEAREST)
+    # for y in range(g_.shape[0]):
+    #     for x in range(g_.shape[1]):
+    #         # project central dert to surrounding rim derts
+    #         img_out[(y*rng)+1:(y*rng)+1+rng,(x*rng)+1:(x*rng)+1+rng] = g_[y,x]
 
-    for y in range(g_.shape[0]):
-        for x in range(g_.shape[1]):
-            # project central dert to surrounding rim derts
-            img_out[(y*rng)+1:(y*rng)+1+rng,(x*rng)+1:(x*rng)+1+rng] = g_[y,x]
-
-    return img_out.astype('uint8')
+    # return img_out.astype('uint8')
+    return img_out
 
 def imread(filename, raise_if_not_read=True):
     "Read an image in grayscale, return array."
@@ -48,9 +59,13 @@ def imread(filename, raise_if_not_read=True):
 # Main
 
 if __name__ == "__main__":
+    argument_parser = argparse.ArgumentParser()
+    argument_parser.add_argument('-i', '--image', help='path to image file', default=IMAGE_PATH)
+    argument_parser.add_argument('-o', '--output', help='path to output folder', default=OUTPUT_PATH)
+    arguments = argument_parser.parse_args()
 
     print('Reading image...')
-    image = imread(IMAGE_PATH)
+    image = imread(arguments.image)
 
     dert_ = comp_pixel_m(image)
 
@@ -82,7 +97,7 @@ if __name__ == "__main__":
     ggrr_dert_  = comp_g(grr_dert_)                         # elif +Grr
 
     print('Drawing forks...')
-    ini_ = np.zeros((image.shape[0], image.shape[1]))  # initialize image y, x
+    ini_ = np.zeros((image.shape[0], image.shape[1]), 'uint8')  # initialize image y, x
 
     # 0th layer
     g_ = draw_g(ini_.copy(), dert_[3])
@@ -121,39 +136,39 @@ if __name__ == "__main__":
     mrrr_ = draw_gr(ini_.copy(), grrr_dert_[6], rng=8)
 
     # save to disk
-    cv2.imwrite(OUTPUT_PATH+'0_g.png', g_)
-    cv2.imwrite(OUTPUT_PATH+'1_m.png', m_)
+    cv2.imwrite(arguments.output + '0_g.jpg',  g_)
+    cv2.imwrite(arguments.output + '1_m.jpg',  m_)
 
-    cv2.imwrite(OUTPUT_PATH+'2_gg.png', gg_)
-    cv2.imwrite(OUTPUT_PATH+'3_mg.png', mg_)
-    cv2.imwrite(OUTPUT_PATH+'4_gr.png', gr_)
-    cv2.imwrite(OUTPUT_PATH+'5_mr.png', mr_)
+    cv2.imwrite(arguments.output + '2_gg.jpg',  gg_)
+    cv2.imwrite(arguments.output + '3_mg.jpg',  mg_)
+    cv2.imwrite(arguments.output + '4_gr.jpg',  gr_)
+    cv2.imwrite(arguments.output + '5_mr.jpg',  mr_)
 
-    cv2.imwrite(OUTPUT_PATH+'6_ggg.png', ggg_)
-    cv2.imwrite(OUTPUT_PATH+'7_mgg.png', mgg_)
-    cv2.imwrite(OUTPUT_PATH+'8_grg.png', grg_)
-    cv2.imwrite(OUTPUT_PATH+'9_mrg.png', mrg_)
-    cv2.imwrite(OUTPUT_PATH+'10_ggr.png', ggr_)
-    cv2.imwrite(OUTPUT_PATH+'11_mgr.png', mgr_)
-    cv2.imwrite(OUTPUT_PATH+'12_grr.png', grr_)
-    cv2.imwrite(OUTPUT_PATH+'13_mrr.png', mrr_)
+    cv2.imwrite(arguments.output + '6_ggg.jpg',  ggg_)
+    cv2.imwrite(arguments.output + '7_mgg.jpg',  mgg_)
+    cv2.imwrite(arguments.output + '8_grg.jpg',  grg_)
+    cv2.imwrite(arguments.output + '9_mrg.jpg',  mrg_)
+    cv2.imwrite(arguments.output + '10_ggr.jpg',  ggr_)
+    cv2.imwrite(arguments.output + '11_mgr.jpg',  mgr_)
+    cv2.imwrite(arguments.output + '12_grr.jpg',  grr_)
+    cv2.imwrite(arguments.output + '13_mrr.jpg',  mrr_)
 
-    cv2.imwrite(OUTPUT_PATH+'14_gggg.png', gggg_)
-    cv2.imwrite(OUTPUT_PATH+'15_mggg.png', mggg_)
-    cv2.imwrite(OUTPUT_PATH+'16_grgg.png', grgg_)
-    cv2.imwrite(OUTPUT_PATH+'17_mrgg.png', mrgg_)
-    cv2.imwrite(OUTPUT_PATH+'18_ggrg.png', ggrg_)
-    cv2.imwrite(OUTPUT_PATH+'19_mgrg.png', mgrg_)
-    cv2.imwrite(OUTPUT_PATH+'20_grrg.png', grrg_)
-    cv2.imwrite(OUTPUT_PATH+'21_mrrg.png', mrrg_)
-    cv2.imwrite(OUTPUT_PATH+'22_gggr.png', gggr_)
-    cv2.imwrite(OUTPUT_PATH+'23_mggr.png', mggr_)
-    cv2.imwrite(OUTPUT_PATH+'24_grgr.png', grgr_)
-    cv2.imwrite(OUTPUT_PATH+'25_mrgr.png', mrgr_)
-    cv2.imwrite(OUTPUT_PATH+'26_ggrr.png', ggrr_)
-    cv2.imwrite(OUTPUT_PATH+'27_mgrr.png', mgrr_)
-    cv2.imwrite(OUTPUT_PATH+'28_grrr.png', grrr_)
-    cv2.imwrite(OUTPUT_PATH+'29_mrrr.png', mrrr_)
+    cv2.imwrite(arguments.output + '14_gggg.jpg',  gggg_)
+    cv2.imwrite(arguments.output + '15_mggg.jpg',  mggg_)
+    cv2.imwrite(arguments.output + '16_grgg.jpg',  grgg_)
+    cv2.imwrite(arguments.output + '17_mrgg.jpg',  mrgg_)
+    cv2.imwrite(arguments.output + '18_ggrg.jpg',  ggrg_)
+    cv2.imwrite(arguments.output + '19_mgrg.jpg',  mgrg_)
+    cv2.imwrite(arguments.output + '20_grrg.jpg',  grrg_)
+    cv2.imwrite(arguments.output + '21_mrrg.jpg',  mrrg_)
+    cv2.imwrite(arguments.output + '22_gggr.jpg',  gggr_)
+    cv2.imwrite(arguments.output + '23_mggr.jpg',  mggr_)
+    cv2.imwrite(arguments.output + '24_grgr.jpg',  grgr_)
+    cv2.imwrite(arguments.output + '25_mrgr.jpg',  mrgr_)
+    cv2.imwrite(arguments.output + '26_ggrr.jpg',  ggrr_)
+    cv2.imwrite(arguments.output + '27_mgrr.jpg',  mgrr_)
+    cv2.imwrite(arguments.output + '28_grrr.jpg',  grrr_)
+    cv2.imwrite(arguments.output + '29_mrrr.jpg',  mrrr_)
 
     print('Done...')
 
@@ -169,4 +184,3 @@ def add_colour(img_comp,size_y,size_x):
     img_colour = np.rollaxis(img_colour,0,3).astype('uint8')
 
     return img_colour
-
