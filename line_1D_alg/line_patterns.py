@@ -61,8 +61,8 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         dert_.append((_p, _d, _m * 1.5))  # unilateral d, forward-project last m to bilateral m
 
         mP_ = form_mP_(dert_)  # forms m-sign patterns
-        intra_mP_(mP_, fid=False, rdn=1, rng=3)  # evaluates sub-recursion per mP
-        intra_neg_mP_(mP_, rdn=1, rng=3)  # evaluates negative mPs for internal clustering into dPs
+        adj_M_ = form_adjacent_M_(mP_)  # compute adjacent Ms for borrowing
+        intra_mP_(mP_, adj_M_ , fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per mP
 
         frame_of_patterns_.append( [mP_] )  # line of patterns is added to frame of patterns
 
@@ -77,8 +77,8 @@ def form_mP_(P_dert_):  # initialization, accumulation, termination
     if d is None: D = 0
     else: D = d
     L, I, M, dert_, sub_H = 1, p, m, [(p, d, m)], []
-
-    for p, d, m in P_dert_[1:]:  # cluster P_derts by m | d sign
+    # cluster P_derts by m sign
+    for p, d, m in P_dert_[1:]:
         sign = m > 0
         if sign != _sign:  # sign change: terminate P
             P_.append((_sign, L, I, D, M, dert_, sub_H))
@@ -98,8 +98,8 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
     p, d, m = P_dert_[1]  # skip dert_[0]: d is None
     _sign = d > 0
     L, I, D, M, dert_, sub_H = 1, p, 0, m, [(p, d, m)], []
-
-    for p, d, m in P_dert_[2:]:  # cluster P_derts by d sign
+    # cluster P_derts by d sign
+    for p, d, m in P_dert_[2:]:
         sign = d > 0
         if sign != _sign:  # sign change: terminate P
             P_.append((_sign, L, I, D, M, dert_, sub_H))
@@ -111,6 +111,20 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
 
     P_.append((_sign, L, I, D, M, dert_, sub_H))  # incomplete P
     return P_
+
+
+def form_adjacent_M_(mP_):  # compute adjacent Ms, for neg_mP borrow evaluation
+
+    pri_M = mP_[0][4]  # comp_g value is borrowed from adjacent opposite-sign Ms
+    M = mP_[1][4]
+    adj_M_ = [abs(M)]  # initial next_M, no / 2: projection for first P, abs for bilateral adjustment
+
+    for _, _, _, _, next_M, _, _ in mP_[2:]:
+        adj_M_.append((abs(pri_M / 2) + abs(next_M / 2)))  # exclude M
+        pri_M = M
+
+    adj_M_.append(abs(pri_M))  # no / 2: projection for last P
+    return adj_M_
 
 ''' 
     Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
@@ -128,49 +142,30 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
                 # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
 '''
 
-def intra_mP_(P_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, pack results into sub_mP_
+def intra_mP_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line mP_, pack results into sub_mP_
 
     comb_layers = []  # combine into root P sub_layers[1:]
-    for sign, L, I, D, M, dert_, sub_layers in P_:  # each sub_layer is nested to depth = sub_layers[n]
+    for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sub_layers[n]
 
-        if M > ave_M * rdn and L > 4:  # low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
-            # or M adjusted for borrow to neg mP_: all comps are to form params for hLe comp?
+        if sign:  # +mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
+            if M - adj_M > ave_M * rdn and L > 4:  # reduced by contrast borrow: all comps are to form params for hLe comp?
 
-            r_dert_ = range_comp(dert_, fid)  # rng+ comp, skip predictable next dert
-            sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
+                r_dert_ = range_comp(dert_, fid)  # rng+ comp, skip predictable next dert
+                sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
 
-            sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
-            sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
+                sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
 
-            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
-                           # splice sub_layers across sub_Ps for return as root sub_layers[1:]
-    return comb_layers
+        else:  # -mP: high-variation span, contrast value, min_M is borrowed from adjacent +mPs:
+            if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, not per L: decay is separate?
 
-def intra_neg_mP_(mP_, rdn, rng):  # compute adjacent M, evaluate for sub-clustering by d sign
+                sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
+                sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                sub_layers += intra_dP_(sub_dP_, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nmP
 
-    # same for pos_mP: intra_comp value = projected extra_comp value, but then borrow adjustment?
-
-    pri_M = mP_[0][4]  # comp_g value is borrowed from adjacent opposite-sign Ms
-    M = mP_[1][4]
-    adj_M_ = [abs(M)]  # initial next_M, no / 2: projection for first P, abs for bilateral adjustment?
-
-    for _, _, _, _, next_M, _, _ in mP_[2:]:
-        adj_M_.append( (abs( pri_M / 2) + abs( next_M / 2)) )  # exclude M
-        pri_M = M
-    adj_M_.append( abs(pri_M))  # no / 2: projection for last P
-
-    comb_layers = []
-    for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):
-
-        if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, not per L: decay is separate?
-
-            sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
-            sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if Ls > min?
-            sub_layers += intra_dP_(sub_dP_, rdn + 1 + 1 / Ls, rng+1)  # der_comp eval per nmP
-
-            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
+        comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                       zip_longest(comb_layers, sub_layers, fillvalue=[])]
+                       # splice sub_layers across sub_Ps for return as root sub_layers[1:]
 
     return comb_layers
 
@@ -178,6 +173,7 @@ def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, packing 
 
     comb_layers = []
     for sign, L, I, D, M, dert_, sub_layers in dP_:  # each sub in sub_ is nested to depth = sub_[n]
+    # eval for allocated adj_M?
 
         if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds at rng+1:
 
@@ -214,7 +210,7 @@ def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 a
         d = i - _i
         if fid: m = min(i, _i) - ave_min  # match = min: magnitude of derived vars correlates with stability
         else:   m = ave - abs(d)  # inverse match: intensity doesn't correlate with stability
-        rng_d = _d + _short_rng_d      # difference accumulated in rng
+        rng_d = _d + _short_rng_d   # difference accumulated in rng
         rng_m = _m + m + _short_rng_m  # bilateral match accumulated in rng
         rdert_.append((_i, rng_d, rng_m))
         _i, _d, _m, _short_rng_d, _short_rng_m =\
@@ -243,6 +239,23 @@ def deriv_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign
 
     ddert_.append((_i, _d, _m * 1.5))  # forward-project bilateral m
     return ddert_
+
+
+def intra_neg_mP_(mP_, adj_M_, rdn, rng):  # deprecated:  evaluate for sub-clustering by d sign
+
+    comb_layers = []
+    for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(mP_, adj_M_):
+
+        if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, not per L: decay is separate?
+
+            sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
+            sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if Ls > min?
+            sub_layers += intra_dP_(sub_dP_, rdn + 1 + 1 / Ls, rng+1)  # der_comp eval per nmP
+
+            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
+
+    return comb_layers
 
 
 if __name__ == "__main__":

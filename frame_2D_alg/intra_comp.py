@@ -16,7 +16,7 @@ XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
             0       0  ¦          -2       2  ¦
             1   2   1  ¦          -1   0   1  ¦
             
-Or Scharr coefs:
+| Scharr coefs:
 # YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
 # XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 '''
@@ -142,15 +142,16 @@ def comp_r(dert__, fig, root_fcr):
         '''
         8-tuple of differences between central dert angle and rim dert angle:
         '''
-        cos_da = [
-            ((a__topleft[1].data     * a__center[1].data) + (a__center[0].data * a__topleft[0].data)),
-            ((a__top[1].data         * a__center[1].data) + (a__center[0].data * a__top[0].data)),
-            ((a__topright[1].data    * a__center[1].data) + (a__center[0].data * a__topright[0].data)),
-            ((a__right[1].data       * a__center[1].data) + (a__center[0].data * a__right[0].data)),
-            ((a__bottomright[1].data * a__center[1].data) + (a__center[0].data * a__bottomright[0].data)),
-            ((a__bottom[1].data      * a__center[1].data) + (a__center[0].data * a__bottom[0].data)),
-            ((a__bottomleft[1].data  * a__center[1].data) + (a__center[0].data * a__bottomleft[0].data)),
-            ((a__left[1].data        * a__center[1].data) + (a__center[0].data * a__left[0].data))
+        cos_da = [  # abs because cos_da should only reduce magnitude of projected d | m, not alter it's sign:
+
+            abs(((a__topleft[1].data     * a__center[1].data) + (a__center[0].data * a__topleft[0].data))),
+            abs(((a__top[1].data         * a__center[1].data) + (a__center[0].data * a__top[0].data))),
+            abs(((a__topright[1].data    * a__center[1].data) + (a__center[0].data * a__topright[0].data))),
+            abs(((a__right[1].data       * a__center[1].data) + (a__center[0].data * a__right[0].data))),
+            abs(((a__bottomright[1].data * a__center[1].data) + (a__center[0].data * a__bottomright[0].data))),
+            abs(((a__bottom[1].data      * a__center[1].data) + (a__center[0].data * a__bottom[0].data))),
+            abs(((a__bottomleft[1].data  * a__center[1].data) + (a__center[0].data * a__bottomleft[0].data))),
+            abs(((a__left[1].data        * a__center[1].data) + (a__center[0].data * a__left[0].data)))
         ]
         '''
         8-tuple of cosine matches per direction:
@@ -235,8 +236,8 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
     gg__[:] = ma.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = ma.minimum(g0__, g2__) * cos_da0__  # g match = min(g, _g) *cos(da)
-    mg1__ = ma.minimum(g1__, g3__) * cos_da1__
+    mg0__ = ma.minimum(g0__, g2__) * abs(cos_da0__)  # g match = min(g, _g) *cos(da)
+    mg1__ = ma.minimum(g1__, g3__) * abs(cos_da1__)
     mg__[:]  = mg0__ + mg1__
 
     ig__[:] = g__ [:-1, :-1]  # remove last row and column to align with derived params
