@@ -13,7 +13,7 @@ import numpy as np
 # Input:
 IMAGE_PATH = "./images/raccoon.jpg"
 # Outputs:
-OUTPUT_PATH = "./images/intra_comp/"
+OUTPUT_PATH = "./images/intra_comp0/"
 
 # -----------------------------------------------------------------------------
 # Functions
@@ -23,7 +23,8 @@ def draw_g(img_out, g_):
     endx = min(img_out.shape[1], g_.shape[1])
     img_out[:endy, :endx] = (g_[:endy, :endx] * 255) / g_.max()  # scale to max=255, less than max / 255 is 0
 
-    # was: img_out[:endy, :endx] = normalization(g_[:endy, :endx]);
+    # was: img_out[:endy, :endx] = normalization(g_[:endy, :endx])
+    # assert array.min() >= 0
     # for y in range(g_.shape[0]):  # loop rows, skip last row
     #     for x in range(g_.shape[1]):  # loop columns, skip last column
     #         img_out[y,x] = g_[y,x]

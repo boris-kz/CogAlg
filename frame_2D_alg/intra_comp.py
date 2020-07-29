@@ -61,15 +61,23 @@ def comp_r(dert__, fig, root_fcr):
     i__bottomleft =  i__[2::2, :-2:2]
     i__left =        i__[1:-1:2, :-2:2]
     ''' 
-    unmask all derts in kernels with only one masked dert, can be set to any number of masked derts,
-    to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels.
-    unmasked derts were already computed due to extend_dert() in intra_blob   
+    unmask all derts in kernels with only one masked dert (can be set to any number of masked derts), 
+    to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
+    unmasked derts were computed due to extend_dert() in intra_blob   
     '''
-    mask_i = mask_SUM([i__center.mask, i__topleft.mask, i__top.mask,
-                       i__topright.mask, i__right.mask, i__bottomright.mask,
-                       i__bottom.mask, i__bottomleft.mask, i__left.mask])
+    majority_mask = ( i__[:, 1:-1:2, 1:-1:2].mask.astype(int)
+                    + i__[:, :-2:2, :-2:2].mask.astype(int)
+                    + i__[:, :-2:2, 1:-1: 2].mask.astype(int)
+                    + i__[:, :-2:2, 2::2].mask.astype(int)
+                    + i__[:, 1:-1:2, 2::2].mask.astype(int)
+                    + i__[:, 2::2, 2::2].mask.astype(int)
+                    + i__[:, 2::2, 1:-1:2].mask.astype(int)
+                    + i__[:, 2::2, :-2:2].mask.astype(int)
+                    + i__[:, 1:-1:2, :-2:2].mask.astype(int)
+                    ) > 1
+    i__center.mask = i__topleft.mask = i__top.mask = i__topright.mask = i__right.mask = i__bottomright.mask = \
+    i__bottom.mask = i__bottomleft.mask = i__left.mask = majority_mask  # not only i__center
 
-    i__center.mask = mask_i
     idy__[:], idx__[:] = dert__[[1, 2], 1:-1:2, 1:-1:2]
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
@@ -78,7 +86,7 @@ def comp_r(dert__, fig, root_fcr):
         dx__[:] = dert__[5, 1:-1:2, 1:-1:2]
         m__[:] = dert__[6, 1:-1:2, 1:-1:2]
 
-    dy__.mask = dx__.mask = m__.mask = mask_i
+    dy__.mask = dx__.mask = m__.mask = majority_mask
 
     if not fig:  # compare four diametrically opposed pairs of rim pixels:
 
@@ -99,7 +107,7 @@ def comp_r(dert__, fig, root_fcr):
 
         g__[:] = ma.hypot(dy__, dx__)  # gradient
         '''
-        inverse match = SAD, more precise measure of variation than g, direction-invariant
+        inverse match = SAD, direction-invariant and more precise measure of variation than g
         (all diagonal derivatives can be imported from prior 2x2 comp)
         '''
         m__ +=( abs(i__center.data - i__topleft.data)
@@ -128,42 +136,50 @@ def comp_r(dert__, fig, root_fcr):
         a__bottom      = a__[:, 2::2, 1:-1:2]
         a__bottomleft  = a__[:, 2::2, :-2:2]
         a__left        = a__[:, 1:-1:2, :-2:2]
-
         ''' 
-        only mask kernels with more than one masked dert 
+        only mask kernels with more than one masked dert, for all operations below: 
         '''
-        mask_a = mask_SUM([a__center.mask, a__topleft.mask, a__top.mask,
-                           a__topright.mask, a__right.mask, a__bottomright.mask,
-                           a__bottom.mask, a__bottomleft.mask, a__left.mask])
+        majority_mask_a = ( a__[:, 1:-1:2, 1:-1:2].mask.astype(int)
+                          + a__[:, :-2:2, :-2:2].mask.astype(int)
+                          + a__[:, :-2:2, 1:-1: 2].mask.astype(int)
+                          + a__[:, :-2:2, 2::2].mask.astype(int)
+                          + a__[:, 1:-1:2, 2::2].mask.astype(int)
+                          + a__[:, 2::2, 2::2].mask.astype(int)
+                          + a__[:, 2::2, 1:-1:2].mask.astype(int)
+                          + a__[:, 2::2, :-2:2].mask.astype(int)
+                          + a__[:, 1:-1:2, :-2:2].mask.astype(int)
+                          ) > 1
+        a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
+        a__bottom.mask = a__bottomleft.mask = a__left.mask = majority_mask_a
 
-        assert (mask_a[0] == mask_a[1]).all()
-        dy__.mask = dx__.mask = m__.mask = mask_a[0]
+        assert (majority_mask_a[0] == majority_mask_a[1]).all()
+        # what does that do?
+        dy__.mask = dx__.mask = m__.mask = majority_mask_a[0]
 
         '''
         8-tuple of differences between central dert angle and rim dert angle:
         '''
-        cos_da = [  # abs because cos_da should only reduce magnitude of projected d | m, not alter it's sign:
-
-            abs(((a__topleft[1].data     * a__center[1].data) + (a__center[0].data * a__topleft[0].data))),
-            abs(((a__top[1].data         * a__center[1].data) + (a__center[0].data * a__top[0].data))),
-            abs(((a__topright[1].data    * a__center[1].data) + (a__center[0].data * a__topright[0].data))),
-            abs(((a__right[1].data       * a__center[1].data) + (a__center[0].data * a__right[0].data))),
-            abs(((a__bottomright[1].data * a__center[1].data) + (a__center[0].data * a__bottomright[0].data))),
-            abs(((a__bottom[1].data      * a__center[1].data) + (a__center[0].data * a__bottom[0].data))),
-            abs(((a__bottomleft[1].data  * a__center[1].data) + (a__center[0].data * a__bottomleft[0].data))),
-            abs(((a__left[1].data        * a__center[1].data) + (a__center[0].data * a__left[0].data)))
+        cos_da = [
+            ((a__topleft[1].data     * a__center[1].data) + (a__center[0].data * a__topleft[0].data)),
+            ((a__top[1].data         * a__center[1].data) + (a__center[0].data * a__top[0].data)),
+            ((a__topright[1].data    * a__center[1].data) + (a__center[0].data * a__topright[0].data)),
+            ((a__right[1].data       * a__center[1].data) + (a__center[0].data * a__right[0].data)),
+            ((a__bottomright[1].data * a__center[1].data) + (a__center[0].data * a__bottomright[0].data)),
+            ((a__bottom[1].data      * a__center[1].data) + (a__center[0].data * a__bottom[0].data)),
+            ((a__bottomleft[1].data  * a__center[1].data) + (a__center[0].data * a__bottomleft[0].data)),
+            ((a__left[1].data        * a__center[1].data) + (a__center[0].data * a__left[0].data))
         ]
         '''
         8-tuple of cosine matches per direction:
         '''
-        m__ += (  ma.minimum(i__center.data, i__topleft.data)    * cos_da[0]
-                + ma.minimum(i__center.data, i__top .data)       * cos_da[1]
-                + ma.minimum(i__center.data, i__topright.data)   * cos_da[2]
-                + ma.minimum(i__center.data, i__right.data)      * cos_da[3]
-                + ma.minimum(i__center.data, i__bottomright.data)* cos_da[4]
-                + ma.minimum(i__center.data, i__bottom.data)     * cos_da[5]
-                + ma.minimum(i__center.data, i__bottomleft.data) * cos_da[6]
-                + ma.minimum(i__center.data, i__left.data)       * cos_da[7]
+        m__ += (  ma.minimum(i__center.data, i__topleft.data)     * cos_da[0]
+                + ma.minimum(i__center.data, i__top.data)         * cos_da[1]
+                + ma.minimum(i__center.data, i__topright.data)    * cos_da[2]
+                + ma.minimum(i__center.data, i__right.data)       * cos_da[3]
+                + ma.minimum(i__center.data, i__bottomright.data) * cos_da[4]
+                + ma.minimum(i__center.data, i__bottom.data)      * cos_da[5]
+                + ma.minimum(i__center.data, i__bottomleft.data)  * cos_da[6]
+                + ma.minimum(i__center.data, i__left.data)        * cos_da[7]
                 )
         '''
         8-tuple of cosine differences per direction:
@@ -204,18 +220,20 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     # Unpack relevant params
     g__, dy__, dx__ = dert__[[3, 4, 5]]    # g, dy, dx -> local i, idy, idx
     g__.data[np.where(g__.data == 0)] = 1  # replace 0 values with 1 to avoid error, not needed in high-g blobs?
+    ''' 
+    for all operations below: only mask kernels with more than one masked dert 
+    '''
+    majority_mask = (g__[:-1, :-1].mask.astype(int) +
+                     g__[:-1, 1:].mask.astype(int) +
+                     g__[1:, 1:].mask.astype(int) +
+                     g__[1:, :-1].mask.astype(int)
+                     ) > 1
+    g__.mask, dy__.mask, dx__.mask = majority_mask
 
     g0__, dy0__, dx0__ = g__[:-1, :-1].data, dy__[:-1, :-1].data, dx__[:-1, :-1].data  # top left
     g1__, dy1__, dx1__ = g__[:-1, 1:].data,  dy__[:-1, 1:].data,  dx__[:-1, 1:].data   # top right
     g2__, dy2__, dx2__ = g__[1:, 1:].data,   dy__[1:, 1:].data,   dx__[1:, 1:].data    # bottom right
     g3__, dy3__, dx3__ = g__[1:, :-1].data,  dy__[1:, :-1].data,  dx__[1:, :-1].data   # bottom left
-    ''' 
-    only mask kernels with more than one masked dert 
-    '''
-    summed_mask = (g__[:-1, :-1].mask.astype(int) +
-                   g__[:-1, 1:].mask.astype(int) +
-                   g__[1:, 1:].mask.astype(int) +
-                   g__[1:, :-1].mask.astype(int)) > 1
 
     sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
     sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
@@ -229,21 +247,22 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
     cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
-    dgy__[:] = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
+    dgy__[:] = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da0__))
     # y-decomposed cosine difference between gs
     dgx__[:] = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
     # x-decomposed cosine difference between gs
 
     gg__[:] = ma.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = ma.minimum(g0__, g2__) * abs(cos_da0__)  # g match = min(g, _g) *cos(da)
-    mg1__ = ma.minimum(g1__, g3__) * abs(cos_da1__)
-    mg__[:]  = mg0__ + mg1__
+    mg0__ = ma.minimum(g0__, g2__) * (cos_da1__+1)  # +1 to make all positive
+    mg1__ = ma.minimum(g1__, g3__) * (cos_da1__+1)
+    mg__[:]  = mg0__ + mg1__  # match of gradient
 
     ig__[:] = g__ [:-1, :-1]  # remove last row and column to align with derived params
     idy__[:] = dy__[:-1, :-1]
     idx__[:] = dx__[:-1, :-1]  # -> idy, idx to compute cos for comp rg
-    gg__.mask = mg__.mask = dgy__.mask = dgx__.mask = summed_mask
+    # unnecessary?:
+    gg__.mask = mg__.mask = dgy__.mask = dgx__.mask = majority_mask
 
     '''
     next comp_rg will use g, dy, dx
@@ -344,7 +363,7 @@ def comp_r_old(dert__, fig, root_fcr):
         a__left        = a__[:, 1:-1:2, :-2:2].copy()
 
         ''' 
-        mask kernels with more than one masked dert 
+        mask only kernels with more than one masked dert 
         '''
         mask_a = mask_SUM([a__center.mask, a__topleft.mask, a__top.mask,
                            a__topright.mask, a__right.mask, a__bottomright.mask,

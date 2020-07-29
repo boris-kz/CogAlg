@@ -89,7 +89,6 @@ def form_mP_(P_dert_):  # initialization, accumulation, termination
         _sign = sign
 
     P_.append((_sign, L, I, D, M, dert_, sub_H))  # incomplete P
-
     return P_
 
 def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as -M?
@@ -152,37 +151,39 @@ def intra_mP_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
 
                 r_dert_ = range_comp(dert_, fid)  # rng+ comp, skip predictable next dert
                 sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
-
+                sub_adj_M_ = form_adjacent_M_(sub_mP_)
                 sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
-                sub_layers += intra_mP_(sub_mP_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
+
+                sub_layers += intra_mP_(sub_mP_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
+                comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                               zip_longest(comb_layers, sub_layers, fillvalue=[])]  # splice sub_layers across sub_Ps
 
         else:  # -mP: high-variation span, contrast value, min_M is borrowed from adjacent +mPs:
             if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, not per L: decay is separate?
 
+                rel_adj_M = adj_M / -M  # for allocation of adj_M to each dP
                 sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
                 sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if Ls > min?
-                sub_layers += intra_dP_(sub_dP_, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nmP
 
-        comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                       zip_longest(comb_layers, sub_layers, fillvalue=[])]
-                       # splice sub_layers across sub_Ps for return as root sub_layers[1:]
-
+                sub_layers += intra_dP_(sub_dP_, rel_adj_M, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nmP
+                comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                               zip_longest(comb_layers, sub_layers, fillvalue=[])]
+                               # splice sub_layers across sub_Ps for return as root sub_layers[1:]
     return comb_layers
 
-def intra_dP_(dP_, rdn, rng):  # evaluate for sub-recursion in line P_, packing results in sub_P_
+
+def intra_dP_(dP_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P_, packing results in sub_P_
 
     comb_layers = []
     for sign, L, I, D, M, dert_, sub_layers in dP_:  # each sub in sub_ is nested to depth = sub_[n]
-    # eval for allocated adj_M?
+        if min( abs(D), abs(D) * rel_adj_M) > ave_D * rdn and L > 3:  # abs(D) * rel_adj_M: allocated adj_M
 
-        if abs(D) > ave_D * rdn and L > 3:  # cross-comp uni_ds at rng+1:
+            d_dert_ = deriv_comp(dert_)  # cross-comp of uni_ds
+            sub_mP_ = form_mP_(d_dert_); Ls = len(sub_mP_)  # cluster dP derts by md, won't happen
+            sub_adj_M_ = form_adjacent_M_(sub_mP_)
+            sub_layers += [[(Ls, 1, 1, rdn, rng, sub_mP_)]]  # 1st layer: Ls, fdP, fid, rdn, rng, sub_P_
 
-            d_dert_ = deriv_comp(dert_)
-            sub_dP_ = form_mP_(d_dert_); Ls = len(sub_dP_)   # cluster dP derts by md, won't happen
-
-            sub_layers += [[(Ls, 1, 1, rdn, rng, sub_dP_)]]  # 1st layer: Ls, fdP, fid, rdn, rng, sub_P_
-            sub_layers += intra_mP_(sub_dP_, 1, rdn + 1 + 1 / Ls, rng+1)
-
+            sub_layers += intra_mP_(sub_mP_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng+1)
             comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
                            zip_longest(comb_layers, sub_layers, fillvalue=[])]
 
