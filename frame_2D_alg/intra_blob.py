@@ -1,6 +1,6 @@
 from collections import deque, defaultdict
 from class_cluster import ClusterStructure, NoneType
-from intra_comp import *
+from intra_comp_ma import *
 from itertools import zip_longest
 # from comp_P_draft import comp_P_blob
 

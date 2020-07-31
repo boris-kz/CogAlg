@@ -7,7 +7,7 @@ Note: Since these operations performed only on multivariate variables,
 
 import frame_blobs_alone
 from intra_blob_alone import ave
-from intra_comp import *
+from intra_comp_ma import *
 from comp_pixel_versions import comp_pixel
 from utils import imwrite, imread, map_frame_binary
 

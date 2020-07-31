@@ -1,5 +1,5 @@
 from collections import deque, defaultdict
-from intra_comp import *
+from intra_comp_ma import *
 from itertools import zip_longest
 
 '''

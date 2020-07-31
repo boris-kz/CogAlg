@@ -111,7 +111,7 @@ class Img2BlobStreamer(Streamer):
                  winname='image_to_blobs',
                  record_path=None):
         self.blob_cls = blob_cls
-        height, width = frame['dert__'].shape[1:]
+        height, width = frame['dert__'][0].shape
         if window_size is None:
             if height < 480:
                 window_size = 640, 480
@@ -165,8 +165,7 @@ class Img2BlobStreamer(Streamer):
 
                 # add to id_map
                 over_draw(self._id_map, None, blob.box,
-                          mask=blob.dert__.mask[0],
-                          fill_color=blob.id)
+                          mask=blob.mask, fill_color=blob.id)
 
         # resize window to display
         self.frame = cv.resize(self.img, self.window_size,
@@ -226,7 +225,7 @@ class Img2BlobStreamer(Streamer):
                     self.img = np.copy(self.background)
                     blob = self.blob_cls.get_instance(self.pointing_blob_id)
                     over_draw(self.img, None, blob.box,
-                              mask=blob.dert__.mask[0],
+                              mask=blob.mask,
                               fill_color=(255, 255, 255))  # gray
                     # ... and its adjacents
                     for adj_blob, pose in blob.adj_blobs[0]:
@@ -239,7 +238,7 @@ class Img2BlobStreamer(Streamer):
                         else:
                             raise ValueError("adj pose id incorrect. Something is wrong")
                         over_draw(self.img, None, adj_blob.box,
-                                  mask=adj_blob.dert__.mask[0],
+                                  mask=adj_blob.mask,
                                   fill_color=color)
                     # ... print blobs properties.
                     print("\rblob:",

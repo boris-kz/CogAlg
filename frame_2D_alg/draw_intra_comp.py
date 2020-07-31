@@ -3,7 +3,7 @@ Visualize output of first 3 layers of intra_comp forks, for testing
 """
 
 from frame_2D_alg.comp_pixel_versions import comp_pixel_m
-from frame_2D_alg.intra_comp import *
+from frame_2D_alg.intra_comp_ma import *
 
 import cv2
 import argparse

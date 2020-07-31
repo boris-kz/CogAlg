@@ -31,7 +31,7 @@ from itertools import zip_longest
   '''
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
-ave = 15   # |difference| between pixels that coincides with average value of mP - redundancy to overlapping dPs
+ave = 15     # |difference| between pixels that coincides with average value of mP
 ave_min = 2  # for m defined as min |d|: smaller?
 ave_M = 50   # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 5    # min |D| for initial incremental-derivation comparison(d_)
@@ -61,11 +61,12 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         dert_.append((_p, _d, _m * 1.5))  # unilateral d, forward-project last m to bilateral m
 
         mP_ = form_mP_(dert_)  # forms m-sign patterns
-        adj_M_ = form_adjacent_M_(mP_)  # compute adjacent Ms for borrowing
-        intra_mP_(mP_, adj_M_ , fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per mP
+        if len(mP_) > 4:
+            adj_M_ = form_adjacent_M_(mP_)  # compute adjacent Ms for borrowing
+            intra_mP_(mP_, adj_M_ , fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per mP
 
-        frame_of_patterns_.append( [mP_] )  # line of patterns is added to frame of patterns
-
+        frame_of_patterns_.append( [mP_] )
+        # line of patterns is added to frame of patterns
     return frame_of_patterns_  # frame of patterns will be output to level 2
 
 
@@ -91,7 +92,7 @@ def form_mP_(P_dert_):  # initialization, accumulation, termination
     P_.append((_sign, L, I, D, M, dert_, sub_H))  # incomplete P
     return P_
 
-def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as -M?
+def form_dP_(P_dert_):  # cluster by d sign, within -mPs: min neg m spans
 
     P_ = []  # initialization:
     p, d, m = P_dert_[1]  # skip dert_[0]: d is None
@@ -112,7 +113,7 @@ def form_dP_(P_dert_):  # cluster by d sign, min mag is already selected for as 
     return P_
 
 
-def form_adjacent_M_(mP_):  # compute adjacent Ms, for neg_mP borrow evaluation
+def form_adjacent_M_(mP_):  # compute array of adjacent Ms, for contrastive borrow evaluation
 
     pri_M = mP_[0][4]  # comp_g value is borrowed from adjacent opposite-sign Ms
     M = mP_[1][4]
@@ -146,22 +147,22 @@ def intra_mP_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
     comb_layers = []  # combine into root P sub_layers[1:]
     for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sub_layers[n]
 
-        if sign:  # +mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19
-            if M - adj_M > ave_M * rdn and L > 4:  # reduced by contrast borrow: all comps are to form params for hLe comp?
+        if sign:  # +mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19; change to 2^n: 2, 4, 8?
+            if M - adj_M > ave_M * rdn and L > 4:  # reduced by lending to contrast: all comps form params for hLe comp?
 
                 r_dert_ = range_comp(dert_, fid)  # rng+ comp, skip predictable next dert
                 sub_mP_ = form_mP_(r_dert_); Ls = len(sub_mP_)  # cluster by m sign
-                sub_adj_M_ = form_adjacent_M_(sub_mP_)
                 sub_layers += [[(Ls, False, fid, rdn, rng, sub_mP_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                if len(sub_mP_) > 4:
+                    sub_adj_M_ = form_adjacent_M_(sub_mP_)
+                    sub_layers += intra_mP_(sub_mP_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
+                    comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                                   zip_longest(comb_layers, sub_layers, fillvalue=[])]  # splice sub_layers across sub_Ps
 
-                sub_layers += intra_mP_(sub_mP_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng*2 + 1)  # feedback
-                comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                               zip_longest(comb_layers, sub_layers, fillvalue=[])]  # splice sub_layers across sub_Ps
+        else:  # -mP: high-variation span, min neg M is contrast value, borrowed from adjacent +mPs:
+            if min(-M, adj_M) > ave_D * rdn and L > 3:  # cancelled M+ val, M = min | ~v_SAD
 
-        else:  # -mP: high-variation span, contrast value, min_M is borrowed from adjacent +mPs:
-            if min(-M, adj_M) > ave_D * rdn and L > 3:  # |D| val = cancelled M+ val, not per L: decay is separate?
-
-                rel_adj_M = adj_M / -M  # for allocation of adj_M to each dP
+                rel_adj_M = adj_M / -M  # for allocation of -mP' adj_M to each of its internal dPs
                 sub_dP_ = form_dP_(dert_); Ls = len(sub_dP_)  # cluster by input d sign match: partial d match
                 sub_layers += [[(Ls, True, 1, rdn, rng, sub_dP_)]]  # 1st layer, Dert=[], fill if Ls > min?
 
@@ -177,24 +178,23 @@ def intra_dP_(dP_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
     comb_layers = []
     for sign, L, I, D, M, dert_, sub_layers in dP_:  # each sub in sub_ is nested to depth = sub_[n]
         if min( abs(D), abs(D) * rel_adj_M) > ave_D * rdn and L > 3:  # abs(D) * rel_adj_M: allocated adj_M
+            # if fid: abs(D), else: M + ave*L: complementary m is more precise than inverted diff?
 
             d_dert_ = deriv_comp(dert_)  # cross-comp of uni_ds
             sub_mP_ = form_mP_(d_dert_); Ls = len(sub_mP_)  # cluster dP derts by md, won't happen
-            sub_adj_M_ = form_adjacent_M_(sub_mP_)
             sub_layers += [[(Ls, 1, 1, rdn, rng, sub_mP_)]]  # 1st layer: Ls, fdP, fid, rdn, rng, sub_P_
-
-            sub_layers += intra_mP_(sub_mP_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng+1)
-            comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                           zip_longest(comb_layers, sub_layers, fillvalue=[])]
-
+            if len(sub_mP_) > 3:
+                sub_adj_M_ = form_adjacent_M_(sub_mP_)
+                sub_layers += intra_mP_(sub_mP_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng+1)
+                comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
+                               zip_longest(comb_layers, sub_layers, fillvalue=[])]
+    ''' 
+    adj_M is not affected by primary range_comp per mP?
+    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
+    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+    '''
     return comb_layers
 
-''' maximal M adjustment is initial cross-sign comb, doesn't affect primary rng+ eval per mP
-    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
-
-    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
-    if fid: abs(D), else: M + ave*L  # inverted diff m vs. more precise complementary m 
-'''
 
 def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
