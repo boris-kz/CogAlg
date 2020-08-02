@@ -31,9 +31,9 @@ from utils import (
 )
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
-
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image.
+
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
@@ -44,8 +44,8 @@ from utils import (
 
     Higher-row elements include additional parameters, derived while they were lower-row elements. Processing is bottom-up:
     from input-row to higher-row structures, sequential because blobs are irregular, not suited for matrix operations.
-
     Resulting blob structure (fixed set of parameters per blob): 
+
     - Dert = I, G, Dy, Dx, S, Ly: summed pixel-level dert params I, G, Dy, Dx, surface area S, vertical depth Ly
     - sign = s: sign of gradient deviation
     - box  = [y0, yn, x0, xn], 
@@ -124,7 +124,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, between its four vertex pixels
 
     return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed as dert__ = (p__, g__, dy__, dx__) for readability in functions below
+    # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
 
 
 def image_to_blobs(image, verbose=False, render=False):
@@ -521,9 +521,10 @@ if __name__ == '__main__':
             G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
             borrow_G = min(abs(G), abs(adj_G) / 2)
             '''
-            int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, same as pri_M and next_M in line patterns
+            int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, 
+            same as pri_M and next_M in line patterns but direction here is radial: inside-out
             borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
-            Also borrow_G -= inductive leaking across external blob?
+            Add borrow_G -= inductive leaking across external blob?
             '''
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
                              sign=blob.sign, root_dert__=frame['dert__'],

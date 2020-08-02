@@ -23,13 +23,6 @@ def draw_g(img_out, g_):
     endx = min(img_out.shape[1], g_.shape[1])
     img_out[:endy, :endx] = (g_[:endy, :endx] * 255) / g_.max()  # scale to max=255, less than max / 255 is 0
 
-    # was: img_out[:endy, :endx] = normalization(g_[:endy, :endx])
-    # assert array.min() >= 0
-    # for y in range(g_.shape[0]):  # loop rows, skip last row
-    #     for x in range(g_.shape[1]):  # loop columns, skip last column
-    #         img_out[y,x] = g_[y,x]
-    # return img_out.astype('uint8')
-
     return img_out
 
 def draw_gr(img_out, g_, rng):
@@ -37,12 +30,6 @@ def draw_gr(img_out, g_, rng):
     img_out[:] = cv2.resize((g_[:] * 255) / g_.max(),  # normalize g to uint
                             (img_out.shape[1], img_out.shape[0]),
                             interpolation=cv2.INTER_NEAREST)
-    # for y in range(g_.shape[0]):
-    #     for x in range(g_.shape[1]):
-    #         # project central dert to surrounding rim derts
-    #         img_out[(y*rng)+1:(y*rng)+1+rng,(x*rng)+1:(x*rng)+1+rng] = g_[y,x]
-
-    # return img_out.astype('uint8')
     return img_out
 
 def imread(filename, raise_if_not_read=True):
@@ -72,30 +59,30 @@ if __name__ == "__main__":
 
     print('Processing first layer comps...')
     # comp_p ->
-    gr_dert_ = comp_r(dert_, fig = 0, root_fcr = 0)         # if   +M
-    gg_dert_ = comp_g(dert_)                                # elif +G
+    gr_dert_, _ = comp_r(dert_, fig = 0, root_fcr = 0)         # if   +M
+    gg_dert_, _ = comp_g(dert_)                                # elif +G
 
     print('Processing second layer comps...')
     # comp_g ->
-    grg_dert_  = comp_r(gg_dert_, fig = 1, root_fcr = 0)    # if   +Mg
-    ggg_dert_  = comp_g(gg_dert_)                           # elif +Gg
+    grg_dert_, _ = comp_r(gg_dert_, fig = 1, root_fcr = 0)    # if   +Mg
+    ggg_dert_, _ = comp_g(gg_dert_)                           # elif +Gg
     # comp_r ->
-    grr_dert_  = comp_r(gr_dert_, fig = 0, root_fcr = 1)    # if   +Mr
-    ggr_dert_  = comp_g(gr_dert_)                           # elif +Gr
+    grr_dert_, _ = comp_r(gr_dert_, fig = 0, root_fcr = 1)    # if   +Mr
+    ggr_dert_, _ = comp_g(gr_dert_)                           # elif +Gr
 
     print('Processing third layer comps...')
     # comp_gg ->
-    grgg_dert_ = comp_r(ggg_dert_, fig = 1, root_fcr = 0)   # if   +Mgg
-    gggg_dert_ = comp_g(ggg_dert_)                          # elif +Ggg
+    grgg_dert_, _ = comp_r(ggg_dert_, fig = 1, root_fcr = 0)   # if   +Mgg
+    gggg_dert_, _ = comp_g(ggg_dert_)                          # elif +Ggg
     # comp_rg ->
-    grrg_dert_  = comp_r(grg_dert_, fig = 0, root_fcr = 1)  # if   +Mrg
-    ggrg_dert_ = comp_g(grg_dert_)                          # elif +Grg
+    grrg_dert_, _ = comp_r(grg_dert_, fig = 0, root_fcr = 1)  # if   +Mrg
+    ggrg_dert_, _ = comp_g(grg_dert_)                          # elif +Grg
     # comp_gr ->
-    grgr_dert_ = comp_r(ggr_dert_, fig = 1, root_fcr = 0)   # if   +Mgr
-    gggr_dert_    = comp_g(ggr_dert_)                       # elif +Ggr
+    grgr_dert_, _ = comp_r(ggr_dert_, fig = 1, root_fcr = 0)   # if   +Mgr
+    gggr_dert_, _ = comp_g(ggr_dert_)                       # elif +Ggr
     # comp_rrp ->
-    grrr_dert_ = comp_r(grr_dert_, fig = 0, root_fcr = 1)   # if   +Mrr
-    ggrr_dert_  = comp_g(grr_dert_)                         # elif +Grr
+    grrr_dert_, _ = comp_r(grr_dert_, fig = 0, root_fcr = 1)   # if   +Mrr
+    ggrr_dert_, _ = comp_g(grr_dert_)                         # elif +Grr
 
     print('Drawing forks...')
     ini_ = np.zeros((image.shape[0], image.shape[1]), 'uint8')  # initialize image y, x

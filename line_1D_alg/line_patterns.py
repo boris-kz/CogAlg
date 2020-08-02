@@ -122,8 +122,9 @@ def form_adjacent_M_(mP_):  # compute array of adjacent Ms, for contrastive borr
     for _, _, _, _, next_M, _, _ in mP_[2:]:
         adj_M_.append((abs(pri_M / 2) + abs(next_M / 2)))  # exclude M
         pri_M = M
-
+        M = next_M
     adj_M_.append(abs(pri_M))  # no / 2: projection for last P
+
     return adj_M_
 
 ''' 
