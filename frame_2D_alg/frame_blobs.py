@@ -178,7 +178,7 @@ def image_to_blobs(image, verbose=False, render=False):
     blob_binder.bind_from_lower(stack_binder)
     assign_adjacent(blob_binder)  # add adj_blobs to each blob
 
-    if verbose:
+    if verbose:  # print infos at the end
         nblobs = len(frame['blob__'])
         print(f"\rImage has been successfully converted to "
               f"{nblobs} blob{'s' if nblobs != 1 else 0} in "
@@ -187,7 +187,7 @@ def image_to_blobs(image, verbose=False, render=False):
         merged_percentage = len([*filter(lambda bid: CBlob.get_instance(bid) is None, blob_ids)]) / len(blob_ids)
         print(f"\nPercentage of merged blobs: {merged_percentage}")
 
-    if render:
+    if render:  # rendering mode after blob conversion
         streamer.update(y)
         streamer.writeframe(output_path(arguments['image'],
                                         suffix='.im2blobs.jpg'))
@@ -426,8 +426,8 @@ def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
-        blob1 = CBlob.get_instance(blob_id1)
-        blob2 = CBlob.get_instance(blob_id2)
+        blob1 = blob_binder.cluster_cls.get_instance(blob_id1)
+        blob2 = blob_binder.cluster_cls.get_instance(blob_id2)
 
         if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
             if blob1.fopen:
@@ -457,19 +457,6 @@ def accum_Dert(Dert: dict, **params) -> None:
 
 
 def update_dert(blob):  # add idy, idx, m to dert__
-    '''
-    old code
-    new_dert__ = np.zeros((7, blob.dert__.shape[1], blob.dert__.shape[2])) # initialize with 0
-    new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
-    new_dert__.mask = blob.dert__[0].mask
-    new_dert__[0] = blob.dert__[0]  # i
-    # new_dert__[1] = idy
-    # new_dert__[2] = idx
-    new_dert__[3] = blob.dert__[1]  # g
-    new_dert__[4] = blob.dert__[2]  # dy
-    new_dert__[5] = blob.dert__[3]  # dx
-    # new_dert__[6] = m
-    '''
     i, g, dy, dx = blob.dert__
     blob.dert__ = (i,
                    np.zeros(i.shape),  # idy
@@ -511,6 +498,14 @@ if __name__ == '__main__':
         deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
+        empty = np.zeros_like(frame['dert__'][0])
+        deep_root_dert__ = (  # update root dert__
+            frame['dert__'][0],    # i
+            empty,                 # idy
+            empty,                 # idx
+            *frame['dert__'][1:],  # g, dy, dx
+            empty,                 # m
+        )
 
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             '''
@@ -527,7 +522,7 @@ if __name__ == '__main__':
             Add borrow_G -= inductive leaking across external blob?
             '''
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
-                             sign=blob.sign, root_dert__=frame['dert__'],
+                             sign=blob.sign, root_dert__=deep_root_dert__,
                              dert__=blob.dert__, mask=blob.mask,
                              adj_blobs=blob.adj_blobs, fopen=blob.fopen) #, margin=blob.margin)
             if blob.sign:

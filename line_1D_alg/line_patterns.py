@@ -1,7 +1,7 @@
 import cv2
 import argparse
 from time import time
-from line_1D_alg.utils import *
+from utils import *
 from itertools import zip_longest
 ''' 
   line_patterns is a principal version of 1st-level 1D algorithm
@@ -148,7 +148,7 @@ def intra_mP_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
     comb_layers = []  # combine into root P sub_layers[1:]
     for (sign, L, I, D, M, dert_, sub_layers), adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sub_layers[n]
 
-        if sign:  # +mP: low-variation span, eval comp at rng*3 (2+1): 1, 3, 9, kernel: 3, 7, 19; change to 2^n: 2, 4, 8?
+        if sign:  # +mP: low-variation span, eval comp at rng=2^n: 2, 4., kernel: 5, 9., rng=1 cross-comp is kernels 2 and 3
             if M - adj_M > ave_M * rdn and L > 4:  # reduced by lending to contrast: all comps form params for hLe comp?
 
                 r_dert_ = range_comp(dert_, fid)  # rng+ comp, skip predictable next dert
@@ -271,9 +271,6 @@ if __name__ == "__main__":
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     assert image is not None, "No image in the path"
     image = image.astype(int)
-    # same image loaded online, without cv2:
-    # from scipy import misc
-    # image = misc.face(gray=True).astype(int)
 
     start_time = time()
     # Main
@@ -281,15 +278,3 @@ if __name__ == "__main__":
     end_time = time() - start_time
     print(end_time)
 
-'''
-2nd level cross-compares resulting patterns Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison. 
-Depth of cross-comparison (discontinuous if generic) is increased in lower-recursion e_, then between same-recursion e_s:
-
-comp (s):  same-sign only?
-    comp (L, I, D, M), select redundant I | (D,M),  div L if V_var * D_vars, and same-sign d_vars?
-        comp (dert_):  lower composition than layers, if any
-    comp (layer_):  same-derivation elements
-        comp (P_):  sub patterns
-                            
-This 2nd level alg should be extended to a recursive meta-level algorithm 
-'''

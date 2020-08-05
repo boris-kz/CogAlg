@@ -1,7 +1,11 @@
 from collections import deque, defaultdict
 from class_cluster import ClusterStructure, NoneType
-from intra_comp_ma import *
+from class_bind import AdjBinder
+from frame_blobs import assign_adjacent
+from intra_comp import comp_g, comp_r
 from itertools import zip_longest
+from utils import pairwise
+import numpy as np
 # from comp_P_draft import comp_P_blob
 
 '''
@@ -33,7 +37,6 @@ from itertools import zip_longest
 
 ave  = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
-
 class CDeepP(ClusterStructure):
     I = int
     G = int
@@ -70,6 +73,7 @@ class CDeepBlob(ClusterStructure):
     open_stacks = int
     root_dert__ = object
     dert__ = object
+    mask = object
     adj_blobs = list
     fopen = bool
     margin = list
@@ -88,14 +92,14 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
 
     spliced_layers = []  # to extend root_blob sub_layers
-    ext_dert__ = extend_dert(blob)
+    ext_dert__, ext_mask = extend_dert(blob)
     if fcr:
-        dert__ = comp_r(ext_dert__, fig, fcr)  # -> m sub_blobs
+        dert__, mask = comp_r(ext_dert__, fig, fcr, ext_mask)  # -> m sub_blobs
     else:
-        dert__ = comp_g(ext_dert__)  # -> g sub_blobs:
+        dert__, mask = comp_g(ext_dert__, ext_mask)  # -> g sub_blobs:
 
-    if dert__.shape[1] >2 and dert__.shape[2] >2 and False in dert__.mask:  # min size in y and x, least one dert in dert__
-        sub_blobs = cluster_derts(dert__, ave*rdn, fcr, fig)
+    if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
+        sub_blobs = cluster_derts(dert__, mask, ave*rdn, fcr, fig)
 
         blob.fcr = fcr  # this should be
         blob.fig = fig
@@ -106,12 +110,12 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
             if sub_blob.sign:
-                if sub_blob.Dert['M'] - sub_blob.adj_blobs[3] * (sub_blob.adj_blobs[2] / sub_blob.Dert['S']) \
+                if sub_blob.Dert['M'] - sub_blob.adj_blobs[2] * (sub_blob.adj_blobs[1] / sub_blob.Dert['S']) \
                     > aveB * rdn:  # M - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S))
                     # comp_r fork:
                     blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng*2, fig=fig, fcr=1)
                 # else: comp_P_
-            elif sub_blob.Dert['G'] + sub_blob.adj_blobs[3] * (sub_blob.adj_blobs[2] / sub_blob.Dert['S']) \
+            elif sub_blob.Dert['G'] + sub_blob.adj_blobs[2] * (sub_blob.adj_blobs[1] / sub_blob.Dert['S']) \
                 > aveB * rdn:  # G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S))
                 # comp_g fork:
                 blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng=rng, fig=1, fcr=0)
@@ -122,53 +126,59 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     return spliced_layers
 
 
-def cluster_derts(dert__, Ave, fcr, fig):  # similar to frame_to_blobs
+def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
 
     if fcr:  # comp_r output;  form clustering criterion:
-        if fig: crit__ = dert__[0] + dert__[4] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
-        else:   crit__ = Ave - dert__[1]  # eval by -g, accum in rng
+        if fig: crit__ = dert__[0] + dert__[6] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
+        else:   crit__ = Ave - dert__[3]  # eval by -g, accum in rng
     else:    # comp_g output
-        crit__ = dert__[4] - Ave  # comp_g output eval by m, or clustering is always by m?
+        crit__ = dert__[6] - Ave  # comp_g output eval by m, or clustering is always by m?
 
-    root_dert__ = dert__.copy() # derts after the comps operation, which is the root_dert__
-    dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
+    root_dert__ = dert__ # derts after the comps operation, which is the root_dert__
+    dert__ = [*zip(*dert__)]  # transpose dert__ into shape [y, params, x]
 
+    sub_blobs = []  # from form_blob:
     stack_ = deque()  # buffer of running vertical stacks of Ps
+    stack_binder = AdjBinder(CDeepStack)
 
-    for y in range(dert__.shape[0]):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
-        if False in dert__[y, :, :].mask:  # [y,x,params], there is at least one dert in line
-
-            P_ = form_P_(dert__[y,:,:], crit__[y, :])  # horizontal clustering, adds a row of Ps
-            P_ = scan_P_(P_, stack_,root_dert__)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
-            stack_ = form_stack_(P_, root_dert__, y)
-
-    sub_blobs =[]  # from form_blob:
+    for y, dert_ in enumerate(dert__):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
+        # if False in mask[i]:  # [y,x,params], there is at least one dert in line
+            P_binder = AdjBinder(CDeepP)  # binder needs data about clusters of the same level
+            P_ = form_P_(zip(*dert_), crit__[y], mask[y], P_binder)  # horizontal clustering, adds a row of Ps
+            P_ = scan_P_(P_, stack_,root_dert__, sub_blobs, P_binder)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
+            stack_ = form_stack_(P_, root_dert__, sub_blobs, y)
+            stack_binder.bind_from_lower(P_binder)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
-        sub_blobs.append ( form_blob(stack_.popleft(),root_dert__))
+        form_blob(stack_.popleft(),root_dert__, sub_blobs)
 
-    sub_blobs = find_adjacent(sub_blobs)
+    blob_binder = AdjBinder(CDeepBlob)
+    blob_binder.bind_from_lower(stack_binder)
+    assign_adjacent(blob_binder)  # add adj_blobs to each blob
+    # sub_blobs = find_adjacent(sub_blobs)
 
     return sub_blobs
 
 # clustering functions:
 #-------------------------------------------------------------------------------------------------------------------
 
-def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    mask_ = dert_[:,0].mask
     sign_ = crit_ > 0
     x0 = 0
-    for x in range(len(dert_)):
-        if ~mask_[x]:
-            x0 = x  # coordinate of first unmasked dert in line
-            break
-    I, iDy, iDx, G, Dy, Dx, M, L = *dert_[x0], 1  # initialize P params
+    try:
+        while mask_[x0]:  # skip until not masked
+            next(dert_)
+            x0 += 1
+    except IndexError:
+        return P_   # the whole line is masked, return an empty P
+
+    I, iDy, iDx, G, Dy, Dx, M, L = *next(dert_), 1  # initialize P params
     _sign = sign_[x0]
     _mask = True  # mask bit per dert
 
-    for x in range(x0+1, dert_.shape[0]):  # loop left to right in each row of derts
+    for x, (i, idy, idx, g, dy, dx, m) in enumerate(dert_, start=x0+1):  # loop left to right in each row of derts
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             sign = sign_[x]
@@ -187,13 +197,13 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
             I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x+1
 
         if ~mask:  # accumulate P params:
-            I += dert_[x][0]
-            iDy += dert_[x][1]
-            iDx += dert_[x][2]
-            G += dert_[x][3]
-            Dy += dert_[x][4]
-            Dx += dert_[x][5]
-            M += dert_[x][6]
+            I += i
+            iDy += idy
+            iDx += idx
+            G += g
+            Dy += dy
+            Dx += dx
+            M += m
             L += 1
             _sign = sign  # prior sign
         _mask = mask
@@ -202,10 +212,14 @@ def form_P_(dert_, crit_):  # segment dert__ into P__, in horizontal ) vertical 
         P = CDeepP(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
         P_.append(P)
 
+    for _P, P in pairwise(P_):
+        if _P.x0 + _P.L == P.x0: # check if Ps are adjacents
+            binder.bind(_P, P)
+
     return P_
 
 
-def scan_P_(P_, stack_, root_dert__):  # merge P into higher-row stack of Ps with same sign and x_coord overlap
+def scan_P_(P_, stack_, root_dert__, sub_blobs, binder):  # merge P into higher-row stack of Ps with same sign and x_coord overlap
 
     next_P_ = deque()  # to recycle P + up_connect_ that finished scanning _P, will be converted into next_stack_
 
@@ -228,12 +242,16 @@ def scan_P_(P_, stack_, root_dert__):  # merge P into higher-row stack of Ps wit
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
+                    else:
+                        binder.bind(_P, P)
 
             else:  # -G, check for orthogonal overlaps only: 4 directions, edge blobs are more selective
                 if _x0 < xn and x0 < _xn:  # x overlap between loaded P and _P
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
+                    else:
+                        binder.bind(_P, P)
 
             if (xn < _xn or  # _P overlaps next P in P_
                     xn == _xn and stack.sign):  # sign taken accounted
@@ -243,11 +261,11 @@ def scan_P_(P_, stack_, root_dert__):  # merge P into higher-row stack of Ps wit
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     if stack.down_connect_cnt != 1:  # terminate stack, merge it into up_connects' blobs
-                        form_blob(stack, root_dert__)
+                        form_blob(stack, root_dert__, sub_blobs)
                     break
             else:  # no next-P overlap
                 if stack.down_connect_cnt != 1:  # terminate stack, merge it into up_connects' blobs
-                    form_blob(stack, root_dert__)
+                    form_blob(stack, root_dert__, sub_blobs)
                 if stack_:  # load stack with next _P
                     stack = stack_.popleft()
                     _P = stack.Py_[-1]
@@ -258,12 +276,12 @@ def scan_P_(P_, stack_, root_dert__):  # merge P into higher-row stack of Ps wit
     while P_:  # terminate Ps and stacks that continue at row's end
         next_P_.append((P_.popleft(), []))  # no up_connect
     while stack_:
-        form_blob(stack_.popleft(), root_dert__)  # down_connect_cnt always == 0
+        form_blob(stack_.popleft(), root_dert__, sub_blobs)  # down_connect_cnt always == 0
 
     return next_P_  # each element is P + up_connect_ refs
 
 
-def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack of Ps, merge blobs
+def form_stack_(P_, root_dert__, sub_blobs, y):  # Convert or merge every P into its stack of Ps, merge blobs
 
     next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
 
@@ -277,6 +295,7 @@ def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack 
                              box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
             new_stack = CDeepStack(I=I, G=G, Dy=0, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=L, Ly=1,
                                    y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+            new_stack.hid = blob.id
             blob.stack_.append(new_stack)
         else:
             if len(up_connect_) == 1 and up_connect_[0].down_connect_cnt == 1:
@@ -292,15 +311,16 @@ def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack 
                 # initialize new_stack with up_connect blob:
                 new_stack = CDeepStack(I=I, G=G, Dy=0, Dx=Dx, M=M, iDy=iDy, iDx=iDx,S=L, Ly=1,
                                        y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+                new_stack.hid = blob.id
                 blob.stack_.append(new_stack)
 
                 if len(up_connect_) > 1:  # merge blobs of all up_connects
                     if up_connect_[0].down_connect_cnt == 1:  # up_connect is not terminated
-                        form_blob(up_connect_[0], root_dert__)  # merge stack of 1st up_connect into its blob
+                        form_blob(up_connect_[0], root_dert__, sub_blobs)  # merge stack of 1st up_connect into its blob
 
                     for up_connect in up_connect_[1:len(up_connect_)]:  # merge blobs of other up_connects into blob of 1st up_connect
                         if up_connect.down_connect_cnt == 1:
-                            form_blob(up_connect, root_dert__)
+                            form_blob(up_connect, root_dert__, sub_blobs)
 
                         if not up_connect.blob is blob:
                             merged_blob = up_connect.blob
@@ -313,19 +333,22 @@ def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack 
                             for stack in merged_blob.stack_:
                                 if not stack is up_connect:
                                     stack.blob = blob  # blobs in other up_connects are references to blob in the first up_connect.
+                                    stack.hid = blob.id
                                     blob.stack_.append(stack)  # buffer of merged root stacks.
                             up_connect.blob = blob
+                            up_connect.hid = blob.id
                             blob.stack_.append(up_connect)
                         blob.open_stacks -= 1  # overlap with merged blob.
 
         blob.box[1] = min(blob.box[1], x0)  # extend box x0
         blob.box[2] = max(blob.box[2], xn)  # extend box xn
+        P.hid = new_stack.id    # assign higher cluster id for P
         next_stack_.append(new_stack)
 
     return next_stack_
 
 
-def form_blob(stack, root_dert__):  # increment blob with terminated stack, check for blob termination
+def form_blob(stack, root_dert__, sub_blobs):  # increment blob with terminated stack, check for blob termination
 
     I, G, Dy, Dx, M, iDy, iDx, S, Ly, y0, Py_, blob, down_connect_cnt, sign = stack.unpack()
     accum_Dert(blob.Dert, I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=S, Ly=Ly)
@@ -346,239 +369,40 @@ def form_blob(stack, root_dert__):  # increment blob with terminated stack, chec
                 x_stop = x_start + P.L
                 mask[y, x_start:x_stop] = False
 
-        dert__ = (root_dert__[:,y0:yn, x0:xn]).copy()  # copy mask as dert.mask
-        dert__.mask = True
-        dert__.mask = mask  # overwrite default mask 0s
-        root_dert__[:,y0:yn, x0:xn] = dert__.copy()  # assign mask back to blob root dert__
-
         fopen = 0  # flag: blob on frame boundary
-        if x0 == 0 or xn == root_dert__.shape[2] or y0 == 0 or yn == root_dert__.shape[1]:
+        if x0 == 0 or xn == root_dert__[0].shape[1] or y0 == 0 or yn == root_dert__[0].shape[0]:
             fopen = 1
-
-        blob_map = np.ones((root_dert__.shape[1], root_dert__.shape[2])).astype('bool')
-        blob_map[y0:yn, x0:xn] = mask
-        # unmasked area is false
-        blob_map_y,blob_map_x = np.where(blob_map==False)
-        blob_map_yx = [ [y,x] for y,x in zip(blob_map_y,blob_map_x)]  # x and y coordinates of dert__
-
-        margin = form_margin(blob_map, diag=blob.sign)
-        margin_y,margin_x = np.where(margin==True)  # set margin=true
-        margin_yx = [[y,x] for y,x in zip(margin_y,margin_x)]  # x and y coordinates of margin
 
         blob.root_dert__ = root_dert__
         blob.box = (y0, yn, x0, xn)
-        blob.dert__ = dert__
-        blob.adj_blobs = [[], [], 0, 0]
+        blob.dert__ = [derts[y0:yn, x0:xn] for derts in root_dert__]
+        blob.mask = mask
+        blob.adj_blobs = [[], 0, 0]
         blob.fopen = fopen
-        blob.margin = [blob_map_yx, margin_yx]
 
-    return blob
+        sub_blobs.append(blob)
 
-
-def find_adjacent(sub_blobs):  # adjacents are blobs connected to _blob
-    '''
-    2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
-    '''
-    blob_adj__ = []  # [(blob, adj_blob__)] to replace blob__
-    while sub_blobs:  # outer loop
-
-        _blob = sub_blobs.pop(0)  # pop left outer loop's blob
-        _y0, _yn, _x0, _xn = _blob.box
-        if 'adj_blobs' in _blob:  # reuse adj_blobs if any
-            _adj_blobs = _blob.adj_blobs
-        else:
-            _adj_blobs = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-            # don't we need to initialize adj_S and adj_G?
-        i = 0  # inner loop counter
-        yn = 9999  # > _yn
-        while i <= len(sub_blobs) - 1 and _yn<=yn:  # vertical overlap between _blob and blob + margin
-
-            blob = sub_blobs[i]  # inner loop's blob
-            if 'adj_blobs' in blob:
-                adj_blobs = blob.adj_blobs
-            else:
-                adj_blobs = [[], []]  # [adj_blobs], [positions: 0 = internal to current blob, 1 = external, 2 = open]
-            y0, yn, x0, xn = blob.box
-
-            if y0 <= _yn and blob.sign != _blob.sign:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
-                _blob_map = _blob.margin[0]
-                margin_map = blob.margin[1]
-                check_overlap = any(margin in _blob_map  for margin in margin_map)  # any of blob's margin is in _blob's derts
-                if check_overlap:  # at least one blob's margin element is in _blob: blob is adjacent
-
-                    check_external = all(margin in _blob_map  for margin in margin_map)  # all of blob's margin is in _blob's dert
-                    if check_external:
-                        # all of blob margin is in _blob: _blob is external
-                        if blob not in _adj_blobs[0]:
-                            _adj_blobs[0].append(blob)
-                            _adj_blobs[2]+=blob.Dert['S'] # sum adjacent blob's S
-                            _adj_blobs[3]+=blob.Dert['G'] # sum adjacent blob's G
-
-                            if blob.fopen == 1:  # this should not happen, internal blob cannot be open?
-                                _adj_blobs[1].append(2)  # 2 for open
-                            else:
-                                _adj_blobs[1].append(0)  # 0 for internal
-                        if _blob not in adj_blobs[0]:
-                            adj_blobs[0].append(_blob)
-                            adj_blobs[1].append(1)  # 1 for external
-                            adj_blobs[2]+=_blob.Dert['S'] # sum adjacent blob's S
-                            adj_blobs[3]+=_blob.Dert['G'] # sum adjacent blob's G
-                    else:
-                        # _blob is internal or open
-                        if blob not in _adj_blobs[0]:
-                            _adj_blobs[0].append(blob)
-                            _adj_blobs[1].append(1)  # 1 for external
-                            _adj_blobs[2]+=blob.Dert['S'] # sum adjacent blob's S
-                            _adj_blobs[3]+=blob.Dert['G'] # sum adjacent blob's G
-                        if _blob not in adj_blobs[0]:
-                            adj_blobs[0].append(_blob)
-                            adj_blobs[2]+=_blob.Dert['S'] # sum adjacent blob's S
-                            adj_blobs[3]+=_blob.Dert['G'] # sum adjacent blob's G
-                            if _blob.fopen == 1:
-                                adj_blobs[1].append(2)  # 2 for open
-                            else:
-                                adj_blobs[1].append(0)  # 0 for internal
-
-            blob.adj_blobs = adj_blobs  # pack adj_blobs to _blob
-            sub_blobs[i] = blob  # reassign blob in inner loop
-            _blob.adj_blobs = _adj_blobs  # pack _adj_blobs into _blob
-            i += 1
-        blob_adj__.append(_blob)  # repack processed _blob into blob__
-
-    sub_blobs = blob_adj__  # update empty sub_blobs
-
-    return sub_blobs
-
-
-def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 directions, to find adjacent blobs
-
-    up_margin = np.zeros_like(blob_map)
-    up_margin[:-1, :] = np.logical_and(blob_map[:-1, :], ~blob_map[1:, :])
-
-    down_margin = np.zeros_like(blob_map)
-    down_margin[1:, :] = np.logical_and(blob_map[1:, :], ~blob_map[:-1, :])
-
-    left_margin = np.zeros_like(blob_map)
-    left_margin[:, :-1] = np.logical_and(blob_map[:, :-1], ~blob_map[:, 1:])
-
-    right_margin = np.zeros_like(blob_map)
-    right_margin[:, 1:] = np.logical_and(blob_map[:, 1:], ~blob_map[:, :-1])
-
-    # combine margins:
-    margin = up_margin + down_margin + left_margin + right_margin
-
-    if diag:  # add diagonal margins
-
-        upleft_margin = np.zeros_like(blob_map)
-        upleft_margin[:-1, :-1] = np.logical_and(blob_map[:-1, :-1], ~blob_map[1:, 1:])
-
-        upright_margin = np.zeros_like(blob_map)
-        upright_margin[:-1, 1:] = np.logical_and(blob_map[:-1, 1:], ~blob_map[1:, :-1])
-
-        downleft_margin = np.zeros_like(blob_map)
-        downleft_margin[1:, :-1] = np.logical_and(blob_map[1:, :-1], ~blob_map[:-1, 1:])
-
-        downright_margin = np.zeros_like(blob_map)
-        downright_margin[1:, 1:] = np.logical_and(blob_map[1:, 1:], ~blob_map[:-1, :-1])
-
-        # combine margins:
-        margin = margin + upleft_margin + upright_margin + downleft_margin + downright_margin
-
-    return margin
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
-    _, rY, rX = blob.root_dert__.shape  # higher dert size
-    cP, cY, cX = blob.dert__.shape  # current dert params and size
+    rY, rX = blob.root_dert__[0].shape  # higher dert size
 
-    y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e is for extended
-    # prevent boundary <0 or >image size:
-    if y0e < 0:  y0e = 0; ystart = 0
-    else:        ystart = 1
-    if yne > rY: yne = rY; yend = ystart + cY
-    else:        yend = ystart + cY
-    if x0e < 0:  x0e = 0; xstart = 0
-    else:        xstart = 1
-    if xne > rX: xne = rX; xend = xstart + cX
-    else:        xend = xstart + cX
+    # determine pad size
+    y0e = max(0, y0 - 1)
+    yne = min(rY, yn + 1)
+    x0e = max(0, x0 - 1)
+    xne = min(rX, xn + 1)  # e is for extended
 
-    ini_dert = blob.root_dert__[:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
+    # take ext_dert__ from part of root_dert__
+    ext_dert__ = [derts[y0e:yne, x0e:xne] if derts is not None else None
+                  for derts in blob.root_dert__]
 
-    ext_dert__ = ma.array(np.zeros((cP, ini_dert.shape[1], ini_dert.shape[2])))
-    ext_dert__.mask = True
-    ext_dert__[0, ystart:yend, xstart:xend] = blob.dert__[0].copy() # update i
-    ext_dert__[3, ystart:yend, xstart:xend] = blob.dert__[1].copy() # update g
-    ext_dert__[4, ystart:yend, xstart:xend] = blob.dert__[2].copy() # update dy
-    ext_dert__[5, ystart:yend, xstart:xend] = blob.dert__[3].copy() # update dx
-    ext_dert__.mask = ext_dert__[0].mask # set all masks to blob dert mask
+    # pad mask: top, btm, left, right. 1 or 0 at boundaries
+    mask = np.pad(blob.mask, ((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)),
+                  mode='constant', constant_values=True)
 
-    return ext_dert__
-
-
-def extend_dert_diag(blob, ext_num=1, unmask_ext=1, diag=1):
-    '''
-        only if unmask more than one dert in mask_SUM: any kernel missing diagonal dert also misses orthogonal derts
-        extend derts
-        input       = blob input
-        ext_num     = number of dert extension
-        unmask_ext  = enable unmasking the extended dert
-        diag        = enable dert extension in diagonal direction
-    '''
-
-    y0, yn, x0, xn = blob.box  # dert box:
-    _, rY, rX = blob.root_dert__.shape  # higher dert size
-    cP, cY, cX = blob.dert__.shape  # current dert params and size
-
-    y0e = y0 - ext_num; yne = yn + ext_num; x0e = x0 - ext_num; xne = xn + ext_num  # e is for extended
-    # prevent boundary <0 or >image size:
-    if y0e < 0:
-        y0e = 0; ystart = 0
-    else:
-        ystart = 1
-    if yne > rY:
-        yne = rY; yend = ystart + cY
-    else:
-        yend = ystart + cY
-    if x0e < 0:
-        x0e = 0; xstart = 0
-    else:
-        xstart = 1
-    if xne > rX:
-        xne = rX; xend = xstart + cX
-    else:
-        xend = xstart + cX
-
-    ini_dert = blob.root_dert__[:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
-    ext_dert__ = ma.array(np.zeros((cP, ini_dert.shape[1], ini_dert.shape[2])))  # initialize extended 2D array
-    ext_dert__.mask = True  # set default mask = true
-    ext_mask = ext_dert__.mask[0].copy()  # get extended mask
-    ext_mask[ystart:yend, xstart:xend] = blob.dert__[0].mask  # get mask from blob's dert and assign it into the new extended mask
-
-    if unmask_ext:  # unmask extended derts, almost similar with previous margin operation
-
-        mask_tem = ext_mask.copy()  # temporary mask for shifting operation
-
-        # orthogonal 4 directions
-        ext_mask[:-1, :] = ext_mask[:-1, :] * ~np.logical_or(~mask_tem[1:, :], ~mask_tem[:-1, :])  # up
-        ext_mask[1:, :] = ext_mask[1:, :] * ~np.logical_or(~mask_tem[:-1, :], ~mask_tem[1:, :])  # down
-        ext_mask[:, :-1] = ext_mask[:, :-1] * ~np.logical_or(~mask_tem[:, 1:], ~mask_tem[:, :-1])  # left
-        ext_mask[:, 1:] = ext_mask[:, 1:] * ~np.logical_or(~mask_tem[:, :-1], ~mask_tem[:, 1:])  # right
-
-        if diag:
-            # diagonal 4 directions
-            ext_mask[:-1, :-1] = ext_mask[:-1, :-1] * ~np.logical_or(~mask_tem[1:, 1:], ~mask_tem[:-1, :-1])  # top left
-            ext_mask[:-1, 1:] = ext_mask[:-1, 1:] * ~np.logical_or(~mask_tem[1:, :-1], ~mask_tem[:-1, 1:])  # top right
-            ext_mask[1:, :-1] = ext_mask[1:, :-1] * ~np.logical_or(~mask_tem[:-1, 1:], ~mask_tem[1:, :-1])  # bottom left
-            ext_mask[1:, 1:] = ext_mask[1:, 1:] * ~np.logical_or(~mask_tem[:-1, :-1], ~mask_tem[1:, 1:])  # bottom left
-
-    ext_dert__[0, ystart:yend, xstart:xend] = blob.dert__[0].copy()  # update i
-    ext_dert__[3, ystart:yend, xstart:xend] = blob.dert__[1].copy()  # update g
-    ext_dert__[4, ystart:yend, xstart:xend] = blob.dert__[2].copy()  # update dy
-    ext_dert__[5, ystart:yend, xstart:xend] = blob.dert__[3].copy()  # update dx
-    ext_dert__.mask = ext_mask  # set all masks to extended mask
-
-    return ext_dert__
+    return ext_dert__, mask
 
 
 def accum_Dert(Dert: dict, **params) -> None:

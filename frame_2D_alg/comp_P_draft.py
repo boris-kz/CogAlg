@@ -23,8 +23,8 @@ from time import time
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    
    radial comparison extension for co-internal blobs: 
-   ! sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
-   = sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
+   != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
+   == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
    
    borrow = adj_G * rS: default sum div_comp S -> relative area and distance to adjj_blob_
    internal sum comp if mS: in thin lines only? comp_norm_G or div_comp_G -> rG?

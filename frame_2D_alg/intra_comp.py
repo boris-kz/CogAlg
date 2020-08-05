@@ -56,20 +56,19 @@ def comp_r(dert__, fig, root_fcr, mask=None):
     unmasked derts were computed due to extend_dert() in intra_blob   
     '''
     if mask is not None:
-        majority_mask = ( mask[1:-1:2, 1:-1:2]
-                        + mask[:-2:2, :-2:2]
-                        + mask[:-2:2, 1:-1: 2]
-                        + mask[:-2:2, 2::2]
-                        + mask[1:-1:2, 2::2]
-                        + mask[2::2, 2::2]
-                        + mask[2::2, 1:-1:2]
-                        + mask[2::2, :-2:2]
-                        + mask[1:-1:2, :-2:2]
+        majority_mask = ( mask[1:-1:2, 1:-1:2].astype(int)
+                        + mask[:-2:2, :-2:2].astype(int)
+                        + mask[:-2:2, 1:-1: 2].astype(int)
+                        + mask[:-2:2, 2::2].astype(int)
+                        + mask[1:-1:2, 2::2].astype(int)
+                        + mask[2::2, 2::2].astype(int)
+                        + mask[2::2, 1:-1:2].astype(int)
+                        + mask[2::2, :-2:2].astype(int)
+                        + mask[1:-1:2, :-2:2].astype(int)
                         ) > 1
     else:
         majority_mask = None
     # majority_mask is returned at the end of function
-
     idy__, idx__ = dert__[1][1:-1:2, 1:-1:2], dert__[2][1:-1:2, 1:-1:2]
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
@@ -141,10 +140,6 @@ def comp_r(dert__, fig, root_fcr, mask=None):
         cos__bottom      = cos__[2::2, 1:-1:2]
         cos__bottomleft  = cos__[2::2, :-2:2]
         cos__left        = cos__[1:-1:2, :-2:2]
-        ''' 
-        only mask kernels with more than one masked dert, for all operations below: 
-        '''
-        # (mask is summed above
 
         '''
         8-tuple of differences between central dert angle and rim dert angle:
@@ -209,10 +204,10 @@ def comp_g(dert__, mask=None):  # cross-comp of g in 2x2 kernels, between derts 
     for all operations below: only mask kernels with more than one masked dert 
     '''
     if mask is not None:
-        majority_mask = (mask[:-1, :-1] +
-                         mask[:-1, 1:] +
-                         mask[1:, 1:] +
-                         mask[1:, :-1]
+        majority_mask = (mask[:-1, :-1].astype(int) +
+                         mask[:-1, 1:].astype(int) +
+                         mask[1:, 1:].astype(int) +
+                         mask[1:, :-1].astype(int)
                          ) > 1
     else:
         majority_mask = None
