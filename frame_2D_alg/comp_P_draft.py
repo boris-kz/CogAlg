@@ -59,11 +59,10 @@ ave_dX = 10
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
-    s, x0, (G, M, Dx, Dy, L), derts_ = P  # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
-    _s, _x0, (_G, _M, _Dx, _Dy, _L), _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
+    s, x0, (G, M, Dx, Dy, L), dert_ = P  # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
+    _s, _x0, (_G, _M, _Dx, _Dy, _L), _dert_, _dX = _P  # params per comp_branch, S x branch if min n?
     '''
-    redefine Ps by recomputed dx: different from decomposed, no vertical comp?
-    rescan dert by input P d_ave_x: skip if not in blob?
+    redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
     '''
     xn = x0 + L-1;  _xn = _x0 + _L-1
     mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
@@ -93,30 +92,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
     Pm = mX + mL + mM, mDx + mDy  # -> complementary vPP, rdn *= Pd | Pm rolp?
 
-    if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
-
-        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
-        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
-        nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
-
-        Pnm = mX + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
-
-        if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
-        else: mPP_rdn = 1; nmPP_rdn = 0
-
-        Pnd = ddX + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
-
-        if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
-        else: dPP_rdn = 1; ndPP_rdn = 0
-
-        div_f = 1
-        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn,  Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
-
-    else:
-        div_f = 0  # DIV comp flag
-        nvars = 0  # DIV + norm derivatives
-
-    P_ders = Pm, Pd, mX, dX, mL, dL, mDx, dDx, mDy, dDy, div_f, nvars
+    P_ders = Pm, Pd, mX, dX, mL, dL, mDx, dDx, mDy, dDy  # div_f, nvars
 
     vs = 1 if Pm > ave * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
     ds = 1 if Pd > 0 else 0
@@ -190,7 +166,33 @@ def cluster_P_(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D 
     aM = M / L; dM = aM - _aM; mM = min(aM, _aM)
 
     d_aS comp if cs D_aS, iter dS - S -> (n, M, diff): var precision or modulo + remainder? 
-    pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn? '''
+    pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn? 
+    
+    # eval_div(PP):
+    
+    if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
+
+        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
+        nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
+
+        Pnm = mX + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
+
+        if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
+        else: mPP_rdn = 1; nmPP_rdn = 0
+
+        Pnd = ddX + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
+
+        if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
+        else: dPP_rdn = 1; ndPP_rdn = 0
+
+        div_f = 1
+        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn,  Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
+
+    else:
+        div_f = 0  # DIV comp flag
+        nvars = 0  # DIV + norm derivatives
+    '''
 
 
 def form_PP(typ, P, PP):  # increments continued vPPs or dPPs (not pPs): incr_blob + P_ders?
