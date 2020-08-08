@@ -16,12 +16,21 @@ comp (s): if same-sign,
 
 Increment of 2nd level alg over 1st level alg should be made recursive, forming relative-level meta-algorithm.
 
+Comparison distance is extended to first match or maximal accumulated miss over compared dert_Ps, measured by roL*roM?
+Match or miss may be between Ps of either sign, but comparison of lower P layers is conditional on higher-layer match
+
+So, comparison between two Ps is variable-depth down P hierarchy, with sign at the top, until max accumulated miss.
+(vertical induction: results of higher-layer comparison predict results of next-layer comparison)
+This is similar to variable-range comp between Ps, until either first match or max miss (lateral induction).
+
+Resulting PPs will be more like graphs (in 1D), with explicit distances between consecutive element Ps.
+This is different from 1st level connectivity clustering, where all distances between consecutive elements = 1.
 '''
 
 ave_dI = 20
 div_ave = 50
 ave_Pm = 50
-range_limit = 50
+max_miss = 50
 
 def comp_P(P_):
 
@@ -30,14 +39,16 @@ def comp_P(P_):
 
     for i, P in enumerate(P_, start=2):
         sign, L, I, D, M, dert_, sub_H = P
+        roL = roM = 0
 
         for _P in (P_[i+1 :]):  # no past-P displacement, just shifting first _P for variable max-distance comp
             _sign, _L, _I, _D, _M, _dert_, _sub_H = _P
 
-            roL = P_[i-1][1] / L  # relative_distance, P_[i-1] is prior opposite-sign P
-            roM = P_[i-1][4] / M  # contrast: additional range limiter, roD if for dPP?
+            roL += P_[i-1][1] / L  # relative distance, P_[i-1] is prior opposite-sign P
+            roM += P_[i-1][4] / M  # relative miss or contrast: additional range limiter, roD if for dPP?
+            # or ro_Pm: induction and search blocker is current-level match, not intra_input M?
 
-            if roL*roM < range_limit:  # need to add results from multiple oPs and cPs: prior match should extend the range?
+            if roL*roM > max_miss:  # accumulated from all net-negative comparisons before first match
                 dL = L - _L
                 mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
                 dI = I - _I
@@ -45,9 +56,15 @@ def comp_P(P_):
                 dD = abs(D) - abs(_D)
                 mD = min(abs(D), abs(_D))  # same-sign D in dP?
                 dM = M - _M;  mM = min(M, _M)
-                dert_P_.append( (roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P))
+
+                Pm = mL + mM + mD  # Pm *= roL * decay: contrast to global decay rate?
+                ms = 1 if Pm > ave_Pm * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
+
+                dert_P_.append( (ms, Pm, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P))
+                if ms:
+                    break  # nearest-neighbour search, until first match, or:
             else:
-                break  # limit of search; no oP = P  # next P will have opposite sign
+                break  # reached maximal accumulated miss, stop search
 
     return dert_P_
 
@@ -55,10 +72,7 @@ def comp_P(P_):
 def form_mPP(dert_P_):  # cluster dert_Ps by Pm sign
 
     mPP_ = []
-    for roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P in dert_P_:
-
-        Pm = mL + mM + mD  # Pm *= roL * decay: contrast to global decay rate?
-        ms = 1 if Pm > ave_Pm * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
+    for ms, Pm, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P in dert_P_:
         # in form_dPP:
         # Pd = dL + dM + dD  # -> directional dPP, equal-weight params, no rdn?
         # ds = 1 if Pd > 0 else 0
