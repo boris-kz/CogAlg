@@ -1,35 +1,3 @@
-"""
-usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
-                      [-z ZOOM]
-optional arguments:
-  -h, --help            show this help message and exit
-  -i IMAGE, --image IMAGE
-                        path to image file
-  -v VERBOSE, --verbose VERBOSE
-                        print details, useful for debugging
-  -n INTRA, --intra INTRA
-                        run intra_blobs after frame_blobs
-  -r RENDER, --render RENDER
-                        render the process
-  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
-"""
-
-from time import time
-from collections import deque
-from pathlib import Path
-import sys
-import numpy as np
-import numpy.ma as ma
-
-from class_cluster import ClusterStructure, NoneType
-from class_bind import AdjBinder
-# from comp_pixel import comp_pixel
-from class_stream import Img2BlobStreamer
-from utils import (
-    pairwise,
-    imread, imwrite, map_frame_binary,
-    WHITE, BLACK,
-)
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
@@ -68,6 +36,38 @@ from utils import (
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
     Please see diagrams of frame_blobs on https://kwcckw.github.io/CogAlg/
 '''
+"""
+usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                      [-z ZOOM]
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to image file
+  -v VERBOSE, --verbose VERBOSE
+                        print details, useful for debugging
+  -n INTRA, --intra INTRA
+                        run intra_blobs after frame_blobs
+  -r RENDER, --render RENDER
+                        render the process
+  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+"""
+
+from time import time
+from collections import deque
+from pathlib import Path
+import sys
+import numpy as np
+import numpy.ma as ma
+
+from class_cluster import ClusterStructure, NoneType
+from class_bind import AdjBinder
+# from comp_pixel import comp_pixel
+from class_stream import BlobStreamer
+from utils import (
+    pairwise,
+    imread, imwrite, map_frame_binary,
+    WHITE, BLACK,
+)
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
@@ -141,8 +141,8 @@ def image_to_blobs(image, verbose=False, render=False):
     if render:
         def output_path(input_path, suffix):
             return str(Path(input_path).with_suffix(suffix))
-        streamer = Img2BlobStreamer(CBlob, frame,
-                                    record_path=output_path(arguments['image'],
+        streamer = BlobStreamer(CBlob, frame,
+                                record_path=output_path(arguments['image'],
                                     suffix='.out.avi'))
 
     stack_binder = AdjBinder(Cstack)
@@ -568,21 +568,16 @@ if __name__ == '__main__':
     # END DEBUG ---------------------------------------------------------------
     ''' 
     This may not be needed as external borrow is likely cancelled-out by extra-external lend:
-
     if blob.sign:  # borrow is from adj_blobs, which may lend to multiple blobs, current blob borrow is reduced accordingly:
-
         borrow_G /= 3  # simplest adjustment by coeff filter: higher-level ave min_G / Min_G,
         # adj_G > G: is not the min_G, so it has enough value to cover the min
         # adj_G < G: borrow_G won't be significant, so precision is not needed?            
         # or more precise:
-
         Min_G = 0
         for (adj_blob, _) in blob.adj_blobs[0]:  # adj_blob_
             for (adjj_blob, _) in adj_blob.adj_blobs[0]:  # adj_adj_blob_
-
                 Min_G += min( abs( adjj_blob.Dert['G']), abs( adj_G))  # adjj_blobs borrow from adj_G    
                 Min_G *= ave_rel_G  # adjj_/ adjjj_ ~ ave minG / Min_G: adjj_blobs also borrow from other adjjj_blobs,
                 # this external borrow may on the average cancel the reduction in borrow_G?
-
         borrow_G *= borrow_G / Min_G  # reduce current borrow by total borrowing requested from adj_blobs
     '''

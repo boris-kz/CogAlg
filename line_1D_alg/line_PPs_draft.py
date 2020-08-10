@@ -35,7 +35,7 @@ max_miss = 50
 def comp_P(P_):
     dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
 
-    for i, P in enumerate(P_, start=2):
+    for i, P in enumerate(P_):
         sign, L, I, D, M, dert_, sub_H = P
         oL = omP = 0
         for _P in (P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
@@ -43,12 +43,11 @@ def comp_P(P_):
             roL = oL / L  # relative distance to _P
             roM = omP / (abs(M)+1)  # relative miss or contrast between _P: also search blocker, roD for dPP
 
-            if roL * roM > max_miss:  # accumulated from all net-negative comparisons before first match,
-                # selective by combined Pm, not M sign alone?
+            if roL * roM > max_miss:  # accumulated over -mPs before first +mP, no select by M sign
                 dL = L - _L
-                mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
+                mL = min(L, _L)  # L: positions / sign, derived: magnitude-proportional value
                 dI = I - _I
-                mI = abs(dI) - ave_dI
+                mI = abs(dI) - ave_dI  # not derived, match is inverse miss
                 dD = abs(D) - abs(_D)
                 mD = min(abs(D), abs(_D))  # same-sign D in dP?
                 dM = M - _M;  mM = min(M, _M)
@@ -58,7 +57,7 @@ def comp_P(P_):
                 if ms:
                     # add comp over deeper layers, adjust and evaluate updated mP
                     dert_P_.append( (ms, mP, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P))
-                    break  # nearest-neighbour search, until first match
+                    break  # nearest-neighbour search is terminated by first match
                 else:
                     oL += _L
                     omP += mP  # other derivatives and oP_ are not significant if neg mP, optional in dert_P?

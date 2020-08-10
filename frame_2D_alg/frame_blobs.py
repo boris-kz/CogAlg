@@ -1,34 +1,3 @@
-"""
-usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
-                      [-z ZOOM]
-optional arguments:
-  -h, --help            show this help message and exit
-  -i IMAGE, --image IMAGE
-                        path to image file
-  -v VERBOSE, --verbose VERBOSE
-                        print details, useful for debugging
-  -n INTRA, --intra INTRA
-                        run intra_blobs after frame_blobs
-  -r RENDER, --render RENDER
-                        render the process
-  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
-"""
-
-from time import time
-from collections import deque
-from pathlib import Path
-import sys
-import numpy as np
-
-from class_cluster import ClusterStructure, NoneType
-from class_bind import AdjBinder
-# from comp_pixel import comp_pixel
-from class_stream import Img2BlobStreamer
-from utils import (
-    pairwise,
-    imread, imwrite, map_frame_binary,
-    WHITE, BLACK,
-)
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
@@ -67,6 +36,37 @@ from utils import (
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
     Please see diagrams of frame_blobs on https://kwcckw.github.io/CogAlg/
 '''
+"""
+usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                      [-z ZOOM]
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to image file
+  -v VERBOSE, --verbose VERBOSE
+                        print details, useful for debugging
+  -n INTRA, --intra INTRA
+                        run intra_blobs after frame_blobs
+  -r RENDER, --render RENDER
+                        render the process
+  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+"""
+
+from time import time
+from collections import deque
+from pathlib import Path
+import sys
+import numpy as np
+
+from class_cluster import ClusterStructure, NoneType
+from class_bind import AdjBinder
+# from comp_pixel import comp_pixel
+from class_stream import BlobStreamer
+from utils import (
+    pairwise,
+    imread, imwrite, map_frame_binary,
+    WHITE, BLACK,
+)
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
@@ -142,10 +142,9 @@ def image_to_blobs(image, verbose=False, render=False):
     if render:
         def output_path(input_path, suffix):
             return str(Path(input_path).with_suffix(suffix))
-        streamer = Img2BlobStreamer(CBlob, frame,
-                                    record_path=output_path(arguments['image'],
-                                    suffix='.im2blobs.avi'))
-
+        streamer = BlobStreamer(CBlob, dert__[1],
+                                record_path=output_path(arguments['image'],
+                                                        suffix='.im2blobs.avi'))
     stack_binder = AdjBinder(Cstack)
 
     if verbose:
@@ -162,11 +161,7 @@ def image_to_blobs(image, verbose=False, render=False):
         P_ = form_P_(zip(*dert_), P_binder)  # horizontal clustering
 
         if render:
-            streamer.update(y, P_)
-            if streamer.render() == 32: # press space to pause
-                while streamer.render() != 32:
-                    streamer.update(y)
-
+            render = streamer.update_blob_conversion(y, P_)
         P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
         stack_binder.bind_from_lower(P_binder)
@@ -188,14 +183,9 @@ def image_to_blobs(image, verbose=False, render=False):
         print(f"\nPercentage of merged blobs: {merged_percentage}")
 
     if render:  # rendering mode after blob conversion
-        streamer.update(y)
-        streamer.writeframe(output_path(arguments['image'],
-                                        suffix='.im2blobs.jpg'))
-        print("Press Q to quit...")
-        streamer.init_adj_disp()
-        while streamer.render() != ord('q'):    # press Q key to qut
-            streamer.update_adj_disp()
-        streamer.stop()
+        path = output_path(arguments['image'],
+                           suffix='.im2blobs.jpg')
+        streamer.end_blob_conversion(y, img_out_path=path)
 
     return frame  # frame of blobs
 
@@ -422,7 +412,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
 def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
     '''
-    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_finder.
+    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
@@ -474,9 +464,9 @@ if __name__ == '__main__':
 
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
-    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
+    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
-    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
     arguments = vars(argument_parser.parse_args())
     image = imread(arguments['image'])
     verbose = arguments['verbose']
@@ -489,7 +479,7 @@ if __name__ == '__main__':
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         if verbose:
-            print("\nRunning intra_blob...")
+            print("\rRunning intra_blob...")
 
         from intra_blob import (
             intra_blob, CDeepBlob, aveB,
@@ -528,21 +518,20 @@ if __name__ == '__main__':
             if blob.sign:
                 if G + borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
                     update_dert(blob)
-                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
+                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0, render=render)  # +G blob' dert__' comp_g
 
             elif -G - borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
                 update_dert(blob)
-                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
+                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1, render=render)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
         if verbose:
-            print("Finished running intra_blob")
+            print("\rFinished running intra_blob")
 
     end_time = time() - start_time
     if verbose:
         print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
-    pass

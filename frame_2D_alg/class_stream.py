@@ -74,44 +74,44 @@ class Streamer:
     def writeframe(self, path):
         cv.imwrite(path, self.frame)
 
-    def _render_no_record(self):
+    def _render_no_record(self, waitms=1):
         """Render visualization to screen."""
         cv.imshow(winname=self.winname, mat=self.view)
-        return cv.waitKey(1)
+        return cv.waitKey(waitms)
 
-    def _render_and_record(self):
+    def _render_and_record(self, waitms=1):
         cv.imshow(winname=self.winname, mat=self.view)
         self.video_writer.write(self.view)
-        return cv.waitKey(1)
+        return cv.waitKey(waitms)
 
-    def _render_draw_rectangle(self):
+    def _render_draw_rectangle(self, **kwargs):
         cv.rectangle(self.view,
                      (self.x1, self.y1),
                      (self.x, self.y),
                      (0, 0, 255), 2)
-        self._render()
+        self._render(**kwargs)
 
-    def _zoomed_render(self):
+    def _zoomed_render(self, **kwargs):
         self.view = cv.resize(self.view[self.y1:self.y2,
                                         self.x1:self.x2],
                               self.window_size,
                               interpolation=cv.INTER_NEAREST)
-        self._render()
+        self._render(**kwargs)
 
 
-class Img2BlobStreamer(Streamer):
+class BlobStreamer(Streamer):
     """
     Use this class to monitor the actions of image_to_blobs in frame_blobs.
     """
     sign_map = {False: BLACK, True: WHITE}  # sign_map for terminated blobs
     sign_map_unterminated = {False: DGREY, True: LGREY}  # sign_map for unterminated blobs
 
-    def __init__(self, blob_cls, frame,
+    def __init__(self, blob_cls, crit__, mask=None,
                  window_size=None,
                  winname='image_to_blobs',
                  record_path=None):
         self.blob_cls = blob_cls
-        height, width = frame['dert__'][0].shape
+        height, width = crit__.shape
         if window_size is None:
             if height < 480:
                 window_size = 640, 480
@@ -122,13 +122,15 @@ class Img2BlobStreamer(Streamer):
                           record_path=record_path)
         # set background with g__
         self.img = blank_image((height, width))
-        g = frame['dert__'][1]
-        self.img[:, :, 0] = (255 * (g - g.min()) / (g.max() - g.min()))
+        self.img[:, :, 0] = (255 * (crit__ - crit__.min()) /
+                             (crit__.max() - crit__.min()))
         self.img[:, :, 2] = self.img[:, :, 1] = self.img[:, :, 0]
+        if mask is not None:
+            self.img[mask] = 128, 128, 128
 
         # initialize other variables
         self.incomplete_blob_ids = set()
-        self.first_id = 0
+        self.first_id = self.blob_cls.instance_cnt
 
         # for interactive adj highlight after conversion
         self.background = None
@@ -160,7 +162,7 @@ class Img2BlobStreamer(Streamer):
                 # re-draw with normal colors, remove ref
                 self.incomplete_blob_ids.remove(blob_id)
                 blob_img = draw_blob(blob, blob_box=blob.box,
-                                     sign_map=Img2BlobStreamer.sign_map)
+                                     sign_map=BlobStreamer.sign_map)
                 over_draw(self.img, blob_img, blob.box)
 
                 # add to id_map
@@ -224,6 +226,10 @@ class Img2BlobStreamer(Streamer):
                     # override color of the blob
                     self.img = np.copy(self.background)
                     blob = self.blob_cls.get_instance(self.pointing_blob_id)
+                    if blob is None:
+                        print("\r", end="\t\t\t\t\t\t\t")
+                        sys.stdout.flush()
+                        return
                     over_draw(self.img, None, blob.box,
                               mask=blob.mask,
                               fill_color=(255, 255, 255))  # gray
@@ -250,7 +256,7 @@ class Img2BlobStreamer(Streamer):
                           "Dx =", blob.Dert['Dx'],
                           "S =", blob.Dert['S'],
                           "Ly =", blob.Dert['Ly'],
-                          end="              ")
+                          end="\t\t\t")
                     sys.stdout.flush()
 
         cv.setMouseCallback(self.winname, mouse_call)
@@ -262,3 +268,38 @@ class Img2BlobStreamer(Streamer):
         self.frame = cv.resize(self.img, self.window_size,
                                interpolation=cv.INTER_NEAREST)
         super().update()
+
+    def update_blob_conversion(self, y, P_):
+        self.update(y, P_)
+        k = self.render()
+        if k == 32:  # press space to pause
+            while True:
+                self.update(y)
+                k = self.render()
+                if k == 32:
+                    break
+                elif k == ord('q'):
+                    self.stop()
+                    return False
+        elif k == ord('q'):
+            self.stop()
+            return False
+        return True
+
+    def end_blob_conversion(self, y, img_out_path=None):
+        self.update(y)
+        if img_out_path is not None:
+            self.writeframe(img_out_path)
+        print("\rPress A for adjacent view, or press Q to quit...", end="\t\t\t")
+        sys.stdout.flush()
+        while True:  # press Q key to quit
+            k = self.render()
+            if k == ord('a'):
+                self.update_adj_disp()
+                self.init_adj_disp()
+                while self.render() != ord('q'):  # press Q key to quit
+                    self.update_adj_disp()
+                break
+            elif k == ord('q'):
+                break
+        self.stop()

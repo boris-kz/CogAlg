@@ -30,7 +30,7 @@ class MTLookupTable(object):
     imports = set()  # For outputting into python script.
 
     def __init__(self, *args, **kwargs):
-        """Meta __init__ method."""
+        """Meta __init__.py method."""
         self._generate_table(*args, **kwargs)
 
     def _generate_table(self, *args, **kwargs):
