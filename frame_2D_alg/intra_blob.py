@@ -112,8 +112,9 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
+
             G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
-            borrow = min(abs(G), abs(adj_G) / 2)
+            borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
 
             if sub_blob.sign:
                 if sub_blob.Dert['M'] - borrow > aveB * rdn:  # M - (intra_comp value lend to edge blob)
@@ -190,17 +191,19 @@ def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizon
 
     I, iDy, iDx, G, Dy, Dx, M, L = *next(dert_), 1  # initialize P params
     _sign = sign_[x0]
-    _mask = True  # mask bit per dert
+    _mask = mask_[x0]  # mask bit per dert
 
-    for x, (i, idy, idx, g, dy, dx, m) in enumerate(dert_, start=x0 + 1):  # loop left to right in each row of derts
+    for x, (i, idy, idx, g, dy, dx, m) in enumerate(dert_, start=x0+1):  # loop left to right in each row of derts
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             sign = sign_[x]
             if ~_mask and sign != _sign:  # prior dert is not masked and sign changed
                 # pack P
-                P = CDeepP(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L, x0=x0, sign=_sign)
+                P = CDeepP(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L,x0=x0, sign=_sign)
                 P_.append(P)
                 # initialize P params:
+                I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x
+            elif _mask:
                 I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x
         # current dert is masked
         elif ~_mask:  # prior dert is not masked
