@@ -29,20 +29,22 @@ This is different from 1st level connectivity clustering, where all distances be
 
 ave_dI = 20
 div_ave = 50
-ave_mP = 50
-max_miss = 50
+ave_mP = 20
+max_miss = 1
 
 def comp_P(P_):
     dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
 
     for i, P in enumerate(P_):
         sign, L, I, D, M, dert_, sub_H = P
-        oL = omP = roL = roM = 0
+        neg_mP = neg_rM = 0  # initialization
+        sm = mP = None  # should not be used, first comparison is default?
 
         for _P in (P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
             _sign, _L, _I, _D, _M, _dert_, _sub_H = _P
 
-            if roL * roM > max_miss:  # initially false, accumulated over -mPs before first +mP, no select by M sign
+            if neg_rM < max_miss:  # miss is accumulated over -mPs before first +mP, no select by M sign
+                # miss < max miss, search continues:
                 dL = L - _L
                 mL = min(L, _L)  # L: positions / sign, derived: magnitude-proportional value
                 dI = I - _I
@@ -51,22 +53,22 @@ def comp_P(P_):
                 mD = min(abs(D), abs(_D))  # same-sign D in dP?
                 dM = M - _M;  mM = min(M, _M)
 
-                mP = mL + mM + mD  # Pm *= roL * decay: contrast to global decay rate?
-                ms = 1 if mP > ave_mP * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
-                if ms:
+                mP = mL + mM + mD - ave_mP  # mP *= neg_rL * decay: contrast to global decay rate?
+                sm = mP > 0  # ave_mP = ave * 3: comp cost, or rep cost: n vars per P?
+                if sm:
                     # add comp over deeper layers, adjust and evaluate updated mP
-                    dert_P_.append( (ms, mP, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P))
+                    dert_P_.append( (sm, mP, neg_rM, mL, dL, mI, dI, mD, dD, mM, dM, P))
                     break  # nearest-neighbour search is terminated by first match
-                else:
-                    oL += _L
-                    omP += mP
-                    roL = oL / L  # relative distance to _P
-                    roM = omP / (abs(M) + 1)  # relative miss or contrast between _P: also search blocker, roD for dPP
-                    # other derivatives and oP_ are not significant in neg mP, optional in dert_P?
+
+                else:  # accumulate criteria for search continuation
+                    neg_mP -= mP  # always negative here
+                    neg_rM = -neg_mP / (abs(M) + 1)  # relative miss or contrast of _P, roD for dPP
+                    # other derivatives are not significant in neg dert_P
+                    # no neg_rL = neg_L / L: distance * ave_decay is obviated by actual decay: neg_rM?
             else:
-                dert_P_.append((ms, mP, roL, roM, None, None, None, None, None, None, None, None, P))
-                # at least one comp per loop, derivatives preserved if +mP only
-                break  # reached maximal accumulated miss, stop search
+                dert_P_.append((sm, mP, neg_rM, None, None, None, None, None, None, None, None, P))
+                # at least one comp per loop, derivatives in +ve dert_P only
+                break  # > max_miss, stop search
 
     return dert_P_
 
@@ -74,10 +76,29 @@ def comp_P(P_):
 def form_PPm(dert_P_):  # cluster dert_Ps by mP sign
 
     PPm_ = []
-    for ms, mP, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P in dert_P_:
-        # in form_PPd:
-        # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
-        # ds = 1 if Pd > 0 else 0
+    # initialize PPm with first dert_P:
+    _sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P_[0]
+    P_ = [_P]
+
+    for i, dert_P in enumerate(dert_P_, start=1):
+        sm = dert_P[0]
+        if sm != _sm:
+            PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, [_P]])
+            # initialize PPm with current dert_P:
+            MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
+            P_ = [_P]
+        else:
+            # accumulate params
+            sm, mP, rnM, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
+            MP += mP; RnM += rnM; ML += mL; DL += dL; MI += mI; DI += dI; MD += mD; DD += dD; MM += mM; DM += dM
+            P_.append(P)
+        _sm = sm
+
+    PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, [_P]])  # pack last PP
+
+    # in form_PPd:
+    # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
+    # ds = 1 if Pd > 0 else 0
 
     ''' evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps  
 

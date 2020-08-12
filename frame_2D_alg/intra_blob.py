@@ -26,7 +26,7 @@
 from collections import deque, defaultdict
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
-from frame_blobs import assign_adjacent
+from frame_blobs import assign_adjacents
 from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from class_stream import BlobStreamer
@@ -165,7 +165,7 @@ def cluster_derts(dert__, mask, Ave, fcr, fig, render=False):  # similar to fram
 
     blob_binder = AdjBinder(CDeepBlob)
     blob_binder.bind_from_lower(stack_binder)
-    assign_adjacent(blob_binder)  # add adj_blobs to each blob
+    assign_adjacents(blob_binder)  # add adj_blobs to each blob
     # sub_blobs = find_adjacent(sub_blobs)
 
     if render:  # rendering mode after blob conversion

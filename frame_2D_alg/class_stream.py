@@ -293,6 +293,7 @@ class BlobStreamer(Streamer):
         print("\rPress A for adjacent view, or press Q to quit...", end="\t\t\t")
         sys.stdout.flush()
         while True:  # press Q key to quit
+            self.update(y)
             k = self.render()
             if k == ord('a'):
                 self.update_adj_disp()
