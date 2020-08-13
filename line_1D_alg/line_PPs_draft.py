@@ -23,7 +23,7 @@ Comparison between two Ps is of variable-depth P hierarchy, with sign at the top
 This is vertical induction: results of higher-layer comparison predict results of next-layer comparison,
 similar to lateral induction: variable-range comparison among Ps, until first match or max prior-Ps miss.
 
-Resulting PPs will be more like graphs (in 1D), with explicit distances between nearest element Ps.
+Resulting PPs will be more like 1D graphs, with explicit distances between nearest element Ps.
 This is different from 1st level connectivity clustering, where all distances between nearest elements = 1.
 '''
 
@@ -37,13 +37,12 @@ def comp_P(P_):
 
     for i, P in enumerate(P_):
         sign, L, I, D, M, dert_, sub_H = P
-        neg_mP = neg_rM = 0  # initialization
-        sm = mP = None  # should not be used, first comparison is default?
+        nmP = rnM = sm = mP = nL = 0  # initialization
 
         for _P in (P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
             _sign, _L, _I, _D, _M, _dert_, _sub_H = _P
 
-            if neg_rM < max_miss:  # miss is accumulated over -mPs before first +mP, no select by M sign
+            if rnM < max_miss:  # miss is accumulated over -mPs before first +mP, no select by M sign
                 # miss < max miss, search continues:
                 dL = L - _L
                 mL = min(L, _L)  # L: positions / sign, derived: magnitude-proportional value
@@ -57,17 +56,21 @@ def comp_P(P_):
                 sm = mP > 0  # ave_mP = ave * 3: comp cost, or rep cost: n vars per P?
                 if sm:
                     # add comp over deeper layers, adjust and evaluate updated mP
-                    dert_P_.append( (sm, mP, neg_rM, mL, dL, mI, dI, mD, dD, mM, dM, P))
+                    dert_P_.append( (sm, mP, rnM, nL, mL, dL, mI, dI, mD, dD, mM, dM, P))
                     break  # nearest-neighbour search is terminated by first match
 
-                else:  # accumulate criteria for search continuation
-                    neg_mP -= mP  # always negative here
-                    neg_rM = -neg_mP / (abs(M) + 1)  # relative miss or contrast of _P, roD for dPP
-                    # other derivatives are not significant in neg dert_P
-                    # no neg_rL = neg_L / L: distance * ave_decay is obviated by actual decay: neg_rM?
+                else:  # accumulate negative dert_P params
+                    nL += L  # distance
+                    nmP += mP  # both are negative here
+                    rnM = -nmP / (abs(M) + 1)  # relative contiguous miss to _Ps
+                    '''
+                    M += adj_M + deep_M: combined only? roD / dPP?
+                    no contrast borrowing: initial opposite-sign P miss is expected?
+                    no neg dert_P derivatives: not significant, also no contrast value in neg PPms? 
+                    no neg_rL = neg_L / L: distance * ave_decay is obviated by actual decay: neg_rM? '''
             else:
-                dert_P_.append((sm, mP, neg_rM, None, None, None, None, None, None, None, None, P))
-                # at least one comp per loop, derivatives in +ve dert_P only
+                dert_P_.append((sm, mP, rnM, nL, 0, 0, 0, 0, 0, 0, 0, 0, P))
+                # at least one comp per loop, 0-d derivatives will be ignored in -ve dert_Ps and PPs?
                 break  # > max_miss, stop search
 
     return dert_P_
@@ -83,7 +86,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign
     for i, dert_P in enumerate(dert_P_, start=1):
         sm = dert_P[0]
         if sm != _sm:
-            PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, [_P]])
+            PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, P_])
             # initialize PPm with current dert_P:
             MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
             P_ = [_P]
@@ -94,7 +97,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign
             P_.append(P)
         _sm = sm
 
-    PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, [_P]])  # pack last PP
+    PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, P_])  # pack last PP
 
     # in form_PPd:
     # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
