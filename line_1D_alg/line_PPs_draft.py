@@ -36,11 +36,11 @@ def comp_P(P_):
     dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
 
     for i, P in enumerate(P_):
-        sign, L, I, D, M, dert_, sub_H = P
-        neg_M = mP = smP = _smP = neg_L = 0  # initialization
+        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP should be set at 0 in line_patterns
+        neg_M = mP = smP = neg_L = 0  # initialization
 
-        for _P in (P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
-            _sign, _L, _I, _D, _M, _dert_, _sub_H = _P
+        for j, _P in enumerate(P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
+            _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P
 
             if neg_M < max_miss:  # miss accumulated while mP < max miss: search continues, no select by M sign
                 dL = L - _L
@@ -56,7 +56,8 @@ def comp_P(P_):
                 smP = mP > 0  # ave_mP = ave * 3: comp cost, or rep cost: n vars per P?
 
                 if smP:  # dert_P sign is positive if match is found, else negative
-                    _smP = True  # backward match
+                    P_[j][-1] = True  # __smP: backward match, is True, stored in each P
+
                     # add comp over deeper layers, adjust and evaluate updated mP
                     dert_P_.append( (smP, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
                     break  # nearest-neighbour search, terminated by first match
