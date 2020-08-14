@@ -37,67 +37,68 @@ def comp_P(P_):
 
     for i, P in enumerate(P_):
         sign, L, I, D, M, dert_, sub_H = P
-        nmP = rnM = sm = mP = nL = 0  # initialization
+        neg_M = mP = smP = _smP = neg_L = 0  # initialization
 
         for _P in (P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
             _sign, _L, _I, _D, _M, _dert_, _sub_H = _P
 
-            if rnM < max_miss:  # miss is accumulated over -mPs before first +mP, no select by M sign
-                # miss < max miss, search continues:
+            if neg_M < max_miss:  # miss accumulated while mP < max miss: search continues, no select by M sign
                 dL = L - _L
                 mL = min(L, _L)  # L: positions / sign, derived: magnitude-proportional value
                 dI = I - _I
-                mI = abs(dI) - ave_dI  # not derived, match is inverse miss
-                dD = abs(D) - abs(_D)
-                mD = min(abs(D), abs(_D))  # same-sign D in dP?
-                dM = M - _M;  mM = min(M, _M)
+                mI = ave_dI - abs(dI)  # not derived, match is inverse deviation of miss
+                dD = D - _D      # sum if opposite-sign
+                mD = min(D, _D)  # same-sign D in dP?
+                dM = M - _M      # sum if opposite-sign
+                mM = min(M, _M)  # negative if opposite-sign, M += adj_M + deep_M: combined value only?
 
-                mP = mL + mM + mD - ave_mP  # mP *= neg_rL * decay: contrast to global decay rate?
-                sm = mP > 0  # ave_mP = ave * 3: comp cost, or rep cost: n vars per P?
-                if sm:
+                mP = mL + mM + mD - ave_mP  # mP *= (nL/L) * decay: contrast to global decay rate?
+                smP = mP > 0  # ave_mP = ave * 3: comp cost, or rep cost: n vars per P?
+
+                if smP:  # dert_P sign is positive if match is found, else negative
+                    _smP = True  # backward match
                     # add comp over deeper layers, adjust and evaluate updated mP
-                    dert_P_.append( (sm, mP, rnM, nL, mL, dL, mI, dI, mD, dD, mM, dM, P))
-                    break  # nearest-neighbour search is terminated by first match
-
-                else:  # accumulate negative dert_P params
-                    nL += L  # distance
-                    nmP += mP  # both are negative here
-                    rnM = -nmP / (abs(M) + 1)  # relative contiguous miss to _Ps
-                    '''
-                    M += adj_M + deep_M: combined only? roD / dPP?
-                    no contrast borrowing: initial opposite-sign P miss is expected?
+                    dert_P_.append( (smP, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
+                    break  # nearest-neighbour search, terminated by first match
+                else:
+                    # accumulate negative-mP params:
+                    neg_M += mP  # both are negative here  # roD / dPP?
+                    neg_L += _L  # distance
+                    '''                     
+                    no contrast borrowing: initial opposite-sign P miss is expected
+                    no rnM = -nmP / (abs(M) + 1): simple vs relative miss to _Ps
                     no neg dert_P derivatives: not significant, also no contrast value in neg PPms? 
-                    no neg_rL = neg_L / L: distance * ave_decay is obviated by actual decay: neg_rM? '''
+                    no neg_rL = neg_L / L: distance * ave_decay is obviated by actual decay: neg_rM '''
             else:
-                dert_P_.append((sm, mP, rnM, nL, 0, 0, 0, 0, 0, 0, 0, 0, P))
+                dert_P_.append((smP or _smP, mP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))
+                # smP is ORed bilaterally, distinct from mP, negative for single (weak) dert_Ps only?
                 # at least one comp per loop, 0-d derivatives will be ignored in -ve dert_Ps and PPs?
                 break  # > max_miss, stop search
 
     return dert_P_
 
 
-def form_PPm(dert_P_):  # cluster dert_Ps by mP sign
-
+def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast in overlapping comp?
     PPm_ = []
     # initialize PPm with first dert_P:
-    _sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P_[0]
+    _smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P_[0]  # positive only, no contrast?
     P_ = [_P]
 
     for i, dert_P in enumerate(dert_P_, start=1):
-        sm = dert_P[0]
-        if sm != _sm:
-            PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, P_])
+        smP = dert_P[0]
+        if smP != _smP:
+            PPm_.append([_smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, P_])
             # initialize PPm with current dert_P:
-            MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
+            _sm, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
             P_ = [_P]
         else:
             # accumulate params
-            sm, mP, rnM, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
-            MP += mP; RnM += rnM; ML += mL; DL += dL; MI += mI; DI += dI; MD += mD; DD += dD; MM += mM; DM += dM
+            sm, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
+            MP+=mP; Neg_M+=neg_M; Neg_L+=neg_L; ML+=mL; DL+=dL; MI+=mI; DI+=dI; MD+=mD; DD+=dD; MM+=mM; DM+=dM
             P_.append(P)
-        _sm = sm
+        _smP = smP
 
-    PPm_.append([_sm, MP, RnM, ML, DL, MI, DI, MD, DD, MM, DM, P_])  # pack last PP
+    PPm_.append([_smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, P_])  # pack last PP
 
     # in form_PPd:
     # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
