@@ -31,14 +31,14 @@ ave_dI = 20
 ave_div = 50
 ave_rM = .7   # average relative match per input magnitude, at rl=1 or .5?
 ave_net_M = 20  # search stop
-# ave_mP = 20  # no need, param ms are already deviations  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
+# no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
 
 
 def comp_P(P_):
     dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
 
     for i, P in enumerate(P_):
-        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP should be set at 0 in line_patterns, M: deviation even if min?
+        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP = 0 in line_patterns, M: deviation even if min
         neg_M = vmP = smP = neg_L = 0  # initialization
 
         for j, _P in enumerate(P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
@@ -47,21 +47,20 @@ def comp_P(P_):
             if M - neg_M > ave_net_M:  # search continues while net_M > ave, True for 1st _P, no selection by M sign
                 dL = L - _L
                 mL = min(L, _L)  # - ave_rM * L?  L: positions / sign, derived: magnitude-proportional value
-                dI = I - _I      # not proportional to I?
+                dI = I - _I      # proportional to distance, not I?
                 mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
                 dD = D - _D      # sum if opposite-sign
                 mD = min(D, _D)  # - ave_rM * D?  same-sign D in dP?
                 dM = M - _M      # sum if opposite-sign
                 mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-                mP = mL + mI + mM + mD  # match(P, _P)
-                proj_mP = (L + I + M + D) * (ave_rM ** (1 + neg_L/L))  # projected mP at current relative distance
-                vmP = mP - proj_mP  # mP value = deviation from projected mP, replaces mP?
-                # deviation ~ I vs. M contrast value, +|-?
+                mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
+                proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L/L))  # projected mP at current relative distance
+                vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
                 smP = vmP > 0
 
                 if smP:  # dert_P sign is positive if forward match is found, else negative
-                    P_[i+1+j][-1] = True  # __smP = True: backward match per P
+                    P_[i+1+j][-1] = True  # backward match per P: __smP = True
                     # add deeper comp
                     dert_P_.append( (smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
                     break  # nearest-neighbour search, terminated by first match
@@ -91,10 +90,10 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
         if smP != _smP:
             PPm_.append([_smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, P_])
             # initialize PPm with current dert_P:
-            _smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
+            _smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P
             P_ = [_P]
         else:
-            # accumulate params
+            # accumulate PPm with current dert_P:
             smP, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
             MP+=mP; Neg_M+=neg_M; Neg_L+=neg_L; ML+=mL; DL+=dL; MI+=mI; DI+=dI; MD+=mD; DD+=dD; MM+=mM; DM+=dM
             P_.append(P)
