@@ -1,5 +1,5 @@
 '''
-line_PPs is a 2nd level 1D algorithm.
+line_PPs is a 2nd-level 1D algorithm.
 
 It cross-compares line_patterns output Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 Depth of cross-comparison: range+ and deriv+, is increased in lower-recursion element_,
@@ -28,53 +28,54 @@ This is different from 1st level connectivity clustering, where all distances be
 '''
 
 ave_dI = 20
-div_ave = 50
-ave_mP = 20
-max_miss = 1
+ave_div = 50
+ave_rM = .7   # average relative match per input magnitude, at rl=1 or .5?
+ave_net_M = 20  # search stop
+# ave_mP = 20  # no need, param ms are already deviations  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
+
 
 def comp_P(P_):
     dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
 
     for i, P in enumerate(P_):
-        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP should be set at 0 in line_patterns
-        neg_M = mP = smP = neg_L = 0  # initialization
+        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP should be set at 0 in line_patterns, M: deviation even if min?
+        neg_M = vmP = smP = neg_L = 0  # initialization
 
         for j, _P in enumerate(P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
             _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P
 
-            if neg_M < max_miss:  # miss accumulated while mP < max miss: search continues, no select by M sign
+            if M - neg_M > ave_net_M:  # search continues while net_M > ave, True for 1st _P, no selection by M sign
                 dL = L - _L
-                mL = min(L, _L)  # L: positions / sign, derived: magnitude-proportional value
-                dI = I - _I
-                mI = ave_dI - abs(dI)  # not derived, match is inverse deviation of miss
+                mL = min(L, _L)  # - ave_rM * L?  L: positions / sign, derived: magnitude-proportional value
+                dI = I - _I      # not proportional to I?
+                mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
                 dD = D - _D      # sum if opposite-sign
-                mD = min(D, _D)  # same-sign D in dP?
+                mD = min(D, _D)  # - ave_rM * D?  same-sign D in dP?
                 dM = M - _M      # sum if opposite-sign
-                mM = min(M, _M)  # negative if opposite-sign, M += adj_M + deep_M: combined value only?
+                mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-                mP = mL + mM + mD - ave_mP  # mP *= (nL/L) * decay: contrast to global decay rate?
-                smP = mP > 0  # ave_mP = ave * 3: comp cost, or rep cost: n vars per P?
+                mP = mL + mI + mM + mD  # match(P, _P)
+                proj_mP = (L + I + M + D) * (ave_rM ** (1 + neg_L/L))  # projected mP at current relative distance
+                vmP = mP - proj_mP  # mP value = deviation from projected mP, replaces mP?
+                # deviation ~ I vs. M contrast value, +|-?
+                smP = vmP > 0
 
-                if smP:  # dert_P sign is positive if match is found, else negative
-                    P_[j][-1] = True  # __smP: backward match, is True, stored in each P
-
-                    # add comp over deeper layers, adjust and evaluate updated mP
-                    dert_P_.append( (smP, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
+                if smP:  # dert_P sign is positive if forward match is found, else negative
+                    P_[i+1+j][-1] = True  # __smP = True: backward match per P
+                    # add deeper comp
+                    dert_P_.append( (smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
                     break  # nearest-neighbour search, terminated by first match
                 else:
                     # accumulate negative-mP params:
-                    neg_M += mP  # both are negative here  # roD / dPP?
-                    neg_L += _L  # distance
+                    neg_M += mP  # accumulate contiguous miss: negative mP  # roD / dPP?
+                    neg_L += _L  # distance to match, if any
                     '''                     
-                    no contrast borrowing: initial opposite-sign P miss is expected
-                    no rnM = -nmP / (abs(M) + 1): simple vs relative miss to _Ps
-                    no neg dert_P derivatives: not significant, also no contrast value in neg PPms? 
-                    no neg_rL = neg_L / L: distance * ave_decay is obviated by actual decay: neg_rM '''
+                    no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
+                    neg dert_P derivatives are not significant;  actual decay = neg_M obviates distance * decay '''
             else:
-                dert_P_.append((smP or _smP, mP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))
-                # smP is ORed bilaterally, distinct from mP, negative for single (weak) dert_Ps only?
-                # at least one comp per loop, 0-d derivatives will be ignored in -ve dert_Ps and PPs?
-                break  # > max_miss, stop search
+                dert_P_.append((smP or _smP, vmP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))  # ignore 0s if ~smP
+                # smP is ORed bilaterally, negative for single (weak) dert_Ps only
+                break  # neg net_M: stop search
 
     return dert_P_
 
@@ -90,11 +91,11 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
         if smP != _smP:
             PPm_.append([_smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, P_])
             # initialize PPm with current dert_P:
-            _sm, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
+            _smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P[1:]
             P_ = [_P]
         else:
             # accumulate params
-            sm, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
+            smP, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
             MP+=mP; Neg_M+=neg_M; Neg_L+=neg_L; ML+=mL; DL+=dL; MI+=mI; DI+=dI; MD+=mD; DD+=dD; MM+=mM; DM+=dM
             P_.append(P)
         _smP = smP
@@ -108,7 +109,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
     ''' evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps  
 
         fdiv = 0, nvars = []
-        if M + abs(dL + dI + dD + dM) > div_ave:  
+        if M + abs(dL + dI + dD + dM) > ave_div:  
             
             rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
             norm_D = D * rL
