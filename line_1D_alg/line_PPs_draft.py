@@ -68,6 +68,9 @@ def comp_P(P_):
                     # accumulate negative-mP params:
                     neg_M += mP  # accumulate contiguous miss: negative mP  # roD / dPP?
                     neg_L += _L  # distance to match, if any
+
+                    if _P is P_[-1]:  # pack last dert_P in line
+                        dert_P_.append((smP or _smP, vmP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))
                     '''                     
                     no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
                     neg dert_P derivatives are not significant;  actual decay = neg_M obviates distance * decay '''
