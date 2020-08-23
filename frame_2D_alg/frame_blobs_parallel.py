@@ -8,6 +8,12 @@ def frame_blobs_parallel(dert__):
     dert__[:].append(blob__[:])  # add blob ID to each dert, not sure expression is correct
 
     for i, blob in enumerate(blob__):
+        '''
+        grow blob.dert__: layers of rims, rectangle unless individual dert coords?
+        y(x priority of merge_blobs, 
+        merge after extension: current rim of merged blob may overlap with that of remaining blob? 
+        concentric vs. y(x dert__ order for composition, oriented re-order for comp_P? 
+        '''
         rim_AND = 0  # counter of AND(last_rim_dert_sign, new_rim_dert_sign)
 
         for j, _side in enumerate(blob.dert__[-1]):  # dert__ is a sequence of rims, each has four sides: top, right, bottom, left

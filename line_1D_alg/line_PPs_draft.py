@@ -26,11 +26,13 @@ similar to lateral induction: variable-range comparison among Ps, until first ma
 Resulting PPs will be more like 1D graphs, with explicit distances between nearest element Ps.
 This is different from 1st level connectivity clustering, where all distances between nearest elements = 1.
 '''
+import numpy as np
 
-ave_dI = 20
+ave_dI = 1000
 ave_div = 50
-ave_rM = .7   # average relative match per input magnitude, at rl=1 or .5?
-ave_net_M = 20  # search stop
+ave_rM = .5   # average relative match per input magnitude, at rl=1 or .5?
+ave_net_M = 100  # search stop
+ave_Ls = 3
 # no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
 
 
@@ -60,8 +62,26 @@ def comp_P(P_):
                 smP = vmP > 0
 
                 if smP:  # dert_P sign is positive if forward match is found, else negative
+
                     P_[i+1+j][-1] = True  # backward match per P: __smP = True
-                    # add deeper comp
+                    dert_P_layers = []
+                    # compare sub_layers between sub_Hs:
+                    for (Ls, fdP, fid, rdn, rng, sub_P_), (_Ls, _fdP, _fid, _rdn, _rng, _sub_P_) \
+                        in zip(P[6], _P[6]):
+                        if fdP==_fdP and rng==_rng and min(Ls,_Ls) > ave_Ls:  # approximate match
+                            dert_sub_H = dert_sub_P_ = []
+                            sub_MP = sub_MP = 0
+
+                            for sub_P in sub_P_:
+                                for _sub_P in _sub_P_:
+                                    dert_sub_P = (comp_P_pair(sub_P, _sub_P))
+                                    # add: form sub_mP and sub_dP,
+                                    # add: sub_MP += sub_mP, sub_DP += sub_dP
+                                    dert_sub_P_.append(dert_sub_P)
+                            dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # tentative
+                            if sub_MP < ave_net_M:  # tentative
+                                break
+
                     dert_P_.append( (smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
                     break  # nearest-neighbour search, terminated by first match
                 else:
@@ -80,6 +100,9 @@ def comp_P(P_):
                 break  # neg net_M: stop search
 
     return dert_P_
+
+
+def comp_P_pair(P, _P):
 
 
 def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast in overlapping comp?
@@ -137,3 +160,4 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
             nvars = 0  # DIV + norm derivatives
         '''
     return PPm_
+
