@@ -36,73 +36,80 @@ ave_Ls = 3
 # no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
 
 
-def comp_P(P_):
-    dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
+def comp_P_(P_):
+    dert_P_ = []  # comp_P_ forms array of alternating-sign Ps with derivatives from comp_P
 
     for i, P in enumerate(P_):
-        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP = 0 in line_patterns, M: deviation even if min
-        neg_M = vmP = smP = neg_L = 0  # initialization
+        neg_M = vmP = smP = _smP = neg_L = 0  # initialization
 
-        for j, _P in enumerate(P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
-            _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P
+        for j, _P in enumerate(P_[i+1 :]):  # variable-range comp, no last-P displacement, just shifting first _P
+            M = P[4]
+            if M - neg_M > ave_net_M:  # search continues while net_M > ave, True for 1st _P, no select by M sign
 
-            if M - neg_M > ave_net_M:  # search continues while net_M > ave, True for 1st _P, no selection by M sign
-                dL = L - _L
-                mL = min(L, _L)  # - ave_rM * L?  L: positions / sign, derived: magnitude-proportional value
-                dI = I - _I      # proportional to distance, not I?
-                mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
-                dD = D - _D      # sum if opposite-sign
-                mD = min(D, _D)  # - ave_rM * D?  same-sign D in dP?
-                dM = M - _M      # sum if opposite-sign
-                mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
-
-                mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
-                proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L/L))  # projected mP at current relative distance
-                vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
-                smP = vmP > 0
-
-                if smP:  # dert_P sign is positive if forward match is found, else negative
-
-                    P_[i+1+j][-1] = True  # backward match per P: __smP = True
-                    dert_P_layers = []
-                    # compare sub_layers between sub_Hs:
-                    for (Ls, fdP, fid, rdn, rng, sub_P_), (_Ls, _fdP, _fid, _rdn, _rng, _sub_P_) \
-                        in zip(P[6], _P[6]):
-                        if fdP==_fdP and rng==_rng and min(Ls,_Ls) > ave_Ls:  # approximate match
-                            dert_sub_H = dert_sub_P_ = []
-                            sub_MP = sub_MP = 0
-
-                            for sub_P in sub_P_:
-                                for _sub_P in _sub_P_:
-                                    dert_sub_P = (comp_P_pair(sub_P, _sub_P))
-                                    # add: form sub_mP and sub_dP,
-                                    # add: sub_MP += sub_mP, sub_DP += sub_dP
-                                    dert_sub_P_.append(dert_sub_P)
-                            dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # tentative
-                            if sub_MP < ave_net_M:  # tentative
-                                break
-
-                    dert_P_.append( (smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
-                    break  # nearest-neighbour search, terminated by first match
+                dert_P, _L, _smP = comp_P(P, _P, neg_M, neg_L)
+                smP, vmP, neg_M, neg_L, P = dert_P[:4]
+                dert_P_.append(dert_P)
+                if smP:
+                    P_[i + 1 + j][-1] = True  # backward match per P: __smP = True
+                    break  # nearest-neighbour search is terminated by first match
                 else:
-                    # accumulate negative-mP params:
-                    neg_M += mP  # accumulate contiguous miss: negative mP  # roD / dPP?
-                    neg_L += _L  # distance to match, if any
-
-                    if _P is P_[-1]:  # pack last dert_P in line
-                        dert_P_.append((smP or _smP, vmP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))
+                    neg_M += vmP  # accumulate contiguous miss: negative mP
+                    neg_L += _L   # accumulate distance to match
+                    if j == len(P_):  # last P
+                        dert_P_.append((smP or _smP, vmP, neg_M, neg_L, P, 0, 0, 0, 0, 0, 0, 0, 0))
                     '''                     
                     no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
-                    neg dert_P derivatives are not significant;  actual decay = neg_M obviates distance * decay '''
+                    actual decay = neg_M obviates distance * decay '''
             else:
-                dert_P_.append((smP or _smP, vmP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))  # ignore 0s if ~smP
-                # smP is ORed bilaterally, negative for single (weak) dert_Ps only
+                dert_P_.append((smP or _smP, vmP, neg_M, neg_L, P, 0, 0, 0, 0, 0, 0, 0, 0))
+                # smP is ORed bilaterally, negative for single (weak) dert_Ps
+                # neg_dert_P derivatives are not significant
                 break  # neg net_M: stop search
 
     return dert_P_
 
 
-def comp_P_pair(P, _P):
+def comp_P(P, _P, neg_M, neg_L):
+
+    sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP = 0 in line_patterns, M: deviation even if min
+    _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P
+
+    dL = L - _L
+    mL = min(L, _L)  # - ave_rM * L?  L: positions / sign, derived: magnitude-proportional value
+    dI = I - _I  # proportional to distance, not I?
+    mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
+    dD = D - _D  # sum if opposite-sign
+    mD = min(D, _D)  # - ave_rM * D?  same-sign D in dP?
+    dM = M - _M  # sum if opposite-sign
+    mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
+
+    mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
+    proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L / L))  # projected mP at current relative distance
+    vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
+    smP = vmP > 0
+
+    if smP:  # forward match, compare sub_layers between sub_hierarchies:
+        dert_sub_H = []
+        for (Ls, fdP, fid, rdn, rng, sub_P_), (_Ls, _fdP, _fid, _rdn, _rng, _sub_P_) in zip(P[6], _P[6]):
+            # fork comparison:
+            if fdP == _fdP and rng == _rng and min(Ls, _Ls) > ave_Ls:
+                dert_sub_P_ = []
+                sub_MP = 0
+                # cross-compare all sub_Ps between P level and _P level:
+                for sub_P in sub_P_:
+                    for _sub_P in _sub_P_:
+                        dert_sub_P, _, _ = comp_P(sub_P, _sub_P, neg_M=0, neg_L=0)  # ignore _sub_L, _sub_smP?
+                        sub_MP += dert_sub_P[1]  # sum sub_vmPs in dert_P_layer
+                        dert_sub_P_.append(dert_sub_P)
+
+                dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # tentative
+                if sub_MP < ave_net_M:
+                    # or mH: trans-layer induction?
+                    break  # low vertical induction, deeper sub_layers are not compared
+            else:
+                break  # deeper P and _P sub_layers are from different intra_comp forks, not comparable?
+
+    return (smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P), _L, _smP
 
 
 def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast in overlapping comp?
