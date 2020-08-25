@@ -59,7 +59,8 @@ def is_close(x1, x2):
             return x1 == x2
 
 
-def bipolar(iterable):
+def bipolar(iterable, tee=tee, zip=zip, map=map,
+            reversed=reversed, list=list):
     "[0, 1, 2, 3] -> [(0, 3), (1, 2), (2, 1), (3, 0)]"
     it1, it2 = tee(iterable)
     return zip(it1,
@@ -67,7 +68,7 @@ def bipolar(iterable):
                    reversed(list(it2))))
 
 
-def pairwise(iterable):
+def pairwise(iterable, tee=tee, next=next, zip=zip):
     "s -> (s0,s1), (s1,s2), (s2, s3), ..."
     a, b = tee(iterable)
     next(b, None)
@@ -77,6 +78,11 @@ def pairwise(iterable):
 def flatten(listOfLists):
     "Flatten one level of nesting"
     return chain.from_iterable(listOfLists)
+
+
+def minmax(iterable, min=min, max=max, tee=tee):
+    a, b = tee(iterable)
+    return min(a), max(b)
 
 
 def array2image(a):

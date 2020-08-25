@@ -1,5 +1,5 @@
 from utils import *
-from frame_blobs import *
+from frame_blobs_yx import *
 import argparse
 
 # Main #
