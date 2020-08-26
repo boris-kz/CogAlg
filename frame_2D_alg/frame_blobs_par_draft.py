@@ -2,27 +2,35 @@
 Draft of blob-parallel version of frame_blobs
 '''
 
-def frame_blobs_parallel(dert__):
+def frame_blobs_parallel(frame_dert__):
     '''
-    grow blob.dert__ by merge_blobs, where remaining vs merged blobs are prior in y(x.
-    merge after extension: merged blobs may overlap with remaining blob, check and remove redundant derts
+    grow blob.dert__ by merging same-sign connected blobs, where remaining vs merged blobs are prior in y(x.
+    after extension: merged blobs may overlap with remaining blob, check and remove redundant derts
+    pseudo code below:
     '''
-    blob__ = dert__  # initialize one blob per dert
-    dert__[:].append(blob__[:])  # add blob ID to each dert, not sure expression is correct
+    blob__ = frame_dert__  # initialize one blob per dert
+    blob__[:].append(frame_dert__[:])  # add open_derts = dert per blob
+    frame_dert__[:].append(blob__[:])  # add blob ID to each dert, not sure expression is correct
 
-    for i, blob in enumerate(blob__):
-
-        border_AND = 0  # counter of AND(border_dert_sign, unfilled_rim_dert_sign)
-        for j, dert in enumerate(blob.border):  # border: list of derts that have unfilled derts in their 3x3 rim
-
-            for _dert in dert.unfilled_rim: # unfilled: derts in the rim of last-cycle border dert that are not in blob.dert__
-                if dert.sign and _dert.sign:
-                    border_AND += 1
-                    merge_blobs(blob, _dert.blob)  # merge blob and blob assigned to _dert, remaining blob is prior in y)x
-                    # remove dert from blob.border,
-                    # add merged blob border to current blob border
-        if ~border_AND:
-            terminate_blob(blob)
+    for blob in (blob__):  # initial blobs are open derts
+        open_AND = 0  # counter of AND(open_dert.sign, unfilled_rim_dert.sign)
+        new_open_derts = []
+        for dert in blob.open_derts:  # open border: list of derts in dert__ that have unfilled derts in their 3x3 rim
+            i = 0
+            while i < 7:
+                _y, _x = compute_rim(dert.y, dert.x, i)  # compute rim _y _x from dert y x, clock-wise from top-left
+                i += 1
+                if not (_y in blob.dert__ and _x in blob.dert__):
+                    _dert = frame_dert__[_y][_x]  # load unfilled rim dert from frame.dert__
+                    new_open_derts.append(_dert)
+                    if dert.sign and _dert.sign:
+                        open_AND += 1
+                        merge_blobs(blob, _dert.blob)  # merge blob with blob currently assigned to _dert,
+                        # remaining vs. merged blob is the one prior in y ( x
+                        # new_open_derts += merged_blob_open_derts - overlap, re-assign blob ID per dert
+                        # remove merged blob from next extension cycle
+        if open_AND==0:
+            terminate_blob(blob)  # remove blob from next extension cycle
 
         '''
         old dert and box- based version:

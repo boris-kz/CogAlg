@@ -59,11 +59,10 @@ def comp_P_(P_):
                         dert_P_.append((smP or _smP, vmP, neg_M, neg_L, P, 0, 0, 0, 0, 0, 0, 0, 0))
                     '''                     
                     no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
-                    actual decay = neg_M obviates distance * decay '''
+                    neg_dert_P derivatives are not significant; neg_M obviates distance * decay_rate * M '''
             else:
                 dert_P_.append((smP or _smP, vmP, neg_M, neg_L, P, 0, 0, 0, 0, 0, 0, 0, 0))
                 # smP is ORed bilaterally, negative for single (weak) dert_Ps
-                # neg_dert_P derivatives are not significant
                 break  # neg net_M: stop search
 
     return dert_P_
@@ -88,21 +87,22 @@ def comp_P(P, _P, neg_M, neg_L):
     vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
     smP = vmP > 0
 
-    if smP:  # forward match, compare sub_layers between sub_hierarchies:
+    if smP:  # forward match, compare sub_layers between P and _P sub_hierarchies:
         dert_sub_H = []
         for (Ls, fdP, fid, rdn, rng, sub_P_), (_Ls, _fdP, _fid, _rdn, _rng, _sub_P_) in zip(P[6], _P[6]):
             # fork comparison:
             if fdP == _fdP and rng == _rng and min(Ls, _Ls) > ave_Ls:
                 dert_sub_P_ = []
                 sub_MP = 0
-                # cross-compare all sub_Ps between P level and _P level:
+                # compare all sub_Ps to each _sub_P, form dert_sub_P per compared pair
                 for sub_P in sub_P_:
                     for _sub_P in _sub_P_:
                         dert_sub_P, _, _ = comp_P(sub_P, _sub_P, neg_M=0, neg_L=0)  # ignore _sub_L, _sub_smP?
                         sub_MP += dert_sub_P[1]  # sum sub_vmPs in dert_P_layer
                         dert_sub_P_.append(dert_sub_P)
 
-                dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # tentative
+                dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # only layers that have been compared
+                vmP += sub_MP  # of compared H, no specific mP?
                 if sub_MP < ave_net_M:
                     # or mH: trans-layer induction?
                     break  # low vertical induction, deeper sub_layers are not compared
