@@ -1,7 +1,7 @@
 '''
-line_PPs is a 2nd-level 1D algorithm.
+line_PPs is a 2nd-level 1D algorithm, processing output Ps from the 1st level: line_patterns.
 
-It cross-compares line_patterns output Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
+It cross-compares Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 Depth of cross-comparison: range+ and deriv+, is increased in lower-recursion element_,
 then between same-recursion element_s:
 
@@ -36,8 +36,8 @@ ave_Ls = 3
 # no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
 
 
-def comp_P_(P_):
-    dert_P_ = []  # comp_P_ forms array of alternating-sign Ps with derivatives from comp_P
+def comp_P_(P_):  # cross-compare patterns within horizontal line
+    dert_P_ = []  # comp_P_ forms array of alternating-sign (derivatives, P): output of pair-wise comp_P
 
     for i, P in enumerate(P_):
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
@@ -87,7 +87,7 @@ def comp_P(P, _P, neg_M, neg_L):
     vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
     smP = vmP > 0
 
-    if smP:  # forward match, compare sub_layers between P and _P sub_hierarchies:
+    if smP:  # forward match, compare sub_layers between P.sub_H and _P.sub_H (sub_hierarchies):
         dert_sub_H = []
         for (Ls, fdP, fid, rdn, rng, sub_P_), (_Ls, _fdP, _fid, _rdn, _rng, _sub_P_) in zip(P[6], _P[6]):
             # fork comparison:
@@ -137,6 +137,10 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
     # in form_PPd:
     # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
     # ds = 1 if Pd > 0 else 0
+
+    def accum_PP(PP: dict, **params) -> None:
+        PP.update({param: PP[param] + value for param, value in params.items()})
+
 
     ''' evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps  
 
