@@ -42,7 +42,7 @@ Many readers note disconnect between abstractness of this outline and the amount
 
 
 
-All unsupervised learning is some form of pattern discovery. The patterns are defined by match vs error between inputs, which is effectively clustering these inputs into patterns. In my scheme both comparison and clustering are primarily lateral: among inputs within a level, while in statistical learning they are vertical: between layers of composition (weighted summation). That makes all statistical learning some form of [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering), which conceptually includes neural nets.
+All unsupervised learning is pattern discovery. The patterns are clusters of inputs, defined by match vs. error from some level of comparison. In my scheme both comparison and clustering are primarily lateral: among inputs within a level, while in statistical learning they are vertical: between layers of composition or weighted summation. That makes all statistical learning, including neural nets, some variation of [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering).
 
 Basic ANN is a multi-layer perceptron: each node weighs the inputs at synapses, then sums and thresholds them into output. This normalized sum of inputs is their centroid. Output of top layer is compared to some template, forming an error. With Stochastic Gradient Descent, that error backpropagates, converting initially random weights into functional values. This is a form of learning, but I have basic problems with the process:
 
