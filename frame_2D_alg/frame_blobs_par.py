@@ -14,36 +14,67 @@ def frame_blobs_parallel_pseudo(frame_dert__):
     for blob, dert in zip(blob__, frame_dert__):
         blob[i] = [[blob],[dert]]  # add open_derts and empty connected_blobs to each blob
         i += 1
+
+    while blob__:  # flood-fill blobs by single layer of open_derts per cycle, stream compaction in next cycle
+        cycle(blob__, frame_dert__)
     '''
-    blob flood-filling by single layer of open_derts per cycle, with stream compaction in next cycle: 
+    also check for:
     while yn-y0 < Y or xn-x0 < X: 
         generic box < frame: iterate blob and box extension cycle by rim per open dert
         check frame_dert__ to assign lowest blob ID in each dert, 
         remove all other blobs from the stream
     '''
-    for blob in (blob__):  # single extension cycle, initial blobs are open derts
 
-        blob = merge_open_derts(blob)  # merge last-cycle new_open_derts, re-assign blob ID per dert
+def cycle(blob__, frame_dert__):  # blob extension cycle, initial blobs are open derts
+
+    blob__ = remove_overlapping blobs(blob__, frame_dert__)
+    # check ids in all frame derts, remove blobs in blob__ that have >lowest id in any frame dert
+    # not sure how to do it in parallel?
+
+    for i, blob in enumerate(blob__):
         open_AND = 0  # counter of AND(open_dert.sign, unfilled_rim_dert.sign)
         new_open_derts = []
+
         for dert in blob.open_derts:  # open_derts: list of derts in dert__ with unfilled derts in their 3x3 rim
-            i = 0
-            while i < 7:
-                _y, _x = compute_rim(dert.y, dert.x, i)  # compute rim _y _x from dert y x, clock-wise from top-left
-                i += 1
+            j = 0
+            while j < 7:
+                _y, _x = compute_rim(dert.y, dert.x, j)  # compute rim _y _x from dert y x, clock-wise from top-left
+                j += 1
                 if not (_y in blob.dert__ and _x in blob.dert__):
                     _dert = frame_dert__[_y][_x]  # load unfilled rim dert from frame.dert__
                     if dert.sign and _dert.sign:
                         open_AND += 1
                         new_open_derts.append(_dert)
+                        # add: blob params += _dert params
                         frame_dert__[_y][_x].append(blob.ID)
                         # multiple blob IDs maybe assigned to each frame_dert, with the lowest one selected in next cycle
         if open_AND==0:
-            terminate_blob(blob)  # remove blob from next extension cycle
+            del blob[i]  # blob terminates remove from next extension cycle
 
+
+def compute_rim(y, x, j):
+    # topleft:
+    if j == 0: _y = y - 1; _x = x - 1
+    # top:
+    elif j==1: _y = y - 1; _x = x
+    # topright:
+    elif j==2: _y = y - 1; _x = x + 1
+    # right:
+    elif j==3: _y = y; _x = x + 1
+    # bottomright:
+    elif j==4: _y = y + 1; _x = x + 1
+    # bottom:
+    elif j==5: _y = y + 1; _x = x
+    # bottomleft:
+    elif j==6: _y = y + 1; _x = x - 1
+    # left:
+    else:      _y = y; _x = x - 1
+
+    return _y, _x
 
 '''
-Chee's implementation of blob-parallel frame_blobs:
+Chee's implementation of blob-parallel frame_blobs,
+with a bunch of my edits, unfinished:
 '''
 
 from class_cluster import ClusterStructure, NoneType
@@ -60,6 +91,7 @@ from matplotlib import pyplot as plt
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
+
 class CDert(ClusterStructure):
     # Derts
     i = int
@@ -70,9 +102,11 @@ class CDert(ClusterStructure):
     sign = NoneType
     x_coord = int
     y_coord = int
+    blob = list
     blob_ids = list
     blob_id_min = int
     fopen = bool
+
 
 class CBlob(ClusterStructure):
     # Derts
@@ -88,117 +122,128 @@ class CBlob(ClusterStructure):
     root_dert__ = object
     adj_blobs = list
     fopen = bool
+    dert = object
 
 
-def generate_blobs(dert, y, x):
-    '''
-    generate dert & blob based on given dert and their location
-    '''
+def initialize_blobs(dert_input, y, x):
 
-    dert_i = CDert(i=dert[0], g=dert[1] - ave, dy=dert[2], dx=dert[3],
-                   x_coord=x, y_coord=y, sign=dert[1] - ave > 0, fopen=1)
+    # dert instance from their class
+    dert = CDert(i=dert_input[0], g=dert_input[1] - ave, dy=dert_input[2], dx=dert_input[3],
+                 x_coord=x, y_coord=y, sign=dert_input[1] - ave > 0, fopen=1)
 
-    blob = CBlob(I=dert[0], G=dert[1] - ave, Dy=dert[2], Dx=dert[3],
-                 dert_coord_=[[y, x]], sign=dert[1] - ave > 0)
+    # blob instance from their class
+    blob = CBlob(I=dert_input[0], G=dert_input[1] - ave, Dy=dert_input[2], Dx=dert_input[3],
+                 dert_coord_=[[y, x]], sign=dert_input[1] - ave > 0, dert=dert)
 
-    dert_i.blob_ids.append(blob.id)
+    # update blob params into dert
+    dert.blob = blob
+    dert.blob_ids.append(blob.id)
+    dert.blob_id_min = blob.id
 
-    return [blob, dert_i]
+    return [blob, dert]
 
 
-def check_rim(blobdert, blobdert_rim):
+def check_rims(blob, blob_rims):
     '''
     check connectivity of blob's rim derts and update each dert's ids
+    I use "rim" as in kernel only, blob has open_derts instead.
+    So this should be "check rims of open_derts?
     '''
-    c_blob = blobdert[0]  # current blob
-    c_dert = blobdert[1]  # current dert
+    dert = blob.dert  # get dert from blob
 
-    if c_blob.sign:  # for + sign, check 8 ortho+diag rims
-        for rim in blobdert_rim:
-            if rim:  # not empty rim
-                blob, dert = rim
+    if blob.sign:  # for + sign, check 8 ortho+diag rims
+        for blob_rim in blob_rims:
+            if blob_rim:  # not empty rim
+                _dert = blob_rim.dert
 
-                # check open dert flag and same sign
-                if c_dert.sign == dert.sign:
-                    c_dert.blob_ids.append(blob.id)  # add same sign rim blob's id
-                    c_dert.blob_ids += dert.blob_ids  # chain the rim dert' blob' rim dert's blobs ids
-                    c_dert.blob_ids = list(set(c_dert.blob_ids))  # remove duplicated ids
+                # check same sign
+                if dert.sign == _dert.sign:
+                    dert.blob_ids.append(blob_rim.id)  # add same sign rim blob's id
+                    dert.blob_ids += _dert.blob_ids  # chain the rim dert' blob' rim dert's blobs ids
+                    dert.blob_ids = list(set(dert.blob_ids))  # remove duplicated ids
 
     else:  # for - sign, check 4 ortho rims
-        for i, rim in enumerate(blobdert_rim):
-            if rim and (i + 1) % 2:  # not empty rim and ortho rim
-                blob, dert = rim
+        for i, blob_rim in enumerate(blob_rims):
+            if blob_rim and i % 2:  # not empty rim and ortho rim
+                _dert = blob_rim.dert
 
-                # check open dert flag and same sign
-                if c_dert.sign == dert.sign:
-                    c_dert.blob_ids.append(blob.id)  # add same sign rim blob's id
-                    c_dert.blob_ids += dert.blob_ids  # chain the rim dert' blob' rim dert's blobs ids
-                    c_dert.blob_ids = list(set(c_dert.blob_ids))  # remove duplicated ids
+                # check same sign
+                if dert.sign == _dert.sign:
+                    dert.blob_ids.append(blob_rim.id)  # add same sign rim blob's id
+                    dert.blob_ids += _dert.blob_ids  # chain the rim dert' blob' rim dert's blobs ids
+                    dert.blob_ids = list(set(dert.blob_ids))  # remove duplicated ids
+
     # min of ids
-    c_dert.blob_id_min = min(c_dert.blob_ids)
-    return [c_blob, c_dert]
+    dert.blob_id_min = min(dert.blob_ids)
+    return [blob, dert]
 
 
-# there could be a better way to replace this function with parallel process ,need to think about it
-def get_rim_dert(blobdert__, height, width):
-    '''
-    generate rims' blobs & derts
-    '''
+# there could be a better way to replace this function with parallel process, need to think about it
 
-    blobdert_rim_ = []
+def get_rim_derts(dert_, height, width):
+
+    # convert frame dert_ to 2D array
+    # this should be original frame_dert__, already 2D array?
+    # blob__ is a separate array, blob growth and pruning should not affect frame_dert__?
+
+    dert__ = [dert_[i:i + width] for i in range(0, len(dert_), width)]
+    blob_rims_ = []
+
     for y in range(height):
         for x in range(width):
-            # topleft
+        # sorry, you are getting rims for all derts in blob box?
+        # it should only be for open derts, added in the last cycle, check line 29 above
+
             if y - 1 >= 0 and x - 1 >= 0:
-                blobdert_topleft = blobdert__[y - 1][x - 1]
-            else:
-                blobdert_topleft = []
-            # top
+                topleft = dert__[y - 1][x - 1]
+            else: topleft = []
             if y - 1 >= 0:
-                blobdert_top = blobdert__[y - 1][x]
-            else:
-                blobdert_top = []
-            # topright
+                top = dert__[y - 1][x]
+            else: top = []
             if y - 1 >= 0 and x + 1 <= width - 1:
-                blobdert_topright = blobdert__[y - 1][x + 1]
-            else:
-                blobdert_topright = []
-            # right
+                topright = dert__[y - 1][x + 1]
+            else: topright = []
             if x + 1 <= width - 1:
-                blobdert_right = blobdert__[y][x + 1]
-            else:
-                blobdert_right = []
-            # botright
+                right = dert__[y][x + 1]
+            else: right = []
             if y + 1 <= height - 1 and x + 1 <= width - 1:
-                blobdert_botright = blobdert__[y + 1][x + 1]
-            else:
-                blobdert_botright = []
-            # bot
+                botright = dert__[y + 1][x + 1]
+            else: botright = []
             if y + 1 <= height - 1:
-                blobdert_bot = blobdert__[y + 1][x]
-            else:
-                blobdert_bot = []
-            # botleft
+                bottom = dert__[y + 1][x]
+            else: bottom = []
             if y + 1 <= height - 1 and x - 1 >= 0:
-                blobdert_botleft = blobdert__[y + 1][x - 1]
-            else:
-                blobdert_botleft = []
-            # left
+                botleft = dert__[y + 1][x - 1]
+            else: botleft = []
             if x - 1 >= 0:
-                blobdert_left = blobdert__[y][x - 1]
-            else:
-                blobdert_left = []
+                left = dert__[y][x - 1]
+            else: left = []
 
-            blobdert_rim_.append([blobdert_topleft, blobdert_top, blobdert_topright, blobdert_right,
-                                  blobdert_botright, blobdert_bot, blobdert_botleft, blobdert_left])
-
-    return blobdert_rim_
+            blob_rims_.append([topleft, top, topright, right, botright, bottom, botleft, left])
+    return blob_rims_
 
 
-def frame_blobs_parallel_Chee(dert__):
+def cycle_Chee(pool, blob_, height, width):
     '''
-    grow blob.dert__ by merge_blobs, where remaining vs merged blobs are prior in y(x.
-    merge after extension: merged blobs may overlap with remaining blob, check and remove redundant derts
+    cycle includes getting updated rim blobs and update the rims
+    this should be
+    '''
+    # get each dert rims (8 rims)
+    blob_rims_ = get_rim_derts(blob_, height, width)
+    # (parallel process) get updated id in each dert
+    blob_, dert_ = zip(*pool.starmap(check_rims, zip(blob_, blob_rims_)))
+
+    # get map of min id
+    id_map_ = [dert.blob_id_min for dert in dert_]
+    id_map__ = [id_map_[i:i + width] for i in range(0, len(id_map_), width)]
+    id_map_np__ = np.array(id_map__)
+
+    return blob_, id_map_np__
+
+
+def frame_blobs_parallel(dert__):
+    '''
+    Draft of parallel blobs forming process, consists
     '''
 
     pool = ThreadPool(mp.cpu_count())  # initialize pool of threads
@@ -207,76 +252,47 @@ def frame_blobs_parallel_Chee(dert__):
 
     # generate all x and y coordinates
     dert_coord = [[y, x] for x in range(width) for y in range(height)]
-    y_ = [y for y, x in dert_coord]
-    x_ = [x for y, x in dert_coord]
+    y_, x_ = zip(*[[y, x] for y, x in dert_coord])
 
-    # get each dert from coordinate
+    # get each non class instance dert from coordinates
     dert_ = [dert__[:, y, x] for y, x in dert_coord]
 
-    # (parallel process) generate instance of derts and blobs
-    blobdert_ = pool.starmap(generate_blobs, zip(dert_, y_, x_))
+    # (parallel process) generate instance of derts and blobs from their class
+    blob_, dert_ = zip(*pool.starmap(initialize_blobs, zip(dert_, y_, x_)))
 
-    ite_count = 0  # count of iteration
+    cycle_count = 0
     id_map_np_prior___ = np.zeros((height, width))  # prior id_map, to check when to stop iteration
-    f_ite = 1  # flag to continue iteration, 0 = stop, 1 = continue
+    fcontinue = 1  # 0 = stop, 1 = continue
 
-    ## 1st iteration ##
+    ## 1st cycle ##
+    blob_, id_map_np__ = cycle_Chee(pool, blob_, height, width)
 
-    # convert blobdert_ to 2D array
-    blobdert__ = [blobdert_[i:i + width] for i in range(0, len(blobdert_), width)]
-    # get each dert rims (8 rims)
-    blobdert_rim_ = get_rim_dert(blobdert__, height, width)
-    # (parallel process) get updated id in each dert
-    blobdert_ = pool.starmap(check_rim, zip(blobdert_, blobdert_rim_))
-    # get map of min id
-    id_map_ = [dert.blob_id_min for [blob, dert] in blobdert_]
-    id_map__ = [id_map_[i:i + width] for i in range(0, len(id_map_), width)]
-    id_map_np__ = np.array(id_map__)
+    # save output image
+    cv2.imwrite("./images/parallel/id_cycle_0.png", ((np.fliplr(np.rot90(np.array(id_map_np__), 3)) * 255) / (width * height)).astype('uint8'))
+    while fcontinue:
 
-    ## end of 1st iteration ##
+        print("Running cycle " + str(cycle_count + 1))
+        id_map_np_prior___ = id_map_np__  # update prior id map
 
-    while f_ite:
+        ## consecutive cycles ##
+        blob_, id_map_np__ = cycle_Chee(pool, blob_, height, width)
+        dif_id = id_map_np__ - id_map_np_prior___
 
-        print("Running iteration " + str(ite_count))
-
-        id_map_np_prior___ = id_map_np__
-
-        ## consecutive nth iteration ##
-
-        # convert blobdert_ to 2D array
-        blobdert__ = [blobdert_[i:i + width] for i in range(0, len(blobdert_), width)]
-
-        # get each dert rims (8 rims)
-        blobdert_rim_ = get_rim_dert(blobdert__, height, width)
-
-        # get updated id in each dert
-        blobdert_ = pool.starmap(check_rim, zip(blobdert_, blobdert_rim_))
-
-        # get map of min id
-        id_map_ = [dert.blob_id_min for [blob, dert] in blobdert_]
-        id_map__ = [id_map_[i:i + width] for i in range(0, len(id_map_), width)]
-        id_map_np__ = np.array(id_map__)
-
-        ## end of consecutive nth iteration ##
-
-        # check whether there is any change in id
-        dif = id_map_np__ - id_map_np_prior___
-
-        # if there is no change in ids, stop the iteration
-        if (np.sum(dif) == 0):
-            f_ite = 0
+        # if no change in ids, stop the iteration
+        if (np.sum(dif_id) == 0):
+            fcontinue = 0
 
         # save image
-        cv2.imwrite("./images/parallel/id_ite_" + str(ite_count) + ".png", ((np.fliplr(np.rot90(np.array(id_map_np__), 3)) * 255) / (width * height)).astype('uint8'))
+        cv2.imwrite("./images/parallel/id_cycle_" + str(cycle_count + 1) + ".png", ((np.fliplr(np.rot90(np.array(id_map_np__), 3)) * 255) / (width * height)).astype('uint8'))
+        cycle_count += 1
 
-        # increase interation count
-        ite_count += 1
-
-    print("total iteration = " + str(ite_count))
+    print("total cycle= " + str(cycle_count))
 
     # close pool of threads
     pool.close()
     pool.join()
+
+    return np.fliplr(np.rot90(np.array(id_map_np__)))
 
 
 if __name__ == '__main__':
@@ -291,7 +307,7 @@ if __name__ == '__main__':
 
     dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
 
-    frame_blobs_parallel_Chee(dert__)
+    id_map__ = frame_blobs_parallel(dert__)
 
     end_time = time() - start_time
     print("time elapsed = " + str(end_time))
