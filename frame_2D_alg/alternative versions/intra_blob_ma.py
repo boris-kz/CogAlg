@@ -1,4 +1,4 @@
-from collections import deque, defaultdict
+from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from intra_comp_ma import *
 from itertools import zip_longest

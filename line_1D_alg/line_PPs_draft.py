@@ -142,33 +142,44 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
         PP.update({param: PP[param] + value for param, value in params.items()})
 
 
-    ''' evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps  
+def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
+    '''
+    evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps
+    '''
+    for PP in PP_:
+        fdiv = 0
+        nvars = []
+        if PP.M + abs(PP.dL + PP.dI + PP.dD + PP.dM) > ave_div:
+            _P = PP.P_[0]
+            # smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, iP = P,
+            _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P[-1]
 
-        fdiv = 0, nvars = []
-        if M + abs(dL + dI + dD + dM) > ave_div:  
-            
-            rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
-            norm_D = D * rL
-            norm_dD = norm_D - _norm_D
-            nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
-            nDy = Dy * rL;
-            ndDy = nDy - _Dy;
-            nmDy = min(nDy, _Dy)
+            for P in PP.P_[1:]:
+                sign, L, I, D, M, dert_, sub_H, _smP = P[-1]
+                # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+                rL = L / _L
+                # mL = whole_rL * min_L?
+                dI = I * rL - _I  # rL-normalized dI, vs. nI = dI * rL or aI = I / L
+                mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
+                dD = D * rL - _D  # sum if opposite-sign
+                mD = min(D, _D)   # same-sign D in dP?
+                dM = M * rL - _M  # sum if opposite-sign
+                mM = min(M, _M)   # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-            Pnm = mX + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
-
-            if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
-            else:        mPP_rdn = 1; nmPP_rdn = 0
-            Pnd = ddX + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
-
-            if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
-            else:        dPP_rdn = 1; ndPP_rdn = 0
-            fdiv = 1
-            nvars = Pnm, nmD, mPP_rdn, nmPP_rdn, Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
-
-        else:
-            fdiv = 0  # DIV comp flag
-            nvars = 0  # DIV + norm derivatives
-        '''
-    return PPm_
+                mP = mI + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
+                                   # defines norm_mPP, no ndx: single, but nmx is summed
+                if mP > P[1]:
+                    rrdn = 1  # added to rdn, or diff alt, olp, div rdn?
+                else:
+                    rrdn = 2
+                if mP > ave_dI * 3 * rrdn:
+                    rvars = mP, mI, mD, mM, dI, dD, dM  # dPP_rdn, ndPP_rdn
+                else:
+                    rvars = []
+                '''
+                also define dP,
+                if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
+                else:        dPP_rdn = 1; ndPP_rdn = 0
+                '''
+    return PP_
 

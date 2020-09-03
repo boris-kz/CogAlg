@@ -1,5 +1,5 @@
 """
-Provide AdjBinder object for frame_blobs_yx.py
+Provide AdjBinder object for frame_blobs_xy.py
 """
 
 class AdjBinder:

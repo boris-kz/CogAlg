@@ -1,5 +1,6 @@
 """
 Provide streaming methods to monitor some of frame_2D_alg operations.
+Used in frame_blobs_yx.
 """
 import sys
 import numpy as np

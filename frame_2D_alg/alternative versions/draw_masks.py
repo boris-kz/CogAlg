@@ -23,7 +23,7 @@ draw_masks(frame)
 
 # Draw blobs --------------------------------------------------------------
 
-IMAGE_PATH = "./images/raccoon_eye.jpeg"
+IMAGE_PATH = "../images/raccoon_eye.jpeg"
 image = imread(IMAGE_PATH)
 
 '''

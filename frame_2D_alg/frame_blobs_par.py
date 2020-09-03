@@ -4,9 +4,7 @@ Draft of blob-parallel version of frame_blobs
 
 def frame_blobs_parallel_pseudo(frame_dert__):
     '''
-    grow blob.dert__ by merging same-sign connected blobs, where remaining vs merged blob is prior in y(x.
-    after extension: merged blobs may overlap with remaining blob, check and remove redundant derts
-    pseudo code below:
+    grow blob.dert__ by all blobs in parallel, pseudo code below:
     '''
     blob__ = frame_dert__  # initialize one blob per dert
     frame_dert__[:].append(blob__[:])  # add blob ID to each dert, not sure expression is correct
@@ -17,19 +15,14 @@ def frame_blobs_parallel_pseudo(frame_dert__):
 
     while blob__:  # flood-fill blobs by single layer of open_derts per cycle, stream compaction in next cycle
         cycle(blob__, frame_dert__)
-    '''
-    also check for:
-    while yn-y0 < Y or xn-x0 < X: 
-        generic box < frame: iterate blob and box extension cycle by rim per open dert
-        check frame_dert__ to assign lowest blob ID in each dert, 
-        remove all other blobs from the stream
-    '''
 
-def cycle(blob__, frame_dert__):  # blob extension cycle, initial blobs are open derts
+
+def cycle(blob__, frame_dert__):  # parallel blob extension cycle, initial blobs are open derts
 
     blob__ = remove_overlapping blobs(blob__, frame_dert__)
-    # check ids in all frame derts, remove blobs in blob__ that have >lowest id in any frame dert
-    # not sure how to do it in parallel?
+    # check ids in all frame derts, remove blob__ blobs with >lowest id in any frame dert
+    # or by blob.G: remove blobs with < highest-G in any frame dert?
+    # each frame dert is mapped to a node?
 
     for i, blob in enumerate(blob__):
         open_AND = 0  # counter of AND(open_dert.sign, unfilled_rim_dert.sign)
@@ -48,8 +41,9 @@ def cycle(blob__, frame_dert__):  # blob extension cycle, initial blobs are open
                         # add: blob params += _dert params
                         frame_dert__[_y][_x].append(blob.ID)
                         # multiple blob IDs maybe assigned to each frame_dert, with the lowest one selected in next cycle
-        if open_AND==0:
-            del blob[i]  # blob terminates remove from next extension cycle
+
+        if open_AND==0:  # add: or yn-y0 < Y or xn-x0 < X: generic box < frame?
+            del blob[i]  # blob is terminated, remove from next extension cycle
 
 
 def compute_rim(y, x, j):
@@ -78,16 +72,11 @@ with a bunch of my edits, unfinished:
 '''
 
 from class_cluster import ClusterStructure, NoneType
-from utils import (
-    pairwise,
-    imread, )
 import multiprocessing as mp
-from frame_blobs_ma import comp_pixel
+from frame_blobs import comp_pixel
 from time import time
-import numpy as np
 from utils import *
 from multiprocessing.pool import ThreadPool
-from matplotlib import pyplot as plt
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
