@@ -6,6 +6,7 @@
 
 from ctypes import *
 import numpy as np
+
 from frame_blobs_defs import CBlob, FrameOfBlobs
 from utils import imread
 
@@ -69,6 +70,7 @@ def transfer_data(sframe, dert__):
         cblob.dert_coord_.update(((sblob.dert_ref[i].y, sblob.dert_ref[i].x)
                                   for i in range(sblob.S)))
 
+
         ntframe.blob_.append(cblob)
 
     return ntframe
@@ -84,4 +86,3 @@ def cwrapped_derts2blobs(dert__):
     ntframe = transfer_data(sframe, dert__)
 
     return ntframe, idmap, set()
-

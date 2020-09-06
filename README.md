@@ -3,19 +3,18 @@ CogAlg
 
 Full introduction: <www.cognitivealgorithm.info>
 
-Intelligence is a general cognitive ability, ultimately the ability to predict. That includes planning, which technically is a self-prediction. Any prediction is interactive projection of known patterns, hence the first step must be pattern discovery. This perspective is well established, pattern recognition is a core of any IQ test. But there is no general AND constructive definition of pattern or recognition, so I have my own in the Outline section.
+Intelligence is a general cognitive ability, ultimately the ability to predict. That includes planning, which technically is a self-prediction. Any prediction is interactive projection of known patterns, hence the first step must be pattern discovery. This perspective is well established, pattern recognition is a core of any IQ test. Recognition is a product of comparisons, ordered in some form of search. But I don't see any conceptually consistent attempts to implement recursively incremental search, which is critical for scalability.
 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and 
 “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most everyone else use neural nets, which work in very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more local and selective by multiple instantiation parameters. But they still start with weighted summation per parameter, which degrades the data before comparison and evaluation.
 
-In the next section, I define similarity for the simplest inputs, then describe hierarchically recursive algorithm 
-of search for similarity among incrementally complex inputs: lower-level patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+In the next section, I define atomic comparison and resulting patterns, then describe hierarchically recursive algorithm to search for incrementally complex patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline of my approach
 
 
-Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It is designed to discover patterns of incremental composition in recursively extended pipeline. Each level of this pipeline cross-compares inputs and then clusters them into patterns by proximity and resulting match.
+Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It's a search for patterns of incremental composition in recursively extended pipeline. Each level of this pipeline cross-compares inputs and then clusters them into patterns by proximity and resulting match. So, pattern is a set of nearest-neighbor matching inputs. In more common use, pattern is a matching set of inputs. But that's really a second-order covariance pattern: a set of inputs with matching derivatives from prior comparisons.
 
 First-level comparands are sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All symbolic data is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross compared. The difficulty of decoding is exponential with the level of encoding, thus starting with raw sensory input is by far the easiest to implement (part 0).
 

@@ -321,7 +321,7 @@ def over_draw(map, sub_map, sub_box,
     return map
 
 
-def blank_image(shape):
+def blank_image(shape, fill_val=None):
     '''Create an empty numpy array of desired shape.'''
 
     if len(shape) == 2:
@@ -330,8 +330,9 @@ def blank_image(shape):
         y0, yn, x0, xn = shape
         height = yn - y0
         width = xn - x0
-
-    return np.full((height, width, 3), masking_val, 'uint8')
+    if fill_val is None:
+        fill_val = masking_val
+    return np.full((height, width, 3), fill_val, 'uint8')
 
 # ---------------------------------------------------------------------
 # ----------------------------------------------------------------------------

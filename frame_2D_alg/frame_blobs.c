@@ -156,8 +156,8 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
                 nfilled++;
                 if(y < box[0]) box[0] = y;
                 if(y > box[1]) box[1] = y;
-                if(y < box[2]) box[2] = x;
-                if(y > box[3]) box[3] = x;
+                if(x < box[2]) box[2] = x;
+                if(x > box[3]) box[3] = x;
 
                 // loop through adjacent coordinates, 8 if sign else 4
                 for(int dir = 0; dir < (sign?8:4); dir++) {
@@ -197,6 +197,10 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
             blobs[nblobs].Dy = Dy;
             blobs[nblobs].Dx = Dx;
             blobs[nblobs].S = S;
+            blobs[nblobs].box[0] = box[0];
+            blobs[nblobs].box[1] = box[1] + 1;
+            blobs[nblobs].box[2] = box[2];
+            blobs[nblobs].box[3] = box[3] + 1;
             blobs[nblobs].sign = sign;
             blobs[nblobs].fopen = fopen;
             nblobs++;

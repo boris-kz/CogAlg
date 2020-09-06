@@ -6,6 +6,7 @@ formed blobs interactively.
 import sys
 import numpy as np
 import cv2 as cv
+from utils import blank_image, over_draw
 
 MIN_WINDOW_WIDTH = 640
 MIN_WINDOW_HEIGHT = 480
@@ -34,12 +35,20 @@ def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
             max(width, MIN_WINDOW_WIDTH),
             max(height, MIN_WINDOW_HEIGHT),
         )
+    background = blank_image((height, width))
+    masks = {}
+    for blobid in range(idmap.max() + 1):
+        blob = blob_cls.get_instance(blobid)
+        y0, yn, x0, xn = blob.box
+        # Form masks for fast transition
+        mask = ~(idmap[y0:yn, x0:xn] == blobid)
+        masks[blobid] = mask
+        # Prepare background image
+        over_draw(background, None, blob.box,
+                  mask=mask,
+                  fill_color=[blob.sign * 32] * 3)
+
     idmap = cv.resize(idmap.astype('uint64'), window_size, interpolation=cv.INTER_NEAREST)
-    background = np.zeros_like(idmap, 'uint8')
-    for blobid in range(idmap.max()):
-        sign = blob_cls.get_instance(blobid).sign
-        background[idmap == blobid] = sign * 64
-    background = np.stack([background] * 3, axis=2)
     img = background.copy()
     blobid = [-1]
 
@@ -56,10 +65,14 @@ def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
                     print("\r", end="\t\t\t\t\t\t\t")
                     sys.stdout.flush()
                     return
-                img[idmap == blobid[0]] = WHITE
+                over_draw(img, None, blob.box,
+                          mask=masks[blobid[0]],
+                          fill_color=WHITE)
                 # ... and its adjacents
                 for adj_blob, pose in blob.adj_blobs[0]:
-                    img[idmap == adj_blob.id] = POSE2COLOR[pose]
+                    over_draw(img, None, adj_blob.box,
+                              mask=masks[adj_blob.id],
+                              fill_color=POSE2COLOR[pose])
                 # ... print blobs properties.
                 print("\rblob:",
                       "id =", blob.id,
@@ -76,7 +89,10 @@ def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
     cv.setMouseCallback(winname, mouse_call)
     print()
     while True:
-        cv.imshow(winname, img)
+        cv.imshow(winname,
+                  cv.resize(img,
+                            window_size,
+                            interpolation=cv.INTER_NEAREST))
         if cv.waitKey(1) == ord('q'):
             break
     cv.destroyAllWindows()

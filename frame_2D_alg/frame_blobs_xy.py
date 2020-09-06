@@ -480,7 +480,7 @@ if __name__ == '__main__':
         if verbose:
             print("\rRunning intra_blob...")
 
-        from intra_blob import (
+        from intra_blob_xy import (
             intra_blob, CDeepBlob, aveB,
         )
 
