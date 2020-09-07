@@ -14,7 +14,6 @@
     sign,
     box,  # y0, yn, x0, xn
     dert__,  # box of derts, each = i, idy, idx, g, dy, dx, m
-    stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, in vertical (horizontal) order
     # next fork:
     fcr,  # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork?
     fig,  # flag input is gradient
@@ -24,20 +23,18 @@
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
 from collections import deque, defaultdict
-from frame_blobs_defs import CDeepBlobs
+from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from utils import pairwise
 import numpy as np
-
 # from comp_P_draft import comp_P_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
-
 
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
@@ -45,7 +42,7 @@ aveB = 50  # fixed cost per intra_blob comp and clustering
 def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | der+ cross-comp within blob
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
     if kwargs.get('render', None) is not None:  # stop rendering sub-blobs when blob is too small
-        if blob.Dert['S'] < 100:
+        if blob.S < 100:
             kwargs['render'] = False
 
     spliced_layers = []  # to extend root_blob sub_layers
@@ -56,7 +53,7 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
         dert__, mask = comp_g(ext_dert__, ext_mask)  # -> g sub_blobs:
 
     if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-        sub_blobs = cluster_derts(dert__, mask, ave * rdn, fcr, fig, **kwargs)
+        sub_blobs = cluster_derts(dert__, mask, ave * rdn, fcr, fig, False, **kwargs)
         # fork params:
         blob.fcr = fcr
         blob.fig = fig
@@ -67,7 +64,7 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
 
-            G = blob.Dert['G'];  adj_G = blob.adj_blobs[2]
+            G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
             borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
 
             if sub_blob.sign:
@@ -85,7 +82,8 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
     return spliced_layers
 
 
-def cluster_derts(dert__, mask, Ave, fcr, fig, **kwargs):
+def cluster_derts(dert__, mask, Ave, fcr, fig, verbose=False, **kwargs):
+
     if fcr:  # comp_r output;  form clustering criterion:
         if fig:
             crit__ = dert__[0] + dert__[6] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
@@ -100,7 +98,7 @@ def cluster_derts(dert__, mask, Ave, fcr, fig, **kwargs):
                                          sign__=crit__ > 0,
                                          verbose=verbose,
                                          excluded_derts=excluded_derts,
-                                         blob_cls=CDeepBlobs,
+                                         blob_cls=CDeepBlob,
                                          accum_func=accum_blob_Dert,
                                          **kwargs)
 

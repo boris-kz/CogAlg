@@ -38,13 +38,12 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
     dert_P_ = []  # comp_P_ forms array of alternating-sign (derivatives, P): output of pair-wise comp_P
 
     for i, P in enumerate(P_):
-
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
         M = P[4]
+
         for j, _P in enumerate(P_[i+1 :]):  # variable-range comp, no last-P displacement, just shifting first _P
-
-            if M - neg_M > ave_net_M:  # search continues while net_M > ave, True for 1st _P, no select by M sign
-
+            if M - neg_M > ave_net_M:
+                # search while net_M > ave, True for 1st _P, no select by M sign
                 dert_P, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 smP, vmP, neg_M, neg_L, P = dert_P[:5]
                 dert_P_.append(dert_P)
@@ -147,9 +146,16 @@ def accum_PP(PP: dict, **params) -> None:
 def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
     '''
     evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps
+    higher comp to normalize for difference in L: higher-composition param
+    direct vs. rL-projected:
     '''
     for PP in PP_:
-        if PP.M + abs(PP.dL + PP.dI + PP.dD + PP.dM) > ave_div:
+        if PP.M + (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:
+            ''' 
+            or eval by match rate: irM * D_vars, regardless of sign?
+            or abs(PP.dL + PP.dI + PP.dD + PP.dM): opposite sign cancels-out div_comp value, should be L-proportional?
+            or div_comp value is match: min(dL, dI, dD, dM) * 4, | sum of pairwise mins?
+            '''
             _dert_P = PP.dert_P_[0]
             # smP, vmP, neg_M, neg_L, iP, mL, dL, mI, dI, mD, dD, mM, dM = P,
             _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _dert_P[4]
