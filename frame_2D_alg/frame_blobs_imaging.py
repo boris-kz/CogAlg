@@ -22,13 +22,14 @@ POSE2COLOR = {
 }
 
 
-def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
+def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
     """
     Visualize blobs after clustering.
     Highlight the blob the mouse is hovering on and its
     adjacents.
     """
     print("Preparing for visualization...", end="")
+    blob_cls = blob_[0].__class__
     height, width = idmap.shape
     if window_size is None:
         window_size = (
@@ -36,19 +37,13 @@ def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
             max(height, MIN_WINDOW_HEIGHT),
         )
     background = blank_image((height, width))
-    masks = {}
-    for blobid in range(idmap.max() + 1):
-        blob = blob_cls.get_instance(blobid)
-        y0, yn, x0, xn = blob.box
-        # Form masks for fast transition
-        mask = ~(idmap[y0:yn, x0:xn] == blobid)
-        masks[blobid] = mask
-        # Prepare background image
+    for blob in blob_:
         over_draw(background, None, blob.box,
-                  mask=mask,
+                  mask=blob.mask,
                   fill_color=[blob.sign * 32] * 3)
 
-    idmap = cv.resize(idmap.astype('uint64'), window_size, interpolation=cv.INTER_NEAREST)
+    idmap = cv.resize(idmap.astype('uint64'), window_size,
+                      interpolation=cv.INTER_NEAREST)
     img = background.copy()
     blobid = [-1]
 
@@ -66,12 +61,12 @@ def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
                     sys.stdout.flush()
                     return
                 over_draw(img, None, blob.box,
-                          mask=masks[blobid[0]],
+                          mask=blob.mask,
                           fill_color=WHITE)
                 # ... and its adjacents
                 for adj_blob, pose in blob.adj_blobs[0]:
                     over_draw(img, None, adj_blob.box,
-                              mask=masks[adj_blob.id],
+                              mask=adj_blob.mask,
                               fill_color=POSE2COLOR[pose])
                 # ... print blobs properties.
                 print("\rblob:",
@@ -96,3 +91,4 @@ def visualize_blobs(idmap, blob_cls, window_size=None, winname="blobs"):
         if cv.waitKey(1) == ord('q'):
             break
     cv.destroyAllWindows()
+    print()

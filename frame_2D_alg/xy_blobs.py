@@ -64,9 +64,7 @@ from class_bind import AdjBinder
 from class_stream import BlobStreamer
 from utils import (
     pairwise,
-    imread, imwrite, map_frame_binary,
-    WHITE, BLACK,
-)
+    imread, )
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 

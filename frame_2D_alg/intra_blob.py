@@ -27,6 +27,7 @@ from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_g, comp_r
+from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from utils import pairwise
 import numpy as np
@@ -41,7 +42,7 @@ aveB = 50  # fixed cost per intra_blob comp and clustering
 
 def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | der+ cross-comp within blob
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
-    if kwargs.get('render', None) is not None:  # stop rendering sub-blobs when blob is too small
+    if kwargs.get('render') is not None:  # stop rendering sub-blobs when blob is too small
         if blob.S < 100:
             kwargs['render'] = False
 
@@ -64,15 +65,15 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
 
-            G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
+            G = blob.G; adj_G = blob.adj_blobs[2]
             borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
 
             if sub_blob.sign:
-                if sub_blob.Dert['M'] - borrow > aveB * rdn:  # M - (intra_comp value lend to edge blob)
+                if sub_blob.M - borrow > aveB * rdn:  # M - (intra_comp value lend to edge blob)
                     # comp_r fork:
                     blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng * 2, fig=fig, fcr=1, **kwargs)
                 # else: comp_P_
-            elif sub_blob.Dert['G'] + borrow > aveB * rdn:  # G + (intra_comp value borrow from flat blob)
+            elif sub_blob.G + borrow > aveB * rdn:  # G + (intra_comp value borrow from flat blob)
                 # comp_g fork:
                 blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng=rng, fig=1, fcr=0, **kwargs)
             # else: comp_P_
@@ -91,16 +92,21 @@ def cluster_derts(dert__, mask, Ave, fcr, fig, verbose=False, **kwargs):
             crit__ = Ave - dert__[3]  # eval by -g, accum in rng
     else:  # comp_g output
         crit__ = dert__[6] - Ave  # comp_g output eval by m, or clustering is always by m?
+    if kwargs.get('use_c'):
+        raise NotImplementedError
+        (_, _, _, blob_, _), idmap, adj_pairs = flood_fill()
+    else:
+        blob_, idmap, adj_pairs = flood_fill(dert__,
+                                             sign__=crit__ > 0,
+                                             verbose=verbose,
+                                             mask=mask,
+                                             blob_cls=CDeepBlob,
+                                             accum_func=accum_blob_Dert)
 
-    excluded_derts = set(zip(*mask.nonzero()))
-
-    blob_, idmap, adj_pairs = flood_fill(dert__,
-                                         sign__=crit__ > 0,
-                                         verbose=verbose,
-                                         excluded_derts=excluded_derts,
-                                         blob_cls=CDeepBlob,
-                                         accum_func=accum_blob_Dert,
-                                         **kwargs)
+    assign_adjacents(adj_pairs, CDeepBlob)
+    if kwargs.get('render', False):
+        visualize_blobs(idmap, blob_,
+                        winname=f"Deep blobs (fcr = {fcr}, fig = {fig})")
 
     return blob_
 
@@ -120,10 +126,13 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     ext_dert__ = [derts[y0e:yne, x0e:xne] if derts is not None else None
                   for derts in blob.root_dert__]
 
-    # TODO: build mask
-    mask = None
+    # extended mask
+    ext_mask = np.pad(blob.mask,
+                      ((y0 - y0e, yne - yn),
+                       (x0 - x0e, xne - xn)),
+                      constant_values=True)
 
-    return ext_dert__, mask
+    return ext_dert__, ext_mask
 
 
 def accum_blob_Dert(blob, dert__, y, x):

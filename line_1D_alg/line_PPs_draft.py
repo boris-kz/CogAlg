@@ -2,8 +2,7 @@
 line_PPs is a 2nd-level 1D algorithm, processing output Ps from the 1st level: line_patterns.
 It cross-compares Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 
-Depth of cross-comparison: range+ and deriv+, is increased in lower-recursion element_,
-then between same-recursion element_s:
+Range or derivation of cross-comp is selectively increased if the match from prior-order cross-comp is above threshold:
 comp (s): if same-sign,
           cross-sign comp is borrow, also default L and M (core param) comp?
           discontinuous comp up to max rel distance +|- contrast borrow, with bi-directional selection?
@@ -35,20 +34,19 @@ ave_Ls = 3
 
 
 def comp_P_(P_):  # cross-compare patterns within horizontal line
-    dert_P_ = []  # comp_P_ forms array of alternating-sign (derivatives, P): output of pair-wise comp_P
+    dert_P_ = []  # comp_P_ forms array of alternating-sign dert_Ps (derivatives + P): output of pair-wise comp_P
 
     for i, P in enumerate(P_):
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
         M = P[4]
-
         for j, _P in enumerate(P_[i+1 :]):  # variable-range comp, no last-P displacement, just shifting first _P
             if M - neg_M > ave_net_M:
                 # search while net_M > ave, True for 1st _P, no select by M sign
                 dert_P, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 smP, vmP, neg_M, neg_L, P = dert_P[:5]
-                dert_P_.append(dert_P)
                 if smP:
                     P_[i + 1 + j][-1] = True  # backward match per P: __smP = True
+                    dert_P_.append(dert_P)
                     break  # nearest-neighbour search is terminated by first match
                 else:
                     neg_M += vmP  # accumulate contiguous miss: negative mP
@@ -146,15 +144,21 @@ def accum_PP(PP: dict, **params) -> None:
 def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
     '''
     evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps
+    estimated value of division = rm * contig D, compressible by subtracting multiple of min: vertically vs. laterally.
+
+    * higher D-orders?  division is compression of D, ratio match ~ N same-sign d-orders?
+    * D of composition order: induction to lower orders?
+
     higher comp to normalize for difference in L: higher-composition param
-    direct vs. rL-projected:
+    sum comp -> rVar | ave comp: Var*rL -> dVar?
     '''
     for PP in PP_:
-        if PP.M + (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:
+        if PP.M / (PP.L + PP.I + abs(PP.D) + abs(PP.dM)) * (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:
+            # if irM * D_vars: match rate projects der and div match,
+            # div if scale invariance: comp x dVars, signed
             ''' 
-            or eval by match rate: irM * D_vars, regardless of sign?
-            or abs(PP.dL + PP.dI + PP.dD + PP.dM): opposite sign cancels-out div_comp value, should be L-proportional?
-            or div_comp value is match: min(dL, dI, dD, dM) * 4, | sum of pairwise mins?
+            | abs(dL + dI + dD + dM): div value ~= L, Vars correlation: stability of density, opposite signs cancel-out?
+            | div_comp value is match: min(dL, dI, dD, dM) * 4, | sum of pairwise mins?
             '''
             _dert_P = PP.dert_P_[0]
             # smP, vmP, neg_M, neg_L, iP, mL, dL, mI, dI, mD, dD, mM, dM = P,

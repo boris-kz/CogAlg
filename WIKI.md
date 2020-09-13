@@ -1,7 +1,11 @@
 Welcome to the CogAlg wiki!
 
 Much of the coding was done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg) and [Kok Wei Chee](https://github.com/kwcckw/CogAlg), according to the principles introduced in README.
-We have three self-contained folders:
+
+Main principle here is cross-comparison, which operates on all levels of input composition and external dimensionality, starting with grey-scale pixels ordered in 1D: horizontal line. So, initial data point is pixel, vs. whole image in conventional CV. Cross-comp is computing change of brightness between nearest pixels, which is normally low because each pixel is predictive of its neighborhood. Next, pixels + local derivatives are clustered into blobs of above- and below- average change between their pixels. 
+
+To preserve positional information, this algorithm is specific to external dimensionality it can handle.
+So far, we have three self-contained folders:
 
 **line_1D_alg:**
 

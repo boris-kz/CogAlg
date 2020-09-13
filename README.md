@@ -57,7 +57,7 @@ More basic neural learning mechanism is Hebbian, though it is rarely used in ML.
 
 Such learning is local, within each node. But it is still a product of vertical comparison: centroid is a higher order of composition than individual inputs. This comparison across composition drives all statistical learning, but it destroys positional information at each layer. Compared to autoencoders: principal backprop-driven unsupervised learning technique, Hebbian learning lacks the decoding stage (as does proposed algorithm). Decoding decomposes hidden layers, to equalize composition orders of output and compared template.
 
-Inspiration by the brain kept ANN research going for decades before they became useful. Their “neurons” are mere stick figures, but that’s not a problem, most of neuron’s complexity is due to constraints of biology. The problem is that core mechanism in ANN: weighted summation, may also be a no-longer needed compensation for such constraints: neural memory requires dedicated connections. That makes representation and cross-comparison of individual inputs nearly impossible, so they are summed. But we now have dirt-cheap RAM.
+Inspiration by the brain kept ANN research going for decades before they became useful. Their “neurons” are mere stick figures, but that’s not a problem, most of neuron’s complexity is due to constraints of biology. The problem is that core mechanism in ANN: weighted summation, may also be a no-longer needed compensation for such constraints: neural memory requires dedicated connections. Which makes representation and cross-comparison of individual inputs very expensive, so they are summed. But we now have dirt-cheap RAM.
 
 Other biological constraints are very slow neurons, and the imperative of fast reaction for survival in the wild. Both favor fast though crude summation, at the cost of glacial training. Reaction speed became less important: modern society is quite secure, while continuous learning is far more important because of accelerating progress. Summation also reduces noise, which is very important for neurons that often fire at random, to initiate and maintain latent connections. But that’s irrelevant for electronic circuits.
 
@@ -71,8 +71,8 @@ Uri Hasson, Samuel Nastase, Ariel Goldstein reach a similar conclusion in “Dir
 
 The nearest experimentally successful method is recently introduced “capsules”. Some similarities to CogAlg:
 - capsules also output multivariate vectors, “encapsulating” several parameters, similar to my patterns,
-- these parameters also include pose: coordinates and dimensions, compared to compute corresponding miss,
-- these misses / distances are compared to find affine transformations or equivariance: my match of misses,
+- these parameters also include pose: coordinates and dimensions, compared to compute transformations,
+- these transformations are compared to find affine transformations or equivariance: my match of misses,
 - capsules also send direct feedback to lower layer: dynamic routing, vs. trans-hidden-layer backprop in ANN.
 
 My main problems with CapsNet and alternative treatment:

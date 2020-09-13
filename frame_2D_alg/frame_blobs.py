@@ -5,7 +5,7 @@
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
     The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
     - derts2blobs:
-    Image dert__ is segmented into blobs: contiguous areas of same-sign G (deviation of gradient per kernel).
+    Image dert__ is segmented into blobs: contiguous areas of positive | negative deviation of gradient per kernel.
     Each blob is parameterized with summed derivatives of its constituent derts.
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
@@ -16,7 +16,7 @@ import numpy as np
 
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
-from frame_blobs_cwrapper import cwrapped_derts2blobs
+from frame_blobs_wrapper import wrapped_flood_fill
 from frame_blobs_imaging import visualize_blobs
 from utils import minmax
 
@@ -49,33 +49,45 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
 
 
-def derts2blobs(dert__, verbose=False):
+def derts2blobs(dert__, verbose=False, render=False, use_c=False):
 
-    blob_, idmap, adj_pairs = flood_fill(dert__,
-                                         sign__=dert__[1] > 0,
-                                         verbose=verbose)
-    I = 0; G = 0; Dy = 0; Dx = 0
-    for blob in blob_:
-        I += blob.I
-        G += blob.G
-        Dy += blob.Dy
-        Dx += blob.Dx
+    if verbose:
+        start_time = time()
 
-    frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
+    if use_c:
+        dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
+        frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
+    else:
+        blob_, idmap, adj_pairs = flood_fill(dert__,
+                                             sign__=dert__[1] > 0,
+                                             verbose=verbose)
+        I = 0; G = 0; Dy = 0; Dx = 0
+        for blob in blob_:
+            I += blob.I
+            G += blob.G
+            Dy += blob.Dy
+            Dx += blob.Dx
+        frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
 
-    return frame, idmap, adj_pairs
+    assign_adjacents(adj_pairs)
+
+    if verbose:
+        print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
+
+    if render:
+        visualize_blobs(idmap, frame.blob_)
+
+    return frame
+
 
 def flood_fill(dert__, sign__, verbose=False,
-               excluded_derts=None,
-               blob_cls=CBlob,
-               accum_func=accum_blob_Dert
-               # add kwargs?
-               ):
+               mask=None, blob_cls=CBlob,
+               accum_func=accum_blob_Dert):
 
     height, width = dert__[0].shape
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
-    if excluded_derts is not None:
-        idmap[[*zip(*excluded_derts)]] = EXCLUDED_ID
+    if mask is not None:
+        idmap[mask] = EXCLUDED_ID
 
     if verbose:
         step = 100 / height / width     # progress % percent per pixel
@@ -92,6 +104,8 @@ def flood_fill(dert__, sign__, verbose=False,
                 blob = blob_cls(sign=sign__[y, x], root_dert__=dert__)
                 blob_.append(blob)
                 idmap[y, x] = blob.id
+                y0, yn = y, y
+                x0, xn = x, x
 
                 # flood fill the blob, start from current position
                 unfilled_derts = deque([(y, x)])
@@ -99,9 +113,16 @@ def flood_fill(dert__, sign__, verbose=False,
                     y1, x1 = unfilled_derts.popleft()
 
                     # add dert to blob
-                    blob.dert_coord_.add((y1, x1))  # add dert coordinate to blob
                     accum_func(blob, dert__, y1, x1)
                     blob.S += 1
+                    if y1 < y0:
+                        y0 = y1
+                    elif y1 > yn:
+                        yn = y1
+                    if x1 < x0:
+                        x0 = x1
+                    elif x1 > xn:
+                        xn = x1
 
                     # determine neighbors' coordinates, 4 for -, 8 for +
                     if blob.sign:   # include diagonals
@@ -131,13 +152,10 @@ def flood_fill(dert__, sign__, verbose=False,
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
                 # terminate blob
-                y_coords, x_coords = zip(*blob.dert_coord_)
-                y0, yn = minmax(y_coords)
-                x0, xn = minmax(x_coords)
-                blob.box = (
-                    y0, yn + 1,  # y0, yn
-                    x0, xn + 1,  # x0, xn
-                )
+                yn += 1
+                xn += 1
+                blob.box = y0, yn, x0, xn
+                blob.mask = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[], 0, 0]
 
                 if verbose:
@@ -202,16 +220,10 @@ if __name__ == "__main__":
     # frame-blobs start here
     start_time = time()
     dert__ = comp_pixel(image)
-    if args.clib:
-        frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
-    else:
-        frame, idmap, adj_pairs = derts2blobs(dert__, verbose=args.verbose)
-    assign_adjacents(adj_pairs)
-    if args.verbose:
-        print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
-
-    if args.render:  # will be replaced with interactive adjacent blobs display
-        visualize_blobs(idmap, CBlob)
+    frame = derts2blobs(dert__,
+                        verbose=args.verbose,
+                        render=args.render,
+                        use_c=args.clib)
 
     if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
@@ -252,7 +264,7 @@ if __name__ == "__main__":
             '''
             blob = CDeepBlob(I=blob.I, G=blob.G, Dy=blob.Dy, Dx=blob.Dx,
                              S=blob.S, box=blob.box, sign=blob.sign,
-                             dert_coord_=blob.dert_coord_, root_dert__=deep_root_dert__,
+                             mask=blob.mask, root_dert__=deep_root_dert__,
                              adj_blobs=blob.adj_blobs, fopen=blob.fopen)
 
             blob_height = blob.box[1] - blob.box[0]
@@ -269,7 +281,7 @@ if __name__ == "__main__":
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
-        if verbose:
+        if args.verbose:
             print("\rFinished intra_blob")
 
     end_time = time() - start_time
