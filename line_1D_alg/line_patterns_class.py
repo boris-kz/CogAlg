@@ -16,7 +16,7 @@
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
   Both forks are currently exclusive per P to avoid redundancy, but they can be made partly or fully overlapping.
 
-  Initial bi-lateral cross-comp here is 1D slice of 2D 3x3 kernel, while uni-lateral d is equivalent to 2x2 kernel.
+  Initial bilateral cross-comp here is 1D slice of 2D 3x3 kernel, while unilateral d is equivalent to 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
   The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_P.
 

@@ -1,5 +1,5 @@
 '''
-    2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
+    2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and xy_blobs.
     frame_blobs() performs three types of operations:
     - comp_pixel:
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
@@ -16,7 +16,7 @@ import numpy as np
 
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
-from frame_blobs_wrapper import wrapped_flood_fill
+# from frame_blobs_wrapper import wrapped_flood_fill
 from frame_blobs_imaging import visualize_blobs
 from utils import minmax
 
@@ -43,7 +43,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
-    G__ = np.hypot(Gy__, Gx__) - ave  # central gradient per kernel, between its four vertex pixels
+    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # central gradient per kernel, between its four vertex pixels
 
     return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
@@ -84,7 +84,13 @@ def flood_fill(dert__, sign__, verbose=False,
                mask=None, blob_cls=CBlob,
                accum_func=accum_blob_Dert):
 
-    height, width = dert__[0].shape
+    if mask is None: # non intra dert
+        height, width = dert__[0].shape
+
+    else: # intra dert
+        height, width = mask.shape
+
+
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
     if mask is not None:
         idmap[mask] = EXCLUDED_ID
@@ -206,10 +212,10 @@ if __name__ == "__main__":
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_head.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
-    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     args = argument_parser.parse_args()
     image = imread(args.image)
@@ -269,14 +275,17 @@ if __name__ == "__main__":
 
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
-            if blob.sign:
-                if G + borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0,
-                                                render=args.render)  # +G blob' dert__' comp_g
 
-            elif -G - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1,
-                                            render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
+            if blob.sign:
+                # +G on first fork
+                if G + borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                    blob.rdn = 1;blob.fca = 1 # +G blob' dert' comp_a
+                    deep_layers[i] = intra_blob(blob, render=args.render)
+
+            # +M on first fork (+M is represented by -G?)
+            elif -G - borrow_G > aveB > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                blob.rdn = 1;blob.rng = 1;blob.fcr = 1
+                deep_layers[i] = intra_blob(blob, render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers

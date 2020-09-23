@@ -29,6 +29,10 @@ class CDeepBlob(ClusterStructure):
     Dx = int
     M = int
     S = int
+    Dyy = int
+    Dyx = int
+    Dxy = int
+    Dxx = int
     # other data
     sign = NoneType
     box = list
@@ -38,6 +42,8 @@ class CDeepBlob(ClusterStructure):
     fopen = bool
     fcr = bool
     fig = bool
+    fca = bool
+    figa = bool
     rdn = float
     rng = int
     Ls = int  # for visibility and next-fork rdn

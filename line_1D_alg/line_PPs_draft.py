@@ -91,7 +91,7 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
                     neg_dert_P derivatives are not significant; neg_M obviates distance * decay_rate * M '''
             else:
                 dert_P_.append(Cdert_P(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P, ML=0, DL=0, MI=0, DI=0, MD=0, DD=0, MM=0, DM=0))
-                # smP is ORed bilaterally, negative for single (weak) dert_Ps
+                # smP is ORed bilaterally, negative for single (weak) dert_Ps only
                 break  # neg net_M: stop search
 
     return dert_P_
@@ -178,9 +178,16 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
     PPm_.append(CPP(smP=_smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))
 
     return PPm_
-    # in form_PPd:
-    # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
-    # ds = 1 if Pd > 0 else 0
+
+''' Each PP is evaluated for intra-processing: 
+    incremental range and derivation as in line_patterns intra_P, 
+    div_comp if L-proportional contents: comp norm param or x param ratios, diffs are not L-proportional? 
+    form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
+
+    in form_PPd:
+    dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
+    ds = 1 if Pd > 0 else 0
+'''
 
 def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
     '''
