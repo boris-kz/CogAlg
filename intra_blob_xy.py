@@ -4,10 +4,10 @@
 
     - comp_r: incremental range cross-comp in low-variation flat areas of +v--vg: the trigger is positive deviation of negated -vg,
     - comp_a: angle cross-comp in high-variation edge areas of positive deviation of gradient, forming gradient of angle,
-    - xy_blobs: forming edge-orthogonal Ps evaluated for comp_d, and their stacks evaluated for comp_P, in low gradient of angle blobs
-
+    - xy_blobs in low gradient of angle areas: forms edge-orthogonal Ps, evaluated for comp_d, then evaluates their stacks for comp_P
     Each adds a layer of sub_blobs per blob.
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_xy_scheme.png
+
     Blob structure, for all layers of blob hierarchy:
     root_dert__,
     Dert = I, iDy, iDx, G, Dy, Dx, M, S (area), Ly (vertical dimension)

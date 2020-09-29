@@ -1,11 +1,9 @@
 '''
-    2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
-    frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
-    comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image.
+    comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image
+    These pixel-level parameters are accumulated in contiguous spans of same-sign gradient, first horizontally then vertically.
+    Horizontal spans are Ps: 1D patterns, and vertical spans are first stacks of Ps, then blobs of stacks.
 
-    Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
-    adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
-
+    This processing adds a level of encoding per row y, defined relative to y of current input row, with top-down scan:
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
     2Le, line y-2: scan_P_(P, hP) -> hP, up_connect_, down_connect_count: vertical connections per stack of Ps 
     3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
@@ -76,6 +74,7 @@ class CP(ClusterStructure):
     L = int
     x0 = int
     sign = NoneType
+    dert_ = list
 
 class Cstack(ClusterStructure):
     I = int
@@ -194,9 +193,12 @@ Dert: params of cluster structures (P, stack, blob): summed dert params + dimens
 
 def form_P_(dert__, binder):  # horizontal clustering and summation of dert params into P params, per row of a frame
     # P is a segment of same-sign derts in horizontal slice of a blob
-
+    '''
+    this needs to be updated for comp_a dert params: g, idy, idx, ga, day, dax, also p?
+    '''
     P_ = deque()  # row of Ps
     I, G, Dy, Dx, L, x0 = *next(dert__), 1, 0  # initialize P params with 1st dert params
+    dert_ = [*next(dert__)]
     G = int(G) - ave
     _s = G > 0  # sign
     for x, (p, g, dy, dx) in enumerate(dert__, start=1):    # dert__ is now a generator/iterator, no need for [1:]
@@ -204,9 +206,9 @@ def form_P_(dert__, binder):  # horizontal clustering and summation of dert para
         s = vg > 0
         if s != _s:
             # terminate and pack P:
-            P = CP(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s)  # no need for dert_
+            P = CP(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s, dert_=dert_)
             # initialize new P params:
-            I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
+            I, G, Dy, Dx, L, x0, dert_ = 0, 0, 0, 0, 0, x, []
             P_.append(P)
         # accumulate P params:
         I += p
@@ -214,15 +216,45 @@ def form_P_(dert__, binder):  # horizontal clustering and summation of dert para
         Dy += dy
         Dx += dx
         L += 1
+        dert_.append(*next(dert__))
         _s = s  # prior sign
 
-    P = CP(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s)  # last P in a row
+    P = CP(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s, dert_=dert_)  # last P in a row
     P_.append(P)
 
     for _P, P in pairwise(P_):
         binder.bind(_P, P)
 
     return P_
+
+
+def comp_d_draft(blob):  # needs to be redone
+
+    # retrieve root dert__ and mask
+    dert__ = blob.root_dert__
+    mask = blob.mask
+
+    #comp_a output = i__,g__,dy__,dx__,ga__,day__,dax__,ma__,cos_da0__,cos_da1__
+    a_dy, a_dx = (dert__[2], dert__[3]) / dert__[1]  # (dy,dx) / g
+
+    a_shift_dy_ = shift_img(a_dy,4) # shift angle of dy
+    a_shift_dx_ = shift_img(a_dx,4) # shift angle of dx
+
+    a_center_dy = np.average(np.array(a_shift_dy_),axis=0) # center of dy
+    a_center_dx = np.average(np.array(a_shift_dx_),axis=0) # center of dx
+
+    # initialization
+    a_shift_dy_coef = np.zeros((a_center_dy.shape))
+    a_shift_dx_coef = np.zeros((a_center_dx.shape))
+
+    # sum of -> (each shifted direction - center) * each direction coefficients
+    for i,(a_shift_dy, a_shift_dx) in enumerate(zip(a_shift_dy_,a_shift_dx_)):
+        a_shift_dy_coef += (a_shift_dy - a_center_dy) *Y_COEFFS[i]
+        a_shift_dx_coef += (a_shift_dx - a_center_dx) *X_COEFFS[i]
+
+
+    return a_shift_dy_coef, a_shift_dx_coef # what are the other values should we return here?
+
 
 def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     '''
@@ -309,6 +341,8 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             blob = CBlob(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
             new_stack = Cstack(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
             new_stack.hid = blob.id
+
+
             blob.stack_.append(new_stack)
 
         else:

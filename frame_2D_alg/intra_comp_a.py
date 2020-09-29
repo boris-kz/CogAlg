@@ -296,8 +296,8 @@ def comp_a(dert__, fga, mask=None):  # cross-comp of a or aga in 2x2 kernels
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
     '''
-    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
-    # angle gradient, a scalar, to evaluate for comp_aga
+    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
+    # angle gradient, a scalar evaluated for comp_aga
 
     '''
     next comp_g will use g, cos_da0__, cos_da1__, dy, dx (passed to comp_rg as idy, idx)
@@ -315,9 +315,10 @@ def angle_diff(a2, a1):  # compare angle_1 to angle_2
 
     sin_1, cos_1 = a1[:]
     sin_2, cos_2 = a2[:]
+
     # sine and cosine of difference between angles:
 
     sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
-    cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
+    cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
 
     return sin_da, cos_da

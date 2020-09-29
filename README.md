@@ -91,11 +91,11 @@ Overall, CapsNet is a variation of ANN, with input summation first and dynamic r
 
 
 
-### Quantifying match and miss between variables
+### Atomic comparison: quantifying match and miss between variables
 
 
 
-The purpose here is prediction, and predictive value is usually defined as [compressibility](https://en.wikipedia.org/wiki/Algorithmic_information_theory). Which is perfectly fine, but existing methods only compute compression per sequence of inputs. To enable more incremental selection and scalable search, I quantify partial match between atomic inputs, vs. binary same | different choice for inputs within sequences. This is similar to the way Bayesian inference improved on classical logic, by quantifying probability vs. binary true | false values.
+First, we need to quantify predictive value. Algorithmic information theory defines it as compressibility of representation, which is perfectly fine. But compression is currently computed only for sequences of inputs, while I think a logical start is analog input digitization: a rock bottom of organic compression hierarchy. The next level is cross-comparison among resulting pixels, commonly known as edge detection, and higher levels will cross-compare resulting patterns. Partial match computed by comparison is a measure of compression.
 
 Partial match between two variables is a complementary of miss, in corresponding power of comparison: 
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss), 
