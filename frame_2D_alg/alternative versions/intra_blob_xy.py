@@ -27,7 +27,7 @@ from collections import deque, defaultdict
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
 from frame_blobs_yx import assign_adjacents
-from intra_comp import comp_g, comp_r
+from intra_comp_g import comp_g, comp_r
 from itertools import zip_longest
 from class_stream import BlobStreamer
 from utils import pairwise

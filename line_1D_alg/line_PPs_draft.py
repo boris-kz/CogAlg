@@ -25,7 +25,7 @@ This is different from 1st level connectivity clustering, where all distances be
 '''
 
 import numpy as np
-from line_patterns_defs import Cdert_P, CPP
+from line_Ps_defs import Cdert_P, CPP
 
 ave_dI = 1000
 ave_div = 50
@@ -134,14 +134,19 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
                 dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
                 dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
             P_ = [_P]
-        else:
-            # accumulate PPm with current dert_P:
-            smP, mP, neg_M, neg_L, P, mL, dL, mI, dI, mD, dD, mM, dM = \
-                dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
-                dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
-            MP+=mP; Neg_M+=neg_M; Neg_L+=neg_L; ML+=mL; DL+=dL; MI+=mI; DI+=dI; MD+=mD; DD+=dD; MM+=mM; DM+=dM
-
-            P_.append(P)
+        else:  # accumulate PPm with current dert_P:
+            MP += dert_P.MP
+            Neg_M += dert_P.Neg_M
+            Neg_L += dert_P.Neg_L
+            ML += dert_P.ML
+            DL += dert_P.DL
+            MI += dert_P.MI
+            DI += dert_P.DI
+            MD += dert_P.MD
+            DD += dert_P.DD
+            MM += dert_P.MM
+            DM += dert_P.DM
+            P_.append(dert_P.P)
         _smP = smP
     # pack last PP
     PPm_.append(CPP(smP=_smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))

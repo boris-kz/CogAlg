@@ -4,7 +4,7 @@ Visualize each comp's output with image output
 """
 
 from comp_pixel_versions import comp_pixel_m
-from intra_comp_a import *
+from intra_comp import *
 from utils import imread
 import cv2
 import numpy as np

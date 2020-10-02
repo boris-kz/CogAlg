@@ -27,7 +27,7 @@ from collections import deque, defaultdict
 from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
-from intra_comp_a import comp_g, comp_r, comp_a
+from intra_comp import comp_g, comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from utils import pairwise
