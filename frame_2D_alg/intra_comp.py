@@ -115,9 +115,7 @@ def comp_r(dert__, root_fcr, mask=None):
 
 
 def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
-    '''
-    no if fga: ga__, day__, dax__ = dert__[3:6]; a__ = [day__, dax__] / ga__
-    '''
+
     if mask is not None:
         majority_mask = (mask[:-1, :-1].astype(int) +
                          mask[:-1, 1:].astype(int) +
@@ -127,8 +125,8 @@ def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
     else:
         majority_mask = None
 
-    i__, dy__, dx__, g__, dgy__, dgx__, m__ = dert__
-    a__ = [idy__, idx__] / g__  # similar to calc_a
+    i__, dy__, dx__, g__, m__ = dert__[:4]  # day__,dax__,ga__,ma__ are recomputed
+    a__ = [dy__, dx__] / g__  # similar to calc_a
 
     # each shifted a in 2x2 kernel
     a__topleft = a__[:,:-1, :-1]
@@ -155,16 +153,12 @@ def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
     ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
     # angle gradient, a scalar evaluated for comp_aga
 
-    '''
-    next comp_g will use g, cos_da0__, cos_da1__, dy, dx (passed to comp_rg as idy, idx)
-    next comp_a will use ga, day, dax  # comp_aga
-    '''
-    ig__ = ig__[:-1, :-1]  # for summation in Dert
+    i__ = i__[:-1, :-1]  # for summation in Dert
     g__ = g__[:-1, :-1]  # for summation in Dert
     dy__ = dy__[:-1, :-1]  # passed on as idy
     dx__ = dx__[:-1, :-1]  # passed on as idx
 
-    return (ig__,g__,dy__,dx__,ga__,day__,dax__,ma__,cos_da0__,cos_da1__), majority_mask
+    return (i__,dy__,dx__,g__,m__,day__,dax__,ga__,ma__), majority_mask
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2

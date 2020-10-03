@@ -27,7 +27,7 @@ from collections import deque, defaultdict
 from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
-from intra_comp import comp_g, comp_r, comp_a
+from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from utils import pairwise
@@ -53,7 +53,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | der+ cross-comp within
     spliced_layers = []  # to extend root_blob sub_layers
     ext_dert__, ext_mask = extend_dert(blob)
     if blob.fca:  # comp_a
-        dert__, mask = comp_a(ext_dert__, blob.figa, ext_mask)  # -> xy_blos (comp_d, comp_P)
+        dert__, mask = comp_a(ext_dert__, blob.figa, ext_mask)  # -> xy_blobs (comp_d, comp_P)
     else:  # comp_r
         dert__, mask = comp_r(ext_dert__, blob.fig, blob.fcr, ext_mask)  # -> m sub_blobs
 
@@ -66,8 +66,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | der+ cross-comp within
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_a | comp_r | xy_blobs:
 
-            G = blob.G;
-            adj_G = blob.adj_blobs[2]
+            G = blob.G; adj_G = blob.adj_blobs[2]
             borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
 
             # +Ga, +Gaga, +Gr, +Gagr, +Grr and so on
