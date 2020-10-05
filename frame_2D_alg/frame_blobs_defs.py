@@ -4,13 +4,13 @@ from class_cluster import ClusterStructure, NoneType
 FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, G, Dy, Dx, blob_, dert__')
 
 class CBlob(ClusterStructure):
-    # Derts
+    # Dert params
     I = int
     G = int
     Dy = int
     Dx = int
+    # blob params
     S = int
-    # other data
     sign = NoneType
     box = list
     mask = object
@@ -20,20 +20,18 @@ class CBlob(ClusterStructure):
 
 
 class CDeepBlob(ClusterStructure):
-    # Derts
+    # Dert params
     I = int
-    iDy = int
-    iDx = int
-    G = int
     Dy = int
     Dx = int
+    G = int
     M = int
-    S = int
     Dyy = int
     Dyx = int
     Dxy = int
     Dxx = int
-    # other data
+    # blob params
+    S = int
     sign = NoneType
     box = list
     mask = object
@@ -41,9 +39,7 @@ class CDeepBlob(ClusterStructure):
     adj_blobs = list
     fopen = bool
     fcr = bool
-    fig = bool
     fca = bool
-    figa = bool
     rdn = float
     rng = int
     Ls = int  # for visibility and next-fork rdn

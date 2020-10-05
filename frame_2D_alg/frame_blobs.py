@@ -236,7 +236,7 @@ if __name__ == "__main__":
         if args.verbose:
             print("\rRunning intra_blob...")
 
-        from intra_blob import (
+        from intra_blob_g import (
             intra_blob, aveB,
         )
         from frame_blobs_defs import CDeepBlob

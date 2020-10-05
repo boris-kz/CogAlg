@@ -124,7 +124,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
 
 
-def image_to_blobs(dert__, verbose=False, render=False):
+def form_P_blobs(dert__, verbose=False, render=False):
 
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
@@ -486,14 +486,14 @@ if __name__ == '__main__':
     if verbose:
         print(f"Done in {(time() - start_time):f} seconds")
 
-    frame = image_to_blobs(dert__, verbose, render)
+    frame = form_P_blobs(dert__, verbose, render)
 
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         if verbose:
             print("\rRunning intra_blob...")
 
-        from intra_blob_xy import (
+        from intra_blob import (
             intra_blob, CDeepBlob, aveB,
         )
 

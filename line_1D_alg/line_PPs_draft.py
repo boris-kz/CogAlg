@@ -32,8 +32,9 @@ ave_div = 50
 ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
 ave_net_M = 100  # search stop
 ave_Ls = 3
-
-# no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
+'''
+no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
+'''
 
 def comp_P_(P_):  # cross-compare patterns within horizontal line
     dert_P_ = []  # comp_P_ forms array of alternating-sign dert_Ps (derivatives + P): output of pair-wise comp_P
@@ -52,9 +53,10 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
                     break  # nearest-neighbour search is terminated by first match
                 else:
                     neg_M += vmP  # accumulate contiguous miss: negative mP
-                    neg_L += _L  # accumulate distance to match
+                    neg_L += _L   # accumulate distance to match
                     if j == len(P_):  # last P
-                        dert_P_.append(Cdert_P(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P ))  # unconnected P, derivatives are ignored
+                        dert_P_.append(Cdert_P(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P ))
+                        # unconnected P, derivatives are ignored
                     '''                     
                     no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
                     neg_dert_P derivatives are not significant; neg_M obviates distance * decay_rate * M '''
@@ -68,6 +70,7 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
 
 def comp_P(P, _P, neg_M, neg_L):
     # _smP = 0 in line_patterns, M: deviation even if min
+
     sign, L, I, D, M, dert_, sub_H, _smP = P.sign, P.L, P.I, P.D, P.M, P.dert_, P.sub_layers, P.smP
     _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P.sign, _P.L, _P.I, _P.D, _P.M, _P.dert_, _P.sub_layers, _P.smP
 
@@ -81,6 +84,8 @@ def comp_P(P, _P, neg_M, neg_L):
     mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
     mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
+    if sign == _sign:
+        mP *= 2  # value of sign match = full magnitude match?
     proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L / L))  # projected mP at current relative distance
     vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
     smP = vmP > 0
@@ -89,6 +94,7 @@ def comp_P(P, _P, neg_M, neg_L):
         dert_sub_H = []
         if P.sub_layers and _P.sub_layers:  # not empty sub layers
             for sub_P, _sub_P in zip(P.sub_layers, _P.sub_layers):
+
                 if P and _P:  # both forks exist
                     Ls, fdP, fid, rdn, rng, sub_P_ = sub_P[0]
                     _Ls, _fdP, _fid, _rdn, _rng, _sub_P_ = _sub_P[0]
@@ -168,7 +174,8 @@ def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
     estimated value of division = rm * D, compression = D - min * N: vertical vs lateral. if same-sign:
     * higher-derivation D: ratio induction?
     * higher-composition D: vertical d-induction from L, div value?
-    sum comp -> rVar | ave comp: Var*rL -> dVar?
+    sum comp: S / L -> rVars, if stack_V: internal rng = 1, eval by ext rng only?
+    ave comp: Var*rL -> dVar?
     '''
     for PP in PP_:
         if PP.M / (PP.L + PP.I + abs(PP.D) + abs(PP.dM)) * (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:

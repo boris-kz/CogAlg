@@ -1,5 +1,5 @@
 """
-Provide AdjBinder object for xy_blobs.py
+Provide AdjBinder object for P_blobs.py
 """
 
 class AdjBinder:

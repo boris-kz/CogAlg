@@ -1,5 +1,5 @@
 from utils import *
-from xy_blobs import *
+from P_blobs import *
 import argparse
 
 # Main #
