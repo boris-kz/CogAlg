@@ -47,6 +47,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 
     return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
+    # add m?
 
 
 def derts2blobs(dert__, verbose=False, render=False, use_c=False):
@@ -204,6 +205,7 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         blob2.adj_blobs[2] += blob1.G
 
 
+
 if __name__ == "__main__":
     # Imports
     import argparse
@@ -236,7 +238,7 @@ if __name__ == "__main__":
         if args.verbose:
             print("\rRunning intra_blob...")
 
-        from intra_blob_g import (
+        from intra_blob import (
             intra_blob, aveB,
         )
         from frame_blobs_defs import CDeepBlob
@@ -279,12 +281,12 @@ if __name__ == "__main__":
             if blob.sign:
                 # +G on first fork
                 if G + borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                    blob.rdn = 1;blob.fca = 1 # +G blob' dert' comp_a
+                    blob.rdn = 1; blob.fca = 1 # +G blob' dert' comp_a
                     deep_layers[i] = intra_blob(blob, render=args.render)
 
             # +M on first fork (+M is represented by -G?)
             elif -G - borrow_G > aveB > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                blob.rdn = 1;blob.rng = 1;blob.fcr = 1
+                blob.rdn = 1; blob.rng = 1; blob.fcr = 1
                 deep_layers[i] = intra_blob(blob, render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
