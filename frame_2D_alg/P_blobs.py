@@ -381,7 +381,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
     if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
         last_stack = stack
-        Dert, [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[:5]
+        [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[-4:]
         yn = last_stack.y0 + last_stack.Ly
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:

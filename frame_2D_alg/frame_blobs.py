@@ -26,9 +26,10 @@ EXCLUDED_ID = -2
 
 def accum_blob_Dert(blob, dert__, y, x):
     blob.I += dert__[0][y, x]
-    blob.G += dert__[1][y, x]
-    blob.Dy += dert__[2][y, x]
-    blob.Dx += dert__[3][y, x]
+    blob.Dy += dert__[1][y, x]
+    blob.Dx += dert__[2][y, x]
+    blob.G += dert__[3][y, x]
+    blob.M += dert__[4][y, x]
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
@@ -44,10 +45,10 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
     G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # central gradient per kernel, between its four vertex pixels
+    M__ = (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))  # inverse match = SAD: variation within kernel
 
-    return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
-    # add m?
+    return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 
 
 def derts2blobs(dert__, verbose=False, render=False, use_c=False):
@@ -62,13 +63,14 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
         blob_, idmap, adj_pairs = flood_fill(dert__,
                                              sign__=dert__[1] > 0,
                                              verbose=verbose)
-        I = 0; G = 0; Dy = 0; Dx = 0
+        I = Dy = Dx = G = M = 0
         for blob in blob_:
             I += blob.I
-            G += blob.G
             Dy += blob.Dy
             Dx += blob.Dx
-        frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
+            G += blob.G
+            M += blob.M
+        frame = FrameOfBlobs(I=I, Dy=Dy, Dx=Dx, G=G, M=M, blob_=blob_, dert__=dert__)
 
     assign_adjacents(adj_pairs)
 
@@ -249,11 +251,11 @@ if __name__ == "__main__":
         empty = np.zeros_like(frame.dert__[0])
         deep_root_dert__ = (  # update root dert__
             frame.dert__[0],  # i
-            empty,  # idy
-            empty,  # idx
-            *frame.dert__[1:],  # g, dy, dx
-            empty,  # m
-        )
+            frame.dert__[1],  # dy
+            frame.dert__[2],  # dx
+            frame.dert__[3],  # g
+            frame.dert__[4],  # m
+            )
 
         for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
             '''
@@ -302,28 +304,30 @@ if __name__ == "__main__":
     else:
         print(end_time)
 
-    # # Test if the two versions give identical results
-    # from itertools import zip_longest
-    # frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
-    # frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
-    # did = 0
-    # dI = 0
-    # dG = 0
-    # dDy = 0
-    # dDx = 0
-    # dbox = 0
-    # dfopen = 0
-    # dsign = 0
-    # for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
-    #     did += abs(blob.id - blob1.id)
-    #     dI += abs(blob.I - blob1.I)
-    #     dG += abs(blob.G - blob1.G)
-    #     dDy += abs(blob.Dy - blob1.Dy)
-    #     dDx += abs(blob.Dx - blob1.Dx)
-    #     dfopen += abs(blob.fopen - blob1.fopen)
-    #     dsign += abs(int(blob.sign) - int(blob1.sign))
-    #     dbox += abs(blob.box[0] - blob1.box[0])
-    #     dbox += abs(blob.box[1] - blob1.box[1])
-    #     dbox += abs(blob.box[2] - blob1.box[2])
-    #     dbox += abs(blob.box[3] - blob1.box[3])
-    # print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
+# Test if the two versions give identical results:
+'''
+from itertools import zip_longest
+frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
+frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
+did = 0
+dI = 0
+dG = 0
+dDy = 0
+dDx = 0
+dbox = 0
+dfopen = 0
+dsign = 0
+for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
+    did += abs(blob.id - blob1.id)
+    dI += abs(blob.I - blob1.I)
+    dG += abs(blob.G - blob1.G)
+    dDy += abs(blob.Dy - blob1.Dy)
+    dDx += abs(blob.Dx - blob1.Dx)
+    dfopen += abs(blob.fopen - blob1.fopen)
+    dsign += abs(int(blob.sign) - int(blob1.sign))
+    dbox += abs(blob.box[0] - blob1.box[0])
+    dbox += abs(blob.box[1] - blob1.box[1])
+    dbox += abs(blob.box[2] - blob1.box[2])
+    dbox += abs(blob.box[3] - blob1.box[3])
+print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
+'''

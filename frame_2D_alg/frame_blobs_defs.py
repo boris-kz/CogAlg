@@ -1,14 +1,15 @@
 from collections import namedtuple
 from class_cluster import ClusterStructure, NoneType
 
-FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, G, Dy, Dx, blob_, dert__')
+FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, G, M, blob_, dert__')
 
 class CBlob(ClusterStructure):
     # Dert params
     I = int
-    G = int
     Dy = int
     Dx = int
+    G = int
+    M = int
     # blob params
     S = int
     sign = NoneType
@@ -38,8 +39,8 @@ class CDeepBlob(ClusterStructure):
     root_dert__ = object
     adj_blobs = list
     fopen = bool
-    fcr = bool
-    fca = bool
+    fia = bool  # flag: input is from comp angle
+    fca = bool  # flag: current fork is comp angle
     rdn = float
     rng = int
     Ls = int  # for visibility and next-fork rdn

@@ -28,7 +28,7 @@ def comp_r(dert__, root_fcr, mask=None):
     Such input is predictable enough for selective sampling: skipping current
     rim derts as kernel-central derts in following comparison kernels.
     Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
-    rng (distance between centers of compared derts) increases as 2^n, starting at 0:
+    rng (distance between centers of compared derts) increases as 2^n, with n starting at 0:
     rng = 1: 3x3 kernel,
     rng = 2: 5x5 kernel,
     rng = 4: 9x9 kernel,
@@ -156,6 +156,7 @@ def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
 
     i__ = i__[:-1, :-1]  # for summation in Dert
     g__ = g__[:-1, :-1]  # for summation in Dert
+    m__ = m__[:-1, :-1]
     dy__ = dy__[:-1, :-1]  # passed on as idy
     dx__ = dx__[:-1, :-1]  # passed on as idx
 
