@@ -272,7 +272,7 @@ if __name__ == "__main__":
             borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
             Add borrow_G -= inductive leaking across external blob?
             '''
-            blob = CDeepBlob(I=blob.I, G=blob.G, Dy=blob.Dy, Dx=blob.Dx,
+            blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M,
                              S=blob.S, box=blob.box, sign=blob.sign,
                              mask=blob.mask, root_dert__=deep_root_dert__,
                              adj_blobs=blob.adj_blobs, fopen=blob.fopen)
@@ -282,13 +282,13 @@ if __name__ == "__main__":
 
             if blob.sign:
                 # +G on first fork
-                if G + borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                     blob.rdn = 1; blob.fca = 1 # +G blob' dert' comp_a
                     deep_layers[i] = intra_blob(blob, render=args.render)
 
-            # +M on first fork (+M is represented by -G?)
-            elif -G - borrow_G > aveB > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                blob.rdn = 1; blob.rng = 1; blob.fcr = 1
+            # +M on first fork
+            elif M - borrow_G > aveB > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                blob.rdn = 1; blob.rng = 1; blob.fia = 0
                 deep_layers[i] = intra_blob(blob, render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers

@@ -20,7 +20,7 @@ YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
 XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 '''
 
-def comp_r(dert__, root_fcr, mask=None):
+def comp_r(dert__, root_fia, mask=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -69,15 +69,18 @@ def comp_r(dert__, root_fcr, mask=None):
     else:
         majority_mask = None  # returned at the end of function
 
-    if root_fcr:  # root fork is comp_r, accumulate derivatives:
+    if root_fia:  # initialize derivatives:
+        dy__ = np.zeros_like(i__center)  # sparse to align with i__center
+        dx__ = np.zeros_like(dy__)
+        m__ = np.zeros_like(dy__)
+
+    else:  # root fork is comp_r, accumulate derivatives:
         dy__ = dert__[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
         dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
         m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
-    else:  # initialize derivatives:
-        dy__ = np.zeros_like(i__center)  # sparse to align with i__center
-        dx__ = np.zeros_like(dy__)
-        m__ = np.zeros_like(dy__)
+
+
 
     # compare four diametrically opposed pairs of rim pixels:
 
@@ -159,6 +162,7 @@ def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
     m__ = m__[:-1, :-1]
     dy__ = dy__[:-1, :-1]  # passed on as idy
     dx__ = dx__[:-1, :-1]  # passed on as idx
+
 
     return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask
 

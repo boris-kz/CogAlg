@@ -85,7 +85,7 @@ def comp_P(P, _P, neg_M, neg_L):
 
     mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
     if sign == _sign:
-        mP *= 2  # value of sign match = full magnitude match?
+        mP *= 2  # sign is msb, value of sign match = full magnitude match?
     proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L / L))  # projected mP at current relative distance
     vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
     smP = vmP > 0
@@ -159,23 +159,26 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
 
     return PPm_
 
-''' Each PP is evaluated for intra-processing: 
-    incremental range and derivation as in line_patterns intra_P, 
-    div_comp if L-proportional contents: comp norm param or x param ratios, diffs are not L-proportional? 
-    form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
-    in form_PPd:
-    dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
-    ds = 1 if Pd > 0 else 0
+''' Each PP is evaluated for intra-processing (no eval per P, results must be comparable between consecutive Ps): 
+
+    - incremental range and derivation as in line_patterns intra_P, but over multiple params, 
+    - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef? 
+    - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
+    
+    form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
 '''
 
-def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
+def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps
     '''
-    evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps
-    estimated value of division = rm * D, compression = D - min * N: vertical vs lateral. if same-sign:
+    prevalue: projected compression = rm * L * S,
+    product doesn't form patterns: non-fraction-specific div similarity proxy,
+    per PP after sub comp: if DL * DS: xP d compression, positive if same sign only! product similarity: L-proportion coef?
+
     * higher-derivation D: ratio induction?
     * higher-composition D: vertical d-induction from L, div value?
-    sum comp: S / L -> rVars, if stack_V: internal rng = 1, eval by ext rng only?
-    ave comp: Var*rL -> dVar?
+
+    comp param: S / L -> comp relative param?
+    norm param: Var*rL -> comp norm param, but diffs are not L-proportional?
     '''
     for PP in PP_:
         if PP.M / (PP.L + PP.I + abs(PP.D) + abs(PP.dM)) * (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:
@@ -216,7 +219,7 @@ def div_comp_P(PP_):  # draft, check all PPs for div_comp among their element Ps
                 # P vars -> _P vars:
                 _sign = sign, _L = L, _I = I, _D = D, _M = M, _dert_ = dert_, _sub_H = sub_H, __smP = _smP
                 '''
-                also define dP,
+                also define dP, 
                 if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
                 else:        dPP_rdn = 1; ndPP_rdn = 0
                 '''

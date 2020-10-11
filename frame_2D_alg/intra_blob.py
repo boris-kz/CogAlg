@@ -59,27 +59,26 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
         dert__, mask = comp_a(ext_dert__, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_d, comp_P)
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
 
-            # cluster_derts_P eval, tentative:
-            if blob.G * (1 - blob.Ga / 100 * blob.S) - aveB * blob.rdn > 0:  # replace 100 with max_ga value
-                # G reduced by Ga value,
-                # G is second deviation, or replace with specific borrow value?
-                # flatten day and dax: this should done for both if blob.fia forks, or as a general default?
+            # P_blobs eval, tentative:
+            if blob.G * (1 - blob.Ga / 6 * blob.S) - aveB * blob.rdn > 0:
+                # G reduced by Ga value, max_ga=6?
+                # G is second deviation, or replace with Adj_blobs borrow value?
+                # flatten day and dax: this should done for both if blob.fia forks, or a general default?
                 dert__ = list(dert__)
                 dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
                           dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                           dert__[7], dert__[8])
 
-                crit__ =  dert__[3] * (1 - dert__[7] / 100) - ave * blob.rdn  # replace 100 with max_ga value?
-                # record separately from g and ga?
+                crit__ =  dert__[3] * (1 - dert__[7] / 6) - ave * blob.rdn  # max_ga=6, separate from g and ga?
                 sub_frame = cluster_derts_P(dert__, crit__, mask, ave * blob.rdn)
                 sub_blobs = sub_frame['blob__']
                 blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
                 blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
             # comp_aga eval, tentative:
-            elif blob.G / (1 - blob.Ga / 100 * blob.S) - aveB > 0:  # replace 100 with max_ga value
+            elif blob.G / (1 - blob.Ga / 6 * blob.S) - aveB > 0:  # max_ga=6
                 # G increased by Ga value,
-                # G is second deviation, or replace with specific borrow value?
+                # G is second deviation or specific borrow value?
                 # flatten day and dax?
                 crit__ =  dert__[3] * (1 - dert__[7] / 100) - ave * blob.rdn
                 # similar to eval per blob, replace 100 with max_ga value?
@@ -104,7 +103,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
     else:  # comp_r -> comp_r or comp_a
         if blob.M > aveB:
-            dert__, mask = comp_r(ext_dert__, blob.fcr, ext_mask)
+            dert__, mask = comp_r(ext_dert__, blob.fca, ext_mask)
             crit__ = dert__[4] - ave * blob.rdn
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
