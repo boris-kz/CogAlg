@@ -59,102 +59,91 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
         dert__, mask = comp_a(ext_dert__, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_d, comp_P)
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
 
-            # cluster_derts_P eval, tentative:
-            if blob.G * (1 - blob.Ga / 6 * blob.S) - aveB * blob.rdn > 0:  # max_ga=6?
-                # G reduced by Ga value, base G is second deviation or specific borrow value?
-                # flatten day and dax: this should done for both if blob.fia forks, or as a general default?
+            # P_blobs eval, tentative:
+            if blob.G * (1 - blob.Ga / 6 * blob.S) - aveB * blob.rdn > 0:
+                # G reduced by Ga value, max_ga=6?
+                # G is second deviation, or replace with Adj_blobs borrow value?
+                # flatten day and dax: this should done for both if blob.fia forks, or a general default?
                 dert__ = list(dert__)
                 dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
                           dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                           dert__[7], dert__[8])
 
-                crit__ = dert__[3] * (1 - dert__[7] / 6) - ave * blob.rdn  # max_ga=6?
-                # record separately from g and ga?
-                blob.fca=0
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
+                crit__ =  dert__[3] * (1 - dert__[7] / 6) - ave * blob.rdn  # max_ga=6, separate from g and ga?
+                sub_frame = cluster_derts_P(dert__, crit__, mask, ave * blob.rdn)
+                sub_blobs = sub_frame['blob__']
+                blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
+                blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
             # comp_aga eval, tentative:
-            elif blob.G / (1 - blob.Ga / 6 * blob.S) - aveB > 0:  # max_ga=6?
+            elif blob.G / (1 - blob.Ga / 6 * blob.S) - aveB > 0:  # max_ga=6
                 # G increased by Ga value,
-                # G is second deviation, or replace with specific borrow value?
+                # G is second deviation or specific borrow value?
                 # flatten day and dax?
-                crit__ = dert__[3] * (1 - dert__[7] / 100) - ave * blob.rdn
+                crit__ =  dert__[3] / (1 - dert__[7] / 100) - ave * blob.rdn
                 # similar to eval per blob, replace 100 with max_ga value?
                 # record separately from g and ga?
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
+                sub_blobs = cluster_derts(dert__, crit__, mask)
+                blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
+                blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
+
+                for sub_blob in sub_blobs:  # evaluate for comp_aga only, not comp_r | P_blobs?
+                    G = blob.G
+                    adj_G = blob.adj_blobs[2]
+                    borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
+                    # same eval as in root elif?:
+                    if sub_blob.G + borrow > ave * blob.rdn:  # also if +Ga, +Gaga, +Gr, +Gagr, +Grr...
+                        # comp_aga: runnable but not correct, the issue of nested day and dax need to be fixed first
+                        sub_blob.fia = 1
+                        sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+                        blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
             spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                               zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
     else:  # comp_r -> comp_r or comp_a
         if blob.M > aveB:
-            dert__, mask = comp_r(ext_dert__, blob.fia, ext_mask)
+            dert__, mask = comp_r(ext_dert__, blob.fca, ext_mask)
             crit__ = dert__[4] - ave * blob.rdn
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
+
+                sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
+                # replace lines below with generic sub_eval()?
+
+                blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
+                blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
+
+                for sub_blob in sub_blobs:  # evaluate for intra_blob comp_a | comp_r | P_blobs:
+                    G = blob.G
+                    adj_G = blob.adj_blobs[2]
+                    borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
+
+                    if sub_blob.G + borrow > ave * blob.rdn:  # also if +Ga, +Gaga, +Gr, +Gagr, +Grr...
+                        # comp_a:
+                        sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+                        blob.sub_layers += intra_blob(sub_blob, **kwargs)
+
+                    elif sub_blob.M > ave * blob.rdn:  # if +Mr, +Mrr...
+                        # comp_r:
+                        sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+                        sub_blob.fcr = 1
+                        sub_blob.rng = blob.rng * 2
+                        blob.sub_layers += intra_blob(sub_blob, **kwargs)
+
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
         elif blob.G > aveB:
             dert__, mask = comp_a(ext_dert__, ext_mask)  # -> m sub_blobs
             crit__ = dert__[3] - ave * blob.rdn
-
-            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
-                spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
-                                  zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
+            # call new sub_eval(), same as in comp_r fork
 
     return spliced_layers
 
 
-def sub_eval(blob, dert__, crit__, mask, **kwargs):
-
-    if ~blob.fca:  # cluster_dert_P -> terminate fork
-        sub_frame = cluster_derts_P(dert__, ave * blob.rdn)  # we should need crit__ and mask cluster_dert_P' form_P?
-        sub_blobs = sub_frame['blob__']
-        blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
-        blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
-
-    else:  # comp_r, comp_a and comp_aga
-        sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
-
-        blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
-        blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
-
-        for sub_blob in sub_blobs:  # evaluate for intra_blob comp_a | comp_r | P_blobs:
-
-            G = blob.G
-            adj_G = blob.adj_blobs[2]
-
-            if blob.fia:  # comp_aga
-                borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
-                # same eval as in root elif?:
-                if sub_blob.G + borrow > ave * blob.rdn:  # also if +Ga, +Gaga, +Gr, +Gagr, +Grr...
-                    # comp_aga: runnable but not correct, the issue of nested day and dax need to be fixed first
-                    sub_blob.fia = 1
-                    sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)
-
-            else:  # comp_r or comp_a
-                borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
-
-                if sub_blob.G + borrow > ave * blob.rdn:  # also if +Ga, +Gaga, +Gr, +Gagr, +Grr...
-                    # comp_a:
-                    sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    sub_blob.fca = 1
-                    sub_blob.fia = 1
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)
-
-                elif sub_blob.M > ave * blob.rdn:  # if +Mr, +Mrr...
-                    # comp_r:
-                    sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    sub_blob.fia = 0
-                    sub_blob.rng = blob.rng * 2
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)
-
-
 def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
+
     # this is function should be folded into flood_fill()
 
     ''' obsolete define clustering criterion:
@@ -183,10 +172,9 @@ def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
     assign_adjacents(adj_pairs, CDeepBlob)
     if kwargs.get('render', False):
         visualize_blobs(idmap, blob_,
-                        winname=f"Deep blobs (fcr = {fcr}, fia = {fia})")
+                        winname=f"Deep blobs (fca = {fca}, fia = {fia})")
 
     return blob_
-
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
@@ -215,7 +203,7 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     # extended mask
     ext_mask = np.pad(blob.mask,
                       ((y0 - y0e, yne - yn),
-                       (x0 - x0e, xne - xn)),
+                      (x0 - x0e, xne - xn)),
                       constant_values=True, mode='constant')
 
     return ext_dert__, ext_mask

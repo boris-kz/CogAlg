@@ -1,34 +1,32 @@
 '''
-    P_blobs is a terminal fork of intra_blob, will call comp_g and then comp_P (edge tracing) per terminated stack.
-
     Pixel-level parameters are accumulated in contiguous spans of same-sign gradient, first horizontally then vertically.
     Horizontal spans are Ps: 1D patterns, and vertical spans are first stacks of Ps, then blobs of stacks.
 
     This processing adds a level of encoding per row y, defined relative to y of current input row, with top-down scan:
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
-    2Le, line y-2: scan_P_(P, hP) -> hP, up_connect_, down_connect_count: vertical connections per stack of Ps
+    2Le, line y-2: scan_P_(P, hP) -> hP, up_connect_, down_connect_count: vertical connections per stack of Ps 
     3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
     4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_connect_, recursively
 
     Higher-row elements include additional parameters, derived while they were lower-row elements.
-    Resulting blob structure (fixed set of parameters per blob):
+    Resulting blob structure (fixed set of parameters per blob): 
     - Dert: summed pixel-level dert params, Dx, surface area S, vertical depth Ly
     - sign = s: sign of gradient deviation
-    - box  = [y0, yn, x0, xn],
+    - box  = [y0, yn, x0, xn], 
     - dert__,  # 2D array of pixel-level derts: (p, dy, dx, g, m) tuples
     - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own
     ( intra_blob structure extends Dert, adds fork params and sub_layers)
 
     Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
-    per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity)
-    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object
-    (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)
+    per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity) 
+    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object 
+    (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)  
 
-    Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions,
+    Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
     orientation. These params are essential because value of prediction = precision of what * precision of where.
     Clustering is by nearest-neighbor connectivity only, to avoid overlap among the blobs.
 
-    frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params
+    frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
     Old diagrams are on https://kwcckw.github.io/CogAlg/
@@ -65,7 +63,6 @@ from utils import (
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-
 class CP(ClusterStructure):
     I = int  # default type at initialization
     Dy = int
@@ -82,7 +79,6 @@ class CP(ClusterStructure):
     x0 = int
     sign = NoneType
     dert_ = list
-
 
 class Cstack(ClusterStructure):
     I = int
@@ -104,7 +100,6 @@ class Cstack(ClusterStructure):
     down_connect_cnt = int
     sign = NoneType
 
-
 class CBlob(ClusterStructure):
     Dert = dict
     box = list
@@ -118,13 +113,31 @@ class CBlob(ClusterStructure):
     fopen = bool
     margin = list
 
-
 # Functions:
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
+    # see comp_pixel_versions file for other versions and more explanation
 
-def cluster_derts_P(dert__, mask, crit__, verbose=False, render=False):
+    # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
+    topleft__ = image[:-1, :-1]
+    topright__ = image[:-1, 1:]
+    bottomleft__ = image[1:, :-1]
+    bottomright__ = image[1:, 1:]
+
+    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
+    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
+
+    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # central gradient per kernel, between its four vertex pixels
+    M__ = (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))  # inverse match = SAD: variation within kernel
+
+    return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
+
+
+def cluster_derts_P(dert__, Ave, verbose=False, render=False):
+
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
@@ -132,7 +145,6 @@ def cluster_derts_P(dert__, mask, crit__, verbose=False, render=False):
     if render:
         def output_path(input_path, suffix):
             return str(Path(input_path).with_suffix(suffix))
-
         streamer = BlobStreamer(CBlob, dert__[1],
                                 record_path=output_path(arguments['image'],
                                                         suffix='.im2blobs.avi'))
@@ -144,12 +156,12 @@ def cluster_derts_P(dert__, mask, crit__, verbose=False, render=False):
 
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose:
-            print(f"\rProcessing line {y + 1}/{height}, ", end="")
+            print(f"\rProcessing line {y+1}/{height}, ", end="")
             print(f"{len(frame['blob__'])} blobs converted", end="")
             sys.stdout.flush()
 
         P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
-        P_ = form_P_(zip(*dert_), crit__[y], mask[y], P_binder)  # horizontal clustering
+        P_ = form_P_(zip(*dert_), P_binder)  # horizontal clustering
 
         if render:
             render = streamer.update_blob_conversion(y, P_)
@@ -191,72 +203,48 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizontal ) vertical order
+
+def form_P_(idert_, binder):  # horizontal clustering and summation of dert params into P params, per row of a frame
+    # P is a segment of derts with same-sign g in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
-    s_ = crit_ > 0
-    x0 = 0
-    try:
-        while mask_[x0]:  # skip until not masked
-            next(idert_)
-            x0 += 1
-    except IndexError:
-        return P_  # the whole line is masked, return an empty P
-
     dert_ = [*next(idert_)]  # get first dert, dert_ is a generator/iterator
-    (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_, 1  # initialize P params
 
-    _s = s_[x0]
-    _mask = mask_[x0]  # mask bit per dert
+    # initialize P params with 1st dert params
+    (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L, x0 = dert_, 1, 0
+    _s = ave - Ga > 0  # sign crit = ave - Ga  # should reduce g but not significantly as these are low-ga blobs
 
-    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_, start=x0 + 1):  # loop left to right in each row of derts
-        mask = mask_[x]
-        if ~mask:  # current dert is not masked
-            s = s_[x]
-            if ~_mask and s != _s:  # prior dert is not masked and sign changed
-                # pack P
-                # terminate and pack P:
-                P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
-                P_.append(P)
-                # initialize P params:
-                # initialize new P params:
-                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
-            elif _mask:
-                # initialize new P params:
-                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
-        # current dert is masked
-        elif ~_mask:  # prior dert is not masked
-            # pack P
+    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_, start=1):
+        vga = (ave - ga)  # inverse deviation of ga
+        s = vga > 0
+        if s != _s:
+            # terminate and pack P:
             P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
+            # initialize new P params:
+            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
             P_.append(P)
-            # initialize P params: (redundant)
-            # I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x + 1
+        # accumulate P params:
+        I += p
+        Dy += dy
+        Dx += dx
+        G += g
+        M += m
+        Dyy += dyy
+        Dyx += dyx
+        Dxy += dxy
+        Dxx += dxx
+        Ga += vga
+        Ma += Ma
+        L += 1
+        dert_.append([p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma])  # accumulate dert into dert_ if no sign change
+        _s = s  # prior sign
 
-        if ~mask:  # accumulate P params:
-            # accumulate P params:
-            I += p
-            Dy += dy
-            Dx += dx
-            G += g
-            M += m
-            Dyy += dyy
-            Dyx += dyx
-            Dxy += dxy
-            Dxx += dxx
-            Ga += ga
-            Ma += Ma
-            L += 1
-            dert_.append([p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma])  # accumulate dert into dert_ if no sign change
-            _s = s  # prior sign
-        _mask = mask
-
-    if ~_mask:  # terminate and pack last P in a row if prior dert is unmasked
-        P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
-        P_.append(P)
+    # last P in a row
+    P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
+    P_.append(P)
 
     for _P, P in pairwise(P_):
-        if _P.x0 + _P.L == P.x0:  # check if Ps are adjacents
-            binder.bind(_P, P)
+        binder.bind(_P, P)
 
     return P_
 
@@ -411,7 +399,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
     if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
         last_stack = stack
-        [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[1:5]
+        [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[-4:]
         yn = last_stack.y0 + last_stack.Ly
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
@@ -428,11 +416,12 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
             fopen = 1
 
         blob.root_dert__ = frame['dert__']
-        blob.box = (y0, yn, x0, xn)
+        blob.box=(y0, yn, x0, xn)
         blob.dert__ = dert__
         blob.mask = mask
         blob.adj_blobs = [[], 0, 0]
         blob.fopen = fopen
+
 
         frame.update(I=frame['I'] + blob.Dert['I'],
                      Dy=frame['Dy'] + blob.Dert['Dy'],
@@ -483,3 +472,91 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
+
+# -----------------------------------------------------------------------------
+# Main
+# There should be no main here, cluster_derts_P will be called from intra_blob
+
+if __name__ == '__main__':
+    import argparse
+
+    argument_parser = argparse.ArgumentParser()
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
+    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
+    arguments = vars(argument_parser.parse_args())
+    image = imread(arguments['image'])
+    verbose = arguments['verbose']
+    intra = arguments['intra']
+    render = arguments['render']
+
+    start_time = time()
+    if verbose:
+        start_time = time()
+        print("Doing comparison...", end=" ")
+    dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
+    if verbose:
+        print(f"Done in {(time() - start_time):f} seconds")
+
+    frame = cluster_derts_P(dert__, verbose, render)
+
+    if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
+
+        if verbose:
+            print("\rRunning intra_blob...")
+
+        from intra_blob import (
+            intra_blob, CDeepBlob, aveB,
+        )
+
+        deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
+        deep_blob_i_ = []  # index of a blob with deep layers
+        deep_layers = [[]]*len(frame['blob__'])  # for visibility only
+        empty = np.zeros_like(frame['dert__'][0])
+        deep_root_dert__ = (  # update root dert__
+            frame['dert__'][0],    # i
+            empty,                 # idy
+            empty,                 # idx
+            *frame['dert__'][1:],  # g, dy, dx
+            empty,                 # m
+        )
+
+        for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
+            '''
+            Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
+            +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
+            positive value of adjacent -G "flat" blobs.
+            '''
+            G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
+            borrow_G = min(abs(G), abs(adj_G) / 2)
+            '''
+            int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, 
+            same as pri_M and next_M in line patterns but direction here is radial: inside-out
+            borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
+            Add borrow_G -= inductive leaking across external blob?
+            '''
+            blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
+                             sign=blob.sign, root_dert__=deep_root_dert__,
+                             dert__=blob.dert__, mask=blob.mask,
+                             adj_blobs=blob.adj_blobs, fopen=blob.fopen) #, margin=blob.margin)
+            if blob.sign:
+                if G + borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
+                    update_dert(blob)
+                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0, render=render)  # +G blob' dert__' comp_g
+
+            elif -G - borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
+                update_dert(blob)
+                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1, render=render)  # -G blob' dert__' comp_r in 3x3 kernels
+
+            if deep_layers[i]:  # if there are deeper layers
+                deep_blob_i_.append(i)  # indices of blobs with deep layers
+
+        if verbose:
+            print("\rFinished running intra_blob")
+
+    end_time = time() - start_time
+    if verbose:
+        print(f"\nSession ended in {end_time:.2} seconds", end="")
+    else:
+        print(end_time)

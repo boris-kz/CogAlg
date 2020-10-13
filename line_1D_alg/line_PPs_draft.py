@@ -170,13 +170,12 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps
     '''
-    prevalue: projected compression = rm * L * S,
-    product doesn't form patterns: non-fraction-specific div similarity proxy,
-    per PP after sub comp: if DL * DS: xP d compression, positive if same sign only! product similarity: L-proportion coef?
+    xParam div projected compression = rm * L * S, * sub PPm DL * DS: no internal range,
+    product as proxy of div match, proportional to both comparands, positive if same sign only?
+    cheaper than ratio but doesn't exclude fraction: uncompressed remainder, ~ diff, not whole ratio?
 
     * higher-derivation D: ratio induction?
     * higher-composition D: vertical d-induction from L, div value?
-
     comp param: S / L -> comp relative param?
     norm param: Var*rL -> comp norm param, but diffs are not L-proportional?
     '''
