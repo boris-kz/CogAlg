@@ -44,8 +44,8 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
-    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # central gradient per kernel, between its four vertex pixels
-    M__ = (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))  # inverse match = SAD: variation within kernel
+    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int') - ave  # deviation of central gradient per kernel, between four vertex pixels
+    M__ = (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__)) - ave  # inverse match = SAD: variation within kernel
 
     return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
@@ -61,7 +61,8 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     else:
         blob_, idmap, adj_pairs = flood_fill(dert__,
-                                             sign__=dert__[1] > 0,
+                                             sign__=dert__[3] > 0,  # sign of deviation of gradient
+                                             # g__ was not signed, we used dy__ sign instead
                                              verbose=verbose)
         I = Dy = Dx = G = M = 0
         for blob in blob_:

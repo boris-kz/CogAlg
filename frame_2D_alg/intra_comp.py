@@ -20,7 +20,7 @@ YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
 XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 '''
 
-def comp_r(dert__, root_fia, mask=None):
+def comp_r(dert__, ave, root_fia, mask=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -99,20 +99,20 @@ def comp_r(dert__, root_fia, mask=None):
              d_tr_bl * XCOEFs[2] +
              d_r_l * XCOEFs[3])
 
-    g__ = np.hypot(dy__, dx__)  # gradient, recomputed at each comp_r
+    g__ = np.hypot(dy__, dx__) - ave  # gradient, recomputed at each comp_r
     '''
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
     '''
-    m__ += (abs(i__center - i__topleft)
-            + abs(i__center - i__top)
-            + abs(i__center - i__topright)
-            + abs(i__center - i__right)
-            + abs(i__center - i__bottomright)
-            + abs(i__center - i__bottom)
-            + abs(i__center - i__bottomleft)
-            + abs(i__center - i__left)
-            )
+    m__ += ave - (abs(i__center - i__topleft)
+               + abs(i__center - i__top)
+               + abs(i__center - i__topright)
+               + abs(i__center - i__right)
+               + abs(i__center - i__bottomright)
+               + abs(i__center - i__bottom)
+               + abs(i__center - i__bottomleft)
+               + abs(i__center - i__left)
+               )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask
 
@@ -130,7 +130,7 @@ def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
 
     i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
     g__[np.where(g__ == 0)] = 1  # to avoid / 0
-    a__ = [dy__, dx__] / g__  # similar to calc_a
+    a__ = [dy__, dx__] / g__  # angle, similar to calc_a
 
     # each shifted a in 2x2 kernel
     a__topleft = a__[:, :-1, :-1]

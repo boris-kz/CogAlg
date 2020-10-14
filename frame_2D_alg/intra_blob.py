@@ -1,5 +1,4 @@
 '''
-    2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.
     intra_blob recursively evaluates each blob for three forks of extended internal cross-comparison and sub-clustering:
 
     - comp_r: incremental range cross-comp in low-variation flat areas of +v--vg: the trigger is positive deviation of negated -vg,
@@ -61,24 +60,26 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
         dert__, mask = comp_a(ext_dert__, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_d, comp_P)
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
 
-            # cluster_derts_P eval, tentative:
-            if blob.G * (1 - blob.Ga / 6 * blob.S) - AveB > 0:  # max_ga=6?
+            # cluster_derts_P eval, tentative, no cluster_derts_P yet:
+            if blob.G * (1 - blob.Ga / (6 * blob.S)) - AveB > 0:  # max_ga=6?
                 # G reduced by Ga value, base G is second deviation or specific borrow value?
-                # flatten day and dax:
-                # this should done for both if blob.fia forks, or as a general default?
+                # flatten day and dax, not generalized for nested day and dax yet:
                 dert__ = list(dert__)
                 dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
                           dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                           dert__[7], dert__[8])
 
                 crit__ = dert__[3] * (1 - dert__[7] / 6) - Ave  # max_ga=6, record separately from g and ga?
+                # ga is not signed, thus additional eval, different Ave?
                 blob.fca=0
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
 
-            # comp_aga eval, inverse relative ga value, tentative:
-            elif blob.G / (1 - blob.Ga / 6 * blob.S) - AveB > 0:  # max_ga=6, init G is 2nd deviation or specific borrow value?
+            # comp_aga eval, inverse relative ga value, tentative, no comp_aga yet:
+            elif blob.G / (1 - blob.Ga / (6 * blob.S)) - AveB > 0:  # max_ga=6, init G is 2nd deviation or specific borrow value?
                 # G increased by Ga value,  flatten day and dax?
                 crit__ = dert__[3] / (1 - dert__[7] / 6) - Ave  # ~ eval per blob, record separately from g and ga?
+                # ga is not signed, thus additional eval, different Ave?
+                blob.fca = 1
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
 
             spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
@@ -86,8 +87,8 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
     else:  # comp_r -> comp_r or comp_a
         if blob.M > AveB:
-            dert__, mask = comp_r(ext_dert__, blob.fia, ext_mask)
-            crit__ = dert__[4] - Ave
+            dert__, mask = comp_r(ext_dert__, Ave, blob.fia, ext_mask)
+            crit__ = dert__[4]  # signed inverse deviation of SAD
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
@@ -96,7 +97,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
         elif blob.G > AveB:
             dert__, mask = comp_a(ext_dert__, ext_mask)  # -> m sub_blobs
-            crit__ = dert__[3] - Ave
+            crit__ = dert__[3]  # signed deviation of g
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
