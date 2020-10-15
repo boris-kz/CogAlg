@@ -33,7 +33,7 @@ Please see [whole-system diagram](https://github.com/boris-kz/CogAlg/blob/master
 Working algorithm will be first level operations plus recursive increment in operations per higher level. This increment is needed to handle incremental syntax (derivatives and dimensions) of outputs relative to inputs.
 Higher levels will discover longer-range spatio-temporal and then conceptual patterns, of indefinite generality. But this process is too complex and slow for simple test problems, its design should be driven by theory rather than experimentation. Which is probably why such schemes are not actively explored.
 
-Many readers note disconnect between abstractness of this outline and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires very specific processing. Another complaint is that I don't use mathematical notation, but it simply doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. 
+Many readers note disconnect between abstractness of this outline and the amount of detail in current code. That’s because we are in the space-time continuum: search must follow proximity in each dimension, which requires very specific processing. Another complaint is that I don't use mathematical notation, but it simply doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. 
 
 
 
