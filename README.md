@@ -8,7 +8,7 @@ Intelligence is a general cognitive ability, ultimately the ability to predict. 
 For excellent popular introductions to cognition-as-prediction thesis see “On Intelligence” by Jeff Hawkins and 
 “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most everyone else use neural nets, which work in very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more local and selective by multiple instantiation parameters. But they still start with weighted summation per parameter, which degrades the data before comparison and evaluation.
 
-In the next section, I define atomic comparison and resulting patterns, then describe hierarchically recursive algorithm of search for incrementally complex patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm search for incrementally complex patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline of my approach
