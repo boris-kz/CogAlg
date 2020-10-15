@@ -56,16 +56,16 @@ def comp_r(dert__, ave, root_fia, mask=None):
     unmasked derts were computed due to extend_dert() in intra_blob   
     '''
     if mask is not None:
-        majority_mask = (mask[1:-1:2, 1:-1:2].astype(int)
-                         + mask[:-2:2, :-2:2].astype(int)
-                         + mask[:-2:2, 1:-1: 2].astype(int)
-                         + mask[:-2:2, 2::2].astype(int)
-                         + mask[1:-1:2, 2::2].astype(int)
-                         + mask[2::2, 2::2].astype(int)
-                         + mask[2::2, 1:-1:2].astype(int)
-                         + mask[2::2, :-2:2].astype(int)
-                         + mask[1:-1:2, :-2:2].astype(int)
-                         ) > 1
+        majority_mask = ( mask[1:-1:2, 1:-1:2].astype(int)
+                        + mask[:-2:2, :-2:2].astype(int)
+                        + mask[:-2:2, 1:-1: 2].astype(int)
+                        + mask[:-2:2, 2::2].astype(int)
+                        + mask[1:-1:2, 2::2].astype(int)
+                        + mask[2::2, 2::2].astype(int)
+                        + mask[2::2, 1:-1:2].astype(int)
+                        + mask[2::2, :-2:2].astype(int)
+                        + mask[1:-1:2, :-2:2].astype(int)
+                        ) > 1
     else:
         majority_mask = None  # returned at the end of function
 
@@ -78,9 +78,6 @@ def comp_r(dert__, ave, root_fia, mask=None):
         dy__ = dert__[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
         dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
         m__ = dert__[4][1:-1:2, 1:-1:2].copy()
-
-
-
 
     # compare four diametrically opposed pairs of rim pixels:
 
@@ -104,20 +101,20 @@ def comp_r(dert__, ave, root_fia, mask=None):
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
     '''
-    m__ += ave - (abs(i__center - i__topleft)
-               + abs(i__center - i__top)
-               + abs(i__center - i__topright)
-               + abs(i__center - i__right)
-               + abs(i__center - i__bottomright)
-               + abs(i__center - i__bottom)
-               + abs(i__center - i__bottomleft)
-               + abs(i__center - i__left)
-               )
+    m__ += ave - ( abs(i__center - i__topleft)
+                 + abs(i__center - i__top)
+                 + abs(i__center - i__topright)
+                 + abs(i__center - i__right)
+                 + abs(i__center - i__bottomright)
+                 + abs(i__center - i__bottom)
+                 + abs(i__center - i__bottomleft)
+                 + abs(i__center - i__left)
+                 )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask
 
 
-def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
+def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
 
     if mask is not None:
         majority_mask = (mask[:-1, :-1].astype(int) +
@@ -130,7 +127,7 @@ def comp_a(dert__, mask=None):  # cross-comp of angle in 2x2 kernels
 
     i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
     g__[np.where(g__ == 0)] = 1  # to avoid / 0
-    a__ = [dy__, dx__] / g__  # angle, similar to calc_a
+    a__ = [dy__, dx__] / (g__ + ave)  # angle, restore g to abs, similar to calc_a
 
     # each shifted a in 2x2 kernel
     a__topleft = a__[:, :-1, :-1]

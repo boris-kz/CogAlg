@@ -170,12 +170,10 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps
     '''
-    xParam div projected compression = rm * L * S, * sub PPm DL * DS: no internal range,
-    product as proxy of div match, proportional to both comparands, positive if same sign only?
-    cheaper than ratio but doesn't exclude fraction: uncompressed remainder, ~ diff, not whole ratio?
+    div x param: projected compression = rm * L * S: L=min, accumulated in PP: no internal range for ind eval,
+    ~ div match: positive if same sign, proportional to both, but also includes fractional miss
+    sub PPm' DL * DS: xP difference compression, additive to x param compression?
 
-    * higher-derivation D: ratio induction?
-    * higher-composition D: vertical d-induction from L, div value?
     comp param: S / L -> comp relative param?
     norm param: Var*rL -> comp norm param, but diffs are not L-proportional?
     '''
