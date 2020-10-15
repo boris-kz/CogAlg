@@ -14,7 +14,7 @@ In the next section, I define atomic comparison and resulting patterns, then des
 ### Outline of my approach
 
 
-Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It's a search for patterns of incremental composition in recursively extended pipeline. Each level of this pipeline cross-compares inputs and then clusters them into patterns by proximity and resulting match. So, pattern is a set of nearest-neighbor matching inputs. In more common use, pattern is a matching set of inputs. But that's really a second-order covariance pattern: a set of inputs with matching derivatives from prior comparisons.
+Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It's a search for patterns of incremental composition in a recursively extended pipeline. Each level of this pipeline cross-compares inputs and then clusters them into patterns by proximity and resulting match. So, pattern is a set of nearest-neighbor matching inputs. In more common use, pattern is a matching set of inputs. But that's really a second-order covariance pattern: a set of inputs with matching derivatives from prior comparisons.
 
 First-level comparands are sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All symbolic data is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross compared. The difficulty of decoding is exponential with the level of encoding, thus starting with raw sensory input is by far the easiest to implement (part 0).
 
