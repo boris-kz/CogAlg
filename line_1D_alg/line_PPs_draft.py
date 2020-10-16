@@ -165,17 +165,18 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
     - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef? 
     - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
     
-    form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
+    form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?  
+    L is summed sign: val = comb S val, ?  
 '''
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps
     '''
     div x param: projected compression = rm * L * S: L=min, accumulated in PP: no internal range for ind eval,
     ~ div match: positive if same sign, proportional to both, but also includes fractional miss
-    sub PPm' DL * DS: xP difference compression, additive to x param compression?
+    sub PPm DL * DS: xP difference compression, additive to x param compression?
 
     comp param: S / L -> comp relative param?
-    norm param: Var*rL -> comp norm param, but diffs are not L-proportional?
+    norm param: Var*rL-> comp norm param, but diffs are not L-proportional?
     '''
     for PP in PP_:
         if PP.M / (PP.L + PP.I + abs(PP.D) + abs(PP.dM)) * (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:
