@@ -124,7 +124,7 @@ class CBlob(ClusterStructure):
 # postfix '_' denotes array name, vs. same-name elements of that array
 
 
-def cluster_derts_P(dert__, mask, crit__, verbose=False, render=False):
+def P_blobs(dert__, mask, crit__, verbose=False, render=False):
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape

@@ -166,7 +166,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
     - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
     
     form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?  
-    L is summed sign: val = comb S val, ?  
+    L is summed sign: val = S val, core ! comb?  
 '''
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps

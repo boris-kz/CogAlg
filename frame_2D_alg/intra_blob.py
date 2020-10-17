@@ -32,7 +32,7 @@ from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from utils import pairwise
 import numpy as np
-from P_blobs import cluster_derts_P
+from P_blobs import P_blobs
 
 # from comp_P_draft import comp_P_blob
 
@@ -57,26 +57,27 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
     if blob.fia:  # comp_a -> P_blobs or comp_aga
 
-        dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_d, comp_P)
-        if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
+        dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_g, comp_P)
+        if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
 
-            # cluster_derts_P eval, tentative, no cluster_derts_P yet:
-            if blob.G * (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45?
+            # P_blobs eval, tentative:
+            if blob.G * (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45
                 # G reduced by Ga value, base G is second deviation or specific borrow value
-                # flatten day and dax, not generalized for nested day and dax yet:
-                dert__ = list(dert__)
+                dert__ = list(dert__)  # flatten day and dax, not generalized for nested day and dax yet:
                 dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
                           dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                           dert__[7], dert__[8])
 
                 crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
+                P_blobs(dert__, mask, crit__, verbose=False, render=False)
                 # ga is not signed, thus additional eval, different Ave?
                 blob.fca=0
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
 
-            # comp_aga eval, inverse relative ga value, tentative, no comp_aga yet:
+            # comp_aga eval, inverse relative ga value, tentative:
             elif blob.G / (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45, init G is 2nd deviation or borrow value
                 # G increased by Ga value,  flatten day and dax?
+                dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
                 crit__ = dert__[3] / (1 - dert__[7] / 4.45) - Ave  # ~ eval per blob, record separately from g and ga?
                 # ga is not signed, thus additional eval, different Ave?
                 blob.fca = 1
@@ -112,7 +113,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
 
     if blob.fia and not blob.fca:  # cluster_dert_P -> terminate fork
 
-        sub_frame = cluster_derts_P(dert__, mask, crit__, Ave)
+        sub_frame = P_blobs(dert__, mask, crit__, Ave)
         sub_blobs = sub_frame['blob__']
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
