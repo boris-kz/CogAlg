@@ -55,7 +55,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
     spliced_layers = []  # to extend root_blob sub_layers
     ext_dert__, ext_mask = extend_dert(blob)
 
-    if blob.fia:  # comp_a -> P_blobs or comp_aga
+    if blob.fia:  # input from comp_a -> P_blobs or comp_aga
 
         dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_g, comp_P)
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
@@ -67,29 +67,27 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
                 dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
                           dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                           dert__[7], dert__[8])
-
                 crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
-                P_blobs(dert__, mask, crit__, verbose=False, render=False)
-                # ga is not signed, thus additional eval, different Ave?
+                # ga is not signed, use Ave_ga?
                 blob.fca=0
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
+                sub_eval(blob, dert__, crit__, mask, **kwargs)  # includes re-clustering by P_blobs
 
-            # comp_aga eval, inverse relative ga value, tentative:
+            # comp_aga eval, tentative:
             elif blob.G / (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45, init G is 2nd deviation or borrow value
                 # G increased by Ga value,  flatten day and dax?
                 dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
                 crit__ = dert__[3] / (1 - dert__[7] / 4.45) - Ave  # ~ eval per blob, record separately from g and ga?
-                # ga is not signed, thus additional eval, different Ave?
+                # ga is not signed, use Ave_ga?
                 blob.fca = 1
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
 
             spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                               zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-    else:  # comp_r -> comp_r or comp_a
+    else:  # input from comp_r -> comp_r or comp_a
         if blob.M > AveB:
             dert__, mask = comp_r(ext_dert__, Ave, blob.fia, ext_mask)
-            crit__ = dert__[4]  # signed inverse deviation of SAD
+            crit__ = dert__[4]  # m__: inverse deviation of SAD
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
@@ -98,7 +96,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
         elif blob.G > AveB:
             dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
-            crit__ = dert__[3]  # signed deviation of g
+            crit__ = dert__[3]  # deviation of g
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
@@ -111,7 +109,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 def sub_eval(blob, dert__, crit__, mask, **kwargs):
     Ave = ave * blob.rdn;  AveB = aveB * blob.rdn
 
-    if blob.fia and not blob.fca:  # cluster_dert_P -> terminate fork
+    if blob.fia and not blob.fca:  # terminal P_blobs
 
         sub_frame = P_blobs(dert__, mask, crit__, Ave)
         sub_blobs = sub_frame['blob__']
@@ -119,34 +117,34 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
         print('dert_P fork')
 
-    else:  # comp_r, comp_a and comp_aga
+    else:  # comp_r, comp_a, comp_aga
         sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
-        for sub_blob in sub_blobs:  # evaluate for intra_blob comp_a | comp_r | P_blobs:
-            G = blob.G
-            adj_G = blob.adj_blobs[2]
+        for sub_blob in sub_blobs:  # evaluate sub_blob
+            G = blob.G  # or Gr, Grr..?
+            adj_M = blob.adj_blobs[2]  # replace with adjacent M?
+            borrow_M = min(G, adj_M / 2)
             if blob.fia:
                 # comp_aga
-                borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
-                if sub_blob.G + borrow > AveB:  # also if +Ga, +Gaga, +Gr, +Gagr, +Grr...
-                    # comp_aga: runnable but not correct, the issue of nested day and dax need to be fixed first
+                Ga = blob.Ga
+                adj_Ma = blob.adj_blobs[2]  # replace with adjacent Ma?
+                borrow_Ma = min(Ga, adj_Ma / 2)
+
+                if borrow_M / (1 - borrow_Ma / (4.45 * blob.S)) > AveB:  # combine G with Ga, need to re-check
                     sub_blob.fia = 1
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)
+                    blob.sub_layers += intra_blob(sub_blob, **kwargs)  # comp_aga, not correct, need to fix nested day and dax
                     print('aga fork')
-
-            else:  # comp_r or comp_a
-                borrow = min(abs(G), abs(adj_G) / 2)  # or adjacent M if negative sign?
-
-                if min(sub_blob.G, borrow) > AveB:  # also if +Ga, +Gaga, +Gr, +Gagr, +Grr...
+            else:
+                if borrow_M > AveB:
                     # comp_a:
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
                     sub_blob.fia = 1
                     blob.sub_layers += intra_blob(sub_blob, **kwargs)
                     print('a fork')
-                elif sub_blob.M > AveB:  # if +Mr, +Mrr...
+                elif sub_blob.M - borrow_M > AveB:  #
                     # comp_r:
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
                     sub_blob.fia = 0
