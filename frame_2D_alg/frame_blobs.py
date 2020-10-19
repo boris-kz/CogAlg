@@ -166,7 +166,7 @@ def flood_fill(dert__, sign__, verbose=False,
                 xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.mask = (idmap[y0:yn, x0:xn] != blob.id)
-                blob.adj_blobs = [[], 0, 0]
+                blob.adj_blobs = [[], 0, 0, 0, 0]
 
                 if verbose:
                     progress += blob.S * step
@@ -206,6 +206,11 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         blob2.adj_blobs[1] += blob1.S
         blob1.adj_blobs[2] += blob2.G
         blob2.adj_blobs[2] += blob1.G
+        blob1.adj_blobs[3] += blob2.M
+        blob2.adj_blobs[3] += blob1.M
+        if hasattr(blob1,'Ma'): # add Ma to deep blob only
+            blob1.adj_blobs[4] += blob2.Ma
+            blob2.adj_blobs[4] += blob1.Ma
 
 
 
@@ -217,7 +222,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_head.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)

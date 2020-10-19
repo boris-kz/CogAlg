@@ -31,7 +31,7 @@
     frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
-    Old diagrams are on https://kwcckw.github.io/CogAlg/
+    Old diagrams: https://kwcckw.github.io/CogAlg/
 '''
 """
 usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
@@ -65,7 +65,6 @@ from utils import (
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-
 class CP(ClusterStructure):
     I = int  # default type at initialization
     Dy = int
@@ -82,7 +81,6 @@ class CP(ClusterStructure):
     x0 = int
     sign = NoneType
     dert_ = list
-
 
 class Cstack(ClusterStructure):
     I = int
@@ -104,7 +102,6 @@ class Cstack(ClusterStructure):
     down_connect_cnt = int
     sign = NoneType
 
-
 class CBlob(ClusterStructure):
     Dert = dict
     box = list
@@ -117,7 +114,6 @@ class CBlob(ClusterStructure):
     adj_blobs = list
     fopen = bool
     margin = list
-
 
 # Functions:
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
@@ -180,6 +176,7 @@ def P_blobs(dert__, mask, crit__, verbose=False, render=False):
 
     return frame  # frame of blobs
 
+
 ''' 
 Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
@@ -190,6 +187,7 @@ Parameterized connectivity clustering functions below:
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
+
 
 def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizontal ) vertical order
 
@@ -203,8 +201,10 @@ def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizo
     except IndexError:
         return P_  # the whole line is masked, return an empty P
 
-    dert_ = [*next(idert_)]  # get first dert, dert_ is a generator/iterator
-    (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_, 1  # initialize P params
+    # need double bracket
+    dert_ = [[*next(idert_)]]  # get first dert, dert_ is a generator/iterator
+    # Why double brackets?
+    (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params
 
     _s = s_[x0]
     _mask = mask_[x0]  # mask bit per dert
@@ -213,27 +213,19 @@ def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizo
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             s = s_[x]
-            if ~_mask and s != _s:  # prior dert is not masked and sign changed
-                # pack P
-                # terminate and pack P:
+            if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate and pack P:
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
                 P_.append(P)
-                # initialize P params:
                 # initialize new P params:
                 I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
             elif _mask:
-                # initialize new P params:
                 I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
         # current dert is masked
-        elif ~_mask:  # prior dert is not masked
-            # pack P
+        elif ~_mask:  # prior dert is not masked, pack P
             P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
             P_.append(P)
-            # initialize P params: (redundant)
-            # I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x + 1
 
         if ~mask:  # accumulate P params:
-            # accumulate P params:
             I += p
             Dy += dy
             Dx += dx
@@ -421,6 +413,8 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 x_stop = x_start + P.L
                 mask[y, x_start:x_stop] = False
 
+                comp_g(P)  # adds gdert_ per P and Dg, Mg to Derts of all structures
+
         dert__ = tuple(derts[y0:yn, x0:xn] for derts in frame['dert__'])  # slice each dert array of the whole frame
 
         fopen = 0  # flag: blob on frame boundary
@@ -431,7 +425,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.box = (y0, yn, x0, xn)
         blob.dert__ = dert__
         blob.mask = mask
-        blob.adj_blobs = [[], 0, 0]
+        blob.adj_blobs = [[], 0, 0, 0, 0]
         blob.fopen = fopen
 
         frame.update(I=frame['I'] + blob.Dert['I'],
@@ -475,6 +469,10 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
         blob2.adj_blobs[1] += blob1.Dert['S']
         blob1.adj_blobs[2] += blob2.Dert['G']
         blob2.adj_blobs[2] += blob1.Dert['G']
+        blob1.adj_blobs[3] += blob2.Dert['M']
+        blob2.adj_blobs[3] += blob1.Dert['M']
+        blob1.adj_blobs[4] += blob2.Dert['Ma']
+        blob2.adj_blobs[4] += blob1.Dert['Ma']
 
 
 # -----------------------------------------------------------------------------
@@ -483,3 +481,23 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
+
+# -----------------------------------------------------------------------------
+
+def comp_g(P):
+    '''
+    draft of comp_g in P_blobs
+    '''
+    Dg=Mg=0
+    gdert_ = []
+    _g = P.dert_[0][3]  # initial g
+
+    for i, dert in enumerate(P.dert_, start=1):
+        g = dert[3]
+        dg = g - _g
+        mg = min(g, _g)
+        gdert_.append([dg, mg])  # g is already in dert_
+        Dg+=dg
+        Mg+=mg
+        _g=g
+    P.append((gdert_, Dg, Mg))

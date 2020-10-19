@@ -123,15 +123,15 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
         for sub_blob in sub_blobs:  # evaluate sub_blob
-            G = blob.G  # or Gr, Grr..?
-            adj_M = blob.adj_blobs[2]  # replace with adjacent M?
+            G = blob.G  # or Gr, Grr..
+            adj_M = blob.adj_blobs[3]
             borrow_M = min(G, adj_M / 2)
-            if blob.fia:
+
+            if blob.fia and blob.fca:
                 # comp_aga
                 Ga = blob.Ga
-                adj_Ma = blob.adj_blobs[2]  # replace with adjacent Ma?
+                adj_Ma = blob.adj_blobs[4]
                 borrow_Ma = min(Ga, adj_Ma / 2)
-
                 if borrow_M / (1 - borrow_Ma / (4.45 * blob.S)) > AveB:  # combine G with Ga, need to re-check
                     sub_blob.fia = 1
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
@@ -144,7 +144,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
                     sub_blob.fia = 1
                     blob.sub_layers += intra_blob(sub_blob, **kwargs)
                     print('a fork')
-                elif sub_blob.M - borrow_M > AveB:  #
+                elif sub_blob.M - borrow_M > AveB:
                     # comp_r:
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
                     sub_blob.fia = 0
