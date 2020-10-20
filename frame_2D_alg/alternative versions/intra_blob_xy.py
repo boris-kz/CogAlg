@@ -23,7 +23,7 @@
     sub_layers  # [sub_blobs ]: list of layers across sub_blob derivation tree
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
-from collections import deque, defaultdict
+from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
 from frame_blobs_yx import assign_adjacents

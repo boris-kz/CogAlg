@@ -22,14 +22,11 @@
     sub_layers  # [sub_blobs ]: list of layers across sub_blob derivation tree
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
-from collections import deque, defaultdict
 from frame_blobs_defs import CDeepBlob
-from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp_g import comp_g, comp_r
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
-from utils import pairwise
 import numpy as np
 # from comp_P_draft import comp_P_blob
 

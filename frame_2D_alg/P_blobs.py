@@ -54,6 +54,7 @@ from collections import deque
 from pathlib import Path
 import sys
 import numpy as np
+from operator import attrgetter
 
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
@@ -64,6 +65,7 @@ from utils import (
     imread, )
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+aveG = 50  # filter for comp_g, assumed constant direction
 
 class CP(ClusterStructure):
     I = int  # default type at initialization
@@ -114,6 +116,12 @@ class CBlob(ClusterStructure):
     adj_blobs = list
     fopen = bool
     margin = list
+
+class CgP(ClusterStructure):
+    P = list
+    gdert_ = list
+    Dg = int
+    Mg = int
 
 # Functions:
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
@@ -176,7 +184,6 @@ def P_blobs(dert__, mask, crit__, verbose=False, render=False):
 
     return frame  # frame of blobs
 
-
 ''' 
 Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
@@ -187,7 +194,6 @@ Parameterized connectivity clustering functions below:
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
-
 
 def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizontal ) vertical order
 
@@ -201,11 +207,8 @@ def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizo
     except IndexError:
         return P_  # the whole line is masked, return an empty P
 
-    # need double bracket
-    dert_ = [[*next(idert_)]]  # get first dert, dert_ is a generator/iterator
-    # Why double brackets?
+    dert_ = [[*next(idert_)]]  # get first dert from idert_ (generator/iterator)
     (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params
-
     _s = s_[x0]
     _mask = mask_[x0]  # mask bit per dert
 
@@ -216,12 +219,11 @@ def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizo
             if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate and pack P:
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
                 P_.append(P)
-                # initialize new P params:
-                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
+                I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
             elif _mask:
-                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, dert_ = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, x, []
-        # current dert is masked
-        elif ~_mask:  # prior dert is not masked, pack P
+                I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
+        elif ~_mask:
+            # dert is masked, prior dert is not masked, pack P:
             P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
             P_.append(P)
 
@@ -335,8 +337,10 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
         xn = x0 + L  # next-P x0
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
-            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
-            new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, S=0, Ly=0),
+                         box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
+            new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
+                               y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
             new_stack.hid = blob.id
             # if stack.G - stack.Ga > ave * coeff * len(stack.Py):
             # comp_d_(stack)
@@ -354,7 +358,8 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             else:  # P has >1 up_connects, or 1 up_connect that has >1 down_connect_cnt:
                 blob = up_connect_[0].blob
                 # initialize new_stack with up_connect blob:
-                new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+                new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
+                                   y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
                 new_stack.hid = blob.id
                 blob.stack_.append(new_stack)  # stack is buffered into blob
 
@@ -408,12 +413,30 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
         for stack in stack_:
+            # draft form gP_:
+            if stack.G > aveG:  # and min(stack.Py_, key=attrgetter("L")).L > 1:
+                Py_ = stack.Py_
+                gP_G = Py_[0].G
+                gP_ = []
+                _gP_s = gP_G > aveG and Py_[0].L > 1
+                for P in Py_[1:]:
+                    gP_s = P.G > aveG and P.L > 1
+                    if _gP_s == gP_s:
+                        gP_G += P.G; gP_.append(P)  # accum gP
+                    else:
+                        if gP_G > aveG:
+                            gP = comp_g(P)  # adds gdert_, Dg, Mg per P
+                        else:
+                            gP = P
+                        gP_.append(gP)
+                gP_.append(gP)
+                stack.Py_ = gP_
+                # flag fg?
+                # add Dg, Mg to stack?
             for y, P in enumerate(stack.Py_, start=stack.y0 - y0):
                 x_start = P.x0 - x0
                 x_stop = x_start + P.L
                 mask[y, x_start:x_stop] = False
-
-                comp_g(P)  # adds gdert_ per P and Dg, Mg to Derts of all structures
 
         dert__ = tuple(derts[y0:yn, x0:xn] for derts in frame['dert__'])  # slice each dert array of the whole frame
 
@@ -490,14 +513,16 @@ def comp_g(P):
     '''
     Dg=Mg=0
     gdert_ = []
-    _g = P.dert_[0][3]  # initial g
+    _g = P.dert_[0][3]  # first g
 
     for i, dert in enumerate(P.dert_, start=1):
         g = dert[3]
         dg = g - _g
         mg = min(g, _g)
-        gdert_.append([dg, mg])  # g is already in dert_
+        gdert_.append((dg, mg))  # no g: already in dert_
         Dg+=dg
         Mg+=mg
-        _g=g
-    P.append((gdert_, Dg, Mg))
+        _g = g
+
+    return CgP(P=P, gdert_=gdert_, Dg=Dg, Mg=Mg)
+
