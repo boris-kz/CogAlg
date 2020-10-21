@@ -83,6 +83,9 @@ class CP(ClusterStructure):
     x0 = int
     sign = NoneType
     dert_ = list
+    gdert_ = list
+    Dg = int
+    Mg = int
 
 class Cstack(ClusterStructure):
     I = int
@@ -103,6 +106,7 @@ class Cstack(ClusterStructure):
     blob = NoneType
     down_connect_cnt = int
     sign = NoneType
+    fgP = bool  # GPy_ if 1, else Py_
 
 class CBlob(ClusterStructure):
     Dert = dict
@@ -116,12 +120,6 @@ class CBlob(ClusterStructure):
     adj_blobs = list
     fopen = bool
     margin = list
-
-class CgP(ClusterStructure):
-    P = list
-    gdert_ = list
-    Dg = int
-    Mg = int
 
 # Functions:
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
@@ -333,14 +331,14 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
     while P_:
         P, up_connect_ = P_.popleft()
-        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, s, dert_ = P.unpack()
+        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, s, dert_, _, _, _ = P.unpack()
         xn = x0 + L  # next-P x0
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
             blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, S=0, Ly=0),
                          box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
             new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
-                               y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+                               y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fgP=0)
             new_stack.hid = blob.id
             # if stack.G - stack.Ga > ave * coeff * len(stack.Py):
             # comp_d_(stack)
@@ -359,7 +357,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                 blob = up_connect_[0].blob
                 # initialize new_stack with up_connect blob:
                 new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
-                                   y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+                                   y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fgP=0)
                 new_stack.hid = blob.id
                 blob.stack_.append(new_stack)  # stack is buffered into blob
 
@@ -400,7 +398,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
 def form_blob(stack, frame):  # increment blob with terminated stack, check for blob termination and merger into frame
 
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, S, Ly, y0, Py_, blob, down_connect_cnt, sign = stack.unpack()
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, S, Ly, y0, Py_, blob, down_connect_cnt, sign, fgP = stack.unpack()
     # terminated stack is merged into continued or initialized blob (all connected stacks):
     accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=S, Ly=Ly)
 
@@ -413,26 +411,8 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
         for stack in stack_:
-            # draft form gP_:
-            if stack.G > aveG:  # and min(stack.Py_, key=attrgetter("L")).L > 1:
-                Py_ = stack.Py_
-                gP_G = Py_[0].G
-                gP_ = []
-                _gP_s = gP_G > aveG and Py_[0].L > 1
-                for P in Py_[1:]:
-                    gP_s = P.G > aveG and P.L > 1
-                    if _gP_s == gP_s:
-                        gP_G += P.G; gP_.append(P)  # accum gP
-                    else:
-                        if gP_G > aveG:
-                            gP = comp_g(P)  # adds gdert_, Dg, Mg per P
-                        else:
-                            gP = P
-                        gP_.append(gP)
-                gP_.append(gP)
-                stack.Py_ = gP_
-                # flag fg?
-                # add Dg, Mg to stack?
+            form_gPy_(stack)  # evaluate to convert stack.Py_ to stack.gPy_
+
             for y, P in enumerate(stack.Py_, start=stack.y0 - y0):
                 x_start = P.x0 - x0
                 x_stop = x_start + P.L
@@ -506,23 +486,64 @@ def accum_Dert(Dert: dict, **params) -> None:
 
 
 # -----------------------------------------------------------------------------
+def form_gPy_(stack):
+    ave_gP = 100  # min summed value of gdert params
 
-def comp_g(P):
-    '''
-    draft of comp_g in P_blobs
-    '''
-    Dg=Mg=0
-    gdert_ = []
-    _g = P.dert_[0][3]  # first g
+    if stack.G > aveG:
+        # and min(stack.Py_, key=attrgetter("L")).L > 1:?
+        stack_Dg = stack_Mg = 0
+        gPy_ = []  # may replace stack.Py_
+        P = stack.Py_[0]
+        Py_ = [P]; gP_G = P.G   # initialize gP params
+        _gP_sign = gP_G > aveG and P.L > 1
 
-    for i, dert in enumerate(P.dert_, start=1):
-        g = dert[3]
-        dg = g - _g
-        mg = min(g, _g)
-        gdert_.append((dg, mg))  # no g: already in dert_
-        Dg+=dg
-        Mg+=mg
-        _g = g
+        for P in stack.Py_[1:]:
+            gP_sign = P.G > aveG and P.L > 1  # gP sign
+            if _gP_sign == gP_sign:  # accum gP:
+                Py_.append(P)
+                gP_G += P.G
+            else:  # sign change, terminate gP:
+                if gP_G > aveG:
+                    Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P in Py_
+                    stack_Dg += abs(Dg)  # all positive?
+                    stack_Mg += Mg
+                gPy_.append((_gP_sign, gP_G, Py_))  # pack gP
+                Py_ = [P]; gP_G = P.G  # initialize gP params
+            _gP_sign = gP_sign
 
-    return CgP(P=P, gdert_=gdert_, Dg=Dg, Mg=Mg)
+        gP = _gP_sign, gP_G, Py_  # terminate last GP
+        if gP_G > aveG:
+            Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P
+            stack_Dg += abs(Dg)  # all positive?
+            stack_Mg += Mg
+        if stack_Dg + stack_Mg < ave_gP:
+            gPy_.append(gP)
+            stack.Py_ = gPy_
+            stack.fgP = 1  # flag gPy_ vs. Py_ in stack
+
+
+def comp_g(Py_):  # cross-comp of gs in P.dert_ in gP' Py_
+    gP_ = []
+    gP_Dg = gP_Mg = 0
+
+    for P in Py_:
+        Dg=Mg=0
+        gdert_ = []
+        _g = P.dert_[0][3]  # first g
+        for dert in P.dert_[1:]:
+            g = dert[3]
+            dg = g - _g
+            mg = min(g, _g)
+            gdert_.append((dg, mg))  # no g: already in dert_
+            Dg+=dg
+            Mg+=mg
+            _g = g
+        P.gdert_ = gdert_
+        P.Dg = Dg
+        P.Mg = Mg
+        gP_.append(P)
+        gP_Dg += Dg
+        gP_Mg += Mg  # to set stack fgP
+
+    return gP_, gP_Dg, gP_Mg
 
