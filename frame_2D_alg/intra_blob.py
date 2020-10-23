@@ -62,10 +62,10 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
             # P_blobs eval, tentative:
             if blob.G * (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45
-                # G reduced by Ga value, base G is second deviation or specific borrow value
-                dert__ = list(dert__)  # flatten day and dax, not generalized for nested day and dax yet:
+                # G reduced by relative Ga value, base G is second deviation or specific borrow value
+                dert__ = list(dert__)
                 dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
-                          dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
+                          dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],  # flatten day and dax, no nested yet
                           dert__[7], dert__[8])
                 crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
                 # ga is not signed, use Ave_ga?
@@ -74,7 +74,8 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
             # comp_aga eval, tentative:
             elif blob.G / (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45, init G is 2nd deviation or borrow value
-                # G increased by Ga value,  flatten day and dax?
+                # G increased by relative Ga value,
+                # flatten day and dax?
                 dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
                 crit__ = dert__[3] / (1 - dert__[7] / 4.45) - Ave  # ~ eval per blob, record separately from g and ga?
                 # ga is not signed, use Ave_ga?
@@ -117,8 +118,17 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
         print('dert_P fork')
 
-    else:  # comp_r, comp_a, comp_aga
-        sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
+    else:  # comp_r, comp_a, comp_aga  # sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
+        sub_blobs, idmap, adj_pairs = flood_fill(dert__,
+                                                 sign__=crit__ > 0,
+                                                 verbose=False,
+                                                 mask=mask,
+                                                 blob_cls=CDeepBlob,
+                                                 accum_func=accum_blob_Dert)
+        assign_adjacents(adj_pairs, CDeepBlob)
+        if kwargs.get('render', False):
+            visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (fca = {blob.fca}, fia = {blob.fia})")
+
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
@@ -154,20 +164,8 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
 
 
 def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
-    # this is function should be folded into flood_fill()
+    # replaced by flood_fill
 
-    ''' obsolete define clustering criterion:
-    if fia:      # input is from comp_a
-        if fca:  # comp_a eval by g / cos(ga)
-            crit__ = dert__[3] / np.cos(dert__[7]) - Ave  # combined value, no comp_r: no use for ma?
-        else:    # P_blobs eval by g * cos(ga)
-            crit__ = dert__[3] * np.cos(dert__[7]) - Ave  # separate from g and ga
-    else:        # input is from comp_r
-        if fca:  # comp_a eval by g
-            crit__ = dert__[3] - Ave
-        else:    # comp_r eval by m
-            crit__ = dert__[4] - Ave
-    '''
     if kwargs.get('use_c'):
         raise NotImplementedError
         (_, _, _, blob_, _), idmap, adj_pairs = flood_fill()

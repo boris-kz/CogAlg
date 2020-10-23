@@ -340,8 +340,6 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
                                y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fPP=0)
             new_stack.hid = blob.id
-            # if stack.G - stack.Ga > ave * coeff * len(stack.Py):
-            # comp_d_(stack)
             blob.stack_.append(new_stack)
 
         else:
@@ -457,7 +455,6 @@ def form_PPy_(stack):
     ave_PP = 100  # min summed value of gdert params
 
     if stack.G > aveG:
-        # and min(stack.Py_, key=attrgetter("L")).L > 1:?
         stack_Dg = stack_Mg = 0
         PPy_ = []  # may replace stack.Py_
         P = stack.Py_[0]
@@ -502,7 +499,7 @@ def comp_g(Py_):  # cross-comp of gs in P.dert_, in PP.Py_
             dg = g - _g
             mg = min(g, _g)
             gdert_.append((dg, mg))  # no g: already in dert_
-            Dg+=dg  # P-wide cross-sign, P.L is too short to form sub_Ps, but possibly double edge | waves?
+            Dg+=dg  # P-wide cross-sign, P.L is too short to form sub_Ps
             Mg+=mg
             _g = g
         P.gdert_ = gdert_
@@ -513,6 +510,29 @@ def comp_g(Py_):  # cross-comp of gs in P.dert_, in PP.Py_
         gP_Mg += Mg  # positive, for stack evaluation to set fPP
 
     return gP_, gP_Dg, gP_Mg
+
+
+def form_gP_(gdert_):
+    # probably not needed.
+
+    gP_ = []  # initialization
+    _g, _Dg, _Mg = gdert_[0]  # first gdert
+    _s = _Mg > 0  # initial sign, should we use ave here?
+
+    for (g, Dg, Mg) in gdert_[1:]:
+        s = Mg > 0  # current sign
+        if _s != s:  # sign change
+            gP_.append([_s, _Dg, _Mg])  # pack gP
+            # update params
+            _s = s
+            _Dg = Dg
+            _Mg = Mg
+        else:  # accumulate params
+            _Dg += Dg  # should we abs the value here?
+            _Mg += Mg
+
+    gP_.append([_s, _Dg, _Mg])  # pack last gP
+    return gP_
 
 
 def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blobs
