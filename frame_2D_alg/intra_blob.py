@@ -27,7 +27,7 @@ from collections import deque, defaultdict
 from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
-from intra_comp import comp_r, comp_a
+from intra_comp import comp_r, comp_a, comp_aga
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from utils import pairwise
@@ -76,7 +76,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
             elif blob.G / (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45, init G is 2nd deviation or borrow value
                 # G increased by relative Ga value,
                 # flatten day and dax?
-                dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
+                dert__, mask = comp_aga(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
                 crit__ = dert__[3] / (1 - dert__[7] / 4.45) - Ave  # ~ eval per blob, record separately from g and ga?
                 # ga is not signed, use Ave_ga?
                 blob.fca = 1
@@ -118,7 +118,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
         print('dert_P fork')
 
-    else:  # comp_r, comp_a, comp_aga  # sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
+    else:  # comp_r, comp_a, comp_aga
         sub_blobs, idmap, adj_pairs = flood_fill(dert__,
                                                  sign__=crit__ > 0,
                                                  verbose=False,
@@ -164,6 +164,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
 
 
 def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
+    # sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs:
     # replaced by flood_fill
 
     if kwargs.get('use_c'):
@@ -218,6 +219,36 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     return ext_dert__, ext_mask
 
 
+def nested_function(element__, function, *args):
+    '''
+    nested operation on 1 variable based on the provided function
+    replace with looping through a list of layers?
+    '''
+    if isinstance(element__, list):
+        if len(element__) > 1 and isinstance(element__[0], list):
+            for i, element_ in enumerate(element__):
+                element__[i] = nested_function(element_, function, *args)
+        else:
+            element__ = function(element__, *args)
+    else:
+        element__ = function(element__, *args)
+    return element__
+
+
+def nested_accum_blob_Dert(element_, *args):
+    param = args[0]
+    y = args[1]
+    x = args[2]
+
+    if isinstance(element_, list):
+        for i, element in enumerate(element_):
+            element[i][y, x] += param
+    else:
+        element_[y, x] += param
+
+    return element_
+
+
 def accum_blob_Dert(blob, dert__, y, x):
     blob.I += dert__[0][y, x]
     blob.Dy += dert__[1][y, x]
@@ -226,9 +257,19 @@ def accum_blob_Dert(blob, dert__, y, x):
     blob.M += dert__[4][y, x]
 
     if len(dert__) > 5:  # past comp_a fork
-        blob.Dyy += dert__[5][0][y, x]
-        blob.Dyx += dert__[5][1][y, x]
-        blob.Dxy += dert__[6][0][y, x]
-        blob.Dxx += dert__[6][1][y, x]
-        blob.Ga += dert__[7][y, x]
-        blob.Ma += dert__[8][y, x]
+        if a_depth == 1:
+
+            blob.Dyy += dert__[5][0][y, x]
+            blob.Dyx += dert__[5][1][y, x]
+            blob.Dxy += dert__[6][0][y, x]
+            blob.Dxx += dert__[6][1][y, x]
+            blob.Ga += dert__[7][y, x]
+            blob.Ma += dert__[8][y, x]
+
+        else:  # a_depth > 1:
+            nested_process(dert__[4], nested_accum_blob_Dert, blob.Dyy, y, x)
+            nested_process(dert__[5], nested_accum_blob_Dert, blob.Dyx, y, x)
+            nested_process(dert__[6], nested_accum_blob_Dert, blob.Dxy, y, x)
+            nested_process(dert__[7], nested_accum_blob_Dert, blob.Dxx, y, x)
+            nested_process(dert__[8], nested_accum_blob_Dert, blob.Ga, y, x)
+            nested_process(dert__[9], nested_accum_blob_Dert, blob.Ma, y, x)

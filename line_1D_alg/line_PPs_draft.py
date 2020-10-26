@@ -1,5 +1,5 @@
 '''
-line_PPs is a 2nd-level 1D algorithm, processing output Ps from the 1st level: line_patterns.
+line_PPs is a 2nd-level 1D algorithm, processing Ps outputted by the 1st level line_patterns.
 It cross-compares Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 
 Range or derivation of cross-comp is selectively increased if the match from prior-order cross-comp is above threshold:
@@ -54,15 +54,15 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
                 else:
                     neg_M += vmP  # accumulate contiguous miss: negative mP
                     neg_L += _L   # accumulate distance to match
-                    if j == len(P_):  # last P
+                    if j == len(P_):
+                        # last P is a singleton dert_P, derivatives are ignored:
                         dert_P_.append(Cdert_P(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P ))
-                        # unconnected P, derivatives are ignored
                     '''                     
                     no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
                     neg_dert_P derivatives are not significant; neg_M obviates distance * decay_rate * M '''
             else:
                 dert_P_.append(Cdert_P(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P))
-                # smP is ORed bilaterally, negative for single (weak) dert_Ps only
+                # smP is ORed bilaterally, negative for singleton dert_Ps only
                 break  # neg net_M: stop search
 
     return dert_P_
@@ -75,7 +75,7 @@ def comp_P(P, _P, neg_M, neg_L):
     _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P.sign, _P.L, _P.I, _P.D, _P.M, _P.dert_, _P.sub_layers, _P.smP
 
     dL = L - _L
-    mL = min(L, _L)  # - ave_rM * L?  L: positions / sign, derived: magnitude-proportional value
+    mL = min(L, _L)  # - ave_rM * L: positions / sign, derived, magnitude-proportional value
     dI = I - _I  # proportional to distance, not I?
     mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
     dD = D - _D  # sum if opposite-sign
@@ -86,7 +86,8 @@ def comp_P(P, _P, neg_M, neg_L):
     mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
     if sign == _sign:
         mP *= 2  # sign is msb, value of sign match = full magnitude match?
-    proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L / L))  # projected mP at current relative distance
+    proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L / L))
+    # projected mP at current distance: neg_L
     vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
     smP = vmP > 0
 
@@ -121,7 +122,7 @@ def comp_P(P, _P, neg_M, neg_L):
     return dert_P, _L, _smP
 
 
-def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast in overlapping comp?
+def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, to eval for div comp, positive only: no contrast in overlapping comp?
     PPm_ = []
     # initialize PPm with first dert_P:
     dert_P = dert_P_[0]
@@ -171,12 +172,12 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps
     '''
-    div x param: projected compression = rm * L * S: L=min, accumulated in PP: no internal range for ind eval,
-    ~ div match: positive if same sign, proportional to both, but also includes fractional miss
-    sub PPm DL * DS: xP difference compression, additive to x param compression?
+    div x param if projected div match: compression per PP, no internal range for ind eval
+    ~ (L*D + L*M) * rm: L=min, positive if same-sign L & S, proportional to both, but includes fractional miss
 
-    comp param: S / L -> comp relative param?
-    norm param: Var*rL-> comp norm param, but diffs are not L-proportional?
+    + PPm' DL * DS: xP difference compression, additive to x param (intra) compression: S / L -> comp rS
+    also + ML * MS: redundant unless min or converted?
+    | norm param: Var*rL-> comp norm param, but diffs are not L-proportional?
     '''
     for PP in PP_:
         if PP.M / (PP.L + PP.I + abs(PP.D) + abs(PP.dM)) * (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:
