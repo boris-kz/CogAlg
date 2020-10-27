@@ -33,16 +33,15 @@ from itertools import zip_longest
 from utils import pairwise
 import numpy as np
 from P_blobs import P_blobs
-
+from utils_nested import *
 # from comp_P_draft import comp_P_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
 
-
 # --------------------------------------------------------------------------------------------------------------
-# functions, ALL WORK-IN-PROGRESS:
+# functions:
 
 def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp within blob
 
@@ -181,7 +180,7 @@ def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
     assign_adjacents(adj_pairs, CDeepBlob)
     if kwargs.get('render', False):
         visualize_blobs(idmap, blob_,
-                        winname=f"Deep blobs (fcr = {fcr}, fia = {fia})")
+                        winname=f"Deep blobs (fca = {fca}, fia = {fia})")
 
     return blob_
 
@@ -201,11 +200,10 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     ext_dert__ = []
     for derts in blob.root_dert__:
         if derts is not None:
-            if type(derts) == tuple:  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
-                ext_dert__.append(derts[0][y0e:yne, x0e:xne])
-                ext_dert__.append(derts[1][y0e:yne, x0e:xne])
-            else:
-                ext_dert__.append(derts[y0e:yne, x0e:xne])
+
+            params = [y0e,yne,x0e,xne]
+            ext_dert__.append(nested(derts,nested_crop,params))
+
         else:
             ext_dert__.append(None)
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
@@ -219,36 +217,6 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     return ext_dert__, ext_mask
 
 
-def nested_function(element__, function, *args):
-    '''
-    nested operation on 1 variable based on the provided function
-    replace with looping through a list of layers?
-    '''
-    if isinstance(element__, list):
-        if len(element__) > 1 and isinstance(element__[0], list):
-            for i, element_ in enumerate(element__):
-                element__[i] = nested_function(element_, function, *args)
-        else:
-            element__ = function(element__, *args)
-    else:
-        element__ = function(element__, *args)
-    return element__
-
-
-def nested_accum_blob_Dert(element_, *args):
-    param = args[0]
-    y = args[1]
-    x = args[2]
-
-    if isinstance(element_, list):
-        for i, element in enumerate(element_):
-            element[i][y, x] += param
-    else:
-        element_[y, x] += param
-
-    return element_
-
-
 def accum_blob_Dert(blob, dert__, y, x):
     blob.I += dert__[0][y, x]
     blob.Dy += dert__[1][y, x]
@@ -256,6 +224,17 @@ def accum_blob_Dert(blob, dert__, y, x):
     blob.G += dert__[3][y, x]
     blob.M += dert__[4][y, x]
 
+    if len(dert__) > 5:  # past comp_a fork
+
+        # this function applicable to conditions if depth = 0 or depth >=1
+        nested(dert__[5][0], nested_accum_blob_Dert, blob.Dyy, y, x)
+        nested(dert__[5][1], nested_accum_blob_Dert, blob.Dyx, y, x)
+        nested(dert__[6][0], nested_accum_blob_Dert, blob.Dxy, y, x)
+        nested(dert__[6][1], nested_accum_blob_Dert, blob.Dxx, y, x)
+        nested(dert__[7], nested_accum_blob_Dert, blob.Ga, y, x)
+        nested(dert__[8], nested_accum_blob_Dert, blob.Ma, y, x)
+
+'''
     if len(dert__) > 5:  # past comp_a fork
         if a_depth == 1:
 
@@ -273,3 +252,4 @@ def accum_blob_Dert(blob, dert__, y, x):
             nested_process(dert__[7], nested_accum_blob_Dert, blob.Dxx, y, x)
             nested_process(dert__[8], nested_accum_blob_Dert, blob.Ga, y, x)
             nested_process(dert__[9], nested_accum_blob_Dert, blob.Ma, y, x)
+'''
