@@ -177,7 +177,7 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in the
 
     + PPm' DL * DS: xP difference compression, additive to x param (intra) compression: S / L -> comp rS
     also + ML * MS: redundant unless min or converted?
-    | norm param: Var*rL-> comp norm param, but diffs are not L-proportional?
+    | norm param: Var*rL-> comp norm param, simpler, but diffs are not L-proportional?
     '''
     for PP in PP_:
         if PP.M / (PP.L + PP.I + abs(PP.D) + abs(PP.dM)) * (abs(PP.dL) + abs(PP.dI) + abs(PP.dD) + abs(PP.dM)) > ave_div:

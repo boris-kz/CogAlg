@@ -155,8 +155,11 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     '''
     ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
     '''
-    gradient of angle, initial deviation: ga - 90_degree, primary sign comp? 
-    comp_aga val = 2nd deviation, sign-agnostic interruption | wave: expected reversion, same for d sign?
+    or compute dydy, dxdy, dydx, dxdx (ga direction, instead of day, dax)
+    by decomposing corresponding diffs per dert in kernel, then
+    ga__ = np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)
+    
+    ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
     '''
 
     i__ = i__[:-1, :-1]  # for summation in Dert
@@ -164,12 +167,6 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     m__ = m__[:-1, :-1]
     dy__ = dy__[:-1, :-1]  # passed on as idy
     dx__ = dx__[:-1, :-1]  # passed on as idx
-
-    ## temporary section for debug purpose on comp_aga, comp_aga_ga
-    dert__ga = dcopy((i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__))
-    dert__aga, mask__aga = comp_aga(dcopy(dert__ga),ave=ave) # comp_aga
-    dert__aga_ga, mask__aga_ga = comp_aga(dcopy(dert__aga),ave=ave) # comp_aga_ga
-
 
     return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask
 

@@ -60,9 +60,7 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     else:
-        blob_, idmap, adj_pairs = flood_fill(dert__,
-                                             sign__=dert__[3] > 0,  # sign of deviation of gradient
-                                             # g__ was not signed, we used dy__ sign instead
+        blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  # sign of deviation of gradient
                                              verbose=verbose)
         I = Dy = Dx = G = M = 0
         for blob in blob_:
@@ -291,12 +289,12 @@ if __name__ == "__main__":
                 # +G on first fork
                 if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                     blob.rdn = 1; blob.fca = 1 # +G blob' dert' comp_a
-                    deep_layers[i] = intra_blob(blob, render=args.render)
+                    deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
 
             # +M on first fork
             elif M - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                 blob.rdn = 1; blob.rng = 1; blob.fia = 0
-                deep_layers[i] = intra_blob(blob, render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
+                deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers

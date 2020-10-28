@@ -47,9 +47,4 @@ class CDeepBlob(ClusterStructure):
     rng = int
     Ls = int  # for visibility and next-fork rdn
     sub_layers = list
-
-    class CgP(ClusterStructure):
-        P = list
-        gdert_ = list
-        Dg = int
-        Mg = int
+    a_depth = int
