@@ -4,7 +4,6 @@ Cross-comparison of pixels or gradients, in 2x2 or 3x3 kernels
 
 import numpy as np
 import functools
-from utils_nested import *
 
 # Sobel coefficients to decompose ds into dy and dx:
 
@@ -155,11 +154,9 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     '''
     ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
     '''
-    or compute dydy, dxdy, dydx, dxdx (ga direction, instead of day, dax)
-    by decomposing corresponding diffs per dert in kernel, then
-    ga__ = np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)
-    
     ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
+    compute extended-kernel gradient from decomposed diffs: dydy, dxdy, dydx, dxdx,
+    g__ = np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
     '''
 
     i__ = i__[:-1, :-1]  # for summation in Dert
@@ -170,71 +167,6 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
 
     return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask
 
-
-def comp_aga(dert__, ave, mask=None):  # prior fork is comp_a, cross-comp of angle in 2x2 kernels
-
-    if mask is not None:
-        majority_mask = (mask[:-1, :-1].astype(int) +
-                         mask[:-1, 1:].astype(int) +
-                         mask[1:, 1:].astype(int) +
-                         mask[1:, :-1].astype(int)
-                         ) > 1
-    else:
-        majority_mask = None
-
-    i__ = [dert__[1],dert__[2]] # i = [dy,dx]
-    dy__, dx__, g__, m__ = dert__[5:]  # day__,dax__,ga__,ma__ are recomputed
-    g__ = nested(g__, replace_zero_nested)  # to avoid / 0
-
-    # compute g + ave
-    day__ = calc_a(dy__, g__, ave)  # sin, restore g to abs
-    dax__ = calc_a(dx__, g__, ave)  # cos, restore g to abs
-    a__ = [day__, dax__]
-
-    # shift directions
-    a__topleft = nested(dcopy(a__), shift_topleft) # use deep copy to create a new memory location
-    a__topright = nested(dcopy(a__), shift_topright)
-    a__botright = nested(dcopy(a__), shift_botright)
-    a__botleft = nested(dcopy(a__), shift_botleft)
-
-    # diagonal angle differences:
-    sin_da0__, cos_da0__ = nested2(a__topleft, a__botright, angle_diff)
-    sin_da1__, cos_da1__ = nested2(a__topright, a__botleft, angle_diff)
-
-    ma1__ = nested2(sin_da0__, cos_da0__, hypot_add1_nested)
-    ma2__ = nested2(sin_da0__, cos_da0__, hypot_add1_nested)
-    ma__ = nested2(ma1__, ma2__, add_nested)
-    # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
-
-    # negative nested sin_da0
-    sin_da0_nested__ = nested(dcopy(sin_da0__), negative_nested)
-
-    # day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
-    day__ = [nested2(sin_da0_nested__, cos_da0__, subtract_nested),
-             nested2(cos_da0__, cos_da1__, add_nested)]
-    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-
-    # dax__ = (-sin_da0__ + sin_da1__), (cos_da0__ + cos_da1__)
-    dax__ = [nested2(sin_da0_nested__, cos_da0__, add_nested),
-             nested2(cos_da0__, cos_da1__, add_nested)]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
-
-    # np.arctan2(*day__)
-    arctan_day__ = nested2(day__[0], day__[1], arctan2_nested)
-    # np.arctan2(*dax__)
-    arctan_dax__ = nested2(dax__[0], dax__[1], arctan2_nested)
-
-    # ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
-    ga__ = nested2(arctan_day__, arctan_dax__, hypot_nested)
-    # angle gradient, a scalar evaluated for comp_aga
-
-    i__ = nested(i__, shift_topleft)  # for summation in Dert
-    g__ = nested(g__, shift_topleft)  # for summation in Dert
-    m__ = nested(m__, shift_topleft)
-    dy__ = nested(dy__, shift_topleft)  # passed on as idy
-    dx__ = nested(dx__, shift_topleft)  # passed on as idy
-
-    return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask
 
 # -----------------------------------------------------------------------------
 # Utilities
