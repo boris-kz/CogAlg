@@ -55,8 +55,8 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
     spliced_layers = []  # to extend root_blob sub_layers
     ext_dert__, ext_mask = extend_dert(blob)
 
-    if blob.fia:  # input from comp_a -> P_blobs or comp_aga
-
+    if blob.fia:
+        # input from comp_a -> P_blobs
         dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_g, comp_P)
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
 
@@ -70,8 +70,8 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
                 # includes re-clustering by P_blobs
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
-
-    else:  # input from comp_r -> comp_r or comp_a
+    else:
+        # input from comp_r -> comp_r or comp_a
         if blob.M > AveB:
             if kwargs.get('verbose'):
                 print(' ')
@@ -105,8 +105,13 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
     if blob.fia and not blob.fca:  # terminal P_blobs
         if kwargs.get('verbose'):
             print(' '); print('dert_P fork')
+        dert__ = list(dert__)
+        # flatten day and dax
+        dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
+                  dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
+                  dert__[7], dert__[8])
 
-        sub_frame = P_blobs(dert__, mask, crit__, Ave, verbose=kwargs.get('verbose'))
+        sub_frame = P_blobs(dert__, mask, crit__, verbose=kwargs.get('verbose'))
         sub_blobs = sub_frame['blob__']
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
@@ -130,30 +135,19 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
             adj_M = blob.adj_blobs[3]
             borrow_M = min(G, adj_M / 2)
 
-            if blob.fia and blob.fca:
-                # comp_aga
-                Ga = blob.Ga
-                adj_Ma = blob.adj_blobs[4]
-                borrow_Ma = min(Ga, adj_Ma / 2)
-                if borrow_M / (1 - borrow_Ma / (4.45 * blob.S)) > AveB:  # combine G with Ga, need to re-check
-                    sub_blob.fia = 1
-                    sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)  # comp_aga, not correct, need to fix nested day and dax
-            else:
-                if borrow_M > AveB:
-                    # comp_a:
-                    sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    sub_blob.fia = 1
-                    sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)
+            if borrow_M > AveB:
+                # comp_a:
+                sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+                sub_blob.fia = 1
+                sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
+                blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
-                elif sub_blob.M - borrow_M > AveB:
-                    # comp_r:
-                    sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                    sub_blob.fia = 0
-                    sub_blob.rng = blob.rng * 2
-                    blob.sub_layers += intra_blob(sub_blob, **kwargs)
+            elif sub_blob.M - borrow_M > AveB:
+                # comp_r:
+                sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+                sub_blob.fia = 0
+                sub_blob.rng = blob.rng * 2
+                blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
@@ -170,7 +164,14 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     # take ext_dert__ from part of root_dert__
     ext_dert__ = []
     for derts in blob.root_dert__:
-        ext_dert__.append(derts[y0e:yne, x0e:xne])
+        if derts is not None:
+            if type(derts) == list:  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
+                ext_dert__.append(derts[0][y0e:yne, x0e:xne])
+                ext_dert__.append(derts[1][y0e:yne, x0e:xne])
+            else:
+                ext_dert__.append(derts[y0e:yne, x0e:xne])
+        else:
+            ext_dert__.append(None)
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
 
     # extended mask
@@ -197,5 +198,3 @@ def accum_blob_Dert(blob, dert__, y, x):
         blob.Dxx += dert__[6][1][y, x]
         blob.Ga += dert__[7][y, x]
         blob.Ma += dert__[8][y, x]
-
-

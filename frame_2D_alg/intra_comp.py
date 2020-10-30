@@ -155,8 +155,7 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
     '''
     ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
-    compute extended-kernel gradient from decomposed diffs: dydy, dxdy, dydx, dxdx,
-    g__ = np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
+    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
     '''
 
     i__ = i__[:-1, :-1]  # for summation in Dert
