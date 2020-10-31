@@ -15,7 +15,7 @@ import sys
 import numpy as np
 
 from collections import deque
-from frame_blobs_defs import CBlob, FrameOfBlobs
+from blobs_defs import CBlob, FrameOfBlobs
 # from frame_blobs_wrapper import wrapped_flood_fill
 from frame_blobs_imaging import visualize_blobs
 from utils import minmax

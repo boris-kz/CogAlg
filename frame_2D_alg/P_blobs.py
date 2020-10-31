@@ -60,9 +60,8 @@ from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
 # from comp_pixel import comp_pixel
 from class_stream import BlobStreamer
-from utils import (
-    pairwise,
-    imread, )
+from utils import (pairwise, imread)
+from comp_P_draft import cluster_P_
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -410,6 +409,8 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
         for stack in stack_:
             form_PPy_(stack)  # evaluate to convert stack.Py_ to stack.PPy_
+
+            cluster_P_(stack, ave)  # root function of comp_P: edge tracing and vectorization function
             
             if stack.fPP:  # Py_ is PPy_
                 for y, (PP_sign, PP_G, P_) in enumerate(stack.Py_, start=stack.y0 - y0):
