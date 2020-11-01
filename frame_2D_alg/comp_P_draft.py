@@ -1,84 +1,111 @@
-from collections import deque
-from math import hypot
-from time import time
 '''
    comp_P_ is a terminal fork of intra_blob.
     
    comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
    It should reduce dimensionality | vectorize edges: low-g blobs, into outlines of adjacent flats: low-g blobs.
    This is selective for high aspect blobs: G * (box area / blob area) * (P number / blob area / stack number) 
-    
-   Pre-processing: dert__ re-clustering by dx -> dxP, intra_comp(dx) -> ddx, dmx, md, mm -> sub_mdP, sub_ddP
-   scan_comp_P_ -> dPPs and mPPs: clusters of same-sign deviation in vertical difference or match per P.
-   These PPs replace vertical clustering by g. They may continue across forking: by match ! contiguity?
-        
-   Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
-   DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
-    
-   - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-   - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
-   | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer?
-      
+
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
-   
-   radial comparison extension for co-internal blobs: 
+   radial comp extension for co-internal blobs:
    != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
    == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
    
    borrow = adj_G * rS: default sum div_comp S -> relative area and distance to adjj_blob_
    internal sum comp if mS: in thin lines only? comp_norm_G or div_comp_G -> rG?
    isolation = decay + contrast: 
-   G - G * (rS * ave_rG: decay) - (rS * adj_G: contrast, = lend | borrow, no need to compare vG?) 
-   
+   G - G * (rS * ave_rG: decay) - (rS * adj_G: contrast, = lend | borrow, no need to compare vG?)
+
    if isolation: cross adjj_blob composition eval, 
    else:         cross adjj_blob merge eval:
    blob merger if internal match (~raG) - isolation, rdn external match:  
    blob compos if external match (~rS?) + isolation, 
-   
-   Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps, 
-   after full-blob comp_P_ sums match and miss per parameter. 
-   Also coefs per sub_blob from comp_blob_: potential parts of a higher object?  
 
-   orientation = (Ly / Lx) * (|Dx| / |Dy|): vert ! horiz match coef = elongation * ddirection?
-   or after comp_P: initial edge segmentation by primary axis?
-   if orientation < 1: 
-       orientation = 1 / orientation; flip_cost = flip_ave  # no separate L, D orientation?
-   else: flip_cost = 0
-   comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P
-    
+   Also eval comp_P over fork_?
    rng+ should preserve resolution: rng+_dert_ is dert layers, 
    rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 
    rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr? 
 '''
+from time import time
+from collections import deque
+from class_cluster import ClusterStructure, NoneType
+from math import hypot
 
 ave = 20
 div_ave = 200
 flip_ave = 1000
 ave_dX = 10  # difference between median x coords of consecutive Ps
 
-def cluster_P_(stack, Ave):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursive?
-    # val_PP_: combined value of PP_
-    # differential Pd -> dPP and Pm -> mPP: dderived params magnitude is the only proxy to predictive value
+class CP(ClusterStructure):
+    I = int  # default type at initialization
+    Dy = int
+    Dx = int
+    G = int
+    M = int
+    Dyy = int
+    Dyx = int
+    Dxy = int
+    Dxx = int
+    Ga = int
+    Ma = int
+    L = int
+    x0 = int
+    sign = NoneType
+    dert_ = list
+    gdert_ = list
+    Dg = int
+    Mg = int
 
-    G, Dy, Dx, N, L, Ly, sub_ = stack.Dert[0]  # G will be redefined from Dx, Dy, or only per blob for 2D comp?
-    y0, yn, x0, xn = stack.box
+class Cstack(ClusterStructure):
+    I = int
+    Dy = int
+    Dx = int
+    G = int
+    M = int
+    Dyy = int
+    Dyx = int
+    Dxy = int
+    Dxx = int
+    Ga = int
+    Ma = int
+    S = int
+    Ly = int
+    y0 = int
+    Py_ = list
+    blob = NoneType
+    down_connect_cnt = int
+    sign = NoneType
+    fPP = bool  # PPy_ if 1, else Py_
+
+
+def cluster_P_(stack, Ave):
+    # scan of vertical Py_ -> comp_P -> form_PP -> 2D PPd_, PPm_: clusters of same-sign Pd | Pm deviation
+
     DdX = 0
+    y0 = stack.y0
+    yn = stack.y0 + stack.Ly
+    x0 = min([P.x0 for P in stack.Py_])
+    xn = max([P.x0 + P.L for P in stack.Py_])
 
-    if stack.G * ((xn - x0 + 1) / (yn - y0 + 1)) * (max(abs(Dx), abs(Dy)) / min(abs(Dx), abs(Dy))) > flip_ave:
-        flip(stack)
-        # vertical blob rescan -> comp_Px_ if PM gain: D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
-        # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
+    L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
+    G_bias = max(abs(stack.Dx), abs(stack.Dy)) / min(abs(stack.Dx), abs(stack.Dy))
+    # ddirection: max(Gy,Gx) / min(Gy,Gx), pref. comp over low G
+
+    if stack.G * L_bias / G_bias > flip_ave:
+        flip(stack)  # 90 degree rotation, vertical blob rescan -> comp_Px_ if projected PM gain
+    '''
+       if orientation < 1: 
+          orientation = 1 / orientation; flip_cost = flip_ave  # no separate L, D orientation?
+       else: flip_cost = 0
+       comp_P_ if (G + M) * orientation - flip_cost > Ave_comp_P? '''
 
     if stack.G * (stack.Dx / stack.Dy) * stack.Ly_  > Ave: ort = 1
-    # estimate params of Ps orthogonal to long axis, stack-wide for same-syntax comp_P?
-    else: ort = 0  # to max ave ders, or if xDd to min Pd?
+    # virtual rotation: if G * L_bias * L_bias after any rescan: estimate params of Ps as orthogonal to long axis, to increase PM
+    else: ort = 0
 
-    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # C for combined comparable params and their derivatives
-
+    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # "C" is for combined comparable params and their derivatives
     mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
     dPP = 0, [], []  # per dev of D_params: abs or co-signed?
-
     _P = stack.Py_.popleft()  # initial comparand
 
     while stack.Py_:  # comp_P starts from 2nd P, top-down
@@ -110,45 +137,17 @@ def cluster_P_(stack, Ave):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPP
                 dPP = ds, [], []
 
             _P = P; _ms = ms; _ds = ds
-    return stack, CmPP_, mPP_, CdPP_, dPP_  # stack | PP_? comp_P over fork_, after comp_segment?
+
+    return stack, CmPP_, mPP_, CdPP_, dPP_
 
 '''
-    selection by dx: cross-dimension in oriented blob, recursive 1D alg -> nested Ps?
-    G redefined by Dx, Dy for alt comp, or only per blob for 2D comp?
-
-    aS compute if positive eV (not qD?) = mx + mL -ave? :
-    aI = I / L; dI = aI - _aI; mI = min(aI, _aI)  
-    aD = D / L; dD = aD - _aD; mD = min(aD, _aD)  
-    aM = M / L; dM = aM - _aM; mM = min(aM, _aM)
-
-    d_aS comp if cs D_aS, iter dS - S -> (n, M, diff): var precision or modulo + remainder? 
-    pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn? 
+    Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
+    DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
     
-    # eval_div(PP):
-    
-    if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
-
-        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
-        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
-        nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
-
-        Pnm = mX + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
-
-        if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
-        else: mPP_rdn = 1; nmPP_rdn = 0
-
-        Pnd = ddX + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
-
-        if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
-        else: dPP_rdn = 1; ndPP_rdn = 0
-
-        div_f = 1
-        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn,  Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
-
-    else:
-        div_f = 0  # DIV comp flag
-        nvars = 0  # DIV + norm derivatives
-    '''
+    - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+    - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
+    | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer? 
+'''
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
@@ -192,6 +191,40 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
 
     return (P, P_ders), vs, ds
 
+'''
+    aS compute if positive eV (not qD?) = mx + mL -ave? :
+    aI = I / L; dI = aI - _aI; mI = min(aI, _aI)  
+    aD = D / L; dD = aD - _aD; mD = min(aD, _aD)  
+    aM = M / L; dM = aM - _aM; mM = min(aM, _aM)
+
+    d_aS comp if cs D_aS, iter dS - S -> (n, M, diff): var precision or modulo + remainder? 
+    pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn? 
+
+    # eval_div(PP):
+
+    if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
+
+        rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+        nDx = Dx * rL; ndDx = nDx - _Dx; nmDx = min(nDx, _Dx)  # vs. nI = dI * rL or aI = I / L?
+        nDy = Dy * rL; ndDy = nDy - _Dy; nmDy = min(nDy, _Dy)
+
+        Pnm = mX + nmDx + nmDy  # defines norm_mPP, no ndx: single, but nmx is summed
+
+        if Pm > Pnm: nmPP_rdn = 1; mPP_rdn = 0  # added to rdn, or diff alt, olp, div rdn?
+        else: mPP_rdn = 1; nmPP_rdn = 0
+
+        Pnd = ddX + ndDx + ndDy  # normalized d defines norm_dPP or ndPP
+
+        if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
+        else: dPP_rdn = 1; ndPP_rdn = 0
+
+        div_f = 1
+        nvars = Pnm, nmDx, nmDy, mPP_rdn, nmPP_rdn,  Pnd, ndDx, ndDy, dPP_rdn, ndPP_rdn
+
+    else:
+        div_f = 0  # DIV comp flag
+        nvars = 0  # DIV + norm derivatives
+    '''
 
 def form_PP(typ, P, PP):  # increments continued vPPs or dPPs (not pPs): incr_blob + P_ders?
 
@@ -258,7 +291,11 @@ def incr_deriv_comp_P(typ, PP):
     return PP
 
 def scan_params(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders and nvars?
-
+    '''
+    Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps,
+    after full-blob comp_P_ sums match and miss per parameter.
+    Also coefs per sub_blob from comp_blob_: potential parts of a higher object?
+    '''
     P_ = PP[11]
     Pars = [(0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0),[]]
 

@@ -164,15 +164,11 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     # take ext_dert__ from part of root_dert__
     ext_dert__ = []
     for dert in blob.root_dert__:
-        if dert is not None:
-            # how can it be None?
-            if type(dert) == list:  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
-                ext_dert__.append(dert[0][y0e:yne, x0e:xne])
-                ext_dert__.append(dert[1][y0e:yne, x0e:xne])
-            else:
-                ext_dert__.append(dert[y0e:yne, x0e:xne])
+        if type(dert) == list:  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
+            ext_dert__.append(dert[0][y0e:yne, x0e:xne])
+            ext_dert__.append(dert[1][y0e:yne, x0e:xne])
         else:
-            ext_dert__.append(None)
+            ext_dert__.append(dert[y0e:yne, x0e:xne])
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
 
     # extended mask
