@@ -1,12 +1,26 @@
 '''
-    2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and xy_blobs.
-    frame_blobs() performs three types of operations:
+    2D version of first-level core algorithm includes frame_blobs, intra_blob (recursive search within blobs), and blob2_P_blob.
+
+    Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
+    per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity)
+    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object
+    (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)
+
+    Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions,
+    orientation. These params are essential because value of prediction = precision of what * precision of where.
+    Clustering is by nearest-neighbor connectivity only, to avoid overlap among the blobs.
+
+    frame_blobs() functions:
     - comp_pixel:
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
     The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
+
     - derts2blobs:
-    Image dert__ is segmented into blobs: contiguous areas of positive | negative deviation of gradient per kernel.
-    Each blob is parameterized with summed derivatives of its constituent derts.
+    Segmentation of image dert__ into blobs: contiguous areas of positive | negative deviation of gradient per kernel.
+    Each blob is parameterized with summed params of constituent derts, derived by pixel cross-comparison (cross-correlation).
+    These params represent predictive value per pixel, so they are also predictive on a blob level,
+    thus should be cross-compared between blobs on the next level of search.
+
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
 '''
@@ -211,7 +225,6 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
             blob2.adj_blobs[4] += blob1.Ma
 
 
-
 if __name__ == "__main__":
     # Imports
     import argparse
@@ -309,30 +322,3 @@ if __name__ == "__main__":
     else:
         print(end_time)
 
-# Test if the two versions give identical results:
-'''
-from itertools import zip_longest
-frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
-frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
-did = 0
-dI = 0
-dG = 0
-dDy = 0
-dDx = 0
-dbox = 0
-dfopen = 0
-dsign = 0
-for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
-    did += abs(blob.id - blob1.id)
-    dI += abs(blob.I - blob1.I)
-    dG += abs(blob.G - blob1.G)
-    dDy += abs(blob.Dy - blob1.Dy)
-    dDx += abs(blob.Dx - blob1.Dx)
-    dfopen += abs(blob.fopen - blob1.fopen)
-    dsign += abs(int(blob.sign) - int(blob1.sign))
-    dbox += abs(blob.box[0] - blob1.box[0])
-    dbox += abs(blob.box[1] - blob1.box[1])
-    dbox += abs(blob.box[2] - blob1.box[2])
-    dbox += abs(blob.box[3] - blob1.box[3])
-print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
-'''
