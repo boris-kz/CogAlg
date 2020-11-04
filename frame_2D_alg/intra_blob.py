@@ -3,8 +3,7 @@
 
     - comp_r: incremental range cross-comp in low-variation flat areas of +v--vg: the trigger is positive deviation of negated -vg,
     - comp_a: angle cross-comp in high-variation edge areas of positive deviation of gradient, forming gradient of angle,
-    - P_blobs forms roughly edge-orthogonal Ps, evaluated for comp_d, then evaluates their stacks for comp_P
-
+    - P_blob forms roughly edge-orthogonal Ps, evaluated for comp_d, then evaluates their stacks for comp_P
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
 
     Blob structure, for all layers of blob hierarchy:
@@ -23,13 +22,13 @@
     sub_layers  # [sub_blobs ]: list of layers across sub_blob derivation tree
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
-from blobs_defs import CDeepBlob
+from blob_defs import CDeepBlob
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 import numpy as np
-from P_blobs import P_blobs
+from P_blob import P_blob
 
 # from comp_P_draft import comp_P_blob
 
@@ -108,7 +107,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
                   dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                   dert__[7], dert__[8])
 
-        sub_frame = P_blobs(dert__, mask, crit__, verbose=kwargs.get('verbose'))
+        sub_frame = P_blob(dert__, mask, crit__, verbose=kwargs.get('verbose'))
         sub_blobs = sub_frame['blob__']
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs

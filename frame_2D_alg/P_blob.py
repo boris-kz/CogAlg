@@ -51,7 +51,7 @@ from class_bind import AdjBinder
 # from comp_pixel import comp_pixel
 from class_stream import BlobStreamer
 from utils import (pairwise, imread)
-from comp_P_draft import cluster_P_
+from comp_P_draft import cluster_Py_
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -114,7 +114,7 @@ class CBlob(ClusterStructure):
 # postfix '_' denotes array name, vs. same-name elements of that array
 
 
-def P_blobs(dert__, mask, crit__, verbose=False, render=False):
+def P_blob(dert__, mask, crit__, verbose=False, render=False):
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
@@ -376,7 +376,9 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
     blob.open_stacks += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
+
     if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
+        # blob termination may be simpler, we don't need open stacks, just check for dert__ termination?
         last_stack = stack
         [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[1:5]
         yn = last_stack.y0 + last_stack.Ly
@@ -384,18 +386,16 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
 
         for stack in stack_:
-            form_PPy_(stack)  # evaluate to convert stack.Py_ to stack.PPy_
+            form_gPPy_(stack)  # evaluate for comp_g, converting stack.Py_ to stack.PPy_
 
-            # cluster_P_ and comp_P
-            PP_ = [] # please suggest a better name
+            gPPy_ = []  # comp_P eval, do this per blob instead?:
             if stack.fPP:
-                for PP in stack.Py_:
-                   PP_.append(cluster_P_(stack, PP[2], ave))
+                for gPP in stack.Py_:
+                   gPPy_.append(cluster_Py_(gPP.Py_, ave))
             else:
-                PP_ = cluster_P_(stack, stack.Py_, ave)  # root function of comp_P: edge tracing and vectorization function
+                stack.Py_ = cluster_Py_(stack.Py_, ave)  # root function of comp_P: edge tracing and vectorization function
 
-
-            if stack.fPP:  # Py_ is PPy_
+            if stack.fPP:  # Py_ is gPPy_
                 for y, (PP_sign, PP_G, P_) in enumerate(stack.Py_, start=stack.y0 - y0):
                     for P in P_:
                         x_start = P.x0 - x0
@@ -434,7 +434,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['blob__'].append(blob)
 
 
-def form_PPy_(stack):
+def form_gPPy_(stack):
     ave_PP = 100  # min summed value of gdert params
 
     if stack.G > aveG:
@@ -469,7 +469,7 @@ def form_PPy_(stack):
             stack.fPP = 1  # flag PPy_ vs. Py_ in stack
 
 
-def comp_g(Py_):  # cross-comp of gs in P.dert_, in PP.Py_
+def comp_g(Py_):  # cross-comp of gs in P.dert_, in gPP.Py_
     gP_ = []
     gP_Dg = gP_Mg = 0
 

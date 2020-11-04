@@ -1,9 +1,9 @@
 '''
    comp_P_ is a terminal fork of intra_blob.
     
-   comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across a blob.
-   It should reduce dimensionality | vectorize edges: low-g blobs, into outlines of adjacent flats: low-g blobs.
-   This is selective for high aspect blobs: G * (box area / blob area) * (P number / blob area / stack number) 
+   comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across edge blob.
+   It should vectorize edges: high-G low Ga blobs, into outlines of adjacent flats: low-G blobs.
+   This is a form of dimensionality reduction.
 
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
@@ -30,6 +30,7 @@ from time import time
 from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from math import hypot
+import numpy as np
 
 ave = 20
 div_ave = 200
@@ -37,7 +38,7 @@ flip_ave = 1000
 ave_dX = 10  # difference between median x coords of consecutive Ps
 
 class CP(ClusterStructure):
-    I = int  # default type at initialization
+    I = int
     Dy = int
     Dx = int
     G = int
@@ -77,10 +78,38 @@ class Cstack(ClusterStructure):
     sign = NoneType
     fPP = bool  # PPy_ if 1, else Py_
 
+class Cdert_P(ClusterStructure):
+    Pm = int
+    Pd = int
+    mx = int
+    dx = int
+    mL = int
+    dL = int
+    mDx = int
+    dDx = int
+    mDy = int
+    dDy = int
+    dert_ = list
+    ms = bool
+    ds = bool
 
-def cluster_P_(stack, Ave):
+class CPP(ClusterStructure):
+    PM = int
+    PD = int
+    MX = int
+    DX = int
+    ML = int
+    DL = int
+    MDx = int
+    DDx = int
+    MDy = int
+    DDy = int
+    fdiv = bool
+    P_ = list
+
+
+def cluster_Py_(stack, Ave):
     # scan of vertical Py_ -> comp_P -> form_PP -> 2D PPd_, PPm_: clusters of same-sign Pd | Pm deviation
-
     DdX = 0
     y0 = stack.y0
     yn = stack.y0 + stack.Ly
@@ -88,11 +117,12 @@ def cluster_P_(stack, Ave):
     xn = max([P.x0 + P.L for P in stack.Py_])
 
     L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
-    G_bias = max(abs(stack.Dx), abs(stack.Dy)) / min(abs(stack.Dx), abs(stack.Dy))
+    G_bias = min(abs(stack.Dx), abs(stack.Dy)) / max(abs(stack.Dx), abs(stack.Dy))
     # ddirection: max(Gy,Gx) / min(Gy,Gx), pref. comp over low G
+    # or y/x (L_bias * G_bias) max / min?
 
-    if stack.G * L_bias / G_bias > flip_ave:
-        flip(stack)  # 90 degree rotation, vertical blob rescan -> comp_Px_ if projected PM gain
+    if stack.G * L_bias * G_bias > flip_ave:
+        flip_yx(stack)  # 90 degree rotation, vertical blob rescan -> comp_Px_ if projected PM gain
     '''
        if orientation < 1: 
           orientation = 1 / orientation; flip_cost = flip_ave  # no separate L, D orientation?
@@ -103,29 +133,29 @@ def cluster_P_(stack, Ave):
     # virtual rotation: if G * L_bias * L_bias after any rescan: estimate params of Ps as orthogonal to long axis, to increase PM
     else: ort = 0
 
-    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # "C" is for combined comparable params and their derivatives
-    mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
-    dPP = 0, [], []  # per dev of D_params: abs or co-signed?
-    _P = stack.Py_.popleft()  # initial comparand
+    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [], [], [], [], [], []  # "C" is for combined comparable params and their derivatives
+    mPP = CPP()
+    dPP = CPP()
 
     while stack.Py_:  # comp_P starts from 2nd P, top-down
-        P = stack.Py_.popleft()
-        _P, _ms, _ds = comp_P(ort, P, _P, DdX)
+        P = stack.Py_.pop(0)
+        _dert_P = comp_P(ort, P, _P, DdX)
 
         while stack.Py_:  # form_PP starts from 3rd P
-            P = stack.Py_.popleft()
-            P, ms, ds = comp_P(ort, P, _P, DdX)  # P: S_vars += S_ders in comp_P
-            if ms == _ms:
+            P = stack.Py_.pop(0)
+            dert_P = comp_P(ort, P, _P, DdX)  # P: S_vars += S_ders in comp_P
+            if dert_P.ms == _dert_P.ms:
                 mPP = form_PP(1, P, mPP)
             else:
+            # under review, disregard
                 mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
                 mPP_.append(mPP)
                 for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 summed vars from incr_PP
                     C += par
                     Cm_.append(C)  # or C is directly modified in CvPP?
                 CmPP_ = Cm_  # but CPP is redundant, if len(PP_) > ave?
-                mPP = ms, [], []  # s, PP, Py_ init
-            if ds == _ds:
+                mPP = dert_P.ms, [], []  # s, PP, Py_ init
+            if dert_P.ds == _ds:
                 dPP = form_PP(0, P, dPP)
             else:
                 dPP = term_PP(0, dPP)
@@ -134,15 +164,52 @@ def cluster_P_(stack, Ave):
                     C += var
                     Cd_.append(C)
                 CdPP_ = Cd_
-                dPP = ds, [], []
+                dPP = dert_P.ds, [], []
 
-            _P = P; _ms = ms; _ds = ds
+            _P = P; _ms = dert_P.ms; _ds = dert_P.ds
 
     return stack, CmPP_, mPP_, CdPP_, dPP_
 
+
+def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob's ders__
+
+    y0 = 0
+    yn = len(Py_)
+    x0 = min([P.x0 for P in Py_])
+    xn = max([P.x0 + P.L for P in Py_])
+
+    # initialize list containing y and x size, number of sublist = number of params
+    dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(Py_[0].dert_[0]))]
+    mask__ = np.zeros((yn - y0, xn - x0)) > 0
+
+    # insert Py_ value into dert__
+    for y, P in enumerate(Py_):
+        for x, idert in enumerate(P.dert_):
+            for i, (param, dert) in enumerate(zip(idert, dert__)):
+                dert[y, x] = param
+
+    # create mask and set masked area = True
+    mask__[np.where(dert__[0] == -1)] = True
+
+    # rotate 90 degree clockwise, anti-clockwise is better for consistency?
+    dert__flip = tuple([np.rot90(dert) for dert in dert__])
+    mask__flip = np.rot90(mask__)
+
+    Py_flip = []
+    # form vertical patterns after rotation
+    from P_blob import form_P_
+    for y, dert_ in enumerate(zip(*dert__flip)):
+        crit_ = dert_[3] > 0  # compute crit from G? dert_[3] is G
+        P_ = form_P_(zip(*dert_), crit_, mask__flip[y])
+
+        if len([P for P in P_]) > 0:  # empty P, when mask is masked for whole row or column, need check further on this
+            Py_flip.append([P for P in P_][0])  # change deque of P_ into list
+
+    return Py_flip
+
 '''
-    Pd and Pm are ds | ms per param summed in P. Primary comp is by subtraction, div if par * rL compression: 
-    DL * DS > min: must be both, eval per dPP'PD, signed? comp d?
+    Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression: 
+    DL * DS > min: must be both, eval per dPP PD, signed? comp d?
     
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
     - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
@@ -200,8 +267,7 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     d_aS comp if cs D_aS, iter dS - S -> (n, M, diff): var precision or modulo + remainder? 
     pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn? 
 
-    # eval_div(PP):
-
+    eval_div(PP):
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
 
         rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
@@ -387,64 +453,6 @@ def scan_PP_(PP_):  # within a blob, also within a segment?
 
 def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: very rare?
     return PP
-
-def flip(blob):  # vertical-first run of form_P and deeper functions over blob's ders__
-    return blob
-
-def cluster_P_blob(val_PP_, blob, Ave, xD):  # scan of vertical Py_ -> comp_P -> 2D mPPs and dPPs, recursive?
-    # val_PP_: combined value of PP_
-    # differential Pd -> dPP and Pm -> mPP: dderived params magnitude is the only proxy to predictive value
-
-    G, Dy, Dx, N, L, Ly, sub_ = blob.Dert[0]  # G will be redefined from Dx, Dy, or only per blob for 2D comp?
-    max_y, min_y, max_x, min_x = blob.box
-    DdX = 0
-
-    if val_PP_ * ((max_x - min_x + 1) / (max_y - min_y + 1)) * (max(abs(Dx), abs(Dy)) / min(abs(Dx), abs(Dy))) > flip_ave:
-        flip(blob)
-        # vertical blob rescan -> comp_Px_ if PM gain: D-bias <-> L-bias: width / height, vs abs(xD) / height for oriented blobs?
-        # or flip_eval(positive xd_dev_P (>>90)), after scan_Py_-> xd_dev_P?
-
-    if xD / Ly * val_PP_ > Ave: ort = 1  # estimate params of Ps orthogonal to long axis, seg-wide for same-syntax comp_P
-    else: ort = 0  # to max ave ders, or if xDd to min Pd?
-
-    mPP_, dPP_, CmPP_, CdPP_, Cm_, Cd_ = [],[],[],[],[],[]  # C for combined comparable params and their derivatives
-
-    mPP = 0, [], []  # per dev of M_params, dderived: match = min, G+=Ave?
-    dPP = 0, [], []  # per dev of D_params: abs or co-signed?
-
-    Py_ = blob[3][-1]  # per segment, also flip eval per seg?
-    _P = Py_.popleft()  # initial comparand
-
-    while Py_:  # comp_P starts from 2nd P, top-down
-        P = Py_.popleft()
-        _P, _ms, _ds = comp_P(ort, P, _P, DdX)
-
-        while Py_:  # form_PP starts from 3rd P
-            P = Py_.popleft()
-            P, ms, ds = comp_P(ort, P, _P, DdX)  # P: S_vars += S_ders in comp_P
-            if ms == _ms:
-                mPP = form_PP(1, P, mPP)
-            else:
-                mPP = term_PP(1, mPP)  # SPP += S, PP eval for orient, incr_comp_P, scan_par..?
-                mPP_.append(mPP)
-                for par, C in zip(mPP[1], CmPP_):  # blob-wide summation of 16 summed vars from incr_PP
-                    C += par
-                    Cm_.append(C)  # or C is directly modified in CvPP?
-                CmPP_ = Cm_  # but CPP is redundant, if len(PP_) > ave?
-                mPP = ms, [], []  # s, PP, Py_ init
-            if ds == _ds:
-                dPP = form_PP(0, P, dPP)
-            else:
-                dPP = term_PP(0, dPP)
-                dPP_.append(dPP)
-                for var, C in zip(dPP[1], CdPP_):
-                    C += var
-                    Cd_.append(C)
-                CdPP_ = Cd_
-                dPP = ds, [], []
-
-            _P = P; _ms = ms; _ds = ds
-    return blob, CmPP_, mPP_, CdPP_, dPP_  # blob | PP_? comp_P over fork_, after comp_segment?
 
 '''  
     rL: elongation = max(ave_Lx, Ly) / min(ave_Lx, Ly): match rate in max | min dime, also max comp_P rng?    

@@ -260,7 +260,7 @@ if __name__ == "__main__":
         from intra_blob import (
             intra_blob, aveB,
         )
-        from frame_blobs_defs import CDeepBlob
+        from blob_defs import CDeepBlob
 
         deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers
