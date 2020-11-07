@@ -107,7 +107,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
                   dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                   dert__[7], dert__[8])
 
-        sub_frame = P_blob(dert__, mask, crit__, verbose=kwargs.get('verbose'))
+        sub_frame = P_blob(dert__, mask, crit__, AveB, verbose=kwargs.get('verbose'))
         sub_blobs = sub_frame['blob__']
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
