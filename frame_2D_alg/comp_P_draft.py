@@ -37,7 +37,9 @@ div_ave = 200
 flip_ave = 1000
 ave_dX = 10  # difference between median x coords of consecutive Ps
 
-class CP(ClusterStructure):
+
+class CP(ClusterStructure):  # P params
+
     I = int
     Dy = int
     Dx = int
@@ -75,44 +77,33 @@ class Cdert_P(ClusterStructure):
     mMg = int
     dMg = int
 
-class Cstack(ClusterStructure):
-    I = int
-    Dy = int
-    Dx = int
-    G = int
-    M = int
-    Dyy = int
-    Dyx = int
-    Dxy = int
-    Dxx = int
-    Ga = int
-    Ma = int
-    S = int
+class Cstack(ClusterStructure):  # = gstack, with Py_ = istack_, and PP_stack, with Pi = dert_P instance
+
+    Pi = object  # P instance, P params are accumulated into stack params, stack.S = P.L
+                 # or dert_P instance if this is PP_stack
     Ly = int
     y0 = int
-    Py_ = list
-    blob = NoneType
+    Py_ = list  # stack_ if this is gstack
     down_connect_cnt = int
-    sign = NoneType
     fPP = NoneType  # PPy_ if 1, else Py_
+    blob = NoneType
 
 class CPP(ClusterStructure):
-    PM = int
-    PD = int
-    MX = int
-    DX = int
-    ML = int
-    DL = int
-    MDx = int
-    DDx = int
-    MDy = int
-    DDy = int
-    MDg = int
-    DDg = int
-    MMg = int
-    DMg = int
+
+    dert_Pi = object  # PP params = accumulated dert_P params:
+    # PM, PD, MX, DX, ML, DL, MDx, DDx, MDy, DDy, MDg, DDg, MMg, DMg; also accumulate P params?
+    dert_P_ = list   # only refs to PP_stack dert_Ps
+    fmPP = NoneType  # mPP if 1, else dPP; not needed if packed in PP_?
+    fdiv = NoneType  # or defined per stack?
+
+class CPP_stack(ClusterStructure):
+
+    dert_Pi = object  # PP_stack params = accumulated dert_P params:
+    # sPM, sPD, sMX, sDX, sML, sDL, sMDx, sDDx, sMDy, sDDy, sMDg, sDDg, sMMg, sDMg
+    mPP_ = list
+    dPP_ = list
+    dert_P_ = list
     fdiv = NoneType
-    P_ = list
 
 
 def comp_P_blob(blob_, AveB):  # comp_P eval per blob
@@ -126,7 +117,7 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
                     if stack.fPP:
                         for j, istack in enumerate(stack.Py_):
                             # istack is original stack, higher-level stack is actually a gstack
-                            if istack.G * (1 - istack.Ga / (4.45 * istack.S)) - AveB / 10 > 0 and len(istack.Py_) > 1:
+                            if istack.G * (1 - istack.Ga / (4.45 * istack.S)) - AveB / 10 > 0 and len(istack.Py_) > 2:
 
                                 PP_stack = comp_Py_(istack, ave)  # root function of comp_P: edge tracing and vectorization
                                 istack.Py_[j] = PP_stack  # PP_stack has accumulated PP params and PP_
@@ -135,7 +126,7 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
                                 # then that stack will replace blob.stack below
                     else:
                         # stack is original stack
-                        if stack.G * (1 - stack.Ga / (4.45 * stack.S)) - AveB / 10 > 0 and len(stack.Py_) > 1:
+                        if stack.G * (1 - stack.Ga / (4.45 * stack.S)) - AveB / 10 > 0 and len(stack.Py_) > 2:
 
                             stack = comp_Py_(stack, ave)  # stack is PP_stack, with accumulated PP params and PP_
 
@@ -153,8 +144,9 @@ def comp_Py_(stack, Ave):
     L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
     G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: max(Gy,Gx) / min(Gy,Gx), pref. comp over low G
 
-    if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias
-        flip_yx(stack.Py_)  # 90 degree rotation, vertical blob rescan -> comp_Px_ if projected PM gain
+    if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
+        # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_Px_
+        stack.Py_ = flip_yx(stack.Py_)
     # comp_Py_ if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_P?
 
     if stack.G * (stack.Dy / stack.Dx) * stack.Ly > Ave:  # if y_bias after any rescan, also L_bias?
@@ -172,9 +164,10 @@ def comp_Py_(stack, Ave):
     return form_PP_(dert_P_)  # PP_stack
 
 
-def form_PP_(dert_P_):  # increments continued vPPs or dPPs (not pPs): incr_blob + P_ders?
+def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
     PP_stack = CPP_stack  # need to define object and accum_PP_stack()
+    # not sure it belongs here, maybe in comp_PP_blob?
     mPP_ = dPP_ = []
     mPP = dPP = CPP()
     _dert_P = dert_P_[0]
@@ -183,24 +176,69 @@ def form_PP_(dert_P_):  # increments continued vPPs or dPPs (not pPs): incr_blob
 
         if _dert_P.Pm > 0 != dert_P.Pm > 0: # sign change between _dert_P and dert_P
             mPP_.append(mPP)
-            accum_PP_stack(mPP)  # PP_stack contains accumulated params, mPP_, dPP_
             mPP=CPP()
         accum_PP(_dert_P, mPP)  # accumulate _dert_P params into PP params
 
         if _dert_P.Pd > 0 != dert_P.Pd > 0:  # sign change between _dert_P and dert_P
             dPP_.append(dPP)
-            accum_PP_stack(mPP)  # PP_stack contains accumulated params, mPP_, dPP_
             dPP=CPP()
         accum_PP(_dert_P, dPP)  # accumulate _dert_P params into PP params
 
+        PP_params = accum_PP_stack(dert_P)  # accumulate dert_P params into PP_stack params
         _dert_P = dert_P  # update _dert_P
 
     mPP_.append(mPP)  # pack last PP in PP_
     dPP_.append(dPP)
 
-    accum_PP_stack(mPP)  # PP_stack contains accumulated params, mPP_, dPP_
+    return (PP_params, mPP_, dPP, dert_P_)  # PP_stack
 
-    return PP_stack
+
+# The below needs to be reviewed, use dertP params, and class defs have changed
+
+def accum_PP_stack(PP, PP_stack):  # accumulate mPPs or dPPs
+
+    PM, PD, MX, DX, ML, DL, MDx, DDx, MDy, DDy, MDg, DDg, MMg, DMg, fdiv, P_, dert_P_ = PP.unpack()
+    # accumulate PP params into PP_stack
+    PP_stack.PM += PM
+    PP_stack.PD += PD
+    PP_stack.MX += MX
+    PP_stack.DX += DX
+    PP_stack.ML += ML
+    PP_stack.DL += DL
+    PP_stack.MDx += MDx
+    PP_stack.DDx += DDx
+    PP_stack.MDy += MDy
+    PP_stack.DDy += DDy
+    PP_stack.MDg += MDg
+    PP_stack.DDg += DDg
+    PP_stack.MMg += MMg
+    PP_stack.DMg += DMg
+    PP_stack.P_.extend(P_) # similar with append, but P_ is flatten first before appended into PP_stack.P_
+    PP_stack.dert_P_.extend(dert_P_)
+
+    for P in P_:
+        # P params
+        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, sign, dert_, gdert_, Dg, Mg = P.unpack()
+
+        # accumulate P params into PP_stack
+        PP_stack.I += I
+        PP_stack.Dy += Dy
+        PP_stack.Dx += Dx
+        PP_stack.G += G
+        PP_stack.M += M
+        PP_stack.Dyy += Dyy
+        PP_stack.Dyx += Dyx
+        PP_stack.Dxy += Dxy
+        PP_stack.Dxx += Dxx
+        PP_stack.Ga += Ga
+        PP_stack.Ma += Ma
+        PP_stack.S += L
+        PP_stack.Ly += 1
+        PP_stack.y0 += 1 # not sure how to get y0 from PP here, need to think further on this
+        PP_stack.Py_.append(P)
+        PP_stack.sign = sign
+        PP_stack.Dg += Dg
+        PP_stack.Mg += Mg
 
 
 def accum_PP(dert_P, PP):  # accumulate mPPs or dPPs
@@ -222,8 +260,8 @@ def accum_PP(dert_P, PP):  # accumulate mPPs or dPPs
     PP.MMg += mMg
     PP.DMg += dMg
 
-
-    PP.P_.append(dert_P)
+    PP.P_ .append(Pi) # dert_P should always contain 1 P, so append Pi(P instance of dert_P) into PP's P_
+    PP.dert_P_.append(dert_P)
 
     '''
     P, P_ders, S_ders = P
@@ -272,7 +310,7 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
     dert__flip = tuple([np.rot90(dert) for dert in dert__])
     mask__flip = np.rot90(mask__)
 
-    Py_flip = []
+    flipped_Py_ = []
     # form vertical patterns after rotation
     from P_blob import form_P_
     for y, dert_ in enumerate(zip(*dert__flip)):
@@ -280,9 +318,9 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
         P_ = form_P_(zip(*dert_), crit_, mask__flip[y])
 
         if len([P for P in P_]) > 0:  # empty P, when mask is masked for whole row or column, need check further on this
-            Py_flip.append([P for P in P_][0])  # change deque of P_ into list
+            flipped_Py_.append([P for P in P_][0])  # change deque of P_ into list
 
-    return Py_flip
+    return flipped_Py_
 
 '''
     Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression: 
@@ -336,8 +374,8 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
     Pm = mX + mL + mM + mDx + mDy + mMg + mDg # -> complementary vPP, rdn *= Pd | Pm rolp?
 
-    # do we need P param in dert_P?
-    dert_P = Cdert_P(Pm=Pm, Pd=Pd, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)  # div_f, nvars
+    dert_P = Cdert_P(Pi=_P, Pm=Pm, Pd=Pd, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)
+    # div_f, nvars
 
     return dert_P
 
