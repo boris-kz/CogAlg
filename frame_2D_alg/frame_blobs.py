@@ -8,9 +8,9 @@
 
     Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions,
     orientation. These params are essential because value of prediction = precision of what * precision of where.
-    Clustering is by nearest-neighbor connectivity only, to avoid overlap among the blobs.
+    Clustering here is nearest-neighbor only, to avoid overlap among blobs.
+    Main functions:
 
-    frame_blobs() functions:
     - comp_pixel:
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
     The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
@@ -29,21 +29,33 @@ import sys
 import numpy as np
 
 from collections import deque
-from blobs_defs import CBlob, FrameOfBlobs
 # from frame_blobs_wrapper import wrapped_flood_fill
 from frame_blobs_imaging import visualize_blobs
 from utils import minmax
+from collections import namedtuple
+from class_cluster import ClusterStructure, NoneType
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 UNFILLED = -1
 EXCLUDED_ID = -2
 
-def accum_blob_Dert(blob, dert__, y, x):
-    blob.I += dert__[0][y, x]
-    blob.Dy += dert__[1][y, x]
-    blob.Dx += dert__[2][y, x]
-    blob.G += dert__[3][y, x]
-    blob.M += dert__[4][y, x]
+FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, G, M, blob_, dert__')
+
+class CBlob(ClusterStructure):
+    # Dert params
+    I = int
+    Dy = int
+    Dx = int
+    G = int
+    M = int
+    # blob params
+    S = int
+    sign = NoneType
+    box = list
+    mask = object
+    root_dert__ = object
+    adj_blobs = list
+    fopen = bool
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
@@ -224,6 +236,14 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
             blob1.adj_blobs[4] += blob2.Ma
             blob2.adj_blobs[4] += blob1.Ma
 
+def accum_blob_Dert(blob, dert__, y, x):
+
+    blob.I += dert__[0][y, x]
+    blob.Dy += dert__[1][y, x]
+    blob.Dx += dert__[2][y, x]
+    blob.G += dert__[3][y, x]
+    blob.M += dert__[4][y, x]
+
 
 if __name__ == "__main__":
     # Imports
@@ -260,7 +280,35 @@ if __name__ == "__main__":
         from intra_blob import (
             intra_blob, aveB,
         )
-        from blob_defs import CDeepBlob
+        class CDeepBlob(ClusterStructure):
+            # Dert params
+            I = int
+            Dy = int
+            Dx = int
+            G = int
+            M = int
+            Dyy = int
+            Dyx = int
+            Dxy = int
+            Dxx = int
+            Ga = int
+            Ma = int
+            # blob params
+            S = int
+            sign = NoneType
+            box = list
+            mask = object
+            root_dert__ = object
+            adj_blobs = list
+            fopen = bool
+            fia = bool  # flag: input is from comp angle
+            fca = bool  # flag: current fork is comp angle
+            rdn = float
+            rng = int
+            Ls = int  # for visibility and next-fork rdn
+            sub_layers = list
+            a_depth = int
+
 
         deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers

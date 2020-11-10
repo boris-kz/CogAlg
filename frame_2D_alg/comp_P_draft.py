@@ -115,13 +115,15 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
             for i, stack in enumerate(blob.stack_):
                 if stack.G * (1 - stack.Ga / (4.45 * stack.S)) - AveB / 10 > 0:  # / 10: ratio AveB to AveS
                     if stack.fPP:
+                        # stack is actually a nested gstack
                         for j, istack in enumerate(stack.Py_):
-                            # istack is original stack, higher-level stack is actually a gstack
+                            # istack is original stack
                             if istack.G * (1 - istack.Ga / (4.45 * istack.S)) - AveB / 10 > 0 and len(istack.Py_) > 2:
 
                                 PP_stack = comp_Py_(istack, ave)  # root function of comp_P: edge tracing and vectorization
                                 istack.Py_[j] = PP_stack  # PP_stack has accumulated PP params and PP_
 
+                                # Chee, could you look into this:
                                 # add accumulation of istack params into blob stack params here,
                                 # then that stack will replace blob.stack below
                     else:
@@ -130,7 +132,7 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
 
                             stack = comp_Py_(stack, ave)  # stack is PP_stack, with accumulated PP params and PP_
 
-            blob.stack_[i] = stack  # return as PP_stack from form_PP
+                blob.stack_[i] = stack  # return as PP_stack from form_PP
 
 
 def comp_Py_(stack, Ave):
@@ -142,12 +144,15 @@ def comp_Py_(stack, Ave):
     xn = max([P.x0 + P.L for P in stack.Py_])
 
     L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
-    G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: max(Gy,Gx) / min(Gy,Gx), pref. comp over low G
+    G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
 
     if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
-        # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_Px_
-        stack.Py_ = flip_yx(stack.Py_)
-    # comp_Py_ if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_P?
+
+        flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_Px_
+        if len(flipped_Py_) > 2:  # at least 3 Ps to form 2 dert_P and 1 PP
+            stack.Py_ = flipped_Py_
+        else:
+            return stack  # comp_P if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_P?
 
     if stack.G * (stack.Dy / stack.Dx) * stack.Ly > Ave:  # if y_bias after any rescan, also L_bias?
         ort = 1  # virtual rotation: estimate P params as orthogonal to long axis, to increase Pm
@@ -166,10 +171,10 @@ def comp_Py_(stack, Ave):
 
 def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
-    PP_stack = CPP_stack  # need to define object and accum_PP_stack()
+    PP_stack = CPP_stack(dert_Pi = Cdert_P())  # need to define object and accum_PP_stack()
     # not sure it belongs here, maybe in comp_PP_blob?
     mPP_ = dPP_ = []
-    mPP = dPP = CPP()
+    mPP = dPP = CPP(dert_Pi = Cdert_P())
     _dert_P = dert_P_[0]
 
     for i, dert_P in enumerate(dert_P_[1:]): # consecutive dert_P
@@ -184,107 +189,65 @@ def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
             dPP=CPP()
         accum_PP(_dert_P, dPP)  # accumulate _dert_P params into PP params
 
-        PP_params = accum_PP_stack(dert_P)  # accumulate dert_P params into PP_stack params
         _dert_P = dert_P  # update _dert_P
 
+    accum_PP_stack(PP_stack, dert_P_)  # accumulate dert_P params into PP_stack params, in batch
     mPP_.append(mPP)  # pack last PP in PP_
     dPP_.append(dPP)
+    # compute fmPP and fdiv of mPP and dPP?
 
-    return (PP_params, mPP_, dPP, dert_P_)  # PP_stack
+    PP_stack.mPP_ = mPP_
+    PP_stack.dPP_ = dPP_
+    PP_stack.dert_P_ = dert_P_
+    # compute fdiv of PP_stack?
+
+    return PP_stack
 
 
-# The below needs to be reviewed, use dertP params, and class defs have changed
+def accum_PP_stack(PP_stack, dert_P_):  # accumulate mPPs or dPPs
 
-def accum_PP_stack(PP, PP_stack):  # accumulate mPPs or dPPs
+    for dert_P in dert_P_:
+        _, Pm, Pd, mx, dx, mL, dL, mDx, dDx, mDy, dDy, mDg, dDg, mMg, dMg = dert_P.unpack()
 
-    PM, PD, MX, DX, ML, DL, MDx, DDx, MDy, DDy, MDg, DDg, MMg, DMg, fdiv, P_, dert_P_ = PP.unpack()
-    # accumulate PP params into PP_stack
-    PP_stack.PM += PM
-    PP_stack.PD += PD
-    PP_stack.MX += MX
-    PP_stack.DX += DX
-    PP_stack.ML += ML
-    PP_stack.DL += DL
-    PP_stack.MDx += MDx
-    PP_stack.DDx += DDx
-    PP_stack.MDy += MDy
-    PP_stack.DDy += DDy
-    PP_stack.MDg += MDg
-    PP_stack.DDg += DDg
-    PP_stack.MMg += MMg
-    PP_stack.DMg += DMg
-    PP_stack.P_.extend(P_) # similar with append, but P_ is flatten first before appended into PP_stack.P_
-    PP_stack.dert_P_.extend(dert_P_)
-
-    for P in P_:
-        # P params
-        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, sign, dert_, gdert_, Dg, Mg = P.unpack()
-
-        # accumulate P params into PP_stack
-        PP_stack.I += I
-        PP_stack.Dy += Dy
-        PP_stack.Dx += Dx
-        PP_stack.G += G
-        PP_stack.M += M
-        PP_stack.Dyy += Dyy
-        PP_stack.Dyx += Dyx
-        PP_stack.Dxy += Dxy
-        PP_stack.Dxx += Dxx
-        PP_stack.Ga += Ga
-        PP_stack.Ma += Ma
-        PP_stack.S += L
-        PP_stack.Ly += 1
-        PP_stack.y0 += 1 # not sure how to get y0 from PP here, need to think further on this
-        PP_stack.Py_.append(P)
-        PP_stack.sign = sign
-        PP_stack.Dg += Dg
-        PP_stack.Mg += Mg
+        # accumulate dert_P params into PP_stack
+        PP_stack.dert_Pi.Pm += Pm
+        PP_stack.dert_Pi.Pd += Pd
+        PP_stack.dert_Pi.mx += mx
+        PP_stack.dert_Pi.dx += dx
+        PP_stack.dert_Pi.mL += mL
+        PP_stack.dert_Pi.dL += dL
+        PP_stack.dert_Pi.mDx += mDx
+        PP_stack.dert_Pi.dDx += dDx
+        PP_stack.dert_Pi.mDy += mDy
+        PP_stack.dert_Pi.dDy += dDy
+        PP_stack.dert_Pi.mDg += mDg
+        PP_stack.dert_Pi.dDg += dDg
+        PP_stack.dert_Pi.mMg += mMg
+        PP_stack.dert_Pi.dMg += dMg
 
 
 def accum_PP(dert_P, PP):  # accumulate mPPs or dPPs
 
-    Pi, Pm, Pd, mx, dx, mL, dL, mDx, dDx, mDy, dDy, mDg, dDg, mMg, dMg = dert_P.unpack()
+    # dert_P params
+    _, Pm, Pd, mx, dx, mL, dL, mDx, dDx, mDy, dDy, mDg, dDg, mMg, dMg = dert_P.unpack()
 
-    PP.PM += Pm
-    PP.PD += Pd
-    PP.MX += mx
-    PP.DX += dx
-    PP.ML += mL
-    PP.DL += dL
-    PP.MDx += mDx
-    PP.DDx += dDx
-    PP.MDy += mDy
-    PP.DDy += dDy
-    PP.MDg += mDg
-    PP.DDg += dDg
-    PP.MMg += mMg
-    PP.DMg += dMg
-
-    PP.P_ .append(Pi) # dert_P should always contain 1 P, so append Pi(P instance of dert_P) into PP's P_
+    # accumulate dert_P params into PP
+    PP.dert_Pi.Pm += Pm
+    PP.dert_Pi.Pd += Pd
+    PP.dert_Pi.mx += mx
+    PP.dert_Pi.dx += dx
+    PP.dert_Pi.mL += mL
+    PP.dert_Pi.dL += dL
+    PP.dert_Pi.mDx += mDx
+    PP.dert_Pi.dDx += dDx
+    PP.dert_Pi.mDy += mDy
+    PP.dert_Pi.dDy += dDy
+    PP.dert_Pi.mDg += mDg
+    PP.dert_Pi.dDg += dDg
+    PP.dert_Pi.mMg += mMg
+    PP.dert_Pi.dMg += dMg
     PP.dert_P_.append(dert_P)
 
-    '''
-    P, P_ders, S_ders = P
-    s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_ = P
-    L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_ = PP
-    L2 += len(t2_)
-    I2 += I
-    D2 += D; Dy2 += Dy
-    M2 += M; My2 += My
-    G2 += G
-    OG += oG
-    Olp2 += Olp
-    Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars = P_ders
-    _dx, Ddx, \
-    PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, div_f, nVars = S_ders
-    Py_.appendleft((s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars))
-    ddx = dx - _dx  # no ddxP_ or mdx: olp of dxPs?
-    Ddx += abs(ddx)  # PP value of P norm | orient per indiv dx: m (ddx, dL, dS)?
-    # summed per PP, then per blob, for form_pP_ or orient eval?
-    PM += Pm; PD += Pd  # replace by zip (S_ders, P_ders)
-    Mx += mx; Dx += dx; ML += mL; DL += dL; ML += mI; DL += dI
-    MD += mD; DD += dD; MDy += mDy; DDy += dDy; MM += mM; DM += dM; MMy += mMy; DMy += dMy
-    '''
 
 def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob's ders__
 
@@ -322,14 +285,6 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
 
     return flipped_Py_
 
-'''
-    Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression: 
-    DL * DS > min: must be both, eval per dPP PD, signed? comp d?
-    
-    - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
-    - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
-    | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer? 
-'''
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
@@ -380,6 +335,13 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
     return dert_P
 
 '''
+    Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression: 
+    DL * DS > min: must be both, eval per dPP PD, signed? comp d?
+    
+    - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
+    - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
+    | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer? 
+
     aS compute if positive eV (not qD?) = mx + mL -ave? :
     aI = I / L; dI = aI - _aI; mI = min(aI, _aI)  
     aD = D / L; dD = aD - _aD; mD = min(aD, _aD)  
@@ -403,39 +365,6 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
         div_f = 0  # DIV comp flag
         nvars = 0  # DIV + norm derivatives
     '''
-
-
-def form_PP(typ, P, PP):  # increments continued vPPs or dPPs (not pPs): incr_blob + P_ders?
-
-    P, P_ders, S_ders = P
-    s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_ = P
-    L2, I2, D2, Dy2, M2, My2, G2, OG, Olp2, Py_ = PP
-
-    L2 += len(t2_)
-    I2 += I
-    D2 += D; Dy2 += Dy
-    M2 += M; My2 += My
-    G2 += G
-    OG += oG
-    Olp2 += Olp
-
-    Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars = P_ders
-    _dx, Ddx, \
-    PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, div_f, nVars = S_ders
-
-    Py_.appendleft((s, ix, x, I, D, Dy, M, My, G, oG, Olp, t2_, Pm, Pd, mx, dx, mL, dL, mI, dI, mD, dD, mDy, dDy, mM, dM, mMy, dMy, div_f, nvars))
-
-    ddx = dx - _dx  # no ddxP_ or mdx: olp of dxPs?
-    Ddx += abs(ddx)  # PP value of P norm | orient per indiv dx: m (ddx, dL, dS)?
-
-    # summed per PP, then per blob, for form_pP_ or orient eval?
-
-    PM += Pm; PD += Pd  # replace by zip (S_ders, P_ders)
-    Mx += mx; Dx += dx; ML += mL; DL += dL; ML += mI; DL += dI
-    MD += mD; DD += dD; MDy += mDy; DDy += dDy; MM += mM; DM += dM; MMy += mMy; DMy += dMy
-
-    return s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_, PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, nVars
-
 
 def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
 
@@ -476,7 +405,7 @@ def scan_params(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders an
     Also coefs per sub_blob from comp_blob_: potential parts of a higher object?
     '''
     P_ = PP[11]
-    Pars = [(0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0,[]), (0,0,0),[]]
+    Pars = [ (0,0,0,[]) ]
 
     for P in P_:  # repack ders into par_s by parameter type:
 
@@ -568,8 +497,6 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
     return PP
 
 '''  
-    rL: elongation = max(ave_Lx, Ly) / min(ave_Lx, Ly): match rate in max | min dime, also max comp_P rng?    
-    rD: ddirection = max(Dy, Dx) / min(Dy, Dx);  low bias, indirect Mx, My: = M/2 *|/ ddirection?
     horiz_dim_val = ave_Lx - |Dx| / 2  # input res and coord res are adjusted so mag approximates predictive value,
     vertical_dim_val  = Ly - |Dy| / 2  # or proj M = M - (|D| / M) / 2: no neg? 
     
@@ -577,7 +504,6 @@ def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: 
     no * Ave_blob / Ga: angle match rate, already represented by hforks' position + mag' V+G -> comp( d | ortho_d)?   
     eval per blob, too expensive for seg? no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
     
-    # Dert is None if len | Var < min, for blob_, fork_, and layers?  
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
     relative colors may match across reflecting objects, forming color | lighting objects?     
     comp between color patterns within an object: segmentation? 

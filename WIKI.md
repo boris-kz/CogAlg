@@ -16,23 +16,26 @@ To preserve positional info, this algorithm must be specific to external or Cart
 
 **frame_2D_alg:**
 
- 1st level:
+ 1st level: [Chart](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/1st_level_2D_alg.png)
+  
 - [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs.py) defines initial blobs: contiguous areas of same-sign deviation of gradient per pixel. It's a basic cross-correlation and connectivity clustering within an image, but resulting blobs also contain comparison-derived parameters for future comparison between blobs (comp_blob). This code is functional. 
 - [frame_blobs_par](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/frame_blobs_par.py) is POC of parallel-processing version. It is currently not much faster, but is critical for future scalability. 
 
-- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): recursive calls to intra_comp: cross-comparison at extended range or higher derivation within selected blobs and then sub_blobs. Each call converts input blob into root blob and forms respective sub_blobs: contiguous areas of same-sign deviation of a new gradient. Functionally complete, working out bugs and optimizations.
+- [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): recursive calls to intra_comp: cross-comparison at extended range or higher derivation within selected blobs and then sub_blobs. Each call converts input blob into root blob and forms respective sub_blobs: contiguous areas of same-sign deviation of a new gradient.
+
+  [Diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png), functional, but may have bugs.
    
   - [intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp.py) cross-compares pixels over extended range, or cross-compares angle of gradient, forming corresponding type of new gradient.
   - [draw_intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/draw_intra_comp.py) computes gradients of the first three layers of forks over the whole frame, for visualization only (old version).  
   - [P_blob](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/P_blob.py) is selective for salient smooth edge blobs. It forms edge-orthogonal Ps, selectively cross-compares their internal gradients, then forms vertically contiguous stacks of Ps. These stacks are evaluated for comp_P, below. 
   
-- [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): will be terminal fork of intra_blob. It cross-compares between vertically consecutive Ps: horizontal slices of blob segments. It will be selective for highly elongated blobs: likely edge contours. Comp_P is a version line-tracing: 2D -> 1D dimensionality reduction, converting edges into vector representations. This is similar to second level of 1D alg: [line_PPs_draft](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py). It's currently in pseudo code, will be the next stage of this project.
+- [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): will be terminal fork of intra_blob. It cross-compares between vertically consecutive Ps: horizontal slices of blob segments. It will be selective for elongated blobs: likely edge contours. Comp_P is a version line-tracing: 2D -> 1D dimensionality reduction, converting edges into vector representations. This is similar to second level of 1D alg: [line_PPs_draft](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py). It's currently in pseudo code, will be the next stage of this project.
   
  2nd level and a prototype for recursive meta-level 2D algorithm, to be added:
  
    - merge_blob_: merge weak blobs (with negative summed value) into infra-blob, for comp_blob_ but not intra_blob,
    - comp_blob_: cross-comp of same range and derivation blobs within root blob ) frame, 
-    forms incrementally higher-composition super-blobs, with selective extended cross-comp of their elements,
+     forms incrementally higher-composition super-blobs, with selective extended cross-comp of their elements,
    - comp_layer_: cluster | reorder -> bi-directional hierarchy? sub_blobs comp to higher-blob: contour or axis? 
    - eval_overlap: redundant reps of combined-core positive blob areas, vertical or cross-fork. 
     

@@ -22,15 +22,13 @@
     sub_layers  # [sub_blobs ]: list of layers across sub_blob derivation tree
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
-from blob_defs import CDeepBlob
-from frame_blobs import assign_adjacents, flood_fill
+
+import numpy as np
+from frame_blobs import assign_adjacents, flood_fill, CDeepBlob
 from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
-import numpy as np
 from P_blob import P_blob
-
-# from comp_P_draft import comp_P_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
@@ -39,6 +37,7 @@ aveB = 50  # fixed cost per intra_blob comp and clustering
 
 # --------------------------------------------------------------------------------------------------------------
 # functions:
+
 
 def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp within blob
 
