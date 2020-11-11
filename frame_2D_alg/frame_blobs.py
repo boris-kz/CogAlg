@@ -49,13 +49,42 @@ class CBlob(ClusterStructure):
     G = int
     M = int
     # blob params
-    S = int
+    A = int  # blob area
     sign = NoneType
     box = list
     mask = object
     root_dert__ = object
     adj_blobs = list
     fopen = bool
+
+class CDeepBlob(ClusterStructure):
+    # Dert params
+    I = int
+    Dy = int
+    Dx = int
+    G = int
+    M = int
+    Dyy = int
+    Dyx = int
+    Dxy = int
+    Dxx = int
+    Ga = int
+    Ma = int
+    # blob params
+    A = int  # blob area
+    sign = NoneType
+    box = list
+    mask = object
+    root_dert__ = object
+    adj_blobs = list
+    fopen = bool
+    fia = bool  # flag: input is from comp angle
+    fca = bool  # flag: current fork is comp angle
+    rdn = float
+    rng = int
+    Ls = int  # for visibility and next-fork rdn
+    sub_layers = list
+    a_depth = int
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
@@ -108,16 +137,12 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
     return frame
 
 
-def flood_fill(dert__, sign__, verbose=False,
-               mask=None, blob_cls=CBlob,
-               accum_func=accum_blob_Dert):
+def flood_fill(dert__, sign__, verbose=False, mask=None, blob_cls=CBlob, accum_func=accum_blob_Dert):
 
     if mask is None: # non intra dert
         height, width = dert__[0].shape
-
     else: # intra dert
         height, width = mask.shape
-
 
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
     if mask is not None:
@@ -145,10 +170,9 @@ def flood_fill(dert__, sign__, verbose=False,
                 unfilled_derts = deque([(y, x)])
                 while unfilled_derts:
                     y1, x1 = unfilled_derts.popleft()
-
                     # add dert to blob
                     accum_func(blob, dert__, y1, x1)
-                    blob.S += 1
+                    blob.A += 1
                     if y1 < y0:
                         y0 = y1
                     elif y1 > yn:
@@ -157,7 +181,6 @@ def flood_fill(dert__, sign__, verbose=False,
                         x0 = x1
                     elif x1 > xn:
                         xn = x1
-
                     # determine neighbors' coordinates, 4 for -, 8 for +
                     if blob.sign:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
@@ -193,7 +216,7 @@ def flood_fill(dert__, sign__, verbose=False,
                 blob.adj_blobs = [[], 0, 0, 0, 0]
 
                 if verbose:
-                    progress += blob.S * step
+                    progress += blob.A * step
                     print(f"\rClustering... {round(progress)} %", end="")
                     sys.stdout.flush()
     if verbose:
@@ -264,51 +287,14 @@ if __name__ == "__main__":
     # intra = args.intra
     # render = args.render
 
-    # frame-blobs start here
     start_time = time()
     dert__ = comp_pixel(image)
-    frame = derts2blobs(dert__,
-                        verbose=args.verbose,
-                        render=args.render,
-                        use_c=args.clib)
+    frame = derts2blobs(dert__, verbose=args.verbose, render=args.render, use_c=args.clib)
 
-    if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
+    if args.intra:  # call to intra_blob, omit for testing frame_blobs only:
 
-        if args.verbose:
-            print("\rRunning intra_blob...")
-
-        from intra_blob import (
-            intra_blob, aveB,
-        )
-        class CDeepBlob(ClusterStructure):
-            # Dert params
-            I = int
-            Dy = int
-            Dx = int
-            G = int
-            M = int
-            Dyy = int
-            Dyx = int
-            Dxy = int
-            Dxx = int
-            Ga = int
-            Ma = int
-            # blob params
-            S = int
-            sign = NoneType
-            box = list
-            mask = object
-            root_dert__ = object
-            adj_blobs = list
-            fopen = bool
-            fia = bool  # flag: input is from comp angle
-            fca = bool  # flag: current fork is comp angle
-            rdn = float
-            rng = int
-            Ls = int  # for visibility and next-fork rdn
-            sub_layers = list
-            a_depth = int
-
+        if args.verbose: print("\rRunning intra_blob...")
+        from intra_blob import intra_blob, aveB
 
         deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers

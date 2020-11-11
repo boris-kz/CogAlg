@@ -8,9 +8,8 @@
 
     Blob structure, for all layers of blob hierarchy:
     root_dert__,
-    Dert = S, Ly, I, Dy, Dx, G, M, Day, Dax, Ga, Ma
-    # S: area, Ly: vertical dimension
-    # I: input; Dy, Dx: renamed Gy, Gx; G: gradient; M: match; Day, Dax, Ga, Ma: angle Dy, Dx, G, M
+    Dert = A, Ly, I, Dy, Dx, G, M, Day, Dax, Ga, Ma
+    # A: area, Ly: vertical dimension, I: input; Dy, Dx: renamed Gy, Gx; G: gradient; M: match; Day, Dax, Ga, Ma: angle Dy, Dx, G, M
     sign,
     box,  # y0, yn, x0, xn
     dert__,  # box of derts, each = i, dy, dx, g, m, day, dax, ga, ma
@@ -34,7 +33,6 @@ from P_blob import P_blob
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
 
-
 # --------------------------------------------------------------------------------------------------------------
 # functions:
 
@@ -44,7 +42,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
     Ave = int(ave * blob.rdn); AveB = int(aveB * blob.rdn)
 
     if kwargs.get('render') is not None:  # stop rendering sub-blobs when blob is too small
-        if blob.S < 100:
+        if blob.A < 100:
             kwargs['render'] = False
 
     spliced_layers = []  # to extend root_blob sub_layers
@@ -56,7 +54,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
 
             # P_blobs eval, tentative:
-            if blob.G * (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45
+            if blob.G * (1 - blob.Ga / (4.45 * blob.A)) - AveB > 0:  # max_ga=4.45
                 # G reduced by relative Ga value, base G is second deviation or specific borrow value
                 crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
                 # ga is not signed, use Ave_ga?
@@ -95,7 +93,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
 
 def sub_eval(blob, dert__, crit__, mask, **kwargs):
-    Ave = ave * blob.rdn; AveB = aveB * blob.rdn
+    AveB = aveB * blob.rdn
 
     if blob.fia and not blob.fca:  # terminal P_blobs
         if kwargs.get('verbose'):

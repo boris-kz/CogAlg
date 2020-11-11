@@ -11,15 +11,15 @@
    != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
    == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
    
-   borrow = adj_G * rS: default sum div_comp S -> relative area and distance to adjj_blob_
-   internal sum comp if mS: in thin lines only? comp_norm_G or div_comp_G -> rG?
+   borrow = adj_G * rA: default sum div_comp S -> relative area and distance to adjj_blob_
+   internal sum comp if mA: in thin lines only? comp_norm_G or div_comp_G -> rG?
    isolation = decay + contrast: 
-   G - G * (rS * ave_rG: decay) - (rS * adj_G: contrast, = lend | borrow, no need to compare vG?)
+   G - G * (rA * ave_rG: decay) - (rA * adj_G: contrast, = lend | borrow, no need to compare vG?)
 
    if isolation: cross adjj_blob composition eval, 
    else:         cross adjj_blob merge eval:
    blob merger if internal match (~raG) - isolation, rdn external match:  
-   blob compos if external match (~rS?) + isolation, 
+   blob compos if external match (~rA?) + isolation,
 
    Also eval comp_P over fork_?
    rng+ should preserve resolution: rng+_dert_ is dert layers, 
@@ -31,33 +31,13 @@ from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from math import hypot
 import numpy as np
+from P_blob import CP, CStack, CBlob
 
 ave = 20
 div_ave = 200
 flip_ave = 1000
 ave_dX = 10  # difference between median x coords of consecutive Ps
 
-
-class CP(ClusterStructure):  # P params
-
-    I = int
-    Dy = int
-    Dx = int
-    G = int
-    M = int
-    Dyy = int
-    Dyx = int
-    Dxy = int
-    Dxx = int
-    Ga = int
-    Ma = int
-    L = int
-    x0 = int
-    sign = NoneType
-    dert_ = list
-    gdert_ = list
-    Dg = int
-    Mg = int
 
 class Cdert_P(ClusterStructure):
 
@@ -76,17 +56,6 @@ class Cdert_P(ClusterStructure):
     dDg = int
     mMg = int
     dMg = int
-
-class Cstack(ClusterStructure):  # = gstack, with Py_ = istack_, and PP_stack, with Pi = dert_P instance
-
-    Pi = object  # P instance, P params are accumulated into stack params, stack.S = P.L
-                 # or dert_P instance if this is PP_stack
-    Ly = int
-    y0 = int
-    Py_ = list  # stack_ if this is gstack
-    down_connect_cnt = int
-    fPP = NoneType  # PPy_ if 1, else Py_
-    blob = NoneType
 
 class CPP(ClusterStructure):
 
@@ -172,7 +141,6 @@ def comp_Py_(stack, Ave):
 def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
     PP_stack = CPP_stack(dert_Pi = Cdert_P())  # need to define object and accum_PP_stack()
-    # not sure it belongs here, maybe in comp_PP_blob?
     mPP_ = dPP_ = []
     mPP = dPP = CPP(dert_Pi = Cdert_P())
     _dert_P = dert_P_[0]
@@ -181,12 +149,12 @@ def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
         if _dert_P.Pm > 0 != dert_P.Pm > 0: # sign change between _dert_P and dert_P
             mPP_.append(mPP)
-            mPP=CPP()
+            mPP=CPP(dert_Pi = Cdert_P())
         accum_PP(_dert_P, mPP)  # accumulate _dert_P params into PP params
 
         if _dert_P.Pd > 0 != dert_P.Pd > 0:  # sign change between _dert_P and dert_P
             dPP_.append(dPP)
-            dPP=CPP()
+            dPP=CPP(dert_Pi = Cdert_P())
         accum_PP(_dert_P, dPP)  # accumulate _dert_P params into PP params
 
         _dert_P = dert_P  # update _dert_P
@@ -288,8 +256,9 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
 
 def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
-    s, x0, G, M, Dx, Dy, L, Dg, Mg  = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg   # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
-    _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg  # params per comp_branch, S x branch if min n?
+    s, x0, G, M, Dx, Dy, L, Dg, Mg  = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
+    # params per comp branch, add angle params, ext: X, new: L, no comp of input I in top dert?
+    _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg
     '''
     redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
     '''

@@ -47,10 +47,8 @@ import numpy as np
 from operator import attrgetter
 
 from class_cluster import ClusterStructure, NoneType
-from class_bind import AdjBinder
-# from comp_pixel import comp_pixel
 from class_stream import BlobStreamer
-from utils import (pairwise, imread)
+from frame_blobs import CDeepBlob
 from comp_P_draft import comp_P_blob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
@@ -76,7 +74,7 @@ class CP(ClusterStructure):
     Dg = int
     Mg = int
 
-class Cstack(ClusterStructure):
+class CStack(ClusterStructure):
     I = int
     Dy = int
     Dx = int
@@ -88,14 +86,14 @@ class Cstack(ClusterStructure):
     Dxx = int
     Ga = int
     Ma = int
-    S = int
+    A = int  # blob area
     Ly = int
     y0 = int
-    Py_ = list
-    blob = NoneType
-    down_connect_cnt = int
+    Py_ = list  # Py_ or dPPy_
     sign = NoneType
     fPP = NoneType  # PPy_ if 1, else Py_
+    down_connect_cnt = int
+    blob = NoneType
 
 class CBlob(ClusterStructure):
     Dert = dict
@@ -195,14 +193,14 @@ def form_P_(idert_, crit_, mask_):  # segment dert__ into P__, in horizontal ) v
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             s = s_[x]
-            if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate and pack P:
+            if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate P:
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
                 P_.append(P)
                 I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
             elif _mask:
                 I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
         elif ~_mask:
-            # dert is masked, prior dert is not masked, pack P:
+            # dert is masked, prior dert is not masked, terminate P:
             P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
             P_.append(P)
 
@@ -223,7 +221,7 @@ def form_P_(idert_, crit_, mask_):  # segment dert__ into P__, in horizontal ) v
             _s = s  # prior sign
         _mask = mask
 
-    if ~_mask:  # terminate and pack last P in a row if prior dert is unmasked
+    if ~_mask:  # terminate last P in a row if prior dert is unmasked
         P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
         P_.append(P)
 
@@ -308,9 +306,9 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
         xn = x0 + L  # next-P x0
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
-            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, S=0, Ly=0),
+            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, A=0, Ly=0),
                          box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
-            new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
+            new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
                                y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fPP=0)
             new_stack.hid = blob.id
             blob.stack_.append(new_stack)
@@ -319,7 +317,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             if len(up_connect_) == 1 and up_connect_[0].down_connect_cnt == 1:
                 # P has one up_connect and that up_connect has one down_connect=P: merge P into up_connect stack:
                 new_stack = up_connect_[0]
-                new_stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1)
+                new_stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1)
                 new_stack.Py_.append(P)  # Py_: vertical buffer of Ps
                 new_stack.down_connect_cnt = 0  # reset down_connect_cnt
                 blob = new_stack.blob
@@ -327,7 +325,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             else:  # P has >1 up_connects, or 1 up_connect that has >1 down_connect_cnt:
                 blob = up_connect_[0].blob
                 # initialize new_stack with up_connect blob:
-                new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
+                new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
                                    y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fPP=0)
                 new_stack.hid = blob.id
                 blob.stack_.append(new_stack)  # stack is buffered into blob
@@ -342,8 +340,8 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
                         if not up_connect.blob is blob:
                             Dert, box, stack_, s, open_stacks = up_connect.blob.unpack()[:5]  # merged blob
-                            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, S, Ly = Dert.values()
-                            accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=S, Ly=Ly)
+                            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly = Dert.values()
+                            accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
                             blob.open_stacks += open_stacks
                             blob.box[0] = min(blob.box[0], box[0])  # extend box y0
                             blob.box[1] = min(blob.box[1], box[1])  # extend box x0
@@ -369,15 +367,15 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
 def form_blob(stack, frame):  # increment blob with terminated stack, check for blob termination and merger into frame
 
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, S, Ly, y0, Py_, blob, down_connect_cnt, sign, fPP = stack.unpack()
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, blob, down_connect_cnt, sign, fPP = stack.unpack()
     # terminated stack is merged into continued or initialized blob (all connected stacks):
-    accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=S, Ly=Ly)
+    accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
 
     blob.open_stacks += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
     if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
-        # blob termination may be simpler if there is no re-valuation, then check for dert__ termination vs. open stacks
+        # if there is no re-evaluation: check for dert__ termination vs. open stacks
         last_stack = stack
         [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[1:5]
         yn = last_stack.y0 + last_stack.Ly
@@ -429,7 +427,7 @@ def form_gPPy_(stack):
 
         # initialize PP params:
         Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
-        PP_Ga = P.Ga; PP_Ma = P.Ma; PP_S = P.L; PP_Ly = 1; PP_y0 = stack.y0
+        PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
 
         _PP_sign = PP_G > aveG and P.L > 1
 
@@ -448,7 +446,7 @@ def form_gPPy_(stack):
                 PP_Dxx += P.Dxx
                 PP_Ga += P.Ga
                 PP_Ma += P.Ma
-                PP_S += P.L
+                PP_A += P.L
                 PP_Ly += 1
 
             else:  # sign change, terminate PP:
@@ -456,11 +454,11 @@ def form_gPPy_(stack):
                     Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P in Py_
                     stack_Dg += abs(Dg)  # in all high-G Ps, regardless of direction
                     stack_Mg += Mg
-                gPPy_.append(Cstack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
-                                    Ga = PP_Ga, Ma = PP_Ma, S = PP_S, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
+                gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
+                                    Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
                 # initialize PP params:
                 Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
-                PP_Ga = P.Ga; PP_Ma = P.Ma; PP_S = P.L; PP_Ly = 1; PP_y0 = stack.y0
+                PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
 
             _PP_sign = PP_sign
 
@@ -470,7 +468,8 @@ def form_gPPy_(stack):
             stack_Mg += Mg
         if stack_Dg + stack_Mg < ave_PP:  # separate comp_P values, revert to Py_ if below-cost
              # terminate last PP
-            gPPy_.append(Cstack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx, Ga = PP_Ga, Ma = PP_Ma, S = PP_S, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))
+            gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
+                                Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
             stack.Py_ = gPPy_
             stack.fPP = 1  # flag PPy_ vs. Py_ in stack
 

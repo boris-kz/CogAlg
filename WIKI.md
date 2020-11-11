@@ -29,14 +29,15 @@ To preserve positional info, this algorithm must be specific to external or Cart
   - [draw_intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/draw_intra_comp.py) computes gradients of the first three layers of forks over the whole frame, for visualization only (old version).  
   - [P_blob](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/P_blob.py) is selective for salient smooth edge blobs. It forms edge-orthogonal Ps, selectively cross-compares their internal gradients, then forms vertically contiguous stacks of Ps. These stacks are evaluated for comp_P, below. 
   
-- [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): will be terminal fork of intra_blob. It cross-compares between vertically consecutive Ps: horizontal slices of blob segments. It will be selective for elongated blobs: likely edge contours. Comp_P is a version line-tracing: 2D -> 1D dimensionality reduction, converting edges into vector representations. This is similar to second level of 1D alg: [line_PPs_draft](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py). It's currently in pseudo code, will be the next stage of this project.
+- [comp_P_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_P_draft.py): will be terminal fork of intra_blob. It cross-compares between vertically consecutive Ps: horizontal slices of blob segments. It will be selective for elongated blobs: likely edge contours. Comp_P is a version line-tracing: 2D -> 1D dimensionality reduction, converting edges into vector representations. This is similar to second level of 1D alg: [line_PPs_draft](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py). It's a work-in-progress.
   
  2nd level and a prototype for recursive meta-level 2D algorithm, to be added:
  
-   - merge_blob_: merge weak blobs (with negative summed value) into infra-blob, for comp_blob_ but not intra_blob,
-   - comp_blob_: cross-comp of same range and derivation blobs within root blob ) frame, 
+   - comp_blob_: cross-comp of same range and derivation blobs within root blob or frame, 
+     default for top P level (A, G|M), specification if input value + match, cluster by match only?
      forms incrementally higher-composition super-blobs, with selective extended cross-comp of their elements,
-   - comp_layer_: cluster | reorder -> bi-directional hierarchy? sub_blobs comp to higher-blob: contour or axis? 
+   - comp_layer_: cluster | reorder -> bi-directional hierarchy? sub_blobs comp to higher-blob: contour or axis?
+     (this is within comp_blob) 
    - eval_overlap: redundant reps of combined-core positive blob areas, vertical or cross-fork. 
     
   
