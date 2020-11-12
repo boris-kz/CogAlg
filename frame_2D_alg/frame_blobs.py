@@ -137,6 +137,15 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
     return frame
 
 
+def accum_blob_Dert(blob, dert__, y, x):
+
+    blob.I += dert__[0][y, x]
+    blob.Dy += dert__[1][y, x]
+    blob.Dx += dert__[2][y, x]
+    blob.G += dert__[3][y, x]
+    blob.M += dert__[4][y, x]
+
+
 def flood_fill(dert__, sign__, verbose=False, mask=None, blob_cls=CBlob, accum_func=accum_blob_Dert):
 
     if mask is None: # non intra dert
@@ -249,8 +258,8 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose2))
         blob2.adj_blobs[0].append((blob1, pose1))
-        blob1.adj_blobs[1] += blob2.S
-        blob2.adj_blobs[1] += blob1.S
+        blob1.adj_blobs[1] += blob2.A
+        blob2.adj_blobs[1] += blob1.A
         blob1.adj_blobs[2] += blob2.G
         blob2.adj_blobs[2] += blob1.G
         blob1.adj_blobs[3] += blob2.M
@@ -258,14 +267,6 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         if hasattr(blob1,'Ma'): # add Ma to deep blob only
             blob1.adj_blobs[4] += blob2.Ma
             blob2.adj_blobs[4] += blob1.Ma
-
-def accum_blob_Dert(blob, dert__, y, x):
-
-    blob.I += dert__[0][y, x]
-    blob.Dy += dert__[1][y, x]
-    blob.Dx += dert__[2][y, x]
-    blob.G += dert__[3][y, x]
-    blob.M += dert__[4][y, x]
 
 
 if __name__ == "__main__":
@@ -324,10 +325,8 @@ if __name__ == "__main__":
             borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
             Add borrow_G -= inductive leaking across external blob?
             '''
-            blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M,
-                             S=blob.S, box=blob.box, sign=blob.sign,
-                             mask=blob.mask, root_dert__=deep_root_dert__,
-                             adj_blobs=blob.adj_blobs, fopen=blob.fopen)
+            blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, A=blob.A, box=blob.box, sign=blob.sign,
+                             mask=blob.mask, root_dert__=deep_root_dert__, adj_blobs=blob.adj_blobs, fopen=blob.fopen)
 
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]

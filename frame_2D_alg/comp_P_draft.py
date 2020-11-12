@@ -31,7 +31,6 @@ from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from math import hypot
 import numpy as np
-from P_blob import CP, CStack, CBlob
 
 ave = 20
 div_ave = 200
@@ -79,15 +78,16 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
     # still tentative:
 
     for blob in blob_:
-        if blob.Dert['G'] * (1 - blob.Dert['Ga'] / (4.45 * blob.Dert['S'])) - AveB > 0:
+        if blob.Dert['G'] * (1 - blob.Dert['Ga'] / (4.45 * blob.Dert['A'])) - AveB > 0:
 
             for i, stack in enumerate(blob.stack_):
-                if stack.G * (1 - stack.Ga / (4.45 * stack.S)) - AveB / 10 > 0:  # / 10: ratio AveB to AveS
+                if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0:  # / 10: ratio AveB to AveS
+                    # also check for long / thin edges: len(py_) / A?
                     if stack.fPP:
                         # stack is actually a nested gstack
                         for j, istack in enumerate(stack.Py_):
                             # istack is original stack
-                            if istack.G * (1 - istack.Ga / (4.45 * istack.S)) - AveB / 10 > 0 and len(istack.Py_) > 2:
+                            if istack.G * (1 - istack.Ga / (4.45 * istack.A)) - AveB / 10 > 0 and len(istack.Py_) > 2:
 
                                 PP_stack = comp_Py_(istack, ave)  # root function of comp_P: edge tracing and vectorization
                                 istack.Py_[j] = PP_stack  # PP_stack has accumulated PP params and PP_
@@ -97,7 +97,7 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
                                 # then that stack will replace blob.stack below
                     else:
                         # stack is original stack
-                        if stack.G * (1 - stack.Ga / (4.45 * stack.S)) - AveB / 10 > 0 and len(stack.Py_) > 2:
+                        if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0 and len(stack.Py_) > 2:
 
                             stack = comp_Py_(stack, ave)  # stack is PP_stack, with accumulated PP params and PP_
 
@@ -248,7 +248,7 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
         crit_ = dert_[3] > 0  # compute crit from G? dert_[3] is G
         P_ = form_P_(zip(*dert_), crit_, mask__flip[y])
 
-        if len([P for P in P_]) > 0:  # empty P, when mask is masked for whole row or column, need check further on this
+        if len([P for P in P_]) > 0:  # empty P, when mask is masked for whole row or column
             flipped_Py_.append([P for P in P_][0])  # change deque of P_ into list
 
     return flipped_Py_

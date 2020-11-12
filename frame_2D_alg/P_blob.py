@@ -367,7 +367,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
 def form_blob(stack, frame):  # increment blob with terminated stack, check for blob termination and merger into frame
 
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, blob, down_connect_cnt, sign, fPP = stack.unpack()
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, fPP, down_connect_cnt, blob = stack.unpack()
     # terminated stack is merged into continued or initialized blob (all connected stacks):
     accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
 
@@ -545,8 +545,8 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
         # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose2))
         blob2.adj_blobs[0].append((blob1, pose1))
-        blob1.adj_blobs[1] += blob2.Dert['S']
-        blob2.adj_blobs[1] += blob1.Dert['S']
+        blob1.adj_blobs[1] += blob2.Dert['A']
+        blob2.adj_blobs[1] += blob1.Dert['A']
         blob1.adj_blobs[2] += blob2.Dert['G']
         blob2.adj_blobs[2] += blob1.Dert['G']
         blob1.adj_blobs[3] += blob2.Dert['M']
