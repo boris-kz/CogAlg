@@ -91,7 +91,7 @@ class CStack(ClusterStructure):
     y0 = int
     Py_ = list  # Py_ or dPPy_
     sign = NoneType
-    fPP = NoneType  # PPy_ if 1, else Py_
+    f_gstack = NoneType  # gPPy_ if 1, else Py_
     down_connect_cnt = int
     blob = NoneType
 
@@ -471,7 +471,7 @@ def form_gPPy_(stack):
             gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
                                 Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
             stack.Py_ = gPPy_
-            stack.fPP = 1  # flag PPy_ vs. Py_ in stack
+            stack.f_gstack = 1  # flag gPPy_ vs. Py_ in stack
 
 
 def comp_g(Py_):  # cross-comp of gs in P.dert_, in gPP.Py_
