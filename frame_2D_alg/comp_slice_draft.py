@@ -1,9 +1,9 @@
 '''
-   comp_P_ is a terminal fork of intra_blob.
+   comp_slice_ is a terminal fork of intra_blob.
     
-   comp_P_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across edge blob.
+   comp_slice_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across edge blob.
    It should vectorize edges: high-G low Ga blobs, into outlines of adjacent flats: low-G blobs.
-   This is a form of dimensionality reduction.
+   This is a form of incremental-dimensionality cross-comp and clustering.
 
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
@@ -21,7 +21,7 @@
    blob merger if internal match (~raG) - isolation, rdn external match:  
    blob compos if external match (~rA?) + isolation,
 
-   Also eval comp_P over fork_?
+   Also eval comp_slice over fork_?
    rng+ should preserve resolution: rng+_dert_ is dert layers, 
    rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 
    rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr? 
@@ -59,13 +59,13 @@ class CPP(ClusterStructure):
 
     dert_Pi = object  # PP params = accumulated dert_P params:
     # PM, PD, MX, DX, ML, DL, MDx, DDx, MDy, DDy, MDg, DDg, MMg, DMg; also accumulate P params?
-    dert_P_ = list   # only refs to PP_stack dert_Ps
+    dert_P_ = list   # only refs to stack_PP dert_Ps
     fmPP = NoneType  # mPP if 1, else dPP; not needed if packed in PP_?
     fdiv = NoneType  # or defined per stack?
 
-class CPP_stack(ClusterStructure):
+class CStack_PP(ClusterStructure):
 
-    dert_Pi = object  # PP_stack params = accumulated dert_P params:
+    dert_Pi = object  # stack_PP params = accumulated dert_P params:
     # sPM, sPD, sMX, sDX, sML, sDL, sMDx, sDDx, sMDy, sDDy, sMDg, sDDg, sMMg, sDMg
     mPP_ = list
     dPP_ = list
@@ -90,13 +90,15 @@ class CStack(ClusterStructure):
     Py_ = list  # Py_ or dPPy_
     sign = NoneType
     f_gstack = NoneType  # gPPy_ if 1, else Py_
+    f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
     down_connect_cnt = int
     blob = NoneType
-    PP_stack = object
+    stack_PP = object
 
 
-def comp_P_blob(blob_, AveB):  # comp_P eval per blob
-    # still tentative:
+def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
+
+    # still tentative, not sure we need evaluation per stack:
 
     for blob in blob_:
         if blob.Dert['G'] * (1 - blob.Dert['Ga'] / (4.45 * blob.Dert['A'])) - AveB > 0:
@@ -104,30 +106,27 @@ def comp_P_blob(blob_, AveB):  # comp_P eval per blob
             for i, stack in enumerate(blob.stack_):
                 if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0:  # / 10: ratio AveB to AveS
                     # also check for long / thin edges: len(py_) / A?
-                    if stack.f_gstack:  # stack is actually a nested gstack
-                        new_stack = CStack(PP_stack = CPP_stack())
+                    if stack.f_gstack:
+                        stack_stack_PP = CStack(stack_PP = CStack_PP())  # stack is actually a nested gP_stack
 
-                        for j, istack in enumerate(stack.Py_):
-                            # istack is original stack
+                        for j, istack in enumerate(stack.Py_):  # istack is original stack
                             if istack.G * (1 - istack.Ga / (4.45 * istack.A)) - AveB / 10 > 0 and len(istack.Py_) > 2:
-                                # PP_stack has accumulated PP params and PP_
-                                PP_stack, f_istack = comp_Py_(istack, ave)  # root function of comp_P: edge tracing and vectorization
-                                accum_nested_stack(new_stack, istack, PP_stack, f_istack)
-                        blob.stack_[i] = new_stack  # return as PP_stack from form_PP
 
+                                stack_PP = comp_slice_(istack, ave)  # root function of comp_slice: edge tracing and vectorization
+                                accum_nested_stack(stack_stack_PP, istack, stack_PP)
+                                # stack_PP = accumulated PP params and PP_
+                        blob.stack_[i] = stack_stack_PP
+                        # return as stack_PP from form_PP
                     else:
                         # stack is original stack
                         if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0 and len(stack.Py_) > 2:
 
-                            new_stack, f_istack = comp_Py_(stack, ave)  # stack is PP_stack, with accumulated PP params and PP_
-                            blob.stack_[i] = new_stack  # return as PP_stack from form_PP
-
-
-def comp_Py_(stack, Ave):
-    # scan of vertical Py_ -> comp_P -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
-    f_istack = 1  # flag: output is input stack vs. PP_stack
-
-    DdX = 0
+                            stack_stack_PP = comp_slice_(stack, ave)  # stack is stack_PP, with accumulated PP params and PP_
+                            stack_stack_PP.f_stack_PP = 1
+                            blob.stack_[i] = stack_stack_PP  # return as stack_PP from form_PP
+''' 
+    This should be done in slice_blob:
+    
     y0 = stack.y0
     yn = stack.y0 + stack.Ly
     x0 = min([P.x0 for P in stack.Py_])
@@ -138,13 +137,16 @@ def comp_Py_(stack, Ave):
 
     if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
 
-        flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_Px_
-        if len(flipped_Py_) > 2:  # at least 3 Ps to form 2 dert_P and 1 PP
-            stack.Py_ = flipped_Py_
-        else:
-            f_istack = 1
-            return stack, f_istack  # comp_P if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_P?        
+        flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
+            return stack, f_istack  # comp_slice if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_slice?        
+
         # evaluate for arbitrary-angle rotation here? 
+'''
+
+def comp_slice_(stack, Ave):
+    
+    # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
+    DdX = 0
 
     if stack.G * (stack.Dy / stack.Dx) * stack.Ly > Ave:  # if y_bias after any rescan, also L_bias?
         ort = 1  # virtual rotation: estimate P params as orthogonal to long axis, to increase Pm
@@ -154,16 +156,66 @@ def comp_Py_(stack, Ave):
     _P = stack.Py_[0]
 
     for P in stack.Py_[1:]:
-        dert_P = comp_P(ort, P, _P, DdX)
+        dert_P = comp_slice(ort, P, _P, DdX)
         dert_P_.append( dert_P)
         _P = P
 
-    return form_PP_(dert_P_), f_istack  # PP_stack
+    return form_PP_(dert_P_)  # stack_PP
+
+
+def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
+
+    s, x0, G, M, Dx, Dy, L, Dg, Mg  = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
+    # params per comp branch, add angle params, ext: X, new: L, no comp of input I in top dert?
+    _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg
+    '''
+    redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
+    '''
+    xn = x0 + L-1;  _xn = _x0 + _L-1
+    mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
+    _dX = (xn - L/2) - (_xn - _L/2)
+    dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
+
+    if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
+        if mX == 0:  # no division by zero
+           mX = 1
+        rX = dX / mX  # average dist/prox, | prox/dist, | mX / max_L?
+    ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
+
+    ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
+    # what is this Ddx and where we would use this later?
+    DdX += ddX  # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
+
+    if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, maximizing lat diff, vert match
+
+        hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
+        L /= hyp
+        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
+        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # recompute? est D over vert_L, Ders summed in vert / lat ratio?
+
+    dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
+    dM = M - _M; mM = min(M, _M)  # no Mx, My: non-core, lesser and redundant bias?
+
+    dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in vxP
+    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
+
+    # gdert param comparison, if not fPP, values would be 0
+    dMg = Mg - _Mg; mMg = min(Mg, _Mg)
+    dDg = Dg - _Dg; mDg = min(Dg, _Dg)
+
+    Pd = ddX + dL + dM + dDx + dDy + dMg + dDg # -> directional dPP, equal-weight params, no rdn?
+    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
+    Pm = mX + mL + mM + mDx + mDy + mMg + mDg # -> complementary vPP, rdn *= Pd | Pm rolp?
+
+    dert_P = Cdert_P(Pi=_P, Pm=Pm, Pd=Pd, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)
+    # div_f, nvars
+
+    return dert_P
 
 
 def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
-    PP_stack = CPP_stack(dert_Pi = Cdert_P())  # need to define object and accum_PP_stack()
+    stack_PP = CStack_PP(dert_Pi = Cdert_P())  # need to define object and accum_stack_PP()
     mPP_ = dPP_ = []
     mPP = dPP = CPP(dert_Pi = Cdert_P())
     _dert_P = dert_P_[0]
@@ -182,76 +234,79 @@ def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
         _dert_P = dert_P  # update _dert_P
 
-    accum_PP_stack(PP_stack, dert_P_)  # accumulate dert_P params into PP_stack params, in batch
+    accum_stack_PP(stack_PP, dert_P_)  # accumulate dert_P params into stack_PP params, in batch
     mPP_.append(mPP)  # pack last PP in PP_
     dPP_.append(dPP)
     # compute fmPP and fdiv of mPP and dPP?
 
-    PP_stack.mPP_ = mPP_
-    PP_stack.dPP_ = dPP_
-    PP_stack.dert_P_ = dert_P_
-    # compute fdiv of PP_stack?
+    stack_PP.mPP_ = mPP_
+    stack_PP.dPP_ = dPP_
+    stack_PP.dert_P_ = dert_P_
+    # compute fdiv of stack_PP?
 
-    return PP_stack
+    return stack_PP
 
 
-# accumulate istack and PP_stack into stack
-def accum_nested_stack(new_stack, istack, PP_stack, f_istack):
-    
+# accumulate istack and stack_PP into stack
+def accum_nested_stack(stack_stack_PP, istack, stack_PP):
+    '''
+    This looks wrong, accum_nested_stack should be an add-on to accum_stack_PP
+    only called if istack.f_stack_PP?
+    '''
+    if istack.f_stack_PP:  # input stack is stack_PP
+        # stack_PP params
+        dert_Pi, mPP_, dPP_, dert_P_, fdiv = stack_PP.unpack()
+
+        # need to accumulate dert_P params here, from stack_PP.dert_P params
+        # accumulate stack_PP params
+        stack_stack_PP.stack_PP.mPP_.extend(mPP_)
+        stack_stack_PP.stack_PP.dPP_.extend(dPP_)
+        stack_stack_PP.stack_PP.dert_P_.extend(dert_P_)
+        stack_stack_PP.stack_PP.fdiv = fdiv
+
     # istack params
     I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, _, _, _  = istack.unpack()
     
-    # accumulate istack param into new stack
-    new_stack.I += I
-    new_stack.Dy += Dy
-    new_stack.Dx += Dx
-    new_stack.G += G
-    new_stack.M += M
-    new_stack.Dyy += Dyy
-    new_stack.Dyx += Dyx
-    new_stack.Dxy += Dxy
-    new_stack.Dxx += Dxx
-    new_stack.Ga += Ga
-    new_stack.Ma += Ma
-    new_stack.A += A
-    new_stack.Ly += Ly
-    if new_stack.y0 < y0:
-        new_stack.y0 = y0
-    new_stack.Py_.extend(Py_)
-    new_stack.sign = sign # sign should be same across istack
-
-    if not f_istack:# input is not stack, so input is PP_stack
-        # PP_stack params
-        dert_Pi, mPP_, dPP_ , dert_P_, fdiv = PP_stack.unpack()
-        # do we need to accumulate dert_P? Since that is already included in PP_
-    
-        # accumulate PP_stack params
-        new_stack.PP_stack.mPP_.extend(mPP_)
-        new_stack.PP_stack.dPP_.extend(dPP_)
-        new_stack.PP_stack.dert_P_.extend(dert_P_)
-        new_stack.PP_stack.fdiv = fdiv   
+    # accumulate istack param into stack_stack_PP
+    stack_stack_PP.I += I
+    stack_stack_PP.Dy += Dy
+    stack_stack_PP.Dx += Dx
+    stack_stack_PP.G += G
+    stack_stack_PP.M += M
+    stack_stack_PP.Dyy += Dyy
+    stack_stack_PP.Dyx += Dyx
+    stack_stack_PP.Dxy += Dxy
+    stack_stack_PP.Dxx += Dxx
+    stack_stack_PP.Ga += Ga
+    stack_stack_PP.Ma += Ma
+    stack_stack_PP.A += A
+    stack_stack_PP.Ly += Ly
+    if stack_stack_PP.y0 < y0:
+        stack_stack_PP.y0 = y0
+    stack_stack_PP.Py_.extend(Py_)
+    stack_stack_PP.sign = sign  # sign should be same across istack
 
 
-def accum_PP_stack(PP_stack, dert_P_):  # accumulate mPPs or dPPs
+def accum_stack_PP(stack_PP, dert_P_):  # accumulate mPPs or dPPs
 
     for dert_P in dert_P_:
         _, Pm, Pd, mx, dx, mL, dL, mDx, dDx, mDy, dDy, mDg, dDg, mMg, dMg = dert_P.unpack()
 
-        # accumulate dert_P params into PP_stack
-        PP_stack.dert_Pi.Pm += Pm
-        PP_stack.dert_Pi.Pd += Pd
-        PP_stack.dert_Pi.mx += mx
-        PP_stack.dert_Pi.dx += dx
-        PP_stack.dert_Pi.mL += mL
-        PP_stack.dert_Pi.dL += dL
-        PP_stack.dert_Pi.mDx += mDx
-        PP_stack.dert_Pi.dDx += dDx
-        PP_stack.dert_Pi.mDy += mDy
-        PP_stack.dert_Pi.dDy += dDy
-        PP_stack.dert_Pi.mDg += mDg
-        PP_stack.dert_Pi.dDg += dDg
-        PP_stack.dert_Pi.mMg += mMg
-        PP_stack.dert_Pi.dMg += dMg
+        # accumulate dert_P params into stack_PP
+        stack_PP.dert_Pi.Pm += Pm
+        stack_PP.dert_Pi.Pd += Pd
+        stack_PP.dert_Pi.mx += mx
+        stack_PP.dert_Pi.dx += dx
+        stack_PP.dert_Pi.mL += mL
+        stack_PP.dert_Pi.dL += dL
+        stack_PP.dert_Pi.mDx += mDx
+        stack_PP.dert_Pi.dDx += dDx
+        stack_PP.dert_Pi.mDy += mDy
+        stack_PP.dert_Pi.dDy += dDy
+        stack_PP.dert_Pi.mDg += mDg
+        stack_PP.dert_Pi.dDg += dDg
+        stack_PP.dert_Pi.mMg += mMg
+        stack_PP.dert_Pi.dMg += dMg
 
 
 def accum_PP(dert_P, PP):  # accumulate mPPs or dPPs
@@ -303,62 +358,12 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
 
     flipped_Py_ = []
     # form vertical patterns after rotation
-    from P_blob import form_P_
+    from slice_blob import form_P_
     for y, dert_ in enumerate(zip(*dert__flip)):
         crit_ = dert_[3] > 0  # compute crit from G? dert_[3] is G
         P_ = list(form_P_(zip(*dert_), crit_, mask__flip[y])) # convert P_ to list , so that structure is same with Py_
 
     return flipped_Py_
-
-
-def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
-
-    s, x0, G, M, Dx, Dy, L, Dg, Mg  = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
-    # params per comp branch, add angle params, ext: X, new: L, no comp of input I in top dert?
-    _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg
-    '''
-    redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
-    '''
-    xn = x0 + L-1;  _xn = _x0 + _L-1
-    mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
-    _dX = (xn - L/2) - (_xn - _L/2)
-    dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
-
-    if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
-        if mX == 0:  # no division by zero
-           mX = 1
-        rX = dX / mX  # average dist/prox, | prox/dist, | mX / max_L?
-    ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
-
-    ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
-    # what is this Ddx and where we would use this later?
-    DdX += ddX  # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
-
-    if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, maximizing lat diff, vert match
-
-        hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
-        L /= hyp
-        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
-        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # recompute? est D over vert_L, Ders summed in vert / lat ratio?
-
-    dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
-    dM = M - _M; mM = min(M, _M)  # no Mx, My: non-core, lesser and redundant bias?
-
-    dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in vxP
-    dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
-
-    # gdert param comparison, if not fPP, values would be 0
-    dMg = Mg - _Mg; mMg = min(Mg, _Mg)
-    dDg = Dg - _Dg; mDg = min(Dg, _Dg)
-
-    Pd = ddX + dL + dM + dDx + dDy + dMg + dDg # -> directional dPP, equal-weight params, no rdn?
-    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
-    Pm = mX + mL + mM + mDx + mDy + mMg + mDg # -> complementary vPP, rdn *= Pd | Pm rolp?
-
-    dert_P = Cdert_P(Pi=_P, Pm=Pm, Pd=Pd, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)
-    # div_f, nvars
-
-    return dert_P
 
 '''
     Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression: 
@@ -391,25 +396,25 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
         nvars = 0  # DIV + norm derivatives
     '''
 
-def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
+def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_slice, scan_par_:
 
     s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_, PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, nVars = PP
 
     rdn = Olp2 / L2  # rdn per PP, alt Ps (if not alt PPs) are complete?
 
     # if G2 * Dx > ave * 9 * rdn and len(Py_) > 2:
-    # PP, norm = orient(PP) # PP norm, rescan relative to parent blob, for incr_comp, comp_PP, and:
+    # PP, norm = orient(PP) # PP norm, rescan relative to parent blob, for incr_comp, comp_sliceP, and:
 
     if G2 + PM > ave * 99 * rdn and len(Py_) > 2:
-       PP = incr_range_comp_P(typ, PP)  # forming incrementally fuzzy PP
+       PP = incr_range_comp_slice(typ, PP)  # forming incrementally fuzzy PP
 
     if G2 + PD > ave * 99 * rdn and len(Py_) > 2:
-       PP = incr_deriv_comp_P(typ, PP)  # forming incrementally higher-derivation PP
+       PP = incr_deriv_comp_slice(typ, PP)  # forming incrementally higher-derivation PP
 
-    if G2 + PM > ave * 99 * rdn and len(Py_) > 2:  # PM includes results of incr_comp_P
+    if G2 + PM > ave * 99 * rdn and len(Py_) > 2:  # PM includes results of incr_comp_slice
        PP = scan_params(0, PP)  # forming vpP_ and S_p_ders
 
-    if G2 + PD > ave * 99 * rdn and len(Py_) > 2:  # PD includes results of incr_comp_P
+    if G2 + PD > ave * 99 * rdn and len(Py_) > 2:  # PD includes results of incr_comp_slice
        PP = scan_params(1, PP)  # forming dpP_ and S_p_ders
 
     return PP
@@ -417,16 +422,16 @@ def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_P, scan_par_:
 ''' incr_comp() ~ recursive_comp() in line_POC(), with Ps instead of pixels?
     with rescan: recursion per p | d (signed): frame(meta_blob | blob | PP)? '''
 
-def incr_range_comp_P(typ, PP):
+def incr_range_comp_slice(typ, PP):
     return PP
 
-def incr_deriv_comp_P(typ, PP):
+def incr_deriv_comp_slice(typ, PP):
     return PP
 
 def scan_params(typ, PP):  # at term_network, term_blob, or term_PP: + P_ders and nvars?
     '''
     Aves (integer filters) and coefs (ratio filters) per parameter type trigger formation of parameter_Ps,
-    after full-blob comp_P_ sums match and miss per parameter.
+    after full-blob comp_slice_ sums match and miss per parameter.
     Also coefs per sub_blob from comp_blob_: potential parts of a higher object?
     '''
     P_ = PP[11]
@@ -512,13 +517,13 @@ def term_par_P(typ, par_P):  # from form_par_P: eval for orient, re_comp? or fol
 def scan_par_P(typ, par_P_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
     return par_P_
 
-def comp_par_P(par_P, _par_P):  # with/out orient, from scan_pP_
+def comp_slicear_P(par_P, _par_P):  # with/out orient, from scan_pP_
     return par_P
 
 def scan_PP_(PP_):  # within a blob, also within a segment?
     return PP_
 
-def comp_PP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: very rare?
+def comp_sliceP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: very rare?
     return PP
 
 '''  

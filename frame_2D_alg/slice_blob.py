@@ -1,6 +1,6 @@
 '''
     This is a terminal fork of intra_blob.
-    blob2P_blob converts selected smooth-edge blobs (high G, low Ga) into P_blobs, adding internal P and stack structures.
+    slice_blob converts selected smooth-edge blobs (high G, low Ga) into slice_blobs, adding internal P and stack structures.
     It then calls comp_g and comp_P per stack, to trace and vectorize these edge blobs.
 
     Pixel-level parameters are accumulated in contiguous spans of same-sign gradient, first horizontally then vertically.
@@ -49,7 +49,7 @@ from operator import attrgetter
 from class_cluster import ClusterStructure, NoneType
 from class_stream import BlobStreamer
 from frame_blobs import CDeepBlob
-from comp_P_draft import comp_P_blob
+from comp_slice_draft import comp_slice_blob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -112,7 +112,7 @@ class CBlob(ClusterStructure):
 # postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
 
 
-def P_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
+def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
@@ -126,6 +126,7 @@ def P_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
     if verbose:
         start_time = time()
         print("Converting to image to blobs...")
+
 
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose:
@@ -143,7 +144,7 @@ def P_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
         form_blob(stack_.popleft(), frame)
 
     # evaluate P blobs
-    comp_P_blob(frame['blob__'], AveB)
+    comp_slice_blob(frame['blob__'], AveB)
 
     if verbose:  # print out at the end
         nblobs = len(frame['blob__'])
