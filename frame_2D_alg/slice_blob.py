@@ -53,6 +53,7 @@ from comp_slice_draft import comp_slice_blob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
+flip_ave = 1000
 
 class CP(ClusterStructure):
     I = int  # default type at initialization
@@ -92,8 +93,10 @@ class CStack(ClusterStructure):
     Py_ = list  # Py_ or dPPy_
     sign = NoneType
     f_gstack = NoneType  # gPPy_ if 1, else Py_
+    f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
     down_connect_cnt = int
     blob = NoneType
+    stack_PP = object
 
 class CBlob(ClusterStructure):
     Dert = dict
@@ -142,6 +145,43 @@ def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
+
+    # tentative section #
+
+    # loop each stack in blob
+    for blob in frame['blob__']:
+        for stack in blob.stack_:
+
+            if stack.f_gstack:
+
+                for istack in stack.Py_:
+                    y0 = istack.y0
+                    yn = istack.y0 + stack.Ly
+                    x0 = min([P.x0 for P in istack.Py_])
+                    xn = max([P.x0 + P.L for P in istack.Py_])
+
+                    L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
+                    G_bias = abs(istack.Dy) / abs(istack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
+
+                    if istack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
+
+                        flipped_Py_ = flip_yx(istack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
+    #                return stack, f_istack  # comp_slice if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_slice?
+
+            # evaluate for arbitrary-angle rotation here,
+            # to replace flip if both vertical and horizontal dimensions are significantly different from the angle of blob axis.
+
+            else:
+                y0 = stack.y0
+                yn = stack.y0 + stack.Ly
+                x0 = min([P.x0 for P in stack.Py_])
+                xn = max([P.x0 + P.L for P in stack.Py_])
+
+                L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
+                G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
+
+                if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
+                    flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
 
     # evaluate P blobs
     comp_slice_blob(frame['blob__'], AveB)
@@ -368,7 +408,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
 def form_blob(stack, frame):  # increment blob with terminated stack, check for blob termination and merger into frame
 
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, fPP, down_connect_cnt, blob = stack.unpack()
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, f_gstack, f_stack_PP, down_connect_cnt, blob, stack_PP = stack.unpack()
     # terminated stack is merged into continued or initialized blob (all connected stacks):
     accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
 
@@ -560,3 +600,37 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
 
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
+
+
+def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob's ders__
+
+    y0 = 0
+    yn = len(Py_)
+    x0 = min([P.x0 for P in Py_])
+    xn = max([P.x0 + P.L for P in Py_])
+
+    # initialize list containing y and x size, number of sublist = number of params
+    dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(Py_[0].dert_[0]))]
+    mask__ = np.zeros((yn - y0, xn - x0)) > 0
+
+    # insert Py_ value into dert__
+    for y, P in enumerate(Py_):
+        for x, idert in enumerate(P.dert_):
+            for i, (param, dert) in enumerate(zip(idert, dert__)):
+                dert[y, x+(P.x0-x0)] = param
+
+    # create mask and set masked area = True
+    mask__[np.where(dert__[0] == -1)] = True
+
+    # rotate 90 degree anti-clockwise (np.rot90 rotate 90 degree in anticlockwise direction)
+    dert__flip = tuple([np.rot90(dert) for dert in dert__])
+    mask__flip = np.rot90(mask__)
+
+    flipped_Py_ = []
+    # form vertical patterns after rotation
+    from slice_blob import form_P_
+    for y, dert_ in enumerate(zip(*dert__flip)):
+        crit_ = dert_[3] > 0  # compute crit from G? dert_[3] is G
+        P_ = list(form_P_(zip(*dert_), crit_, mask__flip[y])) # convert P_ to list , so that structure is same with Py_
+
+    return flipped_Py_

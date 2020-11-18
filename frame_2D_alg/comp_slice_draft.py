@@ -1,8 +1,8 @@
 '''
    comp_slice_ is a terminal fork of intra_blob.
     
-   comp_slice_ traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across edge blob.
-   It should vectorize edges: high-G low Ga blobs, into outlines of adjacent flats: low-G blobs.
+   It traces blob axis by cross-comparing vertically adjacent Ps: laterally contiguous slices across edge blob.
+   These high-G low Ga edge blobs are vectorized into outlines of adjacent flats: low-G blobs.
    This is a form of incremental-dimensionality cross-comp and clustering.
 
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
@@ -106,45 +106,29 @@ def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
             for i, stack in enumerate(blob.stack_):
                 if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0:  # / 10: ratio AveB to AveS
                     # also check for long / thin edges: len(py_) / A?
-                    if stack.f_gstack:
-                        stack_stack_PP = CStack(stack_PP = CStack_PP())  # stack is actually a nested gP_stack
+                    if stack.f_gstack:  # stack is a nested gP_stack
+                        gstack_PP = CStack(stack_PP = CStack_PP())
 
                         for j, istack in enumerate(stack.Py_):  # istack is original stack
                             if istack.G * (1 - istack.Ga / (4.45 * istack.A)) - AveB / 10 > 0 and len(istack.Py_) > 2:
 
                                 stack_PP = comp_slice_(istack, ave)  # root function of comp_slice: edge tracing and vectorization
-                                accum_nested_stack(stack_stack_PP, istack, stack_PP)
-                                # stack_PP = accumulated PP params and PP_
-                        blob.stack_[i] = stack_stack_PP
+                                accum_gstack(gstack_PP, istack, stack_PP)
+                                gstack_PP.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
+
+                        blob.stack_[i] = gstack_PP
                         # return as stack_PP from form_PP
                     else:
                         # stack is original stack
                         if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0 and len(stack.Py_) > 2:
 
-                            stack_stack_PP = comp_slice_(stack, ave)  # stack is stack_PP, with accumulated PP params and PP_
-                            stack_stack_PP.f_stack_PP = 1
-                            blob.stack_[i] = stack_stack_PP  # return as stack_PP from form_PP
-''' 
-    This should be done in slice_blob:
-    
-    y0 = stack.y0
-    yn = stack.y0 + stack.Ly
-    x0 = min([P.x0 for P in stack.Py_])
-    xn = max([P.x0 + P.L for P in stack.Py_])
+                            stack_PP = comp_slice_(stack, ave)  # stack is stack_PP, with accumulated PP params and PP_
+                            stack_PP.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
+                            blob.stack_[i] = stack_PP  # return as stack_PP from form_PP
 
-    L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
-    G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
-
-    if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
-
-        flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
-            return stack, f_istack  # comp_slice if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_slice?        
-
-        # evaluate for arbitrary-angle rotation here? 
-'''
 
 def comp_slice_(stack, Ave):
-    
+
     # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
     DdX = 0
 
@@ -248,43 +232,46 @@ def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
 
 # accumulate istack and stack_PP into stack
-def accum_nested_stack(stack_stack_PP, istack, stack_PP):
+def accum_gstack(gstack_PP, istack, stack_PP):
     '''
     This looks wrong, accum_nested_stack should be an add-on to accum_stack_PP
-    only called if istack.f_stack_PP?
+    only called if istack.f_stack_PP:
+    accum_stack_PP accumulates dert_P into stack_PP
+    # accum_gstack accumulates stack_PP into gstack_PP?
     '''
+
     if istack.f_stack_PP:  # input stack is stack_PP
         # stack_PP params
         dert_Pi, mPP_, dPP_, dert_P_, fdiv = stack_PP.unpack()
 
         # need to accumulate dert_P params here, from stack_PP.dert_P params
         # accumulate stack_PP params
-        stack_stack_PP.stack_PP.mPP_.extend(mPP_)
-        stack_stack_PP.stack_PP.dPP_.extend(dPP_)
-        stack_stack_PP.stack_PP.dert_P_.extend(dert_P_)
-        stack_stack_PP.stack_PP.fdiv = fdiv
+        gstack_PP.stack_PP.mPP_.extend(mPP_)
+        gstack_PP.stack_PP.dPP_.extend(dPP_)
+        gstack_PP.stack_PP.dert_P_.extend(dert_P_)
+        gstack_PP.stack_PP.fdiv = fdiv
 
     # istack params
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, _, _, _  = istack.unpack()
-    
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, _, _, _, _, _  = istack.unpack()
+
     # accumulate istack param into stack_stack_PP
-    stack_stack_PP.I += I
-    stack_stack_PP.Dy += Dy
-    stack_stack_PP.Dx += Dx
-    stack_stack_PP.G += G
-    stack_stack_PP.M += M
-    stack_stack_PP.Dyy += Dyy
-    stack_stack_PP.Dyx += Dyx
-    stack_stack_PP.Dxy += Dxy
-    stack_stack_PP.Dxx += Dxx
-    stack_stack_PP.Ga += Ga
-    stack_stack_PP.Ma += Ma
-    stack_stack_PP.A += A
-    stack_stack_PP.Ly += Ly
-    if stack_stack_PP.y0 < y0:
-        stack_stack_PP.y0 = y0
-    stack_stack_PP.Py_.extend(Py_)
-    stack_stack_PP.sign = sign  # sign should be same across istack
+    gstack_PP.I += I
+    gstack_PP.Dy += Dy
+    gstack_PP.Dx += Dx
+    gstack_PP.G += G
+    gstack_PP.M += M
+    gstack_PP.Dyy += Dyy
+    gstack_PP.Dyx += Dyx
+    gstack_PP.Dxy += Dxy
+    gstack_PP.Dxx += Dxx
+    gstack_PP.Ga += Ga
+    gstack_PP.Ma += Ma
+    gstack_PP.A += A
+    gstack_PP.Ly += Ly
+    if gstack_PP.y0 < y0:
+        gstack_PP.y0 = y0
+    gstack_PP.Py_.extend(Py_)
+    gstack_PP.sign = sign  # sign should be same across istack
 
 
 def accum_stack_PP(stack_PP, dert_P_):  # accumulate mPPs or dPPs
@@ -332,52 +319,20 @@ def accum_PP(dert_P, PP):  # accumulate mPPs or dPPs
     PP.dert_P_.append(dert_P)
 
 
-def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob's ders__
-
-    y0 = 0
-    yn = len(Py_)
-    x0 = min([P.x0 for P in Py_])
-    xn = max([P.x0 + P.L for P in Py_])
-
-    # initialize list containing y and x size, number of sublist = number of params
-    dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(Py_[0].dert_[0]))]
-    mask__ = np.zeros((yn - y0, xn - x0)) > 0
-
-    # insert Py_ value into dert__
-    for y, P in enumerate(Py_):
-        for x, idert in enumerate(P.dert_):
-            for i, (param, dert) in enumerate(zip(idert, dert__)):
-                dert[y, x+(P.x0-x0)] = param
-
-    # create mask and set masked area = True
-    mask__[np.where(dert__[0] == -1)] = True
-
-    # rotate 90 degree anti-clockwise (np.rot90 rotate 90 degree in anticlockwise direction)
-    dert__flip = tuple([np.rot90(dert) for dert in dert__])
-    mask__flip = np.rot90(mask__)
-
-    flipped_Py_ = []
-    # form vertical patterns after rotation
-    from slice_blob import form_P_
-    for y, dert_ in enumerate(zip(*dert__flip)):
-        crit_ = dert_[3] > 0  # compute crit from G? dert_[3] is G
-        P_ = list(form_P_(zip(*dert_), crit_, mask__flip[y])) # convert P_ to list , so that structure is same with Py_
-
-    return flipped_Py_
 
 '''
-    Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression: 
+    Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression:
     DL * DS > min: must be both, eval per dPP PD, signed? comp d?
-    
+
     - resulting vertically adjacent dPPs and vPPs are evaluated for cross-comparison, to form PPPs and so on
     - resulting param derivatives form par_Ps, which are evaluated for der+ and rng+ cross-comparison
-    | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer? 
+    | default top+ P level: if PD | PM: add par_Ps: sub_layer, rdn ele_Ps: deeper layer?
     aS compute if positive eV (not qD?) = mx + mL -ave? :
-    aI = I / L; dI = aI - _aI; mI = min(aI, _aI)  
-    aD = D / L; dD = aD - _aD; mD = min(aD, _aD)  
+    aI = I / L; dI = aI - _aI; mI = min(aI, _aI)
+    aD = D / L; dD = aD - _aD; mD = min(aD, _aD)
     aM = M / L; dM = aM - _aM; mM = min(aM, _aM)
-    d_aS comp if cs D_aS, iter dS - S -> (n, M, diff): var precision or modulo + remainder? 
-    pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn? 
+    d_aS comp if cs D_aS, iter dS - S -> (n, M, diff): var precision or modulo + remainder?
+    pP_ eval in +vPPs only, per rdn = alt_rdn * fork_rdn * norm_rdn, then cost of adjust for pP_rdn?
     eval_div(PP):
     if dL * Pm > div_ave:  # dL = potential compression by ratio vs diff, or decremental to Pd and incremental to Pm?
         rL  = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:

@@ -27,7 +27,7 @@ from frame_blobs import assign_adjacents, flood_fill, CDeepBlob
 from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
-from P_blob import P_blob
+from slice_blob import slice_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
@@ -104,7 +104,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
                   dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
                   dert__[7], dert__[8])
 
-        sub_frame = P_blob(dert__, mask, crit__, AveB, verbose=kwargs.get('verbose'))
+        sub_frame = slice_blob(dert__, mask, crit__, AveB, verbose=kwargs.get('verbose'))
         sub_blobs = sub_frame['blob__']
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
