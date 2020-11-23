@@ -85,6 +85,8 @@ class CDeepBlob(ClusterStructure):
     Ls = int  # for visibility and next-fork rdn
     sub_layers = list
     a_depth = int
+    prior_forks = list
+    stack_ = list
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
@@ -98,6 +100,9 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
+
+    # according to Stephan, this is less accurate than rotating dert__ to convert diagonals into orthogonals.
+    # makes sense because any summation is a reduction in accuracy, but then we need to rotate image 45 degree.
 
     G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
     M__ = ave - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))  # inverse deviation of SAD: variation in kernel
@@ -268,7 +273,6 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
             blob1.adj_blobs[4] += blob2.Ma
             blob2.adj_blobs[4] += blob1.Ma
 
-
 if __name__ == "__main__":
     # Imports
     import argparse
@@ -277,7 +281,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_head.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
@@ -335,15 +339,29 @@ if __name__ == "__main__":
                 # +G on first fork
                 if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                     blob.rdn = 1; blob.fca = 1 # +G blob' dert' comp_a
+                    blob.prior_forks.append('g')
                     deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
 
             # +M on first fork
             elif M - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                 blob.rdn = 1; blob.rng = 1; blob.fia = 0
+                blob.prior_forks.append('g')
                 deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
+
+
+        def check_deep_blob(deep_layer,i):
+            for deep_blob_layer in deep_layer:
+                if isinstance(deep_blob_layer,list):
+                    check_deep_blob(deep_blob_layer,i)
+                else:
+                    print('blob num = '+str(i)+', forking = '+'->'.join(deep_blob_layer.prior_forks))
+
+        for i, deep_layer in enumerate(deep_layers):
+            if len(deep_layer)>0:
+                check_deep_blob(deep_layer,i)
 
         if args.verbose:
             print("\rFinished intra_blob")
@@ -354,4 +372,3 @@ if __name__ == "__main__":
         print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
-

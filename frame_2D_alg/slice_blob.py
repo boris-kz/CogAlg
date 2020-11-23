@@ -50,6 +50,7 @@ from class_cluster import ClusterStructure, NoneType
 from class_stream import BlobStreamer
 from frame_blobs import CDeepBlob
 from comp_slice_draft import comp_slice_blob
+from frame_blobs import CDeepBlob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -115,7 +116,7 @@ class CBlob(ClusterStructure):
 # postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
 
 
-def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
+def slice_blob(blob, dert__, mask, crit__, AveB, verbose=False, render=False):
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
@@ -146,12 +147,17 @@ def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
 
-    # tentative section #
+    # update blob to deep blob and add prior fork information
+    for i, iblob in enumerate(frame['blob__']):
+        frame['blob__'][i] = CDeepBlob(I=iblob.Dert['I'], Dy=iblob.Dert['Dy'], Dx=iblob.Dert['Dx'], G=iblob.Dert['G'], M=iblob.Dert['M'], A=iblob.Dert['A'],
+                                       Ga = iblob.Dert['Ga'],Ma = iblob.Dert['Ma'],Dyy = iblob.Dert['Dyy'],Dyx = iblob.Dert['Dyx'],Dxy = iblob.Dert['Dxy'],Dxx = iblob.Dert['Dxx'],
+                                       box=iblob.box, sign=iblob.sign,mask=iblob.mask, root_dert__=dert__, fopen=iblob.fopen, prior_fork=blob.prior_fork.copy(), stack_ = iblob.stack_)
 
-    # loop each stack in blob
+
+    # tentative, flip_yx should operate on whole blob first
+
     for blob in frame['blob__']:
         for stack in blob.stack_:
-
             if stack.f_gstack:
 
                 for istack in stack.Py_:
@@ -182,6 +188,8 @@ def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
 
                 if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
                     flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
+
+    # draw low-ga blob' stacks, draw_stacks(frame)
 
     # evaluate P blobs
     comp_slice_blob(frame['blob__'], AveB)
@@ -429,7 +437,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 x_stop = x_start + P.L
                 mask[y, x_start:x_stop] = False
 
-            form_gPPy_(stack)  # evaluate for comp_g, converting stack.Py_ to stack.PPy_
+#            form_gPPy_(stack)  # evaluate for comp_g, converting stack.Py_ to stack.PPy_
 
         dert__ = tuple(derts[y0:yn, x0:xn] for derts in frame['dert__'])  # slice each dert array of the whole frame
 
@@ -634,3 +642,72 @@ def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob
         P_ = list(form_P_(zip(*dert_), crit_, mask__flip[y])) # convert P_ to list , so that structure is same with Py_
 
     return flipped_Py_
+
+
+def draw_stacks(frame):
+    '''
+    draw stacks per blob
+    '''
+
+    import cv2
+
+    for blob_num, blob in enumerate(frame['blob__']):
+
+        # initialization
+        y0_ = []
+        yn_ = []
+        x0_ = []
+        xn_ = []
+
+        # loop eachstack
+        if len(blob.stack_)>1:
+
+            # retrieve region size of all stacks
+            for stack in blob.stack_:
+                y0_.append(stack.y0)
+                yn_.append(stack.y0 + len(stack.Py_))
+                x0_.append(min([P.x0 for P in stack.Py_]))
+                xn_.append(max([P.x0 + P.L for P in stack.Py_]))
+            y0 = min(y0_)
+            yn = max(yn_)
+            x0 = min(x0_)
+            xn = max(xn_)
+
+            # initialize image and insert value into each stack.
+            # image value is start with 1 hence order of stack can be viewed from image value
+            img = np.zeros((yn - y0, xn - x0))
+            img_value = 1
+            for stack in blob.stack_:
+                for y, P in enumerate(stack.Py_):
+                    for x, dert in enumerate(P.dert_):
+                        img[y+(stack.y0-y0), x+(P.x0-x0)] = img_value
+                img_value +=1 # increase image value at the end of current stack
+
+            # list of colour for visualization purpose
+            colour_list = [ ]
+            colour_list.append([255,255,255]) # white
+            colour_list.append([200,130,0]) # blue
+            colour_list.append([75,25,230]) # red
+            colour_list.append([25,255,255]) # yellow
+            colour_list.append([75,180,60]) # green
+            colour_list.append([212,190,250]) # pink
+            colour_list.append([240,250,70]) # cyan
+            colour_list.append([48,130,245]) # orange
+            colour_list.append([180,30,145]) # purple
+            colour_list.append([40,110,175]) # brown
+
+            # initialization
+            img_colour = np.zeros((yn - y0, xn - x0,3)).astype('uint8')
+            img_index  = np.zeros((yn - y0, xn - x0,3)).astype('uint8')
+
+            total_stacks = len(blob.stack_)
+            for i in range(1,total_stacks+1):
+
+                colour_index = i%10
+                img_colour[np.where(img==i)] = colour_list[colour_index]
+                i_float = float(i)
+                img_index[np.where(img==i)] = (((i_float/total_stacks))*205) + 40
+
+
+            cv2.imwrite('./images/stacks/stacks_blob_'+str(blob_num)+'_colour.bmp',img_colour)
+            cv2.imwrite('./images/stacks/stacks_blob_'+str(blob_num)+'_index.bmp',img_index)
