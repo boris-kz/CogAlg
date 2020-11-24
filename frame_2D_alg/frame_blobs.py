@@ -135,7 +135,6 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
 
     if verbose:
         print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
-
     if render:
         visualize_blobs(idmap, frame.blob_)
 
@@ -273,6 +272,20 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
             blob1.adj_blobs[4] += blob2.Ma
             blob2.adj_blobs[4] += blob1.Ma
 
+
+def print_deep_blob_forking(deep_layer):
+
+    def check_deep_blob(deep_layer,i):
+        for deep_blob_layer in deep_layer:
+            if isinstance(deep_blob_layer,list):
+                check_deep_blob(deep_blob_layer,i)
+            else:
+                print('blob num = '+str(i)+', forking = '+'->'.join(deep_blob_layer.prior_forks))
+
+    for i, deep_layer in enumerate(deep_layers):
+        if len(deep_layer)>0:
+            check_deep_blob(deep_layer,i)
+
 if __name__ == "__main__":
     # Imports
     import argparse
@@ -281,7 +294,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
@@ -352,18 +365,8 @@ if __name__ == "__main__":
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
 
-        def check_deep_blob(deep_layer,i):
-            for deep_blob_layer in deep_layer:
-                if isinstance(deep_blob_layer,list):
-                    check_deep_blob(deep_blob_layer,i)
-                else:
-                    print('blob num = '+str(i)+', forking = '+'->'.join(deep_blob_layer.prior_forks))
-
-        for i, deep_layer in enumerate(deep_layers):
-            if len(deep_layer)>0:
-                check_deep_blob(deep_layer,i)
-
         if args.verbose:
+            print_deep_blob_forking(deep_layers)
             print("\rFinished intra_blob")
 
     end_time = time() - start_time

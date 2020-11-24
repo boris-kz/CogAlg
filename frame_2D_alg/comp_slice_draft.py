@@ -124,8 +124,7 @@ def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
 
                             stack_PP = comp_slice_(stack, ave)  # stack is stack_PP, with accumulated PP params and PP_
                             stack_PP.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
-                            blob.stack_[i] = stack_PP  # return as stack_PP from form_PP
-
+                            stack.stack_PP = stack_PP  # blob.stack_[i] = stack_PP
 
 def comp_slice_(stack, Ave):
 
