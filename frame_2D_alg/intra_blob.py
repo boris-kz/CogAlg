@@ -59,7 +59,34 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
             if blob.G * (1 - blob.Ga / (4.45 * blob.A)) - AveB > 0:  # max_ga=4.45
                 # G reduced by relative Ga value, base G is second deviation or specific borrow value
                 crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
-                # ga is not signed, use Ave_ga?
+                # use Ma instead of Ga
+                '''
+                # flip_yx on whole blob
+                for blob in frame['blob__']:
+                    for stack in blob.stack_:
+                        if stack.f_gstack:
+                            for istack in stack.Py_:
+                                y0 = istack.y0
+                                yn = istack.y0 + stack.Ly
+                                x0 = min([P.x0 for P in istack.Py_])
+                                xn = max([P.x0 + P.L for P in istack.Py_])
+                                L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
+                                G_bias = abs(istack.Dy) / abs(istack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
+                                if istack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
+                                    flipped_Py_ = flip_yx(istack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
+                #                return stack, f_istack  # comp_slice if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_slice?
+                        # evaluate for arbitrary-angle rotation here,
+                        # to replace flip if both vertical and horizontal dimensions are significantly different from the angle of blob axis.
+                        else:
+                            y0 = stack.y0
+                            yn = stack.y0 + stack.Ly
+                            x0 = min([P.x0 for P in stack.Py_])
+                            xn = max([P.x0 + P.L for P in stack.Py_])
+                            L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
+                            G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
+                            if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
+                                flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
+                '''
                 blob.fca = 0
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
                 # includes re-clustering by P_blobs
