@@ -132,7 +132,6 @@ def slice_blob(blob, dert__, mask, crit__, AveB, verbose=False, render=False):
         start_time = time()
         print("Converting to image to blobs...")
 
-
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose:
             print(f"\rProcessing line {y + 1}/{height}, ", end="")

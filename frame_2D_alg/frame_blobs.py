@@ -364,7 +364,6 @@ if __name__ == "__main__":
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
-
         if args.verbose:
             print_deep_blob_forking(deep_layers)
             print("\rFinished intra_blob")

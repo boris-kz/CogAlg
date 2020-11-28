@@ -56,10 +56,10 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
 
             # slice_blobs eval, tentative:
-            if blob.G * (1 - blob.Ga / (4.45 * blob.A)) - AveB > 0:  # max_ga=4.45
+            if blob.G * blob.Ma - AveB > 0:  # ma =/ ave_ma: ratio deviation: no independent value and mag is not co-measurable?
+                # Ma vs. (1 - blob.Ga / (4.45 * blob.A)), max_ga=4.45
                 # G reduced by relative Ga value, base G is second deviation or specific borrow value
-                crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
-                # use Ma instead of Ga
+                crit__ = dert__[3] * dert__[8] - Ave  # record separately from g and ga?
                 '''
                 # flip_yx on whole blob
                 for blob in frame['blob__']:

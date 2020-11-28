@@ -99,18 +99,18 @@ class CStack(ClusterStructure):
 def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
 
     for blob in blob_:
-        if blob.G * (1 - blob.Ga / (4.45 * blob.A)) - AveB > 0:
+        if blob.G * blob.Ma - AveB > 0:
             # or blob value = G + vMa: equal value, normalized for the ratio of max magnitude?
             # separate comp_slice coef: G_bias * L_bias?
 
             for i, stack in enumerate(blob.stack_):
-                if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
+                if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
                     # also check for long / thin edges: len(py_) / A?
                     if stack.f_gstack:  # stack is a nested gP_stack
                         gstack_PP = CStack(stack_PP = CStack_PP())
 
                         for j, istack in enumerate(stack.Py_):  # istack is original stack
-                            if istack.G * (1 - istack.Ga / (4.45 * istack.A)) - AveB / 10 > 0 and len(istack.Py_) > 2:
+                            if istack.G * istack.Ma - AveB / 10 > 0 and len(istack.Py_) > 2:
 
                                 stack_PP = comp_slice_(istack, ave)  # root function of comp_slice: edge tracing and vectorization
                                 accum_gstack(gstack_PP, istack, stack_PP)
@@ -120,7 +120,7 @@ def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
                         # return as stack_PP from form_PP
                     else:
                         # stack is original stack
-                        if stack.G * (1 - stack.Ga / (4.45 * stack.A)) - AveB / 10 > 0 and len(stack.Py_) > 2:
+                        if stack.G * stack.Ma - AveB / 10 > 0 and len(stack.Py_) > 2:
 
                             stack_PP = comp_slice_(stack, ave)  # stack is stack_PP, with accumulated PP params and PP_
                             stack_PP.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
