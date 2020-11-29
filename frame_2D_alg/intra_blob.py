@@ -32,10 +32,10 @@ from slice_blob import slice_blob
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
+flip_ave = 1000
 
 # --------------------------------------------------------------------------------------------------------------
 # functions:
-
 
 def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp within blob
 
@@ -48,48 +48,20 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
     spliced_layers = []  # to extend root_blob sub_layers
     ext_dert__, ext_mask = extend_dert(blob)
 
-    if blob.fia:  # input from comp_a -> P_blobs
+    if blob.fia:  # input from comp_a -> slice_blobs
 
         dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
         mask = blob.mask
 
         if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
+            # slice_blob eval:
+            if blob.G * blob.Ma - AveB > 0:  # ma =/ ave_ma: ratio deviation, no independent value, not co-measurable?
+                # G: second deviation or borrow value, Ma vs G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
 
-            # slice_blobs eval, tentative:
-            if blob.G * blob.Ma - AveB > 0:  # ma =/ ave_ma: ratio deviation: no independent value and mag is not co-measurable?
-                # Ma vs. (1 - blob.Ga / (4.45 * blob.A)), max_ga=4.45
-                # G reduced by relative Ga value, base G is second deviation or specific borrow value
                 crit__ = dert__[3] * dert__[8] - Ave  # record separately from g and ga?
-                '''
-                # flip_yx on whole blob
-                for blob in frame['blob__']:
-                    for stack in blob.stack_:
-                        if stack.f_gstack:
-                            for istack in stack.Py_:
-                                y0 = istack.y0
-                                yn = istack.y0 + stack.Ly
-                                x0 = min([P.x0 for P in istack.Py_])
-                                xn = max([P.x0 + P.L for P in istack.Py_])
-                                L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
-                                G_bias = abs(istack.Dy) / abs(istack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
-                                if istack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
-                                    flipped_Py_ = flip_yx(istack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
-                #                return stack, f_istack  # comp_slice if G + M + fflip * (flip_gain - flip_cost) > Ave_comp_slice?
-                        # evaluate for arbitrary-angle rotation here,
-                        # to replace flip if both vertical and horizontal dimensions are significantly different from the angle of blob axis.
-                        else:
-                            y0 = stack.y0
-                            yn = stack.y0 + stack.Ly
-                            x0 = min([P.x0 for P in stack.Py_])
-                            xn = max([P.x0 + P.L for P in stack.Py_])
-                            L_bias = (xn - x0 + 1) / (yn - y0 + 1)  # elongation: width / height, pref. comp over long dimension
-                            G_bias = abs(stack.Dy) / abs(stack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
-                            if stack.G * L_bias * G_bias > flip_ave:  # y_bias = L_bias * G_bias: projected PM net gain:
-                                flipped_Py_ = flip_yx(stack.Py_)  # rotate stack.Py_ by 90 degree, rescan blob vertically -> comp_slice_
-                '''
                 blob.fca = 0
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
-                # includes re-clustering by P_blobs
+                sub_eval(blob, dert__, crit__, mask, **kwargs)  # calls slice_blob
+
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
     else:
@@ -102,7 +74,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
             dert__, mask = comp_r(ext_dert__, Ave, blob.fia, ext_mask)
             crit__ = dert__[4]  # m__ is inverse deviation of SAD
 
-            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
+            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
@@ -110,7 +82,6 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
         elif blob.G > AveB:
             if kwargs.get('verbose'):
                 print(' '); print('a fork')
-
             blob.prior_forks.extend('a')
 
             adert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
@@ -133,9 +104,18 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 def sub_eval(blob, dert__, crit__, mask, **kwargs):
     AveB = aveB * blob.rdn
 
-    if blob.fia and not blob.fca:  # terminal P_blobs
+    if blob.fia and not blob.fca:  # terminal slice_blobs
         if kwargs.get('verbose'):
             print(' '); print('dert_P fork')
+
+        L_bias = (blob.box[3] - blob.box[2] + 1) / (blob.box[1] - blob.box[0] + 1)  # blob.box = [y0,yn,x0,xn]
+        G_bias = abs(blob.Dy) / abs(blob.Dx)  # ddirection: Gy / Gx, preferential comp over low G
+
+        # eval flip dert__:
+        if blob.G * blob.Ma * L_bias * G_bias > flip_ave:
+            dert__ = tuple([np.rot90(dert) for dert in dert__])
+            crit__ = np.rot90(crit__)
+            mask = np.rot90(mask)
 
         blob.prior_forks.extend('p')
         sub_frame = slice_blob(blob, dert__, mask, crit__, AveB, verbose=kwargs.get('verbose'))
@@ -158,7 +138,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
 
 
         for i, sub_blob in enumerate(sub_blobs):
-            # generate instance of deep blob from flood fill's blobs
+            # convert blob into deep blob:
             sub_blobs[i] = CDeepBlob(I=sub_blob.I, Dy=sub_blob.Dy, Dx=sub_blob.Dx, G=sub_blob.G, M=sub_blob.M, A=sub_blob.A, box=sub_blob.box, sign=sub_blob.sign,
                                      mask=sub_blob.mask, root_dert__=dert__, adj_blobs=sub_blob.adj_blobs, fopen=sub_blob.fopen, prior_forks = blob.prior_forks.copy())
 

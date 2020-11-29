@@ -106,6 +106,9 @@ def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
             for i, stack in enumerate(blob.stack_):
                 if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
                     # also check for long / thin edges: len(py_) / A?
+                    # evaluate for arbitrary-angle rotation to replace flip,
+                    # if both vertical and horizontal dimensions are significantly different from the angle of blob axis.
+
                     if stack.f_gstack:  # stack is a nested gP_stack
                         gstack_PP = CStack(stack_PP = CStack_PP())
 

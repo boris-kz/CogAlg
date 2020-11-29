@@ -139,10 +139,12 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    ma__ = np.hypot(sin_da0__ + 1, cos_da0__ + 1) \
-         + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
+    ma__ = ( np.hypot(sin_da0__ + 1, cos_da0__ + 1)
+           + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
+           ) / 2
+           # ma is a rate deviation from ave_ma = 2?
     # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
-
+    
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 

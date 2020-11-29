@@ -87,7 +87,7 @@ class CDeepBlob(ClusterStructure):
     a_depth = int
     prior_forks = list
     stack_ = list
-
+    f_sstack = NoneType
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
     # see comp_pixel_versions file for other versions and more explanation
