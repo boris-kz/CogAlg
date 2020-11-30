@@ -100,16 +100,17 @@ def comp_r(dert__, ave, root_fia, mask=None):
     '''
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
+    ave SAD = ave g * 1.418:
     '''
-    m__ += ave - ( abs(i__center - i__topleft)
-                 + abs(i__center - i__top)
-                 + abs(i__center - i__topright)
-                 + abs(i__center - i__right)
-                 + abs(i__center - i__bottomright)
-                 + abs(i__center - i__bottom)
-                 + abs(i__center - i__bottomleft)
-                 + abs(i__center - i__left)
-                 )
+    m__ += ave * 1.418 - ( abs(i__center - i__topleft)
+                         + abs(i__center - i__top)
+                         + abs(i__center - i__topright)
+                         + abs(i__center - i__right)
+                         + abs(i__center - i__bottomright)
+                         + abs(i__center - i__bottom)
+                         + abs(i__center - i__bottomleft)
+                         + abs(i__center - i__left)
+                         )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask
 
@@ -139,12 +140,9 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    ma__ = ( np.hypot(sin_da0__ + 1, cos_da0__ + 1)
-           + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
-           ) / 2
-           # ma is a rate deviation from ave_ma = 2?
-    # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
-    
+    ma__ = 2.8284 / (np.hypot(sin_da0__ + 1, cos_da0__ + 1) + np.hypot(sin_da1__ + 1, cos_da1__ + 1))
+    # angle match = inverse deviation rate of SAD_angles from ave ma: (sqrt(2^2+2^2) + sqrt(2^2+2^2)) / 2
+
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 
