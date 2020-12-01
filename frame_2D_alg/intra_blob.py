@@ -64,7 +64,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
     else:
         # input from frame_blobs or comp_r -> comp_r or comp_a
-        if blob.M > AveB:
+        if blob.M > int( AveB * 1.418):
             if kwargs.get('verbose'): print('r fork\n')
             blob.prior_forks.extend('r')
             dert__, mask = comp_r(ext_dert__, Ave, blob.fia, ext_mask)
@@ -76,7 +76,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-        elif blob.G * blob.Ma > AveB:
+        elif blob.G > AveB:
             if kwargs.get('verbose'): print('a fork\n')
             blob.prior_forks.extend('a')
 
@@ -90,6 +90,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
                                 adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
                                 adert__[7], adert__[8]])
                 blob.fia = 1
+                blob.fca = 0
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
@@ -114,7 +115,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
 
         blob.prior_forks.extend('p')
 
-        sub_frame = slice_blob(dert__, mask, crit__, AveB, verbose=kwargs.get('verbose'))
+        sub_frame = slice_blob(dert__, mask, crit__, blob.prior_forks, verbose=kwargs.get('verbose'))
         sub_blobs = sub_frame.sub_layers[0]
 
         blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
@@ -144,11 +145,13 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
             G = blob.G  # Gr, Grr..
             adj_M = blob.adj_blobs[3]
             borrow_M = min(G, adj_M / 2)
+            # borrow M is always negative?
 
             if borrow_M > AveB:
                 # comp_a:
                 sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                sub_blob.fia = 1
+                sub_blob.fia = 0
+                sub_blob.fca = 1
                 sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
                 blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
@@ -156,6 +159,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
                 # comp_r:
                 sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
                 sub_blob.fia = 0
+                sub_blob.fca = 0
                 sub_blob.rng = blob.rng * 2
                 blob.sub_layers += intra_blob(sub_blob, **kwargs)
 

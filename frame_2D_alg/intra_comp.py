@@ -102,15 +102,15 @@ def comp_r(dert__, ave, root_fia, mask=None):
     (all diagonal derivatives can be imported from prior 2x2 comp)
     ave SAD = ave g * 1.418:
     '''
-    m__ += ave * 1.418 - ( abs(i__center - i__topleft)
-                         + abs(i__center - i__top)
-                         + abs(i__center - i__topright)
-                         + abs(i__center - i__right)
-                         + abs(i__center - i__bottomright)
-                         + abs(i__center - i__bottom)
-                         + abs(i__center - i__bottomleft)
-                         + abs(i__center - i__left)
-                         )
+    m__ += int(ave * 1.418) - ( abs(i__center - i__topleft)
+                              + abs(i__center - i__top)
+                              + abs(i__center - i__topright)
+                              + abs(i__center - i__right)
+                              + abs(i__center - i__bottomright)
+                              + abs(i__center - i__bottom)
+                              + abs(i__center - i__bottomleft)
+                              + abs(i__center - i__left)
+                              )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask
 

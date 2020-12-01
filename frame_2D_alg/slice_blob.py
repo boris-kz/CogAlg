@@ -118,7 +118,7 @@ class CBlob(ClusterStructure):
 # Functions:
 
 
-def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
+def slice_blob(dert__, mask, crit__, prior_forks, verbose=False, render=False):
     sliced_blob = CDeepBlob(root_dert__=dert__, sub_layers=[[]])  # 1st layer of sub blobs in 1st sub_layers
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
@@ -150,14 +150,14 @@ def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
     while stack_:  # dert__ ends, last-line stacks are merged into blob
         form_blob(stack_.popleft(), sliced_blob)
 
-    '''
+    # temporary, for debug purpose to prevent error:
     for i, sub_blob in enumerate(sliced_blob.sub_layers[0]):
         # update blob to deep blob
         sliced_blob.sub_layers[0][i] = CDeepBlob(I=sub_blob.Dert['I'], Dy=sub_blob.Dert['Dy'], Dx=sub_blob.Dert['Dx'], G=sub_blob.Dert['G'], M=sub_blob.Dert['M'], A=sub_blob.Dert['A'],
                                                  Ga=sub_blob.Dert['Ga'], Ma=sub_blob.Dert['Ma'], Dyy=sub_blob.Dert['Dyy'], Dyx=sub_blob.Dert['Dyx'], Dxy=sub_blob.Dert['Dxy'],
                                                  Dxx=sub_blob.Dert['Dxx'], box=sub_blob.box, sign=sub_blob.sign, mask=sub_blob.mask, root_dert__=sub_blob.root_dert__, fopen=sub_blob.fopen,
                                                  prior_forks=blob.prior_forks.copy(), stack_=sub_blob.stack_)
-    '''
+
     form_sstack_(sliced_blob)  # cluster stacks into horizontally-oriented super-stacks
 
     flip_sstack_(sliced_blob)  # vertical-first re-scanning of selected sstacks
@@ -433,8 +433,9 @@ def form_blob(stack, sliced_blob):  # increment blob with terminated stack, chec
         sliced_blob.Ga += blob.Dert['Ga']
         sliced_blob.Ma += blob.Dert['Ma']
 
-        # add blob into slice_blob's 1st sub_layer
-        sliced_blob.sub_layers[0].append(blob)
+        # sliced_blob.stack_ is flat version of sub blob's stacks
+        # They should not be merged?
+        sliced_blob.stack_.extend(blob.stack_)
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
