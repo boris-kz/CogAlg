@@ -57,7 +57,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
             if blob.G * blob.Ma - AveB > 0:  # G: borrow value, Ma vs G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
 
                 crit__ = dert__[3] * dert__[8] - Ave  # add to params in adert, no need to recompute?
-                blob.fca = 0
+                # not sure we need fca at all   blob.fca = 0
                 if kwargs.get('verbose'): print('dert_P fork/n')
 
                 L_bias = (blob.box[3] - blob.box[2] + 1) / (blob.box[1] - blob.box[0] + 1)  # Lx / Ly, blob.box = [y0,yn,x0,xn]
@@ -79,35 +79,36 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
 
     else:
         # root fork is frame_blobs or comp_r
-        if blob.fca:
-            if blob.G > AveB:  # comp_a fork
-                if kwargs.get('verbose'): print('a fork\n')
-                blob.prior_forks.extend('a')
+        if blob.G > AveB:  # comp_a fork
+            if kwargs.get('verbose'): print('a fork\n')
+            blob.prior_forks.extend('a')
+            # not sure we need fca at all    blob.fca = 1
 
-                adert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
-                crit__ = adert__[3] * adert__[8]  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
+            adert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
+            crit__ = adert__[3] * adert__[8]  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
 
-                if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:
-                    # min size in y and x, least one dert in dert__
-                    # flatten adert
-                    dert__ = tuple([adert__[0], adert__[1], adert__[2], adert__[3], adert__[4],
-                                    adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
-                                    adert__[7], adert__[8]])
-                    blob.fca = 1
-                    sub_eval(blob, dert__, crit__, mask, **kwargs)
-                    spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
-                                      zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
+            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:
+                # min size in y and x, least one dert in dert__
+                # flatten adert
+                dert__ = tuple([adert__[0], adert__[1], adert__[2], adert__[3], adert__[4],
+                                adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
+                                adert__[7], adert__[8]])
+
+                sub_eval(blob, dert__, crit__, mask, **kwargs)
+                spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
+                                  zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
         elif blob.M > int( AveB * 1.418):  # comp_r fork, ave M = ave G * 1.418
 
             if kwargs.get('verbose'): print('r fork\n')
             blob.prior_forks.extend('r')
+            # not sure we need fca at all   blob.fca = 0
+
             dert__, mask = comp_r(ext_dert__, Ave, blob.fia, ext_mask)
             crit__ = dert__[4]  # m__ is inverse deviation of SAD
 
             if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:
                 # min size in y and x, at least one dert in dert__
-                blob.fca = 0
                 sub_eval(blob, dert__, crit__, mask, **kwargs)
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
@@ -142,14 +143,15 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
             # comp_a:
             sub_blob.fia = 1
             sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
+            sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+            blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
         elif sub_blob.M - borrow_M > AveB:
             # comp_r:
             sub_blob.fia = 0
             sub_blob.rng = blob.rng * 2
-
-        sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-        blob.sub_layers += intra_blob(sub_blob, **kwargs)
+            sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+            blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
