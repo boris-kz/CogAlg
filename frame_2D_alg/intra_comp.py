@@ -140,8 +140,8 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    ma__ = 2.8284 / (np.hypot(sin_da0__ + 1, cos_da0__ + 1) + np.hypot(sin_da1__ + 1, cos_da1__ + 1))
-    # angle match = inverse deviation rate of SAD_angles from ave ma: (sqrt(2^2+2^2) + sqrt(2^2+2^2)) / 2
+    ma__ = 2 / (cos_da0__ + 1) + (cos_da1__ + 1)
+    # angle match = inverse deviation rate of SAD of angles from ave ma: (2 + 2) / 2
 
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines

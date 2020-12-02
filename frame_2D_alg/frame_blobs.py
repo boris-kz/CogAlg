@@ -101,11 +101,12 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
-    # according to Stephan, this is less accurate than rotating dert__ to convert diagonals into orthogonals.
-    # makes sense because any summation is a reduction in accuracy, but then we need to rotate image 45 degree.
+    # This is less accurate than rotating dert__ to convert diagonals into orthogonals: any summation is a reduction in accuracy,
+    # rotate image 45 degree masking empty corners, then Gy__ = top__ + bottom__, Gx__ = left__ + right__?
 
     G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
-    M__ = ave - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))  # inverse deviation of SAD: variation in kernel
+    M__ = int(ave * 1.418)  - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))
+    # inverse deviation of SAD: variation, ave SAD = ave g * 1.418
 
     return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
