@@ -118,7 +118,7 @@ class CBlob(ClusterStructure):
 # Functions:
 
 
-def slice_blob(dert__, mask, crit__, prior_forks, verbose=False, render=False):
+def slice_blob(dert__, mask__, prior_forks, verbose=False, render=False):
     sliced_blob = CDeepBlob(root_dert__=dert__, sub_layers=[[]])  # 1st layer of sub blobs in 1st sub_layers
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
@@ -141,7 +141,7 @@ def slice_blob(dert__, mask, crit__, prior_forks, verbose=False, render=False):
             # this shouldn't be needed
             sys.stdout.flush()
 
-        P_ = form_P_(zip(*dert_), crit__[y], mask[y])  # horizontal clustering
+        P_ = form_P_(zip(*dert_), mask__[y])  # horizontal clustering
         if render: render = streamer.update_blob_conversion(y, P_)
 
         P_ = scan_P_(P_, stack_, sliced_blob)  # vertical clustering, adds P up_connects and _P down_connect_cnt
@@ -153,10 +153,11 @@ def slice_blob(dert__, mask, crit__, prior_forks, verbose=False, render=False):
     # temporary, for debug purpose to prevent error:
     for i, sub_blob in enumerate(sliced_blob.sub_layers[0]):
         # update blob to deep blob
-        sliced_blob.sub_layers[0][i] = CDeepBlob(I=sub_blob.Dert['I'], Dy=sub_blob.Dert['Dy'], Dx=sub_blob.Dert['Dx'], G=sub_blob.Dert['G'], M=sub_blob.Dert['M'], A=sub_blob.Dert['A'],
-                                                 Ga=sub_blob.Dert['Ga'], Ma=sub_blob.Dert['Ma'], Dyy=sub_blob.Dert['Dyy'], Dyx=sub_blob.Dert['Dyx'], Dxy=sub_blob.Dert['Dxy'],
-                                                 Dxx=sub_blob.Dert['Dxx'], box=sub_blob.box, sign=sub_blob.sign, mask=sub_blob.mask, root_dert__=sub_blob.root_dert__, fopen=sub_blob.fopen,
-                                                 prior_forks=blob.prior_forks.copy(), stack_=sub_blob.stack_)
+        sliced_blob.sub_layers[0][i] = CBlob(I=sub_blob.Dert['I'], Dy=sub_blob.Dert['Dy'], Dx=sub_blob.Dert['Dx'], G=sub_blob.Dert['G'], M=sub_blob.Dert['M'],
+                                             Ga=sub_blob.Dert['Ga'], Ma=sub_blob.Dert['Ma'], Dyy=sub_blob.Dert['Dyy'], Dyx=sub_blob.Dert['Dyx'],
+                                             Dxy=sub_blob.Dert['Dxy'], Dxx=sub_blob.Dert['Dxx'], A=sub_blob.Dert['A'],
+                                             box=sub_blob.box, sign=sub_blob.sign, mask=sub_blob.mask, root_dert__=sub_blob.root_dert__, fopen=sub_blob.fopen,
+                                             prior_forks=prior_forks.copy(), stack_=sub_blob.stack_)
 
     form_sstack_(sliced_blob)  # cluster stacks into horizontally-oriented super-stacks
 
@@ -190,10 +191,10 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(idert_, crit_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    s_ = crit_ > 0
+    s_ = idert_[3] * idert_[8] > 0  # g * ma
     x0 = 0
     try:
         while mask_[x0]:  # skip until not masked

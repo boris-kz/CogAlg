@@ -127,8 +127,11 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
         majority_mask = None
 
     i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
-    g__[np.where(g__ == 0)] = 1  # to avoid / 0
-    a__ = [dy__, dx__] / (g__ + ave)  # angle, restore g to abs, similar to calc_a
+
+    abs_g = g__ + ave
+    abs_g[np.where(abs_g == 0)] = 1  # to avoid / 0
+    a__ = [dy__, dx__] / (abs_g)  # angle, restore g to abs, similar to calc_a
+    # a__ = int( [float(dy__)], [float(dx__)] / [(g__ + ave + 0.001)] ) ?
 
     # each shifted a in 2x2 kernel
     a__topleft = a__[:, :-1, :-1]
@@ -140,7 +143,7 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
     sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
 
-    ma__ = 2 / (cos_da0__ + 1) + (cos_da1__ + 1)
+    ma__ = 2 / (cos_da0__ + 1.001) + (cos_da1__ + 1.001)  # +.001 to avoid / 0
     # angle match = inverse deviation rate of SAD of angles from ave ma: (2 + 2) / 2
 
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
