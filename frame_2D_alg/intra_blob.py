@@ -37,26 +37,25 @@ flip_ave = 1000
 # --------------------------------------------------------------------------------------------------------------
 # functions:
 
-def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp within blob
-
-    Ave = int(ave * blob.rdn); AveB = int(aveB * blob.rdn)
+def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-comp | slice_blob within input blob
+                                         # sign__ is optional, for slice_blob only
+    Ave = int(ave * blob.rdn)
+    AveB = int(aveB * blob.rdn)
 
     if kwargs.get('render') is not None:  # stop rendering sub-blobs when blob is too small
         if blob.A < 100: kwargs['render'] = False
 
     spliced_layers = []  # to extend root_blob sub_layers
-    ext_dert__, ext_mask = extend_dert(blob)
-
     if blob.f_root_a:  # root fork is comp_a -> slice_blobs
 
         dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
-        mask = blob.mask
+        mask__ = blob.mask__
 
-        if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
+        if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
             # slice_blob eval:
             if blob.G * blob.Ma - AveB > 0:  # Ma vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
-                blob.f_comp_a = 0  # blob id
-                if kwargs.get('verbose'): print('slice_blob fork/n')
+                blob.f_comp_a = 0  # id
+                if kwargs.get('verbose'): print('\nslice_blob fork\n')
 
                 L_bias = (blob.box[3] - blob.box[2] + 1) / (blob.box[1] - blob.box[0] + 1)  # Lx / Ly, blob.box = [y0,yn,x0,xn]
                 G_bias = abs(blob.Dy) / abs(blob.Dx)  # ddirection: Gy / Gx, preferential comp over low G
@@ -64,55 +63,55 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
                 # eval flip dert__:
                 if blob.G * blob.Ma * L_bias * G_bias > flip_ave:
                     dert__ = tuple([np.rot90(dert) for dert in dert__])
-                    mask = np.rot90(mask)
+                    mask__ = np.rot90(mask__)
                 blob.prior_forks.extend('p')
 
-                blob[:] = slice_blob(dert__, mask, blob.prior_forks, verbose=kwargs.get('verbose'))
+                slice_blob(blob, dert__, sign__, mask__, blob.prior_forks, verbose=kwargs.get('verbose'))
 
     else:  # root fork is frame_blobs or comp_r
+        ext_dert__, ext_mask__ = extend_dert(blob)
 
         if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
-            blob.f_comp_a = 1
-            # blob id
-            if kwargs.get('verbose'): print('a fork\n')
+            blob.f_comp_a = 1  # blob id
+            if kwargs.get('verbose'): print('\na fork\n')
             blob.prior_forks.extend('a')
 
-            adert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
-            crit__ = adert__[3] * adert__[8]  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
+            adert__, mask__ = comp_a(ext_dert__, Ave, ext_mask__)  # -> m sub_blobs
+            sign__ = adert__[3] * adert__[8] > 0  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
 
-            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
+            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, least one dert in dert__
                 # flatten adert
                 dert__ = tuple([adert__[0], adert__[1], adert__[2], adert__[3], adert__[4],
                                 adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
                                 adert__[7], adert__[8]])
 
-                cluster_sub_eval(blob, dert__, crit__, mask, **kwargs)
+                cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-        elif blob.M > AveB * 1.418:  # comp_r fork, ave M = ave G * 1.418
+        elif blob.M > AveB * 1.41:  # comp_r fork, ave M = ave G * 1.41
 
-            if kwargs.get('verbose'): print('r fork\n')
+            if kwargs.get('verbose'): print('\na fork\n')
             blob.prior_forks.extend('r')
             blob.f_comp_a = 0  # blob id
-            dert__, mask = comp_r(ext_dert__, Ave, blob.f_root_a, ext_mask)
-            crit__ = dert__[4]  # m__ is inverse deviation of SAD
+            dert__, mask__ = comp_r(ext_dert__, Ave, blob.f_root_a, ext_mask__)
+            sign__ = dert__[4] > 0  # m__ is inverse deviation of SAD
 
-            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:
+            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:
                 # min size in y and x, at least one dert in dert__
-                cluster_sub_eval(blob, dert__, crit__, mask, **kwargs)
+                cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
     return spliced_layers
 
 
-def cluster_sub_eval(blob, dert__, crit__, mask, **kwargs):  # comp_r or comp_a eval per sub_blob:
+def cluster_sub_eval(blob, dert__, sign__, mask, **kwargs):  # comp_r or comp_a eval per sub_blob:
     
     AveB = aveB * blob.rdn
                              
-    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__=crit__ > 0, verbose=False, mask=mask, blob_cls=CDeepBlob, accum_func=accum_blob_Dert)
-    assign_adjacents(adj_pairs, CBlob)
+    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__, verbose=False, mask=mask, blob_cls=CDeepBlob, accum_func=accum_blob_Dert)
+    assign_adjacents(adj_pairs, CDeepBlob)
 
     if kwargs.get('render', False):
         visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (f_comp_a = {blob.f_comp_a}, f_root_a = {blob.f_root_a})")
@@ -123,23 +122,27 @@ def cluster_sub_eval(blob, dert__, crit__, mask, **kwargs):  # comp_r or comp_a 
     for sub_blob in sub_blobs:  # evaluate sub_blob
 
         G = blob.G  # Gr, Grr..
-        adj_M = blob.adj_blobs[3]
+        adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
+        # adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
+        # track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
+        # G indicates or dert__ extend per blob G?
+
         borrow_M = min(G, adj_M / 2)
-        # borrow M is always negative?
+        sub_blob.prior_forks = blob.prior_forks.copy()  # increments forking sequence: g->a, g->a->p, etc.
 
         if sub_blob.G > AveB:  # replace with borrow_M when known
             # comp_a:
             sub_blob.f_root_a = 1
             sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
             sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-            blob.sub_layers += intra_blob(sub_blob, **kwargs)
+            blob.sub_layers += intra_blob(sub_blob, sign__, **kwargs)
 
         elif sub_blob.M - borrow_M > AveB:
             # comp_r:
             sub_blob.f_root_a = 0
             sub_blob.rng = blob.rng * 2
             sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-            blob.sub_layers += intra_blob(sub_blob, **kwargs)
+            blob.sub_layers += intra_blob(sub_blob, sign__, **kwargs)
 
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)

@@ -1,5 +1,5 @@
 '''
-line_PPs is a 2nd-level 1D algorithm, processing Ps outputted by the 1st level line_patterns.
+line_PPs is a 2nd-level 1D algorithm, its input is Ps formed by the 1st-level line_patterns.
 It cross-compares Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 
 Range or derivation of cross-comp is selectively increased if the match from prior-order cross-comp is above threshold:

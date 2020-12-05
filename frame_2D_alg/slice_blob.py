@@ -118,30 +118,19 @@ class CBlob(ClusterStructure):
 # Functions:
 
 
-def slice_blob(dert__, mask__, prior_forks, verbose=False, render=False):
-    sliced_blob = CDeepBlob(root_dert__=dert__, sub_layers=[[]])  # 1st layer of sub blobs in 1st sub_layers
+def slice_blob(sliced_blob, dert__, sign__, mask__, prior_forks, verbose=False, render=False):
+
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
-
     if render:
-        def output_path(input_path, suffix):
-            return str(Path(input_path).with_suffix(suffix))
-
-        streamer = BlobStreamer(CBlob, dert__[1],
-                                record_path=output_path(arguments['image'],
-                                                        suffix='.im2blobs.avi'))
-    if verbose:
-        start_time = time()
-        print("Converting to image to blobs...")
+        def output_path(input_path, suffix): return str(Path(input_path).with_suffix(suffix))
+        streamer = BlobStreamer(CBlob, dert__[1], record_path=output_path(arguments['image'], suffix='.im2blobs.avi'))
+    if verbose: print("Converting to image...")
 
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
-        if verbose:
-            print(f"\rProcessing line {y + 1}/{height}, ", end="")
-            print(f"{len(sliced_blob.sub_layers)} blobs converted", end="")
-            # this shouldn't be needed
-            sys.stdout.flush()
+        if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
-        P_ = form_P_(zip(*dert_), mask__[y])  # horizontal clustering
+        P_ = form_P_(list(zip(*dert_)), sign__[y], mask__[y])  # horizontal clustering
         if render: render = streamer.update_blob_conversion(y, P_)
 
         P_ = scan_P_(P_, stack_, sliced_blob)  # vertical clustering, adds P up_connects and _P down_connect_cnt
@@ -150,33 +139,15 @@ def slice_blob(dert__, mask__, prior_forks, verbose=False, render=False):
     while stack_:  # dert__ ends, last-line stacks are merged into blob
         form_blob(stack_.popleft(), sliced_blob)
 
-    # temporary, for debug purpose to prevent error:
-    for i, sub_blob in enumerate(sliced_blob.sub_layers[0]):
-        # update blob to deep blob
-        sliced_blob.sub_layers[0][i] = CBlob(I=sub_blob.Dert['I'], Dy=sub_blob.Dert['Dy'], Dx=sub_blob.Dert['Dx'], G=sub_blob.Dert['G'], M=sub_blob.Dert['M'],
-                                             Ga=sub_blob.Dert['Ga'], Ma=sub_blob.Dert['Ma'], Dyy=sub_blob.Dert['Dyy'], Dyx=sub_blob.Dert['Dyx'],
-                                             Dxy=sub_blob.Dert['Dxy'], Dxx=sub_blob.Dert['Dxx'], A=sub_blob.Dert['A'],
-                                             box=sub_blob.box, sign=sub_blob.sign, mask=sub_blob.mask, root_dert__=sub_blob.root_dert__, fopen=sub_blob.fopen,
-                                             prior_forks=prior_forks.copy(), stack_=sub_blob.stack_)
-
     form_sstack_(sliced_blob)  # cluster stacks into horizontally-oriented super-stacks
 
-    flip_sstack_(sliced_blob)  # vertical-first re-scanning of selected sstacks
+#    flip_sstack_(sliced_blob)  # vertical-first re-scanning of selected sstacks
     # evaluation is always per sstack
     # need update comp_slice_blob for new sstack structure
     # comp_slice_blob(sliced_blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
 
-    if verbose:  # print out at the end
-        nblobs = len(sliced_blob.sub_layers[0])
-        print(f"\rImage has been successfully converted to "
-              f"{nblobs} blob{'s' if nblobs != 1 else 0} in "
-              f"{time() - start_time:.3} seconds", end="")
-        blob_ids = [blob_id for blob_id in range(CBlob.instance_cnt)]
-        merged_percentage = len([*filter(lambda bid: CBlob.get_instance(bid) is None, blob_ids)]) / len(blob_ids)
-        print(f"\nPercentage of merged blobs: {merged_percentage}")
-
     if render: path = output_path(arguments['image'], suffix='.im2blobs.jpg'); streamer.end_blob_conversion(y, img_out_path=path)
-    # diagnostic code should be in as few lines as possible
+    # diagnostic code should be as few lines as possible
 
     return sliced_blob  # sliced_blob instance of CDeepBlob
 
@@ -191,27 +162,25 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(idert_, sign_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    s_ = idert_[3] * idert_[8] > 0  # g * ma
     x0 = 0
     try:
         while mask_[x0]:  # skip until not masked
-            next(idert_)
             x0 += 1
     except IndexError:
         return P_  # the whole line is masked, return an empty P
 
     dert_ = [[*next(idert_)]]  # get first dert from idert_ (generator/iterator)
     (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params
-    _s = s_[x0]
+    _s = sign_[x0]
     _mask = mask_[x0]  # mask bit per dert
 
-    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_, start=x0 + 1):  # loop left to right in each row of derts
+    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_[x0:], start=x0):  # left to right in each row of derts
         mask = mask_[x]
         if ~mask:  # current dert is not masked
-            s = s_[x]
+            s = sign_[x]
             if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate P:
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
                 P_.append(P)
@@ -400,44 +369,26 @@ def form_blob(stack, sliced_blob):  # increment blob with terminated stack, chec
         [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[1:5]
         yn = last_stack.y0 + last_stack.Ly
 
-        mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
+        mask__ = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
 
         for stack in stack_:
             for y, P in enumerate(stack.Py_, start=stack.y0 - y0):
                 x_start = P.x0 - x0
                 x_stop = x_start + P.L
-                mask[y, x_start:x_stop] = False
+                mask__[y, x_start:x_stop] = False
 
-        dert__ = tuple(derts[y0:yn, x0:xn] for derts in sliced_blob.root_dert__)  # slice all dert array
-
+        dert__ = [derts[y0:yn, x0:xn] for derts in sliced_blob.root_dert__]  # slice all dert array
+        '''
+        This should be done in flood_fill:
+        
         fopen = 0  # flag: blob on frame boundary
         if x0 == 0 or xn == sliced_blob.root_dert__[0].shape[1] or y0 == 0 or yn == sliced_blob.root_dert__[0].shape[0]:
             fopen = 1
+        '''
 
-        blob.root_dert__ = sliced_blob.root_dert__
-        blob.box = (y0, yn, x0, xn)
-        blob.dert__ = dert__
-        blob.mask = mask
-        blob.fopen = fopen
-
-        # accumulation of sub blob param into root blob
-        # This should not be needed
-        sliced_blob.I += blob.Dert['I']
-        sliced_blob.Dy += blob.Dert['Dy']
-        sliced_blob.Dx += blob.Dert['Dx']
-        sliced_blob.G += blob.Dert['G']
-        sliced_blob.M += blob.Dert['M']
-        sliced_blob.Dyy += blob.Dert['Dyy']
-        sliced_blob.Dyx += blob.Dert['Dyx']
-        sliced_blob.Dxy += blob.Dert['Dxy']
-        sliced_blob.Dxx += blob.Dert['Dxx']
-        sliced_blob.Ga += blob.Dert['Ga']
-        sliced_blob.Ma += blob.Dert['Ma']
-
-        # sliced_blob.stack_ is flat version of sub blob's stacks
-        # They should not be merged?
-        sliced_blob.stack_.extend(blob.stack_)
-
+        sliced_blob.stack_ = blob.stack_
+        sliced_blob.dert__ = dert__
+        sliced_blob.mask__ = mask__
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
 
@@ -545,39 +496,6 @@ def form_gP_(gdert_):
 
     gP_.append([_s, _Dg, _Mg])  # pack last gP
     return gP_
-
-# This is probably not needed:
-
-def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blobs
-    '''
-    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
-    '''
-    for blob_id1, blob_id2 in blob_binder.adj_pairs:
-        assert blob_id1 < blob_id2
-        blob1 = blob_binder.cluster_cls.get_instance(blob_id1)
-        blob2 = blob_binder.cluster_cls.get_instance(blob_id2)
-
-        y01, yn1, x01, xn1 = blob1.box
-        y02, yn2, x02, xn2 = blob2.box
-
-        if y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
-            pose1, pose2 = 0, 1  # 0: internal, 1: external
-        elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
-            pose1, pose2 = 1, 0  # 1: external, 0: internal
-        else:
-            pose1 = pose2 = 2  # open, no need for fopen?
-
-        # bilateral assignments
-        blob1.adj_blobs[0].append((blob2, pose2))
-        blob2.adj_blobs[0].append((blob1, pose1))
-        blob1.adj_blobs[1] += blob2.Dert['A']
-        blob2.adj_blobs[1] += blob1.Dert['A']
-        blob1.adj_blobs[2] += blob2.Dert['G']
-        blob2.adj_blobs[2] += blob1.Dert['G']
-        blob1.adj_blobs[3] += blob2.Dert['M']
-        blob2.adj_blobs[3] += blob1.Dert['M']
-        blob1.adj_blobs[4] += blob2.Dert['Ma']
-        blob2.adj_blobs[4] += blob1.Dert['Ma']
 
 # -----------------------------------------------------------------------------
 # Utilities

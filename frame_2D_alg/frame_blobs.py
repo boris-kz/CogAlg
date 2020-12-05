@@ -74,12 +74,13 @@ class CDeepBlob(ClusterStructure):
     A = int  # blob area
     sign = NoneType
     box = list
-    mask = object
+    mask__ = object
+    dert__ = object
     root_dert__ = object
     adj_blobs = list
     fopen = bool
-    fia = bool  # flag: input is from comp angle
-    fca = bool  # flag: current fork is comp angle
+    f_root_a = bool  # flag: input is from comp angle
+    f_comp_a = bool  # flag: current fork is comp angle
     rdn = float
     rng = int
     Ls = int  # for visibility and next-fork rdn
@@ -121,8 +122,7 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     else:
-        blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  # sign of deviation of gradient
-                                             verbose=verbose)
+        blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  verbose=verbose)
         I = Dy = Dx = G = M = 0
         for blob in blob_:
             I += blob.I
@@ -151,16 +151,16 @@ def accum_blob_Dert(blob, dert__, y, x):
     blob.M += dert__[4][y, x]
 
 
-def flood_fill(dert__, sign__, verbose=False, mask=None, blob_cls=CBlob, accum_func=accum_blob_Dert, prior_forks=[]):
+def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum_func=accum_blob_Dert, prior_forks=[]):
 
-    if mask is None: # non intra dert
+    if mask__ is None: # non intra dert
         height, width = dert__[0].shape
     else: # intra dert
-        height, width = mask.shape
+        height, width = mask__.shape
 
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
-    if mask is not None:
-        idmap[mask] = EXCLUDED_ID
+    if mask__ is not None:
+        idmap[mask__] = EXCLUDED_ID
 
     if verbose:
         step = 100 / height / width     # progress % percent per pixel
@@ -342,7 +342,7 @@ if __name__ == "__main__":
             '''
             int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, 
             same as pri_M and next_M in line patterns but direction here is radial: inside-out
-            borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
+            borrow_G = min, ~ comp(G, _G): only the value present in both parties can be borrowed from one to another
             Add borrow_G -= inductive leaking across external blob?
             '''
             blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, A=blob.A, box=blob.box, sign=blob.sign,
@@ -351,19 +351,19 @@ if __name__ == "__main__":
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
 
-            if blob.sign:
-                # +G on first fork
+            if blob.sign:  # +G on first fork
                 if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                     blob.rdn = 1
-                    blob.fca = 1  # +G blob' dert' comp_a
-                    deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
+                    blob.f_comp_a = 1
+                    deep_layers[i] = intra_blob(blob, sign__=[], render=args.render, verbose=args.verbose)
+                    # dert__ comp_a in 2x2 kernels
 
-            # +M on first fork
             elif M - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                 blob.rdn = 1
                 blob.rng = 1
-                blob.fia = 0
-                deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)  # -G blob' dert__' comp_r in 3x3 kernels
+                blob.f_root_a = 0
+                deep_layers[i] = intra_blob(blob, sign__=[], render=args.render, verbose=args.verbose)
+                # dert__ comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers

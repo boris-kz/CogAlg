@@ -102,15 +102,15 @@ def comp_r(dert__, ave, root_fia, mask=None):
     (all diagonal derivatives can be imported from prior 2x2 comp)
     ave SAD = ave g * 1.418:
     '''
-    m__ += int(ave * 1.418) - ( abs(i__center - i__topleft)
-                              + abs(i__center - i__top)
-                              + abs(i__center - i__topright)
-                              + abs(i__center - i__right)
-                              + abs(i__center - i__bottomright)
-                              + abs(i__center - i__bottom)
-                              + abs(i__center - i__bottomleft)
-                              + abs(i__center - i__left)
-                              )
+    m__ += int(ave * 1.41) - ( abs(i__center - i__topleft)
+                             + abs(i__center - i__top)
+                             + abs(i__center - i__topright)
+                             + abs(i__center - i__right)
+                             + abs(i__center - i__bottomright)
+                             + abs(i__center - i__bottom)
+                             + abs(i__center - i__bottomleft)
+                             + abs(i__center - i__left)
+                             )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask
 
@@ -128,10 +128,7 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
 
     i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
 
-    abs_g = g__ + ave
-    abs_g[np.where(abs_g == 0)] = 1  # to avoid / 0
-    a__ = [dy__, dx__] / (abs_g)  # angle, restore g to abs, similar to calc_a
-    # a__ = int( [float(dy__)], [float(dx__)] / [(g__ + ave + 0.001)] ) ?
+    a__ = [float(dy__)], [float(dx__)] / [(g__ + ave + 0.001)]  # + ave to restore abs g, + .001 to avoid / 0
 
     # each shifted a in 2x2 kernel
     a__topleft = a__[:, :-1, :-1]
