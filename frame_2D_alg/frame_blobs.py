@@ -52,7 +52,7 @@ class CBlob(ClusterStructure):
     A = int  # blob area
     sign = NoneType
     box = list
-    mask = object
+    mask__ = object
     root_dert__ = object
     adj_blobs = list
     fopen = bool
@@ -103,11 +103,11 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
     # This is less accurate than rotating dert__ to convert diagonals into orthogonals: any summation is a reduction in accuracy,
-    # rotate image 45 degree masking empty corners, then Gy__ = top__ + bottom__, Gx__ = left__ + right__?
+    # remap kernel by 45 degree, then Gy__ = bottom__ - top__, Gx__ = right__ - left__?
 
     G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
-    M__ = int(ave * 1.418)  - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))
-    # inverse deviation of SAD: variation, ave SAD = ave g * 1.418
+    M__ = int(ave * 1.41)  - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))
+    # inverse deviation of SAD: variation, ave SAD = ave g * 1.41
 
     return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
@@ -115,8 +115,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 
 def derts2blobs(dert__, verbose=False, render=False, use_c=False):
 
-    if verbose:
-        start_time = time()
+    if verbose: start_time = time()
 
     if use_c:
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
@@ -134,10 +133,8 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
 
     assign_adjacents(adj_pairs)
 
-    if verbose:
-        print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
-    if render:
-        visualize_blobs(idmap, frame.blob_)
+    if verbose: print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
+    if render: visualize_blobs(idmap, frame.blob_)
 
     return frame
 
@@ -165,8 +162,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum
     if verbose:
         step = 100 / height / width     # progress % percent per pixel
         progress = 0.0
-        print(f"\rClustering... {round(progress)} %", end="")
-        sys.stdout.flush()
+        print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
 
     blob_ = []
     adj_pairs = set()
@@ -223,12 +219,11 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum
                         # else check if same-signed
                         elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
-
                 # terminate blob
                 yn += 1
                 xn += 1
                 blob.box = y0, yn, x0, xn
-                blob.mask = (idmap[y0:yn, x0:xn] != blob.id)
+                blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[], 0, 0, 0, 0]
 
                 if verbose:
@@ -346,7 +341,7 @@ if __name__ == "__main__":
             Add borrow_G -= inductive leaking across external blob?
             '''
             blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, A=blob.A, box=blob.box, sign=blob.sign,
-                             mask=blob.mask, root_dert__=deep_root_dert__, adj_blobs=blob.adj_blobs, fopen=blob.fopen, prior_forks=['g'])
+                             mask__=blob.mask__, root_dert__=deep_root_dert__, adj_blobs=blob.adj_blobs, fopen=blob.fopen, prior_forks=['g'])
 
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
@@ -378,3 +373,14 @@ if __name__ == "__main__":
         print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
+
+    '''
+    Test fopen:
+        if args.verbose:
+        for i, blob in enumerate(frame.blob_):
+        # simple check on correctness of fopen
+            # if fopen, y0 = 0, or x0 = 0, or yn = frame's y size or xn = frame's x size
+            if blob.box[0] == 0 or blob.box[2] == 0 or blob.box[1] == blob.root_dert__[0].shape[0] or blob.box[3] == blob.root_dert__[0].shape[1]:
+                if not blob.fopen: # fopen should be true when blob touches the frame boundaries
+                    print('fopen is wrong on blob '+str(i))
+    '''

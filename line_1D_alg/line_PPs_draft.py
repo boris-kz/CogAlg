@@ -25,16 +25,47 @@ This is different from 1st level connectivity clustering, where all distances be
 '''
 
 import numpy as np
-from line_Ps_defs import Cdert_P, CPP
+from line_patterns import *
+from class_cluster import ClusterStructure, NoneType
 
-ave_dI = 1000
+class Cdert_P(ClusterStructure):
+    smP = NoneType
+    MP = int
+    Neg_M = int
+    Neg_L = int
+    P = list
+    ML = int
+    DL = int
+    MI = int
+    DI = int
+    MD = int
+    DD = int
+    MM = int
+    DM = int
+
+class CPP(ClusterStructure):
+    smP = NoneType
+    MP = int
+    Neg_M = int
+    Neg_L = int
+    P_ = list
+    ML = int
+    DL = int
+    MI = int
+    DI = int
+    MD = int
+    DD = int
+    MM = int
+    DM = int
+
+ave = 100  # ave dI -> mI, * coef / var type
+'''
+no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
+'''
 ave_div = 50
 ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
 ave_net_M = 100  # search stop
 ave_Ls = 3
-'''
-no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
-'''
 
 def comp_P_(P_):  # cross-compare patterns within horizontal line
     dert_P_ = []  # comp_P_ forms array of alternating-sign dert_Ps (derivatives + P): output of pair-wise comp_P
@@ -68,29 +99,29 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
     return dert_P_
 
 
-def comp_P(P, _P, neg_M, neg_L):
-    # _smP = 0 in line_patterns, M: deviation even if min
+def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_patterns
 
     sign, L, I, D, M, dert_, sub_H, _smP = P.sign, P.L, P.I, P.D, P.M, P.dert_, P.sub_layers, P.smP
     _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P.sign, _P.L, _P.I, _P.D, _P.M, _P.dert_, _P.sub_layers, _P.smP
 
-    dL = L - _L
-    mL = min(L, _L)  # - ave_rM * L: positions / sign, derived, magnitude-proportional value
+    dC_ave = ave_rM ** (1 + neg_L / L)  # average match projected at current distance: neg_L, add coef / var?
+    # if form_Pd: also project ave_d
+    # if var' fderived: m = min(var,_var) - dC_ave,
+    # else:             m = dC_ave - abs(d_var), always a deviation:
+
     dI = I - _I  # proportional to distance, not I?
-    mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
-    dD = D - _D  # sum if opposite-sign
-    mD = min(D, _D)  # - ave_rM * D?  same-sign D in dP?
-    dM = M - _M  # sum if opposite-sign
-    mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
+    mI = dC_ave - abs(dI)  # I is not derived: match is inverse deviation of miss
+    dL = L - _L
+    mL = min(L, _L) - dC_ave  # positions / sign, derived, magnitude-proportional value
+    dD = D - _D     # sum if opposite-sign
+    mD = min(D, _D) - dC_ave  # same-sign D in Pd?
+    dM = M - _M     # sum if opposite-sign
+    mM = min(M, _M) - dC_ave  # negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-    mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
-    if sign == _sign:
-        mP *= 2  # sign is msb, value of sign match = full magnitude match?
-    proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L / L))
-    # projected mP at current distance: neg_L
-    vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
-    smP = vmP > 0
+    mP = mI + mL + mM + mD  # match(P, _P)
+    if sign == _sign: mP *= 2  # sign is MSB, value of sign match = full magnitude match?
 
+    smP = mP > 0
     if smP:  # forward match, compare sub_layers between P.sub_H and _P.sub_H (sub_hierarchies):
         dert_sub_H = []
         if P.sub_layers and _P.sub_layers:  # not empty sub layers
@@ -111,14 +142,14 @@ def comp_P(P, _P, neg_M, neg_L):
                                 dert_sub_P_.append(dert_sub_P)
 
                         dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # only layers that have been compared
-                        vmP += sub_MP  # of compared H, no specific mP?
+                        mP += sub_MP  # of compared H, no specific mP?
                         if sub_MP < ave_net_M:
                             # or mH: trans-layer induction?
                             break  # low vertical induction, deeper sub_layers are not compared
                     else:
                         break  # deeper P and _P sub_layers are from different intra_comp forks, not comparable?
 
-    dert_P = Cdert_P(smP=smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P, ML=mL, DL=dL, MI=mI, DI=dI, MD=mD, DD=dD, MM=mM, DM=dM)
+    dert_P = Cdert_P(smP=smP, MP=mP, Neg_M=neg_M, Neg_L=neg_L, P=P, ML=mL, DL=dL, MI=mI, DI=dI, MD=mD, DD=dD, MM=mM, DM=dM)
     return dert_P, _L, _smP
 
 
@@ -197,7 +228,7 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in the
                 rL = L / _L
                 # mL = whole_rL * min_L?
                 dI = I * rL - _I  # rL-normalized dI, vs. nI = dI * rL or aI = I / L
-                mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
+                mI = ave - abs(dI)  # I is not derived, match is inverse deviation of miss
                 dD = D * rL - _D  # sum if opposite-sign
                 mD = min(D, _D)   # same-sign D in dP?
                 dM = M * rL - _M  # sum if opposite-sign
@@ -209,7 +240,7 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in the
                     rrdn = 1  # added to rdn, or diff alt, olp, div rdn?
                 else:
                     rrdn = 2
-                if mP > ave_dI * 3 * rrdn:
+                if mP > ave * 3 * rrdn:
                     rvars = mP, mI, mD, mM, dI, dD, dM  # dPP_rdn, ndPP_rdn
                 else:
                     rvars = []
@@ -218,6 +249,8 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in the
                 # P vars -> _P vars:
                 _sign = sign, _L = L, _I = I, _D = D, _M = M, _dert_ = dert_, _sub_H = sub_H, __smP = _smP
                 '''
+                or no normalization, full comp by div is more accurate? 
+                
                 also define dP, 
                 if Pd > Pnd: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
                 else:        dPP_rdn = 1; ndPP_rdn = 0

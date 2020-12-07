@@ -110,7 +110,7 @@ class CBlob(ClusterStructure):
     open_stacks = int
     root_dert__ = object
     dert__ = object
-    mask = object
+    mask__ = object
     fopen = bool
     margin = list
     f_sstack = NoneType  # true if stack_ is sstack_
@@ -141,7 +141,7 @@ def slice_blob(sliced_blob, dert__, sign__, mask__, prior_forks, verbose=False, 
 
     form_sstack_(sliced_blob)  # cluster stacks into horizontally-oriented super-stacks
 
-#    flip_sstack_(sliced_blob)  # vertical-first re-scanning of selected sstacks
+    flip_sstack_(sliced_blob)  # vertical-first re-scanning of selected sstacks
     # evaluation is always per sstack
     # need update comp_slice_blob for new sstack structure
     # comp_slice_blob(sliced_blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
@@ -172,12 +172,12 @@ def form_P_(idert_, sign_, mask_):  # segment dert__ into P__, in horizontal ) v
     except IndexError:
         return P_  # the whole line is masked, return an empty P
 
-    dert_ = [[*next(idert_)]]  # get first dert from idert_ (generator/iterator)
+    dert_ = [list(idert_[x0])]  # get first dert from idert_ (generator/iterator)
     (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params
     _s = sign_[x0]
     _mask = mask_[x0]  # mask bit per dert
 
-    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_[x0:], start=x0):  # left to right in each row of derts
+    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_[x0 + 1:], start=x0 + 1):  # left to right in each row of derts
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             s = sign_[x]
@@ -378,17 +378,10 @@ def form_blob(stack, sliced_blob):  # increment blob with terminated stack, chec
                 mask__[y, x_start:x_stop] = False
 
         dert__ = [derts[y0:yn, x0:xn] for derts in sliced_blob.root_dert__]  # slice all dert array
-        '''
-        This should be done in flood_fill:
-        
-        fopen = 0  # flag: blob on frame boundary
-        if x0 == 0 or xn == sliced_blob.root_dert__[0].shape[1] or y0 == 0 or yn == sliced_blob.root_dert__[0].shape[0]:
-            fopen = 1
-        '''
-
         sliced_blob.stack_ = blob.stack_
         sliced_blob.dert__ = dert__
         sliced_blob.mask__ = mask__
+
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
 
@@ -503,33 +496,6 @@ def form_gP_(gdert_):
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
-'''
-def flip_yx(Py_):  # vertical-first run of form_P and deeper functions over blob's ders__
-    y0 = 0
-    yn = len(Py_)
-    x0 = min([P.x0 for P in Py_])
-    xn = max([P.x0 + P.L for P in Py_])
-    # initialize list containing y and x size, number of sublist = number of params
-    dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(Py_[0].dert_[0]))]
-    mask__ = np.zeros((yn - y0, xn - x0)) > 0
-    # insert Py_ value into dert__
-    for y, P in enumerate(Py_):
-        for x, idert in enumerate(P.dert_):
-            for i, (param, dert) in enumerate(zip(idert, dert__)):
-                dert[y, x+(P.x0-x0)] = param
-    # create mask and set masked area = True
-    mask__[np.where(dert__[0] == -1)] = True
-    # rotate 90 degree anti-clockwise (np.rot90 rotate 90 degree in anticlockwise direction)
-    dert__flip = tuple([np.rot90(dert) for dert in dert__])
-    mask__flip = np.rot90(mask__)
-    flipped_Py_ = []
-    # form vertical patterns after rotation
-    from slice_blob import form_P_
-    for y, dert_ in enumerate(zip(*dert__flip)):
-        crit_ = dert_[3] > 0  # compute crit from G? dert_[3] is G
-        P_ = list(form_P_(zip(*dert_), crit_, mask__flip[y])) # convert P_ to list , so that structure is same with Py_
-    return flipped_Py_
-'''
 
 def draw_stacks(frame):
     '''
@@ -591,7 +557,6 @@ def draw_stacks(frame):
 #           from matplotlib import pyplot as plt
 #           plt.imshow(img_colour)
 #           plt.pause(1)
-
             cv2.imwrite('./images/stacks/stacks_blob_'+str(blob_num)+'_colour.bmp',img_colour)
             cv2.imwrite('./images/stacks/stacks_blob_'+str(blob_num)+'_index.bmp',img_index)
 
@@ -645,21 +610,56 @@ def form_sstack_(sliced_blob):
 def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functions over blob's ders__
     '''
     flip selected sstacks
-     not updated from Chee's version
     '''
-    for sstack_ in sliced_blob['sstack__']:  # should not be needed
-        for sstack in sstack_:
+    for sstack in sliced_blob.stack_:
+        f_flip = 0
+        # get x0,xn,y0,yn from multiple stacks
+        x0_ = xn_ = y0_ = yn_ = []
 
-            x0 = min([Py.x0 for Py in sstack.Py_])
-            xn = max([Py.x0 + Py.L for Py in sstack.Py_])
-            y0 = sstack.y0
-            yn = y0 + sstack.Ly
+        for stack in sstack.Py_:
+            x0_.append(min([Py.x0 for Py in stack.Py_]))
+            xn_.append(max([Py.x0 + Py.L for Py in stack.Py_]))
+            y0_.append(stack.y0)
+            yn_.append(stack.y0 + stack.Ly)
+        x0 = min(x0_)
+        xn = max(xn_)
+        y0 = min(y0_)
+        yn = max(yn_)
 
-            L_bias = (xn - x0 + 1) / (sstack.Ly)
-            G_bias = abs(sstack.Dy) / abs(sstack.Dx)  # ddirection: Gy / Gx, preferential comp over low G
+        L_bias = (xn - x0 + 1) / (sstack.Ly)
+        abs_Dx = abs(sstack.Dx);  if abs_Dx == 0: abs_Dx = 1  # prevent /0
+        G_bias = abs(sstack.Dy) / abs_Dx  # ddirection: Gy / Gx, preferential comp over low G
 
-            if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:
-                dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(sstack.Ly)]
+        if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first re-scanning of selected sstacks
+            f_flip = 1
+            dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(sstack.Py_[0].dert_[0]))]
+            # or we can replace 'len(stack.Py_[0].dert_[0])' with 11, since we would always having 11 params here
+            mask__ = np.zeros((yn - y0, xn - x0)) > 0
+
+            for stack in sstack.Py_:
+                for y, P in enumerate(sstack.Py_):
+                    for x, idert in enumerate(P.dert_):
+                        for i, (param, dert) in enumerate(zip(idert, dert__)):
+                                dert[y + (sstack.y0 - y0), x + (P.x0 - x0)] = param
+            # update mask__
+            mask__[np.where(dert__[0] == -1)] = True
+            sign__ = dert__[3] * dert__[10] > 0
+
+        if f_flip:  # flip dert, form P
+            dert__flip = tuple([np.rot90(dert) for dert in dert__])
+            mask__flip = np.rot90(mask__)
+            sign__flip = np.rot90(sign__)
+
+            # this section is still tentative
+            stack_ = deque()  # buffer of running vertical stacks of Ps
+            for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
+
+                P_ = form_P_(list(zip(*dert_)), sign__[y], mask__[y])  # horizontal clustering
+                P_ = scan_P_(P_, stack_, sliced_blob)  # vertical clustering, adds P up_connects and _P down_connect_cnt
+                stack_ = form_stack_(P_, sliced_blob, y)
+
+            while stack_:  # dert__ ends, last-line stacks are merged into blob
+                form_blob(stack_.popleft(), sliced_blob)
 
         # we need to run form_gPPy per stack after flipping.
         # old comments:

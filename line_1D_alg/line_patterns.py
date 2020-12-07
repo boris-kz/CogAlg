@@ -29,8 +29,23 @@ import argparse
 from time import time
 from utils import *
 from itertools import zip_longest
-from line_PPs_draft import *
-from line_patterns_defs import Cdert, CP
+from class_cluster import ClusterStructure, NoneType
+
+class Cdert(ClusterStructure):
+    p = int
+    d = int
+    m = int
+
+class CP(ClusterStructure):
+    sign = NoneType
+    L = int
+    I = int
+    D = int
+    M = int
+    dert_ = list
+    sub_layers = list
+    smP = NoneType
+    fdert = NoneType
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
@@ -137,7 +152,6 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
 
     return adj_M_
 
-
 ''' 
     Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
     P:
@@ -153,7 +167,6 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
                 # for layer-parallel access and comp, as in frequency domain representation
                 # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
 '''
-
 
 def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
 
@@ -292,6 +305,8 @@ if __name__ == "__main__":
     fline_PPs = 1
     # Main
     frame_of_patterns_ = cross_comp(image)
+
+    from line_PPs_draft import *
 
     frame_dert_P_ = []
     frame_PPm_ = []

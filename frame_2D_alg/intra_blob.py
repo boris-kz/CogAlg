@@ -50,6 +50,8 @@ def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-co
 
         dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
         mask__ = blob.mask__
+        sign__ = sign__[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3]]  # input sign__ is per root blob?
+        # I think sign__ = ~mask__, redundant? And mask__ is already defined per root sub_blob, = current blob
 
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
             # slice_blob eval:
@@ -64,6 +66,8 @@ def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-co
                 if blob.G * blob.Ma * L_bias * G_bias > flip_ave:
                     dert__ = tuple([np.rot90(dert) for dert in dert__])
                     mask__ = np.rot90(mask__)
+                    sign__ = np.rot90(sign__)
+
                 blob.prior_forks.extend('p')
 
                 slice_blob(blob, dert__, sign__, mask__, blob.prior_forks, verbose=kwargs.get('verbose'))
@@ -106,11 +110,12 @@ def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-co
     return spliced_layers
 
 
-def cluster_sub_eval(blob, dert__, sign__, mask, **kwargs):  # comp_r or comp_a eval per sub_blob:
+def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_a eval per sub_blob:
     
     AveB = aveB * blob.rdn
                              
-    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__, verbose=False, mask=mask, blob_cls=CDeepBlob, accum_func=accum_blob_Dert)
+    sub_blobs, idmap, adj_pairs = \
+        flood_fill(dert__, sign__, verbose=False, mask__=mask__, blob_cls=CDeepBlob, accum_func=accum_blob_Dert)
     assign_adjacents(adj_pairs, CDeepBlob)
 
     if kwargs.get('render', False):
@@ -166,13 +171,13 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
             ext_dert__.append(dert[y0e:yne, x0e:xne])
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
 
-    # extended mask
-    ext_mask = np.pad(blob.mask,
+    # extended mask__
+    ext_mask__ = np.pad(blob.mask__,
                       ((y0 - y0e, yne - yn),
                        (x0 - x0e, xne - xn)),
                       constant_values=True, mode='constant')
 
-    return ext_dert__, ext_mask
+    return ext_dert__, ext_mask__
 
 
 def accum_blob_Dert(blob, dert__, y, x):
