@@ -50,13 +50,13 @@ def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-co
 
         dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
         mask__ = blob.mask__
-        sign__ = sign__[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3]]  # input sign__ is per root blob?
+        # sign__ = sign__[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3]]  # input sign__ is per root blob?
         # I think sign__ = ~mask__, redundant? And mask__ is already defined per root sub_blob, = current blob
 
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
             # slice_blob eval:
             if blob.G * blob.Ma - AveB > 0:  # Ma vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
-                blob.f_comp_a = 0  # id
+                blob.f_comp_a = 0
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
 
                 L_bias = (blob.box[3] - blob.box[2] + 1) / (blob.box[1] - blob.box[0] + 1)  # Lx / Ly, blob.box = [y0,yn,x0,xn]
@@ -70,26 +70,27 @@ def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-co
 
                 blob.prior_forks.extend('p')
 
-                slice_blob(blob, dert__, sign__, mask__, blob.prior_forks, verbose=kwargs.get('verbose'))
+                slice_blob(blob, dert__, mask__, blob.prior_forks, verbose=kwargs.get('verbose'))
 
     else:  # root fork is frame_blobs or comp_r
         ext_dert__, ext_mask__ = extend_dert(blob)
 
         if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
-            blob.f_comp_a = 1  # blob id
+            blob.f_comp_a = 1
             if kwargs.get('verbose'): print('\na fork\n')
             blob.prior_forks.extend('a')
 
-            adert__, mask__ = comp_a(ext_dert__, Ave, ext_mask__)  # -> m sub_blobs
+            adert__, mask__ = comp_a(ext_dert__, Ave, ext_mask__)  # compute ma and ga
             sign__ = adert__[3] * adert__[8] > 0  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
 
             if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, least one dert in dert__
-                # flatten adert
+                # flatten adert:
                 dert__ = tuple([adert__[0], adert__[1], adert__[2], adert__[3], adert__[4],
                                 adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
                                 adert__[7], adert__[8]])
 
                 cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)
+                # forms sub_blobs of sign in unmasked area
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
@@ -97,13 +98,13 @@ def intra_blob(blob, sign__, **kwargs):  # recursive input rng+ | angle cross-co
 
             if kwargs.get('verbose'): print('\na fork\n')
             blob.prior_forks.extend('r')
-            blob.f_comp_a = 0  # blob id
+            blob.f_comp_a = 0
             dert__, mask__ = comp_r(ext_dert__, Ave, blob.f_root_a, ext_mask__)
             sign__ = dert__[4] > 0  # m__ is inverse deviation of SAD
 
-            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:
-                # min size in y and x, at least one dert in dert__
+            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
                 cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)
+                # forms sub_blobs of sign in unmasked area
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 

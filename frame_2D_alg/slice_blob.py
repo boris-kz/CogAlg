@@ -48,7 +48,6 @@ from operator import attrgetter
 from class_cluster import ClusterStructure, NoneType
 from class_stream import BlobStreamer
 from comp_slice_draft import comp_slice_blob
-from frame_blobs import CDeepBlob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -113,16 +112,16 @@ class CBlob(ClusterStructure):
     mask__ = object
     fopen = bool
     margin = list
-    f_sstack = NoneType  # true if stack_ is sstack_
+    f_sstack = NoneType  # true if stack_ is sstack_; may not be needed
 
 # Functions:
 
 
-def slice_blob(sliced_blob, dert__, sign__, mask__, prior_forks, verbose=False, render=False):
+def slice_blob(sliced_blob, dert__, mask__, verbose=False, render=False):
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
-    if render:
+    if render:     # diagnostic code should be as few lines as possible
         def output_path(input_path, suffix): return str(Path(input_path).with_suffix(suffix))
         streamer = BlobStreamer(CBlob, dert__[1], record_path=output_path(arguments['image'], suffix='.im2blobs.avi'))
     if verbose: print("Converting to image...")
@@ -130,7 +129,7 @@ def slice_blob(sliced_blob, dert__, sign__, mask__, prior_forks, verbose=False, 
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
-        P_ = form_P_(list(zip(*dert_)), sign__[y], mask__[y])  # horizontal clustering
+        P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
         if render: render = streamer.update_blob_conversion(y, P_)
 
         P_ = scan_P_(P_, stack_, sliced_blob)  # vertical clustering, adds P up_connects and _P down_connect_cnt
@@ -140,14 +139,11 @@ def slice_blob(sliced_blob, dert__, sign__, mask__, prior_forks, verbose=False, 
         form_blob(stack_.popleft(), sliced_blob)
 
     form_sstack_(sliced_blob)  # cluster stacks into horizontally-oriented super-stacks
-
     flip_sstack_(sliced_blob)  # vertical-first re-scanning of selected sstacks
-    # evaluation is always per sstack
-    # need update comp_slice_blob for new sstack structure
-    # comp_slice_blob(sliced_blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
+
+    # comp_slice_blob(sliced_blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks, need to add sstacks
 
     if render: path = output_path(arguments['image'], suffix='.im2blobs.jpg'); streamer.end_blob_conversion(y, img_out_path=path)
-    # diagnostic code should be as few lines as possible
 
     return sliced_blob  # sliced_blob instance of CDeepBlob
 
@@ -162,7 +158,7 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(idert_, sign_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
     x0 = 0
@@ -174,22 +170,18 @@ def form_P_(idert_, sign_, mask_):  # segment dert__ into P__, in horizontal ) v
 
     dert_ = [list(idert_[x0])]  # get first dert from idert_ (generator/iterator)
     (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params
-    _s = sign_[x0]
     _mask = mask_[x0]  # mask bit per dert
 
     for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_[x0 + 1:], start=x0 + 1):  # left to right in each row of derts
         mask = mask_[x]
-        if ~mask:  # current dert is not masked
-            s = sign_[x]
-            if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate P:
-                P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
+        if mask:
+            if ~_mask:  # ~s and _s: prior dert is not masked and sign changed, terminate P:
+                P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
                 P_.append(P)
-                I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
-            elif _mask:
                 I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
         elif ~_mask:
             # dert is masked, prior dert is not masked, terminate P:
-            P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
+            P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
             P_.append(P)
 
         if ~mask:  # accumulate P params:
@@ -206,11 +198,10 @@ def form_P_(idert_, sign_, mask_):  # segment dert__ into P__, in horizontal ) v
             Ma += Ma
             L += 1
             dert_.append([p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma])  # accumulate dert into dert_ if no sign change
-            _s = s  # prior sign
         _mask = mask
 
     if ~_mask:  # terminate last P in a row if prior dert is unmasked
-        P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
+        P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
         P_.append(P)
 
     return P_
@@ -564,15 +555,13 @@ def draw_stacks(frame):
 def form_sstack_(sliced_blob):
     '''
     form horizontal stacks of stacks
-    not updated from Chee's version
     '''
     sstack_ = []
     _stack = sliced_blob.stack_[0]
     _f_up = _stack.up_connect_cnt > 0
     _f_ex = _f_up ^ _stack.down_connect_cnt > 0
 
-    # initialize 1st sstack with _stack params,
-    # stack_PP related params only relevant after form_gPPy
+    # initialize 1st sstack with _stack params, stack_PP related params only relevant after form_gPPy:
 
     sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
                     Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
@@ -584,16 +573,13 @@ def form_sstack_(sliced_blob):
         f_ex = _f_up ^ _stack.down_connect_cnt > 0
 
         if (f_up != _f_up) and (f_ex and _f_ex):
-            # terminate sstack and append it to sstack_
-            sstack_.append(sstack)
-            # initialize new sstack, all values = 0 or []
-            sstack = CStack()
+            sstack_.append(sstack)  # terminate sstack and append it to sstack_
+            sstack = CStack()       # initialize sstack, all values = 0 or []
 
         # append the horizontal stack_ and accumulate sstack params, regardless of termination
         sstack.accumulate(I=stack.I, Dy=stack.Dy, Dx=stack.Dx, G=stack.G, M=stack.M, Dyy=stack.Dyy, Dyx=stack.Dyx, Dxy=stack.Dxy, Dxx=stack.Dxx,
                           Ga=stack.Ga, Ma=stack.Ma, A=stack.A)
-        sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)
-        # 1 line may contain multiple Ps, hence Ly need to be computed from max of y and min of y
+        sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)  # Ly = max y - min y: line may contain multiple Ps
         sstack.y0 = min(sstack.y0, stack.y0)  # y0 is min of stacks' y0
         sstack.Py_.append(stack)
 
@@ -601,10 +587,7 @@ def form_sstack_(sliced_blob):
         _f_up = f_up
         _f_ex = f_ex
 
-    # stack_ = sstack_ if length of sstack_ >0
-    if len(sstack_)>0:
-        sliced_blob.stack_ = sstack_
-        sliced_blob.f_sstack = 1
+    sstack_.append(sstack)  # terminate last sstack
 
 
 def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functions over blob's ders__
@@ -613,7 +596,6 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
     '''
     for sstack in sliced_blob.stack_:
         f_flip = 0
-        # get x0,xn,y0,yn from multiple stacks
         x0_ = xn_ = y0_ = yn_ = []
 
         for stack in sstack.Py_:
@@ -633,28 +615,26 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
         if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first re-scanning of selected sstacks
             f_flip = 1
             dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(sstack.Py_[0].dert_[0]))]
-            # or we can replace 'len(stack.Py_[0].dert_[0])' with 11, since we would always having 11 params here
             mask__ = np.zeros((yn - y0, xn - x0)) > 0
 
-            for stack in sstack.Py_:
-                for y, P in enumerate(sstack.Py_):
-                    for x, idert in enumerate(P.dert_):
-                        for i, (param, dert) in enumerate(zip(idert, dert__)):
-                                dert[y + (sstack.y0 - y0), x + (P.x0 - x0)] = param
+            for stack_ in sstack.Py_:
+                for stack in stack_:  # need to check below:
+                    for y, P in enumerate(stack.Py_):
+                        for x, idert in enumerate(P.dert_):
+                            for i, (param, dert) in enumerate(zip(idert, dert__)):
+                                dert[y + (stack.y0 - y0), x + (P.x0 - x0)] = param
             # update mask__
             mask__[np.where(dert__[0] == -1)] = True
-            sign__ = dert__[3] * dert__[10] > 0
 
         if f_flip:  # flip dert, form P
             dert__flip = tuple([np.rot90(dert) for dert in dert__])
             mask__flip = np.rot90(mask__)
-            sign__flip = np.rot90(sign__)
 
             # this section is still tentative
             stack_ = deque()  # buffer of running vertical stacks of Ps
             for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
 
-                P_ = form_P_(list(zip(*dert_)), sign__[y], mask__[y])  # horizontal clustering
+                P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
                 P_ = scan_P_(P_, stack_, sliced_blob)  # vertical clustering, adds P up_connects and _P down_connect_cnt
                 stack_ = form_stack_(P_, sliced_blob, y)
 

@@ -101,13 +101,10 @@ def comp_slice_blob(blob_, AveB):  # comp_slice eval per blob
     for blob in blob_:
         if blob.G * blob.Ma - AveB > 0:
             # or blob value = G + vMa: equal value, normalized for the ratio of max magnitude?
-            # separate comp_slice coef: G_bias * L_bias?
 
             for i, stack in enumerate(blob.stack_):
                 if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
-                    # also check for long / thin edges: len(py_) / A?
-                    # eval any-angle rotation to replace flip, if min difference of blob axis from both vertical and horizontal directions
-
+                    # * len(Py_) / A: length ratio?
                     if stack.f_gstack:  # stack is a nested gP_stack
                         gstack_PP = CStack(stack_PP = CStack_PP())
 
@@ -132,8 +129,11 @@ def comp_slice_(stack, Ave):
     # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
     DdX = 0
 
-    if stack.G * (stack.Dy / stack.Dx) * stack.Ly > Ave:  # if y_bias after any rescan, also L_bias?
-        ort = 1  # virtual rotation: estimate P params as orthogonal to long axis, to increase Pm
+    if stack.G * (stack.Dy / stack.Dx) * (len(stack.Ly_) / stack.A) > Ave:  # if G_bias * L_bias after rescan?
+        # eval for rotation = blob axis angle - current vertical direction, if > min?
+        # else virtual rotation:
+
+        ort = 1  # virtual rotation: estimate P params as orthogonal to long axis, to increase mP
     else:
         ort = 0
     dert_P_ = []
