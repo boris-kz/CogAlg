@@ -1,10 +1,10 @@
 '''
     This is a terminal fork of intra_blob.
-    slice_blob converts selected smooth-edge blobs (high G, low Ga) into slice_blobs, adding internal P and stack structures.
-    It then calls comp_g and comp_P per stack, to trace and vectorize these edge blobs.
+    slice_blob converts selected smooth-edge blobs (high G, low Ga) into sliced blobs, adding internal P and stack structures.
+    It then calls comp_g and comp_P per stack, to trace and vectorize these edges.
 
     Pixel-level parameters are accumulated in contiguous spans of same-sign gradient, first horizontally then vertically.
-    Horizontal spans are Ps: 1D patterns, and vertical spans are first stacks of Ps, then blob of connected stacks.
+    Horizontal blob slices are Ps: 1D patterns, and vertical spans are first stacks of Ps, then blob of connected stacks.
 
     This processing adds a level of encoding per row y, defined relative to y of current input row, with top-down scan:
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
@@ -96,6 +96,7 @@ class CStack(ClusterStructure):
     sign = NoneType
     f_gstack = NoneType  # gPPy_ if 1, else Py_
     f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
+    f_flip = NoneType  # horizontal if 1, else vertical
     up_connect_cnt = int
     down_connect_cnt = int
     blob = NoneType
@@ -152,10 +153,10 @@ Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with one up_P to one down_P
-- form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob
-  by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
-dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
-Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
+- form_blob merges terminated stacks into blob, removes redundant reprs of the same blob by multiple forked P stacks
+
+dert: tuple of derivatives per pixel, initially (p, dy, dx, g), extended in intra_blob
+Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area A
 '''
 
 def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
@@ -175,16 +176,12 @@ def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical
     for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_[x0 + 1:], start=x0 + 1):  # left to right in each row of derts
         mask = mask_[x]
         if mask:
-            if ~_mask:  # ~s and _s: prior dert is not masked and sign changed, terminate P:
+            if ~_mask:  # prior dert is not masked, current dert is masked, terminate P (if both are masked, nothing happens):
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
                 P_.append(P)
                 I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
-        elif ~_mask:
-            # dert is masked, prior dert is not masked, terminate P:
-            P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
-            P_.append(P)
-
-        if ~mask:  # accumulate P params:
+        else:
+            # accumulate P params:
             I += p
             Dy += dy
             Dx += dx
@@ -494,10 +491,7 @@ def draw_stacks(frame):
     '''
     import cv2
     for blob_num, blob in enumerate(frame['blob__']):
-        y0_ = []
-        yn_ = []
-        x0_ = []
-        xn_ = []
+        y0_ = yn_ = x0_ = xn_ = []
 
         if len(blob.stack_)>1:
             # retrieve region size of all stacks
@@ -588,6 +582,7 @@ def form_sstack_(sliced_blob):
         _f_ex = f_ex
 
     sstack_.append(sstack)  # terminate last sstack
+    sliced_blob.stack_ = sstack_
 
 
 def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functions over blob's ders__
@@ -595,7 +590,6 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
     flip selected sstacks
     '''
     for sstack in sliced_blob.stack_:
-        f_flip = 0
         x0_ = xn_ = y0_ = yn_ = []
 
         for stack in sstack.Py_:
@@ -609,13 +603,27 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
         yn = max(yn_)
 
         L_bias = (xn - x0 + 1) / (sstack.Ly)
-        abs_Dx = abs(sstack.Dx);  if abs_Dx == 0: abs_Dx = 1  # prevent /0
-        G_bias = abs(sstack.Dy) / abs_Dx  # ddirection: Gy / Gx, preferential comp over low G
+        G_bias = abs(sstack.Dy) / (abs(sstack.Dx) + 1)  # ddirection: Gy / Gx, preferential comp over low G
 
-        if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first re-scanning of selected sstacks
-            f_flip = 1
-            dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(sstack.Py_[0].dert_[0]))]
+        if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first re-scan of selected sstacks
+            sstack.f_flip = 1
+
+            ''' just extract sstack dert__ from blob dert__ and forget about input stacks and Ps?
+            
+            dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(len(sstack.Py_[0].Py_[0].dert_[0]))]
+            # len(sstack.Py_[0].Py_[0].dert_[0]) = number of params in derts, which is 11
             mask__ = np.zeros((yn - y0, xn - x0)) > 0
+
+            for stack in sstack.Py_:  # each Py in sstack is a stack
+                for y, P in enumerate(stack.Py_):
+                    for x, idert in enumerate(P.dert_):
+                        for i, (param, dert) in enumerate(zip(idert, dert__)):
+                            dert[y + (stack.y0 - y0), x + (P.x0 - x0)] = param
+
+            # update mask__
+            mask__[np.where(dert__[0] == -1)] = True
+
+        mask__ = np.zeros((yn - y0, xn - x0)) > 0
 
             for stack_ in sstack.Py_:
                 for stack in stack_:  # need to check below:
@@ -625,8 +633,8 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
                                 dert[y + (stack.y0 - y0), x + (P.x0 - x0)] = param
             # update mask__
             mask__[np.where(dert__[0] == -1)] = True
-
-        if f_flip:  # flip dert, form P
+        '''
+        if sstack.f_flip:  # flip dert, form P
             dert__flip = tuple([np.rot90(dert) for dert in dert__])
             mask__flip = np.rot90(mask__)
 
