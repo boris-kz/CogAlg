@@ -170,7 +170,7 @@ def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical
     except IndexError:
         return P_  # the whole line is masked, return an empty P
     '''
-    dert_ = [list(idert_[x0])]  # get first dert from idert_ (generator/iterator)
+    dert_ = [list(idert_[0])]  # get first dert from idert_ (generator/iterator)
     (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params,
     # may not be necessary?
     _mask = mask_[x0]  # mask bit per dert

@@ -3,9 +3,9 @@ CogAlg
 
 Full introduction: <www.cognitivealgorithm.info>
 
-Intelligence is a general cognitive ability, ultimately the ability to predict. That includes planning, which technically is a self-prediction. Any prediction is interactive projection of known patterns, hence the first step must be pattern discovery. This perspective is well established, pattern recognition is a core of any IQ test. Recognition is a product of comparisons, ordered in some form of search. All this sounds pretty conventional, but I don't know of any attempts to implement consistently incremental search, as explained below.
+Intelligence is a general cognitive ability, ultimately the ability to predict. That includes planning, which technically is a self-prediction. Any prediction is interactive projection of known patterns, hence the first step must be pattern discovery. Which consists of input recognition, then clustering of matching inputs into higher-order patterns. These definitions are not terribly radical, pattern recognition is a core of any IQ test. But I don't know of any consistent implementation of hierarchical pattern discovery, thus my design is from the scratch.
 
-For excellent popular introductions to cognitin-as-prediction thesis see “On Intelligence” by Jeff Hawkins and 
+For excellent popular introductions to cognition-as-prediction perspective see “On Intelligence” by Jeff Hawkins and 
 “How to Create a Mind“ by Ray Kurzweil. But on a technical level, they and most everyone else use neural nets, which work in very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more local and selective by multiple instantiation parameters. But they still start with weighted summation per parameter, which degrades the data before comparison and evaluation.
 
 In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
@@ -14,7 +14,7 @@ In the next section, I define atomic comparison and resulting patterns, then des
 ### Outline of my approach
 
 
-Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It's a search for patterns of incremental composition in recursively extended pipeline, a version of instance-based learning. Each level of my pipeline cross-compares inputs, then clusters them into patterns, according to match computed in cross-comp. These patterns: proximity clusters or graphs of matching inputs, become inputs for the next level of search. Thus, higher levels of search (cross-comparison) form patterns of patterns, etc.
+Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It's a search for patterns of incremental composition in recursively extended pipeline, a version of instance-based learning. Each level of my pipeline cross-compares inputs, then clusters them into patterns by resulting match. These patterns: proximity clusters or graphs of matching inputs, become inputs for the next level of search. Thus, higher levels of search (cross-comparison) form patterns of patterns, etc.
 
 This is my definition of pattern, it doesn’t have an accepted one. In common usage pattern implies covariance, which is a match of derivatives across a set of previously compared inputs. In my terms it's a higher-derivation pattern, where cross-comparison and set-to-set comparison of primary inputs don’t form a match. My definition also includes that, because the inputs (pattern elements) may be any set of variables, but cross-comparison must proceed with incremental distance between and derivation of comparands.
 
