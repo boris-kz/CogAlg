@@ -1,5 +1,5 @@
 """
-Cross-comparison of pixels or gradients, in 2x2 or 3x3 kernels
+Cross-comparison of pixels 3x3 kernels or gradient angles in 2x2 kernels
 """
 
 import numpy as np

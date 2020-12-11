@@ -129,7 +129,7 @@ def comp_slice_(stack, Ave):
     # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
     DdX = 0
 
-    if stack.G * (stack.Dy / stack.Dx) * (len(stack.Ly_) / stack.A) > Ave:  # if G_bias * L_bias after rescan?
+    if stack.G * (stack.Dy / (stack.Dx+1)) * (len(stack.Ly_) / stack.A) > Ave:  # if G_bias * L_bias after rescan?
         # eval for rotation = blob axis angle - current vertical direction, if > min?
         # else virtual rotation:
 

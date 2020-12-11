@@ -249,9 +249,10 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in the
                 # P vars -> _P vars:
                 _sign = sign, _L = L, _I = I, _D = D, _M = M, _dert_ = dert_, _sub_H = sub_H, __smP = _smP
                 '''
-                or m and d from comp_rate is more accurate than comp_norm? 
+                or m and d from comp_rate is more accurate than comp_norm?
+                or rm and rd: rate value is relative? 
                 
-                define Pd, if strongly directional? 
+                also define Pd, if strongly directional? 
                    
                 if dP > ndP: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
                 else:        dPP_rdn = 1; ndPP_rdn = 0

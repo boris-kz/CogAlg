@@ -10,7 +10,7 @@
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
     2Le, line y-2: scan_P_(P, hP) -> hP, up_connect_, down_connect_count: vertical connections per stack of Ps
     3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
-    4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_connect_, recursively
+    4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blob referred by up_connect_, recursively
     Higher-row elements include additional parameters, derived while they were lower-row elements.
 
     Resulting blob structure (fixed set of parameters per blob):
@@ -162,46 +162,37 @@ Dert: params of cluster structures (P, stack, blob): summed dert params + dimens
 def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    x0 = 0
-    '''
-    try:
-        while mask_[x0]:  # skip until not masked
-            x0 += 1
-    except IndexError:
-        return P_  # the whole line is masked, return an empty P
-    '''
     dert_ = [list(idert_[0])]  # get first dert from idert_ (generator/iterator)
-    (I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma), L = dert_[0], 1  # initialize P params,
-    # may not be necessary?
-    _mask = mask_[x0]  # mask bit per dert
+    _mask = mask_[0]  # mask bit per dert
+    if ~_mask:
+        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert_[0]; L = 1; x0=0  # initialize P params with first dert
 
-    for x, (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) in enumerate(idert_[x0 + 1:], start=x0 + 1):  # left to right in each row of derts
-        mask = mask_[x]
-        # masks = 1,_0: P termination, 0,_1: P initialization, 0,_0 | 0,_1: P accumulation:
+    for x, dert in enumerate(idert_[1:]):  # left to right in each row of derts, no need for start=x0 + 1
+        mask = mask_[x]  # masks = 1,_0: P termination, 0,_1: P initialization, 0,_0: P accumulation:
         if mask:
-            if ~_mask:  # prior dert not masked, current dert masked, terminate P:
+            if ~_mask:  # _dert is not masked, dert is masked, terminate P:
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
                 P_.append(P)
-        else:
-            if _mask:  # prior dert is masked, initialize P params:
-                I = Dy = Dx = G = M = Dyy = Dyx = Dxy = Dxx = Ga = Ma = L = 0; x0 = x; dert_ = []
-            # current dert unmasked, accumulate P params:
-            I += p
-            Dy += dy
-            Dx += dx
-            G += g
-            M += m
-            Dyy += dyy
-            Dyx += dyx
-            Dxy += dxy
-            Dxx += dxx
-            Ga += ga
-            Ma += Ma
-            L += 1
-            dert_.append([p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma])  # accumulate dert into dert_ if no sign change
+        else:  # dert is not masked
+            if _mask:  # _dert is masked, initialize P params:
+                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert; L = 1; x0=x; dert_=[dert]
+            else:
+                I += dert[0]  # _dert is not masked, accumulate P params with (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) = dert
+                Dy += dert[1]
+                Dx += dert[2]
+                G += dert[3]
+                M += dert[4]
+                Dyy += dert[5]
+                Dyx += dert[6]
+                Dxy += dert[7]
+                Dxx += dert[8]
+                Ga += dert[9]
+                Ma += dert[10]
+                L += 1
+                dert_.append(dert)
         _mask = mask
 
-    if ~_mask:  # terminate last P in a row if prior dert is unmasked
+    if ~_mask:  # terminate last P in a row
         P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
         P_.append(P)
 
@@ -348,14 +339,17 @@ def form_stack_(P_, sliced_blob, y):  # Convert or merge every P into its stack 
 
 def form_blob(stack, sliced_blob):  # increment blob with terminated stack, check for blob termination and merger into frame
 
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, f_gstack, f_stack_PP, f_flip, up_connect_cnt, down_connect_cnt, blob, stack_PP = stack.unpack()
-    # terminated stack is merged into continued or initialized blob (all connected stacks):
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, f_gstack, f_stack_PP, f_flip, up_connect_cnt, down_connect_cnt, \
+    blob, stack_PP = stack.unpack()   # terminated stack is merged into continued or initialized blob (all connected stacks):
     accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
 
     blob.open_stacks += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
+    '''
+    not needed, we only have one blob and mask__ is not modified?
+    
+    if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated:
 
-    if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
         # if there is no re-evaluation: check for dert__ termination vs. open stacks
         last_stack = stack
         [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[1:5]
@@ -373,7 +367,7 @@ def form_blob(stack, sliced_blob):  # increment blob with terminated stack, chec
         sliced_blob.stack_ = blob.stack_
         sliced_blob.dert__ = dert__
         sliced_blob.mask__ = mask__
-
+    '''
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
 
