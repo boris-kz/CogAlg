@@ -350,14 +350,14 @@ if __name__ == "__main__":
                 if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                     blob.rdn = 1
                     blob.f_comp_a = 1
-                    deep_layers[i] = intra_blob(blob, sign__=[], render=args.render, verbose=args.verbose)
+                    deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
                     # dert__ comp_a in 2x2 kernels
 
             elif M - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                 blob.rdn = 1
                 blob.rng = 1
                 blob.f_root_a = 0
-                deep_layers[i] = intra_blob(blob, sign__=[], render=args.render, verbose=args.verbose)
+                deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
                 # dert__ comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers

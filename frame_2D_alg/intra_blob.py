@@ -43,8 +43,8 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
     AveB = int(aveB * blob.rdn)
     if kwargs.get('render') is not None:  # don't render small blobs
         if blob.A < 100: kwargs['render'] = False
-
     spliced_layers = []  # to extend root_blob sub_layers
+
     if blob.f_root_a:  # root fork is comp_a -> slice_blobs
 
         dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
@@ -64,7 +64,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                     mask__ = np.rot90(mask__)
 
                 blob.prior_forks.extend('p')
-                slice_blob(blob, dert__, mask__, verbose=kwargs.get('verbose'))
+                slice_blob(blob, dert__, mask__, AveB, verbose=kwargs.get('verbose'))
 
     else:  # root fork is frame_blobs or comp_r
         ext_dert__, ext_mask__ = extend_dert(blob)
