@@ -98,18 +98,23 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     topright__ = image[:-1, 1:]
     bottomleft__ = image[1:, :-1]
     bottomright__ = image[1:, 1:]
-
+    '''
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
+    '''
+    # rotate dert__ 45 degrees to convert diagonals into orthogonals: avoid summation which degrades accuracy
+    # used in comp_a only, resulting day and dax are back to orthogonal?
 
-    # This is less accurate than rotating dert__ to convert diagonals into orthogonals: any summation is a reduction in accuracy,
-    # remap kernel by 45 degree, then Gy__ = bottom__ - top__, Gx__ = right__ - left__?
+    rot_Gy__ = bottomright__ - topleft__  # bottom__ - top__
+    rot_Gx__ = topright__ - bottomleft__  # right__ - left__
 
-    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
-    M__ = int(ave * 1.41)  - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))
+    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
+    # G and M are rotation invariant, just more accurate from rot_Gy__ and rot_Gx__
+
+    M__ = int(ave * 1.41)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))
     # inverse deviation of SAD: variation, ave SAD = ave g * 1.41
 
-    return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    return (topleft__, rot_Gy__, rot_Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 
 

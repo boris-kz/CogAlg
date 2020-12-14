@@ -127,17 +127,17 @@ def comp_slice_(stack, Ave):
     # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
     DdX = 0
 
-    if stack.G * (stack.Dy / (stack.Dx+1)) * (stack.Ly_ / stack.A) > Ave:  # if G_bias * L_bias after rescan?
-        # eval for rotation = blob axis angle - current vertical direction, if > min?
-        # else virtual rotation eval:
-        ort = 1  # virtual rotation: estimate P params as orthogonal to long axis, to increase mP
+    if stack.G * (stack.Dy / (stack.Dx+1)) * (stack.Ly / stack.A) > Ave:  # if G_bias * L_bias after rescan?
+        # eval for P rotation = blob axis angle - current vertical direction, if > min?
+        # else virtual rotation:
+        ortho = 1  # estimate params of P orthogonal to long axis at P' y and ave_x, to increase mP
     else:
-        ort = 0
+        ortho = 0
     dert_P_ = []
     _P = stack.Py_[0]
 
     for P in stack.Py_[1:]:
-        dert_P = comp_slice(ort, P, _P, DdX)
+        dert_P = comp_slice(ortho, P, _P, DdX)
         dert_P_.append( dert_P)
         _P = P
 

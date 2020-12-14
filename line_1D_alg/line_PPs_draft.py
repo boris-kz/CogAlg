@@ -122,8 +122,9 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     if sign == _sign: mP *= 2  # sign is MSB, value of sign match = full magnitude match?
 
     smP = mP > 0
-    if smP:  # forward match, compare sub_layers between P.sub_H and _P.sub_H (sub_hierarchies):
-        dert_sub_H = []
+    if smP:  # positive forward match, compare sub_layers between P.sub_H and _P.sub_H:
+        dert_sub_H = []  # sub hierarchy is abbreviation for new sub_layers
+
         if P.sub_layers and _P.sub_layers:  # not empty sub layers
             for sub_P, _sub_P in zip(P.sub_layers, _P.sub_layers):
 
@@ -153,11 +154,12 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     return dert_P, _L, _smP
 
 
-def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, to eval for div comp, positive only: no contrast in overlapping comp?
+def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div comp per PPm
+
     PPm_ = []
-    # initialize PPm with first dert_P:
     dert_P = dert_P_[0]
-     # positive only, no contrast?
+    # initialize PPm with first dert_P (positive PPms only, no contrast: miss over discontinuity is expected):
+
     _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
         dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
         dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
@@ -166,13 +168,15 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, to eval for div comp, posi
     for i, dert_P in enumerate(dert_P_, start=1):
         smP = dert_P.smP
         if smP != _smP:
+            # terminate PPm:
             PPm_.append(CPP(smP=smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))
             # initialize PPm with current dert_P:
             _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
                 dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
                 dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
             P_ = [_P]
-        else:  # accumulate PPm with current dert_P:
+        else:
+            # accumulate PPm with current dert_P:
             MP += dert_P.MP
             Neg_M += dert_P.Neg_M
             Neg_L += dert_P.Neg_L
@@ -186,12 +190,13 @@ def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, to eval for div comp, posi
             DM += dert_P.DM
             P_.append(dert_P.P)
         _smP = smP
-    # pack last PP
+    # pack last PP:
     PPm_.append(CPP(smP=_smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))
 
     return PPm_
 
-''' Each PP is evaluated for intra-processing (no eval per P, results must be comparable between consecutive Ps): 
+''' 
+    Each PP is evaluated for intra-processing (no eval per P, results must be comparable between consecutive Ps): 
 
     - incremental range and derivation as in line_patterns intra_P, but over multiple params, 
     - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef? 

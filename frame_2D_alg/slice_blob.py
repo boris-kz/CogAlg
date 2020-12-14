@@ -10,7 +10,7 @@
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
     2Le, line y-2: scan_P_(P, hP) -> hP, up_connect_, down_connect_count: vertical connections per stack of Ps
     3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
-    4Le, line y-4+ stack depth: term_stack(stack, blob): merge connected stacks into up_connect_, recursively
+    4Le, line y-4+ stack depth: term_stack(stack, blob): merge terminated stack into up_connect_, recursively
     Higher-row elements include additional parameters, derived while they were lower-row elements.
 
     Resulting blob structure (fixed set of parameters per blob):
@@ -157,7 +157,7 @@ Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with one up_P to one down_P
-- term_stack merges terminated stacks into blob, removes redundant reprs of the same blob by multiple forked P stacks
+- term_stack merges terminated stacks into blob
 
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), extended in intra_blob
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area A
@@ -534,8 +534,7 @@ def form_sstack_(sliced_blob):
     _stack = sliced_blob.stack_[0]
     _f_up = _stack.up_connect_cnt > 0
     _f_ex = _f_up ^ _stack.down_connect_cnt > 0
-
-    # initialize 1st sstack with _stack params, stack_PP related params only relevant after form_gPPy:
+    # initialize 1st sstack with _stack params:
 
     sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
                     Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
@@ -570,9 +569,9 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
     flip selected sstacks
     '''
     for sstack in sliced_blob.stack_:
-        x0_ = xn_ = y0_ = yn_ = []  # initialization
+        x0_ = xn_ = y0_ = yn_ = []
 
-        # search through all stacks and their Ps, find the min and max of x and y
+        # find min and max x and y in sstack:
         for stack in sstack.Py_:
             x0_.append(min([Py.x0 for Py in stack.Py_]))
             xn_.append(max([Py.x0 + Py.L for Py in stack.Py_]))
@@ -583,43 +582,25 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
         y0 = min(y0_)
         yn = max(yn_)
 
-        L_bias = (xn - x0 + 1) / (sstack.Ly)  # ratio of y to x?
+        L_bias = (xn - x0 + 1) / (sstack.Ly)  # ratio of lx to Ly
         G_bias = abs(sstack.Dy) / (abs(sstack.Dx) + 1)  # ddirection: Gy / Gx, preferential comp over low G
 
         if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first re-scan of selected sstacks
             sstack.f_flip = 1
 
-            dert__ = [(np.zeros((yn - y0, xn - x0)) - 1) for _ in range(11)]  # len(sstack.Py_[0].Py_[0].dert_[0]) = 11: number of params in dert
-            mask__ = np.zeros((yn - y0, xn - x0)) > 0
-
-            for stack in sstack.Py_:  # each Py in sstack is a stack
+            sstack_mask__ = np.ones((yn - y0, xn - x0))
+            # unmask sstack:
+            for stack in sstack.Py_:
                 for y, P in enumerate(stack.Py_):
-                    for x, idert in enumerate(P.dert_):
-                        for i, (param, dert) in enumerate(zip(idert, dert__)):
-                            dert[y + (stack.y0 - y0), x + (P.x0 - x0)] = param
-
-            # update mask__, 
-            # should not be necessary?
-            mask__[np.where(dert__[0] == -1)] = True
-            mask__ = np.zeros((yn - y0, xn - x0)) > 0
-
-            for stack_ in sstack.Py_:
-                for y, P in enumerate(stack.Py_):
-                    for x, idert in enumerate(P.dert_):
-                        for i, (param, dert) in enumerate(zip(idert, dert__)):
-                            dert[y + (stack.y0 - y0), x + (P.x0 - x0)] = param
-            # update mask__
-            mask__[np.where(dert__[0] == -1)] = True
-
-        if sstack.f_flip:  # flip dert, form P
-            dert__ = tuple([np.rot90(dert) for dert in dert__])
-            mask__ = np.rot90(mask__)
+                    sstack_mask__[y, P.x0 : (P.x0+P.L-1)] = np.ones
+                    # or sstack_mask__ = np.ones([y, P.x0 : (P.x0+P.L-1)])?
 
             # this section is still tentative
             stack_ = deque()  # buffer of running vertical stacks of Ps
-            for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
 
-                P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
+            for y, dert_ in enumerate(zip(*sliced_blob.dert__[(y0+1):(yn-1), x0:0] )):  # first and last row are discarded
+
+                P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering
                 P_ = scan_P_(P_, stack_, sstack)  # vertical clustering, adds P up_connects and _P down_connect_cnt
                 stack_ = form_stack_(P_, sstack, y)
 
