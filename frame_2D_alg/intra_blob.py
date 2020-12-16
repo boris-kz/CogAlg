@@ -62,8 +62,9 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                 if blob.G * blob.Ma * L_bias * G_bias > flip_ave:  # flip dert__:
                     dert__ = tuple([np.rot90(dert) for dert in dert__])
                     mask__ = np.rot90(mask__)
-
+                    blob.f_flip = 1
                 blob.prior_forks.extend('p')
+
                 slice_blob(blob, dert__, mask__, AveB, verbose=kwargs.get('verbose'))
 
     else:  # root fork is frame_blobs or comp_r

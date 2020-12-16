@@ -100,6 +100,7 @@ def comp_slice_blob(blob, AveB):  # comp_slice eval per blob
 
     for sstack in blob.stack_:
         for i, stack in enumerate(sstack.Py_):
+
             if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
                 # * len(Py_) / A: length ratio?
                 if stack.f_gstack:  # stack is a nested gP_stack
@@ -128,7 +129,6 @@ def comp_slice_(stack, Ave):
     DdX = 0
 
     if stack.G * (stack.Dy / (stack.Dx+1)) * (stack.Ly / stack.A) > Ave:  # if G_bias * L_bias after rescan?
-        # eval for P rotation = blob axis angle - current vertical direction, if > min?
         # else virtual rotation:
         ortho = 1  # estimate params of P orthogonal to long axis at P' y and ave_x, to increase mP
     else:
@@ -142,12 +142,15 @@ def comp_slice_(stack, Ave):
         _P = P
 
     return form_PP_(dert_P_)  # stack_PP
-
+'''
+also eval for P rotation = blob axis angle - current vertical direction, if > min?
+'''
 
 def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
     s, x0, G, M, Dx, Dy, L, Dg, Mg  = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
-    # params per comp branch, add angle params, ext: X, new: L, no comp of input I in top dert?
+    # params per comp branch, add angle params, ext: X, new: L,
+    # no input I comp in top dert?
     _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg
     '''
     redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
@@ -158,21 +161,24 @@ def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, an
     dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
 
     if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
-        if mX == 0:  # no division by zero
-           mX = 1
-        rX = dX / mX  # average dist/prox, | prox/dist, | mX / max_L?
+        rX = dX / (mX+.001)  # average dist/prox, | prox/dist, | mX / max_L?
+
     ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
-    ddX = dX - _dX  # for ortho eval if first-run ave_DdX * Pm: += compensated angle change,
-    # what is this Ddx and where we would use this later?
-    DdX += ddX  # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
+    ddX = dX - _dX  # long axis curvature
+    DdX += ddX  # ortho eval if first-run ave_DdX * mP:
+    # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
 
-    if ortho:  # if ave_dX * val_PP_: estimate params of P orthogonal to long axis, maximizing lat diff, vert match
-
+    if ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
+        '''
+        Long axis is a curve, which consists of connections between mid-points of consecutive Ps. 
+        Ortho virtually rotates each P as orthogonal to its connection:
+        '''
         hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
         L /= hyp
-        Dx = (Dx * hyp + Dy / hyp) / 2 / hyp
-        Dy = (Dy / hyp - Dx * hyp) / 2 / hyp  # recompute? est D over vert_L, Ders summed in vert / lat ratio?
+        # re-orient derivatives by re-combining them in proportion of decomposition onto new axes:
+        Dx = (Dx * hyp + Dy / hyp) / 2  # no / hyp: kernel distances don't matter?
+        Dy = (Dy / hyp - Dx * hyp) / 2  # recompute? est D over vert_L, Ders summed in vert / lat ratio?
 
     dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
     dM = M - _M; mM = min(M, _M)  # no Mx, My: non-core, lesser and redundant bias?

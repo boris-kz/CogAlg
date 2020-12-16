@@ -81,6 +81,7 @@ class CDeepBlob(ClusterStructure):
     fopen = bool
     f_root_a = bool  # flag: input is from comp angle
     f_comp_a = bool  # flag: current fork is comp angle
+    f_flip = bool
     rdn = float
     rng = int
     Ls = int  # for visibility and next-fork rdn
@@ -89,6 +90,7 @@ class CDeepBlob(ClusterStructure):
     prior_forks = list
     stack_ = list
     f_sstack = NoneType
+
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
     # see comp_pixel_versions file for other versions and more explanation
@@ -105,8 +107,8 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # rotate dert__ 45 degrees to convert diagonals into orthogonals: avoid summation which degrades accuracy
     # used in comp_a only, resulting day and dax are back to orthogonal?
 
-    rot_Gy__ = bottomright__ - topleft__  # bottom__ - top__
-    rot_Gx__ = topright__ - bottomleft__  # right__ - left__
+    rot_Gy__ = bottomright__ - topleft__  # rotated bottom__ - top__
+    rot_Gx__ = topright__ - bottomleft__  # rotated right__ - left__
 
     G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
     # G and M are rotation invariant, just more accurate from rot_Gy__ and rot_Gx__
