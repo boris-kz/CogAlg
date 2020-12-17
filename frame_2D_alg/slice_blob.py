@@ -172,7 +172,7 @@ def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical
     if ~_mask:
         I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert_[0]; L = 1; x0=0  # initialize P params with first dert
 
-    for x, dert in enumerate(idert_, start=1):  # left to right in each row of derts
+    for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # masks = 1,_0: P termination, 0,_1: P initialization, 0,_0: P accumulation:
         if mask:
             if ~_mask:  # _dert is not masked, dert is masked, terminate P:
@@ -565,13 +565,12 @@ def form_sstack_(sliced_blob):
     sliced_blob.stack_ = sstack_
 
 
-def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functions over blob's ders__
+def flip_sstack_(sliced_blob):
     '''
-    flip selected sstacks
+    flip and re-form Ps and stacks in selected sstacks
     '''
     for sstack in sliced_blob.stack_:
         x0_, xn_, y0_, yn_ = [],[],[],[]
-
         # find min and max x and y in sstack:
         for stack in sstack.Py_:
             x0_.append(min([Py.x0 for Py in stack.Py_]))
@@ -598,7 +597,7 @@ def flip_sstack_(sliced_blob):  # vertical-first run of form_P and deeper functi
             sstack_dert__ = tuple([ param_dert__[y0:yn+1, x0:xn+1] for param_dert__ in sliced_blob.dert__ ])
             sstack_dert__ = tuple([ np.rot90(sstack_dert__) ])  # flip sstack
             stack_ = deque()  # vertical stacks of Ps
-            
+
             for y, dert_ in enumerate(zip(*sstack_dert__)):   # first and last row are discarded
 
                 P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering

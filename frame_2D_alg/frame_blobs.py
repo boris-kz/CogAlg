@@ -48,11 +48,16 @@ class CBlob(ClusterStructure):
     Dx = int
     G = int
     M = int
+    Dyy = int
+    Dyx = int
+    Dxy = int
+    Dxx = int
     # blob params
     A = int  # blob area
     sign = NoneType
     box = list
     mask__ = object
+    dert__ = object
     root_dert__ = object
     adj_blobs = list
     fopen = bool
@@ -107,11 +112,11 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # rotate dert__ 45 degrees to convert diagonals into orthogonals: avoid summation which degrades accuracy
     # used in comp_a only, resulting day and dax are back to orthogonal?
 
-    rot_Gy__ = bottomright__ - topleft__  # rotated bottom__ - top__
-    rot_Gx__ = topright__ - bottomleft__  # rotated right__ - left__
+    rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
+    rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
 
     G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
-    # G and M are rotation invariant, just more accurate from rot_Gy__ and rot_Gx__
+    # G and M are rotation invariant, but more accurate from rot_Gy__ and rot_Gx__?
 
     M__ = int(ave * 1.41)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))
     # inverse deviation of SAD: variation, ave SAD = ave g * 1.41
@@ -230,6 +235,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum
                 yn += 1
                 xn += 1
                 blob.box = y0, yn, x0, xn
+                blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[], 0, 0, 0, 0]
 

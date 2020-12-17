@@ -3,9 +3,9 @@ line_PPs is a 2nd-level 1D algorithm, its input is Ps formed by the 1st-level li
 It cross-compares Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 
 Range or derivation of cross-comp is selectively increased if the match from prior-order cross-comp is above threshold:
-comp (s): if same-sign,
-          cross-sign comp is borrow, also default L and M (core param) comp?
-          discontinuous comp up to max rel distance +|- contrast borrow, with bi-directional selection?
+comp s: if same-sign,
+        cross-sign comp is borrow, also default L and M (core param) comp?
+        discontinuous comp up to max rel distance +|- contrast borrow, with bi-directional selection?
     comp (L, I, D, M): equal-weight, select redundant I | (D,M),  div L if V_var * D_vars, and same-sign d_vars?
         comp (dert_):  lower composition than layers, if any
     comp (layers):  same-derivation elements
@@ -106,8 +106,8 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
 
     dC_ave = ave_rM ** (1 + neg_L / L)  # average match projected at current distance: neg_L, add coef / var?
     # if form_Pd: also project ave_d
-    # if var' fderived: m = min(var,_var) - dC_ave,
-    # else:             m = dC_ave - abs(d_var), always a deviation:
+    # if param fderived: m = min(var,_var) - dC_ave,
+    # else:              m = dC_ave - abs(d_var), always a deviation:
 
     dI = I - _I  # proportional to distance, not I?
     mI = dC_ave - abs(dI)  # I is not derived: match is inverse deviation of miss

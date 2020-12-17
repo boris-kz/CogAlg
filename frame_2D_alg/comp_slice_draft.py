@@ -148,7 +148,7 @@ also eval for P rotation = blob axis angle - current vertical direction, if > mi
 
 def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
-    s, x0, G, M, Dx, Dy, L, Dg, Mg  = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
+    s, x0, G, M, Dx, Dy, L, Dg, Mg = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
     # params per comp branch, add angle params, ext: X, new: L,
     # no input I comp in top dert?
     _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg
@@ -166,19 +166,19 @@ def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, an
     ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
     ddX = dX - _dX  # long axis curvature
-    DdX += ddX  # ortho eval if first-run ave_DdX * mP:
-    # mag correlation: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
+    DdX += ddX  # if > ave: ortho eval per P, else per PP_dX?
+    # param correlations: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
 
     if ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
         '''
-        Long axis is a curve, which consists of connections between mid-points of consecutive Ps. 
-        Ortho virtually rotates each P as orthogonal to its connection:
+        Long axis is a curve, consisting of connections between mid-points of consecutive Ps. 
+        Ortho virtually rotates each P to make it orthogonal to its connection:
         '''
         hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
         L /= hyp
-        # re-orient derivatives by re-combining them in proportion of decomposition onto new axes:
-        Dx = (Dx * hyp + Dy / hyp) / 2  # no / hyp: kernel distances don't matter?
-        Dy = (Dy / hyp - Dx * hyp) / 2  # recompute? est D over vert_L, Ders summed in vert / lat ratio?
+        # re-orient derivatives by combining them in proportion of their decomposition on new axes:
+        Dx = (Dx * hyp + Dy / hyp) / 2  # no / hyp: kernel doesn't matter on P level?
+        Dy = (Dy / hyp - Dx * hyp) / 2  # estimated D over vert_L
 
     dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
     dM = M - _M; mM = min(M, _M)  # no Mx, My: non-core, lesser and redundant bias?

@@ -46,29 +46,28 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
     spliced_layers = []  # to extend root_blob sub_layers
 
     if blob.f_root_a:  # root fork is comp_a -> slice_blobs
-
-        dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
+        # dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
         mask__ = blob.mask__
 
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
             # slice_blob eval:
             if blob.G * blob.Ma - AveB > 0:  # Ma vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
+                blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
 
                 L_bias = (blob.box[3] - blob.box[2] + 1) / (blob.box[1] - blob.box[0] + 1)  # Lx / Ly, blob.box = [y0,yn,x0,xn]
                 G_bias = abs(blob.Dy) / abs(blob.Dx)  # ddirection: Gy / Gx, preferential comp over low G
 
-                if blob.G * blob.Ma * L_bias * G_bias > flip_ave:  # flip dert__:
-                    dert__ = tuple([np.rot90(dert) for dert in dert__])
+                if blob.G * blob.Ma * L_bias * G_bias > flip_ave:
+                    blob.f_flip = 1   # flip dert__:
+                    blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
                     mask__ = np.rot90(mask__)
-                    blob.f_flip = 1
-                blob.prior_forks.extend('p')
 
-                slice_blob(blob, dert__, mask__, AveB, verbose=kwargs.get('verbose'))
+                slice_blob(blob, blob.dert__, mask__, AveB, verbose=kwargs.get('verbose'))
 
     else:  # root fork is frame_blobs or comp_r
-        ext_dert__, ext_mask__ = extend_dert(blob)
+        ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, to compute correlation in larger kernels
 
         if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
 
