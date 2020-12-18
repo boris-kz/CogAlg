@@ -119,16 +119,16 @@ class CBlob(ClusterStructure):
 # Functions:
 
 
-def slice_blob(sliced_blob, dert__, mask__, AveB, verbose=False, render=False):
+def slice_blob(sliced_blob, mask__, AveB, verbose=False, render=False):
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
-    height, width = dert__[0].shape
+    height, width = sliced_blob.dert__[0].shape
     if render:     # diagnostic code should be as few lines as possible
         def output_path(input_path, suffix): return str(Path(input_path).with_suffix(suffix))
-        streamer = BlobStreamer(CBlob, dert__[1], record_path=output_path(arguments['image'], suffix='.im2blobs.avi'))
+        streamer = BlobStreamer(CBlob, sliced_blob.dert__[1], record_path=output_path(arguments['image'], suffix='.im2blobs.avi'))
     if verbose: print("Converting to image...")
 
-    for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded?
+    for y, dert_ in enumerate(zip(*sliced_blob.dert__)):  # first and last row are discarded?
         if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
         P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
@@ -585,7 +585,7 @@ def flip_sstack_(sliced_blob):
         L_bias = (xn - x0 + 1) / (sstack.Ly)  # ratio of lx to Ly
         G_bias = abs(sstack.Dy) / (abs(sstack.Dx) + 1)  # ddirection: Gy / Gx, preferential comp over low G
 
-        if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first re-scan of selected sstacks
+        if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first rescan of selected sstacks
             sstack.f_flip = 1
 
             sstack_mask__ = np.ones((yn - y0, xn - x0)).astype(bool)
@@ -594,7 +594,7 @@ def flip_sstack_(sliced_blob):
                 for y, P in enumerate(stack.Py_):
                     sstack_mask__[y, P.x0: (P.x0 + P.L)] = False  # unmask P
 
-            sstack_dert__ = tuple([ param_dert__[y0:yn+1, x0:xn+1] for param_dert__ in sliced_blob.dert__ ])
+            sstack_dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in sliced_blob.dert__])
             sstack_dert__ = tuple([ np.rot90(sstack_dert__) ])  # flip sstack
             stack_ = deque()  # vertical stacks of Ps
 

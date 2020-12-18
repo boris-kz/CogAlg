@@ -52,6 +52,8 @@ class CBlob(ClusterStructure):
     Dyx = int
     Dxy = int
     Dxx = int
+    Ga = int
+    Ma = int
     # blob params
     A = int  # blob area
     sign = NoneType
@@ -60,6 +62,7 @@ class CBlob(ClusterStructure):
     dert__ = object
     root_dert__ = object
     adj_blobs = list
+    prior_forks = list
     fopen = bool
 
 class CDeepBlob(ClusterStructure):

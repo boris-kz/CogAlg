@@ -75,7 +75,7 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
         M = P.M
         for j, _P in enumerate(P_[i + 1:]):  # variable-range comp, no last-P displacement, just shifting first _P
             if M - neg_M > ave_net_M:
-                # search while net_M > ave, True for 1st _P, no select by M sign
+                # search while net_M > ave or 1st _P, no selection by M sign
                 dert_P, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 smP, vmP, neg_M, neg_L, P = dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P
                 if smP:
@@ -105,7 +105,6 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P.sign, _P.L, _P.I, _P.D, _P.M, _P.dert_, _P.sub_layers, _P.smP
 
     dC_ave = ave_rM ** (1 + neg_L / L)  # average match projected at current distance: neg_L, add coef / var?
-    # if form_Pd: also project ave_d
     # if param fderived: m = min(var,_var) - dC_ave,
     # else:              m = dC_ave - abs(d_var), always a deviation:
 
@@ -118,7 +117,7 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     dM = M - _M     # sum if opposite-sign
     mM = min(M, _M) - dC_ave  # negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-    mP = mI + mL + mM + mD  # match(P, _P)
+    mP = mI + mL + mM + mD  # match(P, _P), no I: overlap, for regression to 0der-representation?
     if sign == _sign: mP *= 2  # sign is MSB, value of sign match = full magnitude match?
 
     smP = mP > 0
@@ -142,23 +141,23 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
                                 sub_MP += dert_sub_P.MP  # sum sub_vmPs in dert_P_layer
                                 dert_sub_P_.append(dert_sub_P)
 
-                        dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # only layers that have been compared
+                        dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # add only layers that have been compared
                         mP += sub_MP  # of compared H, no specific mP?
                         if sub_MP < ave_net_M:
-                            # or mH: trans-layer induction?
+                            # potentially mH: trans-layer induction?
                             break  # low vertical induction, deeper sub_layers are not compared
                     else:
                         break  # deeper P and _P sub_layers are from different intra_comp forks, not comparable?
 
     dert_P = Cdert_P(smP=smP, MP=mP, Neg_M=neg_M, Neg_L=neg_L, P=P, ML=mL, DL=dL, MI=mI, DI=dI, MD=mD, DD=dD, MM=mM, DM=dM)
+
     return dert_P, _L, _smP
 
 
 def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div comp per PPm
 
     PPm_ = []
-    dert_P = dert_P_[0]
-    # initialize PPm with first dert_P (positive PPms only, no contrast: miss over discontinuity is expected):
+    dert_P = dert_P_[0]  # initialize PPm with first dert_P (positive PPms only, no contrast: miss over discontinuity is expected):
 
     _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
         dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
@@ -203,13 +202,15 @@ def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div co
     - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
     
     form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?  
+    if comp I -> dI ~ combined d_derivatives, then project ave_d?
+    
     L is summed sign: val = S val, core ! comb?  
 '''
 
-def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division in their element Ps
+def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division among element Ps
     '''
-    div x param if projected div match: compression per PP, no internal range for ind eval
-    ~ (L*D + L*M) * rm: L=min, positive if same-sign L & S, proportional to both, but includes fractional miss
+    div x param if projected div match: compression per PP, no internal range for ind eval.
+    ~ (L*D + L*M) * rm: L=min, positive if same-sign L & S, proportional to both but includes fractional miss
 
     + PPm' DL * DS: xP difference compression, additive to x param (intra) compression: S / L -> comp rS
     also + ML * MS: redundant unless min or converted?
