@@ -594,11 +594,12 @@ def flip_sstack_(sliced_blob):
                 for y, P in enumerate(stack.Py_):
                     sstack_mask__[y, P.x0: (P.x0 + P.L)] = False  # unmask P
 
-            sstack_dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in sliced_blob.dert__])
-            sstack_dert__ = tuple([ np.rot90(sstack_dert__) ])  # flip sstack
-            stack_ = deque()  # vertical stacks of Ps
+            # extract and flip sstack's dert__
+            sstack_dert__ = tuple([np.rot90(param_dert__[y0:yn, x0:xn]) for param_dert__ in sliced_blob.dert__])
+            sstack_mask__ = np.rot90(sstack_mask__)  # flip mask
 
-            for y, dert_ in enumerate(zip(*sstack_dert__)):   # first and last row are discarded
+            stack_ = deque()
+            for y, dert_ in enumerate(zip(*sstack_dert__)):  # same operations as in root sliced_blob(), but on sstack
 
                 P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering
                 P_ = scan_P_(P_, stack_, sstack)  # vertical clustering, adds P up_connects and _P down_connect_cnt
