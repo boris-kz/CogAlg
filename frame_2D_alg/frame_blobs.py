@@ -41,7 +41,7 @@ EXCLUDED_ID = -2
 
 FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, G, M, blob_, dert__')
 
-class CBlob(ClusterStructure):
+class CFlatBlob(ClusterStructure):
     # Dert params
     I = int
     Dy = int
@@ -65,7 +65,7 @@ class CBlob(ClusterStructure):
     prior_forks = list
     fopen = bool
 
-class CDeepBlob(ClusterStructure):
+class CBlob(ClusterStructure):
     # Dert params
     I = int
     Dy = int
@@ -332,7 +332,7 @@ if __name__ == "__main__":
         deep_blob_i_ = []  # index of a blob with deep layers
         deep_layers = [[]] * len(frame.blob_)  # for visibility only
         empty = np.zeros_like(frame.dert__[0])
-        deep_root_dert__ = (  # update root dert__
+        root_dert__ = (  # update root dert__
             frame.dert__[0],  # i
             frame.dert__[1],  # dy
             frame.dert__[2],  # dx
@@ -356,9 +356,7 @@ if __name__ == "__main__":
             borrow_G = min, ~ comp(G, _G): only the value present in both parties can be borrowed from one to another
             Add borrow_G -= inductive leaking across external blob?
             '''
-            blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, A=blob.A, box=blob.box, sign=blob.sign,
-                             mask__=blob.mask__, root_dert__=deep_root_dert__, adj_blobs=blob.adj_blobs, fopen=blob.fopen, prior_forks=['g'])
-
+            blob.root_dert__=root_dert__; blob.prior_forks=['g']  # not sure about this
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
 

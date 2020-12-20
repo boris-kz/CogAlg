@@ -102,7 +102,7 @@ class CStack(ClusterStructure):
     blob = NoneType
     stack_PP = object
 
-class CBlob(ClusterStructure):
+class CBlob(ClusterStructure):  # Flat?
     Dert = dict
     box = list
     stack_ = list

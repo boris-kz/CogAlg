@@ -23,7 +23,7 @@
 '''
 
 import numpy as np
-from frame_blobs import assign_adjacents, flood_fill, CDeepBlob, CBlob
+from frame_blobs import assign_adjacents, flood_fill, CBlob
 from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
@@ -107,14 +107,8 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
 def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_a eval per sub_blob:
     
     AveB = aveB * blob.rdn
-    # convert blob to CDeepBlob before forming sub_blobs:
 
-    blob[:] = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M, Dyy=blob.Dyy, Dyx=blob.Dyx, Dxy=blob.Dxy, Dxx=blob.Dxx, Ga=blob.Ga,
-                        Ma=blob.Ma, A=blob.A, box=blob.box, sign=blob.sign, dert__=blob.dert__, mask__=blob.mask__, root_dert__=blob.root_dert__,
-                        adj_blobs=blob.adj_blobs, prior_forks=blob.prior_forks.copy(), fopen=blob.fopen, f_root_a=1)
-
-    sub_blobs, idmap, adj_pairs = \
-        flood_fill(dert__, sign__, verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_blob_Dert)
+    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__, verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_blob_Dert)
     assign_adjacents(adj_pairs, CBlob)
 
     if kwargs.get('render', False):

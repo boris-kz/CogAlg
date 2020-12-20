@@ -207,7 +207,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div co
     L is summed sign: val = S val, core ! comb?  
 '''
 
-def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division among element Ps
+def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division between element Ps
     '''
     div x param if projected div match: compression per PP, no internal range for ind eval.
     ~ (L*D + L*M) * rm: L=min, positive if same-sign L & S, proportional to both but includes fractional miss

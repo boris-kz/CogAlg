@@ -2,9 +2,11 @@ Welcome to the CogAlg wiki!
 
 Much of the coding was done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg) and [Kok Wei Chee](https://github.com/kwcckw/CogAlg), according to the principles introduced in README.
 
-Main principle is input selection by projected match, quantified by cross-comparison on all levels of input composition. First such level in my scheme is cross-comp of pixels, vs. whole images in conventional CV. Pixel cross-comp (cross-correlation) computes brightness gradient in a sliding kernel, which is a basic edge-detection operator. Next step is selection: pixels + pixel-level gradients are clustered into positive and negative patterns or blobs: contiguous areas of above or below- average gradient. 
+Main principle is input selection by projected match, which is quantified by cross-comparison on all levels of input composition. First level is cross-comp (cross-correlation) of pixels, vs. whole images in conventional CV. It computes derivatives of brightness in a sliding kernel (derivatives are called transforms in Computer Graphics). Next step is segmentation: pixels + pixel-level derivatives are clustered into positive and negative patterns: contiguous spans of above or below- average match (inverse derivative).
 
-To preserve positional info, this algorithm must be specific to external (Cartesian) dimensionality of the input. Thus, we have three dimensionality-specific self-contained folders:
+To preserve positional info, such algorithm must be specific to external (Cartesian) dimensionality of the input. 
+Thus, we have three self-contained dimensionality-specific folders, explained below.
+Beyond 1D, derivatives per dimension are combined into gradient. That makes cross-comp a basic edge-detection operator, and resulting patterns are blobs. 
 
 **line_1D_alg:**
 
