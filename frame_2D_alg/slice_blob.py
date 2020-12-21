@@ -47,11 +47,13 @@ import numpy as np
 from operator import attrgetter
 from class_cluster import ClusterStructure, NoneType
 from class_stream import BlobStreamer
+from frame_blobs import CBlob
 from comp_slice_draft import comp_slice_blob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = 1000
+open_stacks = 0
 
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
@@ -78,6 +80,7 @@ class CP(ClusterStructure):
     Mg = int
 
 class CStack(ClusterStructure):
+    # Dert:
     I = int
     Dy = int
     Dx = int
@@ -99,25 +102,13 @@ class CStack(ClusterStructure):
     f_flip = NoneType  # horizontal if 1, else vertical
     up_connect_cnt = int
     down_connect_cnt = int
-    blob = NoneType
     stack_PP = object
 
-class CBlob(ClusterStructure):  # Flat?
-    Dert = dict
-    box = list
-    stack_ = list
-    sign = NoneType
-    open_stacks = int
-    root_dert__ = object
-    dert__ = object
-    mask__ = object
-    fopen = bool
-    margin = list
-    f_sstack = NoneType  # true if stack_ is sstack_; may not be needed
-    f_flip = bool  # dert__ is rotated 90 degrees
+    '''
+    the whole CSlicedBlob should not be needed, use root CBlob.
+    '''
 
 # Functions:
-
 
 def slice_blob(sliced_blob, mask__, AveB, verbose=False, render=False):
 
@@ -125,7 +116,8 @@ def slice_blob(sliced_blob, mask__, AveB, verbose=False, render=False):
     height, width = sliced_blob.dert__[0].shape
     if render:     # diagnostic code should be as few lines as possible
         def output_path(input_path, suffix): return str(Path(input_path).with_suffix(suffix))
-        streamer = BlobStreamer(CBlob, sliced_blob.dert__[1], record_path=output_path(arguments['image'], suffix='.im2blobs.avi'))
+        streamer = BlobStreamer(CSlicedBlob, sliced_blob.dert__[1], record_path=output_path(arguments['image'], suffix='.im2blobs.avi'))
+        # streamer is not needed?
     if verbose: print("Converting to image...")
 
     for y, dert_ in enumerate(zip(*sliced_blob.dert__)):  # first and last row are discarded?
@@ -151,7 +143,7 @@ def slice_blob(sliced_blob, mask__, AveB, verbose=False, render=False):
 
     if render: path = output_path(arguments['image'], suffix='.im2blobs.jpg'); streamer.end_blob_conversion(y, img_out_path=path)
 
-    return sliced_blob  # sliced_blob instance of CDeepBlob
+    return stack_  # the only thing slice_blob adds to blob?
 
 '''
 Parameterized connectivity clustering functions below:
@@ -282,10 +274,9 @@ def form_stack_(P_, sliced_blob, y):  # Convert or merge every P into its stack 
         xn = x0 + L  # next-P x0
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
-            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, A=0, Ly=0),
-                         box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
+            open_stacks = 1
             new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
-                               y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fPP=0)
+                               y0=y, Py_=[P], down_connect_cnt=0, sign=s, fPP=0)
             new_stack.hid = blob.id
             blob.stack_.append(new_stack)
 
@@ -302,7 +293,7 @@ def form_stack_(P_, sliced_blob, y):  # Convert or merge every P into its stack 
                 blob = up_connect_[0].blob
                 # initialize new_stack with up_connect blob:
                 new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
-                                   y0=y, Py_=[P], blob=blob, down_connect_cnt=0, up_connect_cnt=1, sign=s, fPP=0)
+                                   y0=y, Py_=[P], down_connect_cnt=0, up_connect_cnt=1, sign=s, fPP=0)
                 new_stack.hid = blob.id
                 blob.stack_.append(new_stack)  # stack is buffered into blob
 
@@ -314,7 +305,8 @@ def form_stack_(P_, sliced_blob, y):  # Convert or merge every P into its stack 
                         blob.stack_[-1].up_connect_cnt +=1
                         if up_connect.down_connect_cnt == 1:
                             term_stack(up_connect, sliced_blob)
-
+                        '''
+                        not needed:?
                         if not up_connect.blob is blob:
                             Dert, box, stack_, s, open_stacks = up_connect.blob.unpack()[:5]  # merged blob
                             I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly = Dert.values()
@@ -332,7 +324,8 @@ def form_stack_(P_, sliced_blob, y):  # Convert or merge every P into its stack 
                             up_connect.blob = blob
                             up_connect.hid = blob.id
                             blob.stack_.append(up_connect)
-                        blob.open_stacks -= 1  # overlap with merged blob.
+                        '''
+                        open_stacks -= 1  # overlap with merged blob.
 
         blob.box[1] = min(blob.box[1], x0)  # extend box x0
         blob.box[2] = max(blob.box[2], xn)  # extend box xn
@@ -345,17 +338,16 @@ def form_stack_(P_, sliced_blob, y):  # Convert or merge every P into its stack 
 def term_stack(stack, sliced_blob):  # increment blob with terminated stack
 
     I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, f_gstack, f_stack_PP, f_flip, up_connect_cnt, down_connect_cnt, \
-    blob, stack_PP = stack.unpack()  # terminated stack is merged into continued or initialized blob (all connected stacks):
-    accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
+    stack_PP = stack.unpack()  # terminated stack is merged into continued or initialized blob (all connected stacks):
 
-    blob.open_stacks += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
+    open_stacks += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
 
-    if blob.open_stacks == 0:  # number of incomplete stacks == 0: update stack_
+    if open_stacks == 0:  # number of incomplete stacks == 0: update stack_
         if isinstance(sliced_blob, CStack):  # check if input is sstack, and called from flip_sstack_
-            sliced_blob.Py_ = blob.stack_  # if sliced_blob is sstack, update sstack.Py_ to blob.stack_ (each Pys in Py_ is a stack)
+            sliced_blob.Py_ = stack_  # if sliced_blob is sstack, update sstack.Py_ to blob.stack_ (each Pys in Py_ is a stack)
         else:
-            sliced_blob.stack_ = blob.stack_  # update the newly formed stacks into sliced_blob.stack_
+            sliced_blob.stack_ = stack_  # update the newly formed stacks into sliced_blob.stack_
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
@@ -400,8 +392,8 @@ def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run o
                     gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
                                         Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
                     # initialize PP params:
-                    Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
-                    PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
+                    Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy
+                    PP_Dxx = P.Dxx; PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
 
                 _PP_sign = PP_sign
 

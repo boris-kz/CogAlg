@@ -64,7 +64,8 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                     blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
                     mask__ = np.rot90(mask__)
 
-                slice_blob(blob, mask__, AveB, verbose=kwargs.get('verbose'))
+                blob.stack_ = slice_blob(blob, mask__, AveB, verbose=kwargs.get('verbose'))
+                # stack_ should be the only thing slice_blob adds to blob?
 
     else:  # root fork is frame_blobs or comp_r
         ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, to compute correlation in larger kernels
@@ -117,7 +118,7 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
     blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
     blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
-    for i, sub_blob in enumerate(sub_blobs):  # evaluate sub_blob
+    for sub_blob in sub_blobs:  # evaluate sub_blob
 
         G = blob.G  # Gr, Grr..
         adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:

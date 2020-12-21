@@ -66,38 +66,39 @@ class CFlatBlob(ClusterStructure):
     fopen = bool
 
 class CBlob(ClusterStructure):
-    # Dert params
+    # Dert params, comp_pixel:
     I = int
     Dy = int
     Dx = int
     G = int
     M = int
+    # Dert params, comp_angle:
     Dyy = int
     Dyx = int
     Dxy = int
     Dxx = int
     Ga = int
     Ma = int
-    # blob params
+    # blob params:
     A = int  # blob area
     sign = NoneType
     box = list
     mask__ = object
     dert__ = object
     root_dert__ = object
-    adj_blobs = list
-    fopen = bool
-    f_root_a = bool  # flag: input is from comp angle
-    f_comp_a = bool  # flag: current fork is comp angle
-    f_flip = bool
-    rdn = float
-    rng = int
-    Ls = int  # for visibility and next-fork rdn
+    fopen = bool     # the blob is bordering masked area
+    f_root_a = bool  # input is from comp angle
+    f_comp_a = bool  # current fork is comp angle
+    f_flip = bool    # x-y swap
+    rdn = float      # redundancy to higher blob layers
+    rng = int        # comp range
+    # deep and external params:
+    Ls = int   # for visibility and next-fork rdn
     sub_layers = list
-    a_depth = int
+    a_depth = int  # currently not used
     prior_forks = list
-    stack_ = list
-    f_sstack = NoneType
+    adj_blobs = list  # for borrowing
+    stack_ = list  # sliced_blob if not empty
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
@@ -112,8 +113,8 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
     '''
-    # rotate dert__ 45 degrees to convert diagonals into orthogonals: avoid summation which degrades accuracy
-    # used in comp_a only, resulting day and dax are back to orthogonal?
+    # rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy
+    # used in comp_a only, which returns day and dax back to orthogonal, but summing in Dy, Dx should be from unrotated dy, dx?
 
     rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
     rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
