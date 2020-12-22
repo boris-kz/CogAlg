@@ -28,6 +28,7 @@ from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from slice_blob import slice_blob
+from comp_slice_draft import comp_slice_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
@@ -45,10 +46,9 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         if blob.A < 100: kwargs['render'] = False
     spliced_layers = []  # to extend root_blob sub_layers
 
-    if blob.f_root_a:  # root fork is comp_a -> slice_blobs
-        # dert__= tuple([root_dert[blob.box[0]:blob.box[1],blob.box[2]:blob.box[3]] for root_dert in blob.root_dert__])
+    if blob.f_root_a:
+        # root fork is comp_a -> slice_blobs
         mask__ = blob.mask__
-
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
             # slice_blob eval:
             if blob.G * blob.Ma - AveB > 0:  # Ma vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
@@ -64,11 +64,11 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                     blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
                     mask__ = np.rot90(mask__)
 
-                blob.stack_ = slice_blob(blob, mask__, AveB, verbose=kwargs.get('verbose'))
-                # stack_ should be the only thing slice_blob adds to blob?
-
-    else:  # root fork is frame_blobs or comp_r
-        ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, to compute correlation in larger kernels
+                blob.stack_ = slice_blob(blob.dert__, mask__, verbose=kwargs.get('verbose'))  # adds stack_ to blob
+                comp_slice_blob(blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
+    else:
+        # root fork is frame_blobs or comp_r
+        ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, for cross-comp in larger kernels
 
         if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
 
