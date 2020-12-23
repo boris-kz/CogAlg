@@ -36,6 +36,7 @@
       <w>derts</w>
       <w>diag</w>
       <w>discr</w>
+      <w>downconnect</w>
       <w>dsub</w>
       <w>dterm</w>
       <w>dxax</w>
@@ -133,6 +134,7 @@
       <w>tsegment</w>
       <w>tsegments</w>
       <w>unshifted</w>
+      <w>upconnect</w>
       <w>vals</w>
       <w>vdert</w>
       <w>vectorize</w>
