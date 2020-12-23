@@ -54,8 +54,6 @@ from comp_slice_draft import comp_slice_blob
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = 1000
-open_stacks = 0  # not needed for single blob?
-term_stack_ = []
 
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
@@ -102,15 +100,15 @@ class CStack(ClusterStructure):
     f_gstack = NoneType  # gPPy_ if 1, else Py_
     f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
     f_flip = NoneType  # horizontal if 1, else vertical
-    up_connect_cnt = int
-    down_connect_cnt = int
+    downconnect_cnt = int
     stack_PP = object
 
 # Functions:
 
+
 def slice_blob(dert__, mask__, verbose=False):
 
-    stack_ = deque()  # buffer of running vertical stacks of Ps
+    row_stack_ = deque()  # higher-row vertical stacks of Ps
     height, width = dert__[0].shape
     if verbose: print("Converting to image...")
 
@@ -118,20 +116,17 @@ def slice_blob(dert__, mask__, verbose=False):
         if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
         P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
-        P_ = scan_P_(P_, stack_)  # vertical clustering, adds P up_connects and _P down_connect_cnt
-        stack_ = form_stack_(P_, stack_, term_stack_, open_stacks, y)  # accumulate and terminate stacks
+        P_ = scan_P_(P_, row_stack_)    # vertical clustering, adds P upconnects and _P downconnect_cnt
+        row_stack_ = form_stack_(P_, row_stack_, y)  # initialize and accumulate stacks with Ps, store last row_stack only
 
-    # last line form_stack_()?
-    # term_stack_ for direct access? or no explicit termination, sequential access through last-row stack_?
+    sstack_ = form_sstack_(row_stack_)  # cluster stacks into horizontally-oriented super-stacks
+#   draw_stacks (row_stack_)  # visualization
+#   flip_sstack_(row_stack_)  # vertical-first re-scanning of selected sstacks
 
-    form_sstack_(stack_)  # cluster stacks into horizontally-oriented super-stacks
-    draw_stacks (stack_)  # visualization
-#   flip_sstack_(stack_)  # vertical-first re-scanning of selected sstacks
-
-    for sstack in stack_:  # convert selected stacks into gstacks
+    for sstack in sstack_:  # convert selected stacks into gstacks
         form_gPPy_(sstack.Py_)  # sstack.Py_ = stack_
 
-    return stack_  # added to blob, sequential access to higher stacks?
+    return sstack_  # last row_stack_, access to higher stacks via upconnect_s per row ( stack, in termination order
 
 '''
 Parameterized connectivity clustering functions below:
@@ -139,7 +134,6 @@ Parameterized connectivity clustering functions below:
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with one up_P to one down_P
 - term_stack merges terminated stacks into blob
-
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), extended in intra_blob
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area A
 '''
@@ -184,25 +178,25 @@ def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical
     return P_
 
 
-def scan_P_(P_, stack_):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
+def scan_P_(P_, row_stack_):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     '''
     Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
-    Overlap is represented as up_connect in P and is added to down_connect_cnt in _P. Scan continues until P.x0 >= _P.xn:
-    no x-overlap between P and next _P. Then P is packed into its up_connect stacks or initializes a new stack.
+    Overlap is represented as upconnect in P and is added to downconnect_cnt in _P. Scan continues until P.x0 >= _P.xn:
+    no x-overlap between P and next _P. Then P is packed into its upconnect stacks or initializes a new stack.
     After such test, loaded _P is also tested for x-overlap to the next P.
-    If negative, a stack with loaded _P is removed from stack_ (buffer of higher-row stacks) and tested for down_connect_cnt==0.
-    If so: no lower-row connections, the stack is packed into connected blobs (referred by its up_connect_),
+    If negative, a stack with loaded _P is removed from stack_ (buffer of higher-row stacks) and tested for downconnect_cnt==0.
+    If so: no lower-row connections, the stack is packed into connected blobs (referred by its upconnect_),
     else the stack is recycled into next_stack_, for next-row run of scan_P_.
     It's a form of breadth-first flood fill, with connects as vertices per stack of Ps: a node in connectivity graph.
     '''
-    next_P_ = deque()  # to recycle P + up_connect_ that finished scanning _P, will be converted into next_stack_
+    next_P_ = deque()  # to recycle P + upconnect_ that finished scanning _P, will be converted into next_stack_
 
-    if P_ and stack_:  # if both input row and higher row have any Ps / _Ps left
+    if P_ and row_stack_:  # if both input row and higher row have any Ps / _Ps left
 
         P = P_.popleft()  # load left-most (lowest-x) input-row P
-        stack = stack_.popleft()  # higher-row stacks
+        stack = row_stack_.popleft()  # higher-row stacks
         _P = stack.Py_[-1]  # last element of each stack is higher-row P
-        up_connect_ = []  # list of same-sign x-overlapping _Ps per P
+        upconnect_ = []  # list of same-sign x-overlapping _Ps per P
 
         while True:  # while both P_ and stack_ are not empty
 
@@ -212,71 +206,70 @@ def scan_P_(P_, stack_):  # merge P into higher-row stack of Ps which have same 
             _xn = _x0 + _P.L  # first x in next _P
 
             if (_x0 - 1 < xn and x0 < _xn + 1) and (P.sign == stack.sign):
-                # x overlap between P and _P in 8 directions: +ma blob is less selective
-                stack.down_connect_cnt += 1
-                up_connect_.append(stack)  # P-connected higher-row stacks
+                # x overlap between P and _P in 8 directions: positive ma blob is less selective
+                stack.downconnect_cnt += 1
+                upconnect_.append(stack)  # P-connected higher-row stacks
             if (xn <= _xn):
                 # _P overlaps next P in P_ in 8 directions, else if (xn < _xn)
-                next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
-                up_connect_ = []
+                next_P_.append((P, upconnect_))  # recycle _P for the next run of scan_P_
+                upconnect_ = []
                 if P_:
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     break
             else:  # no next-P overlap
-                if stack_:  # load stack with next _P
-                    stack = stack_.popleft()
+                if row_stack_:  # load stack with next _P
+                    stack = row_stack_.popleft()
                     _P = stack.Py_[-1]
                 else:  # no stack left: terminate loop
-                    next_P_.append((P, up_connect_))
+                    next_P_.append((P, upconnect_))
                     break
 
     while P_:  # terminate Ps that continue at row's end
-        next_P_.append((P_.popleft(), []))  # no up_connect
+        next_P_.append((P_.popleft(), []))  # no upconnect
 
-    return next_P_  # each element is P + up_connect_ refs
+    return next_P_  # each element is P + upconnect_ refs
 
 
-def form_stack_(P_, stack_, term_stack_, open_stacks, y):
+def form_stack_(P_, row_stack_, y):
 
-    # Convert or merge every P into its higher-row stack of Ps, possibly terminate stacks?
-    next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
+    # Convert or merge every P into higher-row stack of Ps, terminate stack if downconnect_cnt != 1
+    next_row_stack_ = deque()  # converted to row_stack_ in the next run of scan_P_
 
     while P_:
-        P, up_connect_ = P_.popleft()
+        P, upconnect_ = P_.popleft()
         I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, s, dert_, _, _, _ = P.unpack()
-        xn = x0 + L  # next-P x0?
-        if not up_connect_:
+        if not upconnect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
-            open_stacks += 1
-            new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
-                               y0=y, Py_=[P], down_connect_cnt=0, up_connect_cnt=0, sign=s, fPP=0)
+            stack = (CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
+                            y0=y, Py_=[P], downconnect_cnt=0, sign=s, fPP=0),
+                     upconnect_)  # stack = (CStack, upconnect_): upward access, no need for downconnect_, upconnect_cnt?
         else:
-            if len(up_connect_) == 1 and up_connect_[0].down_connect_cnt == 1:
-                # P has one up_connect and that up_connect has one down_connect=P: merge P into up_connect stack:
-                new_stack = up_connect_[0]
-                new_stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1)
-                new_stack.Py_.append(P)   # Py_: vertical buffer of Ps
-                new_stack.down_connect_cnt = 0  # reset down_connect_cnt
+            if len(upconnect_) == 1 and upconnect_[0].downconnect_cnt == 1:
+                # P has one upconnect and that upconnect has one downconnect=P: merge P into upconnect stack:
+                stack = upconnect_[0]
+                stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1)
+                stack.Py_.append(P)   # Py_: vertical buffer of Ps
+                stack.downconnect_cnt = 0  # reset downconnect_cnt
 
-            else:  # P has >1 up_connects, or 1 up_connect that has >1 down_connect_cnt:
+            else:  # P has >1 upconnects, or 1 upconnect that has >1 downconnect_cnt:
                 # initialize stack with P:
-                new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
-                                   y0=y, Py_=[P], down_connect_cnt=0, up_connect_cnt=1, sign=s, fPP=0)
+                stack = (CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
+                                y0=y, Py_=[P], downconnect_cnt=0, sign=s, fPP=0),
+                         upconnect_)  # stack = (CStack, upconnect_)
+                if len(upconnect_) > 1:
+                    '''
+                    downconnect_ is not needed?    pseudocode:
+                    for i, upconnect in enumerate(upconnect_):
+                        for j, downconnect in enumerate(upconnect.downconnect_):
+                            upconnect_[i].downconnect_[j] = stack
+                    '''
+                    row_stack_[-1].upconnect_cnt +=1  # not sure
 
-                if len(up_connect_) > 1:
-                    if up_connect_[0].down_connect_cnt == 1:  # up_connect is not terminated
-                        stack_.append(new_stack)
-                    for up_connect in up_connect_[1:len(up_connect_)]:
-                        stack_[-1].up_connect_cnt +=1
+        P.hid = stack.id  # not needed?
+        next_row_stack_.append(stack)
 
-                    # wrong, just pick 1st up_connect with 1 down_connect, the rest refer to that stack?
-                    # same as before, but with stacks, not blobs?
-
-        P.hid = new_stack.id
-        next_stack_.append(new_stack)
-
-    return next_stack_  # input for the next line of scan_P_
+    return next_row_stack_  # input for the next line of scan_P_
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
@@ -448,24 +441,24 @@ def draw_stacks(sliced_blob):
     cv2.imwrite('./images/stacks/stacks_blob_' + str(sliced_blob.id) + '_colour.bmp', img_colour)
 
 
-def form_sstack_(sliced_blob):
+def form_sstack_(stack_):
     '''
     form horizontal stacks of stacks
     '''
     sstack_ = []
-    _stack = sliced_blob.stack_[0]
-    _f_up = _stack.up_connect_cnt > 0
-    _f_ex = _f_up ^ _stack.down_connect_cnt > 0
+    _stack = stack_[0]
+    _f_up = _stack.upconnect_cnt > 0
+    _f_ex = _f_up ^ _stack.downconnect_cnt > 0
     # initialize 1st sstack with _stack params:
 
     sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
                     Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
                     Ga=_stack.Ga, Ma=_stack.Ma, A=_stack.A, Ly=_stack.Ly, y0=_stack.y0,
-                    Py_=[_stack], sign=_stack.sign, blob=_stack.blob)
+                    Py_=[_stack], sign=_stack.sign)
 
-    for stack in sliced_blob.stack_[1:]:
-        f_up = stack.up_connect_cnt > 0
-        f_ex = _f_up ^ _stack.down_connect_cnt > 0
+    for stack in stack_[1:]:
+        f_up = stack.upconnect_cnt > 0
+        f_ex = _f_up ^ _stack.downconnect_cnt > 0
 
         if (f_up != _f_up) and (f_ex and _f_ex):
             sstack_.append(sstack)  # terminate sstack and append it to sstack_
@@ -483,7 +476,8 @@ def form_sstack_(sliced_blob):
         _f_ex = f_ex
 
     sstack_.append(sstack)  # terminate last sstack
-    sliced_blob.stack_ = sstack_
+
+    return sstack_
 
 
 def flip_sstack_(sliced_blob):
@@ -523,7 +517,7 @@ def flip_sstack_(sliced_blob):
             for y, dert_ in enumerate(zip(*sstack_dert__)):  # same operations as in root sliced_blob(), but on sstack
 
                 P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering
-                P_ = scan_P_(P_, stack_, sstack)  # vertical clustering, adds P up_connects and _P down_connect_cnt
+                P_ = scan_P_(P_, stack_, sstack)  # vertical clustering, adds P upconnects and _P downconnect_cnt
                 stack_ = form_stack_(P_, sstack, y)
 
             while stack_:  # dert__ ends, last-line stacks are merged into blob
