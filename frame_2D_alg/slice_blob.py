@@ -48,7 +48,7 @@ from class_cluster import ClusterStructure, NoneType
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = 1000
-term_stack__ = []  # 2D array of terminated row_stack_s
+term_stack_ = []  # 2D array of terminated row_stack_s
 
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
@@ -94,7 +94,7 @@ class CStack(ClusterStructure):
     sign = NoneType
     f_gstack = NoneType  # gPPy_ if 1, else Py_
     f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
-    term_stack__ = list  # also replaces f_flip: vertical if empty, else horizontal
+    term_stack_ = list  # also replaces f_flip: vertical if empty, else horizontal
     downconnect_cnt = int
     upconnect_ = list
     stack_PP = object
@@ -113,12 +113,16 @@ def slice_blob(dert__, mask__, verbose=False):
 
         P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
         P_ = scan_P_(P_, row_stack_)    # vertical clustering, adds P upconnects and _P downconnect_cnt
-
         next_row_stack_ = form_stack_(P_, y)  # initialize and accumulate stacks with Ps
-        term_stack_(row_stack_, term_stack__, y)  # terminate stacks with downconnects != 1
-        row_stack_ = next_row_stack_
 
-    term_stack_(row_stack_, term_stack__, y)  # dert__ ends, last-row stacks are merged into blob
+        for stack in row_stack_:  # terminate stacks:
+            if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
+                term_stack_.append(stack)
+        row_stack_ = next_row_stack_  # row_stack_ + initialized stacks - terminated stacks
+
+    for stack in row_stack_:  # dert__ ends, last-row stacks are moved to term_stack__
+        if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
+            term_stack_.append(stack)
 
     sstack_ = form_sstack_(row_stack_)  # cluster stacks into horizontally-oriented super-stacks
 #   draw_stacks (row_stack_)  # visualization
@@ -262,17 +266,16 @@ def form_stack_(P_, y):
     return next_row_stack_  # input for the next line of scan_P_
 
 
-def term_stack_(row_stack_, term_stack__, y):
+def terminate_stack_(row_stack_, term_stack_):
 
     # for each stack in row_stack_: if complete downconnect_cnt != 1 (or = 0?): include stack in term_stack__:
-    term_stacks = y, []  # a row of terminated stacks
 
     for stack in row_stack_:
         if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
-            term_stacks[1].append(stack)
+            term_stack_.append(stack)
 
-    if term_stacks[1]:  # add a not-empty x-ordered row of terminated stacks to 2D term_stack__:
-        term_stack__.append(term_stacks)
+#    if term_stack_:  # add a not-empty x-ordered row of terminated stacks to 2D term_stack__:
+#        term_stack_.append(term_stack_)
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
@@ -460,7 +463,7 @@ def form_sstack_(stack_):
                     Py_=[_stack], sign=_stack.sign)
 
     for stack in stack_[1:]:
-        f_up = stack.upconnect_cnt > 0
+        f_up = len(stack.upconnect_) > 0
         f_ex = _f_up ^ _stack.downconnect_cnt > 0
 
         if (f_up != _f_up) and (f_ex and _f_ex):
@@ -504,7 +507,6 @@ def flip_sstack_(sliced_blob):
         G_bias = abs(sstack.Dy) / (abs(sstack.Dx) + 1)  # ddirection: Gy / Gx, preferential comp over low G
 
         if sstack.G * sstack.Ma * L_bias * G_bias > flip_ave:  # vertical-first rescan of selected sstacks
-            # term_stack__ replaces f_flip: vertical if empty, else horizontal
 
             sstack_mask__ = np.ones((yn - y0, xn - x0)).astype(bool)
             # unmask sstack:
@@ -521,9 +523,14 @@ def flip_sstack_(sliced_blob):
 
                 P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering
                 P_ = scan_P_(P_, row_stack_)  # vertical clustering, adds P upconnects and _P downconnect_cnt
-
                 next_row_stack_ = form_stack_(P_, y)  # initialize and accumulate stacks with Ps
-                term_stack_(row_stack_, sstack.term_stack__, y)
-                row_stack_ = next_row_stack_
 
-            term_stack_(row_stack_, sstack.term_stack__, y)  # dert__ ends, last-line stacks are merged into sstack
+                for stack in row_stack_:  # terminate stacks:
+                    if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
+                        sstack.term_stack_.append(stack)
+                row_stack_ = next_row_stack_  # row_stack_ + initialized stacks - terminated stacks
+
+            for stack in row_stack_:  # dert__ ends, last-row stacks are moved to sstack.term_stack__
+                if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
+                    sstack.term_stack_.append(stack)
+
