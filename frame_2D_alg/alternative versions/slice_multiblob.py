@@ -253,7 +253,7 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
             _xn = _x0 + _P.L  # first x in next _P
 
             if stack.G > 0:  # check for overlaps in 8 directions, else a blob may leak through its external blob
-                if _x0 - 1 < xn and x0 < _xn + 1:  # x overlap between loaded P and _P
+                if _x0 - 1 < xn and _xn + 1 > x0:  # x overlap between loaded P and _P
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_

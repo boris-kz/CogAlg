@@ -48,7 +48,6 @@ from class_cluster import ClusterStructure, NoneType
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = 1000
-term_stack_ = []  # 2D array of terminated row_stack_s
 
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
@@ -105,6 +104,7 @@ class CStack(ClusterStructure):
 def slice_blob(dert__, mask__, verbose=False):
 
     row_stack_ = deque()  # higher-row vertical stacks of Ps
+    term_stack_ = []  # 2D array of terminated stacks
     height, width = dert__[0].shape
     if verbose: print("Converting to image...")
 
@@ -120,9 +120,7 @@ def slice_blob(dert__, mask__, verbose=False):
                 term_stack_.append(stack)
         row_stack_ = next_row_stack_  # row_stack_ + initialized stacks - terminated stacks
 
-    for stack in row_stack_:  # dert__ ends, last-row stacks are moved to term_stack__
-        if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
-            term_stack_.append(stack)
+    term_stack_ += row_stack_  # dert__ ends, all last-row stacks are moved to term_stack_
 
     sstack_ = form_sstack_(row_stack_)  # cluster stacks into horizontally-oriented super-stacks
 #   draw_stacks (row_stack_)  # visualization
@@ -211,15 +209,14 @@ def scan_P_(P_, row_stack_):  # merge P into higher-row stack of Ps which have s
             _x0 = _P.x0       # first x in _P
             _xn = _x0 + _P.L  # first x in next _P
 
-            if (_x0 - 1 < xn and x0 < _xn + 1) and (P.sign == stack.sign):
-                # x overlap between P and _P in 8 directions: positive ma blob is less selective
+            if _x0 - 1 < xn and _xn + 1 > x0:  # x overlap between P and _P in 8 directions: +ma blob is less selective
                 stack.downconnect_cnt += 1
                 upconnect_.append(stack)  # P-connected higher-row stacks
-            if (xn <= _xn):
-                # _P overlaps next P in P_ in 8 directions, else if (xn < _xn)
+
+            if xn <= _xn:  # _P overlaps next P in P_ in 8 directions, if (xn < _xn) for 4 directions
                 next_P_.append((P, upconnect_))  # recycle _P for the next run of scan_P_
-                upconnect_ = []
                 if P_:
+                    upconnect_ = []  # reset for next P
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     break
@@ -248,7 +245,7 @@ def form_stack_(P_, y):
         if not upconnect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
             stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
-                           y0=y, Py_=[P], downconnect_cnt=0, upconnect_=upconnect_, sign=s, fPP=0),
+                           y0=y, Py_=[P], downconnect_cnt=0, upconnect_=upconnect_, sign=s, fPP=0)
         else:
             if len(upconnect_) == 1 and upconnect_[0].downconnect_cnt == 1:
                 # P has one upconnect and that upconnect has one downconnect=P: merge P into upconnect' stack:
@@ -259,7 +256,7 @@ def form_stack_(P_, y):
 
             else:  # P has >1 upconnects, or 1 upconnect that has >1 downconnects:  initialize stack with P:
                 stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
-                               y0=y, Py_=[P], downconnect_cnt=0, upconnect_=upconnect_, sign=s, fPP=0),
+                               y0=y, Py_=[P], downconnect_cnt=0, upconnect_=upconnect_, sign=s, fPP=0)
 
         next_row_stack_.append(stack)
 
@@ -392,36 +389,25 @@ def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
 
-def draw_stacks(sliced_blob):
+def draw_stacks(stack_):
     '''
-    tentative, still buggy
+    draw stacks, for debug purpose
     '''
     import cv2
+    # retrieve region size of all stacks
+    y0 = min([stack.y0 for stack in stack_])
+    yn = max([stack.y0 + stack.Ly for stack in stack_])
+    x0 = min([P.x0 for stack in stack_ for P in stack.Py_])
+    xn = max([P.x0 + P.L for stack in stack_ for P in stack.Py_])
 
-    y0_, yn_, x0_, xn_ = [],[],[],[]
-
-    for sstack in sliced_blob.stack_:
-        for stack in sstack.Py_:
-            # retrieve region size of all stacks
-            y0_.append(stack.y0)
-            yn_.append(stack.y0 + len(stack.Py_))
-            x0_.append(min([P.x0 for P in stack.Py_]))
-            xn_.append(max([P.x0 + P.L for P in stack.Py_]))
-
-    y0 = min(y0_)
-    yn = max(yn_)
-    x0 = min(x0_)
-    xn = max(xn_)
-    # initialize image and insert value into each stack.
-    # image value is start with 1 hence order of stack can be viewed from image value
     img = np.zeros((yn - y0, xn - x0))
-    img_value = 1
-    for sstack in sliced_blob.stack_:
-        for stack in sstack.Py_:
-            for y, P in enumerate(stack.Py_):
-                for x, dert in enumerate(P.dert_):
-                    img[y + (stack.y0 - y0), x + (P.x0 - x0)] = img_value
-            img_value += 1  # increase image value at the end of current stack
+    stack_index = 1
+
+    for stack in stack_:
+        for y, P in enumerate(stack.Py_):
+            for x, dert in enumerate(P.dert_):
+                img[y + (stack.y0 - y0), x + (P.x0 - x0)] = stack_index
+        stack_index += 1  # for next stack
 
     # list of colour for visualization purpose
     colour_list = []
@@ -438,13 +424,14 @@ def draw_stacks(sliced_blob):
 
     # initialization
     img_colour = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
-    total_stacks = img_value
+    total_stacks = stack_index
 
     for i in range(1, total_stacks + 1):
         colour_index = i % 10
         img_colour[np.where(img == i)] = colour_list[colour_index]
+    #    cv2.imwrite('./images/stacks/stacks_blob_' + str(sliced_blob.id) + '_colour.bmp', img_colour)
 
-    cv2.imwrite('./images/stacks/stacks_blob_' + str(sliced_blob.id) + '_colour.bmp', img_colour)
+    return img_colour
 
 
 def form_sstack_(stack_):
@@ -530,7 +517,5 @@ def flip_sstack_(sliced_blob):
                         sstack.term_stack_.append(stack)
                 row_stack_ = next_row_stack_  # row_stack_ + initialized stacks - terminated stacks
 
-            for stack in row_stack_:  # dert__ ends, last-row stacks are moved to sstack.term_stack__
-                if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
-                    sstack.term_stack_.append(stack)
+            sstack.term_stack_ += row_stack_   # dert__ ends, last-row stacks are moved to sstack.term_stack__
 
