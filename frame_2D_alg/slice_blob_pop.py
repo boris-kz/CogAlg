@@ -210,7 +210,6 @@ def form_stack_(P_, term_stack_, y):
             stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
                            y0=y, Py_=[P], downconnect_cnt=0, upconnect_=upconnect_, sign=s, fPP=0)
 
-            # line 261 and 276 are temporary solution, still need to find a better way to add upconnects to term_stack_
             # add stack's upconnects into term_stack_
             [term_stack_.append(upconnect) for upconnect in upconnect_ if upconnect not in term_stack_ ]
 
