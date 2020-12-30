@@ -195,7 +195,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div co
     return PPm_
 
 ''' 
-    Each PP is evaluated for intra-processing (no eval per P, results must be comparable between consecutive Ps): 
+    Each PP is evaluated for intra-processing, not per P, results must be comparable between consecutive Ps): 
 
     - incremental range and derivation as in line_patterns intra_P, but over multiple params, 
     - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef? 

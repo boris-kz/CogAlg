@@ -93,10 +93,11 @@ class CStack(ClusterStructure):
     sign = NoneType
     f_gstack = NoneType  # gPPy_ if 1, else Py_
     f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
-    term_stack_ = list  # also replaces f_flip: vertical if empty, else horizontal
     downconnect_cnt = int
     upconnect_ = list
     stack_PP = object
+    stack_ = list  # ultimately all stacks, also replaces f_flip: vertical if empty, else horizontal
+
 
 # Functions:
 
@@ -104,7 +105,7 @@ class CStack(ClusterStructure):
 def slice_blob(dert__, mask__, verbose=False):
 
     row_stack_ = []  # higher-row vertical stacks of Ps
-    term_stack_ = []  # terminated stacks
+    stack_ = []  # all terminated stacks
     height, width = dert__[0].shape
     if verbose: print("Converting to image...")
 
@@ -112,30 +113,19 @@ def slice_blob(dert__, mask__, verbose=False):
         if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
         P_ = form_P_(list(zip(*dert_)), mask__[y])  # horizontal clustering
-        P_ = scan_P_(P_, row_stack_)    # vertical clustering, adds P upconnects and stack downconnect_cnt
+        P_ = scan_P_(P_, row_stack_)  # vertical clustering, adds P upconnects and stack downconnect_cnt
         next_row_stack_ = form_stack_(P_, y)  # initialize and accumulate stacks with Ps, including the whole 1st row_stack_
 
-        for stack in row_stack_:  # terminate stacks with downconnects added by scan_P_:
-            if stack.downconnect_cnt != 1:
-                term_stack_.append(stack)  # separate trace-by-upconnect if any, in different order?
-            elif stack.downconnect_cnt == 1:
-                stack.downconnect_cnt = 0  # reset to last P downconnects=0
+        [stack_.append(stack) for stack in row_stack_ if not stack in next_row_stack_]  # buffer stacks that won't be used in next row
+        row_stack_ = next_row_stack_  # stacks initialized or accumulated in form_stack_
 
-        row_stack_ = next_row_stack_  # stacks initialized or accumulated in form_stack, no terminated stacks
+    stack_ += row_stack_  # dert__ ends, all last-row stacks have no downconnects
 
-    term_stack_ += row_stack_  # dert__ ends, all last-row stacks have downconnects=0 and are moved to term_stack_
-
-    # below is for debugging, to check whether we miss out any stack from the mask
-    img_colour = draw_stacks(term_stack_)  # visualization
+    img_colour = draw_stacks(stack_)  # visualization to check if we miss out any stack from the mask
     from matplotlib import pyplot as plt
-    plt.figure()
-    plt.subplot(1,2,1)
-    plt.imshow(img_colour)
-    plt.subplot(1,2,2)
-    plt.imshow(mask__*255)
+    plt.figure(); plt.subplot(1,2,1); plt.imshow(img_colour); plt.subplot(1,2,2); plt.imshow(mask__*255)
 
-    sstack_ = form_sstack_(row_stack_)  # cluster stacks into horizontally-oriented super-stacks
-#   draw_stacks (row_stack_)  # visualization
+    sstack_ = form_sstack_(stack_)  # cluster stacks into horizontally-oriented super-stacks
 #   flip_sstack_(row_stack_)  # vertical-first re-scanning of selected sstacks
 
     for sstack in sstack_:  # convert selected stacks into gstacks
@@ -206,15 +196,16 @@ def scan_P_(P_, row_stack_):  # merge P into higher-row stack of Ps which have s
     It's a form of breadth-first flood fill, with connects as vertices per stack of Ps: a node in connectivity graph.
     '''
     next_P_ = deque()  # to recycle P + upconnect_ that finished scanning _P, will be converted into next_stack_
+    i = 0  # stack index
 
     if P_ and row_stack_:  # there are next P and next stack
-        i = 0  # stack index
+
         P = P_.popleft()  # load left-most (lowest-x) input-row P
         stack = row_stack_[i]  # higher-row stacks
         _P = stack.Py_[-1]  # last element of each stack is higher-row P
         upconnect_ = []  # list of same-sign x-overlapping _Ps per P
 
-        while i < len(row_stack_):  # there is next row_stack
+        while True:           # loop until break
             x0 = P.x0         # first x in P
             xn = x0 + P.L     # first x in next P
             _x0 = _P.x0       # first x in _P
@@ -264,7 +255,7 @@ def form_stack_(P_, y):  # Convert or merge every P into higher-row stack of Ps
                 stack = upconnect_[0]
                 stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1)
                 stack.Py_.append(P)   # Py_: vertical buffer of Ps
-                stack.downconnect_cnt = 1  # reset downconnect_cnt to 0 after termination test
+                stack.downconnect_cnt = 0  # reset downconnect_cnt to that of last P
 
             else:  # P has >1 upconnects, or 1 upconnect that has >1 downconnects: initialize stack with P:
                 stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
@@ -273,16 +264,6 @@ def form_stack_(P_, y):  # Convert or merge every P into higher-row stack of Ps
         next_row_stack_.append(stack)
 
     return next_row_stack_  # input for the next line of scan_P_
-
-
-def terminate_stack_(row_stack_, term_stack_):
-
-    for stack in row_stack_:
-        if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
-            term_stack_.append(stack)  # or if complete downconnect_cnt = 0: exclude stacks accessible via upconnects?
-
-#   if term_stack_:  # add a not-empty x-ordered row of terminated stacks to 2D term_stack__:
-#       term_stack__.append(term_stack_)
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
@@ -392,57 +373,6 @@ def form_gP_(gdert_):
     gP_.append([_s, _Dg, _Mg])  # pack last gP
     return gP_
 
-# -----------------------------------------------------------------------------
-# Utilities
-
-def accum_Dert(Dert: dict, **params) -> None:
-    Dert.update({param: Dert[param] + value for param, value in params.items()})
-
-
-def draw_stacks(stack_):
-    '''
-    draw stacks, for debug purpose
-    '''
-    import cv2
-    # retrieve region size of all stacks
-    y0 = min([stack.y0 for stack in stack_])
-    yn = max([stack.y0 + stack.Ly for stack in stack_])
-    x0 = min([P.x0 for stack in stack_ for P in stack.Py_])
-    xn = max([P.x0 + P.L for stack in stack_ for P in stack.Py_])
-
-    img = np.zeros((yn - y0, xn - x0))
-    stack_index = 1
-
-    for stack in stack_:
-        for y, P in enumerate(stack.Py_):
-            for x, dert in enumerate(P.dert_):
-                img[y + (stack.y0 - y0), x + (P.x0 - x0)] = stack_index
-        stack_index += 1  # for next stack
-
-    # list of colour for visualization purpose
-    colour_list = []
-    colour_list.append([255, 255, 255])  # white
-    colour_list.append([200, 130, 0])  # blue
-    colour_list.append([75, 25, 230])  # red
-    colour_list.append([25, 255, 255])  # yellow
-    colour_list.append([75, 180, 60])  # green
-    colour_list.append([212, 190, 250])  # pink
-    colour_list.append([240, 250, 70])  # cyan
-    colour_list.append([48, 130, 245])  # orange
-    colour_list.append([180, 30, 145])  # purple
-    colour_list.append([40, 110, 175])  # brown
-
-    # initialization
-    img_colour = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
-    total_stacks = stack_index
-
-    for i in range(1, total_stacks + 1):
-        colour_index = i % 10
-        img_colour[np.where(img == i)] = colour_list[colour_index]
-    #    cv2.imwrite('./images/stacks/stacks_blob_' + str(sliced_blob.id) + '_colour.bmp', img_colour)
-
-    return img_colour
-
 
 def form_sstack_(stack_):
     '''
@@ -515,17 +445,61 @@ def flip_sstack_(sliced_blob):
             sstack_dert__ = tuple([np.rot90(param_dert__[y0:yn, x0:xn]) for param_dert__ in sliced_blob.dert__])
             sstack_mask__ = np.rot90(sstack_mask__)  # flip mask
 
-            row_stack_ = deque()
+            row_stack_ = []
             for y, dert_ in enumerate(zip(*sstack_dert__)):  # same operations as in root sliced_blob(), but on sstack
 
                 P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering
                 P_ = scan_P_(P_, row_stack_)  # vertical clustering, adds P upconnects and _P downconnect_cnt
                 next_row_stack_ = form_stack_(P_, y)  # initialize and accumulate stacks with Ps
 
-                for stack in row_stack_:  # terminate stacks:
-                    if stack.downconnect_cnt != 1:  # separate trace-by-connect for stacks with downconnect_cnt > 1, out of order?
-                        sstack.term_stack_.append(stack)
-                row_stack_ = next_row_stack_  # row_stack_ + initialized stacks - terminated stacks
+                [sstack.stack_.append(stack) for stack in row_stack_ if not stack in next_row_stack_]  # buffer terminated stacks
+                row_stack_ = next_row_stack_
 
-            sstack.term_stack_ += row_stack_   # dert__ ends, all last-row stacks are moved to sstack.term_stack__
+            sstack.term_stack_ += row_stack_   # dert__ ends, all last-row stacks have no downconnects
 
+# -----------------------------------------------------------------------------
+# Utilities
+
+def accum_Dert(Dert: dict, **params) -> None:
+    Dert.update({param: Dert[param] + value for param, value in params.items()})
+
+
+def draw_stacks(stack_):
+
+    import cv2
+    # retrieve region size of all stacks
+    y0 = min([stack.y0 for stack in stack_])
+    yn = max([stack.y0 + stack.Ly for stack in stack_])
+    x0 = min([P.x0 for stack in stack_ for P in stack.Py_])
+    xn = max([P.x0 + P.L for stack in stack_ for P in stack.Py_])
+
+    img = np.zeros((yn - y0, xn - x0))
+    stack_index = 1
+
+    for stack in stack_:
+        for y, P in enumerate(stack.Py_):
+            for x, dert in enumerate(P.dert_):
+                img[y + (stack.y0 - y0), x + (P.x0 - x0)] = stack_index
+        stack_index += 1  # for next stack
+
+    colour_list = []  # list of colours:
+    colour_list.append([255, 255, 255])  # white
+    colour_list.append([200, 130, 0])  # blue
+    colour_list.append([75, 25, 230])  # red
+    colour_list.append([25, 255, 255])  # yellow
+    colour_list.append([75, 180, 60])  # green
+    colour_list.append([212, 190, 250])  # pink
+    colour_list.append([240, 250, 70])  # cyan
+    colour_list.append([48, 130, 245])  # orange
+    colour_list.append([180, 30, 145])  # purple
+    colour_list.append([40, 110, 175])  # brown
+    # initialization
+    img_colour = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
+    total_stacks = stack_index
+
+    for i in range(1, total_stacks + 1):
+        colour_index = i % 10
+        img_colour[np.where(img == i)] = colour_list[colour_index]
+    #    cv2.imwrite('./images/stacks/stacks_blob_' + str(sliced_blob.id) + '_colour.bmp', img_colour)
+
+    return img_colour

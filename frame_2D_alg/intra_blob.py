@@ -3,9 +3,9 @@
 
     - comp_r: incremental range cross-comp in low-variation flat areas of +v--vg: the trigger is positive deviation of negated -vg,
     - comp_a: angle cross-comp in high-variation edge areas of positive deviation of gradient, forming gradient of angle,
-    - P_blob forms roughly edge-orthogonal Ps, evaluated for comp_d, then evaluates their stacks for comp_P
-    Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
+    - slice_blob forms roughly edge-orthogonal Ps, their stacks evaluated for rotation, comp_d, and comp_slice
 
+    Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
     Blob structure, for all layers of blob hierarchy:
     root_dert__,
     Dert = A, Ly, I, Dy, Dx, G, M, Day, Dax, Ga, Ma
@@ -51,7 +51,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         mask__ = blob.mask__
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
             # slice_blob eval:
-            if blob.G * blob.Ma - AveB > 0:  # Ma vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+            if blob.G * blob.Ma - AveB > 0:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
