@@ -86,6 +86,7 @@ class CStack(ClusterStructure):
     Dxx = int
     Ga = int
     Ma = int
+    # stack:
     A = int  # stack area
     Ly = int
     y0 = int
@@ -100,7 +101,6 @@ class CStack(ClusterStructure):
 
 
 # Functions:
-
 
 def slice_blob(dert__, mask__, verbose=False):
 
@@ -121,12 +121,10 @@ def slice_blob(dert__, mask__, verbose=False):
 
     stack_ += row_stack_  # dert__ ends, all last-row stacks have no downconnects
 
-    img_colour = draw_stacks(stack_)  # visualization to check if we miss out any stack from the mask
-    from matplotlib import pyplot as plt
-    plt.figure(); plt.subplot(1,2,1); plt.imshow(img_colour); plt.subplot(1,2,2); plt.imshow(mask__*255)
+    check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__
 
     sstack_ = form_sstack_(stack_)  # cluster stacks into horizontally-oriented super-stacks
-#   flip_sstack_(row_stack_)  # vertical-first re-scanning of selected sstacks
+    flip_sstack_(sstack_, dert__)  # vertical-first re-scanning of selected sstacks
 
     for sstack in sstack_:  # convert selected stacks into gstacks
         form_gPPy_(sstack.Py_)  # sstack.Py_ = stack_
@@ -196,10 +194,10 @@ def scan_P_(P_, row_stack_):  # merge P into higher-row stack of Ps which have s
     It's a form of breadth-first flood fill, with connects as vertices per stack of Ps: a node in connectivity graph.
     '''
     next_P_ = deque()  # to recycle P + upconnect_ that finished scanning _P, will be converted into next_stack_
-    i = 0  # stack index
 
     if P_ and row_stack_:  # there are next P and next stack
 
+        i = 0  # stack index
         P = P_.popleft()  # load left-most (lowest-x) input-row P
         stack = row_stack_[i]  # higher-row stacks
         _P = stack.Py_[-1]  # last element of each stack is higher-row P
@@ -413,11 +411,11 @@ def form_sstack_(stack_):
     return sstack_
 
 
-def flip_sstack_(sliced_blob):
+def flip_sstack_(sstack_, dert__):
     '''
     flip and re-form Ps and stacks in selected sstacks
     '''
-    for sstack in sliced_blob.stack_:
+    for sstack in sstack_:
         x0_, xn_, y0_, yn_ = [],[],[],[]
         # find min and max x and y in sstack:
         for stack in sstack.Py_:
@@ -439,10 +437,10 @@ def flip_sstack_(sliced_blob):
             # unmask sstack:
             for stack in sstack.Py_:
                 for y, P in enumerate(stack.Py_):
-                    sstack_mask__[y, P.x0: (P.x0 + P.L)] = False  # unmask P
+                    sstack_mask__[y+(stack.y0-y0), P.x0: (P.x0 + P.L)] = False  # unmask P
 
             # extract and flip sstack's dert__
-            sstack_dert__ = tuple([np.rot90(param_dert__[y0:yn, x0:xn]) for param_dert__ in sliced_blob.dert__])
+            sstack_dert__ = tuple([np.rot90(param_dert__[y0:yn, x0:xn]) for param_dert__ in dert__])
             sstack_mask__ = np.rot90(sstack_mask__)  # flip mask
 
             row_stack_ = []
@@ -455,7 +453,7 @@ def flip_sstack_(sliced_blob):
                 [sstack.stack_.append(stack) for stack in row_stack_ if not stack in next_row_stack_]  # buffer terminated stacks
                 row_stack_ = next_row_stack_
 
-            sstack.term_stack_ += row_stack_   # dert__ ends, all last-row stacks have no downconnects
+            sstack.stack_ += row_stack_   # dert__ ends, all last-row stacks have no downconnects
 
 # -----------------------------------------------------------------------------
 # Utilities
@@ -503,3 +501,30 @@ def draw_stacks(stack_):
     #    cv2.imwrite('./images/stacks/stacks_blob_' + str(sliced_blob.id) + '_colour.bmp', img_colour)
 
     return img_colour
+
+
+def check_stacks_presence(stack_, mask__, f_plot=0):
+    '''
+    visualize stack_ and mask__ to ensure that they are identical
+    '''
+    img_colour = draw_stacks(stack_)  # visualization to check if we miss out any stack from the mask
+    img_sum = img_colour[:, :, 0] + img_colour[:, :, 1] + img_colour[:, :, 2]
+
+    # check if all unmasked area is filled in plotted image
+    check_ok_y = np.where(img_sum > 0)[0].all() == np.where(mask__ == False)[0].all()
+    check_ok_x = np.where(img_sum > 0)[1].all() == np.where(mask__ == False)[1].all()
+
+    # check if their shape is the same
+    check_ok_shape_y = img_colour.shape[0] == mask__.shape[0]
+    check_ok_shape_x = img_colour.shape[1] == mask__.shape[1]
+
+    if not check_ok_y or not check_ok_x or not check_ok_shape_y or not check_ok_shape_x:
+        print("----------------Missing stacks----------------")
+
+    if f_plot:
+        from matplotlib import pyplot as plt
+        plt.figure()
+        plt.subplot(1, 2, 1)
+        plt.imshow(img_colour)
+        plt.subplot(1, 2, 2)
+        plt.imshow(mask__ * 255)
