@@ -68,14 +68,15 @@ ave_net_M = 100  # search stop
 ave_Ls = 3
 
 def comp_P_(P_):  # cross-compare patterns within horizontal line
+
     dert_P_ = []  # comp_P_ forms array of alternating-sign dert_Ps (derivatives + P): output of pair-wise comp_P
 
     for i, P in enumerate(P_):
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
         M = P.M
         for j, _P in enumerate(P_[i + 1:]):  # variable-range comp, no last-P displacement, just shifting first _P
-            if M - neg_M > ave_net_M:
-                # search while net_M > ave or 1st _P, no selection by M sign
+            if M - neg_M > ave_net_M:  # search while net_M > ave or 1st _P, no selection by M sign
+
                 dert_P, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 smP, vmP, neg_M, neg_L, P = dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P
                 if smP:
@@ -122,7 +123,7 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
 
     smP = mP > 0
     if smP:  # positive forward match, compare sub_layers between P.sub_H and _P.sub_H:
-        dert_sub_H = []  # sub hierarchy is abbreviation for new sub_layers
+        dert_sub_H = []  # sub hierarchy, abbreviation for new sub_layers
 
         if P.sub_layers and _P.sub_layers:  # not empty sub layers
             for sub_P, _sub_P in zip(P.sub_layers, _P.sub_layers):
@@ -154,14 +155,13 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     return dert_P, _L, _smP
 
 
-def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div comp per PPm
+def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div_comp per PPm
 
     PPm_ = []
     dert_P = dert_P_[0]  # initialize PPm with first dert_P (positive PPms only, no contrast: miss over discontinuity is expected):
 
     _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
-        dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
-        dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
+    dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
     P_ = [_P]
 
     for i, dert_P in enumerate(dert_P_, start=1):
@@ -171,8 +171,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div co
             PPm_.append(CPP(smP=smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))
             # initialize PPm with current dert_P:
             _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
-                dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, \
-                dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
+            dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P, dert_P.ML, dert_P.DL, dert_P.MI, dert_P.DI, dert_P.MD, dert_P.DD, dert_P.MM, dert_P.DM
             P_ = [_P]
         else:
             # accumulate PPm with current dert_P:
@@ -195,7 +194,7 @@ def form_PPm(dert_P_):  # cluster dert_Ps into PPm s by mP sign, eval for div co
     return PPm_
 
 ''' 
-    Each PP is evaluated for intra-processing, not per P, results must be comparable between consecutive Ps): 
+    Each PP is evaluated for intra-processing, not per P: results must be comparable between consecutive Ps): 
 
     - incremental range and derivation as in line_patterns intra_P, but over multiple params, 
     - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef? 
@@ -240,14 +239,13 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                 dM = M * rL - _M  # sum if opposite-sign
                 mM = min(M, _M)   # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-                mP = mI + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
-                                   # defines norm_mPP, no ndx: single, but nmx is summed
+                mP = mI + mM + mD  # match(P, _P) for derived vars, defines norm_PPm, no ndx: single, but nmx is summed
                 if mP > dert_P[1]:
                     rrdn = 1  # added to rdn, or diff alt, olp, div rdn?
                 else:
                     rrdn = 2
                 if mP > ave * 3 * rrdn:
-                    rvars = mP, mI, mD, mM, dI, dD, dM  # dPP_rdn, ndPP_rdn
+                    rvars = mP, mI, mD, mM, dI, dD, dM  # redundant vars: dPP_rdn, ndPP_rdn, assigned in each fork?
                 else:
                     rvars = []
                 # append rrdn and ratio variables to current dert_P:
@@ -255,8 +253,8 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                 # P vars -> _P vars:
                 _sign = sign, _L = L, _I = I, _D = D, _M = M, _dert_ = dert_, _sub_H = sub_H, __smP = _smP
                 '''
-                or m and d from comp_rate is more accurate than comp_norm?
-                or rm and rd: rate value is relative? 
+                m and d from comp_rate is more accurate than comp_norm?
+                rm, rd: rate value is relative? 
                 
                 also define Pd, if strongly directional? 
                    
