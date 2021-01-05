@@ -89,7 +89,7 @@ class CBlob(ClusterStructure):
     fopen = bool     # the blob is bordering masked area
     f_root_a = bool  # input is from comp angle
     f_comp_a = bool  # current fork is comp angle
-    f_flip = bool    # x-y swap
+    fflip = bool     # x-y swap
     rdn = float      # redundancy to higher blob layers
     rng = int        # comp range
     # deep and external params:
