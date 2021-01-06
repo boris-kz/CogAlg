@@ -391,27 +391,22 @@ def form_gP_(gdert_):
 
 def form_sstack_(stack_):
     '''
-    just a draft
-    form horizontal stacks of stacks, read backwards, sub-access by upconnects?
+    a draft: form horizontal stacks of stacks, read backwards, sub-access by upconnects?
     '''
     sstack_ = []
-    '''
-    _stack = stack_.copy.pop
-    _f_up = len(_stack.upconnect_) > 0
-    _f_ex = _f_up ^ _stack.downconnect_cnt > 0  # exclusive up- or down- connectivity
+    _f_horizontal = True  # accumulate sstack with first stack
 
-    # initialize 1st sstack with _stack params:
-    sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
-                    Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
-                    Ga=_stack.Ga, Ma=_stack.Ma, A=_stack.A, Ly=_stack.Ly, y0=_stack.y0,
-                    Py_=[_stack], sign=_stack.sign)
-    '''
-    for _stack in stack_.copy.pop:  # access in termination order
+    for _stack in reversed(stack_):  # access in termination order
 
         if _stack.downconnect_cnt == 0:  # else skip, this stack is upconnect of prior _stack
             _f_up = len(_stack.upconnect_) > 0
             _f_ex = _f_up ^ _stack.downconnect_cnt > 0  # exclusive up- or down- connectivity
-
+            '''
+            one of consecutive stacks is upconnected, the other is downconnected, both exclusively connected:
+            direction is reversed, which means the stacks are ordered horizontally
+            no _f_horizontal = f_up != _f_up and (f_ex and _f_ex):
+            init True, no f_up and f_ex yet
+            '''
             sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
                             Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
                             Ga=_stack.Ga, Ma=_stack.Ma, A=_stack.A, Ly=_stack.Ly, y0=_stack.y0,
@@ -420,25 +415,29 @@ def form_sstack_(stack_):
         for stack in _stack.upconnect_:  # access connected stacks only
             f_up = len(stack.upconnect_) > 0
             f_ex = f_up ^ stack.downconnect_cnt > 0
+            f_horizontal = f_up != _f_up and (f_ex and _f_ex)
 
-            if (f_up != _f_up) and (f_ex and _f_ex):
-                # one of consecutive stacks is upconnected, the other is downconnected, both of are exclusively connected:
-                # direction is reversed, which means the stacks are ordered horizontally
+            if f_horizontal and _f_horizontal:  # both stacks are horizontal
 
-                # accumulate instead of termination:
                 sstack.accumulate(I=stack.I, Dy=stack.Dy, Dx=stack.Dx, G=stack.G, M=stack.M, Dyy=stack.Dyy, Dyx=stack.Dyx, Dxy=stack.Dxy, Dxx=stack.Dxx,
                                   Ga=stack.Ga, Ma=stack.Ma, A=stack.A)
                 sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)  # Ly = max y - min y: line may contain multiple Ps
                 sstack.y0 = min(sstack.y0, stack.y0)  # y0 is min of stacks' y0
                 sstack.Py_.append(stack)
 
-            else:  # needs a review:
-                sstack_.append(sstack)  # terminate sstack and append it to sstack_
-                sstack = CStack()       # initialize sstack, all values = 0 or []
+                if _stack.Py_[0].x0 > stack.Py_[-1].x0:
+                    _stack = stack
+                # unfinished, need to explore higher upconnects, etc.
 
-        # update prior f_up and f_ex
+            else:
+                if sstack.A:  # not empty
+                   sstack_.append(sstack)  # terminate sstack, not-horizontal stacks don't form sstacks.
+                   sstack = CStack
+                f_horizontal = True  # same as init, to accumulate next horizontal stack
+
         _f_up = f_up
         _f_ex = f_ex
+        _f_horizontal = f_horizontal
 
     sstack_.append(sstack)  # terminate last sstack
 

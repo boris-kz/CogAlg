@@ -47,12 +47,10 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
     spliced_layers = []  # to extend root_blob sub_layers
 
     if blob.f_root_a:
-        # root fork is comp_a -> slice_blobs
-
+        # root fork is comp_a -> slice_blob
         if blob.mask__.shape[0] > 2 and blob.mask__.shape[1] > 2 and False in blob.mask__:  # min size in y and x, at least one dert in dert__
-            # slice_blob eval:
-            if blob.G * blob.Ma - AveB > 0:
-                # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+
+            if blob.G * blob.Ma - AveB > 0:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
@@ -112,8 +110,7 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
     blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
     for sub_blob in sub_blobs:  # evaluate sub_blob
-
-        G = blob.G  # Gr, Grr..
+        G = blob.G  # Gr, Grr...
         adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
         # adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
         # track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
