@@ -2,7 +2,7 @@ Welcome to the CogAlg wiki!
 
 Much of the coding was done by [Khanh Nguyen](https://github.com/khanh93vn/CogAlg) and [Kok Wei Chee](https://github.com/kwcckw/CogAlg), according to the principles introduced in README.
 
-Main principle is input selection by projected match, which is quantified by cross-comparison on all levels of input composition. First level is cross-comp (cross-correlation) of pixels, vs. whole images in conventional CV. It computes derivatives of brightness in a sliding kernel (derivatives are called transforms in Computer Graphics). Next step is segmentation: pixels + pixel-level derivatives are clustered into positive and negative patterns: contiguous spans of above or below- average match (inverse derivative).
+Main principle is input selection by projected match, which is quantified by cross-comparison on all levels of composition. First level is cross-comp (cross-correlation) of pixels, vs. whole images in conventional CV. It computes derivatives of brightness in a sliding kernel (derivatives are called transforms in Computer Graphics). Next step is segmentation: pixels + pixel-level derivatives are clustered into positive and negative patterns: contiguous spans of above or below- average match (inverse derivative).
 
 To preserve positional info, such algorithm must be specific to external (Cartesian) dimensionality of the input. 
 Thus, we have three self-contained dimensionality-specific folders, explained below.
@@ -25,11 +25,12 @@ Beyond 1D, derivatives per dimension are combined into gradient. That makes cros
 
 - [intra_blob](https://github.com/boris-kz/CogAlg/tree/master/frame_2D_alg/intra_blob): recursive calls to intra_comp: cross-comparison at extended range or higher derivation within selected blobs and then sub_blobs. Each call converts input blob into root blob and forms respective sub_blobs: contiguous areas of same-sign deviation of a new gradient.
 
-  [Diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png), functional, but may have bugs.
+  [Diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png), 
    
   - [intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/intra_comp.py) cross-compares pixels over extended range, or cross-compares angle of gradient, forming corresponding type of new gradient.
   - [draw_intra_comp](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/draw_intra_comp.py) computes gradients of the first three layers of forks over the whole frame, for visualization only (old version).  
-  - [slice_blob](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/slice_blob.py) is selective for salient smooth edge blobs. It forms edge-orthogonal Ps, selectively cross-compares their internal gradients, then forms vertically contiguous stacks of Ps. These stacks are evaluated for comp_slice, below. 
+  - [slice_blob](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/slice_blob.py) is selective for salient smooth edge blobs. It forms edge-orthogonal Ps, selectively cross-compares their internal gradients, then forms vertically contiguous stacks of Ps. These stacks are evaluated for comp_slice, below.
+   All functional but may have bugs.  
   
 - [comp_slice_draft](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/comp_slice_draft.py): will be terminal fork of intra_blob. It cross-compares between vertically consecutive Ps: horizontal blob slices. This will be selective for elongated blobs: likely edge contours. Comp_slice is a version line-tracing or 2D -> 1D dimensionality reduction, converting edges into vector representations. It's similar to second level of 1D alg, which cross-compares horizontally discontinuous Ps: [line_PPs_draft](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py). Both are a work-in-progress.
   
