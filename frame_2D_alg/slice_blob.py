@@ -24,21 +24,6 @@
 
     Old diagrams: https://kwcckw.github.io/CogAlg/
 '''
-"""
-usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
-                      [-z ZOOM]
-optional arguments:
-  -h, --help            show this help message and exit
-  -i IMAGE, --image IMAGE
-                        path to image file
-  -v VERBOSE, --verbose VERBOSE
-                        print details, useful for debugging
-  -n INTRA, --intra INTRA
-                        run intra_blobs after frame_blobs
-  -r RENDER, --render RENDER
-                        render the process
-  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
-"""
 
 from collections import deque
 import sys
@@ -102,7 +87,7 @@ class CStack(ClusterStructure):
     downconnect_cnt = int
     upconnect_ = list
     stack_PP = object
-    stack_ = list  # ultimately all stacks, also replaces f_flip: vertical if empty, else horizontal
+    stack_ = list  # ultimately all stacks, also replaces fflip: vertical if empty, else horizontal
     f_checked = int  # flag: stack has gone through form_sstack_recursive as upconnect
 
 # Functions:
@@ -285,8 +270,7 @@ def form_sstack_(stack_):
     _f_up_reverse = True  # accumulate sstack with first stack
 
     for _stack in reversed(stack_):  # access in termination order
-
-        # to check whether x0 and xn are computed correctly, can delete this section later
+        # do we still need this?:
         x0 = min([P.x0 for P in _stack.Py_])
         xn = max([P.x0+P.L for P in _stack.Py_])
         if _stack.x0 != x0:
@@ -317,38 +301,39 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
 
     for stack in _stack.upconnect_:  # upward access only
 
-        horizontal_bias = ((stack.xn - stack.x0 + 1) / stack.Ly) * (abs(stack.Dy) / (abs(stack.Dx) + 1))
-        # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
-        f_up = len(stack.upconnect_) > 0
-        f_ex = f_up ^ stack.downconnect_cnt > 0
-        f_up_reverse = f_up != _f_up and (f_ex and _f_ex)
+        if (sstack and not stack.f_checked):
 
-        if (sstack and not stack.f_checked) \
-            and (horizontal_bias > 1 or f_up_reverse):  # no need for f_up_reverse; sstack eval only?
-            # stack is horizontal or stack combination is horizontal because vertical connectivity is reversed
+            horizontal_bias = ((stack.xn - stack.x0 + 1) / stack.Ly) * (abs(stack.Dy) / (abs(stack.Dx) + 1))
+            # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
+            f_up = len(stack.upconnect_) > 0
+            f_ex = f_up ^ stack.downconnect_cnt > 0
+            f_up_reverse = f_up != _f_up and (f_ex and _f_ex)
 
-            # accumulate stack into sstack:
-            sstack.accumulate(I=stack.I, Dy=stack.Dy, Dx=stack.Dx, G=stack.G, M=stack.M, Dyy=stack.Dyy, Dyx=stack.Dyx, Dxy=stack.Dxy, Dxx=stack.Dxx,
-                              Ga=stack.Ga, Ma=stack.Ma, A=stack.A)
-            sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)  # Ly = max y - min y: maybe multiple Ps in line
-            sstack.y0 = min(sstack.y0, stack.y0)  # y0 is min of stacks' y0
-            sstack.Py_.append(stack)
+            if (horizontal_bias > 1 or f_up_reverse):
+                # stack is horizontal or stack combination is horizontal because vertical connectivity is reversed
+                # or if reversal value: horizontal value += vertical value cancel > excess, non-rdn only: value = horizontal excess?
+                # accumulate stack into sstack:
+                sstack.accumulate(I=stack.I, Dy=stack.Dy, Dx=stack.Dx, G=stack.G, M=stack.M, Dyy=stack.Dyy, Dyx=stack.Dyx, Dxy=stack.Dxy, Dxx=stack.Dxx,
+                                  Ga=stack.Ga, Ma=stack.Ma, A=stack.A)
+                sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)  # Ly = max y - min y: maybe multiple Ps in line
+                sstack.y0 = min(sstack.y0, stack.y0)  # y0 is min of stacks' y0
+                sstack.Py_.append(stack)
 
-            # recursively form sstack from stack
-            form_sstack_recursive(stack, sstack, sstack_, f_up_reverse)
-            stack.f_checked = 1
-
-        else:  # change in stack orientation, pack to check upconnect_ in the next loop
-            if sstack and sstack not in sstack_:  # sstack was not terminated as some other upconnect
-                sstack_.append(sstack)
-
-            if not stack.f_checked:  # check stack upconnect_ to form sstack, unless already done
-                form_sstack_recursive(stack, [], sstack_, f_up_reverse)
+                # recursively form sstack from stack
+                form_sstack_recursive(stack, sstack, sstack_, f_up_reverse)
                 stack.f_checked = 1
 
-    # upconnect_ ends, pack the sstack, unless it was terminated as some other upconnect:
-    if sstack and sstack not in sstack_:
-        sstack_.append(sstack)
+            else:  # change in stack orientation, pack to check upconnect_ in the next loop
+                if sstack not in sstack_:  # sstack was not terminated as some other upconnect
+                    sstack_.append(sstack)
+
+                if not stack.f_checked:  # check stack upconnect_ to form sstack, unless already done
+                    form_sstack_recursive(stack, [], sstack_, f_up_reverse)
+                    stack.f_checked = 1
+
+        # upconnect_ ends, pack the sstack, unless it was terminated as some other upconnect:
+        if sstack and sstack not in sstack_:
+            sstack_.append(sstack)
 
 
 def flip_sstack_(sstack_, dert__):
@@ -356,19 +341,14 @@ def flip_sstack_(sstack_, dert__):
     evaluate for flipping dert__ and re-forming Ps and stacks per sstack
     '''
     for sstack in sstack_:
-        x0_, xn_, y0_, yn_ = [],[],[],[]
-        # find min and max x and y in sstack:
-        for stack in sstack.Py_:
+        x0_, xn_, y0_ = [],[],[]
+        for stack in sstack.Py_:  # find min and max x and y in sstack:
             x0_.append(stack.x0)
             xn_.append(stack.xn)
             y0_.append(stack.y0)
-            yn_.append(stack.y0+stack.Ly)
-
         x0 = min(x0_)
         xn = max(xn_)
         y0 = min(y0_)
-        yn = max(yn_)
-
         sstack.x0, sstack.xn, sstack.y0 = x0, xn, y0
 
         horizontal_bias = ((xn - x0 + 1) / sstack.Ly) * (abs(sstack.Dy) / (abs(sstack.Dx) + 1))
@@ -377,7 +357,7 @@ def flip_sstack_(sstack_, dert__):
         if horizontal_bias > 1 and (sstack.G * sstack.Ma * horizontal_bias > flip_ave):
             # vertical-first rescan of selected sstacks:
 
-            sstack_mask__ = np.ones((yn - y0, xn - x0)).astype(bool)
+            sstack_mask__ = np.ones(sstack.Ly, xn - x0).astype(bool)  # is this correct, default y0 and x0 = 0?
             # unmask sstack:
             for stack in sstack.Py_:
                 for y, P in enumerate(stack.Py_):
@@ -385,7 +365,7 @@ def flip_sstack_(sstack_, dert__):
                     sstack_mask__[y+(stack.y0-y0), P.x0-x0: (P.x0-x0 + P.L)] = False  # unmask P
 
             # extract and flip sstack's dert__
-            sstack_dert__ = tuple([np.rot90(param_dert__[y0:yn, x0:xn]) for param_dert__ in dert__])
+            sstack_dert__ = tuple([np.rot90(param_dert__[y0:y0+sstack.Ly, x0:xn]) for param_dert__ in dert__])
             sstack_mask__ = np.rot90(sstack_mask__)  # flip mask
 
             row_stack_ = []
@@ -774,3 +754,19 @@ def draw_sstack_(f_flip, stack_,sstack_):
     else: plt.title('X sstacks')
     plt.savefig('./images/slice_blob/sstack_'+str(id(sstack_))+'.png')
     plt.close()
+
+    """
+    usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                          [-z ZOOM]
+    optional arguments:
+      -h, --help            show this help message and exit
+      -i IMAGE, --image IMAGE
+                            path to image file
+      -v VERBOSE, --verbose VERBOSE
+                            print details, useful for debugging
+      -n INTRA, --intra INTRA
+                            run intra_blobs after frame_blobs
+      -r RENDER, --render RENDER
+                            render the process
+      -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+    """
