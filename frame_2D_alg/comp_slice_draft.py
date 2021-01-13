@@ -177,7 +177,7 @@ def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, an
         '''
         hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
         L /= hyp
-        # re-orient derivatives by combining them in proportion of their decomposition on new axes:
+        # re-orient derivatives by combining them in proportion to their decomposition on new axes:
         Dx = (Dx * hyp + Dy / hyp) / 2  # no / hyp: kernel doesn't matter on P level?
         Dy = (Dy / hyp - Dx * hyp) / 2  # estimated D over vert_L
 
