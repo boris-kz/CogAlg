@@ -293,13 +293,13 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
     for stack in _stack.upconnect_:  # upward access only
         if sstack and not stack.f_checked:
 
-            horizontal_bias = ((stack.xn - stack.x0 + 1) / stack.Ly) * (abs(stack.Dy) / (abs(stack.Dx) + 1))
+            horizontal_bias = ((stack.xn - stack.x0 + 1) / stack.Ly)  # * (abs(stack.Dy) / (abs(stack.Dx) + 1))
             # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
             f_up = len(stack.upconnect_) > 0
             f_ex = f_up ^ stack.downconnect_cnt > 0
             f_up_reverse = f_up != _f_up and (f_ex and _f_ex)
 
-            if horizontal_bias > 1 or f_up_reverse:  # stack is horizontal or vertical connectivity is reversed: stack combination is horizontal
+            if horizontal_bias > 1:  # or f_up_reverse:  # stack is horizontal or vertical connectivity is reversed: stack combination is horizontal
                 # or horizontal value += reversal value: vertical value cancel - excess: non-rdn value only?
                 # accumulate stack into sstack:
                 sstack.accumulate(I=stack.I, Dy=stack.Dy, Dx=stack.Dx, G=stack.G, M=stack.M, Dyy=stack.Dyy, Dyx=stack.Dyx, Dxy=stack.Dxy, Dxx=stack.Dxx,

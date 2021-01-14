@@ -17,6 +17,8 @@ optional arguments:
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg') # disable visible figure during the processing to speed up the process
 
 
 def draw_stacks(stack_):
@@ -84,7 +86,6 @@ def check_stacks_presence(stack_, mask__, f_plot=0):
         plt.imshow(mask__ * 255)
 
 
-
 def draw_sstack_(blob_fflip, sstack_):
 
     '''visualize stacks and sstacks and their scanning direction, runnable but not fully optimized '''
@@ -116,12 +117,15 @@ def draw_sstack_(blob_fflip, sstack_):
 
     img_index_stacks = np.zeros((yn - y0, xn - x0))
     img_index_sstacks = np.zeros((yn - y0, xn - x0))
-    img_index_sstacks_flipped = np.zeros((yn - y0, xn - x0))
+    img_index_sstacks_flipped = np.zeros((yn - y0, xn - x0)) # show flipped stacks of sstack only
+    img_index_sstacks_mix = np.zeros((yn - y0, xn - x0)) # shows flipped and non flipped stacks
 
     stack_index = 1
     sstack_index = 1
     sstack_flipped_index = 1
+    sstack_mix_index = 1
 
+    # insert stack index and sstack index to X stacks
     for sstack in sstack_:
         for stack in sstack.Py_:
             for y, P in enumerate(stack.Py_):
@@ -131,6 +135,7 @@ def draw_sstack_(blob_fflip, sstack_):
             stack_index += 1  # for next stack
         sstack_index += 1  # for next sstack
 
+    # insert stack index and sstack index to flipped X stacks
     for sstack in sstack_:
         if sstack.stack_:  # sstack is flipped
             sx0_, sxn_, sy0_, syn_ = [], [], [], []
@@ -140,29 +145,31 @@ def draw_sstack_(blob_fflip, sstack_):
                 sy0_.append(stack.y0)
                 syn_.append(stack.y0 + stack.Ly)
             # sstack box:
-            sx0 = min(sx0_)
+            # sx0 = min(sx0_)
             sxn = max(sxn_)
             sy0 = min(sy0_)
-            syn = max(syn_)
+            # syn = max(syn_)
 
             for stack in sstack.stack_:
                 for y, P in enumerate(stack.Py_):
                     for x, dert in enumerate(P.dert_):
                         img_index_sstacks_flipped[sy0+(x + (P.x0 - x0)),sxn-1-(y + (stack.y0 - y0))] = sstack_flipped_index
-
+                        img_index_sstacks_mix[sy0+(x + (P.x0 - x0)),sxn-1-(y + (stack.y0 - y0))] = sstack_mix_index
                 sstack_flipped_index += 1  # for next stack of flipped sstack
+                sstack_mix_index += 1  # for next stack of flipped sstack
 
         else:  # sstack is not flipped
             for stack in sstack.Py_:
                 for y, P in enumerate(stack.Py_):
                     for x, dert in enumerate(P.dert_):
-                        img_index_sstacks_flipped[y + (stack.y0 - y0),x + (P.x0 - x0)] = sstack_flipped_index
-                sstack_flipped_index += 1  # for next stack of sstack
+                        img_index_sstacks_mix[y + (stack.y0 - y0),x + (P.x0 - x0)] = sstack_mix_index
+                sstack_mix_index += 1  # for next stack of sstack
 
     # initialize colour image
     img_colour_stacks = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
     img_colour_sstacks = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
     img_colour_sstacks_flipped = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
+    img_colour_sstacks_mix = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
 
     # draw stacks and sstacks
     for i in range(1, stack_index):
@@ -174,25 +181,31 @@ def draw_sstack_(blob_fflip, sstack_):
     for i in range(1, sstack_flipped_index):
         colour_index = i % 10
         img_colour_sstacks_flipped[np.where(img_index_sstacks_flipped == i)] = colour_list[colour_index]
+    for i in range(1, sstack_mix_index):
+        colour_index = i % 10
+        img_colour_sstacks_mix[np.where(img_index_sstacks_mix == i)] = colour_list[colour_index]
 
     # draw image to figure and save it to disk
     plt.figure(1)
 
-    plt.subplot(1,3,1)
-    plt.imshow(np.uint8(img_colour_sstacks))
-    if blob_fflip: plt.title('X sstacks, \rY blob')
-    else: plt.title('X sstacks, \rX blob')
+    plt.subplot(1,4,1)
+    plt.imshow(img_colour_sstacks)
+    if blob_fflip: plt.title('X sstacks, \nY blob')
+    else: plt.title('X sstacks, \nX blob')
 
-    plt.subplot(1,3,2)
+    plt.subplot(1,4,2)
     plt.imshow(np.uint8(img_colour_stacks))
     plt.title('X stacks')
-    plt.subplot(1,3,3)
 
-    if sstack.stack_:  # sstack is flipped, 
-        # how to locate sstack.stack_?
-        plt.imshow(np.uint8(img_colour_sstacks_flipped))
-        plt.title('Y and X stacks')
+    if any([sstack.stack_ for sstack in sstack_]):  # for sstacks with not empty stack_, show flipped stacks
+
+        plt.subplot(1,4,3)
+        plt.imshow(img_colour_sstacks_flipped)
+        plt.title('Y stacks (flipped)')
+        plt.subplot(1,4,4)
+        plt.imshow(img_colour_sstacks_mix)
+        plt.title('XY stacks')
+
 
     plt.savefig('./images/slice_blob/sstack_'+str(id(sstack_))+'.png')
     plt.close()
-
