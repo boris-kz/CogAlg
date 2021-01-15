@@ -190,8 +190,8 @@ def draw_sstack_(blob_fflip, sstack_):
 
     plt.subplot(1,4,1)
     plt.imshow(img_colour_sstacks)
-    if blob_fflip: plt.title('X sstacks, \nY blob')
-    else: plt.title('X sstacks, \nX blob')
+    if blob_fflip: plt.title('sstacks, \nY blob')
+    else: plt.title('sstacks, \nX blob')
 
     plt.subplot(1,4,2)
     plt.imshow(np.uint8(img_colour_stacks))

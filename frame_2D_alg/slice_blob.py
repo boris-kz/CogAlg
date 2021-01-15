@@ -113,12 +113,12 @@ def slice_blob(blob, verbose=False):
 
     stack_ += row_stack_  # dert__ ends, all last-row stacks have no downconnects
 
-    check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__ to see if they cover the same area
+    if verbose: check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__ to see if they cover the same area
 
     sstack_ = form_sstack_(stack_)  # cluster horizontally-oriented stacks into super-stacks
-    flip_sstack_(sstack_, dert__)  # vertical-first re-scanning of selected sstacks
+    flip_sstack_(sstack_, dert__, verbose)  # vertical-first re-scanning of selected sstacks
 
-    draw_sstack_(blob.fflip, sstack_) # draw stacks, sstacks and # draw stacks, sstacks and the rotated sstacks
+    if verbose: draw_sstack_(blob.fflip, sstack_) # draw stacks, sstacks and # draw stacks, sstacks and the rotated sstacks
 
     for sstack in sstack_:  # convert selected stacks into gstacks
         form_gPPy_(sstack.stack_)  # sstack.Py_ = stack_
@@ -131,7 +131,6 @@ Parameterized connectivity clustering functions below:
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with one up_P to one down_P
 - term_stack merges terminated stacks into blob
-
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), extended in intra_blob
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area A
 '''
@@ -280,24 +279,27 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
     '''
     evaluate upconnect_s of incremental elevation to form sstack recursively, depth-first
     '''
+
+    id_in_layer = -1
     _f_up = len(_stack.upconnect_) > 0
     _f_ex = _f_up ^ _stack.downconnect_cnt > 0  # one of stacks is upconnected, the other is downconnected, both are exclusive
 
     if not sstack and not _stack.f_checked:  # if sstack is empty, initialize it with _stack
-
         sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
                         Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
                         Ga=_stack.Ga, Ma=_stack.Ma, A=_stack.A, Ly=_stack.Ly, y0=_stack.y0,
                         Py_=[_stack], sign=_stack.sign)
+        id_in_layer = sstack.id
 
     for stack in _stack.upconnect_:  # upward access only
         if sstack and not stack.f_checked:
 
-            horizontal_bias = ((stack.xn - stack.x0 + 1) / stack.Ly)  # * (abs(stack.Dy) / (abs(stack.Dx) + 1))
+            horizontal_bias = ((stack.xn - stack.x0) / stack.Ly) * (abs(stack.Dy) / ((abs(stack.Dx)+1)))
             # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
+            # Y*X / A: fill~elongation, flip value?
             f_up = len(stack.upconnect_) > 0
             f_ex = f_up ^ stack.downconnect_cnt > 0
-            f_up_reverse = f_up != _f_up and (f_ex and _f_ex)
+            f_up_reverse = f_up != _f_up and (f_ex and _f_ex)  # unreliable, relative value of connects are not known?
 
             if horizontal_bias > 1:  # or f_up_reverse:  # stack is horizontal or vertical connectivity is reversed: stack combination is horizontal
                 # or horizontal value += reversal value: vertical value cancel - excess: non-rdn value only?
@@ -312,20 +314,17 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
                 form_sstack_recursive(stack, sstack, sstack_, f_up_reverse)
                 stack.f_checked = 1
 
-            else:  # change in stack orientation, pack to check upconnect_ in the next loop
-                if sstack and sstack not in sstack_:  # sstack is not initialized and was not terminated as some other upconnect
-                    sstack_.append(sstack)
+            # change in stack orientation, check upconnect_ in the next loop
+            elif not stack.f_checked:  # check stack upconnect_ to form sstack
+                form_sstack_recursive(stack, [], sstack_, f_up_reverse)
+                stack.f_checked = 1
 
-                if not stack.f_checked:  # check stack upconnect_ to form sstack, unless already done
-                    form_sstack_recursive(stack, [], sstack_, f_up_reverse)
-                    stack.f_checked = 1
-
-    # upconnect_ ends, pack the sstack, unless it was terminated as some other upconnect:
-    if sstack and sstack not in sstack_:
-        sstack_.append(sstack)
+    # upconnect_ ends, pack sstack in current layer
+    if sstack.id == id_in_layer:
+        sstack_.append(sstack) # pack sstack only after scan through all their stacks' upconnect
 
 
-def flip_sstack_(sstack_, dert__):
+def flip_sstack_(sstack_, dert__, verbose):
     '''
     evaluate for flipping dert__ and re-forming Ps and stacks per sstack
     '''
@@ -340,12 +339,12 @@ def flip_sstack_(sstack_, dert__):
         y0 = min(y0_)
         sstack.x0, sstack.xn, sstack.y0 = x0, xn, y0
 
-        horizontal_bias = ((xn - x0 + 1) / sstack.Ly) * (abs(sstack.Dy) / (abs(sstack.Dx) + 1))
+        horizontal_bias = ((xn - x0) / sstack.Ly) * (abs(sstack.Dy) / ((abs(sstack.Dx)+1)))
         # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
 
         if horizontal_bias > 1 and (sstack.G * sstack.Ma * horizontal_bias > flip_ave):
             # vertical-first rescan of selected sstacks:
-            sstack_mask__ = np.ones((sstack.Ly, xn - x0)).astype(bool)  # is this correct, default y0 and x0 = 0?
+            sstack_mask__ = np.ones((sstack.Ly, xn - x0)).astype(bool)
             # unmask sstack:
             for stack in sstack.Py_:
                 for y, P in enumerate(stack.Py_):
@@ -366,7 +365,7 @@ def flip_sstack_(sstack_, dert__):
 
             sstack.stack_ += row_stack_   # dert__ ends, all last-row stacks have no downconnects
 
-            check_stacks_presence(sstack.stack_, sstack_mask__, f_plot=0)
+            if verbose: check_stacks_presence(sstack.stack_, sstack_mask__, f_plot=0)
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
@@ -454,12 +453,10 @@ def comp_g(Py_):  # cross-comp of gs in P.dert_, in gPP.Py_
     return gP_, gP_Dg, gP_Mg
 
 
-def form_gP_(gdert_):
-    # probably not needed.
-
-    gP_ = []  # initialization
+def form_gP_(gdert_):  # probably not needed.
+    gP_ = []
     _g, _Dg, _Mg = gdert_[0]  # first gdert
-    _s = _Mg > 0  # initial sign, should we use ave here?
+    _s = _Mg > 0  # initial sign
 
     for (g, Dg, Mg) in gdert_[1:]:
         s = Mg > 0  # current sign
@@ -479,7 +476,7 @@ def form_gP_(gdert_):
 
 def flip_eval(blob):
 
-    horizontal_bias = ( blob.box[3] - blob.box[2] + 1) / (blob.box[1] - blob.box[0] + 1) \
+    horizontal_bias = ( blob.box[3] - blob.box[2]) / (blob.box[1] - blob.box[0]) \
                       * (abs(blob.Dy) / abs(blob.Dx))
         # L_bias (Lx / Ly) * G_bias (Gy / Gx), blob.box = [y0,yn,x0,xn], ddirection: , preferential comp over low G
 
@@ -492,5 +489,3 @@ def flip_eval(blob):
 
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
-
-
