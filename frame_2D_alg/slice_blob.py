@@ -116,13 +116,15 @@ def slice_blob(blob, verbose=False):
     if verbose: check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__ to see if they cover the same area
 
     sstack_ = form_sstack_(stack_)  # cluster horizontally-oriented stacks into super-stacks
-    flip_sstack_(sstack_, dert__, verbose)  # vertical-first re-scanning of selected sstacks
+    blob.stack_ = flip_sstack_(sstack_, dert__, verbose)  # vertical-first re-scanning of selected sstacks
 
     if verbose: draw_sstack_(blob.fflip, sstack_) # draw stacks, sstacks and # draw stacks, sstacks and the rotated sstacks
 
-    for sstack in sstack_:  # convert selected stacks into gstacks
-        form_gPPy_(sstack.stack_)  # sstack.Py_ = stack_
+    for stack in stack_:  # convert selected stacks into gstacks
+        if stack.stack_: form_gPPy_(stack.stack_)
+        else: form_gPPy_(stack.Py_)  # sstack.Py_ = stack_
 
+    blob.stack_ = sstack_ # update partially rotated and gP-forming stack__ to blob
     return sstack_  # partially rotated and gP-forming stack__
 
 '''
@@ -279,7 +281,6 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
     '''
     evaluate upconnect_s of incremental elevation to form sstack recursively, depth-first
     '''
-
     id_in_layer = -1
     _f_up = len(_stack.upconnect_) > 0
     _f_ex = _f_up ^ _stack.downconnect_cnt > 0  # one of stacks is upconnected, the other is downconnected, both are exclusive
@@ -308,7 +309,7 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
                                   Ga=stack.Ga, Ma=stack.Ma, A=stack.A)
                 sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)  # Ly = max y - min y: maybe multiple Ps in line
                 sstack.y0 = min(sstack.y0, stack.y0)  # y0 is min of stacks' y0
-                sstack.Py_.append(stack)
+                sstack.stack_.append(stack)
 
                 # recursively form sstack from stack
                 form_sstack_recursive(stack, sstack, sstack_, f_up_reverse)
@@ -328,6 +329,8 @@ def flip_sstack_(sstack_, dert__, verbose):
     '''
     evaluate for flipping dert__ and re-forming Ps and stacks per sstack
     '''
+    out_stack_ = []
+
     for sstack in sstack_:
         x0_, xn_, y0_ = [],[],[]
         for stack in sstack.Py_:  # find min and max x and y in sstack:
@@ -343,7 +346,7 @@ def flip_sstack_(sstack_, dert__, verbose):
         # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
 
         if horizontal_bias > 1 and (sstack.G * sstack.Ma * horizontal_bias > flip_ave):
-            # vertical-first rescan of selected sstacks:
+
             sstack_mask__ = np.ones((sstack.Ly, xn - x0)).astype(bool)
             # unmask sstack:
             for stack in sstack.Py_:
@@ -364,8 +367,13 @@ def flip_sstack_(sstack_, dert__, verbose):
                 row_stack_ = next_row_stack_
 
             sstack.stack_ += row_stack_   # dert__ ends, all last-row stacks have no downconnects
-
             if verbose: check_stacks_presence(sstack.stack_, sstack_mask__, f_plot=0)
+
+            out_stack_.append(sstack)
+        else:
+            out_stack_.append([sstack.stack_])  # non-flipped sstack is deconstructed, stack.stack_ s are still empty
+
+    return out_stack_
 
 
 def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_

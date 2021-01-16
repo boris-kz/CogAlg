@@ -31,6 +31,7 @@ from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from math import hypot
 import numpy as np
+from slice_blob import CStack
 
 ave = 20
 div_ave = 200
@@ -72,34 +73,11 @@ class CStack_PP(ClusterStructure):
     dert_P_ = list
     fdiv = NoneType
 
-class CStack(ClusterStructure):
-    I = int
-    Dy = int
-    Dx = int
-    G = int
-    M = int
-    Dyy = int
-    Dyx = int
-    Dxy = int
-    Dxx = int
-    Ga = int
-    Ma = int
-    A = int  # blob area
-    Ly = int
-    y0 = int
-    Py_ = list  # Py_ or dPPy_
-    sign = NoneType
-    f_gstack = NoneType  # gPPy_ if 1, else Py_
-    f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
-    down_connect_cnt = int
-    blob = NoneType
-    stack_PP = object
-
 
 def comp_slice_blob(blob, AveB):  # comp_slice eval per blob
 
         for stack in blob.stack_:
-            if stack.fflip:  # stack is sstack
+            if stack.stack_:  # stack is sstack
                 for i, stack in enumerate(stack.Py_):
 
                     if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
@@ -256,7 +234,7 @@ def accum_gstack(gstack_PP, istack, stack_PP):
         gstack_PP.stack_PP.fdiv = fdiv
 
     # istack params
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, _, _, _, _, _, _, _  = istack.unpack()
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, x0, xn, y0, Py_, sign, _, _, _, _, _, _, _  = istack.unpack()
 
     # accumulate istack param into stack_stack_PP
     gstack_PP.I += I
@@ -272,8 +250,9 @@ def accum_gstack(gstack_PP, istack, stack_PP):
     gstack_PP.Ma += Ma
     gstack_PP.A += A
     gstack_PP.Ly += Ly
-    if gstack_PP.y0 < y0:
-        gstack_PP.y0 = y0
+    if gstack_PP.x0 > x0: gstack_PP.x0 = x0
+    if gstack_PP.xn < xn: gstack_PP.xn = xn
+    if gstack_PP.y0 > y0: gstack_PP.y0 = y0
     gstack_PP.Py_.extend(Py_)
     gstack_PP.sign = sign  # sign should be same across istack
 
