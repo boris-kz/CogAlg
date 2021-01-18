@@ -29,7 +29,7 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
-from slice_blob_draw import *
+from slice_utils import *
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -82,10 +82,10 @@ class CStack(ClusterStructure):
     Py_ = list  # Py_, dPPy_, or stack_
     sign = NoneType
     f_gstack = NoneType  # gPPy_ if 1, else Py_
-    f_stack_PP = NoneType  # PPy_ if 1, else gPPy_ or Py_
+    f_stackPP = NoneType  # for comp_slice: PPy_ if 1, else gPPy_ or Py_
     downconnect_cnt = int
     upconnect_ = list
-    stack_PP = object
+    stack_PP = object  # replaces f_stackPP?
     stack_ = list  # ultimately all stacks, also replaces fflip: vertical if empty, else horizontal
     f_checked = int  # flag: stack has gone through form_sstack_recursive as upconnect
 
@@ -112,20 +112,7 @@ def slice_blob(blob, verbose=False):
         row_stack_ = next_row_stack_  # stacks initialized or accumulated in form_stack_
 
     stack_ += row_stack_  # dert__ ends, all last-row stacks have no downconnects
-
     if verbose: check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__ to see if they cover the same area
-
-    sstack_ = form_sstack_(stack_)  # cluster horizontally-oriented stacks into super-stacks
-    blob.stack_ = flip_sstack_(sstack_, dert__, verbose)  # vertical-first re-scanning of selected sstacks
-
-    if verbose: draw_sstack_(blob.fflip, sstack_) # draw stacks, sstacks and # draw stacks, sstacks and the rotated sstacks
-
-    for stack in stack_:  # convert selected stacks into gstacks
-        if stack.stack_: form_gPPy_(stack.stack_)
-        else: form_gPPy_(stack.Py_)  # sstack.Py_ = stack_
-
-    blob.stack_ = sstack_ # update partially rotated and gP-forming stack__ to blob
-    return sstack_  # partially rotated and gP-forming stack__
 
 '''
 Parameterized connectivity clustering functions below:
@@ -133,6 +120,7 @@ Parameterized connectivity clustering functions below:
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with one up_P to one down_P
 - term_stack merges terminated stacks into blob
+
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), extended in intra_blob
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area A
 '''
@@ -259,227 +247,6 @@ def form_stack_(P_, y):  # Convert or merge every P into higher-row stack of Ps
         next_row_stack_.append(stack)
 
     return next_row_stack_  # input for the next line of scan_P_
-
-
-def form_sstack_(stack_):
-    '''
-    form horizontal stacks of stacks, read backwards, sub-access by upconnects?
-    '''
-    sstack = []
-    sstack_ = []
-    _f_up_reverse = True  # accumulate sstack with first stack
-
-    for _stack in reversed(stack_):  # access in termination order
-        if _stack.downconnect_cnt == 0:  # this stack is not upconnect of lower _stack
-            form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse)
-        # else this _stack is accessed via upconnect_
-
-    return sstack_
-
-
-def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
-    '''
-    evaluate upconnect_s of incremental elevation to form sstack recursively, depth-first
-    '''
-    id_in_layer = -1
-    _f_up = len(_stack.upconnect_) > 0
-    _f_ex = _f_up ^ _stack.downconnect_cnt > 0  # one of stacks is upconnected, the other is downconnected, both are exclusive
-
-    if not sstack and not _stack.f_checked:  # if sstack is empty, initialize it with _stack
-        sstack = CStack(I=_stack.I, Dy=_stack.Dy, Dx=_stack.Dx, G=_stack.G, M=_stack.M,
-                        Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
-                        Ga=_stack.Ga, Ma=_stack.Ma, A=_stack.A, Ly=_stack.Ly, y0=_stack.y0,
-                        Py_=[_stack], sign=_stack.sign)
-        id_in_layer = sstack.id
-
-    for stack in _stack.upconnect_:  # upward access only
-        if sstack and not stack.f_checked:
-
-            horizontal_bias = ((stack.xn - stack.x0) / stack.Ly) * (abs(stack.Dy) / ((abs(stack.Dx)+1)))
-            # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
-            # Y*X / A: fill~elongation, flip value?
-            f_up = len(stack.upconnect_) > 0
-            f_ex = f_up ^ stack.downconnect_cnt > 0
-            f_up_reverse = f_up != _f_up and (f_ex and _f_ex)  # unreliable, relative value of connects are not known?
-
-            if horizontal_bias > 1:  # or f_up_reverse:  # stack is horizontal or vertical connectivity is reversed: stack combination is horizontal
-                # or horizontal value += reversal value: vertical value cancel - excess: non-rdn value only?
-                # accumulate stack into sstack:
-                sstack.accumulate(I=stack.I, Dy=stack.Dy, Dx=stack.Dx, G=stack.G, M=stack.M, Dyy=stack.Dyy, Dyx=stack.Dyx, Dxy=stack.Dxy, Dxx=stack.Dxx,
-                                  Ga=stack.Ga, Ma=stack.Ma, A=stack.A)
-                sstack.Ly = max(sstack.y0 + sstack.Ly, stack.y0 + stack.Ly) - min(sstack.y0, stack.y0)  # Ly = max y - min y: maybe multiple Ps in line
-                sstack.y0 = min(sstack.y0, stack.y0)  # y0 is min of stacks' y0
-                sstack.stack_.append(stack)
-
-                # recursively form sstack from stack
-                form_sstack_recursive(stack, sstack, sstack_, f_up_reverse)
-                stack.f_checked = 1
-
-            # change in stack orientation, check upconnect_ in the next loop
-            elif not stack.f_checked:  # check stack upconnect_ to form sstack
-                form_sstack_recursive(stack, [], sstack_, f_up_reverse)
-                stack.f_checked = 1
-
-    # upconnect_ ends, pack sstack in current layer
-    if sstack.id == id_in_layer:
-        sstack_.append(sstack) # pack sstack only after scan through all their stacks' upconnect
-
-
-def flip_sstack_(sstack_, dert__, verbose):
-    '''
-    evaluate for flipping dert__ and re-forming Ps and stacks per sstack
-    '''
-    out_stack_ = []
-
-    for sstack in sstack_:
-        x0_, xn_, y0_ = [],[],[]
-        for stack in sstack.Py_:  # find min and max x and y in sstack:
-            x0_.append(stack.x0)
-            xn_.append(stack.xn)
-            y0_.append(stack.y0)
-        x0 = min(x0_)
-        xn = max(xn_)
-        y0 = min(y0_)
-        sstack.x0, sstack.xn, sstack.y0 = x0, xn, y0
-
-        horizontal_bias = ((xn - x0) / sstack.Ly) * (abs(sstack.Dy) / ((abs(sstack.Dx)+1)))
-        # horizontal_bias = L_bias (lx / Ly) * G_bias (Gy / Gx, preferential comp over low G)
-
-        if horizontal_bias > 1 and (sstack.G * sstack.Ma * horizontal_bias > flip_ave):
-
-            sstack_mask__ = np.ones((sstack.Ly, xn - x0)).astype(bool)
-            # unmask sstack:
-            for stack in sstack.Py_:
-                for y, P in enumerate(stack.Py_):
-                    sstack_mask__[y+(stack.y0-y0), P.x0-x0: (P.x0-x0 + P.L)] = False  # unmask P, P.x0 is relative to x0
-            # flip:
-            sstack_dert__ = tuple([np.rot90(param_dert__[y0:y0+sstack.Ly, x0:xn]) for param_dert__ in dert__])
-            sstack_mask__ = np.rot90(sstack_mask__)
-
-            row_stack_ = []
-            for y, dert_ in enumerate(zip(*sstack_dert__)):  # same operations as in root sliced_blob(), but on sstack
-
-                P_ = form_P_(list(zip(*dert_)), sstack_mask__[y])  # horizontal clustering
-                P_ = scan_P_(P_, row_stack_)  # vertical clustering, adds P upconnects and _P downconnect_cnt
-                next_row_stack_ = form_stack_(P_, y)  # initialize and accumulate stacks with Ps
-
-                [sstack.stack_.append(stack) for stack in row_stack_ if not stack in next_row_stack_]  # buffer terminated stacks
-                row_stack_ = next_row_stack_
-
-            sstack.stack_ += row_stack_   # dert__ ends, all last-row stacks have no downconnects
-            if verbose: check_stacks_presence(sstack.stack_, sstack_mask__, f_plot=0)
-
-            out_stack_.append(sstack)
-        else:
-            out_stack_.append([sstack.stack_])  # non-flipped sstack is deconstructed, stack.stack_ s are still empty
-
-    return out_stack_
-
-
-def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
-
-    ave_PP = 100  # min summed value of gdert params
-
-    for stack in stack_:
-        if stack.G > aveG:
-            stack_Dg = stack_Mg = 0
-            gPPy_ = []  # may replace stack.Py_
-            P = stack.Py_[0]
-
-            # initialize PP params:
-            Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
-            PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
-
-            _PP_sign = PP_G > aveG and P.L > 1
-
-            for P in stack.Py_[1:]:
-                PP_sign = P.G > aveG and P.L > 1  # PP sign
-                if _PP_sign == PP_sign:  # accum PP:
-                    Py_.append(P)
-                    PP_I += P.I
-                    PP_Dy += P.Dy
-                    PP_Dx += P.Dx
-                    PP_G += P.G
-                    PP_M += P.M
-                    PP_Dyy += P.Dyy
-                    PP_Dyx += P.Dyx
-                    PP_Dxy += P.Dxy
-                    PP_Dxx += P.Dxx
-                    PP_Ga += P.Ga
-                    PP_Ma += P.Ma
-                    PP_A += P.L
-                    PP_Ly += 1
-
-                else:  # sign change, terminate PP:
-                    if PP_G > aveG:
-                        Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P in Py_
-                        stack_Dg += abs(Dg)  # in all high-G Ps, regardless of direction
-                        stack_Mg += Mg
-                    gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
-                                        Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
-                    # initialize PP params:
-                    Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy
-                    PP_Dxx = P.Dxx; PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
-
-                _PP_sign = PP_sign
-
-            if PP_G > aveG:
-                Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P
-                stack_Dg += abs(Dg)  # stack params?
-                stack_Mg += Mg
-            if stack_Dg + stack_Mg < ave_PP:  # separate comp_P values, revert to Py_ if below-cost
-                # terminate last PP
-                gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
-                                    Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
-                stack.Py_ = gPPy_
-                stack.f_gstack = 1  # flag gPPy_ vs. Py_ in stack
-
-
-def comp_g(Py_):  # cross-comp of gs in P.dert_, in gPP.Py_
-    gP_ = []
-    gP_Dg = gP_Mg = 0
-
-    for P in Py_:
-        Dg=Mg=0
-        gdert_ = []
-        _g = P.dert_[0][3]  # first g
-        for dert in P.dert_[1:]:
-            g = dert[3]
-            dg = g - _g
-            mg = min(g, _g)
-            gdert_.append((dg, mg))  # no g: already in dert_
-            Dg+=dg  # P-wide cross-sign, P.L is too short to form sub_Ps
-            Mg+=mg
-            _g = g
-        P.gdert_ = gdert_
-        P.Dg = Dg
-        P.Mg = Mg
-        gP_.append(P)
-        gP_Dg += Dg
-        gP_Mg += Mg  # positive, for stack evaluation to set fPP
-
-    return gP_, gP_Dg, gP_Mg
-
-
-def form_gP_(gdert_):  # probably not needed.
-    gP_ = []
-    _g, _Dg, _Mg = gdert_[0]  # first gdert
-    _s = _Mg > 0  # initial sign
-
-    for (g, Dg, Mg) in gdert_[1:]:
-        s = Mg > 0  # current sign
-        if _s != s:  # sign change
-            gP_.append([_s, _Dg, _Mg])  # pack gP
-            # update params
-            _s = s
-            _Dg = Dg
-            _Mg = Mg
-        else:  # accumulate params
-            _Dg += Dg  # should we abs the value here?
-            _Mg += Mg
-
-    gP_.append([_s, _Dg, _Mg])  # pack last gP
-    return gP_
 
 
 def flip_eval(blob):

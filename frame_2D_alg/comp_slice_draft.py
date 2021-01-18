@@ -31,7 +31,6 @@ from collections import deque
 from class_cluster import ClusterStructure, NoneType
 from math import hypot
 import numpy as np
-from slice_blob import CStack
 
 ave = 20
 div_ave = 200
@@ -74,9 +73,46 @@ class CStack_PP(ClusterStructure):
     fdiv = NoneType
 
 
-def comp_slice_blob(blob, AveB):  # comp_slice eval per blob
+def comp_slice_(blob, AveB):  # comp_slice eval per blob, simple stack_
 
         for stack in blob.stack_:
+            if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
+
+                stack.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
+                # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
+                DdX = 0
+
+                if stack.G * (stack.Ly / stack.A) * (abs(stack.Dy) / abs((stack.Dx) + 1)) > ave:  # if G_bias * L_bias after rescan?
+                    # else virtual rotation:
+                    ortho = 1  # estimate params of P orthogonal to long axis at P' y and ave_x, to increase mP
+                else:
+                    ortho = 0
+                dert_P_ = []
+                _P = stack.Py_[0]
+
+                for P in stack.Py_[1:]:
+                    dert_P = comp_slice(ortho, P, _P, DdX)
+                    dert_P_.append(dert_P)
+                    _P = P
+
+                stack.stack_PP = form_PP_(dert_P_)  # stack_PP
+
+        '''
+        Add comparison of forking adjacent P between stacks.
+        
+        for complex stacks:
+            if stack.f_gstack:  # stack is a nested gP_stack
+                gstack_PP = CStack(stack_PP=CStack_PP())
+
+                for j, istack in enumerate(stack.Py_):  # istack is original stack
+                    if istack.G * istack.Ma - AveB / 10 > 0 and len(istack.Py_) > 2:
+                        stack_PP = comp_slice_(istack, ave)  # root function of comp_slice: edge tracing and vectorization
+                        accum_gstack(gstack_PP, istack, stack_PP)
+                        istack.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
+
+                stack.Py_[i] = gstack_PP
+
+
             if stack.stack_:  # stack is sstack
                 for i, stack in enumerate(stack.Py_):
 
@@ -101,27 +137,7 @@ def comp_slice_blob(blob, AveB):  # comp_slice eval per blob
                                 stack_PP = comp_slice_(stack, ave)  # stack is stack_PP, with accumulated PP params and PP_
                                 stack.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
                                 stack.stack_PP = stack_PP  # blob.stack_[i] = stack_PP
-
-
-def comp_slice_(stack, Ave):
-    # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
-    DdX = 0
-
-    if stack.G * (stack.Dy / (stack.Dx+1)) * (stack.Ly / stack.A) > Ave:  # if G_bias * L_bias after rescan?
-        # else virtual rotation:
-        ortho = 1  # estimate params of P orthogonal to long axis at P' y and ave_x, to increase mP
-    else:
-        ortho = 0
-    dert_P_ = []
-    _P = stack.Py_[0]
-
-    for P in stack.Py_[1:]:
-        dert_P = comp_slice(ortho, P, _P, DdX)
-        dert_P_.append( dert_P)
-        _P = P
-
-    return form_PP_(dert_P_)  # stack_PP
-'''
+        
 also eval for P rotation = blob axis angle - current vertical direction, if > min?
 '''
 

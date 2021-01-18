@@ -28,7 +28,7 @@ from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from slice_blob import slice_blob
-from comp_slice_draft import comp_slice_blob
+from comp_slice_draft import comp_slice_
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
@@ -56,7 +56,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
 
                 slice_blob(blob, verbose=kwargs.get('verbose'))  # adds stack_ to blob
-                comp_slice_blob(blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
+                comp_slice_(blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
     else:
         # root fork is frame_blobs or comp_r
         ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, for cross-comp in larger kernels
