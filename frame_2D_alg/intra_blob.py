@@ -29,6 +29,7 @@ from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from slice_blob import slice_blob
 from comp_slice_draft import comp_slice_
+from slice_utils import *
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
@@ -42,6 +43,8 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
 
     Ave = int(ave * blob.rdn)
     AveB = int(aveB * blob.rdn)
+    verbose = kwargs.get('verbose')
+
     if kwargs.get('render') is not None:  # don't render small blobs
         if blob.A < 100: kwargs['render'] = False
     spliced_layers = []  # to extend root_blob sub_layers
@@ -55,7 +58,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
 
-                slice_blob(blob, verbose=kwargs.get('verbose'))  # adds stack_ to blob
+                slice_blob(blob, verbose)  # adds stack_ to blob
                 comp_slice_(blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
     else:
         # root fork is frame_blobs or comp_r

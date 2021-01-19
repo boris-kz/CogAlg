@@ -112,7 +112,8 @@ def slice_blob(blob, verbose=False):
         row_stack_ = next_row_stack_  # stacks initialized or accumulated in form_stack_
 
     stack_ += row_stack_  # dert__ ends, all last-row stacks have no downconnects
-    if verbose: check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__ to see if they cover the same area
+    blob.stack_ = stack_
+#    if verbose: check_stacks_presence(stack_, mask__, f_plot=0)  # visualize stack_ and mask__ to see if they cover the same area
 
 '''
 Parameterized connectivity clustering functions below:

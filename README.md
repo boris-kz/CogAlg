@@ -32,9 +32,10 @@ Final algorithm will consist of first-level operations, + recursive increment in
 Please see [whole-system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png). 
 
 * Some notes:
-- Design of this algorithm has to be driven theoretically, generality makes it too complex and slow for testing on specific inputs. Until it’s mostly finished, which is some ways off. This is probably why such schemes are not actively explored.
-- Many readers note disconnect between abstractness of this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is mostly the same for all raw modalities. 
+- This design must be driven theoretically, generality means that individual test results are not reliable, and it seems too complex and slow for each specific sample. It can only be justified by scalability across a wide range of samples, which won't be evident until the design is mostly finished. This is probably why such schemes are not actively explored.
+- Many readers note disconnect between abstractness of this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process will be mostly the same for all raw modalities. 
 - Another complaint is that I don't use mathematical notation, but it simply doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. 
+Here is how levels would looks: G(x), F(G(x)), F(F(G(x))).., but this doesn’t really explain the process.
 *
 
 

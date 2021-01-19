@@ -20,7 +20,9 @@ from matplotlib import pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # disable visible figure during the processing to speed up the process
 from slice_blob import *
-from class_cluster import ClusterStructure, NoneType
+
+aveG = 50
+flip_ave = 2000
 
 
 def rescan(blob, verbose=False):  # temporary code container, this should probably be in comp_slice
@@ -36,6 +38,7 @@ def rescan(blob, verbose=False):  # temporary code container, this should probab
         elif stack.G > aveG:
             stack.f_gstack = 1  # flag: gPPy_ vs. Py_ in stack
             comp_g(stack.Py_)
+
 
 def form_sstack_(stack_):
     '''

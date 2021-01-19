@@ -101,7 +101,7 @@ class CBlob(ClusterStructure):
     stack_ = list  # sliced_blob if not empty
 
 
-def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
     # see comp_pixel_versions file for other versions and more explanation
 
     # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
@@ -110,16 +110,18 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     bottomleft__ = image[1:, :-1]
     bottomright__ = image[1:, 1:]
     '''
-    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
-    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
+    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
+    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
     '''
-    # rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy
-    # used in comp_a only, which returns day and dax back to orthogonal, but summing in Dy, Dx should be from unrotated dy, dx?
+    # rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy of Gy, Gx
+    # Gy, Gx are used in comp_a, which returns day and dax back to orthogonal, but 1st comp_r should also be rotated?
+    # but summing in Dy, Dx should be from unrotated dy, dx?
 
     rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
     rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
 
-    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
+    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')
+    # deviation of central gradient per kernel, between four vertex pixels
     # G and M are rotation invariant, but more accurate from rot_Gy__ and rot_Gx__?
 
     M__ = int(ave * 1.41)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))

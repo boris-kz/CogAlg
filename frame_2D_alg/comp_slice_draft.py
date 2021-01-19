@@ -78,12 +78,18 @@ def comp_slice_(blob, AveB):  # comp_slice eval per blob, simple stack_
         for stack in blob.stack_:
             if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
 
-                stack.f_stack_PP = 1  # stack_PP = accumulated PP params and PP_
-                # scan of vertical Py_ -> comp_slice -> form_PP -> 2D dPP_, mPP_: clusters of same-sign Pd | Pm deviation
+                # or default (L, Dy, Dx, G) min comp for rotation,
+                # primary comp L | overlap, the rest is conditional?
+                # init cross-dimension div_comp: Dx/Dy, but separate val for comp G, no default G/L?
+                # comp -> min Dx/Dy for rotation, min G for comp_g?
+
+                # also default min comp to upconnect_ Ps -> forking / merging PPs -> stack_ per PP!
+
+                # stack.f_stackPP = 1  # scan Py_ -> comp_slice -> form_PP -> 2D PP_: clusters of same-sign dP | mP
                 DdX = 0
 
-                if stack.G * (stack.Ly / stack.A) * (abs(stack.Dy) / abs((stack.Dx) + 1)) > ave:  # if G_bias * L_bias after rescan?
-                    # else virtual rotation:
+                if stack.G * (stack.Ly / stack.A) * (abs(stack.Dy) / abs((stack.Dx) + 1)) > ave:  # G_bias * L_bias -> virt.rotation:
+                    # or default min comp, eval per PP?
                     ortho = 1  # estimate params of P orthogonal to long axis at P' y and ave_x, to increase mP
                 else:
                     ortho = 0
@@ -94,13 +100,13 @@ def comp_slice_(blob, AveB):  # comp_slice eval per blob, simple stack_
                     dert_P = comp_slice(ortho, P, _P, DdX)
                     dert_P_.append(dert_P)
                     _P = P
-
-                stack.stack_PP = form_PP_(dert_P_)  # stack_PP
+                if dert_P_:
+                    stack.stack_PP_ = form_PP_(dert_P_)  # stack_PP
 
         '''
         Add comparison of forking adjacent P between stacks.
         
-        for complex stacks:
+        old, for complex stacks:
             if stack.f_gstack:  # stack is a nested gP_stack
                 gstack_PP = CStack(stack_PP=CStack_PP())
 
@@ -198,7 +204,7 @@ def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, an
 def form_PP_(dert_P_):  # terminate, initialize, increment mPPs and dPPs
 
     stack_PP = CStack_PP(dert_Pi = Cdert_P())  # need to define object and accum_stack_PP()
-    mPP_ = dPP_ = []
+    mPP_, dPP_ = [], []
     mPP = dPP = CPP(dert_Pi = Cdert_P())
     _dert_P = dert_P_[0]
 
