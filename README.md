@@ -3,11 +3,11 @@ CogAlg
 
 Full introduction: <www.cognitivealgorithm.info>
 
-Intelligence is a general cognitive ability, ultimately the ability to predict. That includes planning, which technically is a self-prediction. Any prediction is interactive projection of known patterns, hence the first step must be pattern discovery. Which has two stages: comparison among inputs, then clustering of matching inputs into higher-order patterns. These definitions are not terribly radical, pattern recognition is a core of any IQ test. But I don't know of any conceptually consistent implementation, so my design is from the scratch.
+Intelligence is a general cognitive ability, ultimately the ability to predict. That includes planning, which technically is a self-prediction. Any prediction is interactive projection of known patterns, hence the first step must be pattern discovery (more common but obfuscating term for that is unsupervised learning). These definitions are not terribly radical, pattern recognition is a core of any IQ test. But there is no conceptually consistent implementation, thus my design is from-the-scratch, although with many widely used elements.
 
-For excellent popular introductions to cognition-as-prediction perspective see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. On a technical level though, they and most everyone else use neural nets, which work in very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more local and selective by multiple instantiation parameters. But they still start with weighted summation per parameter, which degrades the data before comparison and evaluation.
+For excellent popular introductions to cognition-as-prediction perspective see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. On a technical level though, they and most everyone else use neural nets, which work in very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more local and selective by multiple instantiation parameters. But they still start with weighted summation per parameter, which degrades the data before any comparison and evaluation.
 
-In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline of my approach
@@ -29,11 +29,13 @@ These direct similarity measures work if input intensity represents some stable 
 
 Cross-comparison among patterns forms match and miss per parameter, as well as dimensions and distances: external match and miss (these are separate parameters: total value = precision of what * precision of where). Comparison is limited by max. distance between patterns. Overall hierarchy has incremental dimensionality: search levels ( param levels ( pattern levels)).., and pattern comparison is selectively incremental per such level. This is hard to explain in NL, please see the code, starting with line_patterns and line_PPs.
   
-Resulting matches and misses are summed into lateral match and miss per pattern. Proximate input patterns with above-average match to their nearest neigbours are clustered into higher-level patterns. This adds two pattern levels: of composition and derivation, per level of search. Conditional cross-comp over incremental range and derivation, among the same inputs, may also add sub-levels in selected newly formed patterns (incremental range means using larger kernels, and incremental derivation starts with using Laplacian). 
+Resulting matches and misses are summed into lateral match and miss per pattern. Proximate input patterns with above-average match to their nearest neighbors are clustered into higher-level patterns. This adds two pattern levels: of composition and derivation, per level of search. Conditional cross-comp over incremental range and derivation, among the same inputs, may also add sub-levels in selected newly formed patterns. On a pixel level, incremental range is using larger kernels, and incremental derivation starts with using Laplacian. 
 
-####Feedback of filters, more in part 3:
+####Feedback, more in part 3:
 
-Average match is the first type of “input” filters, computed on higher levels. There are also “positional” filters, starting with maximal comparison distance discussed above. Quantization order (bit, integer, float...) of such internal and external filters corresponds to the order of comparison, and the value of each filter is updated by feedback. These filters are equivalent to “attention” in Neural Nets, but learning here is on-line lateral clustering. There is no equivalent of vertical “training” here, it’s only meaningful in coarse statistical methods.
+Average match is the first type of “input” filters, computed on higher levels. There are also “positional” filters, starting with maximal comparison distance discussed above. Quantization order (bit, integer, float...) of such internal and external filters corresponds to the order of comparison, and the value of each filter is updated by feedback. These filters are equivalent to “attention” in Neural Nets, but learning here is lateral clustering. It’s online, there is no vertical backprop or Hebbian learning, they only belong in coarse statistical methods.
+
+####Hierarchy, part 4 is out of date:
 
 Note that there is a single top-order hierarchy, with feedforward inputs and feedback filters passing through the same levels of search and composition. Lower orders are unfolded sequentially, so there’s always a single currently-unfolded hierarchy. That’s why I don’t have many diagrams: they are good at showing relations in 2D, but I have a simple 1D sequence of levels. Nested sub-hierarchies are generated by the process itself, depending on elevation in a higher-order hierarchy. That means I can’t show them in a generic diagram.  
 
@@ -45,10 +47,10 @@ Please see [system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame
 
 * Some notes:
 - There should be a unique set of operations added per level, hence a singular in “cognitive algorithm”.
-- Core design must be done theoretically: generality makes it too complex for any specific sample. Simple tests are not predictive of the ability to discover complex patterns, which can’t be tested until the process is mostly finished. This is probably why such schemes are not actively explored.
+- Core design has to be done theoretically: generality makes it too complex for any specific sample. Simple tests are not predictive of the ability to discover complex patterns, which can’t be tested until the process is mostly finished. This is probably why such schemes are not actively explored.
 - Many readers note disconnect between abstractness of this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is mostly the same for all raw modalities. 
 - Another complaint is that I don't use mathematical notation, but it doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. This is how the levels would look: 
-1st level: G(x) -> 2nd level: F(G(x)) -> 3rd level: F(F(G(x))).., where F() is recursive complexity increament, but it doesn’t really explain the process.
+1st level: G(x) -> 2nd level: F(G(x)) -> 3rd level: F(F(G(x))).., where F() is the recursive complexity increament, but it doesn’t really explain the process.
 
 
 ### Comparison to Artificial and Biological Neural Networks

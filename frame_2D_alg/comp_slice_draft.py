@@ -67,19 +67,77 @@ class CStack_PP(ClusterStructure):
 
     dert_Pi = object  # stack_PP params = accumulated dert_P params:
     # sPM, sPD, sMX, sDX, sML, sDL, sMDx, sDDx, sMDy, sDDy, sMDg, sDDg, sMMg, sDMg
-    mPP_ = list
-    dPP_ = list
+    PPm_ = list
+    PPd_ = list
     dert_P_ = list
     fdiv = NoneType
 
 
-def comp_slice_(blob, AveB):  # comp_slice eval per blob, simple stack_
+def comp_slice_(stack_):
+    '''
+    form PPs in Ps of stack_, including Ps of adjacent stacks
+    '''
+    # cross-compare all connected Ps
+    for stack in reversed(stack_):
+        _P = stack.Py_[-1]
+        dert_Py_ = [_P]
+
+        for P in reversed(stack.Py_[1:]):
+            dert_P = comp_slice(P, _P)  # ortho and other conditional operations are evaluated per PP
+            dert_Py_.append(dert_P)
+            _P = P
+        stack.Py_ = dert_Py_
+
+    # cluster all connected dert_Ps of same-sign mP
+    for stack in reversed(stack_):
+
+        f_acc = 1  # accumulate 1st P in upconnect_, per stack
+        _dert_P = stack.Py_[-1]
+
+        if stack.dowconnect_cnt == 0:
+            Cdert_P = _dert_P  # pseudo
+            PPm = CPP(PP_stack_[0].Py = [Cdert_P])  # need to be extended to full PP initialization
+            # add accum_PP_stack
+
+            for i, dert_P in enumerate(reversed(stack.Py_[1:])):
+
+                if (_dert_P.mP > 0) == (dert_P.mP > 0):
+                    accum_PP(dert_P, PPm)
+                    _dert_P = dert_P
+
+            if i == len(stack.Py_):  # dert_P is top P
+                for upconnect in stack.upconnect_:  # cluster connected dert_Ps between connected stacks
+
+            # unfinished, add PP accum across PP_stacks, or continue accum_PP_stack if single same-sign upconnect
+
+
+def comp_slice_yet_unused(stack.upconnect_, _P, AveB):
+
+    # stack_PP section
+    if dert_P_:
+        stack.stack_PP_ = form_PP_(dert_P_)
+        if 'mPP' in globals():  # if _dert_P params is summed into stack's PP
+            stack.stack_PP_.dert_P_.insert(_dert_P, 0)  # insert is similar with appendleft
+            stack.stack_PP_.mPP_.insert(mPP, 0)
+            stack.stack_PP_.dert_Pi.accumulate(Pm=_dert_P.Pm, Pd=_dert_P.Pd, mx=_dert_P.mx, dx=_dert_P.dx,
+                                               mL=_dert_P.mL, dL=_dert_P.dL, mDx=_dert_P.mDx, dDx=_dert_P.dDx,
+                                               mDy=_dert_P.mDy, dDy=_dert_P.dDy, mDg=_dert_P.mDg, dDg=_dert_P.dDg,
+                                               mMg=_dert_P.mMg, dMg=_dert_P.dMg)
+    elif 'mPP' in globals():  # if _dert_P params is summed into stack's PP
+        stack_PP_ = CStack_PP(dert_Pi=_dert_P)
+        stack_PP_.dert_P_.append(_dert_P)
+        stack_PP_.mPP_.append(mPP)
+        stack.stack_PP_ = stack_PP_
+
+
+def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
 
         for stack in blob.stack_:
             if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
 
                 # or default (L, Dy, Dx, G) min comp for rotation,
-                # primary comp L | overlap, the rest is conditional?
+                # primary comp L, the rest is normalized?
+                # overlap vs. shift:
                 # init cross-dimension div_comp: Dx/Dy, but separate val for comp G, no default G/L?
                 # comp -> min Dx/Dy for rotation, min G for comp_g?
 
@@ -477,7 +535,7 @@ def term_par_P(typ, par_P):  # from form_par_P: eval for orient, re_comp? or fol
 def scan_par_P(typ, par_P_):  # from term_PP, folded in scan_par_? pP rdn per vertical overlap?
     return par_P_
 
-def comp_slicear_P(par_P, _par_P):  # with/out orient, from scan_pP_
+def comp_slice_P(par_P, _par_P):  # with/out orient, from scan_pP_
     return par_P
 
 def scan_PP_(PP_):  # within a blob, also within a segment?
