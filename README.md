@@ -25,6 +25,8 @@ Basic comparison is inverse arithmetic operation between single-variable compara
 
 These direct similarity measures work if input intensity represents some stable physical property, which anti-correlates with variation. This is the case in tactile but not in visual input: brightness doesn’t correlate with inertia or invariance, dark objects are just as stable as bright ones. Thus, initial match in vision should be defined indirectly, as inverse deviation of variation in intensity. 1D variation is difference, ratio, etc., while multi-D comparison has to combine them into Euclidean distance and gradient, as in common edge detectors.
 
+This specific process description may seem to be quite a jump from generalities in the first section. But it really isn’t, a consistent definition of pattern discovery requires that the process must be bottom-up, in the complexity of both inputs and operations. And there is no ambiguity at the bottom: predictive value that defines patterns is match from comparison among their elements, initially those pixels. So, I think this process is uniquely consistent with my definitions, please let me know if you see any discrepancy in either.
+
 ####Patterns, more in part 2:
 
 Cross-comparison among patterns forms match and miss per parameter, as well as dimensions and distances: external match and miss (these are separate parameters: total value = precision of what * precision of where). Comparison is limited by max. distance between patterns. Overall hierarchy has incremental dimensionality: search levels ( param levels ( pattern levels)).., and pattern comparison is selectively incremental per such level. This is hard to explain in NL, please see the code, starting with line_patterns and line_PPs.
@@ -41,7 +43,7 @@ Note that there is a single top-order hierarchy, with feedforward inputs and fee
 
 Brain-inspired schemes have separate sensory and motor hierarchies, in mine they combined into one. The equivalent of motor patterns in my scheme are positional filter patterns, which ultimately move the sensor. The first level is co-located sensors: targets of input filters, and more coarse actuators: targets of positional filters. I can think of two reasons they are separated in the brain: neurons and axons are uni-directional, and training process has to take off-line the whole hierarchy. Neither constraint applies to my scheme.
 
-Final algorithm will consist of first-level operations + recursive increment in operations per level. The latter is a meta-algorithm that extends working level-algorithm, to handle derivatives added to current inputs. Resulting hierarchy is a pipeline: patterns are outputted to the next level, forming a new level if there is none. As long as there are novel inputs, higher levels will discover longer-range spatio-temporal and then conceptual patterns. 
+Final algorithm will consist of first-level operations + recursive increment in operations per level. The latter is a meta-algorithm that extends working level-algorithm, to handle derivatives added to current inputs. So, the levels are: 1st level: G(x), 2nd level: F(G(x)), 3rd level: F(F(G(x))).., where F() is the recursive increment. Resulting hierarchy is a pipeline: patterns are outputted to the next level, forming a new level if there is none. As long as there are novel inputs, higher levels will discover longer-range spatio-temporal and then conceptual patterns. 
  
 Please see [system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png). 
 
@@ -49,8 +51,10 @@ Please see [system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame
 - There should be a unique set of operations added per level, hence a singular in “cognitive algorithm”.
 - Core design has to be done theoretically: generality makes it too complex for any specific sample. Simple tests are not predictive of the ability to discover complex patterns, which can’t be tested until the process is mostly finished. This is probably why such schemes are not actively explored.
 - Many readers note disconnect between abstractness of this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is mostly the same for all raw modalities. 
-- Another complaint is that I don't use mathematical notation, but it doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. This is how the levels would look: 
-1st level: G(x) -> 2nd level: F(G(x)) -> 3rd level: F(F(G(x))).., where F() is the recursive complexity increament, but it doesn’t really explain the process.
+- Another complaint is that I don't use mathematical notation, but it doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. - Most people who aspire to work on AGI think in terms behaviour and robotics. I think this is too superficial to make progress, the most significant mechanisms are on the level of perception. Feedforward (perception) must drive feedback (action), not the other way around.
+- Another unhealthy distraction is supervision and reinforcement. These are optional task-specific add-ons, core cognitive process is unsupervised pattern discovery, and main problem here is scaling in complexity.
+- Don’t even start me on chatbots. 
+
 
 
 ### Comparison to Artificial and Biological Neural Networks
