@@ -143,7 +143,6 @@ def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
 
                 stack.Py_[i] = gstack_PP
 
-
             if stack.stack_:  # stack is sstack
                 for i, stack in enumerate(stack.Py_):
 
@@ -227,16 +226,16 @@ def comp_slice(ortho, P, _P, DdX):  # forms vertical derivatives of P params, an
 
 ''' this is currently a mess, please do after comp_slice_: '''
 
-def form_PP_(stack_):  # terminate, initialize, increment PPs
+def form_PP_(stack_, _dert_P):  # terminate, initialize, increment PPs
 
     # cluster all connected dert_Ps of same-sign mP
     for stack in reversed(stack_):
 
         f_acc = 1  # accumulate 1st P in upconnect_, per stack
-        _dert_P = stack.Py_[-1]
-        if stack.dowconnect_cnt == 0:
+        if not _dert_P:
+            _dert_P = stack.Py_.pop()
 
-            stack_PP = CStack_PP(dert_Pi = Cdert_P())  # define object and accum_stack_PP()
+            stack_PP = CStack_PP(dert_Pi = Cdert_P)  # define object and accum_stack_PP()
             PP_ = []
             PP = CPP(dert_Pi = Cdert_P())
         _dert_P = dert_P_[0]

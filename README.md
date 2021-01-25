@@ -19,13 +19,13 @@ Pattern is a proximity cluster of matching inputs, where match is a composite of
  
 First-level comparands are sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All primary modalities output a dense array of such atomic inputs in Cartesian dimensions, and symbolic data is merely a product of their encoding by some cognitive process. To discover meaningful patterns, these symbols must be decoded before cross-comparison. The difficulty of decoding is exponential with the level of encoding, thus a start with raw sensory input is by far the easiest to implement.
 
+This specific process description may seem like quite a jump from generalities in the first section. But it really isn’t, internally consistent pattern discovery requires that the process is strictly bottom-up, in complexity of both inputs and operations. And there is no ambiguity at the bottom: predictive value that defines patterns is match from comparison among their elements, initially those pixels. So, I think this process is uniquely consistent with my definitions, please let me know if you see any discrepancy in either.
+
 ####Comparison, more in part 1:
 
 Basic comparison is inverse arithmetic operation between single-variable comparands, of incremental power: Boolean, subtraction, division, etc. Each order of comparison forms miss or loss: XOR, difference, ratio, etc., and match or similarity, which can be defined directly or as inverse deviation of miss. Direct match is compression of represented magnitude by replacing larger input with corresponding miss between the inputs: Boolean AND, the smaller input in comp by subtraction, integer part of ratio in comp by division, etc.
 
 These direct similarity measures work if input intensity represents some stable physical property, which anti-correlates with variation. This is the case in tactile but not in visual input: brightness doesn’t correlate with inertia or invariance, dark objects are just as stable as bright ones. Thus, initial match in vision should be defined indirectly, as inverse deviation of variation in intensity. 1D variation is difference, ratio, etc., while multi-D comparison has to combine them into Euclidean distance and gradient, as in common edge detectors.
-
-This specific process description may seem to be quite a jump from generalities in the first section. But it really isn’t, a consistent definition of pattern discovery requires that the process must be bottom-up, in the complexity of both inputs and operations. And there is no ambiguity at the bottom: predictive value that defines patterns is match from comparison among their elements, initially those pixels. So, I think this process is uniquely consistent with my definitions, please let me know if you see any discrepancy in either.
 
 ####Patterns, more in part 2:
 
