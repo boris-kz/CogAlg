@@ -57,12 +57,15 @@ class Cdert_P(ClusterStructure):
 
 class CPP(ClusterStructure):
 
+    # add PP as a param in stack, making stack as the base element?
     stack_ = list
+    stack_PP_ = list
     # possibly multiple between PPs
     upconnect_ = list
     downconnect_cnt = int
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_?
     fdiv = NoneType
+
 
 class CStack_PP(ClusterStructure):
     # needs to be revised, this is now an element of stack_ in PP,
@@ -86,19 +89,19 @@ def comp_slice_(stack_, _P):
             stack.f_checked = 1
             DdX = 0  # this may also have to be accumulated across stacks
 
-            if not _P:  # no prior P: first call to the blob:
-                _P = stack.Py_.pop()
+            if _P:  # stack_ = upconnect_
                 dert_Py_ = [Cdert_P(Pi=_P)]  # initialize dert_P with _P only, other params are 0
-            else:
+                i = 1
+            else:  # stack_ = blob.stack_, no prior P
                 dert_Py_ = []
-
-            for P in reversed(stack.Py_):
+                i = 0
+            for P in reversed(stack.Py_[i:]):
                 dert_P = comp_slice(P, _P, DdX)  # ortho and other conditional operations are evaluated per PP
                 dert_Py_.append(dert_P)  # dert_P should be converted to Cdert_P in comp_slice
                 _P = P
             stack.Py_ = dert_Py_
 
-            # recursive compare _P to all upconnected P
+            # recursive compare _P to all upconnected Ps
             comp_slice_(stack.upconnect_, _P)
 
 
@@ -128,7 +131,6 @@ def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and condi
     if ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
         Long axis is a curve, consisting of connections between mid-points of consecutive Ps.
         Ortho virtually rotates each P to make it orthogonal to its connection:
-
         hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
         L /= hyp
         # re-orient derivatives by combining them in proportion to their decomposition on new axes:
@@ -182,128 +184,47 @@ def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
                     dert_P = comp_slice(ortho, P, _P, DdX)
                     dert_P_.append(dert_P)
                     _P = P
-                if dert_P_:
-                    stack.stack_PP_ = form_PP_(dert_P_)  # stack_PP
 
 
-def form_PP_(stack_, _dert_P):  # terminate, initialize, increment PPs
+def form_PP_(stack_, PP_, PP):  # terminate, initialize, increment PPs
 
+    # initial draft to test on the concept, buggy and not complete yet
     # cluster all connected dert_Ps of same-sign mP
     for stack in reversed(stack_):
 
-        f_acc = 1  # accumulate 1st P in upconnect_, per stack
-        if not _dert_P:  # input is blob.stack_
-            _dert_P = stack.Py_.pop()
-            stack_PP = CStack_PP(dert_Pi = _dert_P)  # define object and accum_stack_PP()
-        else:
-            stack_PP = CStack_PP()  # stack_PP.PP_ = []?
-            PP_ = []  # will replace blob.stack_
-            PP = CPP(dert_Pi=Cdert_P(_dert_P))
+        if stack.f_checked: # stack.f_checked value is equal to 1 after comp_slice_
+            stack.f_checked = 0
 
-        _dert_P = stack_PP.dert_Py_[0]
+            if PP:  # stack_ = upconnect_
+                stack_PP = PP.stack_PP_[-1]  # how do we add getitem in CPP?
+                _dert_P = stack_PP.Py_[-1]
+                i = 1
+            else:  # stack_ - blob.stack_
+                _dert_P = stack.Py_[0]
+                stack_PP_ = [ CStack_PP(dert_Pi=_dert_P, dert_Py_=[_dert_P]) ]
+                PP = CPP(stack_PP_=stack_PP_)
+                i = 0
 
-        for dert_P in reversed(stack.Py_):
-                accum_stack_PP(stack_PP, dert_P)
+            for dert_P in stack.Py_[i:]:
+                # cluster dert_Ps into PPs
+                if _dert_P.Pm > 0 != dert_P.Pm > 0:  # sign change
+                    PP.stack_PP_.append(stack_PP)      # pack stack_PP
+                    stack_PP = CStack_PP(dert_Pi=Cdert_P())  # reinitialize
+
+                accum_stack_PP(stack_PP, _dert_P)  # pack _dert_P into stack_PP, regardless of termination
                 _dert_P = dert_P
 
-            form_PP_(stack.upconnect_, _dert_P)  # recursive clustering in all upconnects
+            PP.stack_.append(stack)
+            # recursively cluster stack upconnects:
+            form_PP_(stack.upconnect_, PP_, PP)
 
-'''
-Below is not reviewed:
-'''
+            PP_.append(PP)  # PP terminated after scanning through all upconnects
+            PP = CPP()  # what is this for, we should always initialize PP with the first dert_P -> stack_PP?
 
-        for i, dert_P in enumerate(dert_P_[1:]): # consecutive dert_P
-
-        if _dert_P.Pm > 0 != dert_P.Pm > 0: # sign change between _dert_P and dert_P
-            mPP_.append(mPP)
-            mPP=CPP(dert_Pi = Cdert_P())
-        accum_PP(_dert_P, mPP)  # accumulate _dert_P params into PP params
-
-        if _dert_P.Pd > 0 != dert_P.Pd > 0:  # sign change between _dert_P and dert_P
-            dPP_.append(dPP)
-            dPP=CPP(dert_Pi = Cdert_P())
-        accum_PP(_dert_P, dPP)  # accumulate _dert_P params into PP params
-
-        _dert_P = dert_P  # update _dert_P
-
-    accum_stack_PP(stack_PP, dert_P_)  # accumulate dert_P params into stack_PP params, in batch
-    mPP_.append(mPP)  # pack last PP in PP_
-    dPP_.append(dPP)
-    # compute fmPP and fdiv of mPP and dPP?
-
-    stack_PP.mPP_ = mPP_
-    stack_PP.dPP_ = dPP_
-    stack_PP.dert_P_ = dert_P_
-    # compute fdiv of stack_PP?
-
-            Cdert_P = _dert_P  # pseudo
-            PPm = CPP(PP_stack_[0].Py = [Cdert_P])  # need to be extended to full PP initialization
-            # add accum_PP_stack
-
-            for i, dert_P in enumerate(reversed(stack.Py_[1:])):
-
-                if (_dert_P.mP > 0) == (dert_P.mP > 0):
-                    accum_PP(dert_P, PPm)
-                    _dert_P = dert_P
-
-            if i == len(stack.Py_):  # dert_P is top P
-                for upconnect in stack.upconnect_:  # cluster connected dert_Ps between connected stacks
-
-            # unfinished, add PP accum across PP_stacks, or continue accum_PP_stack if single same-sign upconnect
+    return PP_
 
 
-    stack_PP = CStack_PP(dert_Pi = Cdert_P())  # need to define object and accum_stack_PP()
-    mPP_, dPP_ = [], []
-    mPP = dPP = CPP(dert_Pi = Cdert_P())
-    _dert_P = dert_P_[0]
-
-    for i, dert_P in enumerate(dert_P_[1:]): # consecutive dert_P
-
-        if _dert_P.Pm > 0 != dert_P.Pm > 0: # sign change between _dert_P and dert_P
-            mPP_.append(mPP)
-            mPP=CPP(dert_Pi = Cdert_P())
-        accum_PP(_dert_P, mPP)  # accumulate _dert_P params into PP params
-
-        if _dert_P.Pd > 0 != dert_P.Pd > 0:  # sign change between _dert_P and dert_P
-            dPP_.append(dPP)
-            dPP=CPP(dert_Pi = Cdert_P())
-        accum_PP(_dert_P, dPP)  # accumulate _dert_P params into PP params
-
-        _dert_P = dert_P  # update _dert_P
-
-    accum_stack_PP(stack_PP, dert_P_)  # accumulate dert_P params into stack_PP params, in batch
-    mPP_.append(mPP)  # pack last PP in PP_
-    dPP_.append(dPP)
-    # compute fmPP and fdiv of mPP and dPP?
-
-    stack_PP.mPP_ = mPP_
-    stack_PP.dPP_ = dPP_
-    stack_PP.dert_P_ = dert_P_
-    # compute fdiv of stack_PP?
-
-    return stack_PP
-
-'''
-    # stack_PP section
-    if dert_P_:
-        stack.stack_PP_ = form_PP_(dert_P_)
-        if 'mPP' in globals():  # if _dert_P params is summed into stack's PP
-            stack.stack_PP_.dert_P_.insert(_dert_P, 0)  # insert is similar with appendleft
-            stack.stack_PP_.mPP_.insert(mPP, 0)
-            stack.stack_PP_.dert_Pi.accumulate(Pm=_dert_P.Pm, Pd=_dert_P.Pd, mx=_dert_P.mx, dx=_dert_P.dx,
-                                               mL=_dert_P.mL, dL=_dert_P.dL, mDx=_dert_P.mDx, dDx=_dert_P.dDx,
-                                               mDy=_dert_P.mDy, dDy=_dert_P.dDy, mDg=_dert_P.mDg, dDg=_dert_P.dDg,
-                                               mMg=_dert_P.mMg, dMg=_dert_P.dMg)
-    elif 'mPP' in globals():  # if _dert_P params is summed into stack's PP
-        stack_PP_ = CStack_PP(dert_Pi=_dert_P)
-        stack_PP_.dert_P_.append(_dert_P)
-        stack_PP_.mPP_.append(mPP)
-        stack.stack_PP_ = stack_PP_
-
-'''
-
-# accumulate istack and stack_PP into stack
-def accum_gstack(gstack_PP, istack, stack_PP):
+def accum_gstack(gstack_PP, istack, stack_PP):   # accumulate istack and stack_PP into stack
     '''
     This looks wrong, accum_nested_stack should be an add-on to accum_stack_PP
     only called if istack.f_stack_PP:
@@ -346,9 +267,8 @@ def accum_gstack(gstack_PP, istack, stack_PP):
     gstack_PP.sign = sign  # sign should be same across istack
 
 
-def accum_stack_PP(stack_PP, dert_P_):  # accumulate mPPs or dPPs
+def accum_stack_PP(stack_PP, dert_P):  # accumulate mPPs or dPPs
 
-    for dert_P in dert_P_:
         _, Pm, Pd, mx, dx, mL, dL, mDx, dDx, mDy, dDy, mDg, dDg, mMg, dMg = dert_P.unpack()
 
         # accumulate dert_P params into stack_PP
@@ -388,7 +308,7 @@ def accum_PP(dert_P, PP):  # accumulate mPPs or dPPs
     PP.dert_Pi.dDg += dDg
     PP.dert_Pi.mMg += mMg
     PP.dert_Pi.dMg += dMg
-    PP.dert_P_.append(dert_P)
+    PP.dert_Py_.append(dert_P)
 
 '''
     Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression:
