@@ -71,7 +71,7 @@ class CStack_PP(ClusterStructure):
     upconnect_ = list
     downconnect_cnt = int
     #+ other params of CStack?
-    dert_Py_ = list
+    Py_ = list
     fdiv = NoneType
     dert_Pi = object  # stack_PP params = accumulated dert_P params:
     # sPM, sPD, sMX, sDX, sML, sDL, sMDx, sDDx, sMDy, sDDy, sMDg, sDDg, sMMg, sDMg
@@ -90,20 +90,14 @@ def comp_slice_(stack_, _P):
             stack.f_checked = 1
             DdX = 0  # this may also have to be accumulated across stacks
 
-            if _P:  # stack_ = upconnect_
-                dert_Py_ = [Cdert_P(Pi=_P)]  # initialize dert_P with _P only, other params are 0
-            else:  # stack_ = blob.stack_, no prior P
-                dert_Py_ = []
+            if not _P:  # stack_ = upconnect_, else stack_ = blob.stack_
                 _P = stack.Py_.pop()
+            dert_Py_ = [Cdert_P(Pi=_P)]  # _P only, no derivatives in 1st dert_P
 
             for P in reversed(stack.Py_):
                 dert_P = comp_slice(P, _P, DdX)  # ortho and other conditional operations are evaluated per PP
-                dert_Py_.append(dert_P)  # dert_P should be converted to Cdert_P in comp_slice
+                dert_Py_.append(dert_P)  # dert_P is converted to Cdert_P in comp_slice
                 _P = P
-
-            # when stack is having single P, dert_Py_ is empty so adding Pi = _P
-            if not dert_Py_:
-                dert_Py_ = [Cdert_P(Pi=_P)]
 
             stack.Py_ = dert_Py_
 
@@ -167,13 +161,11 @@ def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
 
         for stack in blob.stack_:
             if stack.G * stack.Ma - AveB / 10 > 0:  # / 10: ratio AveB to AveS, or not needed?
-
                 # or default (L, Dy, Dx, G) min comp for rotation,
                 # primary comp L, the rest is normalized?
                 # overlap vs. shift:
                 # init cross-dimension div_comp: Dx/Dy, but separate val for comp G, no default G/L?
                 # comp -> min Dx/Dy for rotation, min G for comp_g?
-
                 # also default min comp to upconnect_ Ps -> forking / merging PPs -> stack_ per PP!
                 # stack.f_stackPP = 1  # scan Py_ -> comp_slice -> form_PP -> 2D PP_: clusters of same-sign dP | mP
                 DdX = 0
@@ -194,40 +186,61 @@ def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
 
 def form_PP_(stack_, PP_, PP, stack_PP, _dert_P):  # terminate, initialize, increment PPs
 
-    # initial draft to test on the concept, buggy and not complete yet
+    PP_id = -1
     # cluster all connected dert_Ps of same-sign mP
     for stack in reversed(stack_):
 
-        if stack.f_checked: # stack.f_checked value is equal to 1 after comp_slice_
+        if stack.f_checked:  # stack.f_checked = 1 after comp_slice_
             stack.f_checked = 0
+
             if _dert_P:  # stack_ = upconnect_  # stack_PP = PP.stack_PP_[-1]; _dert_P = stack_PP.dert_Py_[-1]
                 i = 0
             else:  # stack_ = blob.stack_
                 _dert_P = stack.Py_[0]
                 i = 1
+            if not stack_PP:  # if stack_PP doesn't continue across original stacks, which is possible
+                Cdert_P=_dert_P
+                stack_PP_ = [ CStack_PP(Py_= [Cdert_P] ) ]
+            if not PP:
+                PP = CPP(stack_PP_=stack_PP_)  # not sure about this?
 
             for dert_P in stack.Py_[i:]:
                 # cluster dert_Ps into PPs
                 if _dert_P.Pm > 0 != dert_P.Pm > 0:  # sign change
-
+                    '''
+                    this is done in line 203 now? 
                     if PP and stack_PP:
-                        PP.stack_PP_.append(stack_PP)  # pack stack_PP
+                        PP.stack_PP_.append(stack_PP)  # pack stack_PP, PP may continue in other stack_PPs
                     else:
-                        stack_PP_ = [ CStack_PP(dert_Py_=[_dert_P]) ]
+                        stack_PP_ = [CStack_PP(dert_Py_=[_dert_P]) ]
                         PP = CPP(stack_PP_=stack_PP_)
-                    stack_PP = CStack_PP(dert_Pi=Cdert_P())  # reinitialize
+                        PP_id = PP.id
+                    '''
+                    Cdert_Pi = dert_P
+                    stack_PP = CStack_PP(Py_= [Cdert_Pi] )  # reinitialize
 
                 accum_stack_PP(stack_PP, _dert_P)  # pack _dert_P into stack_PP, regardless of termination
                 _dert_P = dert_P
 
-            PP.stack_PP_.append(stack_PP)
+            '''
+            This should be done at initialization, line 204?
+            #  PP may empty
+            if PP:
+                PP.stack_PP_.append(stack_PP)
+            else: # if PP is empty, reinitialize it
+                PP = CPP(stack_PP_=[CStack_PP(dert_Py_=[_dert_P])]) # reinitialize PP
+                PP_id = PP.id
+            '''
+            # this is also conditional: if len(_dert_P.upconnect_) != 1?:
+            PP.stack_PP_.append(stack_PP)  # append last stack
+
             # recursively cluster stack upconnects:
             form_PP_(stack.upconnect_, PP_, PP, stack_PP, _dert_P)
 
-            # temporary fix, to avoid duplicated PP
-            if PP not in PP_:
+            # terminate PP after it scanning through all upconnects
+            if PP.id == PP_id:
                 PP_.append(PP)  # PP is terminated after scanning through all upconnects
-            PP = []  # we need this to terminate PP
+            PP = []  # we need this to terminate PP, otherwise same PP would be reuse in the next loop
 
     return PP_
 
