@@ -198,11 +198,10 @@ def form_PP_(stack_, PP_, PP, stack_PP, _dert_P):  # terminate, initialize, incr
             else:  # stack_ = blob.stack_
                 _dert_P = stack.Py_[0]
                 i = 1
-            if not stack_PP:  # if stack_PP doesn't continue across original stacks, which is possible
-                Cdert_P=_dert_P
-                stack_PP_ = [ CStack_PP(Py_= [Cdert_P] ) ]
-            if not PP:
-                PP = CPP(stack_PP_=stack_PP_)  # not sure about this?
+                if not PP:  # if stack_PP doesn't continue across original stacks, which is possible
+                    Cdert_P = _dert_P
+                    stack_PP_ = [CStack_PP(Py_=[Cdert_P])]
+                    PP = CPP(stack_PP_=stack_PP_)
 
             for dert_P in stack.Py_[i:]:
                 # cluster dert_Ps into PPs
