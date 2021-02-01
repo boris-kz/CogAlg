@@ -88,7 +88,7 @@ def comp_slice_(stack_, _P):
 
         if not stack.f_checked :  # else this stack has been scanned as some other upconnect
             stack.f_checked = 1
-            DdX = 0  # this may also have to be accumulated across stacks?
+            DdX = 0  # accumulate across stacks?
 
             if not _P:  # stack_ = upconnect_, else stack_ = blob.stack_
                 _P = stack.Py_.pop()
@@ -185,41 +185,88 @@ def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
 
 def form_PP_(stack_, PP_, PP, _dert_P, _stack_PP, upconnect_cnt):  # terminate, initialize, increment PPs
 
-    PP_id = -1
-    # cluster all connected dert_Ps of same-sign mP
-    for stack in reversed(stack_):
+    # in blob: cluster all connected dert_Ps of same-sign mP
+    PP_id = -1  # probably not here
 
-        if stack.f_checked:  # stack.f_checked = 1 after comp_slice_
-            stack.f_checked = 0
+    if _dert_P:  # stack_ = _stack.upconnect_
+        upconnect_ = []  # same-sign upconnects
 
-            if _dert_P:  # stack_ = upconnect_  # stack_PP = PP.stack_PP_[-1]; _dert_P = stack_PP.dert_Py_[-1]
-                i = 0
-            else:  # stack_ = blob.stack_
-                _dert_P = stack.Py_[0]
-                i = 1
-                Cdert_P = _dert_P; CStack_PP(Py_=[Cdert_P])
-                PP_id = PP.id
+        for i, stack in enumerate(stack_):  # breadth-first, upconnect_ is not reversed
+            if stack.f_checked:  # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
+                stack.f_checked = 0
+                dert_P = stack.Py[0]  # reversed by comp_slice_?
 
-            ffirst = 1  # first dert_P in stack
-            for dert_P in stack.Py_[i:]:  # cluster dert_Ps into PPs
+                if _dert_P.Pm > 0 == dert_P.Pm > 0:
+                    upconnect_.append(stack)
+                    stack_[i].pop()  # now contains unconnected stacks only, accum after full scan
+                else:
+                    upconnect_cnt -= 1
 
-                if _dert_P.Pm > 0 != dert_P.Pm > 0:  # sign change
-                    if ffirst:
-                        upconnect_cnt -= 1
-                        ffirst = 0
-                    else:
-                        PP.stack_PP_.append(stack_PP)  # terminate local stack_PP,
-                        # initial _stack_PP may continue in another upconnect,
-                        # but it can't accumulate in multiple stacks?
-                    stack_PP = CStack_PP(dert_Pi=Cdert_P())  # reinitialize, then accumulate:
+        if upconnect_cnt == 1:
+            _dert_P = upconnect_[0].Py_[0]  # sole upconnect' 1st dert_P
+            accum_stack_PP(_stack_PP, _dert_P)
 
-                accum_stack_PP(stack_PP, dert_P)  # pack dert_P into stack_PP, regardless of termination
+            for dert_P in upconnect_[0].Py_[1:]:  # depth-first though stack.Py_
+                if _dert_P.Pm > 0 != dert_P.Pm > 0:
+                    PP.stack_PP_.append(stack_PP)
+                    Cdert_P = _dert_P; stack_PP = CStack_PP(Py_=[Cdert_P])  # reinitialize
+
+                accum_stack_PP(_stack_PP, dert_P)
                 _dert_P = dert_P
+                # anything else here?
+        else:
+            PP.stack_PP_.append(_stack_PP)  # terminate _stack_PP
+            accum_PP(PP, _stack_PP)  # this function should accumulate _stack_PP, not dert_P
 
-            if upconnect_cnt != 1:  # to be revised, this _stack_PP may accumulate in stack,
-                # so, scan breadth-first through stack_ for _stack_PP,
-                # then depth-first though stack.Py_s for new stack_PPs?
+            scan_stack_(upconnect_, PP)
+            '''
+            old:
+            for stack in upconnect_:  
+                _dert_P = stack.Py[0]
+                Cdert_P = _dert_P; stack_PP = CStack_PP(Py_=[Cdert_P])
+                
+                for dert_P in stack.Py_[1:]:
+                    if _dert_P.Pm > 0 == dert_P.Pm > 0:
+                        accum_stack_PP(stack_PP, dert_P)
+                    else:
+                        PP.stack_PP_.append(stack_PP)
+                        Cdert_P = _dert_P; stack_PP = CStack_PP(Py_=[Cdert_P])  # reinitialize
+                    _dert_P = dert_P
+                PP.stack_PP_.append(stack_PP)  # last stack_PP
+            '''
 
+        scan_stack_(stack_, PP)   # stack_: unconnected to _stack_PP
+        '''
+        old:
+        for stack in stack_:  
+            _dert_P = stack.Py[0]
+            Cdert_P = _dert_P; stack_PP = CStack_PP(Py_=[Cdert_P])
+
+            for dert_P in stack.Py_[1:]:
+                if _dert_P.Pm > 0 == dert_P.Pm > 0:
+                    accum_stack_PP(stack_PP, dert_P)
+                else:
+                PP.stack_PP_.append(stack_PP)
+                Cdert_P = _dert_P; stack_PP = CStack_PP(Py_=[Cdert_P])  # reinitialize
+                _dert_P = dert_P
+            PP.stack_PP_.append(stack_PP)  # last stack_PP
+            '''
+    else:  # stack_ = blob.stack_
+
+        scan_stack_(stack_, PP)  # or form_PP?
+        '''
+        old:
+            _dert_P = stack_[0].Py_[0]
+            Cdert_P = _dert_P; CStack_PP(Py_=[Cdert_P])
+            PP_id = PP.id
+
+            for dert_P in stack.Py_[1:]:  # cluster dert_Ps into PPs
+                if _dert_P.Pm > 0 != dert_P.Pm > 0:  # sign change
+                    PP.stack_PP_.append(stack_PP)  # terminate local stack_PP,
+                stack_PP = CStack_PP(dert_Pi=Cdert_P())  # reinitialize, then accumulate:
+
+        if stack.f_checked:  # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
+            stack.f_checked = 0
                 if stack_PP:  # if stack_PP doesn't continue across original stacks
                      PP.stack_PP_.append(_stack_PP)
 
@@ -233,8 +280,28 @@ def form_PP_(stack_, PP_, PP, _dert_P, _stack_PP, upconnect_cnt):  # terminate, 
             if PP.id == PP_id:
                 PP_.append(PP)  # PP is terminated after scanning through all upconnects
             PP = []  # otherwise same PPs would be reused in the next loop
-
+        '''
     return PP_
+
+
+def scan_stack_(stack_, PP):
+    '''
+    Draft:
+    '''
+    for stack in stack_:
+
+        _dert_P = stack.Py[0]
+        Cdert_P = _dert_P;  stack_PP = CStack_PP(Py_=[Cdert_P])
+
+        for dert_P in stack.Py_[1:]:
+            if _dert_P.Pm > 0 != dert_P.Pm > 0:
+                PP.stack_PP_.append(stack_PP)
+                Cdert_P = _dert_P; stack_PP = CStack_PP(Py_=[Cdert_P])  # reinitialize
+
+            accum_stack_PP(stack_PP, dert_P)  # regardless of termination
+            _dert_P = dert_P
+
+        PP.stack_PP_.append(stack_PP)  # last stack_PP
 
 
 def accum_gstack(gstack_PP, istack, stack_PP):   # accumulate istack and stack_PP into stack
