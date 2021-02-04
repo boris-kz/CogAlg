@@ -192,85 +192,83 @@ def form_PP_(stack_, PP_, PP, _dert_P, _stack_PP):  # terminate, initialize, inc
 
     # cluster all connected dert_Ps of same-sign mP in the blob
 
-    if _dert_P:  # stack_ = _stack.upconnect_
+    if _dert_P:  # stack_ = _stack.upconnect_, also PP?
         upconnect_ = []  # same-sign upconnects
 
         for i, stack in enumerate(stack_):  # breadth-first, upconnect_ is not reversed
-            if stack.f_checked:  # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
-                stack.f_checked = 0
-                dert_P = stack.Py_[0]
-                if _dert_P.Pm > 0 == dert_P.Pm > 0:
-                    upconnect_.append(stack_.pop(i))  # now contains unconnected stacks only, accum after full scan
+            dert_P = stack.Py_[0]
+            if (_dert_P.Pm > 0) == (dert_P.Pm > 0):
+                upconnect_.append(stack_.pop(i))  # now contains unconnected stacks only, accum after full scan:
 
-        if len(upconnect_) == 1:
-            _dert_P = upconnect_[0].Py_[0]  # sole upconnect' 1st dert_P
-            stack_PP = _stack_PP  # it seems there is no need for _stack_PP in this case
-            accum_stack_PP(stack_PP, _dert_P)
+        # 1 same-sign upconnect per PP:
+        if PP.len(upconnect_) == 1:
+            if upconnect_[0].f_checked:
+                _dert_P = upconnect_[0].Py_[0]
+                upconnect_[0].f_checked = 0
+                accum_stack_PP(_stack_PP, _dert_P)
 
-            for dert_P in upconnect_[0].Py_[1:]:  # scan stack.Py_
-                if _dert_P.Pm > 0 != dert_P.Pm > 0:
-                    accum_PP(stack_PP, PP)  # terminate stack_PP and PP
-                    PP_.append(PP)  # only one upconnect, no need to buffer
-                    # reinitialize PP:
-                    stack_PP = CStack_PP(dert_Pi=_dert_P,Py_=[_dert_P])
-                    PP = CPP(stack_PP_=[stack_PP])
-                accum_stack_PP(stack_PP, dert_P)  # regardless of termination
-                _dert_P = dert_P                  # _stack_PP is no longer relevant
+                for dert_P in upconnect_[0].Py_[1:]:  # scan stack.Py_
+                    if _dert_P.Pm > 0 != dert_P.Pm > 0:
 
-        elif _stack_PP: # terminate _stack_PP if there is no upconnect_
-            PP.stack_PP_.append(_stack_PP)  # terminate _stack_PP
-            accum_PP(_stack_PP, PP)  # accumulate stack_PP into PP
-            if upconnect_:
+                        accum_PP(_stack_PP, PP)  # terminate stack_PP and PP
+                        PP_.append(PP)  # only one upconnect, no need to check upconnect_
+                        _stack_PP = CStack_PP(dert_Pi=_dert_P, Py_=[_dert_P])  # no need for stack_PP here?
+                        PP = CPP(_stack_PP_=[_stack_PP])
+
+                    accum_stack_PP(_stack_PP, dert_P)  # regardless of termination
+                    _dert_P = dert_P
+        else:
+            if upconnect_:  # >1 same-sign upconnects per PP
                 scan_stack_(upconnect_, PP_, PP)
 
-        scan_stack_(stack_, PP_, [])   # stack_ now contains only stacks unconnected to _stack_PP
+            elif _stack_PP:  # 0 same-sign upconnects per PP, not sure about this?
+                accum_PP(_stack_PP, PP)  # accumulate stack_PP into PP
+                PP_.append(PP)  # no need to reinitialize?
+
+        scan_stack_(stack_, PP_, [])  # stack_ now contains only stacks unconnected to _stack_PP
 
     else:  # stack_ = blob.stack_
-        scan_stack_(stack_, PP_, [])  # form_PP only if stack_ may be upconnect_?
+        scan_stack_(stack_, PP_, [])  # use form_PP only if stack_ may be upconnect_?
 
     return PP_
 
 
-def scan_stack_(stack_, PP_, iPP):
+def scan_stack_(stack_, PP_, PP):
     '''
     Draft:
     '''
-    for stack in stack_:
+    for i, stack in enumerate(stack_):
         if stack.f_checked: # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
             stack.f_checked = 0
 
-            # PP id need to be retrieved in the function where we initialize PP
-            PP_id = -1
-            if not iPP:
-                PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P()))
-                PP_id = PP.id
-
             _dert_P = stack.Py_[0]
             stack_PP = CStack_PP(dert_Pi=_dert_P, Py_=[_dert_P])
-            for dert_P in stack.Py_[1:]:
 
+            if not PP:  # else same input PP for all stacks
+                PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P()))
+            else:
+                if _dert_P.Pm > 0 != PP.stack_PP_[-1].Py_[-1].Pm > 0:  # last dert_P in last stack_PP of input PP
+                    stack_[i].pop()  # stack_ was upconnect_ of PP
+            '''
+            below is not reviewed, stack.Py_ processing maybe different depending on initial sign match:
+            form_PP if iPP, else scan_stack_?
+            '''
+            for dert_P in stack.Py_[1:]:
                 if _dert_P.Pm > 0 != dert_P.Pm > 0:
                     PP.stack_PP_.append(stack_PP)
-                    '''
-                    PP termination draft:
-                    PP_buff.append(PP)
 
-                    for i, PP in enumerate PP_buff:
-                        PP.upconnect_cnt -= 1
-                        if upconnect_cnt == 0:
-                            PP_.append(PP_buff[i].pop())?
-                    '''
+                    if not len(PP.upconnect_):  # all upconnects terminated
+                        PP_.append(PP)
+                        PP = CPP(upconnect_cnt=-1, stack_PPi=CStack_PP(dert_Pi=Cdert_P()))  # reinitialize PP after termination
+                        # upconnect_cnt initialized with -1, to prevent unwanted termination right after the initialization and before getting the upconnect_cnt
+
                     stack_PP = CStack_PP(dert_Pi=_dert_P, Py_=[_dert_P])  # reinitialize
-
                 accum_stack_PP(stack_PP, dert_P)  # regardless of termination
                 _dert_P = dert_P
 
             PP.stack_PP_.append(stack_PP)  # terminate  last stack_PP
 
             form_PP_(stack.upconnect_, PP_, PP, _dert_P, stack_PP) # form PP across upconnects
-
-            if PP.id == PP_id:
-                PP_.append(PP)  # after scanning through all upconnects
 
 
 def accum_gstack(gstack_PP, istack, stack_PP):   # accumulate istack and stack_PP into stack
@@ -380,7 +378,7 @@ def accum_PP(stack_PP, PP):  # accumulate PP
         nvars = 0  # DIV + norm derivatives
     '''
 
-def term_PP(typ, PP):  # eval for orient (as term_blob), incr_comp_slice, scan_par_:
+def term_PP2(typ, PP):  # eval for orient (as term_blob), incr_comp_slice, scan_par_:
 
     s, L2, I2, D2, Dy2, M2, My2, G2, Olp2, Py_, PM, PD, Mx, Dx, ML, DL, MI, DI, MD, DD, MDy, DDy, MM, DM, MMy, DMy, nVars = PP
 
@@ -510,15 +508,15 @@ def scan_PP_(PP_):  # within a blob, also within a segment?
 def comp_sliceP(PP, _PP):  # compares PPs within a blob | segment, -> forking PPP_: very rare?
     return PP
 
-'''  
+'''
     horiz_dim_val = ave_Lx - |Dx| / 2  # input res and coord res are adjusted so mag approximates predictive value,
-    vertical_dim_val  = Ly - |Dy| / 2  # or proj M = M - (|D| / M) / 2: no neg? 
-    
+    vertical_dim_val  = Ly - |Dy| / 2  # or proj M = M - (|D| / M) / 2: no neg?
+
     core params G and M represent value of all others, no max Pm = L + |V| + |Dx| + |Dy|: redundant and coef-filtered?
-    no * Ave_blob / Ga: angle match rate, already represented by hforks' position + mag' V+G -> comp( d | ortho_d)?   
+    no * Ave_blob / Ga: angle match rate, already represented by hforks' position + mag' V+G -> comp( d | ortho_d)?
     eval per blob, too expensive for seg? no abs_Dx, abs_Dy for comp dert eval: mostly redundant?
-    
+
     colors will be defined as color / sum-of-colors, color Ps are defined within sum_Ps: reflection object?
-    relative colors may match across reflecting objects, forming color | lighting objects?     
-    comp between color patterns within an object: segmentation? 
+    relative colors may match across reflecting objects, forming color | lighting objects?
+    comp between color patterns within an object: segmentation?
 '''
