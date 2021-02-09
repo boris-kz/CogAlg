@@ -81,6 +81,7 @@ class CStack_PP(ClusterStructure):
 
     ## PP
     PP = object
+    PP_id = int
     # stack_PP params = accumulated dert_P params:
     # sPM, sPD, sMX, sDX, sML, sDL, sMDx, sDDx, sMDy, sDDy, sMDg, sDDg, sMMg, sDMg
     # add to blob:
@@ -192,11 +193,11 @@ def comp_slice_old(blob, AveB):  # comp_slice eval per blob, simple stack_
 
 def stack_2_PP_(stack_, PP_):
     '''
-    first stack_ call and then select unconnected stack_ call
+    first stack_ call, then sign-unconfirmed upconnect_ calls
     '''
     for i, stack in enumerate(stack_):
 
-        if stack.f_checked: # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
+        if stack.f_checked:  # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
             stack.f_checked = 0
             _dert_P = stack.Py_[0]
             stack_PP = CStack_PP(dert_Pi=_dert_P, Py_=[_dert_P])
@@ -218,7 +219,7 @@ def stack_2_PP_(stack_, PP_):
     return PP_
 
 
-def upconnect_2_PP_(stack_, PP_, iPP, _dert_P, _stack_PP):  # terminate, initialize, increment PPs
+def upconnect_2_PP_(stack_, PP_, iPP, _dert_P, stack_PP):  # terminate, initialize, increment PPs
 
     # in the blob, cluster all connected dert_Ps of same-sign mP into PPs
     upconnect_= []
@@ -226,59 +227,58 @@ def upconnect_2_PP_(stack_, PP_, iPP, _dert_P, _stack_PP):  # terminate, initial
     for i, stack in enumerate(stack_):  # breadth-first, upconnect_ is not reversed
         dert_P = stack.Py_[0]
         if (_dert_P.Pm > 0) == (dert_P.Pm > 0):
-            upconnect_.append(stack)
             upconnect_.append(stack_.pop(i))  # separate stack_ into sign-connected stacks: upconnect_, and unconnected stacks: popped stack_
 
     if len(upconnect_) == 1:  # 1 same-sign upconnect per PP
         if upconnect_[0].f_checked:
             upconnect_[0].f_checked = 0
-            accum_stack_PP(_stack_PP, _dert_P)  # accumulate the input _dert_P
+            accum_stack_PP(stack_PP, _dert_P)  # accumulate the input _dert_P
             PP = iPP  # no difference in single stack
 
-            for dert_P in upconnect_[0].Py_:  # scan_Py_(): same as in stack_2_PP_?
+            for dert_P in upconnect_[0].Py_:
                 if (_dert_P.Pm > 0) != (dert_P.Pm > 0):
-                    accum_PP(_stack_PP, PP)  # terminate stack_PP and PP
-                    PP_.append(PP)  # only one upconnect, no need to check upconnect_
-                    _stack_PP = CStack_PP(dert_Pi=Cdert_P())  # init empty stack_PP, then accum_stack_PP
+                    accum_PP(stack_PP, PP)
+                    PP_.append(PP)  # terminate stack_PP and PP
+                    stack_PP = CStack_PP(dert_Pi=Cdert_P())  # init empty stack_PP, then accum_stack_PP
                     PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P()))
-                    _stack_PP.PP = PP
-                accum_stack_PP(_stack_PP, dert_P)  # regardless of termination
+                    stack_PP.PP = PP
+
+                accum_stack_PP(stack_PP, dert_P)  # regardless of termination
                 _dert_P = dert_P
 
     elif upconnect_:  # >1 same-sign upconnects per PP
-        istack_PP = _stack_PP
-        idert_P = _dert_P
+        istack_PP = stack_PP  # downconnected stack_PP
+        idert_P = _dert_P     # downconnected dert_P
         curr_upconnect_cnt = len(upconnect_)
+        accum_stack_PP(istack_PP, idert_P)  # accumulate the input _dert_P
 
         for upconnect in upconnect_:  # form PPs across stacks
-            # needs to be reviewed:
+            curr_upconnect_cnt -=1
             PP = iPP  # then redefined per stack
-            _stack_PP = istack_PP  # for iPP only?
             _dert_P = idert_P
             if upconnect.f_checked:
                 upconnect.f_checked = 0
-                accum_stack_PP(_stack_PP, _dert_P)  # accumulate the input _dert_P
 
                 for dert_P in upconnect.Py_:
                     if (_dert_P.Pm > 0) != (dert_P.Pm > 0):
-                        accum_PP(stack_PP, PP)
-                        if PP is not iPP:
-                            PP_.append(PP)  # terminate stack_PP-local PP
-                        else:  # separate iPP termination
-                            curr_upconnect_cnt -=1
+                        accum_PP(stack_PP, PP)  # term. stack_PP
+                        if PP is iPP:  # separate iPP termination test
+                            curr_upconnect_cnt -= 1
                             if curr_upconnect_cnt == 0:
                                 PP_.append(PP)
+                        else:  # terminate stack-local PP
+                            PP_.append(PP)
                         # init PP regardless of iPP:
                         stack_PP = CStack_PP(dert_Pi=Cdert_P())  # init empty
                         PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P()))  # we don't know if PP will fork at stack term
 
-                    accum_stack_PP(_stack_PP, dert_P)  # regardless of termination
+                    accum_stack_PP(stack_PP, dert_P)  # regardless of termination
                     _dert_P = dert_P
 
-                upconnect_2_PP_(upconnect.upconnect_, PP_, PP, _dert_P, _stack_PP)
+                upconnect_2_PP_(upconnect.upconnect_, PP_, PP, _dert_P, stack_PP)
 
     else:  # 0 same-sign upconnects per PP:
-        accum_PP(_stack_PP, iPP)  # accumulate stack_PP into PP
+        accum_PP(stack_PP, iPP)  # accumulate stack_PP into PP
         PP_.append(iPP)
 
     stack_2_PP_(stack_, PP_)  # stack_ now contains only stacks unconnected to _stack_PP
@@ -327,26 +327,13 @@ def accum_gstack(gstack_PP, istack, stack_PP):   # accumulate istack and stack_P
     gstack_PP.sign = sign  # sign should be same across istack
 
 
-def accum_stack_PP(stack_PP, dert_P):  # accumulate mPPs or dPPs
+def accum_stack_PP(stack_PP, dert_P):  # accumulate dert_P into stack_PP
 
-    _, Pm, Pd, mx, dx, mL, dL, mDx, dDx, mDy, dDy, mDg, dDg, mMg, dMg = dert_P.unpack()
-
-    # accumulate dert_P params into stack_PP
-    stack_PP.dert_Pi.Pm += Pm
-    stack_PP.dert_Pi.Pd += Pd
-    stack_PP.dert_Pi.mx += mx
-    stack_PP.dert_Pi.dx += dx
-    stack_PP.dert_Pi.mL += mL
-    stack_PP.dert_Pi.dL += dL
-    stack_PP.dert_Pi.mDx += mDx
-    stack_PP.dert_Pi.dDx += dDx
-    stack_PP.dert_Pi.mDy += mDy
-    stack_PP.dert_Pi.dDy += dDy
-    stack_PP.dert_Pi.mDg += mDg
-    stack_PP.dert_Pi.dDg += dDg
-    stack_PP.dert_Pi.mMg += mMg
-    stack_PP.dert_Pi.dMg += dMg
-
+     # accumulate dert_P params into stack_PP
+    stack_PP.dert_Pi.accumulate(Pm=dert_P.Pm, Pd=dert_P.Pd, mx=dert_P.mx, dx=dert_P.dx,
+                                mL=dert_P.mL, dL=dert_P.dL, mDx=dert_P.mDx, dDx=dert_P.dDx,
+                                mDy=dert_P.mDy, dDy=dert_P.dDy, mDg=dert_P.mDg, dDg=dert_P.dDg,
+                                mMg=dert_P.mMg, dMg=dert_P.dMg)
     stack_PP.Py_.append(dert_P)
 
 
@@ -358,8 +345,9 @@ def accum_PP(stack_PP, PP):  # accumulate PP
                                     mDy=stack_PP.dert_Pi.mDy, dDy=stack_PP.dert_Pi.dDy, mDg=stack_PP.dert_Pi.mDg, dDg=stack_PP.dert_Pi.dDg,
                                     mMg=stack_PP.dert_Pi.mMg, dMg=stack_PP.dert_Pi.dMg)
 
-
     PP.stack_.append(stack_PP)
+    stack_PP.PP = PP
+    stack_PP.PP_id = PP.id
 
 '''
     Pd and Pm are ds | ms per param summed in P. Primary comparison is by subtraction, div if par * rL compression:
