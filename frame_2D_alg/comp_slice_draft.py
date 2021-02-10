@@ -1,30 +1,29 @@
 '''
    comp_slice_ is a terminal fork of intra_blob.
-    
+
    It traces blob axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
    These high-G high-Ma blobs are vectorized into outlines of adjacent flat or low-G blobs.
    Vectorization is clustering of Ps + derivatives into PPs: patterns of Ps that describe an edge.
-
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
+
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    radial comp extension for co-internal blobs:
    != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
    == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
-   
+
    borrow = adj_G * rA: default sum div_comp S -> relative area and distance to adjj_blob_
    internal sum comp if mA: in thin lines only? comp_norm_G or div_comp_G -> rG?
-   isolation = decay + contrast: 
+   isolation = decay + contrast:
    G - G * (rA * ave_rG: decay) - (rA * adj_G: contrast, = lend | borrow, no need to compare vG?)
 
-   if isolation: cross adjj_blob composition eval, 
+   if isolation: cross adjj_blob composition eval,
    else:         cross adjj_blob merge eval:
-   blob merger if internal match (~raG) - isolation, rdn external match:  
+   blob merger if internal match (~raG) - isolation, rdn external match:
    blob compos if external match (~rA?) + isolation,
-
    Also eval comp_slice over fork_?
-   rng+ should preserve resolution: rng+_dert_ is dert layers, 
-   rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g, 
-   rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr? 
+   rng+ should preserve resolution: rng+_dert_ is dert layers,
+   rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g,
+   rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr?
 '''
 
 from time import time
@@ -93,7 +92,7 @@ def comp_slice_(stack_, _P):
     '''
     cross-compare connected Ps of stack_, including Ps of adjacent stacks (upconnects)
     '''
-    for stack in reversed(stack_):
+    for stack in reversed(stack_):  # bottom-up
 
         if not stack.f_checked :  # else this stack has been scanned as some other upconnect
             stack.f_checked = 1
@@ -195,7 +194,7 @@ def stack_2_PP_(stack_, PP_):
     '''
     first stack_ call, then sign-unconfirmed upconnect_ calls
     '''
-    for i, stack in enumerate(stack_):
+    for i, stack in enumerate(stack_):  # bottom-up to follow upconnects
 
         if stack.f_checked:  # stack.f_checked = 1 after comp_slice_, redundant if 0: was tested before
             stack.f_checked = 0
@@ -207,19 +206,19 @@ def stack_2_PP_(stack_, PP_):
             for dert_P in stack.Py_[1:]:
                 if (_dert_P.Pm > 0) != (dert_P.Pm > 0):
                     accum_PP(stack_PP, PP); PP_.append(PP)  # terminate stack_PP and PP
-                    stack_PP = CStack_PP(dert_Pi=Cdert_P()); PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P())); stack_PP.PP = PP
+                    stack_PP = CStack_PP(dert_Pi=Cdert_P()); PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P()))
                     # init stack_PP and PP
                 accum_stack_PP(stack_PP, dert_P)  # regardless of termination
                 _dert_P = dert_P
 
             PP.stack_PP_.append(stack_PP)  # terminate last stack_PP
 
-            upconnect_2_PP_(stack.upconnect_, PP_, PP, _dert_P, stack_PP)  # form PPs across upconnects
+            upconnect_2_PP_(stack.upconnect_, PP_, PP, stack_PP, _dert_P)  # form PPs across upconnects
 
     return PP_
 
 
-def upconnect_2_PP_(stack_, PP_, iPP, _dert_P, stack_PP):  # terminate, initialize, increment PPs
+def upconnect_2_PP_(stack_, PP_, iPP, istack_PP, _dert_P):  # terminate, initialize, increment PPs
 
     # in the blob, cluster all connected dert_Ps of same-sign mP into PPs
     upconnect_= []
@@ -232,31 +231,33 @@ def upconnect_2_PP_(stack_, PP_, iPP, _dert_P, stack_PP):  # terminate, initiali
     if len(upconnect_) == 1:  # 1 same-sign upconnect per PP
         if upconnect_[0].f_checked:
             upconnect_[0].f_checked = 0
-            accum_stack_PP(stack_PP, _dert_P)  # accumulate the input _dert_P
+            accum_stack_PP(istack_PP, _dert_P)  # accumulate the input _dert_P
             PP = iPP  # no difference in single stack
 
             for dert_P in upconnect_[0].Py_:
                 if (_dert_P.Pm > 0) != (dert_P.Pm > 0):
-                    accum_PP(stack_PP, PP)
+                    accum_PP(istack_PP, PP)
                     PP_.append(PP)  # terminate stack_PP and PP
-                    stack_PP = CStack_PP(dert_Pi=Cdert_P())  # init empty stack_PP, then accum_stack_PP
+                    istack_PP = CStack_PP(dert_Pi=Cdert_P())  # init empty stack_PP, then accum_stack_PP
                     PP = CPP(stack_PPi=CStack_PP(dert_Pi=Cdert_P()))
-                    stack_PP.PP = PP
 
-                accum_stack_PP(stack_PP, dert_P)  # regardless of termination
+                accum_stack_PP(istack_PP, dert_P)  # regardless of termination
                 _dert_P = dert_P
 
+        else:  # checked before, so the stack already has PP
+            merge_PP(upconnect_[0].PP, istack_PP.PP, PP_)
+
     elif upconnect_:  # >1 same-sign upconnects per PP
-        istack_PP = stack_PP  # downconnected stack_PP
         idert_P = _dert_P     # downconnected dert_P
         curr_upconnect_cnt = len(upconnect_)
         accum_stack_PP(istack_PP, idert_P)  # accumulate the input _dert_P
+        ffirst = 1  # first upconnect
 
         for upconnect in upconnect_:  # form PPs across stacks
-            curr_upconnect_cnt -=1
+            stack_PP = istack_PP  # downconnected stack_PP
             PP = iPP  # then redefined per stack
             _dert_P = idert_P
-            if upconnect.f_checked:
+            if upconnect.f_checked:  # means *not* checked here
                 upconnect.f_checked = 0
 
                 for dert_P in upconnect.Py_:
@@ -274,14 +275,34 @@ def upconnect_2_PP_(stack_, PP_, iPP, _dert_P, stack_PP):  # terminate, initiali
 
                     accum_stack_PP(stack_PP, dert_P)  # regardless of termination
                     _dert_P = dert_P
+                upconnect_2_PP_(upconnect.upconnect_, PP_, PP, stack_PP, _dert_P)
 
-                upconnect_2_PP_(upconnect.upconnect_, PP_, PP, _dert_P, stack_PP)
+            else:  # checked before: stack_PP has already been assigned PP, merge iPP into it
+                if ffirst:
+                    merge_PP(upconnect[0].PP, iPP, PP_)  # all connects refer to upconnect[0].PP
+                    ffirst = 0
+                elif upconnect.PP is not upconnect[0].PP:
+                    merge_PP(upconnect[0].PP, upconnect.PP, PP_)  # all upconnects should have the same PP
 
     else:  # 0 same-sign upconnects per PP:
-        accum_PP(stack_PP, iPP)  # accumulate stack_PP into PP
+        accum_PP(istack_PP, iPP)  # accumulate stack_PP into PP
         PP_.append(iPP)
 
-    stack_2_PP_(stack_, PP_)  # stack_ now contains only stacks unconnected to _stack_PP
+    stack_2_PP_(stack_, PP_)  # stack_ now contains only stacks unconnected to istack_PP
+
+
+def merge_PP(_PP, PP, PP_):  # merge PP into _PP
+
+    _PP.stack_PP_.extend(PP.stack_PP_)
+    _PP.stack_PPi.dert_Pi.accumulate(Pm=PP.stack_PPi.dert_Pi.Pm, Pd=PP.stack_PPi.dert_Pi.Pd, mx=PP.stack_PPi.dert_Pi.mx, dx=PP.stack_PPi.dert_Pi.dx,
+                                     mL=PP.stack_PPi.dert_Pi.mL, dL=PP.stack_PPi.dert_Pi.dL, mDx=PP.stack_PPi.dert_Pi.mDx, dDx=PP.stack_PPi.dert_Pi.dDx,
+                                     mDy=PP.stack_PPi.dert_Pi.mDy, dDy=PP.stack_PPi.dert_Pi.dDy, mDg=PP.stack_PPi.dert_Pi.mDg,
+                                     dDg=PP.stack_PPi.dert_Pi.dDg, mMg=PP.stack_PPi.dert_Pi.mMg, dMg=PP.stack_PPi.dert_Pi.dMg)
+    if PP in PP_:
+        PP_.remove(PP)  # remove the merged PP
+    # if not _PP in PP_:
+    #    PP_.append(PP)  # this is done when PP terminates,
+    # else it is updated in PP_?
 
 
 def accum_gstack(gstack_PP, istack, stack_PP):   # accumulate istack and stack_PP into stack
