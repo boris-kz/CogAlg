@@ -1,9 +1,10 @@
 """
-Visualize output of first 3 layers of intra_comp forks, for testing
+Visualize estimated extrema: e_= m_ - g_, over incremental comp_r
 """
 
 from alternative_versions.comp_pixel_versions import comp_pixel_m
 from intra_comp import *
+from alternative_versions.LUT import Y_COEFFS, X_COEFFS
 
 import cv2
 import argparse
@@ -19,8 +20,73 @@ OUTPUT_PATH = "./images/intra_comp0/"
 # Functions
 
 
-# rng = 2
-def comp_r_rng2(dert__, ave, root_fia, mask__=None):
+def shift_img(img,rng):
+    '''
+    shift image based on the rng directions
+    '''
+
+    minimum_input_size = (rng*2)+1 # minimum input size based on rng
+    output_size_y = img.shape[0] - (rng*2) # expected output size after shifting
+    output_size_x = img.shape[1] - (rng*2) # expected output size after shifting
+
+    total_shift_direction = rng*8 # total shifting direction based on rng
+
+    # initialization
+    img_shift_ = []
+    x = -rng
+    y = -rng
+    sstep = rng+1
+
+    # get shifted images if output size >0
+    if output_size_y>0 and output_size_x>0:
+
+
+        img_center__ = img[rng:-(rng):rng+1,rng:-(rng):rng+1]
+
+
+        for i in range(total_shift_direction):
+
+            # get images in shifted direction
+            if (x<=0 and y<=0) :
+                if y == -rng:
+                    img_shift = img[:y*2:sstep, rng+x:(x*2)-(rng+x):sstep]
+                elif x == -rng:
+                    img_shift = img[rng+y:(y*2)-(rng+y):sstep,:x*2:sstep]
+            elif x>0 and y<=0:
+                if x == rng:
+                    img_shift = img[rng+y:(y*2)-(rng+y):sstep, rng+x::sstep]
+                else:
+                    img_shift = img[rng+y:(y*2)-(rng+y):sstep, rng+x:x-rng:sstep]
+            elif x<=0 and y>0:
+                if y == rng:
+                    img_shift = img[rng+y::sstep, rng+x:(x*2)-(rng+x):sstep]
+                else:
+                    img_shift = img[rng+y:y-rng:sstep, rng+x:(x*2)-(rng+x):sstep]
+            elif x>0 and y>0:
+                if x == rng and y == rng:
+                    img_shift = img[rng+y::sstep, rng+x::sstep]
+                elif x == rng:
+                    img_shift = img[rng+y:y-rng:sstep, rng+x::sstep]
+                elif y == rng:
+                    img_shift = img[rng+y::sstep, rng+x:x-rng:sstep]
+
+
+            # update x and y shifting value
+            if x == -rng and y>-rng:
+                y-=1
+            elif x < rng and y < rng:
+                x+=1
+            elif x >= rng and y < rng:
+                y+=1
+            elif y >= rng and x >-rng:
+                x-=1
+
+            img_shift_.append(img_shift)
+
+    return img_center__, img_shift_
+
+
+def comp_r_rng(dert__, ave, root_fia, rng, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -43,16 +109,7 @@ def comp_r_rng2(dert__, ave, root_fia, mask__=None):
     rotate in first call only: same orientation as from frame_blobs?
     '''
 
-
-    i__center      = i__[2:-2:3, 2:-2:3]  # also assignment to new_dert__[0]
-    i__topleft     = i__[:-4:3, :-4:3]
-    i__top         = i__[:-4:3, 2:-2:3]
-    i__topright    = i__[:-4:3, 4::3]
-    i__right       = i__[2:-2:3, 4::3]
-    i__bottomright = i__[4::3, 4::3]
-    i__bottom      = i__[4::3, 2:-2:3]
-    i__bottomleft  = i__[4::3, :-4:3]
-    i__left        = i__[2:-2:3, :-4:3]
+    i__center, i__directional_ = shift_img(i__,rng)
 
     ''' 
     unmask all derts in kernels with only one masked dert (can be set to any number of masked derts), 
@@ -60,16 +117,12 @@ def comp_r_rng2(dert__, ave, root_fia, mask__=None):
     unmasked derts were computed due to extend_dert() in intra_blob   
     '''
     if mask__ is not None:
-        majority_mask__ = ( mask__[2:-2:3, 2:-2:3].astype(int)
-                          + mask__[:-4:3, :-4:3].astype(int)
-                          + mask__[:-4:3, 2:-2:3].astype(int)
-                          + mask__[:-4:3, 4::3].astype(int)
-                          + mask__[2:-2:3, 4::3].astype(int)
-                          + mask__[4::3, 4::3].astype(int)
-                          + mask__[4::3, 2:-2:3].astype(int)
-                          + mask__[4::3, :-4:3].astype(int)
-                          + mask__[2:-2:3, :-4:3].astype(int)
-                          ) > 1
+        majority_mask__, mask__directional_ = shift_img(mask__,rng)
+        majority_mask__ = majority_mask__.astype(int)
+
+        for mask__directional in mask__directional_:
+            majority_mask__ += mask__directional.astype(int)
+
     else:
         majority_mask__ = None  # returned at the end of function
 
@@ -79,28 +132,37 @@ def comp_r_rng2(dert__, ave, root_fia, mask__=None):
         m__ = np.zeros_like(dy__)
 
     else:  # root fork is comp_r, accumulate derivatives:
-        dy__ = dert__[1][2:-2:3, 2:-2:3].copy()  # sparse to align with i__center
-        dx__ = dert__[2][2:-2:3, 2:-2:3].copy()
-        m__ = dert__[4][2:-2:3, 2:-2:3].copy()
+        dy__ = dert__[1][rng:-(rng):rng+1, rng:-(rng):rng+1].copy()  # sparse to align with i__center
+        dx__ = dert__[2][rng:-(rng):rng+1, rng:-(rng):rng+1].copy()
+        m__  = dert__[4][rng:-(rng):rng+1, rng:-(rng):rng+1].copy()
 
-    # compare four diametrically opposed pairs of rim pixels:
+    # compare diametrically opposed pairs of rim pixels:
 
-    d_tl_br = i__topleft - i__bottomright
-    d_t_b = i__top - i__bottom
-    d_tr_bl = i__topright - i__bottomleft
-    d_r_l = i__right - i__left
+    i_diag_dif_y_ = []
+    i_diag_dif_x_ = []
 
-    dy__ += (d_tl_br * YCOEFs[0] +
-             d_t_b * YCOEFs[1] +
-             d_tr_bl * YCOEFs[2] +
-             d_r_l * YCOEFs[3])
+    # different x and y coeffs for different rng
+    Y_COEFF = Y_COEFFS[rng]
+    X_COEFF = Y_COEFFS[rng]
 
-    dx__ += (d_tl_br * XCOEFs[0] +
-             d_t_b * XCOEFs[1] +
-             d_tr_bl * XCOEFs[2] +
-             d_r_l * XCOEFs[3])
+    # get difference of each diametrically opposed pairs * coeffs
+    for i, i__directional in enumerate(i__directional_[:int(len(i__directional_)/2)]):
+
+        # index of diametrically opposed image
+        diag_index = int(len(i__directional_)/2)+i
+
+        # differences * coeffs
+        i_diag_dif_y_.append( (i__directional - i__directional_[diag_index]) * Y_COEFF [i] )
+        i_diag_dif_x_.append( (i__directional - i__directional_[diag_index]) * X_COEFF [i] )
+
+    # sum of differences
+    dy__ = sum(i_diag_dif_y_)
+    dx__ = sum(i_diag_dif_x_)
+
 
     g__ = np.hypot(dy__, dx__) - ave  # gradient, recomputed at each comp_r
+    g__abs = np.hypot(dy__, dx__)
+
     '''
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
@@ -108,29 +170,18 @@ def comp_r_rng2(dert__, ave, root_fia, mask__=None):
     '''
 
     m__abs = m__.copy()
-    m__ += int(ave * 1.41) - ( abs(i__center - i__topleft)
-                             + abs(i__center - i__top)
-                             + abs(i__center - i__topright)
-                             + abs(i__center - i__right)
-                             + abs(i__center - i__bottomright)
-                             + abs(i__center - i__bottom)
-                             + abs(i__center - i__bottomleft)
-                             + abs(i__center - i__left)
-                             )
+    m__dif = []
 
-    g__abs = np.hypot(dy__, dx__)
-    m__abs += ( abs(i__center - i__topleft)
-              + abs(i__center - i__top)
-              + abs(i__center - i__topright)
-              + abs(i__center - i__right)
-              + abs(i__center - i__bottomright)
-              + abs(i__center - i__bottom)
-              + abs(i__center - i__bottomleft)
-              + abs(i__center - i__left)
-              )
+    # get directional differences of m
+    for i__directional in i__directional_:
+        m__dif.append(abs(i__center - i__directional))
 
-    e__ = m__abs - 1.41*g__abs
+    m__ += int(ave * 1.41) - sum(m__dif)
+    m__abs += sum(m__dif)
 
+    gratio = 2/len(i__directional_)
+
+    e__ = m__abs - (gratio*g__abs)
 
     return (i__center, dy__, dx__, g__, m__, e__), majority_mask__
 
@@ -178,7 +229,18 @@ if __name__ == "__main__":
 
     print('Processing first layer comps...')
     # comp_p ->
-    gr_dert_, _ = comp_r_rng2(dert_, ave, root_fia = 0)
+    gr_dert_1, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 1)
+    gr_dert_2, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 2)
+    gr_dert_3, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 3)
+    gr_dert_4, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 4)
+    gr_dert_5, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 5)
+    gr_dert_6, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 6)
+    gr_dert_7, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 7)
+    gr_dert_8, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 8)
+    gr_dert_9, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 9)
+    gr_dert_10, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 10)
+
+
 
 
     print('Drawing forks...')
@@ -188,17 +250,92 @@ if __name__ == "__main__":
     g_ = draw_g(ini_.copy(), dert_[3])
     m_ = draw_g(ini_.copy(), dert_[6])
     # 1st layer
-    gr_ = draw_gr(ini_.copy(), gr_dert_[3])
-    mr_ = draw_gr(ini_.copy(), gr_dert_[4])
-    e_ = draw_gr(ini_.copy(),  gr_dert_[5])
+
+    # rng = 1
+    gr_1 = draw_gr(ini_.copy(), gr_dert_1[3])
+    mr_1 = draw_gr(ini_.copy(), gr_dert_1[4])
+    e_1 = draw_gr(ini_.copy(),  gr_dert_1[5])
+    # rng = 2
+    gr_2 = draw_gr(ini_.copy(), gr_dert_2[3])
+    mr_2 = draw_gr(ini_.copy(), gr_dert_2[4])
+    e_2 = draw_gr(ini_.copy(),  gr_dert_2[5])
+    # rng = 3
+    gr_3 = draw_gr(ini_.copy(), gr_dert_3[3])
+    mr_3 = draw_gr(ini_.copy(), gr_dert_3[4])
+    e_3 = draw_gr(ini_.copy(),  gr_dert_3[5])
+    # rng = 4
+    gr_4 = draw_gr(ini_.copy(), gr_dert_4[3])
+    mr_4 = draw_gr(ini_.copy(), gr_dert_4[4])
+    e_4 = draw_gr(ini_.copy(),  gr_dert_4[5])
+    # rng = 5
+    gr_5 = draw_gr(ini_.copy(), gr_dert_5[3])
+    mr_5 = draw_gr(ini_.copy(), gr_dert_5[4])
+    e_5 = draw_gr(ini_.copy(),  gr_dert_5[5])
+    # rng = 6
+    gr_6 = draw_gr(ini_.copy(), gr_dert_6[3])
+    mr_6 = draw_gr(ini_.copy(), gr_dert_6[4])
+    e_6 = draw_gr(ini_.copy(),  gr_dert_6[5])
+    # rng = 7
+    gr_7 = draw_gr(ini_.copy(), gr_dert_7[3])
+    mr_7 = draw_gr(ini_.copy(), gr_dert_7[4])
+    e_7 = draw_gr(ini_.copy(),  gr_dert_7[5])
+    # rng = 8
+    gr_8 = draw_gr(ini_.copy(), gr_dert_8[3])
+    mr_8 = draw_gr(ini_.copy(), gr_dert_8[4])
+    e_8 = draw_gr(ini_.copy(),  gr_dert_8[5])
+    # rng = 9
+    gr_9 = draw_gr(ini_.copy(), gr_dert_9[3])
+    mr_9 = draw_gr(ini_.copy(), gr_dert_9[4])
+    e_9 = draw_gr(ini_.copy(),  gr_dert_9[5])
+    # rng = 10
+    gr_10 = draw_gr(ini_.copy(), gr_dert_10[3])
+    mr_10 = draw_gr(ini_.copy(), gr_dert_10[4])
+    e_10 = draw_gr(ini_.copy(),  gr_dert_10[5])
 
 
     # save to disk
     cv2.imwrite(arguments.output + '0_g.jpg',  g_)
     cv2.imwrite(arguments.output + '1_m.jpg',  m_)
-    cv2.imwrite(arguments.output + '2_gr.jpg',  gr_)
-    cv2.imwrite(arguments.output + '3_mr.jpg',  mr_)
-    cv2.imwrite(arguments.output + '4_e.jpg',  e_)
+
+    cv2.imwrite(arguments.output + 'rng1_gr.jpg',  gr_1)
+    cv2.imwrite(arguments.output + 'rng1_mr.jpg',  mr_1)
+    cv2.imwrite(arguments.output + 'rgn1_e.jpg',  e_1)
+
+    cv2.imwrite(arguments.output + 'rng2_gr.jpg',  gr_2)
+    cv2.imwrite(arguments.output + 'rng2_mr.jpg',  mr_2)
+    cv2.imwrite(arguments.output + 'rgn2_e.jpg',  e_2)
+
+    cv2.imwrite(arguments.output + 'rng3_gr.jpg',  gr_3)
+    cv2.imwrite(arguments.output + 'rng3_mr.jpg',  mr_3)
+    cv2.imwrite(arguments.output + 'rgn3_e.jpg',  e_3)
+
+    cv2.imwrite(arguments.output + 'rng4_gr.jpg',  gr_4)
+    cv2.imwrite(arguments.output + 'rng4_mr.jpg',  mr_4)
+    cv2.imwrite(arguments.output + 'rgn4_e.jpg',  e_4)
+
+    cv2.imwrite(arguments.output + 'rng5_gr.jpg',  gr_5)
+    cv2.imwrite(arguments.output + 'rng5_mr.jpg',  mr_5)
+    cv2.imwrite(arguments.output + 'rgn5_e.jpg',  e_5)
+
+    cv2.imwrite(arguments.output + 'rng6_gr.jpg',  gr_6)
+    cv2.imwrite(arguments.output + 'rng6_mr.jpg',  mr_6)
+    cv2.imwrite(arguments.output + 'rgn6_e.jpg',  e_6)
+
+    cv2.imwrite(arguments.output + 'rng7_gr.jpg',  gr_7)
+    cv2.imwrite(arguments.output + 'rng7_mr.jpg',  mr_7)
+    cv2.imwrite(arguments.output + 'rgn7_e.jpg',  e_7)
+
+    cv2.imwrite(arguments.output + 'rng8_gr.jpg',  gr_8)
+    cv2.imwrite(arguments.output + 'rng8_mr.jpg',  mr_8)
+    cv2.imwrite(arguments.output + 'rgn8_e.jpg',  e_8)
+
+    cv2.imwrite(arguments.output + 'rng9_gr.jpg',  gr_9)
+    cv2.imwrite(arguments.output + 'rng9_mr.jpg',  mr_9)
+    cv2.imwrite(arguments.output + 'rgn9_e.jpg',  e_9)
+
+    cv2.imwrite(arguments.output + 'rng10_gr.jpg',  gr_10)
+    cv2.imwrite(arguments.output + 'rng10_mr.jpg',  mr_10)
+    cv2.imwrite(arguments.output + 'rgn10_e.jpg',  e_10)
 
     print('Done...')
 
