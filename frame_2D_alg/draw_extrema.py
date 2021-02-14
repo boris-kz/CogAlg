@@ -19,7 +19,6 @@ OUTPUT_PATH = "./images/intra_comp0/"
 # -----------------------------------------------------------------------------
 # Functions
 
-
 def shift_img(img,rng):
     '''
     shift image based on the rng directions
@@ -35,13 +34,15 @@ def shift_img(img,rng):
     img_shift_ = []
     x = -rng
     y = -rng
-    sstep = rng+1
+    sstep = 1
+    # sstep = rng+1 # skip version
 
     # get shifted images if output size >0
     if output_size_y>0 and output_size_x>0:
 
 
-        img_center__ = img[rng:-(rng):rng+1,rng:-(rng):rng+1]
+        img_center__ = img[rng:-(rng):sstep,rng:-(rng):sstep]
+        # img_center__ = img[rng:-(rng):rng+1,rng:-(rng):rng+1] # skip version
 
 
         for i in range(total_shift_direction):
@@ -86,7 +87,9 @@ def shift_img(img,rng):
     return img_center__, img_shift_
 
 
-def comp_r_rng(dert__, ave, root_fia, rng, mask__=None):
+def comp_rng(dert__, ave, root_fia, rng, mask__=None):
+
+    print('rng = '+str(rng))
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -132,9 +135,9 @@ def comp_r_rng(dert__, ave, root_fia, rng, mask__=None):
         m__ = np.zeros_like(dy__)
 
     else:  # root fork is comp_r, accumulate derivatives:
-        dy__ = dert__[1][rng:-(rng):rng+1, rng:-(rng):rng+1].copy()  # sparse to align with i__center
-        dx__ = dert__[2][rng:-(rng):rng+1, rng:-(rng):rng+1].copy()
-        m__  = dert__[4][rng:-(rng):rng+1, rng:-(rng):rng+1].copy()
+        dy__ = dert__[1][rng:-(rng):1, rng:-(rng):1].copy()  # sparse to align with i__center
+        dx__ = dert__[2][rng:-(rng):1, rng:-(rng):1].copy()
+        m__  = dert__[4][rng:-(rng):1, rng:-(rng):1].copy()
 
     # compare diametrically opposed pairs of rim pixels:
 
@@ -229,16 +232,16 @@ if __name__ == "__main__":
 
     print('Processing first layer comps...')
     # comp_p ->
-    gr_dert_1, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 1)
-    gr_dert_2, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 2)
-    gr_dert_3, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 3)
-    gr_dert_4, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 4)
-    gr_dert_5, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 5)
-    gr_dert_6, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 6)
-    gr_dert_7, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 7)
-    gr_dert_8, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 8)
-    gr_dert_9, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 9)
-    gr_dert_10, _ = comp_r_rng(dert_, ave, root_fia = 0, rng= 10)
+    gr_dert_1, _ = comp_rng(dert_, ave, root_fia = 0, rng= 1)
+    gr_dert_2, _ = comp_rng(dert_, ave, root_fia = 0, rng= 2)
+    gr_dert_3, _ = comp_rng(dert_, ave, root_fia = 0, rng= 3)
+    gr_dert_4, _ = comp_rng(dert_, ave, root_fia = 0, rng= 4)
+    gr_dert_5, _ = comp_rng(dert_, ave, root_fia = 0, rng= 5)
+    gr_dert_6, _ = comp_rng(dert_, ave, root_fia = 0, rng= 6)
+    gr_dert_7, _ = comp_rng(dert_, ave, root_fia = 0, rng= 7)
+    gr_dert_8, _ = comp_rng(dert_, ave, root_fia = 0, rng= 8)
+    gr_dert_9, _ = comp_rng(dert_, ave, root_fia = 0, rng= 9)
+    gr_dert_10, _ = comp_rng(dert_, ave, root_fia = 0, rng= 10)
 
 
 
@@ -254,43 +257,43 @@ if __name__ == "__main__":
     # rng = 1
     gr_1 = draw_gr(ini_.copy(), gr_dert_1[3])
     mr_1 = draw_gr(ini_.copy(), gr_dert_1[4])
-    e_1 = draw_gr(ini_.copy(),  gr_dert_1[5])
+    re_1 = draw_gr(ini_.copy(),  gr_dert_1[5])
     # rng = 2
     gr_2 = draw_gr(ini_.copy(), gr_dert_2[3])
     mr_2 = draw_gr(ini_.copy(), gr_dert_2[4])
-    e_2 = draw_gr(ini_.copy(),  gr_dert_2[5])
+    re_2 = draw_gr(ini_.copy(),  gr_dert_2[5])
     # rng = 3
     gr_3 = draw_gr(ini_.copy(), gr_dert_3[3])
     mr_3 = draw_gr(ini_.copy(), gr_dert_3[4])
-    e_3 = draw_gr(ini_.copy(),  gr_dert_3[5])
+    re_3 = draw_gr(ini_.copy(),  gr_dert_3[5])
     # rng = 4
     gr_4 = draw_gr(ini_.copy(), gr_dert_4[3])
     mr_4 = draw_gr(ini_.copy(), gr_dert_4[4])
-    e_4 = draw_gr(ini_.copy(),  gr_dert_4[5])
+    re_4 = draw_gr(ini_.copy(),  gr_dert_4[5])
     # rng = 5
     gr_5 = draw_gr(ini_.copy(), gr_dert_5[3])
     mr_5 = draw_gr(ini_.copy(), gr_dert_5[4])
-    e_5 = draw_gr(ini_.copy(),  gr_dert_5[5])
+    re_5 = draw_gr(ini_.copy(),  gr_dert_5[5])
     # rng = 6
     gr_6 = draw_gr(ini_.copy(), gr_dert_6[3])
     mr_6 = draw_gr(ini_.copy(), gr_dert_6[4])
-    e_6 = draw_gr(ini_.copy(),  gr_dert_6[5])
+    re_6 = draw_gr(ini_.copy(),  gr_dert_6[5])
     # rng = 7
     gr_7 = draw_gr(ini_.copy(), gr_dert_7[3])
     mr_7 = draw_gr(ini_.copy(), gr_dert_7[4])
-    e_7 = draw_gr(ini_.copy(),  gr_dert_7[5])
+    re_7 = draw_gr(ini_.copy(),  gr_dert_7[5])
     # rng = 8
     gr_8 = draw_gr(ini_.copy(), gr_dert_8[3])
     mr_8 = draw_gr(ini_.copy(), gr_dert_8[4])
-    e_8 = draw_gr(ini_.copy(),  gr_dert_8[5])
+    re_8 = draw_gr(ini_.copy(),  gr_dert_8[5])
     # rng = 9
     gr_9 = draw_gr(ini_.copy(), gr_dert_9[3])
     mr_9 = draw_gr(ini_.copy(), gr_dert_9[4])
-    e_9 = draw_gr(ini_.copy(),  gr_dert_9[5])
+    re_9 = draw_gr(ini_.copy(),  gr_dert_9[5])
     # rng = 10
     gr_10 = draw_gr(ini_.copy(), gr_dert_10[3])
     mr_10 = draw_gr(ini_.copy(), gr_dert_10[4])
-    e_10 = draw_gr(ini_.copy(),  gr_dert_10[5])
+    re_10 = draw_gr(ini_.copy(),  gr_dert_10[5])
 
 
     # save to disk
@@ -299,43 +302,43 @@ if __name__ == "__main__":
 
     cv2.imwrite(arguments.output + 'rng1_gr.jpg',  gr_1)
     cv2.imwrite(arguments.output + 'rng1_mr.jpg',  mr_1)
-    cv2.imwrite(arguments.output + 'rgn1_e.jpg',  e_1)
+    cv2.imwrite(arguments.output + 'rgn1_re.jpg',  re_1)
 
     cv2.imwrite(arguments.output + 'rng2_gr.jpg',  gr_2)
     cv2.imwrite(arguments.output + 'rng2_mr.jpg',  mr_2)
-    cv2.imwrite(arguments.output + 'rgn2_e.jpg',  e_2)
+    cv2.imwrite(arguments.output + 'rgn2_re.jpg',  re_2)
 
     cv2.imwrite(arguments.output + 'rng3_gr.jpg',  gr_3)
     cv2.imwrite(arguments.output + 'rng3_mr.jpg',  mr_3)
-    cv2.imwrite(arguments.output + 'rgn3_e.jpg',  e_3)
+    cv2.imwrite(arguments.output + 'rgn3_re.jpg',  re_3)
 
     cv2.imwrite(arguments.output + 'rng4_gr.jpg',  gr_4)
     cv2.imwrite(arguments.output + 'rng4_mr.jpg',  mr_4)
-    cv2.imwrite(arguments.output + 'rgn4_e.jpg',  e_4)
+    cv2.imwrite(arguments.output + 'rgn4_re.jpg',  re_4)
 
     cv2.imwrite(arguments.output + 'rng5_gr.jpg',  gr_5)
     cv2.imwrite(arguments.output + 'rng5_mr.jpg',  mr_5)
-    cv2.imwrite(arguments.output + 'rgn5_e.jpg',  e_5)
+    cv2.imwrite(arguments.output + 'rgn5_re.jpg',  re_5)
 
     cv2.imwrite(arguments.output + 'rng6_gr.jpg',  gr_6)
     cv2.imwrite(arguments.output + 'rng6_mr.jpg',  mr_6)
-    cv2.imwrite(arguments.output + 'rgn6_e.jpg',  e_6)
+    cv2.imwrite(arguments.output + 'rgn6_re.jpg',  re_6)
 
     cv2.imwrite(arguments.output + 'rng7_gr.jpg',  gr_7)
     cv2.imwrite(arguments.output + 'rng7_mr.jpg',  mr_7)
-    cv2.imwrite(arguments.output + 'rgn7_e.jpg',  e_7)
+    cv2.imwrite(arguments.output + 'rgn7_re.jpg',  re_7)
 
     cv2.imwrite(arguments.output + 'rng8_gr.jpg',  gr_8)
     cv2.imwrite(arguments.output + 'rng8_mr.jpg',  mr_8)
-    cv2.imwrite(arguments.output + 'rgn8_e.jpg',  e_8)
+    cv2.imwrite(arguments.output + 'rgn8_re.jpg',  re_8)
 
     cv2.imwrite(arguments.output + 'rng9_gr.jpg',  gr_9)
     cv2.imwrite(arguments.output + 'rng9_mr.jpg',  mr_9)
-    cv2.imwrite(arguments.output + 'rgn9_e.jpg',  e_9)
+    cv2.imwrite(arguments.output + 'rgn9_re.jpg',  re_9)
 
     cv2.imwrite(arguments.output + 'rng10_gr.jpg',  gr_10)
     cv2.imwrite(arguments.output + 'rng10_mr.jpg',  mr_10)
-    cv2.imwrite(arguments.output + 'rgn10_e.jpg',  e_10)
+    cv2.imwrite(arguments.output + 'rgn10_re.jpg',  re_10)
 
     print('Done...')
 
