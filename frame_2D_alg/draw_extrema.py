@@ -12,7 +12,7 @@ import numpy as np
 
 # -----------------------------------------------------------------------------
 # Input:
-IMAGE_PATH = "./images/toucan.jpg"
+IMAGE_PATH = "./images/raccoon.jpg"
 # Outputs:
 OUTPUT_PATH = "./images/intra_comp0/"
 
@@ -179,12 +179,26 @@ def comp_rng(dert__, ave, root_fia, rng, mask__=None):
     for i__directional in i__directional_:
         m__dif.append(abs(i__center - i__directional))
 
+    # compute m
     m__ += int(ave * 1.41) - sum(m__dif)
     m__abs += sum(m__dif)
 
-    gratio = 2/len(i__directional_)
+    # g multiplcation ratio in computing e__
+    gratio = (2/len(i__directional_) ) * 3
 
+    # e = m - (g_ratio * g)
     e__ = m__abs - (gratio*g__abs)
+
+    # invert to enable dark contour and bright edges
+    m__ = np.max(m__) - m__
+
+    # scale negative values to positive
+    if np.min(g__)<0:
+        g__ += abs(np.min(g__))
+
+    # scale negative values to positive
+    if np.min(e__)<0:
+        e__ += abs(np.min(e__))
 
     return (i__center, dy__, dx__, g__, m__, e__), majority_mask__
 
