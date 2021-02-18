@@ -54,12 +54,13 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         # root fork is comp_a -> slice_blob
         if blob.mask__.shape[0] > 2 and blob.mask__.shape[1] > 2 and False in blob.mask__:  # min size in y and x, at least one dert in dert__
 
-            if blob.G * blob.Ma - AveB > 0:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+            if -blob.M * blob.Ma - AveB > 0:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
-                dert_P_ = comp_slice_(blob.stack_, [])  # cross-comp of vertically consecutive Ps in selected stacks
-                derP_2_PP_(dert_P_, PP=[], PP_=[])
+                slice_blob(blob, verbose)  # adds stack_ to blob
+                derP_ = comp_slice_(blob.stack_, [])  # cross-comp of vertically consecutive Ps in selected stacks
+                blob.PP_ = derP_2_PP_(derP_, blob.PP_)
     else:
         # root fork is frame_blobs or comp_r
         ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, for cross-comp in larger kernels

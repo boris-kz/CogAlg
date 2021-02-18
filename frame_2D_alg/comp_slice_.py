@@ -101,6 +101,9 @@ def comp_slice_(stack_, _P):
 
     return derP_
 
+'''
+Special value of branching points: at least one angle miss, or that's corner?
+'''
 
 def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
@@ -154,66 +157,98 @@ def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and condi
     return derP
 
 
-def accum_PP(PP, derP):  # accumulate PP
+def accum_PP(PP, derP):
 
-    # accumulate sstack params into PP
-    PP.derPi.accumulate(Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx,
-                          mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                          mDy=derP.mDy, dDy=derP.dDy, mDg=derP.mDg, dDg=derP.dDg,
-                          mMg=derP.mMg, dMg=derP.dMg)
+    PP.derPi.accumulate(Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
+                          mDy=derP.mDy, dDy=derP.dDy, mDg=derP.mDg, dDg=derP.dDg, mMg=derP.mMg, dMg=derP.dMg)
+    PP.derP_.append(derP)
+
+def merge_PP(_PP, PP, PP_):  # merge PP into _PP
+
+    _PP.derP_.extend(PP.derP_)
+    _PP.dert_Pi.accumulate(Pm=PP.dert_Pi.Pm, Pd=PP.dert_Pi.Pd, mx=PP.dert_Pi.mx, dx=PP.dert_Pi.dx,
+                           mL=PP.dert_Pi.mL, dL=PP.dert_Pi.dL, mDx=PP.dert_Pi.mDx, dDx=PP.dert_Pi.dDx,
+                           mDy=PP.dert_Pi.mDy, dDy=PP.dert_Pi.dDy, mDg=PP.dert_Pi.mDg,
+                           dDg=PP.dert_Pi.dDg, mMg=PP.dert_Pi.mMg, dMg=PP.dert_Pi.dMg)
+
+    for derP in PP.derP_: # update PP reference
+        derP.PP = _PP
+
+    if PP in PP_:
+        PP_.remove(PP)  # remove the merged PP
 
 
-def derP_2_PP_(derP_, PP, PP_):
+def derP_2_PP_(derP_, PP_):
     '''
     first row of derP_ has downconnect_cnt == 0, higher rows may also have them
     '''
+    for derP in derP_:  # bottom-up to follow upconnects
 
-    if not PP:  # not an upconnect
-        _derP = derP_[0]
-        PP = CPP(derPi=_derP, derP_= [_derP])
+        if derP.downconnect_cnt == 0:  # root derP
+            PP = CPP(derPi=derP, derP_= [derP])  # init
+            derP.PP = PP
+            upconnect_2_PP_(derP, PP_)  # form PPs across dertP upconnects
 
-        for i, derP in enumerate(derP_):  # bottom-up to follow upconnects
-            if derP.downconnect_cnt == 0:  # root derPs were not checked, upconnects always checked
+    return PP_
 
-                if (_derP.Pm > 0) != (derP.Pm > 0):  # check for sign change if prior and current derP are not upconnects
-                    PP_.append(PP)
+
+def upconnect_2_PP_(iderP, PP_):
+    '''
+    check derPs' upconnects to form continuous same-sign PPs
+    '''
+    # if _derP.upconnect_cnt: _derP.upconnect_cnt -= 1  # remaining upconnects
+    # this is done by: PP.upconnect_cnt += len(confirmed_upconnect_)
+    # or not needed at all: each prior upconnect_ is followed until termination?
+
+    confirmed_upconnect_ = []
+    for derP in iderP.upconnect_:  # upconnects from previous call
+
+        if (iderP.Pm > 0) == (derP.Pm > 0):
+            if derP.PP and (derP.PP is not iderP.PP):
+                # if derP.PP may be sufficient: checked derP.PP must be different from iderP.PP?
+                merge_PP(iderP.PP, derP.PP, PP_)
+            else:
+                derP.PP = iderP.PP
+            confirmed_upconnect_.append(derP)
+            accum_PP(iderP.PP, derP)
+        else:
+            # unconfirmed: derP is root derP
+            derP.downconnect_cnt = 0
+            derP.PP = CPP(derPi=derP, derP_=[derP])  # init
+
+        if derP.upconnect_:  # need to make it conditional, else an infinite loop?
+            upconnect_2_PP_(derP, PP_)  # form PPs across dertP upconnects
+
+    iderP.upconnect_ = confirmed_upconnect_
+    iderP.PP.upconnect_cnt += len(confirmed_upconnect_)
+    # PP.upconnect_cnt should not be needed: each prior upconnect_ is followed until termination,
+    # so initial upconnect_cnt per upconnect is always 0?
+
+    if iderP.PP.upconnect_cnt == 0:  # if above, replace with if not confirmed_upconnect_:
+        PP_.append(iderP.PP)  # PP termination;  upconnects are called from derP, not PP
+
+'''
+    if len(PP.upconnect_) > 0:
+        _derP = PP.derP_[-1]
+
+        for i, derP in enumerate(upconnect_):  # bottom-up to follow upconnects
+            if not isinstance(derP.PP, CPP):  # checked derP should have PP object instance
+                if (_derP.Pm > 0) != (derP.Pm > 0):
                     PP = CPP(derPi=CderP(), derP_= [derP])
                     derP.PP = PP
+
                 accum_PP(PP, derP)  # regardless of termination
-                _derP = derP
                 derP_2_PP_(derP.upconnect_, PP, PP_ )  # form PPs across upconnects
 
-#  did not check below
+            elif derP.PP is not PP: # if there is PP in derP and they are not the same PP, merge them
+                merge_PP(PP, derP.PP, PP_)
 
-    else: # from recursive loop
-        if PP.upconnect_cnt: PP.upconnect_cnt -= 1
+                PP.upconnect_cnt -= 1 # reduce upconnect count and check termination, because this section will not call the recursvie function to further check on upconnect
+                if PP.upconnect_cnt == 0: PP_.append(PP)
 
-        upconnect_ = []
-        if derP_: # there is upconnects and PP from prior function
-            _derP = PP.derP_[-1]
-            for i, derP in enumerate(derP_):
-                if (_derP.Pm > 0) != (derP.Pm > 0):
-                    PP.upconnect_.append(derP_.pop(i))
+    # terminate PP when upconnect = 0, should be at the end of the upconnect
+    elif PP.upconnect_cnt == 0: PP_.append(PP)
 
-        PP.upconnect_cnt += len(upconnect_)
-
-        if len(PP.upconnect_) > 0: # if there is any upconnect for current PP
-
-            _derP = PP.derP_[-1]
-            for i, derP in enumerate(upconnect_):  # bottom-up to follow upconnects
-                if not isinstance(derP.PP, CPP):  # checked derP should have PP object instance
-                    if (_derP.Pm > 0) != (derP.Pm > 0):
-                        PP = CPP(derPi=CderP(), derP_= [derP])
-                        derP.PP = PP
-
-                    accum_PP(PP, derP)  # regardless of termination
-                    derP_2_PP_(derP.upconnect_, PP, PP_ )  # form PPs across upconnects
-
-        else: # terminate PP when upconnect = 0, should be at the end of the upconnect
-            if PP.upconnect_cnt == 0:
-                PP_.append(PP)
-
-        # form PP again with the non upconnect's derPs
-        for derP in derP_:
-            PP = CPP(derPi=CderP(), derP_= [derP]) # form new PP for new non upconnect's derPs
-            derP_2_PP_(derP.upconnect_, PP, PP_)
+    # form PP again with the non upconnect's derPs
+    derP_2_PP_(derP_, PP_)
+'''
