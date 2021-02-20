@@ -58,6 +58,7 @@ class CP(ClusterStructure):
     gdert_ = list
     Dg = int
     Mg = int
+    downconnect_ = list
 
 class CStack(ClusterStructure):
     # Dert:
@@ -226,7 +227,7 @@ def form_stack_(P_, y):  # Convert or merge every P into higher-row stack of Ps
 
     while P_:
         P, upconnect_ = P_.popleft()
-        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, s, dert_, _, _, _ = P.unpack()
+        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, L, x0, s, dert_, _, _, _, _ = P.unpack()
         if not upconnect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
             stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,

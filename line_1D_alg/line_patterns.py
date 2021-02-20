@@ -19,11 +19,8 @@
   Initial bilateral cross-comp here is 1D slice of 2D 3x3 kernel, while unilateral d is equivalent to 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
   The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_P.
+'''
 
-  postfix '_' denotes array name, vs. same-name elements
-  prefix '_' denotes prior of two same-name variables
-  prefix 'f' denotes binary flag
-  '''
 import cv2
 import argparse
 from time import time
@@ -57,6 +54,13 @@ ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_in
 ave_rdm = .5  # average dm / m, to project bi_m = m * 1.5
 ini_y = 0
 
+'''
+    Conventions:
+    postfix '_' denotes array name, vs. same-name elements
+    prefix '_' denotes prior of two same-name variables
+    prefix 'f' denotes binary flag
+    capitalized variables normally are summed same-letter small-case variables
+'''
 
 def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
 
@@ -70,14 +74,14 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         __p, _p = pixel_[0:2]  # each prefix '_' denotes prior
         _d = _p - __p  # initial comparison
         _m = ave - abs(_d)
-        dert_.append(Cdert(p=__p, d=None, m=_m * 1.5))  # project _m to bilateral m, first dert is for comp_P only?
+        dert_.append( Cdert(p=__p, d=None, m=(_m + _m / 2)))  # project _m to bilateral m, first dert is for comp_P only?
 
         for p in pixel_[2:]:  # pixel p is compared to prior pixel _p in a row
             d = p - _p
             m = ave - abs(d)  # initial match is inverse deviation of |difference|
-            dert_.append(Cdert(p=_p, d=_d, m=m + _m))  # pack dert: prior p, prior d, bilateral match
+            dert_.append( Cdert(p=_p, d=_d, m=m + _m))  # pack dert: prior p, prior d, bilateral match
             _p, _d, _m = p, d, m
-        dert_.append(Cdert(p=_p, d=_d, m=_m * 1.5))  # unilateral d, forward-project last m to bilateral m
+        dert_.append( Cdert(p=_p, d=_d, m=(_m + _m / 2)))  # unilateral d, forward-project last m to bilateral m
 
         Pm_ = form_Pm_(dert_)  # forms m-sign patterns
         if len(Pm_) > 4:
@@ -96,18 +100,15 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
     dert = P_dert_[0]
 
     _sign = dert.m > 0
-    if dert.d is None:
-        D = 0
-    else:
-        D = dert.d
+    D = dert.d or 0
     L, I, M, dert_, sub_H = 1, dert.p, dert.m, [dert], []
     # cluster P_derts by m sign
     for dert in P_dert_[1:]:
         sign = dert.m > 0
-        if sign != _sign:  # sign change: terminate P
+        if sign != _sign:  # sign change, terminate P
             P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, smP=False, fdert=False))
-            L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []
-            # reset params
+            L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset params
+
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, bilateral m: for eval per pixel
         dert_ += [dert]
         _sign = sign
@@ -125,11 +126,11 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
     # cluster P_derts by d sign
     for dert in P_dert_[2:]:
         sign = dert.d > 0
-        if sign != _sign:  # sign change: terminate P
+        if sign != _sign:  # sign change, terminate P
             P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, smP=False, fdert=False))
-            L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []
-            # reset accumulated params
-        L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, bilateral m: for eval per pixel
+            L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset accumulated params
+
+        L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, m for eval per pixel is bilateral
         dert_ += [dert]
         _sign = sign
 
@@ -183,8 +184,9 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
                 if len(sub_Pm_) > 4:
                     sub_adj_M_ = form_adjacent_M_(sub_Pm_)
                     P.sub_layers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng * 2 + 1)  # feedback
+                    # splice sub_layers across sub_Ps:
                     comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                                   zip_longest(comb_layers, P.sub_layers, fillvalue=[])]  # splice sub_layers across sub_Ps
+                                   zip_longest(comb_layers, P.sub_layers, fillvalue=[])]
 
         else:  # -Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
             if min(-P.M, adj_M) > ave_D * rdn and P.L > 3:  # cancelled M+ val, M = min | ~v_SAD
@@ -195,9 +197,10 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
                 P.sub_layers += [[(Ls, True, 1, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
 
                 P.sub_layers += intra_Pd_(sub_Pd_, rel_adj_M, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nPm
+                # splice sub_layers across sub_Ps, for return as root sub_layers[1:]:
                 comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
                                zip_longest(comb_layers, P.sub_layers, fillvalue=[])]
-                # splice sub_layers across sub_Ps for return as root sub_layers[1:]
+
     return comb_layers
 
 
@@ -215,6 +218,7 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
             if len(sub_Pm_) > 3:
                 sub_adj_M_ = form_adjacent_M_(sub_Pm_)
                 P.sub_layers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng + 1)
+                # splice sub_layers across sub_Ps:
                 comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
                                zip_longest(comb_layers, P.sub_layers, fillvalue=[])]
     ''' 
@@ -228,8 +232,7 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
 def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
     rdert_ = []  # prefix '_' denotes the prior of same-name variables, initialization:
-
-    __dert = dert_[0]
+    __dert = dert_[0]  # prior-prior dert
     __i = __dert.p
 
     _dert = dert_[2]
@@ -242,7 +245,7 @@ def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 a
         _m = min(__i, _i) - ave_min
     else:
         _m = ave - abs(_dert.d)  # no ave * rng: m and d value is cumulative
-    _rng_m = _m * 1.5 + __dert.m  # back-project bilateral m
+    _rng_m = (_m + _m / 2) + __dert.m  # back-project missing m as _m / 2: induction decays with distance
     rdert_.append(Cdert(p=__i, d=None, m=_rng_m))  # no _rng_d = _d + __short_rng_d
 
     for n in range(4, len(dert_), 2):  # backward comp
@@ -262,7 +265,7 @@ def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 a
         _i, _d, _m, _short_rng_d, _short_rng_m = \
             i, d, m, short_rng_d, short_rng_m
 
-    rdert_.append(Cdert(p=_i, d=_d + _short_rng_d, m=_m * 1.5 + _short_rng_m))  # forward-project m to bilateral m
+    rdert_.append(Cdert(p=_i, d=_d + _short_rng_d, m=(_m + _m / 2) + _short_rng_m))  # forward-project _m to bilateral m
     return rdert_
 
 
@@ -276,7 +279,7 @@ def deriv_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign
     __i = abs(__i);  _i = abs(_i)
     _d = _i - __i  # initial comp
     _m = min(__i, _i) - ave_min
-    ddert_.append(Cdert(p=_i, d=None, m=_m * 1.5))  # no __d, back-project __m = _m * .5
+    ddert_.append(Cdert(p=_i, d=None, m=(_m + _m / 2)))  # no __d, back-project __m = _m * .5
 
     for dert in dert_[3:]:
         i = abs(dert.d)  # unilateral d, same sign in Pd
@@ -285,7 +288,7 @@ def deriv_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign
         ddert_.append(Cdert(p=_i, d=_d, m=_m + m))  # unilateral _d and bilateral m per _i
         _i, _d, _m = i, d, m
 
-    ddert_.append(Cdert(p=_i, d=_d, m=_m * 1.5))  # forward-project bilateral m
+    ddert_.append(Cdert(p=_i, d=_d, m=(_m + _m / 2)))  # forward-project bilateral m
     return ddert_
 
 
