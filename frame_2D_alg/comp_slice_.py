@@ -53,7 +53,7 @@ class CderP(ClusterStructure):
     mMg = int
     dMg = int
     upconnect_ = list
-    downconnect_cnt = int
+    downconnect_ = list
     # stack and PP object reference
     stack = object
     PP = object
@@ -66,9 +66,7 @@ class CPP(ClusterStructure):
     fdiv = NoneType
     # between PPs:
     upconnect_ = list
-    downconnect_cnt = int
-    in_upconnect_cnt = int
-
+    downconnect_ = list
 
 def comp_slice_(stack_, _derP, _P):
     '''
@@ -80,12 +78,12 @@ def comp_slice_(stack_, _derP, _P):
 
         if not stack.f_checked :  # else this stack has been scanned as some other upconnect
             stack.f_checked = 1
-            downconnect_cnt = stack.downconnect_cnt
+            downconnect_ = stack.downconnect_cnt
 
             if not _P:  # stack is from blob.stack_
                 _P = stack.Py_.pop()
-                _derP = CderP(Pi=_P, downconnect_cnt = downconnect_cnt, stack = stack)
-                derP_.append(_derP)  # no derivatives in 1st derP, assign stack.downconnect_cnt to derP.downconnect_cnt
+                _derP = CderP(Pi=_P, downconnect_ = downconnect_, stack = stack)
+                derP_.append(_derP)  # no derivatives in 1st derP, assign stack.downconnect_cnt to derP.downconnect_
 
             for P in reversed(stack.Py_):
                 derP = comp_slice(P, _P, DdX)  # ortho and other conditional operations are evaluated per PP
@@ -93,11 +91,11 @@ def comp_slice_(stack_, _derP, _P):
                     if downconnect is not _derP:
                         downconnect.upconnect_.append(derP)
                 _derP.upconnect_.append(derP)  # next
-                derP.downconnect_cnt = downconnect_cnt
+                derP.downconnect_ = downconnect_
                 derP_.append(derP)  # derP is converted to CderP in comp_slice
                 _P = P
                 _derP = derP
-                downconnect_cnt = 1  # always 1 inside Py_
+                downconnect_ = [_derP]  # always 1 inside Py_
 
             for upconnect in stack.upconnect_:  # store _derP in upconnect to assign upconnected derPs to _derP later
                 upconnect.Py_[-1].downconnect_.append(_derP)  # last P of upconnect is connected to 1st derP of current stack
@@ -189,11 +187,11 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
 
 def derP_2_PP_(derP_, PP_):
     '''
-    first row of derP_ has downconnect_cnt == 0, higher rows may also have them
+    first row of derP_ has no downconnects, higher rows may also have them
     '''
     for derP in derP_:  # bottom-up to follow upconnects
 
-        if derP.downconnect_cnt == 0:  # root derP
+        if not derP.downconnect_:  # root derP
             PP = CPP(derPi=derP, derP_= [derP])  # init
             derP.PP = PP
             if derP.upconnect_:
@@ -208,13 +206,9 @@ def upconnect_2_PP_(iderP, PP_):
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
     confirmed_upconnect_ = []
-    iderP.PP.in_upconnect_cnt += len(iderP.upconnect_)  # unconfirmed upconnect count
-
     for derP in iderP.upconnect_:  # potential upconnects from previous call
-        iderP.PP.in_upconnect_cnt -= 1  # reduce unconfirmed upconnect count after loop through each derP
 
         if derP not in iderP.PP.derP_:  # derP should not in current iPP derP_ list, but this may occur after the PP merging
-
             if (iderP.Pm > 0) == (derP.Pm > 0):  # no sign change, accumulate PP
                 if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):  # different previously assigned derP.PP
                     merge_PP(iderP.PP, derP.PP, PP_)
@@ -224,16 +218,15 @@ def upconnect_2_PP_(iderP, PP_):
                 confirmed_upconnect_.append(derP)
 
             else:  # sign changed, derP became root derP
-                derP.downconnect_cnt = 0  # root derP
+                derP.downconnect_ = []  # root derP
                 derP.PP = CPP(derPi=derP, derP_=[derP])  # init
 
             if derP.upconnect_:
                 upconnect_2_PP_(derP, PP_)  # recursive compare sign of next-layer upconnects
-            # terminate PP if:
-            elif (derP.PP is not iderP.PP) or (derP.PP is iderP.PP and iderP.PP.in_upconnect_cnt == 0):
-                PP_.append(derP.PP)
+            elif derP.PP is not iderP.PP:
+                PP_.append(derP.PP) # terminate PP
 
     iderP.upconnect_ = confirmed_upconnect_
 
-    if not confirmed_upconnect_ and iderP.PP.in_upconnect_cnt == 0:  # I don't think in_upconnect_cnt is needed
-        PP_.append(iderP.PP)  # iPP termination, only after all upconnects are checked or no more unconfirmed upconnect
+    if not confirmed_upconnect_ and not iderP.downconnect_:  # iderP is a root
+        PP_.append(iderP.PP)  # iPP termination, only after all upconnects are checked
