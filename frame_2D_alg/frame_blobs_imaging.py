@@ -39,7 +39,7 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
     background = blank_image((height, width))
     for blob in blob_:
         over_draw(background, None, blob.box,
-                  mask=blob.mask,
+                  mask=blob.mask__,
                   fill_color=[blob.sign * 32] * 3)
 
     idmap = cv.resize(idmap.astype('uint64'), window_size,
@@ -61,12 +61,12 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
                     sys.stdout.flush()
                     return
                 over_draw(img, None, blob.box,
-                          mask=blob.mask,
+                          mask=blob.mask__,
                           fill_color=WHITE)
                 # ... and its adjacents
                 for adj_blob, pose in blob.adj_blobs[0]:
                     over_draw(img, None, adj_blob.box,
-                              mask=adj_blob.mask,
+                              mask=adj_blob.mask__,
                               fill_color=POSE2COLOR[pose])
                 # ... print blobs properties.
                 print("\rblob:",
@@ -76,7 +76,7 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
                       "G =", blob.G,
                       "Dy =", blob.Dy,
                       "Dx =", blob.Dx,
-                      "S =", blob.S,
+                      "S =", blob.A,
                       end="\t\t\t")
                 sys.stdout.flush()
 
