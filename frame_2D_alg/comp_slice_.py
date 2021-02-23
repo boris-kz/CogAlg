@@ -1,43 +1,51 @@
 '''
-    comp_slice_ is a terminal fork of intra_blob.
-    It traces blob axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
-    These high-G high-Ma blobs are vectorized into outlines of adjacent flat or low-G blobs.
-    Vectorization is clustering of Ps + derivatives into PPs: patterns of Ps that describe an edge.
-    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
-    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
-    radial comp extension for co-internal blobs:
-    != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
-    == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
-    borrow = adj_G * rA: default sum div_comp S -> relative area and distance to adjj_blob_
-    internal sum comp if mA: in thin lines only? comp_norm_G or div_comp_G -> rG?
-    isolation = decay + contrast:
-    G - G * (rA * ave_rG: decay) - (rA * adj_G: contrast, = lend | borrow, no need to compare vG?)
-    if isolation: cross adjj_blob composition eval,
-    else:         cross adjj_blob merge eval:
-    blob merger if internal match (~raG) - isolation, rdn external match:
-    blob compos if external match (~rA?) + isolation,
-    Also eval comp_slice over fork_?
-    rng+ should preserve resolution: rng+_dert_ is dert layers,
-    rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g,
-    rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr?
+Comp_slice is a terminal fork of intra_blob.
+It traces blob axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
+These low-M high-Ma blobs are vectorized into outlines of adjacent flat or low-G blobs.
+Vectorization is clustering of Ps + derivatives into PPs: patterns of Ps that describe an edge.
+Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
+secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
 '''
-
-from time import time
 from collections import deque
-from class_cluster import ClusterStructure, NoneType
-from math import hypot
+import sys
 import numpy as np
-import warnings  # to detect overflow issue, in case of infinity loop
-warnings.filterwarnings('error')
+from class_cluster import ClusterStructure, NoneType
+from slice_utils import *
 
-ave = 20
+ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
+aveG = 50  # filter for comp_g, assumed constant direction
+flip_ave = 2000
 div_ave = 200
-flip_ave = 1000
 ave_dX = 10  # difference between median x coords of consecutive Ps
 
-class CderP(ClusterStructure):
+# prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
+# postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
+# prefix 'f' denotes flag
 
-    Pi = object  # P instance, accumulation: CderP.Pi.I += 1, etc.
+class CP(ClusterStructure):
+    # Dert: summed pixel values and pixel-level derivatives:
+    I = int
+    Dy = int
+    Dx = int
+    G = int
+    M = int
+    Dyy = int
+    Dyx = int
+    Dxy = int
+    Dxx = int
+    Ga = int
+    Ma = int
+    L = int
+    x0 = int
+    y = int  # for visualization only
+    sign = NoneType  # sign of gradient deviation
+    dert_ = list  # array of pixel-level derts: (p, dy, dx, g, m), extended in intra_blob
+    gdert_ = list
+    Dg = int
+    Mg = int
+
+class CderP(ClusterStructure):
+    Pi = object  # P instance, for accumulation: CderP.Pi.I += 1, etc.
     Pm = int
     Pd = int
     mx = int
@@ -54,61 +62,111 @@ class CderP(ClusterStructure):
     dMg = int
     upconnect_ = list
     downconnect_ = list
-    # stack and PP object reference
-    stack = object
+    _derP = object  # ref to template _P, if compared
     PP = object
 
-class CPP(ClusterStructure):
+# Functions:
 
-    derP_ = list
-    derPi = object
-    fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_?
-    fdiv = NoneType
-    # between PPs:
-    upconnect_ = list
-    downconnect_ = list
-
-def comp_slice_(stack_, _derP, _P):
+def slice_blob(blob, verbose=False):
     '''
-    cross-compare connected Ps of stack_, including Ps of adjacent stacks (upconnects)
+    Slice_blob converts selected smooth-edge blobs (high G, low Ga) into sliced blobs,
+    adding horizontal blob slices: Ps or 1D patterns
     '''
-    derP_ = []
+    flip_eval(blob)
+    dert__ = blob.dert__
+    mask__ = blob.mask__
+    height, width = dert__[0].shape
+    if verbose: print("Converting to image...")
     DdX = 0
-    for stack in reversed(stack_):  # bottom-up
 
-        if not stack.f_checked :  # else this stack has been scanned as some other upconnect
-            stack.f_checked = 1
-            downconnect_ = stack.downconnect_cnt
+    dert__ = [np.flipud(dert_) for dert_ in dert__]  # flips dert__ upside down to scan it bottom-up
+    _derP_ = form_P_(list(zip(*dert__[0])), mask__[0], 0)  # 1st row
 
-            if not _P:  # stack is from blob.stack_
-                _P = stack.Py_.pop()
-                _derP = CderP(Pi=_P, downconnect_ = downconnect_, stack = stack)
-                derP_.append(_derP)  # no derivatives in 1st derP, assign stack.downconnect_cnt to derP.downconnect_
+    for y, dert_ in enumerate(zip(*dert__[1:])):  # last row is discarded?
+        if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
-            for P in reversed(stack.Py_):
-                derP = comp_slice(P, _P, DdX)  # ortho and other conditional operations are evaluated per PP
-                for downconnect in P.downconnect_:  # assign current derP as downconnect' upconnect:
-                    if downconnect is not _derP:
-                        downconnect.upconnect_.append(derP)
-                _derP.upconnect_.append(derP)  # next
-                derP.downconnect_ = downconnect_
-                derP_.append(derP)  # derP is converted to CderP in comp_slice
-                _P = P
-                _derP = derP
-                downconnect_ = [_derP]  # always 1 inside Py_
+        derP_ = form_P_(list(zip(*dert_)), mask__[y+1], y+1)  # horizontal clustering
+        scan_P_(_derP_, derP_, DdX, )  # test for x overlap between Ps
+        _derP_ = derP_  # set current row P_ as next upper row _P_
 
-            for upconnect in stack.upconnect_:  # store _derP in upconnect to assign upconnected derPs to _derP later
-                upconnect.Py_[-1].downconnect_.append(_derP)  # last P of upconnect is connected to 1st derP of current stack
+    blob.derP_ = derP_
 
-            if stack.upconnect_:
-                derP_ += comp_slice_(stack.upconnect_, _derP, _P)  # recursive compare _P to all upconnected Ps
 
-    return derP_
+def form_P_(idert_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
+    '''
+    sums dert params within Ps and increments L: horizontal length.
+    '''
+    P_ = deque()  # row of Ps
+    dert_ = [list(idert_[0])]  # get first dert from idert_ (generator/iterator)
+    _mask = mask_[0]  # mask bit per dert
+    if ~_mask:
+        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert_[0]; L = 1; x0 = 0  # initialize P params with first dert
 
-'''
-Value of branching points: at least one angle miss, or that's a corner?
-PP across branching has to be 2D, no reduction?
-'''
+    for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
+        mask = mask_[x]  # masks = 1,_0: P termination, 0,_1: P initialization, 0,_0: P accumulation:
+        if mask:
+            if ~_mask:  # _dert is not masked, dert is masked, terminate P:
+                P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
+                P_.append(CderP(Pi=P))
+        else:  # dert is not masked
+            if _mask:  # _dert is masked, initialize P params:
+                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert; L = 1; x0 = x; dert_ = [dert]
+            else:
+                I += dert[0]  # _dert is not masked, accumulate P params with (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) = dert
+                Dy += dert[1]
+                Dx += dert[2]
+                G += dert[3]
+                M += dert[4]
+                Dyy += dert[5]
+                Dyx += dert[6]
+                Dxy += dert[7]
+                Dxx += dert[8]
+                Ga += dert[9]
+                Ma += dert[10]
+                L += 1
+                dert_.append(dert)
+        _mask = mask
+
+    if ~_mask:  # terminate last P in a row
+        P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_)
+        P_.append(CderP(Pi=P))
+
+    return P_
+
+
+def scan_P_(_derP_, derP_, DdX):
+
+    for derP in derP_:  # lower row
+        for _derP in _derP_:  # upper row
+            # test for x overlap between P and _P in 8 directions:
+            if derP.P.x0 - 1 < (derP.P.x0 + derP.L) and (_derP.P.x0 + _derP.P.L) + 1 > derP.P.x0:
+
+                if derP._derP is not _derP:  # derP has not been compared yet, or it was compared to different _derP
+                # needs a review
+                    _derP = comp_slice(_derP, derP, DdX)
+                    _derP._derP = _derP  # ref to compared derP
+                    derP_.append(_derP)
+                    derP.upconnect_.append(_derP)
+                    _derP.downconnect_.append(derP)
+
+            elif (_derP.P.x0 + _derP.P.L) < derP.P.x0: # stop scanning the rest of lower row Ps if there is no overlap
+                break
+
+
+def flip_eval(blob):
+    horizontal_bias = (blob.box[3] - blob.box[2]) / (blob.box[1] - blob.box[0]) \
+                      * (abs(blob.Dy) / abs(blob.Dx))
+    # L_bias (Lx / Ly) * G_bias (Gy / Gx), blob.box = [y0,yn,x0,xn], ddirection: , preferential comp over low G
+
+    if horizontal_bias > 1 and (blob.G * blob.Ma * horizontal_bias > flip_ave / 10):
+        blob.fflip = 1  # rotate 90 degrees for scanning in vertical direction
+        blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
+        blob.mask__ = np.rot90(blob.mask__)
+
+
+def accum_Dert(Dert: dict, **params) -> None:
+    Dert.update({param: Dert[param] + value for param, value in params.items()})
+
 
 def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
@@ -120,12 +178,13 @@ def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and condi
     redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
     '''
     xn = x0 + L-1;  _xn = _x0 + _L-1
+    # to be revised:
     mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
     _dX = (xn - L/2) - (_xn - _L/2)
     dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
 
     if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
-        rX = dX / (mX+.001)  # average dist/prox, | prox/dist, | mX / max_L?
+        rX = dX / mX if mX else dX*2  # average dist/prox, | prox/dist, | mX / max_L?
 
     ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
@@ -161,37 +220,31 @@ def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and condi
 
     return derP
 
-
-def accum_PP(PP, derP):
-
-    PP.derPi.accumulate(Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                          mDy=derP.mDy, dDy=derP.dDy, mDg=derP.mDg, dDg=derP.dDg, mMg=derP.mMg, dMg=derP.dMg)
-    PP.derP_.append(derP)
-
-def merge_PP(_PP, PP, PP_):  # merge PP into _PP
-
-    _PP.derP_ += PP.derP_
-    _PP.derPi.accumulate(Pm=PP.derPi.Pm, Pd=PP.derPi.Pd, mx=PP.derPi.mx, dx=PP.derPi.dx,
-                         mL=PP.derPi.mL, dL=PP.derPi.dL, mDx=PP.derPi.mDx, dDx=PP.derPi.dDx,
-                         mDy=PP.derPi.mDy, dDy=PP.derPi.dDy, mDg=PP.derPi.mDg,
-                         dDg=PP.derPi.dDg, mMg=PP.derPi.mMg, dMg=PP.derPi.dMg)
-
-    _PP.upconnect_ += PP.upconnect_ # merge upconnects
-
-    for derP in PP.derP_: # update PP reference
-        derP.PP = _PP
-
-    if PP in PP_:
-        PP_.remove(PP)  # remove the merged PP
-
+'''
+    radial comp extension for co-internal blobs:
+    != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
+    == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
+    borrow = adj_G * rA: default sum div_comp S -> relative area and distance to adjj_blob_
+    internal sum comp if mA: in thin lines only? comp_norm_G or div_comp_G -> rG?
+    isolation = decay + contrast:
+    G - G * (rA * ave_rG: decay) - (rA * adj_G: contrast, = lend | borrow, no need to compare vG?)
+    if isolation: cross adjj_blob composition eval,
+    else:         cross adjj_blob merge eval:
+    blob merger if internal match (~raG) - isolation, rdn external match:
+    blob compos if external match (~rA?) + isolation,
+    Also eval comp_slice over fork_?
+    rng+ should preserve resolution: rng+_dert_ is dert layers,
+    rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g,
+    rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr?
+'''
 
 def derP_2_PP_(derP_, PP_):
     '''
-    first row of derP_ has no downconnects, higher rows may also have them
+    first row of derP_ has downconnect_cnt == 0, higher rows may also have them
     '''
     for derP in derP_:  # bottom-up to follow upconnects
 
-        if not derP.downconnect_:  # root derP
+        if derP.downconnect_cnt == 0:  # root derP
             PP = CPP(derPi=derP, derP_= [derP])  # init
             derP.PP = PP
             if derP.upconnect_:
@@ -206,8 +259,8 @@ def upconnect_2_PP_(iderP, PP_):
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
     confirmed_upconnect_ = []
-    for derP in iderP.upconnect_:  # potential upconnects from previous call
 
+    for derP in iderP.upconnect_:  # potential upconnects from previous call
         if derP not in iderP.PP.derP_:  # derP should not in current iPP derP_ list, but this may occur after the PP merging
             if (iderP.Pm > 0) == (derP.Pm > 0):  # no sign change, accumulate PP
                 if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):  # different previously assigned derP.PP
@@ -218,15 +271,15 @@ def upconnect_2_PP_(iderP, PP_):
                 confirmed_upconnect_.append(derP)
 
             else:  # sign changed, derP became root derP
-                derP.downconnect_ = []  # root derP
+                derP.downconnect_cnt = 0  # root derP
                 derP.PP = CPP(derPi=derP, derP_=[derP])  # init
 
             if derP.upconnect_:
                 upconnect_2_PP_(derP, PP_)  # recursive compare sign of next-layer upconnects
-            elif derP.PP is not iderP.PP:
+            elif derP.PP is not iderP.PP: # we do not terminate iPP here, only new PP after the sign changed is terminated here
                 PP_.append(derP.PP) # terminate PP
 
     iderP.upconnect_ = confirmed_upconnect_
 
-    if not confirmed_upconnect_ and not iderP.downconnect_:  # iderP is a root
-        PP_.append(iderP.PP)  # iPP termination, only after all upconnects are checked
+    if not confirmed_upconnect_ and iderP.downconnect_cnt == 0: # terminate at root derP after
+        PP_.append(iderP.PP)  # iPP termination, only after all upconnects are checked or no more unconfirmed upconnect

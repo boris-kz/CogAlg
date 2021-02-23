@@ -112,6 +112,44 @@ def comp_slice_(stack_, _P):
                 comp_slice_(stack.upconnect_, _P)  # recursive compare _P to all upconnected Ps
 
 
+def comp_slice_converting(stack_, _derP, _P):
+    '''
+    cross-compare connected Ps of stack_, including Ps of adjacent stacks (upconnects)
+    '''
+    derP_ = []
+    DdX = 0
+    for stack in reversed(stack_):  # bottom-up
+
+        if not stack.f_checked :  # else this stack has been scanned as some other upconnect
+            stack.f_checked = 1
+            downconnect_ = stack.downconnect_cnt
+
+            if not _P:  # stack is from blob.stack_
+                _P = stack.Py_.pop()
+                _derP = CderP(Pi=_P, downconnect_ = downconnect_, stack = stack)
+                derP_.append(_derP)  # no derivatives in 1st derP, assign stack.downconnect_cnt to derP.downconnect_
+
+            for P in reversed(stack.Py_):
+                derP = comp_slice(P, _P, DdX)  # ortho and other conditional operations are evaluated per PP
+                for downconnect in P.downconnect_:  # assign current derP as downconnect' upconnect:
+                    if downconnect is not _derP:
+                        downconnect.upconnect_.append(derP)
+                _derP.upconnect_.append(derP)  # next
+                derP.downconnect_ = downconnect_
+                derP_.append(derP)  # derP is converted to CderP in comp_slice
+                _P = P
+                _derP = derP
+                downconnect_ = [_derP]  # always 1 inside Py_
+
+            for upconnect in stack.upconnect_:  # store _derP in upconnect to assign upconnected derPs to _derP later
+                upconnect.Py_[-1].downconnect_.append(_derP)  # last P of upconnect is connected to 1st derP of current stack
+
+            if stack.upconnect_:
+                derP_ += comp_slice_(stack.upconnect_, _derP, _P)  # recursive compare _P to all upconnected Ps
+
+    return derP_
+
+
 def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and conditional ders from norm and DIV comp
 
     s, x0, G, M, Dx, Dy, L, Dg, Mg = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
@@ -122,17 +160,15 @@ def comp_slice(P, _P, DdX):  # forms vertical derivatives of P params, and condi
     redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
     '''
     xn = x0 + L-1;  _xn = _x0 + _L-1
-    mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
-    _dX = (xn - L/2) - (_xn - _L/2)
+    mX = min(xn, _xn) - max(x0, _x0)  # position match = overlap: abs proximity?
+    _dX = (xn - L/2) - (_xn - _L/2)   # average position miss?
     dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
 
     if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
         rX = dX / (mX+.001)  # average dist/prox, | prox/dist, | mX / max_L?
-
     ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
-    ddX = dX - _dX  # long axis curvature
-    DdX += ddX  # if > ave: ortho eval per P, else per PP_dX?
+    DdX += dX - _dX  # long axis curvature; if > ave: ortho eval per P, else per PP_dX?
     # param correlations: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
     '''
     if ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match

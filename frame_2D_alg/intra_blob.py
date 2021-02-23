@@ -27,9 +27,8 @@ from frame_blobs import assign_adjacents, flood_fill, CBlob
 from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
-from slice_blob import slice_blob
-# from comp_slice_sstack import comp_slice_, stack_2_PP_
-from comp_slice_ import comp_slice_, derP_2_PP_
+from comp_slice_ import slice_blob
+from comp_slice_ import derP_2_PP_
 from slice_utils import *
 
 # filters, All *= rdn:
