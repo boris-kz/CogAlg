@@ -12,7 +12,7 @@ import numpy as np
 
 # -----------------------------------------------------------------------------
 # Input:
-IMAGE_PATH = "./images/raccoon.jpg"
+IMAGE_PATH = "./images/toucan.jpg"
 # Outputs:
 OUTPUT_PATH = "./images/intra_comp0/"
 
@@ -70,7 +70,6 @@ def shift_img(img,rng):
                     img_shift = img[rng+y:y-rng:sstep, rng+x::sstep]
                 elif y == rng:
                     img_shift = img[rng+y::sstep, rng+x:x-rng:sstep]
-
 
             # update x and y shifting value
             if x == -rng and y>-rng:
@@ -241,7 +240,6 @@ if __name__ == "__main__":
     image = imread(arguments.image)
 
     dert_ = comp_pixel_m(image)
-
     ave = 50
 
     print('Processing first layer comps...')
@@ -256,9 +254,6 @@ if __name__ == "__main__":
     gr_dert_8, _ = comp_rng(dert_, ave, root_fia = 0, rng= 8)
     gr_dert_9, _ = comp_rng(dert_, ave, root_fia = 0, rng= 9)
     gr_dert_10, _ = comp_rng(dert_, ave, root_fia = 0, rng= 10)
-
-
-
 
     print('Drawing forks...')
     ini_ = np.zeros((image.shape[0], image.shape[1]), 'uint8')  # initialize image y, x
@@ -311,48 +306,48 @@ if __name__ == "__main__":
 
 
     # save to disk
-    cv2.imwrite(arguments.output + '0_g.jpg',  g_)
-    cv2.imwrite(arguments.output + '1_m.jpg',  m_)
+    cv2.imwrite(arguments.output + '0g.jpg',  g_)
+    cv2.imwrite(arguments.output + '0SAD.jpg',  m_)
 
-    cv2.imwrite(arguments.output + 'rng1_gr.jpg',  gr_1)
-    cv2.imwrite(arguments.output + 'rng1_mr.jpg',  mr_1)
-    cv2.imwrite(arguments.output + 'rgn1_re.jpg',  re_1)
+    cv2.imwrite(arguments.output + '1g.jpg',  gr_1)
+    cv2.imwrite(arguments.output + '1SAD.jpg',  mr_1)
+    cv2.imwrite(arguments.output + '1x.jpg',  re_1)
 
-    cv2.imwrite(arguments.output + 'rng2_gr.jpg',  gr_2)
-    cv2.imwrite(arguments.output + 'rng2_mr.jpg',  mr_2)
-    cv2.imwrite(arguments.output + 'rgn2_re.jpg',  re_2)
+    cv2.imwrite(arguments.output + '2g.jpg',  gr_2)
+    cv2.imwrite(arguments.output + '2SAD.jpg',  mr_2)
+    cv2.imwrite(arguments.output + '2x.jpg',  re_2)
 
-    cv2.imwrite(arguments.output + 'rng3_gr.jpg',  gr_3)
-    cv2.imwrite(arguments.output + 'rng3_mr.jpg',  mr_3)
-    cv2.imwrite(arguments.output + 'rgn3_re.jpg',  re_3)
+    cv2.imwrite(arguments.output + '3g.jpg',  gr_3)
+    cv2.imwrite(arguments.output + '3SAD.jpg',  mr_3)
+    cv2.imwrite(arguments.output + '3x.jpg',  re_3)
 
-    cv2.imwrite(arguments.output + 'rng4_gr.jpg',  gr_4)
-    cv2.imwrite(arguments.output + 'rng4_mr.jpg',  mr_4)
-    cv2.imwrite(arguments.output + 'rgn4_re.jpg',  re_4)
+    cv2.imwrite(arguments.output + '4g.jpg',  gr_4)
+    cv2.imwrite(arguments.output + '4SAD.jpg',  mr_4)
+    cv2.imwrite(arguments.output + '4x.jpg',  re_4)
 
-    cv2.imwrite(arguments.output + 'rng5_gr.jpg',  gr_5)
-    cv2.imwrite(arguments.output + 'rng5_mr.jpg',  mr_5)
+    cv2.imwrite(arguments.output + '5g.jpg',  gr_5)
+    cv2.imwrite(arguments.output + '5SAD.jpg',  mr_5)
     cv2.imwrite(arguments.output + 'rgn5_re.jpg',  re_5)
 
-    cv2.imwrite(arguments.output + 'rng6_gr.jpg',  gr_6)
-    cv2.imwrite(arguments.output + 'rng6_mr.jpg',  mr_6)
-    cv2.imwrite(arguments.output + 'rgn6_re.jpg',  re_6)
+    cv2.imwrite(arguments.output + '6g.jpg',  gr_6)
+    cv2.imwrite(arguments.output + '6SAD.jpg',  mr_6)
+    cv2.imwrite(arguments.output + '6x.jpg',  re_6)
 
-    cv2.imwrite(arguments.output + 'rng7_gr.jpg',  gr_7)
-    cv2.imwrite(arguments.output + 'rng7_mr.jpg',  mr_7)
-    cv2.imwrite(arguments.output + 'rgn7_re.jpg',  re_7)
+    cv2.imwrite(arguments.output + '7g.jpg',  gr_7)
+    cv2.imwrite(arguments.output + '7SAD.jpg',  mr_7)
+    cv2.imwrite(arguments.output + '7x.jpg',  re_7)
 
-    cv2.imwrite(arguments.output + 'rng8_gr.jpg',  gr_8)
-    cv2.imwrite(arguments.output + 'rng8_mr.jpg',  mr_8)
-    cv2.imwrite(arguments.output + 'rgn8_re.jpg',  re_8)
+    cv2.imwrite(arguments.output + '8g.jpg',  gr_8)
+    cv2.imwrite(arguments.output + '8SAD.jpg',  mr_8)
+    cv2.imwrite(arguments.output + '8x.jpg',  re_8)
 
-    cv2.imwrite(arguments.output + 'rng9_gr.jpg',  gr_9)
-    cv2.imwrite(arguments.output + 'rng9_mr.jpg',  mr_9)
-    cv2.imwrite(arguments.output + 'rgn9_re.jpg',  re_9)
+    cv2.imwrite(arguments.output + '9g.jpg',  gr_9)
+    cv2.imwrite(arguments.output + '9SAD.jpg',  mr_9)
+    cv2.imwrite(arguments.output + '9x.jpg',  re_9)
 
-    cv2.imwrite(arguments.output + 'rng10_gr.jpg',  gr_10)
-    cv2.imwrite(arguments.output + 'rng10_mr.jpg',  mr_10)
-    cv2.imwrite(arguments.output + 'rgn10_re.jpg',  re_10)
+    cv2.imwrite(arguments.output + '10g.jpg',  gr_10)
+    cv2.imwrite(arguments.output + '10SAD.jpg',  mr_10)
+    cv2.imwrite(arguments.output + '10x.jpg',  re_10)
 
     print('Done...')
 

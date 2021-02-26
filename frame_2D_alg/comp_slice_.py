@@ -231,7 +231,13 @@ def comp_slice(P, _P):  # forms vertical derivatives of derP params, and conditi
 
     return derP
 
-'''
+''' Positional miss is positive: lower filters?  always inverse match?
+    skip to hLe prediction limits: termination defines P?
+    
+    differential feedback per target level: @filters, but not pattern
+    feedforward is fixed at average p-prediction limits?    
+    p size vs. sampling?
+    
     radial comp extension for co-internal blobs:
     != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
     == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:

@@ -45,12 +45,10 @@ class MetaCluster(type):
     """
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
         # get fields/params and numeric params
-        params = tuple(attr for attr in attrs
-                       if not attr.startswith('_')
-                       and not callable(attr))
+        params = tuple(attr for attr in attrs if not callable(attr))  # callable: _id, hid and weakref (see attrs['slots']
+
         numeric_params = tuple(param for param in params
                                if issubclass(attrs[param], Number))
-
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -106,13 +104,10 @@ class MetaCluster(type):
             setattr(instance, param,
                     kwargs.get(param,
                                getattr(cls, param + '_type')()))
-
         # Set id
         instance._id = len(cls._instances)
-
         # Create ref
         cls._instances.append(weakref.ref(instance))
-
         # no default higher cluster id, set to None
         instance.hid = None  # higher cluster's id
 
