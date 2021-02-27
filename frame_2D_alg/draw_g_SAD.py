@@ -1,10 +1,83 @@
 """
-Visualize estimated extrema: e_= m_ - g_, over incremental comp_r
+Visualize estimated extrema: x_ = m_ - g_, over incremental-size kernels
 """
+import numpy as np
 
-from alternative_versions.comp_pixel_versions import comp_pixel_m
-from intra_comp import *
-from alternative_versions.LUT import Y_COEFFS, X_COEFFS
+
+TRANSLATING_SLICES = {
+    0:[
+        (Ellipsis, slice(None, -2, None), slice(None, -2, None)),
+        (Ellipsis, slice(None, -2, None), slice(1, -1, None)),
+        (Ellipsis, slice(None, -2, None), slice(2, None, None)),
+        (Ellipsis, slice(1, -1, None), slice(2, None, None)),
+        (Ellipsis, slice(2, None, None), slice(2, None, None)),
+        (Ellipsis, slice(2, None, None), slice(1, -1, None)),
+        (Ellipsis, slice(2, None, None), slice(None, -2, None)),
+        (Ellipsis, slice(1, -1, None), slice(None, -2, None)),
+    ],
+    1:[
+        (Ellipsis, slice(None, -4, None), slice(None, -4, None)),
+        (Ellipsis, slice(None, -4, None), slice(1, -3, None)),
+        (Ellipsis, slice(None, -4, None), slice(2, -2, None)),
+        (Ellipsis, slice(None, -4, None), slice(3, -1, None)),
+        (Ellipsis, slice(None, -4, None), slice(4, None, None)),
+        (Ellipsis, slice(1, -3, None), slice(4, None, None)),
+        (Ellipsis, slice(2, -2, None), slice(4, None, None)),
+        (Ellipsis, slice(3, -1, None), slice(4, None, None)),
+        (Ellipsis, slice(4, None, None), slice(4, None, None)),
+        (Ellipsis, slice(4, None, None), slice(3, -1, None)),
+        (Ellipsis, slice(4, None, None), slice(2, -2, None)),
+        (Ellipsis, slice(4, None, None), slice(1, -3, None)),
+        (Ellipsis, slice(4, None, None), slice(None, -4, None)),
+        (Ellipsis, slice(3, -1, None), slice(None, -4, None)),
+        (Ellipsis, slice(2, -2, None), slice(None, -4, None)),
+        (Ellipsis, slice(1, -3, None), slice(None, -4, None)),
+    ],
+    2:[
+        (Ellipsis, slice(None, -6, None), slice(None, -6, None)),
+        (Ellipsis, slice(None, -6, None), slice(1, -5, None)),
+        (Ellipsis, slice(None, -6, None), slice(2, -4, None)),
+        (Ellipsis, slice(None, -6, None), slice(3, -3, None)),
+        (Ellipsis, slice(None, -6, None), slice(4, -2, None)),
+        (Ellipsis, slice(None, -6, None), slice(5, -1, None)),
+        (Ellipsis, slice(None, -6, None), slice(6, None, None)),
+        (Ellipsis, slice(1, -5, None), slice(6, None, None)),
+        (Ellipsis, slice(2, -4, None), slice(6, None, None)),
+        (Ellipsis, slice(3, -3, None), slice(6, None, None)),
+        (Ellipsis, slice(4, -2, None), slice(6, None, None)),
+        (Ellipsis, slice(5, -1, None), slice(6, None, None)),
+        (Ellipsis, slice(6, None, None), slice(6, None, None)),
+        (Ellipsis, slice(6, None, None), slice(5, -1, None)),
+        (Ellipsis, slice(6, None, None), slice(4, -2, None)),
+        (Ellipsis, slice(6, None, None), slice(3, -3, None)),
+        (Ellipsis, slice(6, None, None), slice(2, -4, None)),
+        (Ellipsis, slice(6, None, None), slice(1, -5, None)),
+        (Ellipsis, slice(6, None, None), slice(None, -6, None)),
+        (Ellipsis, slice(5, -1, None), slice(None, -6, None)),
+        (Ellipsis, slice(4, -2, None), slice(None, -6, None)),
+        (Ellipsis, slice(3, -3, None), slice(None, -6, None)),
+        (Ellipsis, slice(2, -4, None), slice(None, -6, None)),
+        (Ellipsis, slice(1, -5, None), slice(None, -6, None)),
+    ],
+}
+
+Y_COEFFS = {
+    1:np.array([-0.5, -0.5, -0.5,  0. ,  0.5,  0.5,  0.5,  0. ]),
+    2:np.array([-0.25, -0.25, -0.25, -0.25, -0.25, -0.5 ,  0.  ,  0.5 ,  0.25,
+        0.25,  0.25,  0.25,  0.25,  0.5 ,  0.  , -0.5 ]),
+    3:np.array([-0.167, -0.167, -0.167, -0.167, -0.167, -0.167, -0.167, -0.25 ,
+       -0.5  ,  0.   ,  0.5  ,  0.25 ,  0.167,  0.167,  0.167,  0.167,
+        0.167,  0.167,  0.167,  0.25 ,  0.5  ,  0.   , -0.5  , -0.25 ]),
+}
+
+X_COEFFS = {
+    1:np.array([-0.5,  0. ,  0.5,  0.5,  0.5,  0. , -0.5, -0.5]),
+    2:np.array([-0.25, -0.5 ,  0.  ,  0.5 ,  0.25,  0.25,  0.25,  0.25,  0.25,
+        0.5 ,  0.  , -0.5 , -0.25, -0.25, -0.25, -0.25]),
+    3:np.array([-0.167, -0.25 , -0.5  ,  0.   ,  0.5  ,  0.25 ,  0.167,  0.167,
+        0.167,  0.167,  0.167,  0.167,  0.167,  0.25 ,  0.5  ,  0.   ,
+       -0.5  , -0.25 , -0.167, -0.167, -0.167, -0.167, -0.167, -0.167]),
+}
 
 import cv2
 import argparse
@@ -14,10 +87,32 @@ import numpy as np
 # Input:
 IMAGE_PATH = "./images/toucan.jpg"
 # Outputs:
-OUTPUT_PATH = "./images/intra_comp0/"
+OUTPUT_PATH = "./images/g_SAD_x/"
 
 # -----------------------------------------------------------------------------
 # Functions
+
+def comp_pixel_m(image):  # current version of 2x2 pixel cross-correlation within image
+
+    # following four slices provide inputs to a sliding 2x2 kernel:
+    topleft__ = image[:-1, :-1]
+    topright__ = image[:-1, 1:]
+    botleft__ = image[1:, :-1]
+    botright__ = image[1:, 1:]
+
+    dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # same as diagonal from left
+    dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # same as diagonal from right
+    g__ = np.hypot(dy__, dx__)  # gradient per kernel
+
+    # inverse match = SAD: measure of variation within kernel
+    m__ = ( abs(topleft__ - botright__) + abs(topright__ - botleft__))
+
+    idy__ = np.zeros((topleft__.shape[0], topleft__.shape[1]))
+    idx__ = np.zeros((topleft__.shape[0], topleft__.shape[1]))
+
+    return ((topleft__, idy__, idx__, g__, dy__, dx__, m__))
+
+
 
 def shift_img(img,rng):
     '''
@@ -247,6 +342,7 @@ if __name__ == "__main__":
     gr_dert_1, _ = comp_rng(dert_, ave, root_fia = 0, rng= 1)
     gr_dert_2, _ = comp_rng(dert_, ave, root_fia = 0, rng= 2)
     gr_dert_3, _ = comp_rng(dert_, ave, root_fia = 0, rng= 3)
+    '''
     gr_dert_4, _ = comp_rng(dert_, ave, root_fia = 0, rng= 4)
     gr_dert_5, _ = comp_rng(dert_, ave, root_fia = 0, rng= 5)
     gr_dert_6, _ = comp_rng(dert_, ave, root_fia = 0, rng= 6)
@@ -254,7 +350,7 @@ if __name__ == "__main__":
     gr_dert_8, _ = comp_rng(dert_, ave, root_fia = 0, rng= 8)
     gr_dert_9, _ = comp_rng(dert_, ave, root_fia = 0, rng= 9)
     gr_dert_10, _ = comp_rng(dert_, ave, root_fia = 0, rng= 10)
-
+    '''
     print('Drawing forks...')
     ini_ = np.zeros((image.shape[0], image.shape[1]), 'uint8')  # initialize image y, x
 
@@ -275,6 +371,7 @@ if __name__ == "__main__":
     gr_3 = draw_gr(ini_.copy(), gr_dert_3[3])
     mr_3 = draw_gr(ini_.copy(), gr_dert_3[4])
     re_3 = draw_gr(ini_.copy(),  gr_dert_3[5])
+    '''
     # rng = 4
     gr_4 = draw_gr(ini_.copy(), gr_dert_4[3])
     mr_4 = draw_gr(ini_.copy(), gr_dert_4[4])
@@ -303,52 +400,53 @@ if __name__ == "__main__":
     gr_10 = draw_gr(ini_.copy(), gr_dert_10[3])
     mr_10 = draw_gr(ini_.copy(), gr_dert_10[4])
     re_10 = draw_gr(ini_.copy(),  gr_dert_10[5])
-
+    '''
 
     # save to disk
-    cv2.imwrite(arguments.output + '0g.jpg',  g_)
-    cv2.imwrite(arguments.output + '0SAD.jpg',  m_)
+    cv2.imwrite(arguments.output + '2x2_g.jpg',  g_)
+    cv2.imwrite(arguments.output + '2x2_SAD.jpg',  m_)
 
-    cv2.imwrite(arguments.output + '1g.jpg',  gr_1)
-    cv2.imwrite(arguments.output + '1SAD.jpg',  mr_1)
-    cv2.imwrite(arguments.output + '1x.jpg',  re_1)
+    cv2.imwrite(arguments.output + '3x3_g.jpg',  gr_1)
+    cv2.imwrite(arguments.output + '3x3_SAD.jpg',  mr_1)
+    cv2.imwrite(arguments.output + '3x3_x.jpg',  re_1)
 
-    cv2.imwrite(arguments.output + '2g.jpg',  gr_2)
-    cv2.imwrite(arguments.output + '2SAD.jpg',  mr_2)
-    cv2.imwrite(arguments.output + '2x.jpg',  re_2)
+    cv2.imwrite(arguments.output + '5x5_g.jpg',  gr_2)
+    cv2.imwrite(arguments.output + '5x5_SAD.jpg',  mr_2)
+    cv2.imwrite(arguments.output + '5x5_x.jpg',  re_2)
 
-    cv2.imwrite(arguments.output + '3g.jpg',  gr_3)
-    cv2.imwrite(arguments.output + '3SAD.jpg',  mr_3)
-    cv2.imwrite(arguments.output + '3x.jpg',  re_3)
+    cv2.imwrite(arguments.output + '7x7_g.jpg',  gr_3)
+    cv2.imwrite(arguments.output + '7x7_SAD.jpg',  mr_3)
+    cv2.imwrite(arguments.output + '7x7_x.jpg',  re_3)
 
-    cv2.imwrite(arguments.output + '4g.jpg',  gr_4)
-    cv2.imwrite(arguments.output + '4SAD.jpg',  mr_4)
-    cv2.imwrite(arguments.output + '4x.jpg',  re_4)
+    '''
+    cv2.imwrite(arguments.output + '9x9_g.jpg',  gr_4)
+    cv2.imwrite(arguments.output + '9x9_SAD.jpg',  mr_4)
+    cv2.imwrite(arguments.output + '9x9_x.jpg',  re_4)
 
-    cv2.imwrite(arguments.output + '5g.jpg',  gr_5)
-    cv2.imwrite(arguments.output + '5SAD.jpg',  mr_5)
-    cv2.imwrite(arguments.output + 'rgn5_re.jpg',  re_5)
+    cv2.imwrite(arguments.output + '11x11_g.jpg',  gr_5)
+    cv2.imwrite(arguments.output + '11x11_SAD.jpg',  mr_5)
+    cv2.imwrite(arguments.output + '11x11_x.jpg',  re_5)
 
-    cv2.imwrite(arguments.output + '6g.jpg',  gr_6)
-    cv2.imwrite(arguments.output + '6SAD.jpg',  mr_6)
-    cv2.imwrite(arguments.output + '6x.jpg',  re_6)
+    cv2.imwrite(arguments.output + '13x13_g.jpg',  gr_6)
+    cv2.imwrite(arguments.output + '13x13_SAD.jpg',  mr_6)
+    cv2.imwrite(arguments.output + '13x13_x.jpg',  re_6)
 
-    cv2.imwrite(arguments.output + '7g.jpg',  gr_7)
-    cv2.imwrite(arguments.output + '7SAD.jpg',  mr_7)
-    cv2.imwrite(arguments.output + '7x.jpg',  re_7)
+    cv2.imwrite(arguments.output + '15x15_g.jpg',  gr_7)
+    cv2.imwrite(arguments.output + '15x15_SAD.jpg',  mr_7)
+    cv2.imwrite(arguments.output + '15x15_x.jpg',  re_7)
 
-    cv2.imwrite(arguments.output + '8g.jpg',  gr_8)
-    cv2.imwrite(arguments.output + '8SAD.jpg',  mr_8)
-    cv2.imwrite(arguments.output + '8x.jpg',  re_8)
+    cv2.imwrite(arguments.output + '17x17_g.jpg',  gr_8)
+    cv2.imwrite(arguments.output + '17x17_SAD.jpg',  mr_8)
+    cv2.imwrite(arguments.output + '17x17_x.jpg',  re_8)
 
-    cv2.imwrite(arguments.output + '9g.jpg',  gr_9)
-    cv2.imwrite(arguments.output + '9SAD.jpg',  mr_9)
-    cv2.imwrite(arguments.output + '9x.jpg',  re_9)
+    cv2.imwrite(arguments.output + '19x19_g.jpg',  gr_9)
+    cv2.imwrite(arguments.output + '19x19_SAD.jpg',  mr_9)
+    cv2.imwrite(arguments.output + '19x19_x.jpg',  re_9)
 
-    cv2.imwrite(arguments.output + '10g.jpg',  gr_10)
-    cv2.imwrite(arguments.output + '10SAD.jpg',  mr_10)
-    cv2.imwrite(arguments.output + '10x.jpg',  re_10)
-
+    cv2.imwrite(arguments.output + '21x21_g.jpg',  gr_10)
+    cv2.imwrite(arguments.output + '21x21_SAD.jpg',  mr_10)
+    cv2.imwrite(arguments.output + '21x21_x.jpg',  re_10)
+    '''
     print('Done...')
 
 

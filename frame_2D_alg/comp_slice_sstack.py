@@ -86,6 +86,7 @@ class CSstack(ClusterStructure):
     # PPm_ = list
     # PPd_ = list  # these are now primary blob-level structures
 
+#  derP__ = [np.flipud(dert_) for dert_ in dert__]  # flip dert__ upside down
 
 def comp_slice_(stack_, _P):
     '''
