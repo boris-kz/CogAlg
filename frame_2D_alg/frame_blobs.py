@@ -125,8 +125,8 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard e
     # deviation of central gradient per kernel, between four vertex pixels
     # G and M are rotation invariant, but more accurate from rot_Gy__ and rot_Gx__?
 
-    M__ = int(ave * 1.41)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))
-    # inverse deviation of SAD: variation, ave SAD = ave g * 1.41
+    M__ = int(ave * 1.2)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))
+    # inverse deviation of SAD: variation
 
     return (topleft__, rot_Gy__, rot_Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
