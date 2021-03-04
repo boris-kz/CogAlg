@@ -9,10 +9,12 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
+import warnings  # to detect overflow issue, in case of infinity loop
+warnings.filterwarnings('error')
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
-flip_ave = 2000
+flip_ave = 0.1
 div_ave = 200
 ave_dX = 10  # difference between median x coords of consecutive Ps
 
@@ -41,11 +43,8 @@ class CP(ClusterStructure):
     upconnect_ = list
     downconnect_cnt = int
 
-
 class CderP(ClusterStructure):
-
-    Pi = object  # P instance, for accumulation: CderP.Pi.I += 1, etc.
-    # this would be derPP in accum_PP, no need here?
+    ## derP
     Pm = int
     Pd = int
     mx = int
@@ -62,7 +61,10 @@ class CderP(ClusterStructure):
     dMg = int
     P = object   # lower comparand
     _P = object  # higher comparand
-    PP = object  # contains this derP
+    PP = object  # contains this derP, could be FPP depends on flip_val
+    ## dirP
+    flip_val = int
+
 
 class CPP(ClusterStructure):
 
@@ -73,12 +75,26 @@ class CPP(ClusterStructure):
     downconnect_cnt = int
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_?
     fdiv = NoneType
+    # FPP params
+    flip_val = NoneType  # Ps are vertically biased
+    dert__ = list
+    mask__ = bool
+    P__ = list
+    derP__ = list
+    PP_  = list
 
 # Functions:
 
 # leading '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # trailing '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
 # leading 'f' denotes flag
+'''
+workflow:
+
+intra_blob -> slice_blob(blob) -> derP_ -> PP,
+if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FPP) -> pack PP in FPP.PP_
+else       (PP is PP):  pack PP in blob.PP_
+'''
 
 def slice_blob(blob, verbose=False):
     '''
@@ -86,7 +102,11 @@ def slice_blob(blob, verbose=False):
     adding horizontal blob slices: Ps or 1D patterns
     '''
 
-    flip_eval(blob)
+    fflip = 0
+    if not isinstance(blob, CPP):  # input is blob
+        flip_eval_blob(blob)
+        fflip = 1  # flip FPP if input is blob, else input is FPP, no flipping PPs
+
     dert__ = blob.dert__
     mask__ = blob.mask__
     height, width = dert__[0].shape
@@ -95,7 +115,7 @@ def slice_blob(blob, verbose=False):
     derP__ = []
 
     zip_dert__ = zip(*dert__)
-    _P_ = form_P_(list(zip(*next(zip_dert__))), mask__[0], 0)  # 1st row
+    _P_ = form_P_(list(zip(*next(zip_dert__))), mask__[0], 0)  # 1st upper row
     P__ += _P_  # frame of Ps
 
     for y, dert_ in enumerate(zip_dert__, start=1):  # scan top down
@@ -108,6 +128,7 @@ def slice_blob(blob, verbose=False):
 
     blob.P__ = P__
     blob.derP__ = derP__
+    derP_2_PP_(blob.derP__, blob.PP_, fflip)  # form vertically contiguous patterns of patterns
 
 
 def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) vertical order
@@ -158,15 +179,17 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
     derP_ = []
     for P in P_:  # lower row
         for _P in _P_:  # upper row
-            # test for x overlap between P and _P in 8 directions:
-            if P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0:  # all Ps here are positive
 
-                fcomp = [1 for derP in P.upconnect_ if P is derP.P]
+            # test for x overlap between P and _P in 8 directions
+            if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0): # all Ps here are positive
+
+                fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
+
                 if not fcomp:
-                    derP = comp_slice(P, _P)  # form vertical derivatives
+                    derP = comp_slice(_P, P)  # form vertical and directional derivatives
                     derP_.append(derP)
-                    _P.downconnect_cnt += 1
                     P.upconnect_.append(derP)
+                    _P.downconnect_cnt += 1
 
             elif (P.x0 + P.L) < _P.x0:  # stop scanning the rest of lower P_ if there is no overlap
                 break
@@ -174,23 +197,7 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
     return derP_
 
 
-def flip_eval(blob):
-
-    # L_bias (Lx / Ly) * G_bias (Gy / Gx), blob.box = [y0,yn,x0,xn], ddirection: , preferential comp over low G
-    horizontal_bias = (blob.box[3] - blob.box[2]) / (blob.box[1] - blob.box[0]) \
-                      * (abs(blob.Dy) / abs(blob.Dx))
-
-    if horizontal_bias > 1 and (blob.G * blob.Ma * horizontal_bias > flip_ave / 10):
-        blob.fflip = 1  # rotate 90 degrees for scanning in vertical direction
-        blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
-        blob.mask__ = np.rot90(blob.mask__)
-
-
-def accum_Dert(Dert: dict, **params) -> None:
-    Dert.update({param: Dert[param] + value for param, value in params.items()})
-
-
-def comp_slice(P, _P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
+def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
     s, x0, G, M, Dx, Dy, L, Dg, Mg = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
     # params per comp branch, add angle params, ext: X, new: L,
@@ -208,7 +215,7 @@ def comp_slice(P, _P):  # forms vertical derivatives of derP params, and conditi
     if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
         rX = dX / mX if mX else dX*2  # average dist/prox, | prox/dist, | mX / max_L?
 
-    ave_dx = (x0 + (L-1)/2) - (_x0 + (_L-1)/2)  # d_ave_x, median vs. summed, or for distant-P comp only?
+    ave_dx = (x0 + (L-1)//2) - (_x0 + (_L-1)//2)  # d_ave_x, median vs. summed, or for distant-P comp only?
 
     ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
     # param correlations: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
@@ -236,23 +243,26 @@ def comp_slice(P, _P):  # forms vertical derivatives of derP params, and conditi
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
     Pm = mX + mL + mM + mDx + mDy + mMg + mDg # -> complementary vPP, rdn *= Pd | Pm rolp?
 
-    derP = CderP(P=P, _P=_P, Pm=Pm, Pd=Pd, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)
+    d_ave_x = (P.x0 + (P.L - 1) / 2) - (_P.x0 + (_P.L - 1) / 2)
+    flip_val = (d_ave_x * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
+
+    derP = CderP(P=P, _P=_P, flip_val=flip_val,
+                 Pm=Pm, Pd=Pd, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)
     # div_f, nvars
 
     return derP
 
-''' Positional miss is positive: lower filters, no match: always inverse miss?
 
+''' Positional miss is positive: lower filters, no match: always inverse miss?
     skip to prediction limits: search for termination that defines and borrows from P,
     form complemented ) composite Ps: ave proximate projected match cross sign ) composition level:
-     
-    comp @ ave m: balance between current m and higher-composition m, same for projected m?
-    for hierarchical vs. lateral novelty expansion: higher-order projection?
-          
+
+    comp at ave m, but not specifically projected m?
+    or at ave m/d: current / higher order of composition?
     1Le: fixed binary Cf, 2Le: skip to individual integer Cf, variable pattern L vs. pixel res?
     edge is more concentrated than flat for stable shape -> stable contents patterns?
     differential feedback per target level: @filters, but not pattern
-    
+
     radial comp extension for co-internal blobs:
     != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
     == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
@@ -270,24 +280,25 @@ def comp_slice(P, _P):  # forms vertical derivatives of derP params, and conditi
     rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr?
 '''
 
-def derP_2_PP_(derP_, PP_):
+def derP_2_PP_(derP_, PP_, fflip):
     '''
     first row of derP_ has downconnect_cnt == 0, higher rows may also have them
     '''
     for derP in reversed(derP_):  # bottom-up to follow upconnects, derP is stored top-down
         if not derP.P.downconnect_cnt and not isinstance(derP.PP, CPP):  # root derP was not terminated in prior call
 
-            PP = CPP(derPP=derP, derP_= [derP])  # init
-            derP.PP = PP
+            PP = CPP(derPP=CderP())  # init
+            accum_PP(PP,derP)
 
             if derP._P.upconnect_:  # derP has upconnects
-                upconnect_2_PP_(derP, PP_)  # form PPs across _P upconnects
+                upconnect_2_PP_(derP, PP_, fflip)  # form PPs across _P upconnects
             else:
+                if derP.PP.flip_val and fflip:  # flip FPP
+                    flip_FPP(derP.PP)
                 PP_.append(derP.PP)
-    return PP_
 
 
-def upconnect_2_PP_(iderP, PP_):
+def upconnect_2_PP_(iderP, PP_, fflip):
     '''
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
@@ -295,43 +306,65 @@ def upconnect_2_PP_(iderP, PP_):
     for derP in iderP._P.upconnect_:  # potential upconnects from previous call
 
         if derP not in iderP.PP.derP_:  # derP should not in current iPP derP_ list, but this may occur after the PP merging
-            if (iderP.Pm > 0) == (derP.Pm > 0):  # no sign change, accumulate PP
 
-                if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):  # upconnect derP has different PP, merge them
+            if (derP.flip_val and iderP.flip_val) or ((iderP.Pm > 0) == (derP.Pm > 0)) : # same flip_val or m sign
+                if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):  # upconnect derP has different FPP/PP, merge them
                     merge_PP(iderP.PP, derP.PP, PP_)
-                else: # accumulate derP to current PP
+                else: # accumulate derP to current FPP/PP
                     accum_PP(iderP.PP, derP)
                     confirmed_upconnect_.append(derP)
 
-            elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has PP
+            elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
 
-                derP.PP = CPP(derPP=derP, derP_=[derP])  # init
+                PP = CPP(derPP=CderP())
+                accum_PP(PP,derP)
                 derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
 
             if derP._P.upconnect_:
-                upconnect_2_PP_(derP, PP_)  # recursive compare sign of next-layer upconnects
+                upconnect_2_PP_(derP, PP_, fflip)  # recursive compare sign of next-layer upconnects
 
             elif derP.PP is not iderP.PP and derP.P.downconnect_cnt == 0:
+                if derP.PP.flip_val and fflip:
+                    flip_FPP(derP.PP)
                 PP_.append(derP.PP)  # terminate PP (not iPP) at the sign change
 
     iderP._P.upconnect_ = confirmed_upconnect_
 
     if not iderP.P.downconnect_cnt:
+        if derP.PP.flip_val and fflip:
+            flip_FPP(derP.PP)
         PP_.append(iderP.PP)  # iPP termination after all upconnects are checked
+
+
+def flip_eval_blob(blob):
+
+    # L_bias (Lx / Ly) * G_bias (Gy / Gx), blob.box = [y0,yn,x0,xn], ddirection: , preferential comp over low G
+    horizontal_bias = (blob.box[3] - blob.box[2]) / (blob.box[1] - blob.box[0]) \
+                      * (abs(blob.Dy) / abs(blob.Dx))
+
+    if horizontal_bias > 1 and (blob.G * blob.Ma * horizontal_bias > flip_ave / 10):
+        blob.fflip = 1  # rotate 90 degrees for scanning in vertical direction
+        blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
+        blob.mask__ = np.rot90(blob.mask__)
+
+
+def accum_Dert(Dert: dict, **params) -> None:
+    Dert.update({param: Dert[param] + value for param, value in params.items()})
 
 
 def accum_PP(PP, derP):
 
-    PP.derPP.accumulate(Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
+    # accumulate derP params into PP
+    PP.derPP.accumulate(flip_val=derP.flip_val,Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
                           mDy=derP.mDy, dDy=derP.dDy, mDg=derP.mDg, dDg=derP.dDg, mMg=derP.mMg, dMg=derP.dMg)
-    PP.derP_.append(derP)
-    derP.PP = PP
+    PP.derP_.append(derP) # add derP to PP's derP list
+    derP.PP = PP          # update PP reference
 
 
 def merge_PP(_PP, PP, PP_):  # merge PP into _PP
 
     for derP in PP.derP_:
-        if derP not in _PP.derP_:  # there may be overlapping derPs between PPs
+        if derP not in _PP.derP_:
             _PP.derP_.append(derP)
             derP.PP = _PP  # update reference
 
@@ -342,3 +375,42 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
                                  dDg=derP.dDg, mMg=derP.mMg, dMg=derP.dMg)
     if PP in PP_:
         PP_.remove(PP)  # remove the merged PP
+
+
+def flip_FPP(FPP):
+    '''
+    flip derts of FPP and call again slice_blob to get PPs of FPP
+    '''
+
+    # get box from P and P
+    x0 = min(min([derP.P.x0 for derP in FPP.derP_]), min([derP._P.x0 for derP in FPP.derP_]))
+    xn = max(max([derP.P.x0+derP.P.L for derP in FPP.derP_]), max([derP._P.x0+derP._P.L for derP in FPP.derP_]))
+    y0 = min(min([derP.P.y for derP in FPP.derP_]), min([derP._P.y for derP in FPP.derP_]))
+    yn = max(max([derP.P.y for derP in FPP.derP_]), max([derP._P.y for derP in FPP.derP_]))
+
+    # init empty dert, 11 params in dert
+    dert__ = [np.zeros((yn-y0, xn-x0)) for _ in range(11)]
+    mask__ = np.ones((yn-y0, xn-x0)).astype('bool')
+
+    # fill empty dert with current FPP derts
+    for derP in FPP.derP_:
+        # _P
+        for _x, _dert in enumerate(derP._P.dert_):
+            for i, _param in enumerate(_dert):
+                dert__[i][derP._P.y-y0-1, derP._P.x0-x0+_x] = _param
+                mask__[derP._P.y-y0-1, derP._P.x0-x0+_x] = False
+        # P
+        for x, dert in enumerate(derP.P.dert_):
+            for j, param in enumerate(dert):
+                dert__[j][derP.P.y-y0-1, derP.P.x0-x0+x] = param
+                mask__[derP.P.y-y0-1, derP.P.x0-x0+x] = False
+
+    # rotate dert
+    dert__flip = [np.rot90(dert) for dert in dert__]
+    mask__flip = np.rot90(mask__)
+
+    FPP.dert__ = dert__flip
+    FPP.mask__ = mask__flip
+
+    # form PP with the flipped FPP
+    slice_blob(FPP, verbose=True)
