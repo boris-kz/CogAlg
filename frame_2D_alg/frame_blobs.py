@@ -30,7 +30,7 @@ import numpy as np
 
 from collections import deque
 # from frame_blobs_wrapper import wrapped_flood_fill
-from frame_blobs_imaging import visualize_blobs
+from draw_frame_blobs import visualize_blobs
 from utils import minmax
 from collections import namedtuple
 from class_cluster import ClusterStructure, NoneType

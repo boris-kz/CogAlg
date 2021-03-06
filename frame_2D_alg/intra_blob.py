@@ -25,7 +25,7 @@
 import numpy as np
 from frame_blobs import assign_adjacents, flood_fill, CBlob
 from intra_comp import comp_r, comp_a
-from frame_blobs_imaging import visualize_blobs
+from draw_frame_blobs import visualize_blobs
 from itertools import zip_longest
 from comp_slice_ import *
 from slice_utils import *

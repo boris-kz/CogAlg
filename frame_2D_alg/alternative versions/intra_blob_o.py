@@ -27,7 +27,7 @@
 from frame_blobs_defs import CDeepBlob
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
-from frame_blobs_imaging import visualize_blobs
+from draw_frame_blobs import visualize_blobs
 from itertools import zip_longest
 import numpy as np
 from P_blobs import cluster_derts_P

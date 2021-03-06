@@ -108,6 +108,7 @@ def slice_blob(blob, verbose=False):
 
     blob.P__ = P__
     blob.derP__ = derP__
+    derP_2_PP_(blob.derP__, blob.PP_)
 
 
 def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) vertical order

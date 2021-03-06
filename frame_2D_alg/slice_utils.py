@@ -19,10 +19,119 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # disable visible figure during the processing to speed up the process
-from slice_blob import *
+from comp_slice_ import *
 
 aveG = 50
 flip_ave = 2000
+
+
+def draw_PP_(blob):
+    colour_list = []  # list of colours:
+    colour_list.append([192, 192, 192])  # silver
+    colour_list.append([200, 130, 1])  # blue
+    colour_list.append([75, 25, 230])  # red
+    colour_list.append([25, 255, 255])  # yellow
+    colour_list.append([75, 180, 60])  # green
+    colour_list.append([212, 190, 250])  # pink
+    colour_list.append([240, 250, 70])  # cyan
+    colour_list.append([48, 130, 245])  # orange
+    colour_list.append([180, 30, 145])  # purple
+    colour_list.append([40, 110, 175])  # brown
+
+    img_dir_path = "./images/PPs/"
+
+    # get box
+    if blob.fflip:
+        x0 = blob.box[0]
+        xn = blob.box[1]
+        y0 = blob.box[2]
+        yn = blob.box[3]
+    else:
+        x0 = blob.box[2]
+        xn = blob.box[3]
+        y0 = blob.box[0]
+        yn = blob.box[1]
+
+    # init
+    img_colour_P = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
+    img_separator = (np.ones((yn - y0, 1, 3)).astype('uint8')) * 255
+    img_colour_PP = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
+    img_colour_PP_Ps = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
+    img_colour_FPP = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
+    img_colour_FPP_Ps = np.zeros((yn - y0, xn - x0, 3)).astype('uint8')
+
+    # colour index
+    c_ind_P = 0  # P
+    c_ind_PP = 0  # PP
+    c_ind_PP_Ps = 0  # PP's Ps
+    c_ind_FPP_section = 0  # FPP
+    c_ind_FPP_section_Ps = 0  # FPP's Ps
+
+    # draw Ps
+    for P in blob.P__:
+        for x, _ in enumerate(P.dert_):
+            img_colour_P[P.y, P.x0 + x] = colour_list[c_ind_P % 10]
+        c_ind_P += 1
+
+    for blob_PP in blob.PP_:
+
+        # draw PPs
+        for derP in blob_PP.derP_:
+            if derP.flip_val <= 0:
+                # _P
+                for _x, _dert in enumerate(derP._P.dert_):
+                    img_colour_PP[derP._P.y, derP._P.x0 + _x, :] = colour_list[c_ind_PP % 10]
+                    img_colour_PP_Ps[derP._P.y, derP._P.x0 + _x, :] = colour_list[c_ind_PP_Ps % 10]
+                c_ind_PP_Ps += 1
+                # P
+                for x, dert in enumerate(derP.P.dert_):
+                    img_colour_PP[derP.P.y, derP.P.x0 + x, :] = colour_list[c_ind_PP % 10]
+                    img_colour_PP_Ps[derP.P.y, derP.P.x0 + x, :] = colour_list[c_ind_PP_Ps % 10]
+                c_ind_PP_Ps += 1
+
+        c_ind_PP += 1  # increase P index
+
+        # draw FPPs
+        if blob_PP.flip_val > 0:
+
+            # get box
+            x0FPP = min([P.x0 for P in blob_PP.P__])
+            xnFPP = max([P.x0 + P.L for P in blob_PP.P__])
+            y0FPP = min([P.y for P in blob_PP.P__])
+            ynFPP = max([P.y for P in blob_PP.P__]) + 1  # +1 because yn is not inclusive, else we will lost last y value
+
+            # init smaller image contains the flipped section only
+            img_colour_FPP_section = np.zeros((ynFPP - y0FPP, xnFPP - x0FPP, 3))
+            img_colour_FPP_section_Ps = np.zeros((ynFPP - y0FPP, xnFPP - x0FPP, 3))
+
+            # fill colour
+            for P in blob_PP.P__:
+                for x, _ in enumerate(P.dert_):
+                    img_colour_FPP_section[P.y, P.x0 + x] = colour_list[c_ind_FPP_section % 10]
+                    img_colour_FPP_section_Ps[P.y, P.x0 + x] = colour_list[c_ind_FPP_section_Ps % 10]
+                c_ind_FPP_section_Ps += 1
+            c_ind_FPP_section += 1
+
+            # flip back
+            img_colour_FPP_section = np.rot90(img_colour_FPP_section, k=3)
+            img_colour_FPP_section_Ps = np.rot90(img_colour_FPP_section_Ps, k=3)
+
+            # fill back the bigger image
+            img_colour_FPP[blob_PP.box[0]:blob_PP.box[1], blob_PP.box[2]:blob_PP.box[3]] = img_colour_FPP_section
+            img_colour_FPP_Ps[blob_PP.box[0]:blob_PP.box[1], blob_PP.box[2]:blob_PP.box[3]] = img_colour_FPP_section_Ps
+
+        # combine images with Ps, PPs and FPPs into 1 single image
+        img_combined = np.concatenate((img_colour_P, img_separator), axis=1)
+        img_combined = np.concatenate((img_combined, img_colour_PP), axis=1)
+        img_combined = np.concatenate((img_combined, img_separator), axis=1)
+        img_combined = np.concatenate((img_combined, img_colour_FPP), axis=1)
+        img_combined = np.concatenate((img_combined, img_separator), axis=1)
+        img_combined = np.concatenate((img_combined, img_colour_PP_Ps), axis=1)
+        img_combined = np.concatenate((img_combined, img_separator), axis=1)
+        img_combined = np.concatenate((img_combined, img_colour_FPP_Ps), axis=1)
+
+        # save image to disk
+        cv2.imwrite(img_dir_path + 'img_b' + str(blob.id) + '.bmp', img_combined)
 
 
 def rescan(blob, verbose=False):  # temporary code container, this should probably be in comp_slice
