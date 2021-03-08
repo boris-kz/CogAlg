@@ -1,19 +1,3 @@
-"""
-usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
-                      [-z ZOOM]
-optional arguments:
-  -h, --help            show this help message and exit
-  -i IMAGE, --image IMAGE
-                        path to image file
-  -v VERBOSE, --verbose VERBOSE
-                        print details, useful for debugging
-  -n INTRA, --intra INTRA
-                        run intra_blobs after frame_blobs
-  -r RENDER, --render RENDER
-                        render the process
-  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
-"""
-
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
@@ -133,20 +117,120 @@ def draw_PP_(blob):
         # save image to disk
         cv2.imwrite(img_dir_path + 'img_b' + str(blob.id) + '.bmp', img_combined)
 
+ave_Dx = 10
+ave_PP_Dx = 100
 
-def rescan(blob, verbose=False):  # temporary code container, this should probably be in comp_slice
 
-    sstack_ = form_sstack_(blob.stack_)  # cluster horizontally-oriented stacks into super-stacks
-    blob.stack_ = flip_sstack_(sstack_, blob.dert__, verbose)  # vertical-first re-scanning of selected sstacks
+def form_PP_dx_(P__):
+    '''
+    Cross-comp of dx (incremental derivation) within Pd s of PP_dx, defined by > ave_Dx
+    '''
+    for P in P__:  # start from root P
 
-    if verbose: draw_sstack_(blob.fflip, sstack_)  # draw stacks, sstacks and # draw stacks, sstacks and the rotated sstacks
+        PPDx = 0    # comp_dx criterion per PP
+        PPDx_ = []  # list of criteria
+        P_dx_ = []  # list of selected Ps
+        PP_dx_ = [] # list of PPs
 
-    for stack in blob.stack_:  # convert selected sstacks or stacks into gstacks
-        if stack.stack_:
-            form_gPPy_(stack.stack_)
-        elif stack.G > aveG:
-            stack.f_gstack = 1  # flag: gPPy_ vs. Py_ in stack
-            comp_g(stack.Py_)
+        if P.downconnect_cnt == 0:
+            if P.Dx > ave_Dx:
+                PPDx += P.Dx
+                P_dx_.append(P)
+
+            if P.upconnect_:  # recursively process upconnects
+                comp_PP_dx(P.upconnect_, PPDx, PPDx_, P_dx_, PP_dx_)
+
+                PPDx_.append(PPDx)
+                PP_dx_.append(P_dx_)  # after scanning all upconnects
+
+            elif PPDx != 0:  # terminate PP_Dx and Dx if Dx != 0, else nothing to terminate
+                PPDx_.append(PPDx)
+                PP_dx_.append(P_dx_)
+
+    # comp_dx
+    for i, (PPDx, P_dx_) in enumerate(zip(PPDx_, PP_dx_)):
+        if PPDx > ave_PP_Dx:
+            Pdx_, Ddx, Mdx = comp_dx_(P_dx_)
+
+    # we need to splice Pdx_ back into original Pd_, replacing Ps that were included into PP_dx s?
+
+
+def comp_PP_dx(derP_, iPPDx, iPPDx_, P_dx_, PP_dx_):
+    '''
+    below is not edited, please check
+    '''
+
+    Dx = iDx
+    PDx_ = iPDx_
+
+    for derP in derP_:
+        P = derP._P
+
+        if P.Dx > ave_Dx:  # accumulate dx and Ps
+            Dx += P.Dx
+            PDx_.append(P)
+
+        else:  # terminate and reset Pdx and Dx
+            PP_Dx_.append(PDx_)
+            Dx_.append(Dx)
+            Dx = 0
+            PDx_ = []
+
+        if P.upconnect_:  # recursively process upconnects
+            comp_PP_dx(P.upconnect_, Dx, PDx_, PP_Dx_, Dx_)
+
+        elif Dx != 0 and id(PDx_) != id(iPDx_):  # terminate newly created PDx and Dx in current function call after processed their upconnects
+            PP_Dx_.append(PDx_)
+            Dx_.append(Dx)
+
+
+def comp_dx_(P_):  # cross-comp of dx s in P.dert_
+
+    dxP_ = []
+    dxP_Ddx = 0
+    dxP_Mdx = 0
+
+    for P in P_:
+        Ddx = 0
+        Mdx = 0
+
+        dxdert_ = []
+        _dx = P.dert_[0][2]  # first dx
+        for dert in P.dert_[1:]:
+            dx = dert[2]
+            ddx = dx - _dx
+            mdx = min(dx, _dx)
+            dxdert_.append((ddx, mdx))  # no dx: already in dert_
+            Ddx += ddx  # P-wide cross-sign, P.L is too short to form sub_Ps
+            Mdx += mdx
+            _dx = dx
+
+        P.dxdert_ = dxdert_
+        P.Ddx = Ddx
+        P.Mdx = Mdx
+
+        dxP_.append(P)
+        dxP_Ddx += Ddx
+        dxP_Mdx += Mdx
+
+    return dxP_, dxP_Ddx, dxP_Mdx
+
+
+"""
+usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                      [-z ZOOM]
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to image file
+  -v VERBOSE, --verbose VERBOSE
+                        print details, useful for debugging
+  -n INTRA, --intra INTRA
+                        run intra_blobs after frame_blobs
+  -r RENDER, --render RENDER
+                        render the process
+  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+"""
 
 
 def form_sstack_(stack_):
@@ -264,111 +348,6 @@ def flip_sstack_(sstack_, dert__, verbose):
             out_stack_ += [sstack.stack_]  # non-flipped sstack is deconstructed, stack.stack_ s are still empty
 
     return out_stack_
-
-
-def form_gPPy_(stack_):  # convert selected stacks into gstacks, should be run over the whole stack_
-
-    ave_PP = 100  # min summed value of gdert params
-
-    for stack in stack_:
-        if stack.G > aveG:
-            stack_Dg = stack_Mg = 0
-            gPPy_ = []  # may replace stack.Py_
-            P = stack.Py_[0]
-            # initialize PP params:
-            Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
-            PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
-
-            _PP_sign = PP_G > aveG and P.L > 1
-
-            for P in stack.Py_[1:]:
-                PP_sign = P.G > aveG and P.L > 1  # PP sign
-                if _PP_sign == PP_sign:  # accum PP:
-                    Py_.append(P)
-                    PP_I += P.I
-                    PP_Dy += P.Dy
-                    PP_Dx += P.Dx
-                    PP_G += P.G
-                    PP_M += P.M
-                    PP_Dyy += P.Dyy
-                    PP_Dyx += P.Dyx
-                    PP_Dxy += P.Dxy
-                    PP_Dxx += P.Dxx
-                    PP_Ga += P.Ga
-                    PP_Ma += P.Ma
-                    PP_A += P.L
-                    PP_Ly += 1
-
-                else:  # sign change, terminate PP:
-                    if PP_G > aveG:
-                        Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P in Py_
-                        stack_Dg += abs(Dg)  # in all high-G Ps, regardless of direction
-                        stack_Mg += Mg
-                    gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
-                                        Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
-                    # initialize PP params:
-                    Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy
-                    PP_Dxx = P.Dxx; PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
-
-                _PP_sign = PP_sign
-
-            if PP_G > aveG:
-                Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P
-                stack_Dg += abs(Dg)  # stack params?
-                stack_Mg += Mg
-            if stack_Dg + stack_Mg < ave_PP:  # separate comp_P values, revert to Py_ if below-cost
-                # terminate last PP
-                gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
-                                    Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
-                stack.Py_ = gPPy_
-                stack.f_gstack = 1  # flag gPPy_ vs. Py_ in stack
-
-
-def comp_g(Py_):  # cross-comp of gs in P.dert_, in gPP.Py_
-    gP_ = []
-    gP_Dg = gP_Mg = 0
-
-    for P in Py_:
-        Dg=Mg=0
-        gdert_ = []
-        _g = P.dert_[0][3]  # first g
-        for dert in P.dert_[1:]:
-            g = dert[3]
-            dg = g - _g
-            mg = min(g, _g)
-            gdert_.append((dg, mg))  # no g: already in dert_
-            Dg+=dg  # P-wide cross-sign, P.L is too short to form sub_Ps
-            Mg+=mg
-            _g = g
-        P.gdert_ = gdert_
-        P.Dg = Dg
-        P.Mg = Mg
-        gP_.append(P)
-        gP_Dg += Dg
-        gP_Mg += Mg  # positive, for stack evaluation to set fPP
-
-    return gP_, gP_Dg, gP_Mg
-
-
-def form_gP_(gdert_):  # probably not needed.
-    gP_ = []
-    _g, _Dg, _Mg = gdert_[0]  # first gdert
-    _s = _Mg > 0  # initial sign
-
-    for (g, Dg, Mg) in gdert_[1:]:
-        s = Mg > 0  # current sign
-        if _s != s:  # sign change
-            gP_.append([_s, _Dg, _Mg])  # pack gP
-            # update params
-            _s = s
-            _Dg = Dg
-            _Mg = Mg
-        else:  # accumulate params
-            _Dg += Dg  # should we abs the value here?
-            _Mg += Mg
-
-    gP_.append([_s, _Dg, _Mg])  # pack last gP
-    return gP_
 
 
 def draw_stacks(stack_):
