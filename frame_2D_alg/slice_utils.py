@@ -14,7 +14,7 @@ ave_Dx = 10
 ave_PP_Dx = 100
 
 
-def draw_PP_(blob, fPd):
+def draw_PP_(blob):
     colour_list = []  # list of colours:
     colour_list.append([192, 192, 192])  # silver
     colour_list.append([200, 130, 1])  # blue
@@ -57,25 +57,15 @@ def draw_PP_(blob, fPd):
     c_ind_FPP_section_Ps = 0  # FPP's Ps
 
     # draw Ps
-    if fPd:
-        P__ = blob.Pd__
-        PP_ = blob.PPd_
-    else:
-        P__ = blob.Pm__
-        PP_ = blob.PPm_
-
-    for P in P__:
+    for P in blob.P__:
         for x, _ in enumerate(P.dert_):
             img_colour_P[P.y, P.x0 + x] = colour_list[c_ind_P % 10]
         c_ind_P += 1
 
-    for blob_PP in PP_: # draw PP
-
-        if fPd: derP__ = blob_PP.derPd__
-        else: derP__ = blob_PP.derPm__
+    for blob_PP in blob.PP_: # draw PP
 
         # draw PPs
-        for derP in derP__:
+        for derP in blob_PP.derP__:
             if derP.flip_val <= 0:
                 # _P
                 for _x, _dert in enumerate(derP._P.dert_):
@@ -93,22 +83,18 @@ def draw_PP_(blob, fPd):
         # draw FPPs
         if blob_PP.derPP.flip_val > flip_ave_FPP :
 
-            if fPd: P__ = blob_PP.fPd__
-            else: P__ = blob_PP.fPm__
-
-
             # get box
-            x0FPP = min([P.x0 for P in P__])
-            xnFPP = max([P.x0 + P.L for P in P__])
-            y0FPP = min([P.y for P in P__])
-            ynFPP = max([P.y for P in P__]) + 1  # +1 because yn is not inclusive, else we will lost last y value
+            x0FPP = min([P.x0 for P in blob_PP.Pf__])
+            xnFPP = max([P.x0 + P.L for P in blob_PP.Pf__])
+            y0FPP = min([P.y for P in blob_PP.Pf__])
+            ynFPP = max([P.y for P in blob_PP.Pf__]) + 1  # +1 because yn is not inclusive, else we will lost last y value
 
             # init smaller image contains the flipped section only
             img_colour_FPP_section = np.zeros((ynFPP - y0FPP, xnFPP - x0FPP, 3))
             img_colour_FPP_section_Ps = np.zeros((ynFPP - y0FPP, xnFPP - x0FPP, 3))
 
             # fill colour
-            for P in P__:
+            for P in blob_PP.Pf__:
                 for x, _ in enumerate(P.dert_):
                     img_colour_FPP_section[P.y, P.x0 + x] = colour_list[c_ind_FPP_section % 10]
                     img_colour_FPP_section_Ps[P.y, P.x0 + x] = colour_list[c_ind_FPP_section_Ps % 10]
@@ -134,14 +120,12 @@ def draw_PP_(blob, fPd):
         img_combined = np.concatenate((img_combined, img_colour_FPP_Ps), axis=1)
 
     # save image to disk
-    if fPd:
-        cv2.imwrite(img_dir_path + 'img_Pd_b' + str(blob.id) + '.bmp', img_combined)
-    else:
-        cv2.imwrite(img_dir_path + 'img_Pm_b' + str(blob.id) + '.bmp', img_combined)
+    cv2.imwrite(img_dir_path + 'img_b' + str(blob.id) + '.bmp', img_combined)
 
 
 def form_PP_dx_(P__):
     '''
+    Obsolete
     Cross-comp of dx (incremental derivation) within Pd s of PP_dx, defined by > ave_Dx
     '''
 
@@ -173,14 +157,14 @@ def form_PP_dx_(P__):
             comp_dx_(P_dx_)  # no need to return?
 
 
-def comp_PP_dx(derP_, iPPDx, iPPDx_, P_dx_, PP_dx_):
+def comp_PP_dx(P_, iPPDx, iPPDx_, P_dx_, PP_dx_):
     '''
+    Obsolete
     '''
     PPDx = iPPDx
     PPDx_ = iPPDx_
 
-    for derP in derP_:
-        P = derP._P # get upconnect _P
+    for P in P_:
 
         if P.Dx > ave_Dx:  # accumulate dx and Ps
             PPDx += P.Dx
@@ -226,7 +210,7 @@ def comp_dx_(P_):  # cross-comp of dx s in P.dert_
         dxP_Ddx += Ddx
         dxP_Mdx += Mdx
 
-    return dxP_, dxP_Ddx, dxP_Mdx  # no need to return?
+    return dxP_, dxP_Ddx, dxP_Mdx  # no need to return? # since Ddx and Mdx are packed into P, how about dxP_Ddx, dxP_Mdx ? Where should we pack this?
 
 
 """
@@ -275,6 +259,7 @@ def form_sstack_recursive(_stack, sstack, sstack_, _f_up_reverse):
                         Dyy=_stack.Dyy, Dyx=_stack.Dyx, Dxy=_stack.Dxy, Dxx=_stack.Dxx,
                         Ga=_stack.Ga, Ma=_stack.Ma, A=_stack.A, Ly=_stack.Ly, y0=_stack.y0,
                         stack_=[_stack], sign=_stack.sign)
+
         id_in_layer = sstack.id
 
     for stack in _stack.upconnect_:  # upward access only
@@ -401,6 +386,7 @@ def draw_stacks(stack_):
 
     return img_colour
 
+
 def check_stacks_presence(stack_, mask__, f_plot=0):
     '''
     visualize stack_ and mask__ to ensure that they cover the same area
@@ -455,99 +441,21 @@ def draw_sstack_(blob_fflip, sstack_):
     x0 = min(x0_)
     xn = max(xn_)
     y0 = min(y0_)
-    yn = max(yn_)
-
-    img_index_stacks = np.zeros((yn - y0, xn - x0))
-    img_index_sstacks = np.zeros((yn - y0, xn - x0))
-    img_index_sstacks_flipped = np.zeros((yn - y0, xn - x0)) # show flipped stacks of sstack only
-    img_index_sstacks_mix = np.zeros((yn - y0, xn - x0)) # shows flipped and non flipped stacks
-
-    stack_index = 1
-    sstack_index = 1
-    sstack_flipped_index = 1
-    sstack_mix_index = 1
-
-    # insert stack index and sstack index to X stacks
-    for sstack in sstack_:
-        for stack in sstack.Py_:
-            for y, P in enumerate(stack.Py_):
-                for x, dert in enumerate(P.dert_):
-                    img_index_stacks[y + (stack.y0 - y0), x + (P.x0 - x0)] = stack_index
-                    img_index_sstacks[y + (stack.y0 - y0), x + (P.x0 - x0)] = sstack_index
-            stack_index += 1  # for next stack
-        sstack_index += 1  # for next sstack
-
-    # insert stack index and sstack index to flipped X stacks
-    for sstack in sstack_:
-        if sstack.stack_:  # sstack is flipped
-            sx0_, sxn_, sy0_, syn_ = [], [], [], []
-            for stack in sstack.Py_:
-                sx0_.append(min([Py.x0 for Py in stack.Py_]))
-                sxn_.append(max([Py.x0 + Py.L for Py in stack.Py_]))
-                sy0_.append(stack.y0)
-                syn_.append(stack.y0 + stack.Ly)
-            # sstack box:
-            # sx0 = min(sx0_)
-            sxn = max(sxn_)
-            sy0 = min(sy0_)
-            # syn = max(syn_)
-
-            for stack in sstack.stack_:
-                for y, P in enumerate(stack.Py_):
-                    for x, dert in enumerate(P.dert_):
-                        img_index_sstacks_flipped[sy0+(x + (P.x0 - x0)),sxn-1-(y + (stack.y0 - y0))] = sstack_flipped_index
-                        img_index_sstacks_mix[sy0+(x + (P.x0 - x0)),sxn-1-(y + (stack.y0 - y0))] = sstack_mix_index
-                sstack_flipped_index += 1  # for next stack of flipped sstack
-                sstack_mix_index += 1  # for next stack of flipped sstack
-
-        else:  # sstack is not flipped
-            for stack in sstack.Py_:
-                for y, P in enumerate(stack.Py_):
-                    for x, dert in enumerate(P.dert_):
-                        img_index_sstacks_mix[y + (stack.y0 - y0),x + (P.x0 - x0)] = sstack_mix_index
-                sstack_mix_index += 1  # for next stack of sstack
-
-    # initialize colour image
-    img_colour_stacks = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
-    img_colour_sstacks = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
-    img_colour_sstacks_flipped = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
-    img_colour_sstacks_mix = np.zeros((yn-y0, xn-x0, 3)).astype('uint8')
-
-    # draw stacks and sstacks
-    for i in range(1, stack_index):
-        colour_index = i % 10
-        img_colour_stacks[np.where(img_index_stacks == i)] = colour_list[colour_index]
-    for i in range(1, sstack_index):
-        colour_index = i % 10
-        img_colour_sstacks[np.where(img_index_sstacks == i)] = colour_list[colour_index]
-    for i in range(1, sstack_flipped_index):
-        colour_index = i % 10
-        img_colour_sstacks_flipped[np.where(img_index_sstacks_flipped == i)] = colour_list[colour_index]
-    for i in range(1, sstack_mix_index):
-        colour_index = i % 10
-        img_colour_sstacks_mix[np.where(img_index_sstacks_mix == i)] = colour_list[colour_index]
-
-    # draw image to figure and save it to disk
-    plt.figure(1)
-
-    plt.subplot(1,4,1)
-    plt.imshow(img_colour_sstacks)
-    if blob_fflip: plt.title('sstacks, \nY blob')
-    else: plt.title('sstacks, \nX blob')
-
-    plt.subplot(1,4,2)
-    plt.imshow(np.uint8(img_colour_stacks))
-    plt.title('X stacks')
-
-    if any([sstack.stack_ for sstack in sstack_]):  # for sstacks with not empty stack_, show flipped stacks
-
-        plt.subplot(1,4,3)
-        plt.imshow(img_colour_sstacks_flipped)
-        plt.title('Y stacks (flipped)')
-        plt.subplot(1,4,4)
-        plt.imshow(img_colour_sstacks_mix)
-        plt.title('XY stacks')
 
 
-    plt.savefig('./images/slice_blob/sstack_'+str(id(sstack_))+'.png')
-    plt.close()
+"""
+usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                      [-z ZOOM]
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to image file
+  -v VERBOSE, --verbose VERBOSE
+                        print details, useful for debugging
+  -n INTRA, --intra INTRA
+                        run intra_blobs after frame_blobs
+  -r RENDER, --render RENDER
+                        render the process
+  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+"""
+

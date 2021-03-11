@@ -123,8 +123,6 @@ def slice_blob(blob, fPd, verbose=False):
     Slice_blob converts selected smooth-edge blobs (high G, low Ga) into sliced blobs,
     adding horizontal blob slices: Ps or 1D patterns
     '''
-
-
     fflip = 0
     if not isinstance(blob, CPP):  # input is blob
         flip_eval_blob(blob)
