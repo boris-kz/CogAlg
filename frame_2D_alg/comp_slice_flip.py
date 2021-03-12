@@ -42,6 +42,7 @@ class CP(ClusterStructure):
     upconnect_ = list
     downconnect_cnt = int
     # Dx
+    Pm = object # reference of Pm for Pd s
     Pd_ = list  # exist in Pm s only
     dxdert_ = list
     Ddx = int
@@ -49,8 +50,8 @@ class CP(ClusterStructure):
 
 class CderP(ClusterStructure):
     ## derP
-    Pm = int
-    Pd = int
+    mP = int
+    dP = int
     mx = int
     dx = int
     mL = int
@@ -59,10 +60,6 @@ class CderP(ClusterStructure):
     dDx = int
     mDy = int
     dDy = int
-    mDg = int
-    dDg = int
-    mMg = int
-    dMg = int
     P = object  # lower comparand
     _P = object  # higher comparand
     PP = object  # contains this derP, could be FPP depends on flip_val
@@ -91,7 +88,6 @@ class CPP(ClusterStructure):
     derPf__ = list
     PPf_ = list
     Pf__ = list
-
     # comp_dx params
     Ddx = int
     Mdx = int
@@ -103,7 +99,6 @@ class CPP(ClusterStructure):
 # leading 'f' denotes flag
 '''
 workflow, needs an update:
-
 intra_blob -> slice_blob(blob) -> derP_ -> PP,
 if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FPP) -> pack PP in FPP.PP_
 else       (PP is PP):  pack PP in blob.PP_
@@ -124,6 +119,7 @@ def slice_blob(blob, verbose=False):
     height, width = dert__[0].shape
     if verbose: print("Converting to image...")
     P__ = []
+    Pd__ = []
     derP__ = []
 
     zip_dert__ = zip(*dert__)
@@ -135,16 +131,16 @@ def slice_blob(blob, verbose=False):
 
         P_ = form_P_(list(zip(*dert_)), mask__[y], y)  # horizontal clustering - lower row
         derP_ = scan_P_(P_, _P_)  # test x overlap between Ps, call comp_slice
-        # Pd operations nested in P, make conditional on presence of connects?
-        form_Pd_(P_)  # form Pds across Ps
+
+        Pd_ = form_Pd_(P_); Pd__+= Pd_  # form Pds across Ps
         scan_Pd_(P_, _P_)  # add upconnect_ in Pds
 
         derP__ += derP_  # frame of derPs
         P__ += P_
         _P_ = P_  # set current lower row P_ as next upper row _P_
 
-    # this should be part of comp_slice(Pd)?
-    # form_PP_dx_(P__) # cross comp Pd's Dx
+    # this should be done in form_Pd_ per Pd, we don't need to form PP_dx_?
+    # form_PP_dx_(Pd__) # cross comp Pd's Dx
     form_PP_shell(blob, derP__, P__, fflip)  # form PPs in blob or in FPP
 
     # draw PPs and FPPs
@@ -220,7 +216,6 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
             if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0): # all Ps here are positive
 
                 fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
-
                 if not fcomp:
                     derP = comp_slice(_P, P)  # form vertical and directional derivatives
                     derP_.append(derP)
@@ -235,8 +230,9 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
 
 def form_Pd_(P_):
     '''
-    form Pd across P's derts using Dx sign
+    form Pd s across P's derts using Dx sign
     '''
+    Pd__= []
     for iP in P_:
         Pd_ = []
 
@@ -245,7 +241,11 @@ def form_Pd_(P_):
         I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = _dert; L = 1; x0 = iP.x0  # initialize P params with first dert
         _sign = _dert[2] > 0
         x = 1  # relative x within P
-
+        '''
+        add this here, change for single P:
+        if (P.downconnect_cnt + [1 for P in P_ if P.upconnect_]):  # P has at least one connect
+        the rest is conditional:
+        '''
         for dert in iP.dert_[1:]:
             sign = dert[2] > 0
             if sign == _sign: # same Dx sign
@@ -264,7 +264,9 @@ def form_Pd_(P_):
                 dert_.append(dert)
 
             else: # sign change, terminate P
-                P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign)
+                P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign, Pm=iP)
+                if Dx > ave_Dx:
+                    comp_dx(P)
                 Pd_.append(P)
                 # reinitialize param
                 I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert; x0 = iP.x0+x ;L = 1 ; dert_ = [dert]
@@ -272,11 +274,14 @@ def form_Pd_(P_):
             _sign = sign
             x += 1
         # terminate last P
-        P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign)
+        P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign, Pm=iP)
         Pd_.append(P)
 
         # update Pd reference in P
         iP.Pd_ = Pd_
+        Pd__ += Pd_
+
+    return Pd__
 
 
 def scan_Pd_(P_, _P_):  # test for x overlap between Pds
@@ -286,12 +291,10 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
             for Pd in P.Pd_: # lower row Pds
                 for _Pd in _P.Pd_: # upper row Pds
-
                     # test for same sign & x overlap between Pd and _Pd in 8 directions
                     if (Pd.x0 - 1 < (_Pd.x0 + _Pd.L) and (Pd.x0 + Pd.L) + 1 > _Pd.x0) and (Pd.sign == _Pd.sign) : # all Ps here are positive
 
                         fcomp = [1 for derPd in Pd.upconnect_ if Pd is derPd.P]  # upconnect could be derP or dirP
-
                         if not fcomp:
                             derPd = comp_slice(_Pd, Pd) # the operations is the same between Pd and Pm in comp_slice?
                             Pd.upconnect_.append(derPd)
@@ -303,10 +306,10 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
-    s, x0, G, M, Dx, Dy, L, Dg, Mg = P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L, P.Dg, P.Mg
+    s, x0, G, M, Dx, Dy, L= P.sign, P.x0, P.G, P.M, P.Dx, P.Dy, P.L
     # params per comp branch, add angle params, ext: X, new: L,
     # no input I comp in top dert?
-    _s, _x0, _G, _M, _Dx, _Dy, _L, _Dg, _Mg = _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L, _P.Dg, _P.Mg
+    _s, _x0, _G, _M, _Dx, _Dy, _L= _P.sign, _P.x0, _P.G, _P.M, _P.Dx, _P.Dy, _P.L
     '''
     redefine Ps by dx in dert_, rescan dert by input P d_ave_x: skip if not in blob?
     '''
@@ -339,34 +342,28 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     dDx = abs(Dx) - abs(_Dx); mDx = min(abs(Dx), abs(_Dx))  # same-sign Dx in vxP
     dDy = Dy - _Dy; mDy = min(Dy, _Dy)  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
 
-    # gdert param comparison, if not fPP, values would be 0
-    dMg = Mg - _Mg; mMg = min(Mg, _Mg)
-    dDg = Dg - _Dg; mDg = min(Dg, _Dg)
-
-    dP = ddX + dL + dM + dDx + dDy + dMg + dDg  # -> directional dPP, equal-weight params, no rdn?
+    # replace dDg and mDg with Ddx and Mdx and make it conditional based on existance of Pd?
+    dP = ddX + dL + dM + dDx + dDy    # -> directional dPP, equal-weight params, no rdn?
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?  G = hypot(Dy, Dx) for 2D structures comp?
-    mP = mX + mL + mM + mDx + mDy + mMg + mDg # -> complementary vPP, rdn *= Pd | Pm rolp?
+    mP = mX + mL + mM + mDx + mDy   # -> complementary vPP, rdn *= Pd | Pm rolp?
 
     d_ave_x = (P.x0 + (P.L - 1) / 2) - (_P.x0 + (_P.L - 1) / 2)
     flip_val = (d_ave_x * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
 
     derP = CderP(P=P, _P=_P, flip_val=flip_val,
-                 mP=mP, dP=dP, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy, mDg=mDg, dDg=dDg, mMg=mMg, dMg=dMg)
+                 mP=mP, dP=dP, mX=mX, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
     # div_f, nvars
 
     return derP
 
 
 ''' Positional miss is positive: lower filters, no match: always inverse miss?
-
     skip to prediction limits: search for termination that defines and borrows from P,
     form complemented ) composite Ps: ave proximate projected match cross sign ) composition level:
     comp at ave m, but not specifically projected m?
-
     1Le: fixed binary Cf, 2Le: skip to individual integer Cf, variable pattern L vs. pixel res?
     edge is more concentrated than flat for stable shape -> stable contents patterns?
     differential feedback per target level: @filters, but not pattern
-
     radial comp extension for co-internal blobs:
     != sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
     == sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
@@ -421,7 +418,7 @@ def upconnect_2_PP_(iderP, PP_, fflip):
                     confirmed_upconnect_.append(derP)
 
             # same sign and not FPP
-            elif ((iderP.Pm > 0) == (derP.Pm > 0)) and not (iderP.flip_val>0) and not (derP.flip_val>0):
+            elif ((iderP.mP > 0) == (derP.mP > 0)) and not (iderP.flip_val>0) and not (derP.flip_val>0):
                 # upconnect derP has different PP
                 if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
                     merge_PP(iderP.PP, derP.PP, PP_)
@@ -471,8 +468,8 @@ def accum_Dert(Dert: dict, **params) -> None:
 def accum_PP(PP, derP):
 
     # accumulate derP params into PP
-    PP.derPP.accumulate(flip_val=derP.flip_val, Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                        mDy=derP.mDy, dDy=derP.dDy, mDg=derP.mDg, dDg=derP.dDg, mMg=derP.mMg, dMg=derP.dMg)
+    PP.derPP.accumulate(flip_val=derP.flip_val, mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
+                        mDy=derP.mDy, dDy=derP.dDy)
     PP.derP__.append(derP)
     derP.PP = PP  # update reference
 
@@ -487,10 +484,9 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
             derP.PP = _PP  # update reference
 
             # accumulate if PP' derP not in _PP
-            _PP.derPP.accumulate(flip_val=derP.flip_val, Pm=derP.Pm, Pd=derP.Pd, mx=derP.mx, dx=derP.dx,
+            _PP.derPP.accumulate(flip_val=derP.flip_val, mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx,
                                  mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                                 mDy=derP.mDy, dDy=derP.dDy, mDg=derP.mDg,
-                                 dDg=derP.dDg, mMg=derP.mMg, dMg=derP.dMg)
+                                 mDy=derP.mDy, dDy=derP.dDy)
 
     if PP in PP_:
         PP_.remove(PP)  # remove merged PP
@@ -532,3 +528,24 @@ def flip_FPP(FPP):
 
     # form PP with the flipped FPP
     slice_blob(FPP, verbose=True)
+
+def comp_dx(P):  # cross-comp of dx s in P.dert_
+
+    Ddx = 0
+    Mdx = 0
+    dxdert_ = []
+    _dx = P.dert_[0][2]  # first dx
+    for dert in P.dert_[1:]:
+        dx = dert[2]
+        ddx = dx - _dx
+        mdx = min(dx, _dx)
+        dxdert_.append((ddx, mdx))  # no dx: already in dert_
+        Ddx += ddx  # P-wide cross-sign, P.L is too short to form sub_Ps
+        Mdx += mdx
+        _dx = dx
+
+    P.dxdert_ = dxdert_
+    P.Ddx = Ddx
+    P.Mdx = Mdx
+
+
