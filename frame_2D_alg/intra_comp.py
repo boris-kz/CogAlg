@@ -130,31 +130,34 @@ def comp_a(dert__, ave, mask__=None):  # cross-comp of angle in 2x2 kernels
     i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
 
     a__ = [dy__, dx__] / (g__ + ave + 0.001)  # + ave to restore abs g, + .001 to avoid / 0
-    # use rot_gy__ and rot_gx__
+    # g and m are rotation invariant, but da is more accurate with rot_a__:
 
-    # each shifted a in 2x2 kernel, rotated 45 degrees counter-clockwise:
-    # g and m are rotation invariant, just more accurate if rot_gy__ and rot_gx__
-
+    # each shifted a in 2x2 kernel, rotate 45 degrees counter-clockwise:
     a__left   = a__[:, :-1, :-1]  # was topleft
     a__top    = a__[:, :-1, 1:]   # was topright
     a__right  = a__[:, 1:, 1:]    # was botright
     a__bottom = a__[:, 1:, :-1]   # was botleft
 
-    # kernel is twice rotated, thus angle differences orthogonal:
     sin_da0__, cos_da0__ = angle_diff(a__right, a__left)
     sin_da1__, cos_da1__ = angle_diff(a__bottom, a__top)
-
+    '''
+    if not rotated:
+        a__topleft  = a__[:, :-1, :-1]
+        a__topright = a__[:, :-1, 1:]
+        a__botright = a__[:, 1:, 1:]
+        a__botleft  = a__[:, 1:, :-1]
+        # sin, cos computation needs to be revised?
+    '''
     ma__ = 2 / (cos_da0__ + 1.001) + (cos_da1__ + 1.001)  # +1 to convert to all positives, +.001 to avoid / 0
     # match of angle = inverse deviation rate of SAD of angles from ave ma: (2 + 2) / 2
 
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
-    # needs to be reviewed for the effects of rotation, currently used for ga only?
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-
     dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
-    # needs to be reviewed for the effects of rotation, currently used for ga only?
     # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
     '''
+    needs to be reviewed for the effects of rotation, currently used for ga only?
+    
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
     '''
@@ -163,7 +166,6 @@ def comp_a(dert__, ave, mask__=None):  # cross-comp of angle in 2x2 kernels
     ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
     extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
     '''
-
     i__ = i__[:-1, :-1]  # for summation in Dert
     g__ = g__[:-1, :-1]  # for summation in Dert
     m__ = m__[:-1, :-1]

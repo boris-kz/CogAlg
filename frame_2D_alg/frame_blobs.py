@@ -98,9 +98,14 @@ class CBlob(ClusterStructure):
     a_depth = int  # currently not used
     prior_forks = list
     adj_blobs = list  # for borrowing
-    stack_ = list  # sliced_blob if not empty
+
     PP_ = list  # comp_slice_ if not empty
+    derP__ = list
     P__ = list
+    PPd_ = list  # PP_derPd_
+    derPd__ = list
+    Pd__ = list
+
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
     # see comp_pixel_versions file for other versions and more explanation
@@ -110,27 +115,27 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard e
     topright__ = image[:-1, 1:]
     bottomleft__ = image[1:, :-1]
     bottomright__ = image[1:, 1:]
-    '''
+
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
-    '''
-    # rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy of Gy, Gx
-    # Gy, Gx are used in comp_a, which returns day and dax back to orthogonal, but 1st comp_r should also be rotated?
-    # but summing in Dy, Dx should be from unrotated dy, dx?
 
-    rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
-    rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
-
-    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')
+    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')
     # deviation of central gradient per kernel, between four vertex pixels
-    # G and M are rotation invariant, but more accurate from rot_Gy__ and rot_Gx__?
 
     M__ = int(ave * 1.2)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))
     # inverse deviation of SAD: variation
 
-    return (topleft__, rot_Gy__, rot_Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
-
+'''
+    rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy of Gy, Gx
+    Gy, Gx are used in comp_a, which returns day and dax back to orthogonal, but 1st comp_r should also be rotated?
+    but summing in Dy, Dx should be from unrotated dy, dx?
+    rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
+    rot_Gx__ = topright__ - bottomleft__   # rotated to right__ - left__
+    
+    G and M are rotation invariant, but more accurate from rot_Gy__ and rot_Gx__?
+'''
 
 def derts2blobs(dert__, verbose=False, render=False, use_c=False):
 
