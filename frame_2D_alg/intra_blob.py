@@ -52,7 +52,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         # root fork is comp_a -> slice_blob
         if blob.mask__.shape[0] > 2 and blob.mask__.shape[1] > 2 and False in blob.mask__:  # min size in y and x, at least one dert in dert__
 
-            if -blob.M * blob.Ma - AveB > 0:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+            if (-blob.M * blob.Ma - AveB > 0) and blob.Dx:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
@@ -65,7 +65,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
 
         if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
 
-            adert__, mask__ = comp_a(ext_dert__, Ave, ext_mask__)  # compute ma and ga
+            adert__, mask__ = comp_a(ext_dert__, Ave, blob.prior_forks, ext_mask__)  # compute ma and ga
             blob.f_comp_a = 1
             if kwargs.get('verbose'): print('\na fork\n')
             blob.prior_forks.extend('a')
@@ -81,7 +81,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-        elif blob.M > AveB * 1.41:  # comp_r fork, ave M = ave G * 1.41
+        elif blob.M > AveB * 1.2:  # comp_r fork, ave M = ave G * 1.2
 
             dert__, mask__ = comp_r(ext_dert__, Ave, blob.f_root_a, ext_mask__)
             blob.f_comp_a = 0
