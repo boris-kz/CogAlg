@@ -354,9 +354,9 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     # no comp G: Dx, dDy are more specific?
     dP = ddX + dL + dM + dDx + dDy  # -> directional PPd, equal-weight params, no rdn?
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
-    mP = mX + mL + mM + mDx + mDy   # -> complementary PPm, rdn *= Pd | Pm rolp?
+    mP = mL + mM + mDx + mDy   # -> complementary PPm, rdn *= Pd | Pm rolp?
 
-    mP -= ave_mP / ((dX / L) - 1)  # just a rough draft
+    mP -= ave_mP / 2^(dX / L)  # just a rough draft
     ''' Positional miss is positive: lower filters, no match: always inverse miss? '''
 
     flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
