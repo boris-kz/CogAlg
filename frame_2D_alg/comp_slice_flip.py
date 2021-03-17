@@ -327,9 +327,9 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
 
     s, x0, Dx, Dy, G, M, L = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L
     # params per comp branch, add angle params
-    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P._dX, _P.L
+    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L
 
-    dX = (x0 + L-1 / 2) - (_x0 + _L-1 / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
+    dX = (x0 + (L-1) / 2) - (_x0 + (_L-1) / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
 
     if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
         xn = x0 + L - 1
@@ -340,14 +340,24 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
     # add mdX = min(dX - _dX)?
     '''
-    if ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
-        Long axis is a curve of connections between ave_x s: mid-points of consecutive Ps.
-        Ortho virtually rotates to connection-orthogonal P:
-        hyp = hypot(dX, 1)  # long axis increment (vertical distance), to adjust params of orthogonal slice:
-        L /= hyp
-        # re-orient derivatives by combining them in proportion to their decomposition on new axes:
-        Dx = (Dx * hyp + Dy / hyp) / 2  # no / hyp: kernel doesn't matter on P level?
-        Dy = (Dy / hyp - Dx * hyp) / 2  # estimated D over vert_L
+    if dX * P.G > ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
+    
+        Long axis is a curve of connections between ave_xs: mid-points of consecutive Ps.
+        Ortho virtually rotates P to connection-orthogonal:    
+        hyp = hypot(dX, 1)  # ratio of local segment of long (vertical) axis to dY = 1
+        oL /= hyp  # orthogonal L
+        # combine derivatives in proportion to their axes contribution to new axes:
+        
+        oDy = (Dy * hyp - Dx / hyp) / 2  # estimated along-axis D
+        oDx = (Dx / hyp + Dy * hyp) / 2  # estimated cross-axis D
+        or:
+        oDy = (Dy * hyp) + (Dx / hyp) / 2 
+        oDx = (Dy / hyp) + (Dx * hyp) / 2.
+        or, most likely:
+        
+        oDy = hypot( Dy / hyp, Dx * hyp), 
+        oDx = hypot( Dy * hyp, Dx / hyp)?
+                
         param correlations: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
     '''
     # no comp G: Dx, dDy are more specific?
@@ -355,20 +365,22 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
 
     dDx = Dx - _Dx  # same-sign Dx if Pd
-    if Dx > 0 == _Dx > 0: mDx = min(Dx, _Dx)
-    else: mDx = -min(abs(Dx), abs(_Dx))
+    mDx = min(abs(Dx), abs(_Dx))
+    if Dx > 0 != _Dx > 0: mDx = -mDx
+    # min is value distance for opposite-sign comparands, vs. value overlap for same-sign comparands
     dDy = Dy - _Dy  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
-    if Dy > 0 == _Dy > 0: mDy = min(Dy, _Dy)
-    else: mDy = -min(abs(Dy), abs(_Dy))
+    mDy = min(abs(Dy), abs(_Dy))
+    if Dy > 0 != _Dy > 0: mDy = -mDy
 
-    if P.dxdert and _P._dxdert_:
+    if P.dxdert and _P._dxdert_:  # from comp_dx
         fdx = 1
-        dDdx = P.Ddx - _P.Ddx  # from comp_dx
-        if P.Ddx > 0 == _P.Ddx > 0: mDdx = min(P.Ddx, _P.Ddx)
-        else: mDdx = -min(abs(P.Ddx), abs(_P.Ddx))
-        dMdx = min( P.Mdx, _P.Mdx)  # Mdx is signed
-        if P.Mdx > 0 == _P.Mdx > 0: mMdx = min(P.mMdx, _P.Mdx)
-        else: mMdx = -min(abs(P.Mdx), abs(_P.Mdx))
+        dDdx = P.Ddx - _P.Ddx
+        mDdx = min(abs(P.Ddx), abs(_P.Ddx))
+        if P.Ddx > 0 != _P.Ddx > 0: mDdx = -mDdx
+        # Mdx is signed:
+        dMdx = min( P.Mdx, _P.Mdx)
+        mMdx = -min(abs(P.Mdx), abs(_P.Mdx))
+        if P.Mdx > 0 != _P.Mdx > 0: mMdx = -mMdx
     else:
         fdx = 0
 
