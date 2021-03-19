@@ -23,7 +23,7 @@ ave_dX = 10  # difference between median x coords of consecutive Ps
 ave_Dx = 10
 ave_mP = 20  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
-
+ave_ortho = 20
 
 class CP(ClusterStructure):
     # Dert: summed pixel values and pixel-level derivatives:
@@ -338,49 +338,44 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
         rX = dX / mX if mX else dX*2  # average dist / prox, | prox / dist, | mX / max_L?
 
     ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
-    # add mdX = min(dX - _dX)?
-    '''
-    if dX * P.G > ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
-    
-        Long axis is a curve of connections between ave_xs: mid-points of consecutive Ps.
-        Ortho virtually rotates P to connection-orthogonal:    
-        hyp = hypot(dX, 1)  # ratio of local segment of long (vertical) axis to dY = 1
-        oL /= hyp  # orthogonal L
-        # combine derivatives in proportion to their axes contribution to new axes:
-        
-        oDy = (Dy * hyp - Dx / hyp) / 2  # estimated along-axis D
-        oDx = (Dx / hyp + Dy * hyp) / 2  # estimated cross-axis D
-        or:
-        oDy = (Dy * hyp) + (Dx / hyp) / 2 
-        oDx = (Dy / hyp) + (Dx * hyp) / 2.
-        or, most likely:
-        
-        oDy = hypot( Dy / hyp, Dx * hyp), 
-        oDx = hypot( Dy * hyp, Dx / hyp)?
-                
-        param correlations: dX-> L, ddX-> dL, neutral to Dx: mixed with anti-correlated oDy?
-    '''
-    # no comp G: Dx, dDy are more specific?
+    mdX = min(dX, _dX)  # dX is inversely predictive of mP?
+
+    if dX * P.G > ave_ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
+        # diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/orthogonalization.png
+        # Long axis is a curve of connections between ave_xs: mid-points of consecutive Ps.
+
+        # Ortho virtually rotates P to connection-orthogonal direction:
+        hyp = np.hypot(dX, 1)  # ratio of local segment of long (vertical) axis to dY = 1
+        L = L / hyp  # orthogonal L
+        # combine derivatives in proportion to the contribution of their axes to orthogonal axes:
+        # contribution of Dx should increase with hyp(dX,dY=1), this is original direction of Dx:
+        Dy = (Dy / hyp + Dx * hyp) / 2  # estimated along-axis D
+        Dx = (Dy * hyp + Dx / hyp) / 2  # estimated cross-axis D
+        ''' 
+        alternatives:        
+        oDy = (Dy * hyp - Dx / hyp) / 2;  oDx = (Dx / hyp + Dy * hyp) / 2;  or:
+        oDy = hypot( Dy / hyp, Dx * hyp);  oDx = hypot( Dy * hyp, Dx / hyp)
+        '''
     dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
-
+    # no comp G: Dy, Dx are more specific:
     dDx = Dx - _Dx  # same-sign Dx if Pd
     mDx = min(abs(Dx), abs(_Dx))
     if Dx > 0 != _Dx > 0: mDx = -mDx
     # min is value distance for opposite-sign comparands, vs. value overlap for same-sign comparands
     dDy = Dy - _Dy  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
     mDy = min(abs(Dy), abs(_Dy))
-    if Dy > 0 != _Dy > 0: mDy = -mDy
+    if (Dy > 0) != (_Dy > 0): mDy = -mDy
 
-    if P.dxdert and _P._dxdert_:  # from comp_dx
+    if P.dxdert_ and _P.dxdert_:  # from comp_dx
         fdx = 1
         dDdx = P.Ddx - _P.Ddx
         mDdx = min(abs(P.Ddx), abs(_P.Ddx))
-        if P.Ddx > 0 != _P.Ddx > 0: mDdx = -mDdx
+        if (P.Ddx > 0) != (_P.Ddx > 0): mDdx = -mDdx
         # Mdx is signed:
         dMdx = min( P.Mdx, _P.Mdx)
         mMdx = -min(abs(P.Mdx), abs(_P.Mdx))
-        if P.Mdx > 0 != _P.Mdx > 0: mMdx = -mMdx
+        if (P.Mdx > 0) != (_P.Mdx > 0): mMdx = -mMdx
     else:
         fdx = 0
 
@@ -398,8 +393,12 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
                  mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
     if fdx:
         derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx
-    # div_f, nvars
 
+    '''
+    min comp for rotation: L, Dy, Dx, no redundancy?
+    mParam weighting by relative contribution to mP, /= redundancy?
+    div_f, nvars: primary comp L, the rest is normalized?
+    '''
     return derP
 
 
