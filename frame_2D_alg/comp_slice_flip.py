@@ -163,22 +163,6 @@ def slice_blob(blob, verbose=False):
         draw_PP_(blob)
 
 
-def form_PP_shell(blob, derP__, P__, derPd__, Pd__):
-    '''
-    form PPs in blob or in FPP
-    '''
-    if not isinstance(blob, CPP):  # input is blob
-        blob.derP__ = derP__; blob.P__ = P__
-        blob.derPd__ = derPd__; blob.Pd__ = Pd__
-        derP_2_PP_(blob.derP__, blob.PP_,  1)  # form vertically contiguous patterns of patterns
-        derP_2_PP_(blob.derPd__, blob.PPd_, 1)
-    else: # input is FPP
-        blob.derPf__ = derP__; blob.Pf__ = P__
-        blob.derPdf__ = derPd__; blob.Pdf__ = Pd__
-        derP_2_PP_(blob.derPf__, blob.PPf_, 0)  # form vertically contiguous patterns of patterns
-        derP_2_PP_(blob.derPdf__, blob.PPdf_, 0)
-
-
 def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) vertical order
     '''
     sums dert params within Ps and increments L: horizontal length.
@@ -239,7 +223,6 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
 
             elif (P.x0 + P.L) < _P.x0:  # stop scanning the rest of lower P_ if there is no overlap
                 break
-
     return derP_
 
 
@@ -319,87 +302,23 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
                     elif (Pd.x0 + Pd.L) < _Pd.x0:  # stop scanning the rest of lower P_ if there is no overlap
                         break
-
     return derPd_
 
 
-def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
-
-    s, x0, Dx, Dy, G, M, L = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L
-    # params per comp branch, add angle params
-    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L
-
-    dX = (x0 + (L-1) / 2) - (_x0 + (_L-1) / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
-
-    if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
-        xn = x0 + L - 1
-        _xn = _x0 + _L - 1
-        mX = min(xn, _xn) - max(x0, _x0)  # overlap = abs proximity: summed binary x match
-        rX = dX / mX if mX else dX*2  # average dist / prox, | prox / dist, | mX / max_L?
-
-    ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
-    mdX = min(dX, _dX)  # dX is inversely predictive of mP?
-
-    if dX * P.G > ave_ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
-        # diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/orthogonalization.png
-        # Long axis is a curve of connections between ave_xs: mid-points of consecutive Ps.
-
-        # Ortho virtually rotates P to connection-orthogonal direction:
-        hyp = np.hypot(dX, 1)  # ratio of local segment of long (vertical) axis to dY = 1
-        L = L / hyp  # orthogonal L
-        # combine derivatives in proportion to the contribution of their axes to orthogonal axes:
-        # contribution of Dx should increase with hyp(dX,dY=1), this is original direction of Dx:
-        Dy = (Dy / hyp + Dx * hyp) / 2  # estimated along-axis D
-        Dx = (Dy * hyp + Dx / hyp) / 2  # estimated cross-axis D
-        ''' 
-        alternatives:        
-        oDy = (Dy * hyp - Dx / hyp) / 2;  oDx = (Dx / hyp + Dy * hyp) / 2;  or:
-        oDy = hypot( Dy / hyp, Dx * hyp);  oDx = hypot( Dy * hyp, Dx / hyp)
-        '''
-    dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
-    dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
-    # no comp G: Dy, Dx are more specific:
-    dDx = Dx - _Dx  # same-sign Dx if Pd
-    mDx = min(abs(Dx), abs(_Dx))
-    if Dx > 0 != _Dx > 0: mDx = -mDx
-    # min is value distance for opposite-sign comparands, vs. value overlap for same-sign comparands
-    dDy = Dy - _Dy  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
-    mDy = min(abs(Dy), abs(_Dy))
-    if (Dy > 0) != (_Dy > 0): mDy = -mDy
-
-    if P.dxdert_ and _P.dxdert_:  # from comp_dx
-        fdx = 1
-        dDdx = P.Ddx - _P.Ddx
-        mDdx = min(abs(P.Ddx), abs(_P.Ddx))
-        if (P.Ddx > 0) != (_P.Ddx > 0): mDdx = -mDdx
-        # Mdx is signed:
-        dMdx = min( P.Mdx, _P.Mdx)
-        mMdx = -min(abs(P.Mdx), abs(_P.Mdx))
-        if (P.Mdx > 0) != (_P.Mdx > 0): mMdx = -mMdx
-    else:
-        fdx = 0
-
-    dP = ddX + dL + dM + dDx + dDy  # -> directional PPd, equal-weight params, no rdn?
-    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
-    if fdx: dP += dDdx + dMdx
-
-    mP = mL + mM + mDx + mDy # -> complementary PPm, rdn *= Pd | Pm rolp?
-    if fdx: mP += mDdx + mMdx
-    mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
-
-    flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
-
-    derP = CderP(P=P, _P=_P, flip_val=flip_val,
-                 mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
-    if fdx:
-        derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx
-
+def form_PP_shell(blob, derP__, P__, derPd__, Pd__):
     '''
-    min comp for rotation: L, Dy, Dx, no redundancy?
-    mParam weighting by relative contribution to mP, /= redundancy?
-    div_f, nvars: primary comp L, the rest is normalized?
+    form PPs in blob or in FPP
     '''
-    return derP
+    if not isinstance(blob, CPP):  # input is blob
+        blob.derP__ = derP__; blob.P__ = P__
+        blob.derPd__ = derPd__; blob.Pd__ = Pd__
+        derP_2_PP_(blob.derP__, blob.PP_,  1)  # form vertically contiguous patterns of patterns by the sign of derP
+        derP_2_PP_(blob.derPd__, blob.PPd_, 1)
+    else: # input is FPP
+        blob.derPf__ = derP__; blob.Pf__ = P__
+        blob.derPdf__ = derPd__; blob.Pdf__ = Pd__
+        derP_2_PP_(blob.derPf__, blob.PPf_, 0)  # form vertically contiguous patterns of patterns by the sign of derP
+        derP_2_PP_(blob.derPdf__, blob.PPdf_, 0)
 
 
 def derP_2_PP_(derP_, PP_, fflip):
@@ -438,7 +357,7 @@ def upconnect_2_PP_(iderP, PP_, fflip):
 
             # same sign and not FPP
             elif ((iderP.mP > 0) == (derP.mP > 0)) and not (iderP.flip_val>0) and not (derP.flip_val>0):
-                # upconnect derP has different PP
+                # upconnect derP has different PP, merge them
                 if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
                     merge_PP(iderP.PP, derP.PP, PP_)
                 else: # accumulate derP to current PP
@@ -464,40 +383,6 @@ def upconnect_2_PP_(iderP, PP_, fflip):
         if (iderP.PP.derPP.flip_val > flip_ave_FPP) and fflip:
             flip_FPP(iderP.PP)
         PP_.append(iderP.PP)  # iPP is terminated after all upconnects are checked
-
-
-def flip_eval_blob(blob):
-
-    # L_bias (Lx / Ly) * G_bias (Gy / Gx), blob.box = [y0,yn,x0,xn], ddirection: preferential comp over low G
-    horizontal_bias = (blob.box[3] - blob.box[2]) / (blob.box[1] - blob.box[0])  \
-                    * (abs(blob.Dy) / abs(blob.Dx))
-
-    if horizontal_bias > 1 and (blob.G * blob.Ma * horizontal_bias > flip_ave / 10):
-        blob.fflip = 1  # rotate 90 degrees for scanning in vertical direction
-        # swap blob Dy and Dx:
-        Dy=blob.Dy; blob.Dy = blob.Dx; blob.Dx = Dy
-        # rotate dert__:
-        blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
-        blob.mask__ = np.rot90(blob.mask__)
-        # swap dert dys and dxs:
-        '''
-        blob.dert__[1] swap doesn't affect blob.dert__[2] swap?
-        '''
-        blob.dert__ = list(blob.dert__)  # convert to list since param in tuple is immutable
-        blob.dert__[1], blob.dert__[2] = \
-        blob.dert__[2], blob.dert__[1]
-
-
-def accum_Dert(Dert: dict, **params) -> None:
-    Dert.update({param: Dert[param] + value for param, value in params.items()})
-
-
-def accum_PP(PP, derP):  # accumulate derP params in PP
-
-    PP.derPP.accumulate(flip_val=derP.flip_val, mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                        mDy=derP.mDy, dDy=derP.dDy)
-    PP.derP__.append(derP)
-    derP.PP = PP  # update reference
 
 
 def merge_PP(_PP, PP, PP_):  # merge PP into _PP
@@ -550,6 +435,40 @@ def flip_FPP(FPP):
     # form PP_ in flipped FPP
     slice_blob(FPP, verbose=True)
 
+
+def flip_eval_blob(blob):
+
+    # L_bias (Lx / Ly) * G_bias (Gy / Gx), blob.box = [y0,yn,x0,xn], ddirection: preferential comp over low G
+    horizontal_bias = (blob.box[3] - blob.box[2]) / (blob.box[1] - blob.box[0])  \
+                    * (abs(blob.Dy) / abs(blob.Dx))
+
+    if horizontal_bias > 1 and (blob.G * blob.Ma * horizontal_bias > flip_ave / 10):
+        blob.fflip = 1  # rotate 90 degrees for scanning in vertical direction
+        # swap blob Dy and Dx:
+        Dy=blob.Dy; blob.Dy = blob.Dx; blob.Dx = Dy
+        # rotate dert__:
+        blob.dert__ = tuple([np.rot90(dert) for dert in blob.dert__])
+        blob.mask__ = np.rot90(blob.mask__)
+        # swap dert dys and dxs:
+        '''
+        blob.dert__[1] swap doesn't affect blob.dert__[2] swap?
+        '''
+        blob.dert__ = list(blob.dert__)  # convert to list since param in tuple is immutable
+        blob.dert__[1], blob.dert__[2] = \
+        blob.dert__[2], blob.dert__[1]
+
+
+def accum_Dert(Dert: dict, **params) -> None:
+    Dert.update({param: Dert[param] + value for param, value in params.items()})
+
+def accum_PP(PP, derP):  # accumulate derP params in PP
+
+    PP.derPP.accumulate(flip_val=derP.flip_val, mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
+                        mDy=derP.mDy, dDy=derP.dDy)
+    PP.derP__.append(derP)
+    derP.PP = PP  # update reference
+
+
 def comp_dx(P):  # cross-comp of dx s in P.dert_
 
     Ddx = 0
@@ -568,6 +487,88 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
     P.dxdert_ = dxdert_
     P.Ddx = Ddx
     P.Mdx = Mdx
+
+
+def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
+
+    s, x0, Dx, Dy, G, M, L = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L
+    # params per comp branch, add angle params
+    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L
+
+    dX = (x0 + (L-1) / 2) - (_x0 + (_L-1) / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
+
+    if dX > ave_dX:  # internal comp is higher-power, else two-input comp not compressive?
+        xn = x0 + L - 1
+        _xn = _x0 + _L - 1
+        mX = min(xn, _xn) - max(x0, _x0)  # overlap = abs proximity: summed binary x match
+        rX = dX / mX if mX else dX*2  # average dist / prox, | prox / dist, | mX / max_L?
+
+    ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
+    mdX = min(dX, _dX)  # dX is inversely predictive of mP?
+
+    if dX * P.G > ave_ortho:  # estimate params of P locally orthogonal to long axis, maximizing lateral diff and vertical match
+        # diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/orthogonalization.png
+        # Long axis is a curve of connections between ave_xs: mid-points of consecutive Ps.
+
+        # Ortho virtually rotates P to connection-orthogonal direction:
+        hyp = np.hypot(dX, 1)  # ratio of local segment of long (vertical) axis to dY = 1
+        L = L / hyp  # orthogonal L
+        # combine derivatives in proportion to the contribution of their axes to orthogonal axes:
+        # contribution of Dx should increase with hyp(dX,dY=1), this is original direction of Dx:
+        Dy = (Dy / hyp + Dx * hyp) / 2  # estimated along-axis D
+        Dx = (Dy * hyp + Dx / hyp) / 2  # estimated cross-axis D
+        ''' 
+        alternatives:        
+        oDy = (Dy * hyp - Dx / hyp) / 2;  oDx = (Dx / hyp + Dy * hyp) / 2;  or:
+        oDy = hypot( Dy / hyp, Dx * hyp);  oDx = hypot( Dy * hyp, Dx / hyp)
+        '''
+    dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
+    dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
+    # no comp G: Dy, Dx are more specific:
+    dDx = Dx - _Dx  # same-sign Dx if Pd
+    mDx = min(abs(Dx), abs(_Dx))
+    if Dx > 0 != _Dx > 0: mDx = -mDx
+    # min is value distance for opposite-sign comparands, vs. value overlap for same-sign comparands
+    dDy = Dy - _Dy  # Dy per sub_P by intra_comp(dx), vs. less vertically specific dI
+    mDy = min(abs(Dy), abs(_Dy))
+    if (Dy > 0) != (_Dy > 0): mDy = -mDy
+
+    dDdx, dMdx, mDdx, mMdx = 0, 0, 0, 0
+    if P.dxdert_ and _P.dxdert_:  # from comp_dx
+        fdx = 1
+        dDdx = P.Ddx - _P.Ddx
+        mDdx = min( abs(P.Ddx), abs(_P.Ddx))
+        if (P.Ddx > 0) != (_P.Ddx > 0): mDdx = -mDdx
+        # Mdx is signed:
+        dMdx = min( P.Mdx, _P.Mdx)
+        mMdx = -min( abs(P.Mdx), abs(_P.Mdx))
+        if (P.Mdx > 0) != (_P.Mdx > 0): mMdx = -mMdx
+    else:
+        fdx = 0
+    # coeff = 0.7 for semi redundant parameters, 0.5 for fully redundant parameters:
+
+    dP = ddX + dL + 0.7*(dM + dDx + dDy)  # -> directional PPd, equal-weight params, no rdn?
+    # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
+    if fdx: dP += 0.7*(dDdx + dMdx)
+
+    mP = mdX + mL + 0.7*(mM + mDx + mDy)  # -> complementary PPm, rdn *= Pd | Pm rolp?
+    if fdx: mP += 0.7*(mDdx + mMdx)
+    mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
+
+    flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
+
+    derP = CderP(P=P, _P=_P, flip_val=flip_val,
+                 mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
+    if fdx:
+        derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx
+
+    '''
+    min comp for rotation: L, Dy, Dx, no redundancy?
+    mParam weighting by relative contribution to mP, /= redundancy?
+    div_f, nvars: primary comp L, the rest is normalized?
+    '''
+    return derP
+
 
 '''
     radial comp extension for co-internal blobs:
