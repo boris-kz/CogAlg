@@ -67,16 +67,16 @@ class CderP(ClusterStructure):
     dDx = int
     mDy = int
     dDy = int
+    dDdx = int
+    mDdx = int
+    dMdx = int
+    mMdx = int
     P = object  # lower comparand
     _P = object  # higher comparand
     PP = object  # FPP if flip_val, contains this derP
     flip_val = int
     # from comp_dx
     fdx = NoneType
-    dDdx = int
-    mDdx = int
-    dMdx = int
-    mMdx = int
 
 class CPP(ClusterStructure):
 
@@ -93,21 +93,24 @@ class CPP(ClusterStructure):
     mask__ = bool
     # PP params
     derP__ = list
-    PP_ = list
     P__ = list
     # FPP params
     derPf__ = list
-    PPf_ = list
     Pf__ = list
+    PPmm_ = list
+    PPdm_ = list
+    PPmmf_ = list
+    PPdmf_ = list
     # PPd params
     derPd__ = list
-    PPd_ = list
     Pd__ = list
     # FPP params
     derPdf__ = list
-    PPdf_ = list
     Pdf__ = list
-    # comp_dx params
+    PPmd_ = list
+    PPdd_ = list
+    PPmdf_ = list
+    PPddf_ = list    # comp_dx params
     Ddx = int
     Mdx = int
 
@@ -160,6 +163,7 @@ def slice_blob(blob, verbose=False):
     form_PP_shell(blob, derP__, P__, derPd__, Pd__)  # form PPs in blob or in FPP
     # draw PPs and FPPs
     if not isinstance(blob, CPP):
+        # yet to be updated
         draw_PP_(blob)
 
 
@@ -291,7 +295,7 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
             for Pd in P.Pd_: # lower row Pds
                 for _Pd in _P.Pd_: # upper row Pds
                     # test for same sign & x overlap between Pd and _Pd in 8 directions
-                    if (Pd.x0 - 1 < (_Pd.x0 + _Pd.L) and (Pd.x0 + Pd.L) + 1 > _Pd.x0) and (Pd.sign == _Pd.sign) : # all Ps here are positive
+                    if (Pd.x0 - 1 < (_Pd.x0 + _Pd.L) and (Pd.x0 + Pd.L) + 1 > _Pd.x0) and (Pd.sign == _Pd.sign):
 
                         fcomp = [1 for derPd in Pd.upconnect_ if Pd is derPd.P]  # upconnect could be derP or dirP
                         if not fcomp:
@@ -312,16 +316,29 @@ def form_PP_shell(blob, derP__, P__, derPd__, Pd__):
     if not isinstance(blob, CPP):  # input is blob
         blob.derP__ = derP__; blob.P__ = P__
         blob.derPd__ = derPd__; blob.Pd__ = Pd__
-        derP_2_PP_(blob.derP__, blob.PP_,  1)  # form vertically contiguous patterns of patterns by the sign of derP
-        derP_2_PP_(blob.derPd__, blob.PPd_, 1)
-    else: # input is FPP
+        # derPm - check mP
+        derP_2_PP_(blob.derP__, blob.PPmm_, 1, fPPd=0)  # form vertically contiguous patterns of patterns by the sign of derP
+        # derPm - check dP
+        derP_2_PP_(blob.derP__, blob.PPdm_, 1, fPPd=1)
+        # derPd - check mP
+        derP_2_PP_(blob.derPd__, blob.PPmd_, 1, fPPd=0)
+        # derPd - check dP
+        derP_2_PP_(blob.derPd__, blob.PPdd_, 1, fPPd=1)
+
+    else:  # input is FPP
         blob.derPf__ = derP__; blob.Pf__ = P__
         blob.derPdf__ = derPd__; blob.Pdf__ = Pd__
-        derP_2_PP_(blob.derPf__, blob.PPf_, 0)  # form vertically contiguous patterns of patterns by the sign of derP
-        derP_2_PP_(blob.derPdf__, blob.PPdf_, 0)
+        # derPmf - check mP
+        derP_2_PP_(blob.derPf__, blob.PPmmf_, 0, fPPd=0)  # form vertically contiguous patterns of patterns by the sign of derP
+        # derPmf - check dP
+        derP_2_PP_(blob.derPf__, blob.PPdmf_, 0, fPPd=1)
+        # derPdf - check mP
+        derP_2_PP_(blob.derPdf__, blob.PPmdf_, 0, fPPd=0)
+        # derPdf - check dP
+        derP_2_PP_(blob.derPdf__, blob.PPddf_, 0, fPPd=1)
 
 
-def derP_2_PP_(derP_, PP_, fflip):
+def derP_2_PP_(derP_, PP_, fflip, fPPd):
     '''
     first row of derP_ has downconnect_cnt == 0, higher rows may also have them
     '''
@@ -331,14 +348,14 @@ def derP_2_PP_(derP_, PP_, fflip):
             accum_PP(PP,derP)
 
             if derP._P.upconnect_:  # derP has upconnects
-                upconnect_2_PP_(derP, PP_, fflip)  # form PPs across _P upconnects
+                upconnect_2_PP_(derP, PP_, fflip, fPPd)  # form PPs across _P upconnects
             else:
                 if (derP.PP.derPP.flip_val > flip_ave_FPP) and fflip:
                     flip_FPP(derP.PP)
                 PP_.append(derP.PP)
 
 
-def upconnect_2_PP_(iderP, PP_, fflip):
+def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
     '''
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
@@ -354,23 +371,24 @@ def upconnect_2_PP_(iderP, PP_, fflip):
                 else: # accumulate derP to current FPP
                     accum_PP(iderP.PP, derP)
                     confirmed_upconnect_.append(derP)
-
-            # same sign and not FPP
-            elif ((iderP.mP > 0) == (derP.mP > 0)) and not (iderP.flip_val>0) and not (derP.flip_val>0):
-                # upconnect derP has different PP, merge them
-                if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
-                    merge_PP(iderP.PP, derP.PP, PP_)
-                else: # accumulate derP to current PP
-                    accum_PP(iderP.PP, derP)
-                    confirmed_upconnect_.append(derP)
-
-            elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
-                PP = CPP(derPP=CderP())
-                accum_PP(PP,derP)
-                derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
+            # not FPP
+            else:
+                if fPPd: same_sign = (iderP.dP > 0) == (derP.dP > 0)  # comp dP sign
+                else: same_sign = (iderP.mP > 0) == (derP.mP > 0)  # comp mP sign
+                if same_sign:
+                    if not (iderP.flip_val>0) and not (derP.flip_val>0):  # upconnect derP has different PP, merge them
+                        if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
+                            merge_PP(iderP.PP, derP.PP, PP_)
+                        else:  # accumulate derP in current PP
+                            accum_PP(iderP.PP, derP)
+                            confirmed_upconnect_.append(derP)
+                elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
+                    PP = CPP(derPP=CderP())
+                    accum_PP(PP,derP)
+                    derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
 
             if derP._P.upconnect_:
-                upconnect_2_PP_(derP, PP_, fflip)  # recursive compare sign of next-layer upconnects
+                upconnect_2_PP_(derP, PP_, fflip, fPPd)  # recursive compare sign of next-layer upconnects
 
             elif derP.PP is not iderP.PP and derP.P.downconnect_cnt == 0:
                 if (derP.PP.derPP.flip_val > flip_ave_FPP) and fflip:
@@ -517,8 +535,8 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
         # contribution of Dx should increase with hyp(dX,dY=1), this is original direction of Dx:
         Dy = (Dy / hyp + Dx * hyp) / 2  # estimated along-axis D
         Dx = (Dy * hyp + Dx / hyp) / 2  # estimated cross-axis D
-        ''' 
-        alternatives:        
+        '''
+        alternatives:
         oDy = (Dy * hyp - Dx / hyp) / 2;  oDx = (Dx / hyp + Dy * hyp) / 2;  or:
         oDy = hypot( Dy / hyp, Dx * hyp);  oDx = hypot( Dy * hyp, Dx / hyp)
         '''
@@ -565,7 +583,8 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     '''
     min comp for rotation: L, Dy, Dx, no redundancy?
     mParam weighting by relative contribution to mP, /= redundancy?
-    div_f, nvars: primary comp L, the rest is normalized?
+
+    div_f, nvars: if abs dP per PPd, primary comp L, the rest is normalized?
     '''
     return derP
 
