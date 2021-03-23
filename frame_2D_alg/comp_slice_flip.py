@@ -46,12 +46,12 @@ class CP(ClusterStructure):
     dert_ = list   # array of pixel-level derts: (p, dy, dx, g, m), extended in intra_blob
     upconnect_ = list
     downconnect_cnt = int
-    # only in in Pd:
+    # only in Pd:
     Pm = object  # reference to root P
     dxdert_ = list
-    Mdx = int  # replaced dxP_Mdx
-    Ddx = int  # replaced dxP_Ddx
-    # only on Pm:
+    Mdx = int
+    Ddx = int
+    # only in Pm:
     Pd_ = list
 
 
@@ -77,6 +77,8 @@ class CderP(ClusterStructure):
     flip_val = int
     # from comp_dx
     fdx = NoneType
+    Ddx = int
+    Mdx = int
 
 class CPP(ClusterStructure):
 
@@ -88,13 +90,13 @@ class CPP(ClusterStructure):
     fdiv = NoneType
     box = list # for visualization only, original box before flipping
     # FPP params
-    flip_val = int  # Ps are vertically biased
+    flip_val = int  # vertically bias in Ps
     dert__ = list
     mask__ = bool
     # PP params
     derP__ = list
     P__ = list
-    # FPP params
+    # PP FPP params
     derPf__ = list
     Pf__ = list
     PPmm_ = list
@@ -104,15 +106,13 @@ class CPP(ClusterStructure):
     # PPd params
     derPd__ = list
     Pd__ = list
-    # FPP params
+    # PPd FPP params
     derPdf__ = list
     Pdf__ = list
     PPmd_ = list
     PPdd_ = list
     PPmdf_ = list
     PPddf_ = list    # comp_dx params
-    Ddx = int
-    Mdx = int
 
 # Functions:
 '''
@@ -120,13 +120,13 @@ leading '_' denotes higher-line variable or structure, vs. same-type lower-line 
 trailing '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
 leading 'f' denotes flag
 -
-workflow, needs an update:
+rough workflow:
 -
 intra_blob -> slice_blob(blob) -> derP_ -> PP,
 if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FPP) -> pack PP in FPP.PP_
 else       (PP is PP):  pack PP in blob.PP_
 -
-please see scan_P_ diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/comp_slice.drawio
+please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/comp_slice_flip.drawio
 '''
 
 def slice_blob(blob, verbose=False):
@@ -209,27 +209,6 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) verti
 
     return P_
 
-
-def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
-
-    derP_ = []
-    for P in P_:  # lower row
-        for _P in _P_:  # upper row
-            # test for x overlap between P and _P in 8 directions
-            if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):  # all Ps here are positive
-
-                fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
-                if not fcomp:
-                    derP = comp_slice(_P, P)  # form vertical and directional derivatives
-                    derP_.append(derP)
-                    P.upconnect_.append(derP)
-                    _P.downconnect_cnt += 1
-
-            elif (P.x0 + P.L) < _P.x0:  # stop scanning the rest of lower P_ if there is no overlap
-                break
-    return derP_
-
-
 def form_Pd_(P_):
     '''
     form Pd s across P's derts using Dx sign
@@ -286,6 +265,26 @@ def form_Pd_(P_):
     return Pd__
 
 
+def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
+
+    derP_ = []
+    for P in P_:  # lower row
+        for _P in _P_:  # upper row
+            # test for x overlap between P and _P in 8 directions
+            if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):  # all Ps here are positive
+
+                fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
+                if not fcomp:
+                    derP = comp_slice(_P, P)  # form vertical and directional derivatives
+                    derP_.append(derP)
+                    P.upconnect_.append(derP)
+                    _P.downconnect_cnt += 1
+
+            elif (P.x0 + P.L) < _P.x0:  # stop scanning the rest of lower P_ if there is no overlap
+                break
+    return derP_
+
+
 def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
     derPd_ = []
@@ -311,31 +310,28 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
 def form_PP_shell(blob, derP__, P__, derPd__, Pd__):
     '''
-    form PPs in blob or in FPP
+    form vertically contiguous patterns of patterns by the sign of derP, in blob or in FPP
     '''
+    # there are some bugs here and it should be fixed in the next update.
+    # right now blob's derP__ and their Ps are used twice in derP_2_PP (PPmm -> PPdm, or PPmd -> PPdd)
+    # this will mess up the P's downconnect count when we call the derP_2_PP the 2nd time
+    # since we are already reset it after the checking in the 1st derP_2_PP call.
     if not isinstance(blob, CPP):  # input is blob
+
         blob.derP__ = derP__; blob.P__ = P__
         blob.derPd__ = derPd__; blob.Pd__ = Pd__
-        # derPm - check mP
-        derP_2_PP_(blob.derP__, blob.PPmm_, 1, fPPd=0)  # form vertically contiguous patterns of patterns by the sign of derP
-        # derPm - check dP
-        derP_2_PP_(blob.derP__, blob.PPdm_, 1, fPPd=1)
-        # derPd - check mP
-        derP_2_PP_(blob.derPd__, blob.PPmd_, 1, fPPd=0)
-        # derPd - check dP
-        derP_2_PP_(blob.derPd__, blob.PPdd_, 1, fPPd=1)
+        derP_2_PP_(blob.derP__, blob.PPmm_, 1, fPPd=0)   # cluster by derPm mP sign
+        derP_2_PP_(blob.derP__, blob.PPdm_, 1, fPPd=1)   # cluster by derPm dP sign
+        derP_2_PP_(blob.derPd__, blob.PPmd_, 1, fPPd=0)  # cluster by derPd mP sign
+        derP_2_PP_(blob.derPd__, blob.PPdd_, 1, fPPd=1)  # cluster by derPd dP sign
 
     else:  # input is FPP
         blob.derPf__ = derP__; blob.Pf__ = P__
         blob.derPdf__ = derPd__; blob.Pdf__ = Pd__
-        # derPmf - check mP
-        derP_2_PP_(blob.derPf__, blob.PPmmf_, 0, fPPd=0)  # form vertically contiguous patterns of patterns by the sign of derP
-        # derPmf - check dP
-        derP_2_PP_(blob.derPf__, blob.PPdmf_, 0, fPPd=1)
-        # derPdf - check mP
-        derP_2_PP_(blob.derPdf__, blob.PPmdf_, 0, fPPd=0)
-        # derPdf - check dP
-        derP_2_PP_(blob.derPdf__, blob.PPddf_, 0, fPPd=1)
+        derP_2_PP_(blob.derPf__, blob.PPmmf_, 0, fPPd=0)   # cluster by derPmf mP sign
+        derP_2_PP_(blob.derPf__, blob.PPdmf_, 0, fPPd=1)   # cluster by derPmf dP sign
+        derP_2_PP_(blob.derPdf__, blob.PPmdf_, 0, fPPd=0)  # cluster by derPdf mP sign
+        derP_2_PP_(blob.derPdf__, blob.PPddf_, 0, fPPd=1)  # cluster by derPdf dP sign
 
 
 def derP_2_PP_(derP_, PP_, fflip, fPPd):
@@ -375,8 +371,8 @@ def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
             else:
                 if fPPd: same_sign = (iderP.dP > 0) == (derP.dP > 0)  # comp dP sign
                 else: same_sign = (iderP.mP > 0) == (derP.mP > 0)  # comp mP sign
-                if same_sign:
-                    if not (iderP.flip_val>0) and not (derP.flip_val>0):  # upconnect derP has different PP, merge them
+
+                if same_sign and not (iderP.flip_val>0) and not (derP.flip_val>0):  # upconnect derP has different PP, merge them
                         if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
                             merge_PP(iderP.PP, derP.PP, PP_)
                         else:  # accumulate derP in current PP
@@ -412,7 +408,7 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
             # accumulate if PP' derP not in _PP
             _PP.derPP.accumulate(flip_val=derP.flip_val, mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx,
                                  mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                                 mDy=derP.mDy, dDy=derP.dDy)
+                                 mDy=derP.mDy, dDy=derP.dDy, Ddx=derP.Ddx, Mdx=derP.Mdx)
     if PP in PP_:
         PP_.remove(PP)  # remove merged PP
 
@@ -482,7 +478,7 @@ def accum_Dert(Dert: dict, **params) -> None:
 def accum_PP(PP, derP):  # accumulate derP params in PP
 
     PP.derPP.accumulate(flip_val=derP.flip_val, mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                        mDy=derP.mDy, dDy=derP.dDy)
+                        mDy=derP.mDy, dDy=derP.dDy, Ddx=derP.Ddx, Mdx=derP.Mdx)
     PP.derP__.append(derP)
     derP.PP = PP  # update reference
 
@@ -509,9 +505,9 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
 
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
-    s, x0, Dx, Dy, G, M, L = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L
+    s, x0, Dx, Dy, G, M, L, Ddx, Mdx = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L, P.Ddx, P.Mdx
     # params per comp branch, add angle params
-    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L
+    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L, _Ddx, _Mdx = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L, _P.Ddx, _P.Mdx
 
     dX = (x0 + (L-1) / 2) - (_x0 + (_L-1) / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
 
@@ -554,17 +550,16 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     dDdx, dMdx, mDdx, mMdx = 0, 0, 0, 0
     if P.dxdert_ and _P.dxdert_:  # from comp_dx
         fdx = 1
-        dDdx = P.Ddx - _P.Ddx
-        mDdx = min( abs(P.Ddx), abs(_P.Ddx))
-        if (P.Ddx > 0) != (_P.Ddx > 0): mDdx = -mDdx
+        dDdx = Ddx - _Ddx
+        mDdx = min( abs(Ddx), abs(_Ddx))
+        if (Ddx > 0) != (_Ddx > 0): mDdx = -mDdx
         # Mdx is signed:
-        dMdx = min( P.Mdx, _P.Mdx)
-        mMdx = -min( abs(P.Mdx), abs(_P.Mdx))
-        if (P.Mdx > 0) != (_P.Mdx > 0): mMdx = -mMdx
+        dMdx = min( Mdx, _Mdx)
+        mMdx = -min( abs(Mdx), abs(_Mdx))
+        if (Mdx > 0) != (_Mdx > 0): mMdx = -mMdx
     else:
         fdx = 0
     # coeff = 0.7 for semi redundant parameters, 0.5 for fully redundant parameters:
-
     dP = ddX + dL + 0.7*(dM + dDx + dDy)  # -> directional PPd, equal-weight params, no rdn?
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
     if fdx: dP += 0.7*(dDdx + dMdx)
@@ -578,12 +573,11 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     derP = CderP(P=P, _P=_P, flip_val=flip_val,
                  mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
     if fdx:
-        derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx
+        derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx; derP.Ddx=Ddx; derP.Mdx=Mdx
 
     '''
     min comp for rotation: L, Dy, Dx, no redundancy?
     mParam weighting by relative contribution to mP, /= redundancy?
-
     div_f, nvars: if abs dP per PPd, primary comp L, the rest is normalized?
     '''
     return derP
