@@ -46,6 +46,7 @@ class CP(ClusterStructure):
     dert_ = list   # array of pixel-level derts: (p, dy, dx, g, m), extended in intra_blob
     upconnect_ = list
     downconnect_cnt = int
+    flip_val = int
     # only in Pd:
     Pm = object  # reference to root P
     dxdert_ = list
@@ -69,8 +70,7 @@ class CderP(ClusterStructure):
     dDy = int
     P = object  # lower comparand
     _P = object  # higher comparand
-    PP = object  # FPP if flip_val, contains this derP
-    flip_val = int
+    PP = object  # FPP if flip_val, contains this derP, or move to CP?
     # from comp_dx
     fdx = NoneType
     # optional:
@@ -78,8 +78,6 @@ class CderP(ClusterStructure):
     mDdx = int
     dMdx = int
     mMdx = int
-    # Ddx = int, Mdx = int: should be in P?
-
 
 class CPP(ClusterStructure):
 
@@ -143,7 +141,7 @@ def slice_blob(blob, verbose=False):
     height, width = dert__[0].shape
     if verbose: print("Converting to image...")
 
-    for fPPd in range(2):  # run twice, 1st loop fPPd=0, 2nd loop fPpd=1
+    for fPPd in range(2):  # run twice, 1st loop fPPd=0, 2nd loop fPPd=1
 
         P__ , derP__, Pd__, derPd__ = [], [], [], []
         zip_dert__ = zip(*dert__)
@@ -320,21 +318,21 @@ def form_PP_shell(blob, derP__, P__, derPd__, Pd__, fPPd):
         blob.derP__ = derP__; blob.P__ = P__
         blob.derPd__ = derPd__; blob.Pd__ = Pd__
         if fPPd:
-            derP_2_PP_(blob.derP__, blob.PPdm_, 1, fPPd=1)   # cluster by derPm dP sign
-            derP_2_PP_(blob.derPd__, blob.PPdd_, 1, fPPd=1)  # cluster by derPd dP sign
+            derP_2_PP_(blob.derP__, blob.PPdm_, 1, 1)   # cluster by derPm dP sign
+            derP_2_PP_(blob.derPd__, blob.PPdd_, 1, 1)  # cluster by derPd dP sign
         else:
-            derP_2_PP_(blob.derP__, blob.PPmm_, 1, fPPd=0)   # cluster by derPm mP sign
-            derP_2_PP_(blob.derPd__, blob.PPmd_, 1, fPPd=0)  # cluster by derPd mP sign
+            derP_2_PP_(blob.derP__, blob.PPmm_, 1, 0)   # cluster by derPm mP sign
+            derP_2_PP_(blob.derPd__, blob.PPmd_, 1, 0)  # cluster by derPd mP sign
 
     else:  # input is FPP
         blob.derPf__ = derP__; blob.Pf__ = P__
         blob.derPdf__ = derPd__; blob.Pdf__ = Pd__
         if fPPd:
-            derP_2_PP_(blob.derPf__, blob.PPdmf_, 0, fPPd=1)   # cluster by derPmf dP sign
-            derP_2_PP_(blob.derPdf__, blob.PPddf_, 0, fPPd=1)  # cluster by derPdf dP sign
+            derP_2_PP_(blob.derPf__, blob.PPdmf_, 0, 1)   # cluster by derPmf dP sign
+            derP_2_PP_(blob.derPdf__, blob.PPddf_, 0, 1)  # cluster by derPdf dP sign
         else:
-            derP_2_PP_(blob.derPf__, blob.PPmmf_, 0, fPPd=0)   # cluster by derPmf mP sign
-            derP_2_PP_(blob.derPdf__, blob.PPmdf_, 0, fPPd=0)  # cluster by derPdf mP sign
+            derP_2_PP_(blob.derPf__, blob.PPmmf_, 0, 0)   # cluster by derPmf mP sign
+            derP_2_PP_(blob.derPdf__, blob.PPmdf_, 0, 0)  # cluster by derPdf mP sign
 
 
 def derP_2_PP_(derP_, PP_, fflip, fPPd):
@@ -526,9 +524,13 @@ def comp_slice_simple(_P, P):  # forms vertical derivatives of derP params, and 
     mP = mdX + mL + mM  # -> complementary PPm, rdn *= Pd | Pm rolp?
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
 
-    flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
+    P.flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # avoid division by zero
 
-    derP = CderP(P=P, _P=_P, flip_val=flip_val, mP=mP, dP=dP, dX=dX, mL=mL, dL=dL)
+    derP = CderP(P=P, _P=_P, mP=mP, dP=dP, dX=dX, mL=mL, dL=dL)
+
+    if P.flip_val != _P.flip_val:  # orientation change, derP is potential splicing point between PP and FPP
+        P.PP.splice_.append(derP)
+
     return derP
 
 
