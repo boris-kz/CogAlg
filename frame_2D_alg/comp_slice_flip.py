@@ -26,11 +26,11 @@ warnings.filterwarnings('error')
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = .1
-flip_ave_FPP = 5  # flip large FPPs only
+flip_ave_FPP = 0  # flip large FPPs only (change to 0 for debug purpose)
 div_ave = 200
 ave_dX = 10  # difference between median x coords of consecutive Ps
 ave_Dx = 10
-ave_mP = 20  # just a random number right now.
+ave_mP = 8  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
 
@@ -80,11 +80,11 @@ class CderP(ClusterStructure):
     dDx = int
     mDy = int
     dDy = int
-    P = object    # lower comparand
-    _P = object   # higher comparand
-    PP = object   # FPP if flip_val, contains this derP
-    # not needed?:
-    fxflip = bool  # flag: splicing | flipping point
+    P = object   # lower comparand
+    _P = object  # higher comparand
+    PP = object  # FPP if flip_val, contains this derP
+    fxflip = bool  # flag: derP is a higher splicing | flipping point
+    _fxflip = bool  # flag: derP is a lower splicing | flipping point
     # from comp_dx
     fdx = NoneType
     # optional:
@@ -104,9 +104,8 @@ class CPP(ClusterStructure):
     fdiv = NoneType
     box = list   # for visualization only, original box before flipping
     xflip_derP_ = list    # derPs at potential splicing points
-    xflip_derP_PP_ = list   # potentially spliced PPs in FPP
+    xflip_PP_ = list   # potentially spliced PPs in FPP
     # FPP params
-    flip_val = int  # vertical bias in Ps
     dert__ = list
     mask__ = bool
     # PP params
@@ -293,7 +292,7 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
 
                 fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
                 if not fcomp:
-                    derP = comp_slice_full(_P, P)  # form vertical and directional derivatives
+                    derP = comp_slice(_P, P)  # form vertical and directional derivatives
                     derP_.append(derP)
                     P.upconnect_.append(derP)
                     _P.downconnect_cnt += 1
@@ -315,7 +314,7 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
                         fcomp = [1 for derPd in Pd.upconnect_ if Pd is derPd.P]  # upconnect could be derP or dirP
                         if not fcomp:
-                            derPd = comp_slice_full(_Pd, Pd)
+                            derPd = comp_slice(_Pd, Pd)
                             derPd_.append(derPd)
                             Pd.upconnect_.append(derPd)
                             _Pd.downconnect_cnt += 1
@@ -341,17 +340,15 @@ def form_PP_shell(blob, derP__, P__, derPd__, Pd__, fPPd):
             derP_2_PP_(blob.derPd__, blob.PPmd_, 1, 0)  # cluster by derPd mP sign
 
         # assign spliced_PP after forming all PPs and FPPs
-        PPs_ = [blob.PPdm_,blob.PPdd_,blob.PPmm_,blob.PPmd_]
+        PPs_ = [blob.PPdm_, blob.PPdd_, blob.PPmm_, blob.PPmd_]
         for PP_ in PPs_:
-            for PP in PP_:
-                # check 'if FPP' to save on below?
-                # splice FPP with connected PPs:
-                for derP in PP.xflip_derP_:  # check derPs where flip_val changed sign
+            for PP in PP_:  # splice FPP with connected PPs:
+                for derP in PP.xflip_derP_:  # not empty in FPPs bordering on PPs only
                     _P = derP._P
-                    if _P.derP.PP not in PP.xflip_derP_PP_:  # add _PP to P's PP
-                        PP.xflip_derP_PP_.append(_P.derP.PP)
-#                    if FPP not in _P.derP.PP.xflip_derP_PP_:  # add PP to _P's PP
-#                        _P.derP.PP.xflip_derP_PP_.append(PP)
+                    if (derP._fxflip) and isinstance(_P.derP, CderP) and (_P.derP.PP not in PP.xflip_PP_):
+                        PP.xflip_PP_.append(_P.derP.PP)  # derP is a lower splice point
+                    if (derP.fxflip) and (derP.PP not in PP.xflip_PP_):
+                        PP.xflip_PP_.append(derP.PP)  # derP is a higher splice point
     else:
         FPP = blob  # reassign for clarity
         FPP.derPf__ = derP__; FPP.Pf__ = P__
@@ -403,11 +400,11 @@ def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
                 else: same_sign = (iderP.mP > 0) == (derP.mP > 0)  # comp mP sign
 
                 if same_sign and not (iderP.P.Dert.flip_val>0) and not (derP.P.Dert.flip_val>0):  # upconnect derP has different PP, merge them
-                        if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
-                            merge_PP(iderP.PP, derP.PP, PP_)
-                        else:  # accumulate derP in current PP
-                            accum_PP(iderP.PP, derP)
-                            confirmed_upconnect_.append(derP)
+                    if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
+                        merge_PP(iderP.PP, derP.PP, PP_)
+                    else:  # accumulate derP in current PP
+                        accum_PP(iderP.PP, derP)
+                        confirmed_upconnect_.append(derP)
                 elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
                     PP = CPP(Dert=CDert(), derPP=CderP())
                     accum_PP(PP,derP)
@@ -520,8 +517,7 @@ def accum_PP(PP, derP):  # accumulate derP params in PP
     ''' use:
     for param, PP_param in zip(Dert, PP.Dert):
         PP_param+=param
-    ?
-    '''
+    ? '''
     PP.Dert.accumulate(I=Dert.I, Dy=Dert.Dy, Dx=Dert.Dx, G=Dert.G, M=Dert.M, Dyy=Dert.Dyy, Dyx=Dert.Dyx, Dxy=Dert.Dxy, Dxx=Dert.Dxx,
                      Ga=Dert.Ga, Ma=Dert.Ma, Mdx=Dert.Mdx, Ddx=Dert.Ddx, flip_val=Dert.flip_val)
     # accumulate derP params
@@ -531,8 +527,9 @@ def accum_PP(PP, derP):  # accumulate derP params in PP
 
     derP.PP = PP  # update reference
 
-    if derP.fxflip: # add splice point
+    if derP.fxflip or derP._fxflip: # add splice point
         PP.xflip_derP_.append(derP)
+
 
 def comp_dx(P):  # cross-comp of dx s in P.dert_
 
@@ -570,18 +567,22 @@ def comp_slice(_P, P, _derP_):  # forms vertical derivatives of derP params, and
     M /= hyp  # orthogonal M is reduced by hyp
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
 
-    dP = ddX + dL + dM  # -> directional PPd, equal-weight params, no rdn?
-    mP = mdX + mL + mM  # -> complementary PPm, rdn *= Pd | Pm rolp?
+    dP = dL + dM  # -> directional PPd, equal-weight params, no rdn?
+    mP = mL + mM  # -> complementary PPm, rdn *= Pd | Pm rolp?
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
 
-    P.Dert.flip_val = (dX * (P.Dert.Dy / (P.Dert.Dx+.001)) - flip_ave)  # avoid division by zero
+    P.Dert.flip_val = (dX * (P.Dert.Dy / (P.Dert.Dx+.001)) - flip_ave)  # +.001 to avoid division by zero
 
     derP = CderP(P=P, _P=_P, mP=mP, dP=dP, dX=dX, mL=mL, dL=dL)
     P.derP = derP
 
-    # if flip value>0 AND positive mP (predictive value) AND flip_val sign changed AND _P.derP is derP: exclude 1st row Ps
-    if (P.Dert.flip_val>0) and (derP.mP >0) and ((P.Dert.flip_val>0) != (_P.Dert.flip_val>0)) and (isinstance(_P.derP, CderP)):
-        derP.fxflip = 1
+    if P.Dert.flip_val>0:  # derP.PP is FPP and _derP.PP is PP
+        if ~(_P.Dert.flip_val>0) and (derP.mP >0) and (isinstance(_P.derP, CderP)):  # positive mP AND _P.derP is derP: exclude 1st row Ps
+            derP._fxflip = 1  # derP is a lower splice point
+
+    elif _P.Dert.flip_val>0:  # derP.PP is PP and _derP.PP is FPP
+            if (_P.derP.mP >0) and (isinstance(_P.derP, CderP)):  # positive mP AND _P.derP is derP: exclude 1st row Ps
+                _P.derP.fxflip = 1  # _derP is a higher splice point
 
     return derP
 
@@ -656,9 +657,13 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
     derP = CderP(P=P, _P=_P, mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
     P.derP = derP
 
+    # Chee's version:
     # if flip value>0 AND positive mP (predictive value) AND flip_val sign changed AND _P.derP is derP: exclude 1st row Ps
-    if (P.Dert.flip_val>0) and (derP.mP >0) and ((P.Dert.flip_val>0) != (_P.Dert.flip_val>0)) and (isinstance(_P.derP, CderP)):
+    if (P.Dert.flip_val>0) and (derP.mP >0) and ((P.Dert.flip_val>0) != (_P.Dert.flip_val>0)):
         derP.fxflip = 1
+    # if upper row derP xflip flag is true , add current lower row derP as lower spliced point
+    if (isinstance(_P.derP, CderP)) and (_P.derP.fxflip == 1) and (_P.Dert.flip_val>0) and (_P.derP.mP >0):
+        derP.fsplice= 1
 
     if fdx:
         derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx
