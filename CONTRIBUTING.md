@@ -53,7 +53,7 @@ Kok Wei Chee, $14200, team developer
 
 2021:
 
-Kok Wei Chee, $3000, team developer, January-February
+Kok Wei Chee, $4500, team developer, January-March
 
 
 

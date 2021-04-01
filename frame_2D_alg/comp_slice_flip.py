@@ -578,11 +578,11 @@ def comp_slice(_P, P, _derP_):  # forms vertical derivatives of derP params, and
 
     if P.Dert.flip_val>0:  # derP.PP is FPP and _derP.PP is PP
         if ~(_P.Dert.flip_val>0) and (derP.mP >0) and (isinstance(_P.derP, CderP)):  # positive mP AND _P.derP is derP: exclude 1st row Ps
-            derP._fxflip = 1  # derP is a lower splice point
+            derP.fxflip = 1  # derP is a lower splice point
 
     elif _P.Dert.flip_val>0:  # derP.PP is PP and _derP.PP is FPP
             if (_P.derP.mP >0) and (isinstance(_P.derP, CderP)):  # positive mP AND _P.derP is derP: exclude 1st row Ps
-                _P.derP.fxflip = 1  # _derP is a higher splice point
+                _P.derP._fxflip = 1  # _derP is a higher splice point
 
     return derP
 
