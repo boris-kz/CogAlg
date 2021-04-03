@@ -41,7 +41,7 @@ EXCLUDED_ID = -2
 
 FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, G, M, blob_, dert__')
 
-class CFlatBlob(ClusterStructure):
+class CFlatBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     # Dert params
     I = int
     Dy = int
@@ -96,8 +96,11 @@ class CBlob(ClusterStructure):
     Ls = int   # for visibility and next-fork rdn
     sub_layers = list
     a_depth = int  # currently not used
+
     prior_forks = list
-    adj_blobs = list  # for borrowing
+    adj_blobs = list  # for borrowing and merging
+    dir_blobs = list
+    fsliced = int
 
     PP_ = list  # comp_slice_ if not empty
     derP__ = list

@@ -7,7 +7,7 @@ Intelligence is a general cognitive ability, ultimately the ability to predict. 
 
 For excellent popular introductions to cognition-as-prediction perspective see “On Intelligence” by Jeff Hawkins and “How to Create a Mind“ by Ray Kurzweil. On a technical level though, they and most everyone else use neural nets, which work in very coarse statistical fashion. Capsule Networks, recently introduced by Geoffrey Hinton et al, are more local and selective by multiple instantiation parameters. But they still start with weighted summation per parameter, which degrades the data before any comparison and evaluation.
 
-In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+In the next section, I define one-to-one scalar comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline of my approach
@@ -21,25 +21,25 @@ First-level comparands are sensory inputs at the limit of resolution: adjacent p
 
 This specific process description may seem like quite a jump from generalities in the first section. But it really isn’t, internally consistent pattern discovery requires that the process is strictly bottom-up, in complexity of both inputs and operations. And there is no ambiguity at the bottom: predictive value that defines patterns is match from comparison among their elements, initially those pixels. So, I think this process is uniquely consistent with my definitions, please let me know if you see any discrepancy in either.
 
-####Comparison, more in part 1:
+#### Comparison, more in part 1:
 
 Basic comparison is inverse arithmetic operation between single-variable comparands, of incremental power: Boolean, subtraction, division, etc. Each order of comparison forms miss (loss): XOR, difference, ratio, etc., and match (similarity), which can be defined directly or as inverse deviation of miss. Direct match is compression of represented magnitude by replacing larger input with corresponding miss between the inputs: Boolean AND, the smaller input in comp by subtraction, integer part of ratio in comp by division, etc.
 
 These direct similarity measures work if input intensity represents some stable physical property, which anti-correlates with variation. This is the case in tactile but not in visual input: brightness doesn’t correlate with inertia or invariance, dark objects are just as stable as bright ones. Thus, initial match in vision should be defined indirectly, as inverse deviation of variation in intensity. 1D variation is difference, ratio, etc., while multi-D comparison has to combine them into Euclidean distance and gradient, as in common edge detectors.
 
-####Patterns, more in part 2:
+#### Patterns, more in part 2:
 
 Cross-comparison among patterns forms match and miss per parameter, as well as dimensions and distances: external match and miss (these are separate parameters: total value = precision of what * precision of where). Comparison is limited by max. distance between patterns. Overall hierarchy has incremental dimensionality: search levels ( param levels ( pattern levels)).., and pattern comparison is selectively incremental per such level. This is hard to explain in NL, please see the code, starting with line_patterns and line_PPs.
   
 Resulting matches and misses are summed into lateral match and miss per pattern. Proximate input patterns with above-average match to their nearest neighbors are clustered into higher-level patterns. This adds two pattern levels: of composition and derivation, per level of search. Conditional cross-comp over incremental range and derivation, among the same inputs, may also add sub-levels in selected newly formed patterns. On a pixel level, incremental range is using larger kernels, and incremental derivation starts with using Laplacian. 
 
-####Feedback, more in part 3 (needs editing):
+#### Feedback, more in part 3 (needs editing):
 
 Average match is the first type of “input” filters, computed on higher levels. There are also “positional” filters, starting with pixel size and maximal pixel-comparison distance. Quantization order (bit, integer, float...) of such internal and external filters corresponds to the order of comparison, and their value is updated by feedback. These filters work similarly to “attention” in Neural Nets, but I have no equivalent of weight matrix. That’s because learning here is lateral clustering, vs. vertical clustering via backprop or Hebbian learning in ANN.
 
 All filter types represent higher-level averages or co-averages, locally projected by higher-level patterns. Clustering on a filtered level is by the sign of cross-input-match deviation from those filters, so using averages balances positive and negative patterns (spans of above- and below- average cross-match) in future inputs. Such balanced filtering defines inputs that are likely to form novel patterns, avoiding both repetition of known higher-level patterns: predictable inputs, and forming long new negative-value patterns: noisy input spans.
 
-####Hierarchy, part 4 is out of date:
+#### Hierarchy, part 4 is out of date:
 
 Note that there is a single top-order hierarchy, with feedforward inputs and feedback filters passing through the same levels of search and composition. Lower orders are unfolded sequentially, so there’s always a single currently-unfolded hierarchy. That’s why I don’t have many diagrams: they are good at showing relations in 2D, but I have a simple 1D sequence of levels. Nested sub-hierarchies are generated by the process itself, depending on elevation in a higher-order hierarchy. That means I can’t show them in a generic diagram.  
 
@@ -55,7 +55,8 @@ Please see [system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame
 - Many readers note disconnect between abstractions in this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is mostly the same for all raw modalities. 
 - Another complaint is that I don't use mathematical notation, but it doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. 
 - Most people who aspire to work on AGI think in terms behaviour and robotics. I think this is far too coarse to make progress, the most significant mechanisms are on the level of perception. Feedforward (perception) must drive feedback (action), not the other way around.
-- Other unhealthy distractions are supervision and reinforcement. These are optional task-specific add-ons, core cognitive process is unsupervised pattern discovery, and main problem here is scaling in complexity.
+- Other distractions are supervision and reinforcement. These are optional task-specific add-ons, core cognitive process is unsupervised pattern discovery, and main problem here is scaling in complexity.
+- As distinct from KNN, I treat internal and external parameters (inputs and dimensions these inputs are ordered in) very differently. This also applies to filters: projected average values of these parameters. 
 - Don’t even start me on chatbots. 
 
 
@@ -152,7 +153,7 @@ average_|difference| - |difference|. Though less accurate (defined via average d
 - complementary of |difference| within max input.
 
 
-## quantifying lossy compression
+#### quantifying lossy compression
 
 
 There is a general agreement that compression is a measure of similarity, but no one seems to apply it from the bottom up, the bottom being single scalars. Also, any significant compression must be lossy. This is currently evaluated by perceived similarity of reconstructed input to the original input, as well as compression rate. Which is very coarse and subjective. Compression in my level of search is lossless, represented by match on all levels of pattern. All derived representations are redundant, so it’s really an expansion vs. compression overall.  

@@ -2,78 +2,125 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
-#from intra_blob import accum_blob_Dert
 from frame_blobs import CBlob, flood_fill, assign_adjacents
-from comp_slice_ import*
+from comp_slice_ import slice_blob
 
 flip_ave = 10
-ave_dir_val = 1
-ave_M = 20
+ave_dir_val = 500
+ave_M = -500 # i think we should use negative ave M? Since high G blob should have high negative M value
 
 def segment_by_direction(blob, verbose=False):  # draft
 
     dert__ = list(blob.dert__)
     mask__ = blob.mask__
-    merged_blob_ = []
-    weak_dir_blob_ = []
     dy__ = dert__[1]; dx__ = dert__[2]
     # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
 
     dir_blob_, idmap, adj_pairs = flood_fill(dert__, dy__>dx__, verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_dir_blob_Dert)
     assign_adjacents(adj_pairs, CBlob)
 
-    for dir_blob in dir_blob_:
-        if abs(dir_blob.G * ( dir_blob.Dy / (dir_blob.Dx+.001))) > ave_dir_val:  # direction strength eval
-            if dir_blob.M > ave_M:
-                dir_blob.fsliced = 1
-                merged_blob_.append( slice_blob(dir_blob) )  # slice across directional sub-blob
-            else:
-                merged_blob_.append( dir_blob)  # returned blob is not sliced
-        else:
-            weak_dir_blob_.append(dir_blob)  # weak-direction sub-blob, buffer and merge if connected by assign_adjacents
+    merged_blob_ = merge_blobs_recursive(dir_blob_)
 
-    merged_blob_.append([ merge_blobs_recursive( weak_dir_blob_) ])
-
-    return merged_blob_  # merged blobs may or may not be sliced
+    for blob in merged_blob_:
+        if (blob.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
+            blob.fsliced = True
+            slice_blob(blob)  # slice and comp_slice_ across directional sub-blob
 
 
-def merge_blobs_recursive(weak_dir_blob_):  # draft
+def merge_blobs_recursive(dir_blob_):
 
     merged_blob_ = []
-    merged_weak_dir_blob_ = []
+    new_weak_merged_blob_ = []
 
-    for blob in weak_dir_blob_:
-        merge_adjacents_recursive(blob, blob.adj_blobs)  # merge dert__ and accumulate params in blob
+    for blob in dir_blob_:
+        if not blob.fmerged:  # blob evaluation is done in merge_adjacents
+            merged_blob = merge_adjacents_recursive(blob, blob.adj_blobs)  # returned blob should always be merged
 
-        if abs(blob.G * ( blob.Dy / (blob.Dx+.001))) > ave_dir_val:  # direction strength eval
-            if blob.M > ave_M:
-                blob.fsliced = 1
-                merged_blob_.append( slice_blob(blob))  # slice across directional sub-blob
+            rD = merged_blob.Dy / merged_blob.Dx if merged_blob.Dx else 2 * merged_blob.Dy
+            if abs(merged_blob.G * rD) < ave_dir_val:  # direction strength eval
+                new_weak_merged_blob_.append(merged_blob)
             else:
-                merged_blob_.append(blob)  # returned blob is not sliced
-        else:
-            merged_weak_dir_blob_.append(blob)  # weak-direction sub-blob, buffer and merge if connected by assign_adjacents
+                merged_blob_.append(merged_blob)
+        # else:
+            # if blob was merged before, it should be removed from dir_blob_?
+            # merged_blob_.append(blob)
 
-    if merged_weak_dir_blob_:
-        merged_blob_.append([ merge_blobs_recursive( merged_weak_dir_blob_) ])
+    # old weak_merged_blobs are not recycled, they should always be merged in merge_adjacents:
+    if new_weak_merged_blob_:
+        merged_blob_ = merge_blobs_recursive(new_weak_merged_blob_)  # eval direction again after merging
 
     return merged_blob_  # merged blobs may or may not be sliced
 
 
 def merge_adjacents_recursive(blob, adj_blobs):
 
-    for adj_blob, pose in blob.adj_blobs[0]:  # sub_blob.adj_blobs = [ [[adj_blob1, pose1],[adj_blob2, pose2]], A, G, M, Ga]
-            if not adj_blob.fmerged:  # potential merging blob
-                if abs(adj_blob.G * ( adj_blob.Dy / (adj_blob.Dx+.001))) <= ave_dir_val:
+    rD = blob.Dy / blob.Dx if blob.Dx else 2 * blob.Dy
+    if abs(blob.G * rD) < ave_dir_val:  # direction strength eval
+        _fweak = 1
+    else: _fweak = 0
 
-                    if blob not in adj_blob.merged_blob_:  # and adj_blob not in merged_blob_: it can't be, one pass?
-                        adj_blob.fmerged = 1
-                        blob = merge_blobs(blob, adj_blob)  # merge dert__ and accumulate params
-                        merge_adjacents_recursive(blob, adj_blob.adj_blobs)
+    for adj_blob, pose in adj_blobs[0]:  # sub_blob.adj_blobs = [ [[adj_blob1, pose1],[adj_blob2, pose2]], A, G, M, Ga]
+        if not adj_blob.fmerged:  # potential merging blob
 
+            rD = adj_blob.Dy / adj_blob.Dx if adj_blob.Dx else 2*adj_blob.Dy
+            if abs(adj_blob.G * rD) < ave_dir_val:  # direction strength eval
+                fweak = 1
+            else: fweak = 0
 
-def merge_blobs(blob, adj_blob):
-    # merge adj_blob into blob
+            if _fweak or fweak:  # if either blob or adj_blob are weak, they should be merged
+                adj_blob.fmerged = True
+                blob = merge_blobs(blob, adj_blob)  # merge dert__ and accumulate params
+                merge_adjacents_recursive(blob, adj_blob.adj_blobs)
+
+    blob.adj_blobs[0] = []  # remove adj blobs after merging
+    blob.fmerged = True  # always true after checking all adjacents
+
+    return blob
+
+def merge_blobs(blob, adj_blob):  # merge adj_blob into blob
+
+    # accumulate blob Dert
+    blob.accumulate(**{param:getattr(adj_blob.Dert, param) for param in adj_blob.Dert.numeric_params})
+
+    # y0, yn, x0, xn for combined blob and adj blob box
+    y0 = min([blob.box[0],adj_blob.box[0]])
+    yn = max([blob.box[1],adj_blob.box[1]])
+    x0 = min([blob.box[2],adj_blob.box[2]])
+    xn = max([blob.box[3],adj_blob.box[3]])
+    # offsets from combined box
+    y0_offset = blob.box[0]-y0
+    x0_offset = blob.box[2]-x0
+    adj_y0_offset = adj_blob.box[0]-y0
+    adj_x0_offset = adj_blob.box[2]-x0
+
+    # create extended mask from combined box
+    extended_mask__ = np.ones((yn-y0,xn-x0)).astype('bool')
+    for y in range(blob.mask__.shape[0]): # blob mask
+        for x in range(blob.mask__.shape[1]):
+            if not blob.mask__[y,x]: # replace when mask = false
+                extended_mask__[y+y0_offset,x+x0_offset] = blob.mask__[y,x]
+    for y in range(adj_blob.mask__.shape[0]): # adj_blob mask
+        for x in range(adj_blob.mask__.shape[1]):
+            if not adj_blob.mask__[y,x]: # replace when mask = false
+                extended_mask__[y+adj_y0_offset,x+adj_x0_offset] = adj_blob.mask__[y,x]
+
+    # create extended derts from combined box
+    extended_dert__ = [np.zeros((yn-y0,xn-x0)) for _ in range(len(blob.dert__))]
+    for i in range(len(blob.dert__)):
+        for y in range(blob.dert__[i].shape[0]): # blob derts
+            for x in range(blob.dert__[i].shape[1]):
+                if not blob.mask__[y,x]: # replace when mask = false
+                    extended_dert__[i][y+y0_offset,x+x0_offset] = blob.dert__[i][y,x]
+        for y in range(adj_blob.dert__[i].shape[0]): # adj_blob derts
+            for x in range(adj_blob.dert__[i].shape[1]):
+                if not adj_blob.mask__[y,x]: # replace when mask = false
+                    extended_dert__[i][y+adj_y0_offset,x+adj_x0_offset] = adj_blob.dert__[i][y,x]
+
+    # update dert, mask and box
+    blob.dert__ = extended_dert__
+    blob.mask__ = extended_mask__
+    blob.box = [y0,yn,x0,xn]
+
     return blob
 
 
@@ -92,4 +139,3 @@ def accum_dir_blob_Dert(blob, dert__, y, x):
         blob.Dxx += dert__[8][y, x]
         blob.Ga += dert__[9][y, x]
         blob.Ma += dert__[10][y, x]
-        blob.Dir += dert__[11][y,x]

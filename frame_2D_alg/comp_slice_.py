@@ -18,7 +18,7 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
-from slice_utils import draw_PP_
+#from slice_utils import draw_PP_
 
 import warnings  # to detect overflow issue, in case of infinity loop
 warnings.filterwarnings('error')
@@ -67,8 +67,8 @@ class CP(ClusterStructure):
     # only in Pm:
     Pd_ = list
 
-class CderP(ClusterStructure):
-    ## derDert
+class CderDert(ClusterStructure):
+    
     mP = int
     dP = int
     mx = int
@@ -79,21 +79,40 @@ class CderP(ClusterStructure):
     dDx = int
     mDy = int
     dDy = int
+    ''' 
+    currently not used:
+    mDyy = int
+    mDyx = int
+    mDxy = int
+    mDxx = int
+    mGa = int
+    mMa = int
+    mMdx = int
+    mDdx = int
+    dDyy = int
+    dDyx = int
+    dDxy = int
+    dDxx = int
+    dGa = int
+    dMa = int
+    dMdx = int
+    dDdx = int
+    '''
+
+class CderP(ClusterStructure):
+    
+    derDert = object
     P = object   # lower comparand
     _P = object  # higher comparand
     PP = object  # FPP if flip_val, contains this derP
     # from comp_dx
     fdx = NoneType
-    # optional:
-    dDdx = int
-    mDdx = int
-    dMdx = int
-    mMdx = int
+
 
 class CPP(ClusterStructure):
 
     Dert  = object  # set of P params accumulated in PP
-    derPP = object  # set of derP params accumulated in PP
+    derDert = object  # set of derP params accumulated in PP
     # between PPs:
     upconnect_ = list
     downconnect_cnt = int
@@ -158,6 +177,7 @@ def slice_blob(blob, verbose=False):
 
         form_PP_shell(blob, derP__, P__, derPd__, Pd__, fPPd)  # form PPs in blob or in FPP
 
+    # yet to be updated
     # draw PPs
     #    if not isinstance(blob, CPP):
     #        draw_PP_(blob)
@@ -171,18 +191,18 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) verti
     dert_ = [list(idert_[0])]  # get first dert from idert_ (generator/iterator)
     _mask = mask_[0]  # mask bit per dert
     if ~_mask:
-        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, Dir = dert_[0]; L = 1; x0 = 0  # initialize P params with first dert
+        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert_[0]; L = 1; x0 = 0  # initialize P params with first dert
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
 
         if mask:  # masks: if 1,_0: P termination, if 0,_1: P initialization, if 0,_0: P accumulation:
             if ~_mask:  # _dert is not masked, dert is masked, terminate P:
-                P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, Dir=Dir), L=L, x0=x0, dert_=dert_, y=y)
+                P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma), L=L, x0=x0, dert_=dert_, y=y)
                 P_.append(P)
         else:  # dert is not masked
             if _mask:  # _dert is masked, initialize P params:
-                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, Dir = dert; L = 1; x0 = x; dert_ = [dert]
+                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert; L = 1; x0 = x; dert_ = [dert]
             else:
                 I += dert[0]  # _dert is not masked, accumulate P params with (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) = dert
                 Dy += dert[1]
@@ -195,13 +215,12 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) verti
                 Dxx += dert[8]
                 Ga += dert[9]
                 Ma += dert[10]
-                Dir += dert[11]
                 L += 1
                 dert_.append(dert)
         _mask = mask
 
     if ~_mask:  # terminate last P in a row
-        P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, Dir=Dir), L=L, x0=x0, dert_=dert_, y=y)
+        P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma), L=L, x0=x0, dert_=dert_, y=y)
         P_.append(P)
 
     return P_
@@ -218,7 +237,7 @@ def form_Pd_(P_):
             Pd_ = []   # Pds in P
             _dert = iP.dert_[0]  # 1st dert
             dert_ = [_dert]
-            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, Dir = _dert; L = 1; x0 = iP.x0  # initialize P params with first dert
+            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma= _dert; L = 1; x0 = iP.x0  # initialize P params with first dert
             _sign = _dert[2] > 0
             x = 1  # relative x within P
 
@@ -236,24 +255,23 @@ def form_Pd_(P_):
                     Dxx += dert[8]
                     Ga += dert[9]
                     Ma += dert[10]
-                    Dir += dert[11]
                     L += 1
                     dert_.append(dert)
 
                 else:  # sign change, terminate P
-                    P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, Dir=Dir),
+                    P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma),
                            L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign, Pm=iP)
                     if Dx > ave_Dx:
                         # cross-comp of dx in P.dert_
                         comp_dx(P); P_Ddx += P.Dert.Ddx; P_Mdx += P.Dert.Mdx
                     Pd_.append(P)
                     # reinitialize params
-                    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, Dir = dert; x0 = iP.x0+x; L = 1; dert_ = [dert]
+                    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert; x0 = iP.x0+x; L = 1; dert_ = [dert]
 
                 _sign = sign
                 x += 1
             # terminate last P
-            P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, Dir=Dir),
+            P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma),
                    L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign, Pm=iP)
             if Dx > ave_Dx:
                 comp_dx(P); P_Ddx += P.Dert.Ddx; P_Mdx += P.Dert.Mdx
@@ -327,7 +345,7 @@ def derP_2_PP_(derP_, PP_, fflip, fPPd):
     '''
     for derP in reversed(derP_):  # bottom-up to follow upconnects, derP is stored top-down
         if not derP.P.downconnect_cnt and not isinstance(derP.PP, CPP):  # root derP was not terminated in prior call
-            PP = CPP(Dert=CDert(), derPP=CderP())  # init
+            PP = CPP(Dert=CDert(), derDert=CderDert())  # init
             accum_PP(PP,derP)
 
             if derP._P.upconnect_:  # derP has upconnects
@@ -355,7 +373,7 @@ def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
                     accum_PP(iderP.PP, derP)
                     confirmed_upconnect_.append(derP)
             elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
-                PP = CPP(Dert=CDert(), derPP=CderP())
+                PP = CPP(Dert=CDert(), derDert=CderDert())
                 accum_PP(PP,derP)
                 derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
 
@@ -377,14 +395,11 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
         if derP not in _PP.derP__:
             _PP.derP__.append(derP)
             derP.PP = _PP  # update reference
-            Dert = derP.P.Dert
-            # accumulate Dert param of derP
-            _PP.Dert.accumulate(I=Dert.I, Dy=Dert.Dy, Dx=Dert.Dx, G=Dert.G, M=Dert.M, Dyy=Dert.Dyy, Dyx=Dert.Dyx, Dxy=Dert.Dxy, Dxx=Dert.Dxx,
-                               Ga=Dert.Ga, Ma=Dert.Ma, Mdx=Dert.Mdx, Ddx=Dert.Ddx)
-            # accumulate if PP' derP not in _PP
-            _PP.derPP.accumulate(mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx,
-                                 mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                                 mDy=derP.mDy, dDy=derP.dDy)
+            # accumulate Dert
+            _PP.Dert.accumulate(**{param:getattr(derP.P.Dert, param) for param in _PP.Dert.numeric_params})
+            # accumulate derDert
+            _PP.derDert.accumulate(**{param:getattr(derP.derDert, param) for param in _PP.derDert.numeric_params})
+    
     if PP in PP_:
         PP_.remove(PP)  # remove merged PP
 
@@ -392,19 +407,12 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
 def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
-def accum_PP(PP, derP):  # accumulate derP params in PP
-
-    Dert = derP.P.Dert
-    # accumulate Dert params
-    ''' use:
-    for param, PP_param in zip(Dert, PP.Dert):
-        PP_param+=param
-    ? '''
-    PP.Dert.accumulate(I=Dert.I, Dy=Dert.Dy, Dx=Dert.Dx, G=Dert.G, M=Dert.M, Dyy=Dert.Dyy, Dyx=Dert.Dyx, Dxy=Dert.Dxy, Dxx=Dert.Dxx,
-                     Ga=Dert.Ga, Ma=Dert.Ma, Mdx=Dert.Mdx, Ddx=Dert.Ddx)
-    # accumulate derP params
-    PP.derPP.accumulate(mP=derP.mP, dP=derP.dP, mx=derP.mx, dx=derP.dx, mL=derP.mL, dL=derP.dL, mDx=derP.mDx, dDx=derP.dDx,
-                        mDy=derP.mDy, dDy=derP.dDy)
+def accum_PP(PP, derP):  # accumulate params in PP
+    # accumulate Dert
+    PP.Dert.accumulate(**{param:getattr(derP.P.Dert, param) for param in PP.Dert.numeric_params})
+    # accumulate derDert
+    PP.derDert.accumulate(**{param:getattr(derP.derDert, param) for param in PP.derDert.numeric_params})
+    
     PP.derP__.append(derP)
 
     derP.PP = PP  # update reference
