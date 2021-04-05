@@ -18,6 +18,7 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
+from frame_blobs import CDert
 #from slice_utils import draw_PP_
 
 import warnings  # to detect overflow issue, in case of infinity loop
@@ -33,21 +34,6 @@ ave_Dx = 10
 ave_mP = 8  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
-
-class CDert(ClusterStructure):
-    I = int
-    Dy = int
-    Dx = int
-    G = int
-    M = int
-    Dyy = int
-    Dyx = int
-    Dxy = int
-    Dxx = int
-    Ga = int
-    Ma = int
-    Mdx = int
-    Ddx = int
 
 class CP(ClusterStructure):
 
@@ -68,7 +54,7 @@ class CP(ClusterStructure):
     Pd_ = list
 
 class CderDert(ClusterStructure):
-    
+
     mP = int
     dP = int
     mx = int
@@ -79,8 +65,7 @@ class CderDert(ClusterStructure):
     dDx = int
     mDy = int
     dDy = int
-    ''' 
-    currently not used:
+    # dDdx,mDdx,dMdx,mMdx is used by comp_dx
     mDyy = int
     mDyx = int
     mDxy = int
@@ -97,10 +82,10 @@ class CderDert(ClusterStructure):
     dMa = int
     dMdx = int
     dDdx = int
-    '''
+
 
 class CderP(ClusterStructure):
-    
+
     derDert = object
     P = object   # lower comparand
     _P = object  # higher comparand
@@ -363,8 +348,8 @@ def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
     for derP in iderP._P.upconnect_:  # potential upconnects from previous call
         if derP not in iderP.PP.derP__:  # derP should not in current iPP derP_ list, but this may occur after the PP merging
 
-            if fPPd: same_sign = (iderP.dP > 0) == (derP.dP > 0)  # comp dP sign
-            else: same_sign = (iderP.mP > 0) == (derP.mP > 0)  # comp mP sign
+            if fPPd: same_sign = (iderP.derDert.dP > 0) == (derP.derDert.dP > 0)  # comp dP sign
+            else: same_sign = (iderP.derDert.mP > 0) == (derP.derDert.mP > 0)  # comp mP sign
 
             if same_sign:  # upconnect derP has different PP, merge them
                 if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):
@@ -399,7 +384,7 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
             _PP.Dert.accumulate(**{param:getattr(derP.P.Dert, param) for param in _PP.Dert.numeric_params})
             # accumulate derDert
             _PP.derDert.accumulate(**{param:getattr(derP.derDert, param) for param in _PP.derDert.numeric_params})
-    
+
     if PP in PP_:
         PP_.remove(PP)  # remove merged PP
 
@@ -412,7 +397,7 @@ def accum_PP(PP, derP):  # accumulate params in PP
     PP.Dert.accumulate(**{param:getattr(derP.P.Dert, param) for param in PP.Dert.numeric_params})
     # accumulate derDert
     PP.derDert.accumulate(**{param:getattr(derP.derDert, param) for param in PP.derDert.numeric_params})
-    
+
     PP.derP__.append(derP)
 
     derP.PP = PP  # update reference
@@ -460,7 +445,7 @@ def comp_slice(_P, P, _derP_):  # forms vertical derivatives of derP params, and
 
     P.Dert.flip_val = (dX * (P.Dert.Dy / (P.Dert.Dx+.001)) - flip_ave)  # +.001 to avoid division by zero
 
-    derP = CderP(P=P, _P=_P, mP=mP, dP=dP, dX=dX, mL=mL, dL=dL)
+    derP = CderP(derDert=CderDert(mP=mP, dP=dP, dX=dX, mL=mL, dL=dL), P=P, _P=_P)
     P.derP = derP
 
     return derP
@@ -531,11 +516,11 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
     if fdx: mP += 0.7*(mDdx + mMdx)
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
 
-    derP = CderP(P=P, _P=_P, mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy)
+    derP = CderP(P=P, _P=_P, derDert=CderDert(mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, mDx=mDx, dDx=dDx, mDy=mDy, dDy=dDy))
     P.derP = derP
 
     if fdx:
-        derP.fdx=1; derP.dDdx=dDdx; derP.mDdx=mDdx; derP.dMdx=dMdx; derP.mMdx=mMdx
+        derP.fdx=1; derP.derDert.dDdx=dDdx; derP.derDert.mDdx=mDdx; derP.derDert.dMdx=dMdx; derP.derDert.mMdx=mMdx
 
     '''
     min comp for rotation: L, Dy, Dx, no redundancy?

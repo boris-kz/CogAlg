@@ -8,7 +8,7 @@
     -
     Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions,
     orientation. These params are essential because value of prediction = precision of what * precision of where.
-    Clustering here is nearest-neighbor only, same as image segmentation, to avoid overlap among blobs.
+    Clustering here is nearest-neighbor only, to avoid overlap among blobs.
     -
     Main functions:
     - comp_pixel:
@@ -34,7 +34,6 @@ from collections import namedtuple
 from class_cluster import ClusterStructure, NoneType
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
-aveB = 50
 UNFILLED = -1
 EXCLUDED_ID = -2
 
@@ -100,6 +99,15 @@ class CBlob(ClusterStructure):
     fsliced = bool
     fmerged = bool
 
+    '''
+    PP_ = list  # comp_slice_ if not empty
+    derP__ = list
+    P__ = list
+    PPd_ = list  # PP_derPd_
+    derPd__ = list
+    Pd__ = list
+    '''
+    # if we are not using PPmm, PPdm, PPmd, PPdd, is there a new PP structure?
     PPmm_ = list  # comp_slice_ if not empty
     PPdm_ = list  # comp_slice_ if not empty
     derP__ = list
@@ -249,7 +257,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum
                 blob.box = y0, yn, x0, xn
                 blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
-                blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
+                blob.adj_blobs = [[], 0, 0, 0, 0]
 
                 if verbose:
                     progress += blob.A * step
@@ -283,10 +291,17 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
             raise ValueError("something is wrong with pose")
 
         # bilateral assignments
-        blob1.adj_blobs[0].append(blob2)
-        blob1.adj_blobs[1].append(pose2)
-        blob2.adj_blobs[0].append(blob1)
-        blob2.adj_blobs[1].append(pose1)
+        blob1.adj_blobs[0].append((blob2, pose2))
+        blob2.adj_blobs[0].append((blob1, pose1))
+        blob1.adj_blobs[1] += blob2.A
+        blob2.adj_blobs[1] += blob1.A
+        blob1.adj_blobs[2] += blob2.Dert.G
+        blob2.adj_blobs[2] += blob1.Dert.G
+        blob1.adj_blobs[3] += blob2.Dert.M
+        blob2.adj_blobs[3] += blob1.Dert.M
+        if hasattr(blob1,'Ma'): # add Ma to deep blob only
+            blob1.adj_blobs[4] += blob2.Dert.Ma
+            blob2.adj_blobs[4] += blob1.Dert.Ma
 
 
 def print_deep_blob_forking(deep_layer):
@@ -350,19 +365,26 @@ if __name__ == "__main__":
             '''
             G = blob.Dert.G
             M = blob.Dert.M
-            blob.root_dert__=root_dert__
-            blob.prior_forks=['g']  # not sure about this
+            adj_G = blob.adj_blobs[2]
+            borrow_G = min(abs(G), abs(adj_G) / 2)
+            '''
+            int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, 
+            same as pri_M and next_M in line patterns but direction here is radial: inside-out
+            borrow_G = min, ~ comp(G, _G): only the value present in both parties can be borrowed from one to another
+            Add borrow_G -= inductive leaking across external blob?
+            '''
+            blob.root_dert__=root_dert__; blob.prior_forks=['g']  # not sure about this
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
 
             if blob.sign:  # +G on first fork
-                if G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                     blob.rdn = 1
                     blob.f_comp_a = 1
                     deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
                     # dert__ comp_a in 2x2 kernels
 
-            elif M > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+            elif M - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                 blob.rdn = 1
                 blob.rng = 1
                 blob.f_root_a = 0

@@ -1,87 +1,75 @@
-from collections import deque
-import sys
+'''
+- Segment input blob into dir_blobs by primary direction of kernel gradient: dy>dx
+- Merge weakly directional dir_blobs, with dir_val < cost of comp_slice_
+- Evaluate merged blobs for comp_slice_: if blob.M > ave_M
+'''
+
 import numpy as np
-from class_cluster import ClusterStructure, NoneType
 from frame_blobs import CBlob, flood_fill, assign_adjacents
 from comp_slice_ import slice_blob
 
 flip_ave = 10
-ave_dir_val = 500
-ave_M = -500 # i think we should use negative ave M? Since high G blob should have high negative M value
+ave_dir_val = 50
+ave_M = -500  # high negative ave M for high G blobs
 
-def segment_by_direction(blob, verbose=False):  # draft
+def segment_by_direction(blob, verbose=False):
 
     dert__ = list(blob.dert__)
     mask__ = blob.mask__
     dy__ = dert__[1]; dx__ = dert__[2]
-    # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
 
-    dir_blob_, idmap, adj_pairs = flood_fill(dert__, dy__>dx__, verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_dir_blob_Dert)
+    # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
+    dir_blob_, idmap, adj_pairs = \
+        flood_fill(dert__, abs(dy__) > abs(dx__), verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_dir_blob_Dert)
     assign_adjacents(adj_pairs, CBlob)
 
-    merged_blob_ = merge_blobs_recursive(dir_blob_)
-
-    for blob in merged_blob_:
-        if (blob.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
-            blob.fsliced = True
-            slice_blob(blob)  # slice and comp_slice_ across directional sub-blob
-
-
-def merge_blobs_recursive(dir_blob_):
-
-    merged_blob_ = []
-    new_weak_merged_blob_ = []
-
     for blob in dir_blob_:
-        if not blob.fmerged:  # blob evaluation is done in merge_adjacents
-            merged_blob = merge_adjacents_recursive(blob, blob.adj_blobs)  # returned blob should always be merged
+        blob = merge_adjacents_recursive(blob, blob.adj_blobs)
 
-            rD = merged_blob.Dy / merged_blob.Dx if merged_blob.Dx else 2 * merged_blob.Dy
-            if abs(merged_blob.G * rD) < ave_dir_val:  # direction strength eval
-                new_weak_merged_blob_.append(merged_blob)
-            else:
-                merged_blob_.append(merged_blob)
-        # else:
-            # if blob was merged before, it should be removed from dir_blob_?
-            # merged_blob_.append(blob)
+        if (blob.Dert.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
+            blob.fsliced = True
+            slice_blob(blob,verbose)  # slice and comp_slice_ across directional sub-blob
 
-    # old weak_merged_blobs are not recycled, they should always be merged in merge_adjacents:
-    if new_weak_merged_blob_:
-        merged_blob_ = merge_blobs_recursive(new_weak_merged_blob_)  # eval direction again after merging
-
-    return merged_blob_  # merged blobs may or may not be sliced
+        blob.dir_blobs.append(blob)
 
 
 def merge_adjacents_recursive(blob, adj_blobs):
 
-    rD = blob.Dy / blob.Dx if blob.Dx else 2 * blob.Dy
-    if abs(blob.G * rD) < ave_dir_val:  # direction strength eval
-        _fweak = 1
-    else: _fweak = 0
+    _fweak = directionality_eval(blob)  # direction eval on the input blob
 
-    for adj_blob, pose in adj_blobs[0]:  # sub_blob.adj_blobs = [ [[adj_blob1, pose1],[adj_blob2, pose2]], A, G, M, Ga]
-        if not adj_blob.fmerged:  # potential merging blob
+    for adj_blob in adj_blobs[0]:  # adj_blobs = [ [adj_blob1,adj_blob2], [pose1,pose2] ]
+        # if adj_blob was merged, it should be replaced by a ref to merged blob, so we don't need fmerged?:
+        if not adj_blob.fmerged:
+            fweak = directionality_eval(blob)  # direction eval on the adjacent blob
 
-            rD = adj_blob.Dy / adj_blob.Dx if adj_blob.Dx else 2*adj_blob.Dy
-            if abs(adj_blob.G * rD) < ave_dir_val:  # direction strength eval
-                fweak = 1
-            else: fweak = 0
-
-            if _fweak or fweak:  # if either blob or adj_blob are weak, they should be merged
+            if _fweak: # blob is weak, merge blob to adj blob
+                blob.fmerged = True
+                blob = merge_blobs(adj_blob, blob)  # merge dert__ and accumulate params
+                
+            elif fweak:  # adj blob is weak, merge adj blob to blob
                 adj_blob.fmerged = True
                 blob = merge_blobs(blob, adj_blob)  # merge dert__ and accumulate params
-                merge_adjacents_recursive(blob, adj_blob.adj_blobs)
-
-    blob.adj_blobs[0] = []  # remove adj blobs after merging
-    blob.fmerged = True  # always true after checking all adjacents
-
+            
+            _fweak = directionality_eval(blob)  # if merged blob is still weak, continue searching and merging
+            if _fweak: merge_adjacents_recursive(blob, adj_blob.adj_blobs) 
+            
     return blob
 
+
+def directionality_eval(blob):
+    
+    rD = blob.Dert.Dy / blob.Dert.Dx if blob.Dert.Dx else 2 * blob.Dert.Dy
+    if abs(blob.Dert.G * rD) < ave_dir_val:  # direction strength eval
+        fweak = 1
+    else: fweak = 0
+    
+    return fweak
+    
+    
 def merge_blobs(blob, adj_blob):  # merge adj_blob into blob
 
     # accumulate blob Dert
     blob.accumulate(**{param:getattr(adj_blob.Dert, param) for param in adj_blob.Dert.numeric_params})
-
     # y0, yn, x0, xn for combined blob and adj blob box
     y0 = min([blob.box[0],adj_blob.box[0]])
     yn = max([blob.box[1],adj_blob.box[1]])
@@ -125,17 +113,17 @@ def merge_blobs(blob, adj_blob):  # merge adj_blob into blob
 
 
 def accum_dir_blob_Dert(blob, dert__, y, x):
-    blob.I += dert__[0][y, x]
-    blob.Dy += dert__[1][y, x]
-    blob.Dx += dert__[2][y, x]
-    blob.G += dert__[3][y, x]
-    blob.M += dert__[4][y, x]
+    blob.Dert.I += dert__[0][y, x]
+    blob.Dert.Dy += dert__[1][y, x]
+    blob.Dert.Dx += dert__[2][y, x]
+    blob.Dert.G += dert__[3][y, x]
+    blob.Dert.M += dert__[4][y, x]
 
     if len(dert__) > 5:  # past comp_a fork
 
-        blob.Dyy += dert__[5][y, x]
-        blob.Dyx += dert__[6][y, x]
-        blob.Dxy += dert__[7][y, x]
-        blob.Dxx += dert__[8][y, x]
-        blob.Ga += dert__[9][y, x]
-        blob.Ma += dert__[10][y, x]
+        blob.Dert.Dyy += dert__[5][y, x]
+        blob.Dert.Dyx += dert__[6][y, x]
+        blob.Dert.Dxy += dert__[7][y, x]
+        blob.Dert.Dxx += dert__[8][y, x]
+        blob.Dert.Ga += dert__[9][y, x]
+        blob.Dert.Ma += dert__[10][y, x]
