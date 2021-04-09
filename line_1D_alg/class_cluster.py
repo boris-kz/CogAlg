@@ -1,7 +1,5 @@
 """
-Chee's implementation
-
-Provide a base class for cluster objects in 1D implementation of CogAlg.
+Provide a base class for cluster objects in 2D implementation of CogAlg.
 Features:
 - Unique instance ids per class.
 - Instances are retrievable by ids via class.
@@ -20,11 +18,11 @@ _methods_template = '''
 @property
 def id(self):
     return self._id
-
+    
 def pack(self{pack_args}):
     """Pack all fields/params back into {typename}."""
     {pack_assignments}
-
+    
 def unpack(self):
     """Unpack all fields/params back into the cluster."""
     return ({param_vals})
@@ -40,20 +38,22 @@ def __repr__(self):
     return "{typename}({repr_fmt})" % ({numeric_param_vals})
 '''
 
-
 class MetaCluster(type):
     """
     Serve as a factory for creating new cluster classes.
     """
-
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
         # get fields/params and numeric params
-        params = tuple(attr for attr in attrs
-                       if not attr.startswith('_')
-                       and not callable(attr))
-        numeric_params = tuple(param for param in params
-                               if issubclass(attrs[param], Number))
 
+        # params = tuple(attr for attr in attrs if not callable(attr))  # callable: _id, hid and weakref (see attrs['slots']
+
+        # only ignore param name start with double underscore
+        params = tuple(attr for attr in attrs
+                   if not attr.startswith('__')
+                   and not callable(attr))
+
+        numeric_params = tuple(param for param in params
+                               if (issubclass(attrs[param], Number)) and not (issubclass(attrs[param], bool)) ) # avoid accumulate bool, which is flag
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -64,12 +64,12 @@ class MetaCluster(type):
                                          for param in numeric_params),
             pack_args=', '.join(param for param in ('', *params)),
             pack_assignments='; '.join(f'self.{param} = {param}'
-                                       for param in params)
-            if params else 'pass',
+                                  for param in params)
+                             if params else 'pass',
             accumulations='; '.join(f"self.{param} += "
                                     f"kwargs.get('{param}', 0)"
                                     for param in numeric_params)
-            if params else 'pass',
+                          if params else 'pass',
             repr_fmt=', '.join(f'{param}=%r' for param in numeric_params),
         )
         # Generate methods
@@ -86,7 +86,7 @@ class MetaCluster(type):
         for param in params:
             attrs[param + '_type'] = attrs.pop(param)
         # attrs['params'] = params
-        # attrs['numeric_params'] = numeric_params
+        attrs['numeric_params'] = numeric_params
 
         # Add fields/params and other instance attributes
         attrs['__slots__'] = (('_id', 'hid', *params, '__weakref__')
@@ -109,13 +109,10 @@ class MetaCluster(type):
             setattr(instance, param,
                     kwargs.get(param,
                                getattr(cls, param + '_type')()))
-
         # Set id
         instance._id = len(cls._instances)
-
         # Create ref
         cls._instances.append(weakref.ref(instance))
-
         # no default higher cluster id, set to None
         instance.hid = None  # higher cluster's id
 
@@ -173,8 +170,6 @@ class ClusterStructure(metaclass=MetaCluster):
     def __init__(self, **kwargs):
         pass
 
-
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size
-
     size(ClusterStructure)

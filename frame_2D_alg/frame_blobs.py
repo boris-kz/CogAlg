@@ -96,9 +96,9 @@ class CBlob(ClusterStructure):
 
     prior_forks = list
     adj_blobs = list  # for borrowing and merging
-    dir_blobs = list
+    dir_blobs = list  # primarily vertically | laterally oriented edge blobs
+    dir_val = int     # directional value in dir_blobs
     fsliced = bool
-    fmerged = bool
 
     PPmm_ = list  # comp_slice_ if not empty
     PPdm_ = list  # comp_slice_ if not empty
@@ -172,7 +172,7 @@ def accum_blob_Dert(blob, dert__, y, x):
     blob.Dert.M += dert__[4][y, x]
 
 
-def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum_func=accum_blob_Dert, prior_forks=[]):
+def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=False, accum_func=accum_blob_Dert, prior_forks=[]):
 
     if mask__ is None: # non intra dert
         height, width = dert__[0].shape
@@ -218,7 +218,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum
                     elif x1 > xn:
                         xn = x1
                     # determine neighbors' coordinates, 4 for -, 8 for +
-                    if blob.sign:   # include diagonals
+                    if blob.sign or fseg:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
                                            (y1 - 1, x1 + 1), (y1, x1 + 1),
                                            (y1 + 1, x1 + 1), (y1 + 1, x1),
@@ -243,6 +243,19 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, accum
                         # else check if same-signed
                         elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
+
+                     # temporary commented out, still buggy
+#                    if fseg: # if call from segment by direction, add checking for diagonal directions
+#                        new_adj_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1 + 1),
+#                                          (y1 + 1, x1 + 1), (y1 + 1, x1 - 1)]
+#
+#                        for y2, x2 in new_adj_coords:
+#                        # if image boundary is not reached, is filled , and not same-signed: add adjacency
+#                            if not (y2 < 0 or y2 >= height or x2 < 0 or x2 >= width or idmap[y2, x2] == EXCLUDED_ID) and not \
+#                            (idmap[y2, x2] == UNFILLED) and \
+#                            (blob.sign != sign__[y2, x2]):
+#                                adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
+
                 # terminate blob
                 yn += 1
                 xn += 1

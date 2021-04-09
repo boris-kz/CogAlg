@@ -12,7 +12,6 @@ differences in interfaces are mostly eliminated.
 import weakref
 from numbers import Number
 
-
 NoneType = type(None)
 
 _methods_template = '''
