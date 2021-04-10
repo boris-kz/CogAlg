@@ -52,7 +52,7 @@ ave_M = 50  # min M for initial incremental-range comparison(t_), higher cost th
 ave_D = 5  # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdm = .5  # average dm / m, to project bi_m = m * 1.5
-ini_y = 0
+init_y = 0  # starting row, the whole frame doesn't need to be processed
 
 '''
     Conventions:
@@ -67,7 +67,8 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []
 
-    for y in range(ini_y + 1, Y):  # y is index of new line pixel_
+    # put a brake point here, the code only needs one row to process
+    for y in range(init_y + 1, Y):  # y is index of new line pixel_
         # initialization:
         pixel_ = frame_of_pixels_[y, :]
         dert_ = []
@@ -85,7 +86,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
         Pm_ = form_Pm_(dert_)  # forms m-sign patterns
         if len(Pm_) > 4:
-            adj_M_ = form_adjacent_M_(Pm_)  # compute adjacent Ms for borrowing
+            adj_M_ = form_adjacent_M_(Pm_)  # compute adjacent Ms to evaluate contrastive borrow potential
             intra_Pm_(Pm_, adj_M_, fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per Pm
 
         frame_of_patterns_.append([Pm_])
@@ -234,14 +235,13 @@ def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 a
     rdert_ = []  # prefix '_' denotes the prior of same-name variables, initialization:
     __dert = dert_[0]  # prior-prior dert
     __i = __dert.p
-
-    _dert = dert_[2]
+    _dert = dert_[2]  # initialize _dert with sparse p_, skipping odd ps
     _i = _dert.p
     _short_rng_d = _dert.d
     _short_rng_m = _dert.m
 
     _d = _i - __i
-    if fid:
+    if fid:  # flag: input is d, from deriv_comp
         _m = min(__i, _i) - ave_min
     else:
         _m = ave - abs(_dert.d)  # no ave * rng: m and d value is cumulative
