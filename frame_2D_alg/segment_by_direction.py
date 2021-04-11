@@ -23,8 +23,7 @@ def segment_by_direction(iblob, verbose=False):
     # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
     dir_blob_, idmap, adj_pairs = \
         flood_fill(dert__, abs(dy__) > abs(dx__), verbose=False, mask__=mask__, blob_cls=CBlob, fseg=True, accum_func=accum_dir_blob_Dert)
-    # if fseg: skip computing pose
-    assign_adjacents(adj_pairs, CBlob, fseg)
+    assign_adjacents(adj_pairs, CBlob)  # fseg=True: skip adding the pose
 
     for blob in dir_blob_:
         rD = blob.Dert.Dy / blob.Dert.Dx if blob.Dert.Dx else 2 * blob.Dert.Dy
@@ -39,14 +38,14 @@ def segment_by_direction(iblob, verbose=False):
 
     for i, blob in enumerate(dir_blob_):
         if blob.id not in merged_ids:
-            blob = merge_adjacents_recursive(blob, merged_ids, blob.adj_blobs, strong_adj_blobs=[])
+            blob = merge_adjacents_recursive(blob, merged_ids, blob.adj_blobs[0], strong_adj_blobs=[])  # no pose
 
             if (blob.Dert.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
                 blob.fsliced = True
                 slice_blob(blob,verbose)  # slice and comp_slice_ across directional sub-blob
             iblob.dir_blobs.append(blob)
 
-        for dir_blob in iblob.dir_blobs[:]:
+        for dir_blob in iblob.dir_blobs:
             if dir_blob.id in merged_ids:  # strong blob was merged to another blob, remove it
                 iblob.dir_blobs.remove(dir_blob)
 
@@ -55,35 +54,37 @@ def segment_by_direction(iblob, verbose=False):
 
 def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
 
-    if blob.dir_val < 0:  # directionally weak blob, no re-evaluation until all adjacent weak blobs are merged
+    if blob.dir_val < ave_dir_val:  # directionally weak blob, no re-evaluation until all adjacent weak blobs are merged
 
-        if blob in adj_blobs[0]: adj_blobs[0].remove(blob)  # remove current blob from adj adj blobs (assigned bilaterally)
-        # not needed, adj_blobs are replaced in line 80 anyway?
+        if blob in adj_blobs: adj_blobs.remove(blob)  # remove current blob from adj adj blobs (assigned bilaterally)
         merged_adj_blobs = []  # weak adj_blobs
+        for adj_blob in adj_blobs:
 
-        for (adj_blob) in zip(*adj_blobs):
-            # if also directionally weak, merge adj blob in blob:
-            if (adj_blob.dir_val < 0):
+            if adj_blob.dir_val < ave_dir_val:  # if also directionally weak, merge adj blob in blob:
                 if adj_blob.id not in merged_ids:
                     blob = merge_blobs(blob, adj_blob)
                     merged_ids.append(adj_blob.id)
                     # recursively add adj_adj_blobs to merged_adj_blobs:
-                    for i, adj_adj_blob in enumerate(adj_blob.adj_blobs):
-                        if adj_adj_blob not in merged_adj_blobs and adj_adj_blob is not blob and adj_adj_blob.id not in merged_ids:
-                            merged_adj_blobs.append(adj_blob.adj_blobs[i])
+                    for adj_adj_blob in adj_blob.adj_blobs[0]:
+                        # not included in merged_adj_blobs via prior adj_blob.adj_blobs, or is adj_blobs' blob:
+                        if adj_adj_blob not in merged_adj_blobs and adj_adj_blob is not blob \
+                                and adj_adj_blob.id not in merged_ids: # not merged to prior blob in dir_blobs
+                            merged_adj_blobs.append(adj_blob.adj_blobs)
             else:
                 strong_adj_blobs.append(adj_blob)
 
-        if merged_adj_blobs[0]:
+        if merged_adj_blobs:
             blob = merge_adjacents_recursive(blob, merged_ids, merged_adj_blobs, strong_adj_blobs)
+        # all weak adj_blobs should now be merged, resulting blob may be weak or strong, vertical or lateral
 
-        blob.adj_blobs = strong_adj_blobs  # all weak adj_blobs should be merged
-
-        # merged blob may be weak or strong, vertical or lateral, merge it with same-direction strong adj_blobs, if any:
-        for adj_blob in blob.adj_blobs:
+        blob.adj_blobs = []  # replace with same-dir strong_adj_blobs.adj_blobs + opposite-dir strong_adj_blobs:
+        for adj_blob in strong_adj_blobs:
+            # merge with same-direction strong adj_blobs:
             if (adj_blob.sign == blob.sign) and adj_blob.id not in merged_ids and adj_blob is not blob:
                 blob = merge_blobs(blob, adj_blob)
                 merged_ids.append(adj_blob.id)
+            else:
+                blob.adj_blobs[0].append(adj_blob)
 
     return blob
 

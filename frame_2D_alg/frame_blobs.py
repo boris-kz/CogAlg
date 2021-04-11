@@ -155,7 +155,7 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
             M += blob.Dert.M
         frame = FrameOfBlobs(I=I, Dy=Dy, Dx=Dx, G=G, M=M, blob_=blob_, dert__=dert__)
 
-    assign_adjacents(adj_pairs)
+    assign_adjacents(adj_pairs)  # f_segment_by_direction=False
 
     if verbose: print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
     if render: visualize_blobs(idmap, frame.blob_)
@@ -218,7 +218,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                     elif x1 > xn:
                         xn = x1
                     # determine neighbors' coordinates, 4 for -, 8 for +
-                    if blob.sign or fseg:   # include diagonals
+                    if blob.sign:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
                                            (y1 - 1, x1 + 1), (y1, x1 + 1),
                                            (y1 + 1, x1 + 1), (y1 + 1, x1),
@@ -244,17 +244,16 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                         elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
-                     # temporary commented out, still buggy
-#                    if fseg: # if call from segment by direction, add checking for diagonal directions
-#                        new_adj_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1 + 1),
-#                                          (y1 + 1, x1 + 1), (y1 + 1, x1 - 1)]
-#
-#                        for y2, x2 in new_adj_coords:
-#                        # if image boundary is not reached, is filled , and not same-signed: add adjacency
-#                            if not (y2 < 0 or y2 >= height or x2 < 0 or x2 >= width or idmap[y2, x2] == EXCLUDED_ID) and not \
-#                            (idmap[y2, x2] == UNFILLED) and \
-#                            (blob.sign != sign__[y2, x2]):
-#                                adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
+                    if fseg and not blob.sign: # if call from segment by direction, add checking for diagonal directions
+                        new_adj_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1 + 1),
+                                          (y1 + 1, x1 + 1), (y1 + 1, x1 - 1)]
+
+                        for y2, x2 in new_adj_coords:
+                        # if image boundary is not reached, is filled , and not same-signed: add adjacency
+                            if not (y2 < 0 or y2 >= height or x2 < 0 or x2 >= width or idmap[y2, x2] == EXCLUDED_ID) and not \
+                            (idmap[y2, x2] == UNFILLED) and \
+                            (blob.sign != sign__[y2, x2]):
+                                adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
                 # terminate blob
                 yn += 1
@@ -296,6 +295,11 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
             raise ValueError("something is wrong with pose")
 
         # bilateral assignments
+        '''
+        if f_segment_by_direction:  # pose is not needed
+            blob1.adj_blobs.append(blob2)
+            blob2.adj_blobs.append(blob1)
+        '''
         blob1.adj_blobs[0].append(blob2)
         blob1.adj_blobs[1].append(pose2)
         blob2.adj_blobs[0].append(blob1)
