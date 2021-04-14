@@ -64,19 +64,25 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
                           mask=blob.mask__,
                           fill_color=WHITE)
                 # ... and its adjacents
-                for adj_blob, pose in blob.adj_blobs[0]:
+                for adj_blob, pose in zip(*blob.adj_blobs):
                     over_draw(img, None, adj_blob.box,
                               mask=adj_blob.mask__,
                               fill_color=POSE2COLOR[pose])
+
+                rD = blob.Dert.Dy / blob.Dert.Dx if blob.Dert.Dx else 2 * blob.Dert.Dy
+                dir_val = abs(blob.Dert.G * rD)
+
                 # ... print blobs properties.
                 print("\rblob:",
                       "id =", blob.id,
                       "sign =", "'+'" if blob.sign else "'-'",
-                      "I =", blob.I,
-                      "G =", blob.G,
-                      "Dy =", blob.Dy,
-                      "Dx =", blob.Dx,
+                      "I =", blob.Dert.I,
+                      "G =", blob.Dert.G,
+                      "Dy =", blob.Dert.Dy,
+                      "Dx =", blob.Dert.Dx,
                       "S =", blob.A,
+                      "M = ",blob.Dert.M,
+                      "dir_val = ", dir_val,
                       end="\t\t\t")
                 sys.stdout.flush()
 

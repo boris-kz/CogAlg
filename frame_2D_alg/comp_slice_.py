@@ -168,10 +168,8 @@ def slice_blob(blob, verbose=False):
     #        draw_PP_(blob)
 
 
-def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) vertical order
-    '''
-    sums dert params within Ps and increments L: horizontal length.
-    '''
+def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertical order, sum dert params into P params
+
     P_ = []  # rows of derPs
     dert_ = [list(idert_[0])]  # get first dert from idert_ (generator/iterator)
     _mask = mask_[0]  # mask bit per dert
@@ -210,10 +208,8 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__, in horizontal ) verti
 
     return P_
 
-def form_Pd_(P_):
-    '''
-    form Pd s across P's derts using Dx sign
-    '''
+def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
+
     Pd__ = []
     for iP in P_:
         if (iP.downconnect_cnt>0) or (iP.upconnect_):  # form Pd s if at least one connect in P, else they won't be compared
