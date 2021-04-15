@@ -26,9 +26,6 @@ def segment_by_direction(iblob, verbose=False):
     assign_adjacents(adj_pairs, CBlob)  # fseg=True: skip adding the pose
 
     _dir_blob_ = deepcopy(dir_blob_) # get a copy for dir blob before merging, for visualization purpose
-#   for debugging:
-#   from draw_frame_blobs import visualize_blobs
-#   visualize_blobs(idmap, dir_blob_)
 
     merged_ids = []  # ids of merged adjacent blobs, to skip in the rest of dir_blobs
 
@@ -70,7 +67,7 @@ def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
             if dir_eval(adj_blob.Dert.Dy, adj_blob.Dert.Dx, adj_blob.Dert.G):  # also directionally weak, merge adj blob in blob:
                 if adj_blob.id not in merged_ids:
                     merged_ids.append(adj_blob.id)
-                    blob = merge_blobs(blob, adj_blob, merged_ids)
+                    blob = merge_blobs(blob, adj_blob, strong_adj_blobs)
                     # recursively add adj_adj_blobs to merged_adj_blobs:
                     for adj_adj_blob in adj_blob.adj_blobs[0]:
                         # not included in merged_adj_blobs via prior adj_blob.adj_blobs, or is adj_blobs' blob:
@@ -90,11 +87,11 @@ def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
             # merge with same-direction strong adj_blobs:
             if (adj_blob.sign == blob.sign) and adj_blob.id not in merged_ids and adj_blob is not blob:
                 merged_ids.append(adj_blob.id)
-                blob = merge_blobs(blob, adj_blob, merged_ids)
+                blob = merge_blobs(blob, adj_blob, strong_adj_blobs)
             # append opposite-direction strong_adj_blobs:
             elif adj_blob not in blob.adj_blobs[0] and adj_blob.id not in merged_ids:
                 blob.adj_blobs[0].append(adj_blob)
-                blob.adj_blobs[1].append(2) # assuming adjacent are open, just to visualize the adjacent blobs
+                blob.adj_blobs[1].append(2)  # assuming adjacents are open, just to visualize the adjacent blobs
 
     return blob
 
@@ -106,81 +103,53 @@ def dir_eval(Dy, Dx, G):  # blob direction strength eval
         return True
     else: return False
 
+def merge_blobs(blob, adj_blob, strong_adj_blobs):  # merge blob and adj_blob by summing their params and combining dert__ and mask__
 
-def merge_blobs(blob, adj_blob, merged_ids):  # merge adj_blob into blob
-    '''
-    still need to be optimized further
-    '''
-    # 0 = overlap between blob and adj_blob
-    # 1 = overlap and blob is in adj blob
-    # 2 = overlap and adj blob is in blob
-    floc = 0
     # accumulate blob Dert
     blob.accumulate(**{param:getattr(adj_blob.Dert, param) for param in adj_blob.Dert.numeric_params})
 
     _y0, _yn, _x0, _xn = blob.box
     y0, yn, x0, xn = adj_blob.box
+    cy0 = min(_y0, y0); cyn = max(_yn, yn); cx0 = min(_x0, x0); cxn = max(_xn, xn)
 
-    if (_y0<=y0) and (_yn>=yn) and (_x0<=x0) and (_xn>=xn): # adj blob is inside blob
-        floc = 2
-        cy0, cyn, cx0, cxn =  blob.box # y0, yn, x0, xn for combined blob is blob box
-    elif (y0<=_y0) and (yn>=_yn) and (x0<=_x0) and (xn>=_xn): # blob is inside adj blob
-        floc = 1
-        cy0, cyn, cx0, cxn =  adj_blob.box # y0, yn, x0, xn for combined blob is adj blob box
+    if (y0<=_y0) and (yn>=_yn) and (x0<=_x0) and (xn>=_xn): # blob is inside adj blob
+        # y0, yn, x0, xn for blob within adj blob
+        ay0 = (_y0 - y0); ayn = (_yn - y0); ax0 = (_x0 - x0); axn = (_xn - x0)
+        extended_mask__ = adj_blob.mask__ # extended mask is adj blob's mask, AND extended mask with blob mask
+        extended_mask__[ay0:ayn, ax0:axn] = np.logical_and(blob.mask__, extended_mask__[ay0:ayn, ax0:axn])
+        extended_dert__ = adj_blob.dert__ # if blob is inside adj blob, blob derts should be already in adj blob derts
+
+    elif (_y0<=y0) and (_yn>=yn) and (_x0<=x0) and (_xn>=xn): # adj blob is inside blob
+        # y0, yn, x0, xn for adj blob within blob
+        by0  = (y0 - _y0); byn  = (yn - _y0); bx0  = (x0 - _x0); bxn  = (xn - _x0)
+        extended_mask__ = blob.mask__ # extended mask is blob's mask, AND extended mask with adj blob mask
+        extended_mask__[by0:byn, bx0:bxn] = np.logical_and(adj_blob.mask__, extended_mask__[by0:byn, bx0:bxn])
+        extended_dert__ = blob.dert__ # if adj blob is inside blob, adj blob derts should be already in blob derts
+
     else:
         # y0, yn, x0, xn for combined blob and adj blob box
-        cy0 = min([blob.box[0],adj_blob.box[0]])
-        cyn = max([blob.box[1],adj_blob.box[1]])
-        cx0 = min([blob.box[2],adj_blob.box[2]])
-        cxn = max([blob.box[3],adj_blob.box[3]])
-
-    # offsets from combined box
-    y0_offset = blob.box[0]-cy0
-    x0_offset = blob.box[2]-cx0
-    adj_y0_offset = adj_blob.box[0]-cy0
-    adj_x0_offset = adj_blob.box[2]-cx0
-
-    if floc == 1:  # blob is inside adj blob
-        # extended mask is adj blob's mask, AND extended mask with blob mask
-        extended_mask__ = adj_blob.mask__
-        extended_mask__[y0_offset:y0_offset+(_yn-_y0), x0_offset:x0_offset+(_xn-_x0)] = \
-        np.logical_and(blob.mask__, extended_mask__[y0_offset:y0_offset+(_yn-_y0), x0_offset:x0_offset+(_xn-_x0)])
-        # if blob is inside adj blob, blob derts should be already in adj blob derts
-        extended_dert__ = adj_blob.dert__
-
-    elif floc == 2: # adj blob is inside blob
-        # extended mask is blob's mask, AND extended mask with adj blob mask
-        extended_mask__ = blob.mask__
-        extended_mask__[adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)] = \
-        np.logical_and(adj_blob.mask__, extended_mask__[adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)])
-        # if adj blob is inside blob, adj blob derts should be already in blob derts
-        extended_dert__ = blob.dert__
-
-    else:
+        cay0 = _y0-cy0; cayn = _yn-cy0; cax0 = _x0-cx0; caxn = _xn-cx0
+        cby0 =  y0-cy0; cbyn =  yn-cy0; cbx0 = x0-cx0;  cbxn = xn-cx0
         # create extended mask from combined box
         extended_mask__ = np.ones((cyn-cy0,cxn-cx0)).astype('bool')
-        # AND extended mask with blob mask
-        extended_mask__[y0_offset:y0_offset+(_yn-_y0), x0_offset:x0_offset+(_xn-_x0)] = \
-        np.logical_and(blob.mask__, extended_mask__[y0_offset:y0_offset+(_yn-_y0), x0_offset:x0_offset+(_xn-_x0)])
-
-        extended_mask__[adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)] = \
-        np.logical_and(adj_blob.mask__, extended_mask__[adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)])
-
-        # AND extended mask with adj blob mask
-        extended_mask__[adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)] = \
-        np.logical_and(adj_blob.mask__, extended_mask__[adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)])
-
+        extended_mask__[cay0:cayn, cax0:caxn] = np.logical_and(blob.mask__, extended_mask__[cay0:cayn, cax0:caxn])
+        extended_mask__[cby0:cbyn, cbx0:cbxn] = np.logical_and(adj_blob.mask__, extended_mask__[cby0:cbyn, cbx0:cbxn])
         # create extended derts from combined box
         extended_dert__ = [np.zeros((cyn-cy0,cxn-cx0)) for _ in range(len(blob.dert__))]
         for i in range(len(blob.dert__)):
-            extended_dert__[i][y0_offset:y0_offset+(_yn-_y0), x0_offset:x0_offset+(_xn-_x0)] = blob.dert__[i]
-            extended_dert__[i][adj_y0_offset:adj_y0_offset+(yn-y0), adj_x0_offset:adj_x0_offset+(xn-x0)] = adj_blob.dert__[i]
+            extended_dert__[i][cay0:cayn, cax0:caxn] = blob.dert__[i]
+            extended_dert__[i][cby0:cbyn, cbx0:cbxn] = adj_blob.dert__[i]
 
     # update dert, mask , box and sign
     blob.dert__ = extended_dert__
     blob.mask__ = extended_mask__
     blob.box = [cy0,cyn,cx0,cxn]
     blob.sign = abs(blob.Dert.Dy)>abs(blob.Dert.Dx)
+
+    # add adj_blob's adj blobs to strong_adj_blobs to merge or add them as adj_blob later
+    for adj_adj_blob,pose in zip(*adj_blob.adj_blobs):
+        if adj_adj_blob not in blob.adj_blobs[0] and adj_adj_blob is not blob:
+            strong_adj_blobs.append(adj_adj_blob)
 
     # update adj blob 'adj blobs' adj_blobs reference from pointing adj blob into the merged blob
     for i, adj_adj_blob1 in enumerate(adj_blob.adj_blobs[0]):            # loop adj blobs of adj blob
@@ -315,5 +284,4 @@ def merge_final_weak_blob(blob, adj_blobs, merged_ids):
         if adj_blob.id not in merged_ids and adj_blob is not blob:
             blob = merge_blobs(blob, adj_blob)
             merged_ids.append(adj_blob.id)
-
 '''
