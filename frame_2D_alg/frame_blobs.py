@@ -35,6 +35,8 @@ from class_cluster import ClusterStructure, NoneType
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveB = 50
+ave_M = 100
+ave_mP = 100
 UNFILLED = -1
 EXCLUDED_ID = -2
 
@@ -109,12 +111,10 @@ class CBlob(ClusterStructure):
     Pd__ = list
 
 # draft
-def comp_pixel_new(image):  # 3x3 pixel cross-correlation within image, a standard edge detection operator
-    # see comp_pixel_versions file for other versions and more explanation
+def comp_pixel_hybrid(image):  # 3x3 kernel M and 2x2 quadrant G, see comp_pixel_versions file for other versions and more explanation
     '''
-    3x3 kernel M and 2x2 kernel-quadrant G. 2x2 M is very close to G, but they are different in 3x3 and higher kernels.
     In general, M should be defined in odd-sized kernels, and G in their even-sized quadrants, initially 2x2 quadrants in 3x3 kernels.
-    Same as d in line_patterns, translated into 2D.
+    Same as d in line_patterns, translated into 2D. 2x2 M is very close to G, but they are different in 3x3 and higher kernels.
     M is omnilateral relative to central dert because it's not directional and defines value of that dert,
     G is unilateral higher-derivation directional comparand, thus also higher-resolution to preserve direction 2x2
     '''
@@ -257,7 +257,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                     elif x1 > xn:
                         xn = x1
                     # determine neighbors' coordinates, 4 for -, 8 for +
-                    if blob.sign:   # include diagonals
+                    if blob.sign or fseg:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
                                            (y1 - 1, x1 + 1), (y1, x1 + 1),
                                            (y1 + 1, x1 + 1), (y1 + 1, x1),
@@ -282,17 +282,6 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                         # else check if same-signed
                         elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
-
-                    if fseg and not blob.sign: # if call from segment by direction, add checking for diagonal directions
-                        new_adj_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1 + 1),
-                                          (y1 + 1, x1 + 1), (y1 + 1, x1 - 1)]
-
-                        for y2, x2 in new_adj_coords:
-                        # if image boundary is not reached, is filled , and not same-signed: add adjacency
-                            if not (y2 < 0 or y2 >= height or x2 < 0 or x2 >= width or idmap[y2, x2] == EXCLUDED_ID) and not \
-                            (idmap[y2, x2] == UNFILLED) and \
-                            (blob.sign != sign__[y2, x2]):
-                                adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
                 # terminate blob
                 yn += 1
@@ -358,11 +347,12 @@ def print_deep_blob_forking(deep_layer):
         if len(deep_layer)>0:
             check_deep_blob(deep_layer,i)
 
+
 if __name__ == "__main__":
-    # Imports
     import argparse
     from time import time
     from utils import imread
+    from comp_blob_draft import cross_comp_blobs
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
@@ -431,6 +421,8 @@ if __name__ == "__main__":
         if args.verbose:
             print_deep_blob_forking(deep_layers)
             print("\rFinished intra_blob")
+
+        cross_comp_blobs(frame.blob_)
 
     end_time = time() - start_time
 
