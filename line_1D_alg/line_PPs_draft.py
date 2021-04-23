@@ -64,7 +64,7 @@ no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per
 '''
 ave_div = 50
 ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
-ave_net_M = 100  # search stop
+ave_M = 100  # search stop
 ave_Ls = 3
 
 def comp_P_(P_):  # cross-compare patterns within horizontal line
@@ -75,7 +75,7 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
         M = P.M
         for j, _P in enumerate(P_[i + 1:]):  # variable-range comp, no last-P displacement, just shifting first _P
-            if M - neg_M > ave_net_M:  # search while net_M > ave or 1st _P, no selection by M sign
+            if M - neg_M > ave_M:  # search while net_M > ave or 1st _P, no selection by M sign
 
                 dert_P, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 smP, vmP, neg_M, neg_L, P = dert_P.smP, dert_P.MP, dert_P.Neg_M, dert_P.Neg_L, dert_P.P
@@ -105,7 +105,7 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     sign, L, I, D, M, dert_, sub_H, _smP = P.sign, P.L, P.I, P.D, P.M, P.dert_, P.sub_layers, P.smP
     _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P.sign, _P.L, _P.I, _P.D, _P.M, _P.dert_, _P.sub_layers, _P.smP
 
-    dC_ave = ave_rM ** (1 + neg_L / L)  # average match projected at current distance: neg_L, add coef / var?
+    dC_ave = ave_M * ave_rM ** (1 + neg_L / L)  # average match projected at current distance: neg_L, add coef / var?
     # if param fderived: m = min(var,_var) - dC_ave,
     # else:              m = dC_ave - abs(d_var), always a deviation:
 
@@ -144,7 +144,7 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
 
                         dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # add only layers that have been compared
                         mP += sub_MP  # of compared H, no specific mP?
-                        if sub_MP < ave_net_M:
+                        if sub_MP < ave_M:
                             # potentially mH: trans-layer induction?
                             break  # low vertical induction, deeper sub_layers are not compared
                     else:

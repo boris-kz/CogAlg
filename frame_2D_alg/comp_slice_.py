@@ -160,7 +160,7 @@ def slice_blob(blob, verbose=False):
             P__ += P_; Pd__ += Pd_
             _P_ = P_  # set current lower row P_ as next upper row _P_
 
-        form_PP_shell(blob, derP__, P__, derPd__, Pd__, fPPd)  # form PPs in blob or in FPP
+        form_PP_root(blob, derP__, P__, derPd__, Pd__, fPPd)  # form PPs in blob or in FPP
 
     # yet to be updated
     # draw PPs
@@ -306,21 +306,21 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
     return derPd_
 
 
-def form_PP_shell(blob, derP__, P__, derPd__, Pd__, fPPd):
+def form_PP_root(blob, derP__, P__, derPd__, Pd__, fPPd):
     '''
     form vertically contiguous patterns of patterns by the sign of derP, in blob or in FPP
     '''
     blob.derP__ = derP__; blob.P__ = P__
     blob.derPd__ = derPd__; blob.Pd__ = Pd__
     if fPPd:
-        derP_2_PP_(blob.derP__, blob.PPdm_, 1, 1)   # cluster by derPm dP sign
-        derP_2_PP_(blob.derPd__, blob.PPdd_, 1, 1)  # cluster by derPd dP sign
+        derP_2_PP_(blob.derP__, blob.PPdm_, 0, 1)   # cluster by derPm dP sign
+        derP_2_PP_(blob.derPd__, blob.PPdd_, 1, 1)  # cluster by derPd dP sign, not used
     else:
-        derP_2_PP_(blob.derP__, blob.PPmm_, 1, 0)   # cluster by derPm mP sign
-        derP_2_PP_(blob.derPd__, blob.PPmd_, 1, 0)  # cluster by derPd mP sign
+        derP_2_PP_(blob.derP__, blob.PPmm_, 0, 0)   # cluster by derPm mP sign
+        derP_2_PP_(blob.derPd__, blob.PPmd_, 1, 0)  # cluster by derPd mP sign, not used
 
 
-def derP_2_PP_(derP_, PP_, fflip, fPPd):
+def derP_2_PP_(derP_, PP_, fderPd, fPPd):
     '''
     first row of derP_ has downconnect_cnt == 0, higher rows may also have them
     '''
@@ -330,12 +330,12 @@ def derP_2_PP_(derP_, PP_, fflip, fPPd):
             accum_PP(PP,derP)
 
             if derP._P.upconnect_:  # derP has upconnects
-                upconnect_2_PP_(derP, PP_, fflip, fPPd)  # form PPs across _P upconnects
+                upconnect_2_PP_(derP, PP_, fderPd, fPPd)  # form PPs across _P upconnects
             else:
                 PP_.append(derP.PP)
 
 
-def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
+def upconnect_2_PP_(iderP, PP_, fderPd, fPPd):
     '''
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
@@ -359,7 +359,7 @@ def upconnect_2_PP_(iderP, PP_, fflip, fPPd):
                 derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
 
             if derP._P.upconnect_:
-                upconnect_2_PP_(derP, PP_, fflip, fPPd)  # recursive compare sign of next-layer upconnects
+                upconnect_2_PP_(derP, PP_, fderPd, fPPd)  # recursive compare sign of next-layer upconnects
 
             elif derP.PP is not iderP.PP and derP.P.downconnect_cnt == 0:
                 PP_.append(derP.PP)  # terminate PP (not iPP) at the sign change
@@ -540,4 +540,6 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
     rng+ should preserve resolution: rng+_dert_ is dert layers,
     rng_sum-> rng+, der+: whole rng, rng_incr-> angle / past vs next g,
     rdn Rng | rng_ eval at rng term, Rng -= lost coord bits mag, always > discr?
+    
+    Add comp_PP_recursive
 '''
