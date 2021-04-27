@@ -9,11 +9,11 @@ import cv2
 class CderBlob(ClusterStructure):
 
     blob = object  # core node
+    _blob = object # adj blobs
     neg_mB = int
     distance = int
     mB = int
     dB = int
-    # derBlob will probably be needed, just not accumulate it in bblob
     dI = int
     mI = int
     dA = int
@@ -27,9 +27,10 @@ class CBblob(ClusterStructure):
 
     derBlob = object
     derBlob_ = list
+    blob_ = list
 
 ave_mB = 200
-ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
+ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
 
 
 def cross_comp_blobs(frame):
@@ -37,29 +38,52 @@ def cross_comp_blobs(frame):
     root function of comp_blob: cross compare blobs with their adjacent blobs in frame.blob_, including sub_layers
     '''
     blob_ = frame.blob_
-    checked_ids_ = []
-    derBlobs = []
 
-    for blob in blob_:  # no checking ids, all blobs form unique derBlobs
-        derBlob_ = [[], []]  # DerBlob (including omni_mB), derBlob_
+    for blob in blob_:  # each blob forms compared_blob_ from comparisons to blob.adj_blobs:
+        comp_blob_recursive(blob, blob.adj_blobs[0], checked_id_=[blob.id],  neg_mB=0, distance=0)
 
-        for adj_blob in blob.adj_blobs[0]:
-            if adj_blob.id not in checked_ids_ and not blob.derBlob_:
-                # comp between blob, adj_blob
-                derBlob = comp_blob(blob, adj_blob)
-                accum_DerBlob(derBlob_[0], derBlob)
-                derBlob_[0].append(derBlob_)
+    bblob_ = form_bblob_(blob_)  # form blobs of blobs, connected by mutual match
 
-        derBlobs.append(derBlob_)
-
-    bblob_ = form_bblob_(derBlobs)  # form blobs of blobs
-
-    visualize_cluster_(blob_,frame)
+    visualize_cluster_(bblob_, blob_, frame)
 
     return bblob_
 
 
-def comp_blob(_blob, blob):
+def comp_blob_recursive(blob, adj_blob_, checked_id_, neg_mB, distance):
+    '''
+    called by cross_comp_blob to recursively compare blob to adj_blobs in incremental layers of adjacency
+    '''
+    for adj_blob in adj_blob_:
+        if adj_blob.id not in checked_id_:
+            checked_id_.append(adj_blob.id)
+
+            adj_blob.derBlob = comp_blob(blob, adj_blob, distance)  # compare blob and adjacent blob
+            accum_derBlob(blob.derBlob, adj_blob.derBlob)  # add derBlob into blob.derBlob_
+
+            if adj_blob.derBlob.mB>0:
+                # positive mB, replace blob with adj_blob for continuing adjacency search:
+                comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], checked_id_, distance, neg_mB)
+
+            # negative mB, continue searching when > ave_mB
+            elif blob.Dert.M + neg_mB > ave_mB:  # extend search to adjacents of adjacent, depth-first
+
+                neg_mB += adj_blob.derBlob.mB  # mB accumulated over comparison scope
+                distance += np.sqrt(adj_blob.A)
+                comp_blob_recursive(blob, adj_blob.adj_blobs[0], checked_id_, distance, neg_mB)
+            '''
+            not needed?
+            # stop searching when < ave_mB
+            else:  # compared adj blobs are potential bblob elements
+                for adj_adj_blob in adj_blob.adj_blobs[0]:
+                    if adj_adj_blob not in blob.compared_blob_:
+                        blob.compared_blob_.append(adj_adj_blob)  # potential bblob element
+            '''
+
+def accum_derBlob(_derBlob, derBlob):
+    # accumulate derBlob
+    _derBlob.accumulate(**{param:getattr(derBlob, param) for param in _derBlob.numeric_params})
+
+def comp_blob(_blob, blob, distance):
     '''
     cross compare _blob and blob
     '''
@@ -75,83 +99,72 @@ def comp_blob(_blob, blob):
     dM = _M - M
     mM = min(_M, M)
 
-    mB = mI + mA + mG + mM
-    # distance and deviation is computed in form_bblob_: - ave_mB * ave_rM ** (1 + dist / np.sqrt(blob.A))  # average blob match projected at current distance
+    mB = mI + mA + mG + mM - ave_mB * (ave_rM ** ((1+distance) / np.sqrt(A)))  # deviation from average blob match projected at current distance
     dB = dI + dA + dG + dM
 
-    derBlob  = CderBlob(_blob=blob, mB=mB, dB=dB)
+    derBlob  = CderBlob(blob=_blob, _blob = blob, mB=mB, dB=dB) # blob is core node, _blob is adjacent blob here
 
     if _blob.fsliced and blob.fsliced:
         pass
 
     return derBlob
 
+'''
+Below is not reviewed: 
+'''
 
-def form_bblob_(blob_, adj_blobs):
+def form_bblob_(blob_):
     '''
     form blob of blobs as a cluster of blobs with positive adjacent derBlob_s, formed by comparing adj_blobs
     '''
     checked_ids = []
     bblob_ = []
 
-    for blob, adj__blob_ in zip(blob_, adj_blobs[1]):
-        if blob.derBlob_ and blob.id not in checked_ids:  # blob is initial center of adj_blobs cluster
-            checked_ids.append(blob.id)
-
-            bblob = CBblob(derBlob=CderBlob())  # init bblob
-            accum_bblob(bblob.derBlobs, derBlob_)
-
-            for adj_blob in adj_blobs:  # depth first - check potential bblob element from adjacent cluster of blobs
-                if adj_blob.derBlob_ and adj_blob.id not in checked_ids:
-                    '''
-                    form_bblob_recursive(bblob, blob, adj_blob, checked_ids, adj_blobs):
-                    
-                    replace with:
-                    if blob.omni_mB>0 and adj_blob.omni_mB>0: 
-                        pack blob in bblob, 
-                        form_bblob_(adj_blob, adj_blobs)
-
-                    elif blob.omni_mB>0 and blob.Dert.M + neg_mB > ave_mB:
-                        form_bblob_( blob, adj_blob.adj_blobs )
-                    '''
-
-            bblob_.append(bblob)  # pack bblob after checking through all adjacents
+    for blob in blob_:
+        if blob.id not in checked_ids: # not checked and is head node
+            neg_mB = 0; checked_ids.append(blob.id)
+            bblob = CBblob(derBlob=CderBlob())   # init bblob with previous unconnected blob
+            accum_bblob(bblob, blob)
+            form_bblob_recursive(bblob, blob, neg_mB, checked_ids)
+            bblob_.append(bblob) # pack bblob after search through adjacents
 
     return(bblob_)
 
 
-def form_bblob_recursive(bblob, _blob, blob, checked_ids, compared_blobs):
-    '''
-    As distinct from form_PP_, clustered blobs don't have to be directly adjacent, checking through blob.adj_blobs should be recursive
-    '''
-    _Adj_mB = sum([derBlob.mB for derBlob in _blob.derBlob_])
-    Adj_mB = sum([derBlob.mB for derBlob in blob.derBlob_])
+def form_bblob_recursive(bblob, blob, neg_mB, checked_ids):
 
-    if (_Adj_mB>0) and (Adj_mB>0):  # both local-center-blob clusters must be positive
-        checked_ids.append(blob.id)
+    _omni_mB = sum([derBlob.mB for derBlob in blob.derBlob_])
+    omni_mB = 0
 
-        for derBlob in blob.derBlob_:
-            accum_bblob(bblob,derBlob)  # accum same sign node blob into bblob
+    for compared_blob in blob.compared_blob_: # get sum of omni_mB from all compared_blobs
+        if compared_blob.derBlob_ and compared_blob.id not in checked_ids:
+            omni_mB += sum([derBlob.mB for derBlob in compared_blob.derBlob_])
 
-        compared_blob_ = compared_blobs[1][compared_blobs[0].index(blob)]
-        for compared_blob in compared_blob_: # depth first - check potential blob from adjacent cluster of blobs
-            if compared_blob.derBlob_ and compared_blob.id not in checked_ids:  # potential element blob
-                form_bblob_recursive(bblob, blob, compared_blob, checked_ids, compared_blobs)
+    if (_omni_mB>0) and (omni_mB>0):        # check mutual +mB sign
+        neg_mB += omni_mB                   # increase neg_mB cost
+        for compared_blob in blob.compared_blob_:
+            if compared_blob.derBlob_ and compared_blob.id not in checked_ids:
+                checked_ids.append(compared_blob.id)
+                accum_bblob(bblob, compared_blob)  # accumulate compared blob's cluster
+                form_bblob_recursive(bblob, compared_blob, neg_mB, checked_ids) # continue searching
+
+    elif (blob.Dert.M + neg_mB > ave_mB):  # different sign, check ave_mB to search adjacency
+        neg_mB += omni_mB                  # increase neg_mB cost
+        for compared_blob in blob.compared_blob_:
+            if compared_blob.id not in checked_ids:
+                checked_ids.append(compared_blob.id)
+                form_bblob_recursive(bblob, compared_blob, neg_mB, checked_ids) # continue searching
 
 
-def accum_bblob(bblob, derBlob):
+def accum_bblob(bblob, blob):
 
-    # for debug purpose, on the overflow issue
-    print('bblob id = ' +str(bblob.id))
-    print('derBlob id = ' +str(derBlob.id))
-    print('bblob params : ')
-    print(bblob.derBlob)
-    print('derBlob params : ')
-    print(derBlob)
-    print('------------------------------')
-    # accumulate derBlob
-    bblob.derBlob.accumulate(**{param:getattr(derBlob, param) for param in bblob.derBlob.numeric_params})
-    bblob.derBlob_.append(derBlob)
+    for derBlob in blob.derBlob_:
+        # accumulate derBlob
+        bblob.derBlob.accumulate(**{param:getattr(derBlob, param) for param in bblob.derBlob.numeric_params})
+        bblob.derBlob_.append(derBlob)
+        bblob.blob_.append(derBlob._blob) # pack adj of blob into bblob.blob_
+
+    bblob.blob_.append(blob) # pack blob into bblob.blob_
 
 '''
     cross-comp among sub_blobs in nested sub_layers:
@@ -163,8 +176,8 @@ def accum_bblob(bblob, derBlob):
         merge(_sub_layer, sub_layer)  # only for sub-blobs not combined into new bblobs by cross-comp
 '''
 
-# draft, to visualize the cluster of blobs, next is to visualize the merged clusters
-def visualize_cluster_(blob_, frame):
+
+def visualize_cluster_(bblob_, blob_, frame):
 
     colour_list = []  # list of colours:
     colour_list.append([200, 130, 1])  # blue
@@ -184,85 +197,47 @@ def visualize_cluster_(blob_, frame):
     cluster_img = np.zeros((ysize, xsize,3)).astype('uint8')
     img_separator = np.zeros((ysize,3,3)).astype('uint8')
 
+    # create mask
+    blob_mask = np.zeros_like(frame.dert__[0]).astype('uint8')
+    cluster_mask = np.zeros_like(frame.dert__[0]).astype('uint8')
+
     blob_colour_index = 1
     cluster_colour_index = 1
 
     cv2.namedWindow('blobs & clusters', cv2.WINDOW_NORMAL)
 
+    # draw blobs
     for blob in blob_:
-        if blob.derBlob_:
+        cy0, cyn, cx0, cxn = blob.box
+        blob_mask[cy0:cyn,cx0:cxn] += (~blob.mask__ * blob_colour_index).astype('uint8')
+        blob_colour_index += 1
 
-            # create mask
-            blob_mask = np.zeros_like(frame.dert__[0]).astype('uint8')
-            cluster_mask = np.zeros_like(frame.dert__[0]).astype('uint8')
-
+    # draw blob cluster of bblob
+    for bblob in bblob_:
+        for blob in bblob.blob_:
             cy0, cyn, cx0, cxn = blob.box
-            # insert index of each blob
-            blob_mask[cy0:cyn,cx0:cxn] += (~blob.mask__ * blob_colour_index).astype('uint8')
             blob_colour_index += 1
-            # insert index of blob in cluster
             cluster_mask[cy0:cyn,cx0:cxn] += (~blob.mask__ *cluster_colour_index).astype('uint8')
 
-            for derBlob in blob.derBlob_:
-                cy0, cyn, cx0, cxn = derBlob._blob.box
-                # insert index of each adjacent blob
-                blob_mask[cy0:cyn,cx0:cxn] += (~derBlob._blob.mask__ * blob_colour_index).astype('uint8')
-                blob_colour_index += 1
-                # insert index of each adjacent blob in cluster
-                cluster_mask[cy0:cyn,cx0:cxn] += (~derBlob._blob.mask__ * cluster_colour_index).astype('uint8')
+        # increase colour index
+        cluster_colour_index += 1
 
-            # increase colour index
-            cluster_colour_index += 1
+        # insert colour of blobs
+        for i in range(1,blob_colour_index):
+            blob_img[np.where(blob_mask == i)] = colour_list[i % 10]
 
-            # insert colour of blobs
-            for i in range(1,blob_colour_index):
-                blob_img[np.where(blob_mask == i)] = colour_list[i % 10]
+        # insert colour of clusters
+        for i in range(1,cluster_colour_index):
+            cluster_img[np.where(cluster_mask == i)] = colour_list[i % 10]
 
-            # insert colour of clusters
-            for i in range(1,cluster_colour_index):
-                cluster_img[np.where(cluster_mask == i)] = colour_list[i % 10]
+        # combine images for visualization
+        img_concat = np.concatenate((blob_img, img_separator,
+                                    cluster_img, img_separator), axis=1)
 
-            # combine images for visualization
-            img_concat = np.concatenate((blob_img, img_separator,
-                                        cluster_img, img_separator), axis=1)
-
-            # plot cluster of blob
-            cv2.imshow('blobs & clusters',img_concat)
-            cv2.resizeWindow('blobs & clusters', 1920, 720)
-            cv2.waitKey(100)
+        # plot cluster of blob
+        cv2.imshow('blobs & clusters',img_concat)
+        cv2.resizeWindow('blobs & clusters', 1920, 720)
+        cv2.waitKey(100)
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-
-def comp_blob_recursive(blob, adj_blob_, checked_ids_, neg_mB, neg_dist, compared_blob_, compared_blobs):
-    '''
-    Not used.  called by cross_comp_blob to recursively compare blob to adj_blobs in incremental layers of adjacency
-    '''
-    for adj_blob in adj_blob_:
-        if adj_blob.id not in checked_ids_ and not adj_blob.derBlob_: # adj blob not checked and is not the head node
-            checked_ids_.append(adj_blob.id)
-
-            dist = neg_dist + np.sqrt(blob.A) / 2 + np.sqrt(adj_blob.A)    # approximated euclidean distance to adj_adj_blobs
-            derBlob = comp_blob(blob, adj_blob)  # cross compare blob and adjacent blob, distance should be computed in form_bblobs
-
-            if derBlob.mB>0: # positive mB, stop the searching with prior blob and start with current adj blob
-                neg_dist = 0; neg_mB = 0; adj_compared_blob_ = []  # compared to current blob, reinitialized for each new blob
-                comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], checked_ids_, neg_mB, neg_dist, adj_compared_blob_, compared_blobs)
-                compared_blobs[0].append(adj_blob)
-                compared_blobs[1].append(adj_compared_blob_)  # nested list
-
-            else: # negative mB, continue searching
-                blob.derBlob_.append(derBlob)
-                neg_dist += dist
-                neg_mB += derBlob.mB  # mB accumulated over comparison scope
-
-                # is there any backward match here?
-                if blob.Dert.M + neg_mB > ave_mB:  # extend search to adjacents of adjacent, depth-first
-                    comp_blob_recursive(blob, adj_blob.adj_blobs[0], checked_ids_, neg_mB, neg_dist, compared_blob_, compared_blobs)
-
-                else:  # compared adj blobs are potential bblob elements
-                    for adj_adj_blob in adj_blob.adj_blobs[0]:
-                        if adj_adj_blob not in compared_blob_:
-                            compared_blob_.append(adj_adj_blob)  # potential bblob element
-
