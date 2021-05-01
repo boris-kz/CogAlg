@@ -110,6 +110,13 @@ class CBlob(ClusterStructure):
     derPd__ = list
     Pd__ = list
 
+    # comp blobs
+    DerBlob = object
+    derBlob_ = list
+    distance = int  # common per derBlob_
+    neg_mB = int    # common per derBlob_
+
+
 # draft
 def comp_pixel_hybrid(image):  # 3x3 kernel M and 2x2 quadrant G, see comp_pixel_versions file for other versions and more explanation
     '''
@@ -185,7 +192,7 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     else:
         blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  verbose=verbose)
-        I = Dy = Dx = G = M = 0
+        I, Dy, Dx, G, M = 0, 0, 0, 0, 0
         for blob in blob_:
             I += blob.Dert.I
             Dy += blob.Dert.Dy
@@ -422,7 +429,7 @@ if __name__ == "__main__":
             print_deep_blob_forking(deep_layers)
             print("\rFinished intra_blob")
 
-        cross_comp_blobs(frame.blob_)
+        bblob_ = cross_comp_blobs(frame)
 
     end_time = time() - start_time
 
