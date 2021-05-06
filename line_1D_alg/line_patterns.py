@@ -140,6 +140,12 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
 
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
+    '''
+    Value is projected match, while variation has contrast value only: it matters to the extent that it interrupts adjacent match: adj_M.
+    In noise, there is a lot of variation. but no adjacent match to cancel, so noise has no predictive value.
+    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it defines a large adjacent uniform span.
+    That contrast is salient because it borrows predictive value from adjacent uniform span of inputs.
+    '''
 
     pri_M = Pm_[0].M  # comp_g value is borrowed from adjacent opposite-sign Ms
     M = Pm_[1].M

@@ -25,9 +25,8 @@ class CBblob(ClusterStructure):
     DerBlob = object
     blob_ = list
 
-ave_mB = 20000  # ave can't be negative
+ave_mB = 0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
-
 
 def cross_comp_blobs(frame):
     '''
@@ -36,9 +35,19 @@ def cross_comp_blobs(frame):
     blob_ = frame.blob_
 
     for blob in blob_:  # each blob forms derBlob per compared adj_blob and accumulates adj_blobs'derBlobs:
-        blob.DerBlob = CderBlob()
-        comp_blob_recursive(blob, blob.adj_blobs[0], derBlob_=[], derBlob_id_=[])
+        if not isinstance(blob.DerBlob, CderBlob):  # blob may have been compared when current blob was adj_blob, forming derBlob
+            blob.DerBlob = CderBlob()
+        comp_blob_recursive(blob, blob.adj_blobs[0], blob_id_=[], derBlob_=[], derBlob_id_=[])
         # derBlob_ and derBlob_id_ are local and frame-wide
+
+    # temporary, check if duplicated derBlob or duplicated derBlob._blob
+    # do we still need it?
+
+    for i, blob in enumerate(blob_):
+        if len(blob.derBlob_id_) != len(np.unique(blob.derBlob_id_)):
+            raise ValueError("Duplicated derBlob in blobs")
+        if len(blob.derBlob_blob_id_) != len(np.unique(blob.derBlob_blob_id_)):
+            raise ValueError("Duplicated derBlob's _blob in blobs")
 
     bblob_ = form_bblob_(blob_)  # form blobs of blobs, connected by mutual match
 
@@ -47,61 +56,42 @@ def cross_comp_blobs(frame):
     return bblob_
 
 
-def comp_blob_recursive(blob, adj_blob_, derBlob_, derBlob_id_):
+def comp_blob_recursive(blob, adj_blob_, blob_id_, derBlob_, derBlob_id_):
     '''
     called by cross_comp_blob to recursively compare blob to adj_blobs in incremental layers of adjacency
     '''
-    for adj_blob in adj_blob_:
-        if blob is not adj_blob: # adj of adj blob could be the blob itself
-            # pairing function generates unique number from each comparand_pair, frame-wide:
-            derBlob_id = generate_unique_id(blob.id, adj_blob.id)
+    if blob.id not in blob_id_:
+        blob_id_.append(blob.id)  # to prevent redundant (adj_blob, blob) derBlobs
+        _blob_id = [derBlob._blob.id for derBlob in blob.derBlob_]  # list of derBlob._blobs
 
-            # existing derBlob
-            if derBlob_id in derBlob_id_: # same sign derBlob is in existing derBlob
-                derBlob = derBlob_[derBlob_id_.index(derBlob_id)]
-                accum_derBlob(blob, derBlob)  # also adj_blob.rdn += 1?
+        for adj_blob in adj_blob_:
+            if (adj_blob is not blob) and (adj_blob.id not in _blob_id):  # adj_blob of adj_blob could be the blob itself
+                # pairing function generates unique number from each comparand_pair, frame-wide:
+                derBlob_id = (0.5 * (blob.id + adj_blob.id) * (blob.id + adj_blob.id + 1) + (blob.id * adj_blob.id))
 
-            elif -derBlob_id in derBlob_id_: # different sign derBlob is in existing derBlob
-                derBlob = derBlob_[derBlob_id_.index(-derBlob_id)]
-                accum_derBlob(blob, derBlob)  # also adj_blob.rdn += 1
+                if derBlob_id in derBlob_id_:  # derBlob exists, just accumulate it in blob.DerBlob
+                    derBlob = derBlob_[derBlob_id_.index(derBlob_id)]
+                    accum_derBlob(blob, derBlob)  # also adj_blob.rdn += 1?
 
-            else:  # compute new derBlob
-                derBlob = comp_blob(blob, adj_blob)  # compare blob and adjacent blob
-                accum_derBlob(blob, derBlob)  # from all compared blobs, regardless of mB sign
-                derBlob_id_.append(derBlob_id)  # unique comparand_pair identifier
-                derBlob_.append(derBlob)  # also frame-wide
+                else:  # compute new derBlob
+                    derBlob = comp_blob(blob, adj_blob)  # compare blob and adjacent blob
+                    accum_derBlob(blob, derBlob)         # from all compared blobs, regardless of mB sign
+                    derBlob_id_.append(derBlob_id)       # unique comparand_pair identifier
+                    derBlob_.append(derBlob)             # also frame-wide
 
-            if derBlob.mB > 0:
-                # replace blob with adj_blob for continuing adjacency search:
-                if not isinstance(adj_blob.DerBlob, CderBlob):  # if adj_blob.DerBlob: it's already searched in previous call
-                    # but this search could be to a different depth?
-                    adj_blob.DerBlob = CderBlob()
-                comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], derBlob_, derBlob_id_)
+                if derBlob.mB > 0:
+                    # replace blob with adj_blob for continuing adjacency search:
+                    if not isinstance(adj_blob.DerBlob, CderBlob):  # if adj_blob.DerBlob: it's already searched in previous call
+                        adj_blob.DerBlob = CderBlob()               # but this search could be to a different depth?
+                    comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], blob_id_, derBlob_, derBlob_id_)
+                    break
 
-            elif blob.Dert.M + blob.neg_mB+ derBlob.mB > ave_mB:  # neg mB but positive comb M,
-                # extend blob comparison to adjacents of adjacent, depth-first
-                blob.neg_mB += derBlob.mB  # mB and distance are accumulated over comparison scope
-                blob.distance += np.sqrt(adj_blob.A)
-                comp_blob_recursive(blob, adj_blob.adj_blobs[0], derBlob_, derBlob_id_)
+                elif blob.Dert.M + blob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
+                    # extend blob comparison to adjacents of adjacent, depth-first
+                    blob.neg_mB += derBlob.mB  # mB and distance are accumulated over comparison scope
+                    blob.distance += np.sqrt(adj_blob.A)
+                    comp_blob_recursive(blob, adj_blob.adj_blobs[0], blob_id_, derBlob_, derBlob_id_)
 
-
-def generate_unique_id(id1, id2):
-    '''
-    generate unique id based on id1 and id2, different order of id1 and id2 yields unique id in different sign
-    '''
-     # get sign based on order of id1 and id2, output would be +1 or -1
-    id_sign = ((0.5*(id1+id2)*(id1+id2+1) + id1) - (0.5*(id2+id1)*(id2+id1+1) + id2)) / abs(id1-id2)
-
-    # modified pairing function, so that different order of a and b will generate same value
-    unique_id = (0.5*(id1+id2)*(id1+id2+1) + (id1*id2)) * id_sign
-    '''
-    why not:
-    derBlob_id = (0.5 x (id1+id2) x (id1+id2+1) + (id1 x id2))
-    if id1 is adj_blob:
-    derBlob_id = -derBlob_id 
-    ? 
-    '''
-    return unique_id
 
 def comp_blob(blob, _blob):
     '''
@@ -172,6 +162,10 @@ def accum_derBlob(blob, derBlob):
 
     blob.DerBlob.accumulate(**{param:getattr(derBlob, param) for param in blob.DerBlob.numeric_params})
     blob.derBlob_.append(derBlob)
+
+    # temporary, for debug purpose
+    blob.derBlob_id_.append(derBlob.id)
+    blob.derBlob_blob_id_.append(derBlob._blob.id)
 
 def accum_bblob(bblob, blob):
 
@@ -271,3 +265,21 @@ def visualize_cluster_(bblob_, blob_, frame):
 
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
+
+def generate_unique_id(id1, id2):
+    '''
+    generate unique id based on id1 and id2, different order of id1 and id2 yields unique id in different sign
+    '''
+    # generate unique id with sign
+    '''
+    get sign based on order of id1 and id2, output would be +1 or -1
+    id_sign = ((0.5*(id1+id2)*(id1+id2+1) + id1) - (0.5*(id2+id1)*(id2+id1+1) + id2)) / abs(id1-id2)
+    modified pairing function, so that different order of a and b will generate same value
+    unique_id = (0.5*(id1+id2)*(id1+id2+1) + (id1*id2)) * id_sign
+    '''
+    # generate unique id without sign
+    unique_id = (0.5 * (id1 + id2) * (id1 + id2 + 1) + (id1 * id2))
+
+    return unique_id
+
