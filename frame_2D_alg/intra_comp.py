@@ -132,7 +132,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     a__ = [dy__, dx__] / (g__ + ave + 0.001)  # + ave to restore abs g, + .001 to avoid / 0
     # g and m are rotation invariant, but da is more accurate with rot_a__:
 
-    # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise, compensates for clockwise rotation in frame_blobs:
+    # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to compensate for clockwise rotation in frame_blobs:
     a__left   = a__[:, :-1, :-1]  # was topleft
     a__top    = a__[:, :-1, 1:]   # was topright
     a__right  = a__[:, 1:, 1:]    # was botright
@@ -141,12 +141,15 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     sin_da0__, cos_da0__ = angle_diff(a__right, a__left)
     sin_da1__, cos_da1__ = angle_diff(a__bottom, a__top)
 
-    ma__ = 2 / (cos_da0__ + 1.001) + (cos_da1__ + 1.001)  # +1 to convert to all positives, +.001 to avoid / 0
-    # match of angle = inverse deviation rate of SAD of angles from ave ma: (2 + 2) / 2
-    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
+    # match of angle = inverse deviation rate of SAD of angles from ave ma of all possible angles = 2: (2 + 2) / 2
+    # inverse deviation rate: ave / value, used here instead of ave - value,
+    # because ave ma is computed from a product of ma s?
+    ma__ = 2 / ((cos_da0__ + 1.001) + (cos_da1__ + 1.001))  # +1 to convert to all positives, +.001 to avoid / 0
+
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
     # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
     '''
     need to be reviewed for the effects of rotation, currently used for ga only?
     
@@ -155,7 +158,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     '''
     ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
     '''
-    ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
+    ga value is a deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
     extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
     '''
     # if root fork is frame_blobs, recompute orthogonal dy and dx
