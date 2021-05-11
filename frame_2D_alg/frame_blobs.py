@@ -134,15 +134,20 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard e
 
     G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')
     # deviation of central gradient per kernel, between four vertex pixels
-    M__ = int(ave * 1.2)  - (abs(bottomright__ - topleft__) + abs(topright__ - bottomleft__))
-    # inverse deviation of SAD: variation. Ave * coeff = ave_SAD / ave_G, 1.2 is a guess: SAD is larger than gradient
+    M__ = int(ave * 1.2) - (abs(rot_Gy__) + abs(rot_Gx__))
+    # inverse deviation of SAD, which is a measure of variation. Ave * coeff = ave_SAD / ave_G, 1.2 is a guess
 
     return (topleft__, rot_Gy__, rot_Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 '''
     rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy of Gy, Gx
     Gy, Gx are used in comp_a, which returns them, as well as day, dax back to orthogonal
-    else:
+    
+    Sobel version:
+    Gy__ = -(topleft__ - bottomright__) - (topright__ - bottomleft__)   # decomposition of two diagonal differences into Gy
+    Gx__ = -(topleft__ - bottomright__) + (topright__ - bottomleft__))  # decomposition of two diagonal differences into Gx
+
+    old not-rotated version:
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
 '''

@@ -33,9 +33,12 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     rng = 2: 5x5 kernel,
     rng = 4: 9x9 kernel,
     ...
-    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, see:
+    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, and we use Sobel coeffs,
+    see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
     '''
+
     i__ = dert__[0]  # i is pixel intensity
 
     '''
@@ -80,22 +83,17 @@ def comp_r(dert__, ave, root_fia, mask__=None):
         dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
         m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
-    # compare four diametrically opposed pairs of rim pixels:
+    # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs:
 
-    d_tl_br = i__topleft - i__bottomright
-    d_t_b = i__top - i__bottom
-    d_tr_bl = i__topright - i__bottomleft
-    d_r_l = i__right - i__left
+    dy__ += ((i__topleft - i__bottomright) * -1 +
+             (i__top - i__bottom) * -2 +
+             (i__topright - i__bottomleft) * -1 +
+             (i__right - i__left) * 0)
 
-    dy__ += (d_tl_br * YCOEFs[0] +
-             d_t_b * YCOEFs[1] +
-             d_tr_bl * YCOEFs[2] +
-             d_r_l * YCOEFs[3])
-
-    dx__ += (d_tl_br * XCOEFs[0] +
-             d_t_b * XCOEFs[1] +
-             d_tr_bl * XCOEFs[2] +
-             d_r_l * XCOEFs[3])
+    dx__ += ((i__topleft - i__bottomright) * -1 +
+             (i__top - i__bottom) * 0 +
+             (i__topright - i__bottomleft) * 1 +
+             (i__right - i__left) * 2)
 
     g__ = np.hypot(dy__, dx__) - ave  # gradient, recomputed at each comp_r
     '''
@@ -103,15 +101,15 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     (all diagonal derivatives can be imported from prior 2x2 comp)
     ave SAD = ave g * 1.41:
     '''
-    m__ += int(ave * 1.41) - ( abs(i__center - i__topleft)
-                             + abs(i__center - i__top)
-                             + abs(i__center - i__topright)
-                             + abs(i__center - i__right)
-                             + abs(i__center - i__bottomright)
-                             + abs(i__center - i__bottom)
-                             + abs(i__center - i__bottomleft)
-                             + abs(i__center - i__left)
-                             )
+    m__ += int(ave * 1.2) - ( abs(i__center - i__topleft)
+                            + abs(i__center - i__top) * 2
+                            + abs(i__center - i__topright)
+                            + abs(i__center - i__right) * 2
+                            + abs(i__center - i__bottomright)
+                            + abs(i__center - i__bottom) * 2
+                            + abs(i__center - i__bottomleft)
+                            + abs(i__center - i__left) * 2
+                            )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask__
 
@@ -141,9 +139,14 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     sin_da0__, cos_da0__ = angle_diff(a__right, a__left)
     sin_da1__, cos_da1__ = angle_diff(a__bottom, a__top)
 
-    # match of angle = inverse deviation rate of SAD of angles from ave ma of all possible angles = 2: (2 + 2) / 2
-    # inverse deviation rate: ave / value, used here instead of ave - value,
-    # because ave ma is computed from a product of ma s?
+    ''' 
+    match of angle = inverse deviation rate of SAD of angles from ave ma of all possible angles.
+    we use ave 2: (2 + 2) / 2, 2 is average not-deviation ma, when da is 90 degree (because da varies from 0-180 degree). 
+    That's just a rough guess, as all filter initializations, actual average will be lower because adjacent angles don't vary as much, 
+    there is general correlation between proximity and similarity.
+    Normally, we compute match as inverse deviation: ave - value. Here I use rational deviation: ave / value, 
+    probably because ave is computed from a product vs. sum of results. Don't remember exactly, sorry, need to go over it again.
+    '''
     ma__ = 2 / ((cos_da0__ + 1.001) + (cos_da1__ + 1.001))  # +1 to convert to all positives, +.001 to avoid / 0
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
