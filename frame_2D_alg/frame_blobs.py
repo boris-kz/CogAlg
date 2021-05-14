@@ -22,7 +22,8 @@
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
 
-    Please see illustration: [frame_blobs](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png)
+    Please see illustrations: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
 
 import sys
