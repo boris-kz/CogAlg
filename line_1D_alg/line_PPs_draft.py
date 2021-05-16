@@ -136,7 +136,7 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
                         dert_sub_P_ = []
                         sub_MP = 0
                         # compare all sub_Ps to each _sub_P, form dert_sub_P per compared pair
-                        for sub_P in sub_P_:
+                        for sub_P in sub_P_:  # note name recycling in nested loop
                             for _sub_P in _sub_P_:
                                 dert_sub_P, _, _ = comp_P(sub_P, _sub_P, neg_M=0, neg_L=0)  # ignore _sub_L, _sub_smP?
                                 sub_MP += dert_sub_P.MP  # sum sub_vmPs in derP_layer

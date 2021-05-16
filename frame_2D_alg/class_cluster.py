@@ -1,5 +1,5 @@
 """
-Provide a base class for cluster objects in 2D implementation of CogAlg.
+Provide a base class for cluster objects in CogAlg.
 Features:
 - Unique instance ids per class.
 - Instances are retrievable by ids via class.
@@ -14,6 +14,7 @@ from numbers import Number
 
 NoneType = type(None)
 
+# Template for class method generation
 _methods_template = '''
 @property
 def id(self):
@@ -29,7 +30,11 @@ def unpack(self):
 def accumulate(self, **kwargs):
     """Add a number to specified numerical fields/params."""
     {accumulations}
-def __contains__(self, item):
+def accum_from(self, other):
+    """Accumulate params from another structure."""
+    self.accumulate(**{{p:getattr(other, p, 0)
+                    for p in self.numeric_params}})
+,def __contains__(self, item):
     return (item in {params})
 def __delattr__(self, item):
     raise AttributeError("cannot delete attribute from "
@@ -73,7 +78,7 @@ class MetaCluster(type):
             repr_fmt=', '.join(f'{param}=%r' for param in numeric_params),
         )
         # Generate methods
-        namespace = dict(print=print)
+        namespace = dict(print=print, getattr=getattr)
         exec(methods_definitions, namespace)
         # Replace irrelevant names
         namespace.pop('__builtins__')

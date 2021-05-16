@@ -171,12 +171,10 @@ def accum_dir_blob_Dert(blob, dert__, y, x):
     blob.Dert.M += dert__[4][y, x]
 
     if len(dert__) > 5:  # past comp_a fork
-        blob.Dert.Dyy += dert__[5][y, x]
-        blob.Dert.Dyx += dert__[6][y, x]
-        blob.Dert.Dxy += dert__[7][y, x]
-        blob.Dert.Dxx += dert__[8][y, x]
-        blob.Dert.Ga += dert__[9][y, x]
-        blob.Dert.Ma += dert__[10][y, x]
+        blob.Dert.Day += dert__[5][y, x]
+        blob.Dert.Dax += dert__[6][y, x]
+        blob.Dert.Ga += dert__[7][y, x]
+        blob.Dert.Ma += dert__[8][y, x]
 
 
 def visualize_merging_process(iblob, dir_blob_, _dir_blob_, mask__, i):

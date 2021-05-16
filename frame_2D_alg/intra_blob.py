@@ -72,11 +72,8 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
             blob.prior_forks.extend('a')
 
             if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, least one dert in dert__
-                sign__ = adert__[3] * adert__[8] > 0  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
-
-                dert__ = tuple([adert__[0], adert__[1], adert__[2], adert__[3], adert__[4],
-                                adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
-                                adert__[7], adert__[8]])  # flatten adert
+                sign__ = adert__[3] * adert__[8] > 0   # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
+                dert__ = adert__  # already flat, adert__[[5, 6]] are now complex
 
                 cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)  # forms sub_blobs of sign in unmasked area
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
@@ -114,7 +111,7 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
 
     for sub_blob in sub_blobs:  # evaluate sub_blob
         G = blob.Dert.G  # Gr, Grr...
-        #adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
+        # adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
         # adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
         # track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
         # G indicates or dert__ extend per blob G?
@@ -175,9 +172,7 @@ def accum_blob_Dert(blob, dert__, y, x):
 
     if len(dert__) > 5:  # past comp_a fork
 
-        blob.Dert.Dyy += dert__[5][y, x]
-        blob.Dert.Dyx += dert__[6][y, x]
-        blob.Dert.Dxy += dert__[7][y, x]
-        blob.Dert.Dxx += dert__[8][y, x]
-        blob.Dert.Ga += dert__[9][y, x]
-        blob.Dert.Ma += dert__[10][y, x]
+        blob.Dert.Day += dert__[5][y, x]    # Need to merge 4 Ds into 2
+        blob.Dert.Dax += dert__[6][y, x]
+        blob.Dert.Ga += dert__[7][y, x]
+        blob.Dert.Ma += dert__[8][y, x]

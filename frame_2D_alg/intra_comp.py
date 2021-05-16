@@ -5,11 +5,12 @@ Cross-comparison of pixels 3x3 kernels or gradient angles in 2x2 kernels
 import numpy as np
 import functools
 
-# Sobel coefficients to decompose ds into dy and dx:
+''' 
+Sobel coefficients to decompose ds into dy and dx:
 
 YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
 XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
-''' 
+
     |--(clockwise)--+  |--(clockwise)--+
     YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
             0       0  ¦          -2       2  ¦
@@ -115,6 +116,98 @@ def comp_r(dert__, ave, root_fia, mask__=None):
 
 
 def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+    '''
+    More concise but also more opaque version
+    https://github.com/khanh93vn/CogAlg/commit/1f3499c4545742486b89e878240d5c291b81f0ac
+    '''
+    if mask__ is not None:
+        majority_mask__ = (mask__[:-1, :-1].astype(int) +
+                           mask__[:-1, 1:].astype(int) +
+                           mask__[1:, 1:].astype(int) +
+                           mask__[1:, :-1].astype(int)
+                           ) > 1
+    else:
+        majority_mask__ = None
+
+    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
+
+    az__ = dx__ + 1j * dy__  # take the complex number (z), phase angle is now atan2(dy, dx)
+
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        az__ /= np.absolute(az__)  # normalized, cosine = a__.real, sine = a__.imag
+
+    # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
+    az__left = az__[:-1, :-1]  # was topleft
+    az__top = az__[:-1, 1:]  # was topright
+    az__right = az__[1:, 1:]  # was botright
+    az__bottom = az__[1:, :-1]  # was botleft
+
+    dazx__ = angle_diff(az__right, az__left)
+    dazy__ = angle_diff(az__bottom, az__top)
+    # (a__ is rotated 45 degrees counter-clockwise)
+
+    dax__ = np.angle(dazx__)  # phase angle of the complex number, same as np.atan2(dazx__.imag, dazx__.real)
+    day__ = np.angle(dazy__)
+
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        ma__ = (np.abs(dax__) + np.abs(day__)) - 2 * np.pi  # * pi to make the result range in 0-1; or ave at 45 | 22 degree?
+    '''
+    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
+    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
+    '''
+    ga__ = np.hypot(day__, dax__)  # same as old formula, atan2 and angle are equivalent
+    '''
+    ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
+    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
+    '''
+    # if root fork is frame_blobs, recompute orthogonal dy and dx
+
+    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
+        i__topleft = i__[:-1, :-1]
+        i__topright = i__[:-1, 1:]
+        i__botright = i__[1:, 1:]
+        i__botleft = i__[1:, :-1]
+        dy__ = (i__botleft + i__botright) - (i__topleft + i__topright)  # decomposition of two diagonal differences
+        dx__ = (i__topright + i__botright) - (i__topleft + i__botleft)  # decomposition of two diagonal differences
+    else:
+        dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
+        dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
+
+    i__ = i__[:-1, :-1]  # for summation in Dert
+    g__ = g__[:-1, :-1]  # for summation in Dert
+    m__ = m__[:-1, :-1]
+
+    return (i__, dy__, dx__, g__, m__, dazy__, dazx__, ga__, ma__), majority_mask__  # dazx__, dazy__ may not be needed
+
+
+def angle_diff(az2, az1):  # compare phase angle of az1 to that of az2
+    '''
+    az1 = cos_1 + j*sin_1
+    az2 = cos_2 + j*sin_2
+    (sin_1, cos_1, sin_2, cos_2 below in angle_diff2)
+    Assuming that the formula in angle_diff is correct, the result is:
+    daz = cos_da + j*sin_da
+
+    Substitute cos_da, sin_da (from angle_diff below):
+
+    daz = (cos_1*cos_2 + sin_1*sin_2) + j*(cos_1*sin_2 - sin_1*cos_2)
+        = (cos_1 + j*sin_1)*(cos_2 - j*sin_2)
+
+    Substitute (1) and (2) into the above eq:
+    daz = az1 * complex_conjugate_of_(az2)
+
+    az1 = a + bj; az2 = c + dj
+    daz = (a + bj)(c - dj)
+        = (ac + bd) + (ad - bc)j
+        (same as old formula, in angle_diff2() below)
+     '''
+
+    return az1*az2.conj()  # imags and reals of the result are sines and cosines of difference between angles
+
+'''
+old version:
+'''
+def comp_a_simple(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
 
     # angles can't be summed: https://rosettacode.org/wiki/Averages/Mean_angle
 
@@ -183,10 +276,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask__
 
 
-# -----------------------------------------------------------------------------
-# Utilities
-
-def angle_diff(a2, a1):  # compare angle_1 to angle_2
+def angle_diff_simple(a2, a1):  # compare angle_1 to angle_2
 
     sin_1, cos_1 = a1[:]
     sin_2, cos_2 = a2[:]
@@ -199,74 +289,3 @@ def angle_diff(a2, a1):  # compare angle_1 to angle_2
     return [sin_da, cos_da]
 
 
-def comp_a_complex(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
-    '''
-    More concise but also more opaque version
-    https://github.com/khanh93vn/CogAlg/commit/1f3499c4545742486b89e878240d5c291b81f0ac
-    '''
-    if mask__ is not None:
-        majority_mask__ = (mask__[:-1, :-1].astype(int) +
-                           mask__[:-1, 1:].astype(int) +
-                           mask__[1:, 1:].astype(int) +
-                           mask__[1:, :-1].astype(int)
-                           ) > 1
-    else:
-        majority_mask__ = None
-
-    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
-
-    az__ = dx__ + 1j * dy__  # take the complex number (z), phase angle is now atan2(dy, dx)
-
-    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        az__ /= np.absolute(az__)  # normalized, cosine = a__.real, sine = a__.imag
-
-    # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
-    az__left = az__[:-1, :-1]  # was topleft
-    az__top = az__[:-1, 1:]  # was topright
-    az__right = az__[1:, 1:]  # was botright
-    az__bottom = az__[1:, :-1]  # was botleft
-
-    dazx__ = angle_diff_complex(az__right, az__left)
-    dazy__ = angle_diff_complex(az__bottom, az__top)
-    # (a__ is rotated 45 degrees counter-clockwise)
-    dax__ = np.angle(dazx__)  # phase angle of the complex number, same as np.atan2(dazx__.imag, dazx__.real)
-    day__ = np.angle(dazy__)
-
-    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = (np.abs(dax__) + np.abs(day__)) - 2 * np.pi  # * pi to make the result range in 0-1; or ave at 45 | 22 degree?
-    '''
-    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
-    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    '''
-    ga__ = np.hypot(day__, dax__)  # same as old formula, atan2 and angle are equivalent
-    '''
-    ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
-    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
-    '''
-    # if root fork is frame_blobs, recompute orthogonal dy and dx
-
-    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
-        i__topleft = i__[:-1, :-1]
-        i__topright = i__[:-1, 1:]
-        i__botright = i__[1:, 1:]
-        i__botleft = i__[1:, :-1]
-        dy__ = (i__botleft + i__botright) - (i__topleft + i__topright)  # decomposition of two diagonal differences
-        dx__ = (i__topright + i__botright) - (i__topleft + i__botleft)  # decomposition of two diagonal differences
-    else:
-        dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
-        dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
-
-    i__ = i__[:-1, :-1]  # for summation in Dert
-    g__ = g__[:-1, :-1]  # for summation in Dert
-    m__ = m__[:-1, :-1]
-
-    # dax__, day__ may not be needed
-    return (i__, dy__, dx__, g__, m__, dazy__, dazx__, ga__, ma__), majority_mask__
-
-
-def angle_diff_complex(az2, az1):  # compare phase angle of az1 to that of az2
-    # az1 = a + bj; az2 = c + dj
-    # daz = (a + bj)(c - dj)
-    #     = (ac + bd) + (ad - bc)j
-    #     (same as old formula, in angle_diff2() below)
-    return az1*az2.conj()  # imags and reals of the result are sines and cosines of difference between angles

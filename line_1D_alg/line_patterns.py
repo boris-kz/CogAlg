@@ -62,37 +62,6 @@ init_y = 0  # starting row, the whole frame doesn't need to be processed
     capitalized variables are normally summed same-letter small-case variables
 '''
 
-def cross_comp_spliced(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
-    '''
-    process all image rows as a single line, vertically consecutive and preserving horizontal direction
-    '''
-    Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
-    pixel__ = []
-
-    for y in range(init_y + 1, Y):  # y is index of new line
-        pixel__.append([ frame_of_pixels_[y, :] ])  # splice all rows into pixel__
-
-    # initialization:
-    dert_ = []
-    __p, _p = pixel__[0:2]  # each prefix '_' denotes prior
-    _d = _p - __p  # initial comparison
-    _m = ave - abs(_d)
-    dert_.append( Cdert(p=__p, d=None, m=(_m + _m / 2)))  # project _m to bilateral m, first dert is for comp_P only?
-
-    for p in pixel__[2:]:  # pixel p is compared to prior pixel _p in a row
-        d = p - _p
-        m = ave - abs(d)  # initial match is inverse deviation of |difference|
-        dert_.append( Cdert(p=_p, d=_d, m=m + _m))  # pack dert: prior p, prior d, bilateral match
-        _p, _d, _m = p, d, m
-    dert_.append( Cdert(p=_p, d=_d, m=(_m + _m / 2)))  # unilateral d, forward-project last m to bilateral m
-
-    Pm_ = form_Pm_(dert_)  # forms m-sign patterns
-    if len(Pm_) > 4:
-        adj_M_ = form_adjacent_M_(Pm_)  # compute adjacent Ms to evaluate contrastive borrow potential
-        intra_Pm_(Pm_, adj_M_, fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per Pm
-
-    return Pm_  # frame of patterns, an output to line_PPs (level 2 processing)
-
 
 def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
 
@@ -330,6 +299,38 @@ def deriv_comp(dert_):  # cross-comp consecutive uni_ds in same-sign dert_: sign
     return ddert_
 
 
+def cross_comp_spliced(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
+    '''
+    process all image rows as a single line, vertically consecutive and preserving horizontal direction
+    '''
+    Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
+    pixel__ = []
+
+    for y in range(init_y + 1, Y):  # y is index of new line
+        pixel__.append([ frame_of_pixels_[y, :] ])  # splice all rows into pixel__
+
+    # initialization:
+    dert_ = []
+    __p, _p = pixel__[0:2]  # each prefix '_' denotes prior
+    _d = _p - __p  # initial comparison
+    _m = ave - abs(_d)
+    dert_.append( Cdert(p=__p, d=None, m=(_m + _m / 2)))  # project _m to bilateral m, first dert is for comp_P only?
+
+    for p in pixel__[2:]:  # pixel p is compared to prior pixel _p in a row
+        d = p - _p
+        m = ave - abs(d)  # initial match is inverse deviation of |difference|
+        dert_.append( Cdert(p=_p, d=_d, m=m + _m))  # pack dert: prior p, prior d, bilateral match
+        _p, _d, _m = p, d, m
+    dert_.append( Cdert(p=_p, d=_d, m=(_m + _m / 2)))  # unilateral d, forward-project last m to bilateral m
+
+    Pm_ = form_Pm_(dert_)  # forms m-sign patterns
+    if len(Pm_) > 4:
+        adj_M_ = form_adjacent_M_(Pm_)  # compute adjacent Ms to evaluate contrastive borrow potential
+        intra_Pm_(Pm_, adj_M_, fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per Pm
+
+    return Pm_  # frame of patterns, an output to line_PPs (level 2 processing)
+
+
 if __name__ == "__main__":
     # Parse argument (image)
     argument_parser = argparse.ArgumentParser()
@@ -343,7 +344,7 @@ if __name__ == "__main__":
     image = image.astype(int)
 
     start_time = time()
-    fline_PPs = 1
+    fline_PPs = 0
     # Main
     frame_of_patterns_ = cross_comp(image)
 

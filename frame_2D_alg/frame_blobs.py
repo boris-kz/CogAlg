@@ -21,7 +21,6 @@
     thus should be cross-compared between blobs on the next level of search.
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
-
     Please see illustrations: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
@@ -54,10 +53,8 @@ class CDert(ClusterStructure):
     G = int
     M = int
     # Dert params, comp_angle:
-    Dyy = int
-    Dyx = int
-    Dxy = int
-    Dxx = int
+    Day = complex
+    Dax = complex
     Ga = int
     Ma = int
     # Dert params, comp_dx:
@@ -147,7 +144,6 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard e
     Sobel version:
     Gy__ = -(topleft__ - bottomright__) - (topright__ - bottomleft__)   # decomposition of two diagonal differences into Gy
     Gx__ = -(topleft__ - bottomright__) + (topright__ - bottomleft__))  # decomposition of two diagonal differences into Gx
-
     old not-rotated version:
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
@@ -400,7 +396,7 @@ if __name__ == "__main__":
             print_deep_blob_forking(deep_layers)
             print("\rFinished intra_blob")
 
-        bblob_ = cross_comp_blobs(frame)
+        # bblob_ = cross_comp_blobs(frame)
 
     end_time = time() - start_time
 

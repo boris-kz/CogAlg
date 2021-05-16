@@ -66,18 +66,14 @@ class CderDert(ClusterStructure):
     mDy = int
     dDy = int
     # dDdx,mDdx,dMdx,mMdx is used by comp_dx
-    mDyy = int
-    mDyx = int
-    mDxy = int
-    mDxx = int
+    mDay = complex
+    mDax = complex
     mGa = int
     mMa = int
     mMdx = int
     mDdx = int
-    dDyy = int
-    dDyx = int
-    dDxy = int
-    dDxx = int
+    dDay = complex
+    dDax = complex
     dGa = int
     dMa = int
     dMdx = int
@@ -174,36 +170,34 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
     dert_ = [list(idert_[0])]  # get first dert from idert_ (generator/iterator)
     _mask = mask_[0]  # mask bit per dert
     if ~_mask:
-        I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert_[0]; L = 1; x0 = 0  # initialize P params with first dert
+        I, Dy, Dx, G, M, Day, Dax, Ga, Ma = dert_[0]; L = 1; x0 = 0  # initialize P params with first dert
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
 
         if mask:  # masks: if 1,_0: P termination, if 0,_1: P initialization, if 0,_0: P accumulation:
             if ~_mask:  # _dert is not masked, dert is masked, terminate P:
-                P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma), L=L, x0=x0, dert_=dert_, y=y)
+                P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Day=Day, Dax=Dax, Ga=Ga, Ma=Ma), L=L, x0=x0, dert_=dert_, y=y)
                 P_.append(P)
         else:  # dert is not masked
             if _mask:  # _dert is masked, initialize P params:
-                I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma = dert; L = 1; x0 = x; dert_ = [dert]
+                I, Dy, Dx, G, M, Day, Dax, Ga, Ma = dert; L = 1; x0 = x; dert_ = [dert]
             else:
                 I += dert[0]  # _dert is not masked, accumulate P params with (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) = dert
                 Dy += dert[1]
                 Dx += dert[2]
                 G += dert[3]
                 M += dert[4]
-                Dyy += dert[5]
-                Dyx += dert[6]
-                Dxy += dert[7]
-                Dxx += dert[8]
-                Ga += dert[9]
-                Ma += dert[10]
+                Day += dert[5]
+                Dax += dert[6]
+                Ga += dert[7]
+                Ma += dert[8]
                 L += 1
                 dert_.append(dert)
         _mask = mask
 
     if ~_mask:  # terminate last P in a row
-        P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma), L=L, x0=x0, dert_=dert_, y=y)
+        P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Day=Day, Dax=Dax, Ga=Ga, Ma=Ma), L=L, x0=x0, dert_=dert_, y=y)
         P_.append(P)
 
     return P_
@@ -218,7 +212,7 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
             Pd_ = []   # Pds in P
             _dert = iP.dert_[0]  # 1st dert
             dert_ = [_dert]
-            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma= _dert; L = 1; x0 = iP.x0  # initialize P params with first dert
+            I, Dy, Dx, G, M, Day, Dax, Ga, Ma= _dert; L = 1; x0 = iP.x0  # initialize P params with first dert
             _sign = _dert[2] > 0
             x = 1  # relative x within P
 
@@ -230,17 +224,15 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                     Dx += dert[2]
                     G += dert[3]
                     M += dert[4]
-                    Dyy += dert[5]
-                    Dyx += dert[6]
-                    Dxy += dert[7]
-                    Dxx += dert[8]
-                    Ga += dert[9]
-                    Ma += dert[10]
+                    Day += dert[5]
+                    Dax += dert[6]
+                    Ga += dert[7]
+                    Ma += dert[8]
                     L += 1
                     dert_.append(dert)
 
                 else:  # sign change, terminate P
-                    P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma),
+                    P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Day=Day, Dax=Dax, Ga=Ga, Ma=Ma),
                            L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign, Pm=iP)
                     if Dx > ave_Dx:
                         # cross-comp of dx in P.dert_
@@ -252,7 +244,7 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                 _sign = sign
                 x += 1
             # terminate last P
-            P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma),
+            P = CP(Dert=CDert(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Day=Day, Dax=Dax, Ga=Ga, Ma=Ma),
                    L=L, x0=x0, dert_=dert_, y=iP.y, sign=_sign, Pm=iP)
             if Dx > ave_Dx:
                 comp_dx(P); P_Ddx += P.Dert.Ddx; P_Mdx += P.Dert.Mdx
