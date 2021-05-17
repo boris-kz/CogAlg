@@ -7,7 +7,7 @@
     -
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
     -
-    Blob structure, for all layers of blob hierarchy:
+    Blob structure, for all layers of blob hierarchy, see class CBlob:
     root_dert__,
     Dert = A, Ly, I, Dy, Dx, G, M, Day, Dax, Ga, Ma
     # A: area, Ly: vertical dimension, I: input; Dy, Dx: renamed Gy, Gx; G: gradient; M: match; Day, Dax, Ga, Ma: angle Dy, Dx, G, M
@@ -53,7 +53,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         # root fork is comp_a -> slice_blob
         if blob.mask__.shape[0] > 2 and blob.mask__.shape[1] > 2 and False in blob.mask__:  # min size in y and x, at least one dert in dert__
 
-            if (-blob.Dert.M * blob.Dert.Ma - AveB > 0) and blob.Dert.Dx:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+            if (-blob.M * blob.Ma - AveB > 0) and blob.Dx:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
@@ -64,7 +64,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         # root fork is frame_blobs or comp_r
         ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, for cross-comp in larger kernels
 
-        if blob.Dert.G > AveB:  # comp_a fork, replace G with borrow_M when known
+        if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
 
             adert__, mask__ = comp_a(ext_dert__, Ave, blob.prior_forks, ext_mask__)  # compute ma and ga
             blob.f_comp_a = 1
@@ -79,7 +79,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-        elif blob.Dert.M > AveB * 1.2:  # comp_r fork, ave M = ave G * 1.2
+        elif blob.M > AveB * 1.2:  # comp_r fork, ave M = ave G * 1.2
 
             dert__, mask__ = comp_r(ext_dert__, Ave, blob.f_root_a, ext_mask__)
             blob.f_comp_a = 0
@@ -100,7 +100,7 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
 
     AveB = aveB * blob.rdn
 
-    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__, verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_blob_Dert)
+    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__, verbose=False, mask__=mask__, blob_cls=CBlob)
     assign_adjacents(adj_pairs, CBlob)
 
     if kwargs.get('render', False):
@@ -110,7 +110,7 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
     blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
     for sub_blob in sub_blobs:  # evaluate sub_blob
-        G = blob.Dert.G  # Gr, Grr...
+        G = blob.G  # Gr, Grr...
         # adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
         # adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
         # track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
@@ -119,14 +119,14 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
         # borrow_M = min(G, adj_M / 2)
         sub_blob.prior_forks = blob.prior_forks.copy()  # increments forking sequence: g->a, g->a->p, etc.
 
-        if sub_blob.Dert.G > AveB:  # replace with borrow_M when known
+        if sub_blob.G > AveB:  # replace with borrow_M when known
             # comp_a:
             sub_blob.f_root_a = 1
             sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub_blob, currently not used
             sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
             blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
-        elif sub_blob.Dert.M - aveG > AveB:
+        elif sub_blob.M - aveG > AveB:
             # comp_r:
             sub_blob.rng = blob.rng * 2
             sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
@@ -161,18 +161,3 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
                         constant_values=True, mode='constant')
 
     return ext_dert__, ext_mask__
-
-
-def accum_blob_Dert(blob, dert__, y, x):
-    blob.Dert.I += dert__[0][y, x]
-    blob.Dert.Dy += dert__[1][y, x]
-    blob.Dert.Dx += dert__[2][y, x]
-    blob.Dert.G += dert__[3][y, x]
-    blob.Dert.M += dert__[4][y, x]
-
-    if len(dert__) > 5:  # past comp_a fork
-
-        blob.Dert.Day += dert__[5][y, x]    # Need to merge 4 Ds into 2
-        blob.Dert.Dax += dert__[6][y, x]
-        blob.Dert.Ga += dert__[7][y, x]
-        blob.Dert.Ma += dert__[8][y, x]

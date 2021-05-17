@@ -150,14 +150,21 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     day__ = np.angle(dazy__)
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = (np.abs(dax__) + np.abs(day__)) - 2 * np.pi  # * pi to make the result range in 0-1; or ave at 45 | 22 degree?
+        ma__ = 1 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi   # the result is in range in 0-1
+        ma__
     '''
+    ma = 1 - (np.abs(dax__) + np.abs(day__)) / (2*π):  in range [0, 1]. 
+    ma @ 22.5 deg = 0.875: 1 - (π/8 + π/8)/(2*π)
+    ma @ 45 deg   = 0.75:  1 - (π/4 + π/4)/(2*π)
+    
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
     '''
-    ga__ = np.hypot(day__, dax__)  # same as old formula, atan2 and angle are equivalent
+    ga__ = np.hypot(day__, dax__) - 0.2777  # same as old formula, atan2 and angle are equivalent
     '''
-    ga value is deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
+    ga value is deviation from ave: 0.2777 @ 22.5 deg, 0.5554 @ 45 degrees = π/4 radians, sqrt(0.5)*π/4 
+    
+    interruption | wave is sign-agnostic: expected reversion, same for d sign?
     extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
     '''
     # if root fork is frame_blobs, recompute orthogonal dy and dx

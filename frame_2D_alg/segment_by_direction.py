@@ -16,16 +16,15 @@ ave_M = -500  # high negative ave M for high G blobs
 
 def segment_by_direction(iblob, **kwargs):
 
-    verbose = kwargs.get('verbose')
-    render = kwargs.get('render')
-
     dert__ = list(iblob.dert__)
     mask__ = iblob.mask__
     dy__ = dert__[1]; dx__ = dert__[2]
+    verbose = kwargs.get('verbose')
+    render = kwargs.get('render')
 
     # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
     dir_blob_, idmap, adj_pairs = \
-        flood_fill(dert__, abs(dy__) > abs(dx__), verbose=verbose, mask__=mask__, blob_cls=CBlob, fseg=True, accum_func=accum_dir_blob_Dert)
+        flood_fill(dert__, abs(dy__) > abs(dx__), verbose=verbose, mask__=mask__, blob_cls=CBlob, fseg=True)
     assign_adjacents(adj_pairs, CBlob)  # fseg=True: skip adding the pose
 
     if render: _dir_blob_ = deepcopy(dir_blob_) # get a copy for dir blob before merging, for visualization purpose
@@ -36,7 +35,7 @@ def segment_by_direction(iblob, **kwargs):
         if blob.id not in merged_ids:
             blob = merge_adjacents_recursive(blob, merged_ids, blob.adj_blobs[0], strong_adj_blobs=[])  # no pose
 
-            if (blob.Dert.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
+            if (blob.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
                 blob.fsliced = True
                 slice_blob(blob,verbose)  # slice and comp_slice_ across directional sub-blob
             iblob.dir_blobs.append(blob)
@@ -61,13 +60,13 @@ def segment_by_direction(iblob, **kwargs):
 
 def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
 
-    if dir_eval(blob.Dert.Dy, blob.Dert.Dx, blob.Dert.G):  # directionally weak blob, merge with all adjacent weak blobs
+    if dir_eval(blob.Dy, blob.Dx, blob.G):  # directionally weak blob, merge with all adjacent weak blobs
 
         if blob in adj_blobs: adj_blobs.remove(blob)  # remove current blob from adj adj blobs (assigned bilaterally)
         merged_adj_blobs = []  # weak adj_blobs
         for adj_blob in adj_blobs:
 
-            if dir_eval(adj_blob.Dert.Dy, adj_blob.Dert.Dx, adj_blob.Dert.G):  # also directionally weak, merge adj blob in blob:
+            if dir_eval(adj_blob.Dy, adj_blob.Dx, adj_blob.G):  # also directionally weak, merge adj blob in blob:
                 if adj_blob.id not in merged_ids:
                     merged_ids.append(adj_blob.id)
                     blob = merge_blobs(blob, adj_blob, strong_adj_blobs)
@@ -109,7 +108,7 @@ def dir_eval(Dy, Dx, G):  # blob direction strength eval
 def merge_blobs(blob, adj_blob, strong_adj_blobs):  # merge blob and adj_blob by summing their params and combining dert__ and mask__
 
     # accumulate blob Dert
-    blob.accumulate(**{param:getattr(adj_blob.Dert, param) for param in adj_blob.Dert.numeric_params})
+    blob.accum_from(blob)
 
     _y0, _yn, _x0, _xn = blob.box
     y0, yn, x0, xn = adj_blob.box
@@ -139,6 +138,9 @@ def merge_blobs(blob, adj_blob, strong_adj_blobs):  # merge blob and adj_blob by
         extended_mask__[cby0:cbyn, cbx0:cbxn] = np.logical_and(adj_blob.mask__, extended_mask__[cby0:cbyn, cbx0:cbxn])
         # create extended derts from combined box
         extended_dert__ = [np.zeros((cyn-cy0,cxn-cx0)) for _ in range(len(blob.dert__))]
+        extended_dert__[5] = np.zeros((cyn-cy0,cxn-cx0),dtype=np.complex_) # complex day
+        extended_dert__[6] = np.zeros((cyn-cy0,cxn-cx0),dtype=np.complex_) # complex dax
+
         for i in range(len(blob.dert__)):
             extended_dert__[i][cay0:cayn, cax0:caxn] = blob.dert__[i]
             extended_dert__[i][cby0:cbyn, cbx0:cbxn] = adj_blob.dert__[i]
@@ -147,7 +149,7 @@ def merge_blobs(blob, adj_blob, strong_adj_blobs):  # merge blob and adj_blob by
     blob.dert__ = extended_dert__
     blob.mask__ = extended_mask__
     blob.box = [cy0,cyn,cx0,cxn]
-    blob.sign = abs(blob.Dert.Dy)>abs(blob.Dert.Dx)
+    blob.sign = abs(blob.Dy)>abs(blob.Dx)
 
     # add adj_blob's adj blobs to strong_adj_blobs to merge or add them as adj_blob later
     for adj_adj_blob,pose in zip(*adj_blob.adj_blobs):
@@ -163,20 +165,6 @@ def merge_blobs(blob, adj_blob, strong_adj_blobs):  # merge blob and adj_blob by
     return blob
 
 
-def accum_dir_blob_Dert(blob, dert__, y, x):
-    blob.Dert.I += dert__[0][y, x]
-    blob.Dert.Dy += dert__[1][y, x]
-    blob.Dert.Dx += dert__[2][y, x]
-    blob.Dert.G += dert__[3][y, x]
-    blob.Dert.M += dert__[4][y, x]
-
-    if len(dert__) > 5:  # past comp_a fork
-        blob.Dert.Day += dert__[5][y, x]
-        blob.Dert.Dax += dert__[6][y, x]
-        blob.Dert.Ga += dert__[7][y, x]
-        blob.Dert.Ma += dert__[8][y, x]
-
-
 def visualize_merging_process(iblob, dir_blob_, _dir_blob_, mask__, i):
 
     cv2.namedWindow('(1-3)Before merging, (4-6)After merging - weak blobs,strong blobs,strong+weak blobs', cv2.WINDOW_NORMAL)
@@ -188,9 +176,9 @@ def visualize_merging_process(iblob, dir_blob_, _dir_blob_, mask__, i):
     for dir_blob in _dir_blob_:
         y0, yn, x0, xn = dir_blob.box
 
-        rD = dir_blob.Dert.Dy / dir_blob.Dert.Dx if dir_blob.Dert.Dx else 2 * dir_blob.Dert.Dy
+        rD = dir_blob.Dy / dir_blob.Dx if dir_blob.Dx else 2 * dir_blob.Dy
         # direction eval on the blob
-        if abs(dir_blob.Dert.G * rD)  < ave_dir_val: # weak blob
+        if abs(dir_blob.G * rD)  < ave_dir_val: # weak blob
             img_mask_weak[y0:yn, x0:xn] = np.logical_and(img_mask_weak[y0:yn, x0:xn], dir_blob.mask__)
         else:
             img_mask_strong[y0:yn, x0:xn] = np.logical_and(img_mask_strong[y0:yn, x0:xn], dir_blob.mask__)
@@ -202,9 +190,9 @@ def visualize_merging_process(iblob, dir_blob_, _dir_blob_, mask__, i):
     for dir_blob in iblob.dir_blobs:
         y0, yn, x0, xn = dir_blob.box
 
-        rD = dir_blob.Dert.Dy / dir_blob.Dert.Dx if dir_blob.Dert.Dx else 2 * dir_blob.Dert.Dy
+        rD = dir_blob.Dy / dir_blob.Dx if dir_blob.Dx else 2 * dir_blob.Dy
         # direction eval on the blob
-        if abs(dir_blob.Dert.G * rD)  < ave_dir_val: # weak blob
+        if abs(dir_blob.G * rD)  < ave_dir_val: # weak blob
             img_mask_weak_merged[y0:yn, x0:xn] = np.logical_and(img_mask_weak_merged[y0:yn, x0:xn], dir_blob.mask__)
         else:  # strong blob
             img_mask_strong_merged[y0:yn, x0:xn] = np.logical_and(img_mask_strong_merged[y0:yn, x0:xn], dir_blob.mask__)
