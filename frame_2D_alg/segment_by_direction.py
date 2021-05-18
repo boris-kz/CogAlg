@@ -207,7 +207,7 @@ def visualize_merging_process(iblob, dir_blob_, _dir_blob_, mask__, i):
     # after merging
     img_weak_merged = ((~img_mask_weak_merged)*90).astype('uint8')          # weak blobs after merging process
     img_strong_merged = ((~img_mask_strong_merged)*255).astype('uint8')     # strong blobs after merging process
-    img_combined_merged = img_weak_merged + img_strong_merged                      # merge weak and strong blobs
+    img_combined_merged = img_weak_merged + img_strong_merged               # merge weak and strong blobs
     # img_overlap_merged = np.logical_and(~img_mask_weak_merged, ~img_mask_strong_merged)*255 # overlapping area (between blobs) to check if we merge blob twice
 
     img_concat = np.concatenate((img_weak, img_separator,

@@ -1,4 +1,4 @@
-"""
+'''
 Provide a base class for cluster objects in CogAlg.
 Features:
 - Unique instance ids per class.
@@ -7,13 +7,15 @@ Features:
 - Methods generated via string templates so overheads caused by
 differences in interfaces are mostly eliminated.
 - Can be extended/modified further to support main implementation better.
-"""
+'''
 
 import weakref
 from numbers import Number
+from inspect import isclass
 
 NoneType = type(None)
 
+# ----------------------------------------------------------------------------
 # Template for class method generation
 _methods_template = '''
 @property
@@ -30,10 +32,6 @@ def unpack(self):
 def accumulate(self, **kwargs):
     """Add a number to specified numerical fields/params."""
     {accumulations}
-def accum_from(self, other):
-    """Accumulate params from another structure."""
-    self.accumulate(**{{p:getattr(other, p, 0)
-                    for p in self.numeric_params}})
 def __contains__(self, item):
     return (item in {params})
 def __delattr__(self, item):
@@ -43,6 +41,8 @@ def __repr__(self):
     return "{typename}({repr_fmt})" % ({numeric_param_vals})
 '''
 
+# ----------------------------------------------------------------------------
+# MetaCluster meta-class
 class MetaCluster(type):
     """
     Serve as a factory for creating new cluster classes.
@@ -50,15 +50,15 @@ class MetaCluster(type):
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
         # get fields/params and numeric params
 
-        # params = tuple(attr for attr in attrs if not callable(attr))  # callable: _id, hid and weakref (see attrs['slots']
-
-        # only ignore param name start with double underscore
+        # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
-                   if not attr.startswith('__')
-                   and not callable(attr))
+                       if not attr.startswith('__') and
+                       isclass(attrs[attr]))
 
         numeric_params = tuple(param for param in params
-                               if (issubclass(attrs[param], Number)) and not (issubclass(attrs[param], bool)) ) # avoid accumulate bool, which is flag
+                               if (issubclass(attrs[param], Number)) and
+                               not (issubclass(attrs[param], bool)) ) # avoid accumulate bool, which is flag
+
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -73,12 +73,13 @@ class MetaCluster(type):
                              if params else 'pass',
             accumulations='; '.join(f"self.{param} += "
                                     f"kwargs.get('{param}', 0)"
+                                    #f"kwargs['{param}']"
                                     for param in numeric_params)
                           if params else 'pass',
             repr_fmt=', '.join(f'{param}=%r' for param in numeric_params),
         )
         # Generate methods
-        namespace = dict(print=print, getattr=getattr)
+        namespace = dict(print=print)
         exec(methods_definitions, namespace)
         # Replace irrelevant names
         namespace.pop('__builtins__')
@@ -134,9 +135,11 @@ class MetaCluster(type):
         return len(cls._instances)
 
 
+# ----------------------------------------------------------------------------
+# ClusterStructure class
 class ClusterStructure(metaclass=MetaCluster):
     """
-    Base class for cluster objects in 2D implementation of CogAlg.
+    Class for cluster objects in 2D implementation of CogAlg.
     Each time a new instance is created, four things are done:
     - Set initialize field/param.
     - Set id.
@@ -147,8 +150,8 @@ class ClusterStructure(metaclass=MetaCluster):
     - Set higher cluster id to None (no higher cluster structure yet)
     Examples
     --------
-    >>> from frame_class import Cluster
-    >>> class CP(Cluster):
+    >>> from class_cluster import ClusterStructure
+    >>> class CP(ClusterStructure):
     >>>     L = int  # field/param name and default type
     >>>     I = int
     >>>
@@ -166,6 +169,14 @@ class ClusterStructure(metaclass=MetaCluster):
     >>> P2.L += 1; P2.I += 10  # assignment, fields are mutable
     >>> print(P2)
     CP(L=1, I=10)
+    >>> # Accumulate using accumulate()
+    >>> P1.accumulate(L=1, I=2)
+    >>> print(P1)
+    CP(L=2, I=7)
+    >>> # ... or accum_from()
+    >>> P2.accum_from(P1)
+    >>> print(P2)
+    CP(L=3, I=17)
     >>> # field/param types are not constrained, so be careful!
     >>> P2.L = 'something'
     >>> print(P2)
@@ -174,6 +185,24 @@ class ClusterStructure(metaclass=MetaCluster):
 
     def __init__(self, **kwargs):
         pass
+
+    def accum_from(self, other):
+        """Accumulate params from another structure."""
+        self.accumulate(**{p: getattr(other, p, 0)
+                           for p in self.numeric_params})
+
+    def difference(self, other):
+        return {param:(getattr(self, param) - getattr(other, param))
+                for param in self.numeric_params}
+
+    def min_match(self, other):
+        return {param: min(getattr(self, param), getattr(other, param))
+                for param in self.numeric_params}
+
+    def abs_min_match(self, other):
+        return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
+                for param in self.numeric_params}
+
 
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size

@@ -21,7 +21,10 @@
     thus should be cross-compared between blobs on the next level of search.
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
-    Please see illustrations: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
+    
+    Please see illustrations:
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/blob_params.drawio
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
 
@@ -139,11 +142,12 @@ class CBlob(ClusterStructure):
     Pd__ = list
 
     # comp blobs
-    DerBlob = object
+    mB = int
+    dB = int
     derBlob_ = list
     distance = int  # common per derBlob_
     neg_mB = int    # common per derBlob_
-
+    bblob = object
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
     # see comp_pixel_versions file for other versions and more explanation
@@ -203,14 +207,6 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
     return frame
 
 
-def accum_blob_Dert(blob, dert__, y, x):
-
-    blob.Dert.I += dert__[0][y, x]
-    blob.Dert.Dy += dert__[1][y, x]
-    blob.Dert.Dx += dert__[2][y, x]
-    blob.Dert.G += dert__[3][y, x]
-    blob.Dert.M += dert__[4][y, x]
-
 
 def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=False, prior_forks=[]):
 
@@ -228,26 +224,6 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
         progress = 0.0
         print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
 
-    # init dert instance for accumulation
-    dert__instance = [[[] for _ in range(width)] for _ in range(height)]
-    for y in range(height):
-        for x in range(width):
-            # comp_pixel:
-            dert__instance[y][x] = CDert(I  = dert__[0][y,x],
-                                         Dy = dert__[1][y,x],
-                                         Dx = dert__[2][y,x],
-                                         G  = dert__[3][y,x],
-                                         M  = dert__[4][y,x])
-            if len(dert__)>8:
-                # comp_angle:
-                dert__instance[y][x].Day += dert__[5][y,x]
-                dert__instance[y][x].Dax += dert__[6][y,x]
-                dert__instance[y][x].Ga  += dert__[7][y,x]
-                dert__instance[y][x].Ma  += dert__[8][y,x]
-            if len(dert__)>10:
-                # comp_dx:
-                dert__instance[y][x].Mdx += dert__[9][y,x]
-                dert__instance[y][x].Ddx += dert__[10][y,x]
 
     blob_ = []
     adj_pairs = set()
@@ -268,7 +244,21 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                 while unfilled_derts:
                     y1, x1 = unfilled_derts.popleft()
                     # add dert to blob
-                    blob.accum_from(dert__instance[y][x])
+                    blob.accumulate(I =dert__[0][y][x],
+                                    Dy=dert__[1][y][x],
+                                    Dx=dert__[2][y][x],
+                                    G =dert__[3][y][x],
+                                    M =dert__[4][y][x])
+
+                    if len(dert__)>5: # comp_angle
+                        blob.accumulate(Day =dert__[5][y][x],
+                                        Dax =dert__[6][y][x],
+                                        Ga  =dert__[7][y][x],
+                                        Ma  =dert__[8][y][x])
+                    if len(dert__)>10: # comp_dx
+                        blob.accumulate(Mdx =dert__[9][y][x],
+                                        Ddx =dert__[10][y][x])
+
                     blob.A += 1
                     if y1 < y0:
                         y0 = y1
@@ -310,7 +300,6 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                 xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])
-                blob.dert__instance =  [ dert_row[x0:xn] for dert_row in dert__instance[y0:yn]]
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
 
@@ -381,7 +370,7 @@ if __name__ == "__main__":
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     args = argument_parser.parse_args()
@@ -445,7 +434,7 @@ if __name__ == "__main__":
             print_deep_blob_forking(deep_layers)
             print("\rFinished intra_blob")
 
-        bblob_ = cross_comp_blobs(frame)
+    bblob_ = cross_comp_blobs(frame)
 
     end_time = time() - start_time
 
