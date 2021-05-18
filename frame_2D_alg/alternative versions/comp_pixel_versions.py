@@ -36,7 +36,7 @@ def comp_pixel_hybrid(image):  # 3x3 kernel M and 2x2 quadrant G, see comp_pixel
     left__        = image[1:-1,:-2]
     center__      = image[1:-1,1:-1]
 
-    # using bottom right quarant of 3x3 kernel -> 2x2
+    # using bottom right quadrant of 3x3 kernel -> 2x2
     rot_Gy__ = bottomright__ - center__  # rotated to bottom__ - top__
     rot_Gx__ = right__ - bottom__  # rotated to right__ - left__
 
