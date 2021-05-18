@@ -141,7 +141,7 @@ def P_blobs(dert__, mask, crit__, verbose=False, render=False):
 
     if verbose:
         start_time = time()
-        print("Converting to image to blobs...")
+        print("Converting the image(frame) to blobs...")
 
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose:
