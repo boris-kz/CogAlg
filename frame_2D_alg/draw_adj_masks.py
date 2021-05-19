@@ -44,7 +44,7 @@ for i, blob in enumerate(blob_to_draw_):
         dert__mask = dert__mask * 255  # set intensity of colour
 
         # draw blobs into image
-        # current blob - whilte colour
+        # current blob - white colour
         img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 0] += dert__mask
         img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 1] += dert__mask
         img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 2] += dert__mask
