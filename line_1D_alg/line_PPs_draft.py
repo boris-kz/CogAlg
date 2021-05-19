@@ -73,9 +73,9 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
 
     for i, P in enumerate(P_):
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
-        M = P.M
+
         for j, _P in enumerate(P_[i + 1:]):  # variable-range comp, no last-P displacement, just shifting first _P
-            if M - neg_M > ave_M:  # search while net_M > ave or 1st _P, no selection by M sign
+            if P.M - neg_M > ave_M:  # search while net_M > ave or 1st _P, no selection by M sign
 
                 derP, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 smP, vmP, neg_M, neg_L, P = derP.smP, derP.MP, derP.Neg_M, derP.Neg_L, derP.P

@@ -12,6 +12,7 @@ differences in interfaces are mostly eliminated.
 import weakref
 from numbers import Number
 from inspect import isclass
+from cmath import phase
 
 NoneType = type(None)
 
@@ -73,7 +74,6 @@ class MetaCluster(type):
                              if params else 'pass',
             accumulations='; '.join(f"self.{param} += "
                                     f"kwargs.get('{param}', 0)"
-                                    #f"kwargs['{param}']"
                                     for param in numeric_params)
                           if params else 'pass',
             repr_fmt=', '.join(f'{param}=%r' for param in numeric_params),
@@ -191,18 +191,29 @@ class ClusterStructure(metaclass=MetaCluster):
         self.accumulate(**{p: getattr(other, p, 0)
                            for p in self.numeric_params})
 
-    def difference(self, other):
+    def difference(self, other, excluded=[]):
         return {param:(getattr(self, param) - getattr(other, param))
-                for param in self.numeric_params}
+                for param in self.numeric_params if param not in excluded}
+    '''
+    def min_match(self, other, excluded=[]):
+        return {param: min(getattr(self, param), getattr(other, param))
+                for param in self.numeric_params if param not in excluded}
+    def abs_min_match(self, other, excluded=[]):
+        return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
+                for param in self.numeric_params if param not in excluded}
+    '''
 
     def min_match(self, other):
-        return {param: min(getattr(self, param), getattr(other, param))
-                for param in self.numeric_params}
-
-    def abs_min_match(self, other):
-        return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
-                for param in self.numeric_params}
-
+        results = {}
+        for param in self.numeric_params:
+            _e = getattr(other, param)
+            e = getattr(self, param)
+            if isinstance(e, complex):
+                # For angle, not sure if it makes any sense for min-match
+                results[param] = _e if phase(_e) < phase(e)  else e
+            else:
+                results[param] = min(_e, e)
+        return results
 
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size

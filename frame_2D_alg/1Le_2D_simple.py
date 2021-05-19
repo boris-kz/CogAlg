@@ -27,13 +27,9 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
 
-import sys
 import numpy as np
 
-from collections import deque
 # from frame_blobs_wrapper import wrapped_flood_fill
-from draw_frame_blobs import visualize_blobs
-from utils import minmax
 from collections import namedtuple
 from class_cluster import ClusterStructure, NoneType
 
@@ -445,7 +441,6 @@ if __name__ == "__main__":
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
 
-import numpy as np
 from frame_blobs import assign_adjacents, flood_fill, CBlob
 from intra_comp import comp_r, comp_a
 from draw_frame_blobs import visualize_blobs
@@ -610,7 +605,6 @@ Cross-comparison of pixels 3x3 kernels or gradient angles in 2x2 kernels
 """
 
 import numpy as np
-import functools
 
 # Sobel coefficients to decompose ds into dy and dx:
 
@@ -897,7 +891,6 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/comp_s
 
 from collections import deque
 import sys
-import numpy as np
 from class_cluster import ClusterStructure, NoneType
 from frame_blobs import CDert
 #from slice_utils import draw_PP_
@@ -1430,7 +1423,7 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
 Cross-compare blobs with incrementally intermediate adjacency, within a frame
 '''
 
-from class_cluster import ClusterStructure, NoneType
+from class_cluster import ClusterStructure
 import numpy as np
 import cv2
 

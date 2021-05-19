@@ -21,8 +21,10 @@
     thus should be cross-compared between blobs on the next level of search.
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
-    
+
+    Frame_blobs is a root function for all deeper processing in 2D alg.
     Please see illustrations:
+
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/blob_params.drawio
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio

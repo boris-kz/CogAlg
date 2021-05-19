@@ -9,17 +9,12 @@ Vectorization is clustering of Ps + their derivatives (derPs) into PPs: patterns
 This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
 As we add higher dimensions (2D alg, 3D alg), this dimensionality reduction is done in salient high-aspect blobs
 (likely edges / contours in 2D or surfaces in 3D) to form more compressed skeletal representations of full-D patterns.
--
-Please see diagram:
-https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/comp_slice_flip.drawio
 '''
 
 from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
-from frame_blobs import CDert
-#from slice_utils import draw_PP_
 
 import warnings  # to detect overflow issue, in case of infinity loop
 warnings.filterwarnings('error')

@@ -7,7 +7,6 @@ import functools
 
 ''' 
 Sobel coefficients to decompose ds into dy and dx:
-
 YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
 XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
 
@@ -15,7 +14,6 @@ XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
     YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
             0       0  ¦          -2       2  ¦
             1   2   1  ¦          -1   0   1  ¦
-            
 Scharr coefs:
 YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
 XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
@@ -150,26 +148,17 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     day__ = np.angle(dazy__)
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = 1 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi   # the result is in range in 0-1
-        ma__
+        ma__ = 1 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi - 0.875   # the result is in range in 0-1
     '''
-    ma = 1 - (np.abs(dax__) + np.abs(day__)) / (2*π):  in range [0, 1]. 
-    ma @ 22.5 deg = 0.875: 1 - (π/8 + π/8)/(2*π)
-    ma @ 45 deg   = 0.75:  1 - (π/4 + π/4)/(2*π)
-    
+    ma deviation from ave = ma @ 22.5 deg = 0.875: 1 - (π/8 + π/8)/(2*π), or ma @ 45 deg = 0.75:  1 - (π/4 + π/4)/(2*π)
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
     '''
     ga__ = np.hypot(day__, dax__) - 0.2777  # same as old formula, atan2 and angle are equivalent
     '''
-    ga value is deviation from ave: 0.2777 @ 22.5 deg, 0.5554 @ 45 degrees = π/4 radians, sqrt(0.5)*π/4 
-    
-    interruption | wave is sign-agnostic: expected reversion, same for d sign?
-    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
+    ga deviation from ave = 0.2777 @ 22.5 deg, 0.5554 @ 45 degrees = π/4 radians, sqrt(0.5)*π/4 
     '''
-    # if root fork is frame_blobs, recompute orthogonal dy and dx
-
-    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
+    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):  # root fork is frame_blobs, recompute orthogonal dy and dx
         i__topleft = i__[:-1, :-1]
         i__topright = i__[:-1, 1:]
         i__botright = i__[1:, 1:]
@@ -194,22 +183,18 @@ def angle_diff(az2, az1):  # compare phase angle of az1 to that of az2
     (sin_1, cos_1, sin_2, cos_2 below in angle_diff2)
     Assuming that the formula in angle_diff is correct, the result is:
     daz = cos_da + j*sin_da
-
     Substitute cos_da, sin_da (from angle_diff below):
-
     daz = (cos_1*cos_2 + sin_1*sin_2) + j*(cos_1*sin_2 - sin_1*cos_2)
-        = (cos_1 + j*sin_1)*(cos_2 - j*sin_2)
-
+        = (cos_1 - j*sin_1)*(cos_2 + j*sin_2)
     Substitute (1) and (2) into the above eq:
     daz = az1 * complex_conjugate_of_(az2)
-
     az1 = a + bj; az2 = c + dj
     daz = (a + bj)(c - dj)
         = (ac + bd) + (ad - bc)j
         (same as old formula, in angle_diff2() below)
      '''
 
-    return az1*az2.conj()  # imags and reals of the result are sines and cosines of difference between angles
+    return az2 * az1.conj()  # imags and reals of the result are sines and cosines of difference between angles
 
 '''
 old version:
@@ -258,7 +243,7 @@ def comp_a_simple(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradi
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
     '''
-    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) )
+    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - 2
     '''
     ga value is a deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
     extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
@@ -294,5 +279,3 @@ def angle_diff_simple(a2, a1):  # compare angle_1 to angle_2
     cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
 
     return [sin_da, cos_da]
-
-
