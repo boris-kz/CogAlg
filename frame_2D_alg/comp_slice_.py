@@ -497,7 +497,7 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
     ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
     mdX = min(dX, _dX)  # dX is inversely predictive of mP?
 
-    # is this looks better? or it would better if we stick to the old code?
+    # is this looking better? or it would better if we stick to the old code?
     difference = P.difference(_P)   # P - _P
     match = P.min_match(_P)         # min of P and _P
     abs_match = P.abs_min_match(_P) # min of abs(P) and abs(_P)
@@ -641,7 +641,7 @@ def comp_PP_recursive(PP_, PP, fPd, fPPd):
         if fPd: derP__ = PP.derPd__  # derPd
         else: derP__ = PP.derP__     # derPm
 
-        # need further review, suppose we need find connected PPs, but upconnect should be already merged into the PP ?
+        # need further review, suppose we need to find connected PPs, but upconnect should be already merged into the PP ?
         # search upconnects via PP's derPs
         for derP in derP__:
             for upconnect in derP._P.upconnect_:
