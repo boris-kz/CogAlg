@@ -64,17 +64,17 @@ def comp_blob_recursive(blob, adj_blob_, derBlob_):
     '''
     derBlob_pair_ = [ [derBlob.blob, derBlob._blob]  for derBlob in derBlob_]  # blob, adj_blob pair
 
-    for i, adj_blob in enumerate(adj_blob_):
+    for adj_blob in adj_blob_:
         if [adj_blob, blob] in derBlob_pair_:  # derBlob.blob=adj_blob, derBlob._blob=blob
             derBlob = derBlob_[derBlob_pair_.index([adj_blob,blob])]
-            accum_derBlob(blob, derBlob)
             # also adj_blob.rdn += 1?
         elif [blob, adj_blob] not in derBlob_pair_:  # form new derBlob if blob pair wasn't compared in prior function call
             derBlob = comp_blob(blob, adj_blob)  # compare blob and adjacent blob
-            accum_derBlob(blob, derBlob)         # from all compared blobs, regardless of mB sign
             derBlob_.append(derBlob)             # also frame-wide
 
         if "derBlob" in locals(): # derBlob exists
+            accum_derBlob(blob, derBlob)         # from all compared blobs, regardless of mB sign
+
             if derBlob.mB > 0:  # replace blob with adj_blob for continued adjacency search:
                 comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], derBlob_)  # search depth could be different, compare anyway
                 break
@@ -91,7 +91,7 @@ def comp_blob(blob, _blob):
     '''
 
     difference = _blob.difference(blob)
-    match = _blob.min_match(blob,excluded=['Day', 'Dax'])
+    match = _blob.min_match(blob)
 
     mB = match['I'] + match['A'] + match['G'] + match['M'] - ave_mB * (ave_rM ** ((1+blob.distance) / np.sqrt(blob.A)))
     # deviation from average blob match at current distance

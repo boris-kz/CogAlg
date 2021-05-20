@@ -148,7 +148,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     day__ = np.angle(dazy__)
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = 1 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi - 0.875   # the result is in range in 0-1
+        ma__ = .125 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi   # the result is in range in 0-1
     '''
     ma deviation from ave = ma @ 22.5 deg = 0.875: 1 - (π/8 + π/8)/(2*π), or ma @ 45 deg = 0.75:  1 - (π/4 + π/4)/(2*π)
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 

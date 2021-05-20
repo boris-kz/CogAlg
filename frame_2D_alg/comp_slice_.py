@@ -16,8 +16,8 @@ import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
 
-import warnings  # to detect overflow issue, in case of infinity loop
-warnings.filterwarnings('error')
+# import warnings  # to detect overflow issue, in case of infinity loop
+# warnings.filterwarnings('error')
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback, not needed here
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -170,8 +170,14 @@ class CPP(ClusterStructure):
     PPdd_ = list  # comp_dx params
 
     # comp_PP
-    derPPm = object
-    derPPd = object
+    #derPPm = object
+    #derPPd = object
+    derPPm_ = []
+    derPPd_ = []
+    mmPP = int
+    dmPP = int
+    mdPP = int
+    ddPP = int
     neg_mmPP = int
     neg_mdPP = int
 
@@ -220,7 +226,7 @@ def slice_blob(blob, verbose=False):
 
         form_PP_root(blob, derP__, P__, derPd__, Pd__, fPPd)  # form PPs in blob or in FPP
 
-        # comp_PP_(blob,fPPd)
+        comp_PP_(blob,fPPd)
 
         # yet to be updated
         # draw PPs
@@ -394,10 +400,14 @@ def upconnect_2_PP_(iderP, PP_,  fPPd):
                 else:  # accumulate derP in current PP
                     accum_PP(iderP.PP, derP)
                     confirmed_upconnect_.append(derP)
-            elif not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
-                PP = CPP()
-                accum_PP(PP,derP)
-                derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
+            else:
+                if not isinstance(derP.PP, CPP):  # sign changed, derP is root derP unless it already has FPP/PP
+                    PP = CPP()
+                    accum_PP(PP,derP)
+                    derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
+
+                iderP.PP.upconnect_.append(derP.PP) # add new initialized PP as upconnect of current PP
+                derP.PP.downconnect_cnt += 1        # add downconnect count to newly initialized PP
 
             if derP._P.upconnect_:
                 upconnect_2_PP_(derP, PP_, fPPd)  # recursive compare sign of next-layer upconnects
@@ -595,7 +605,7 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
 '''
 
 
-# draft of comp_PP, pending update
+# draft of comp_PP, following structure of comp_blob
 def comp_PP_(blob, fPPd):
 
     for fPd in [0,1]:
@@ -604,14 +614,56 @@ def comp_PP_(blob, fPPd):
                 PP_ = blob.PPdd_
             else: # using derPm (PPdm)
                 PP_ = blob.PPdm_
+            for PP in PP_:
+                if len(PP.derPPd_) == 0: # PP doesn't perform any searching in prior function call
+                    comp_PP_recursive(PP, PP.upconnect_, derPP_=[], fPPd=fPPd)
+
         else: # cluster by m sign
             if fPd: # using derPd (PPmd)
                 PP_ = blob.PPmd_
             else: # using derPm (PPmm)
                 PP_ = blob.PPmm_
+            for PP in PP_:
+                if len(PP.derPPm_) == 0: # PP doesn't perform any searching in prior function call
+                    comp_PP_recursive(PP, PP.upconnect_, derPP_=[], fPPd=fPPd)
 
-        for PP in PP_:
-            comp_PP_recursive(PP_, PP, fPd=fPd, fPPd=fPPd)
+
+def comp_PP_recursive(PP, upconnect_, derPP_, fPPd):
+
+    derPP_pair_ = [ [derPP.PP, derPP._PP]  for derPP in derPP_]
+
+    for _PP in upconnect_:
+        if [_PP, PP] in derPP_pair_ : # derPP.PP = _PP, derPP._PP = PP
+            derPP = derPP_[derPP_pair_.index([_PP,PP])]
+
+        elif [PP, _PP] not in derPP_pair_ : # same pair of PP and _PP doesn't checked prior this function call
+            derPP = comp_PP(PP, _PP) # comp_PP
+            derPP_.append(derPP)
+
+        if "derPP" in locals(): # derPP exists
+            accum_derPP(PP, derPP, fPPd)    # accumulate derPP
+            if fPPd:                  # PP cluster by d
+                mPP = derPP.mdPP      # match of PPs' d
+            else:                     # PP cluster by m
+                mPP = derPP.mmPP      # match of PPs' m
+
+            if mPP>0: # _PP replace PP to continue the searching
+                comp_PP_recursive(_PP, _PP.upconnect_, derPP_, fPPd)
+
+            elif fPPd and PP.neg_mdPP > ave_mPP: # evaluation to extend PPd comparison
+                PP.neg_mdPP += derPP.mdPP
+                comp_PP_recursive(PP, _PP.upconnect_, derPP_, fPPd)
+
+            elif not fPPd and PP.neg_mmPP > ave_mPP: # evaluation to extend PPm comparison
+                PP.neg_mmPP += derPP.mmPP
+                comp_PP_recursive(PP, _PP.upconnect_, derPP_, fPPd)
+
+
+def form_PPP_():
+    '''
+    work in progress
+    '''
+    pass
 
 
 def comp_PP(PP, _PP):
@@ -622,55 +674,23 @@ def comp_PP(PP, _PP):
 
     # match of compared PPs' m components
     mmPP = match['mP'] + match['mx'] + match['mL'] + match['mDx'] + match['mDy']
-    # deviation of compared PPs' m components
+    # difference of compared PPs' m components
     dmPP = difference['mP'] + difference['mx'] + difference['mL'] + difference['mDx'] + difference['mDy']
 
     # match of compared PPs' d components
     mdPP = match['dP'] + match['dx'] + match['dL'] + match['dDx'] + match['dDy']
-    # deviation of compared PPs' d components
+    # difference of compared PPs' d components
     ddPP = difference['dP'] + difference['dx'] + difference['dL'] + difference['dDx'] + difference['dDy']
 
     derPP = CderPP(PP=PP, _PP=_PP, mmPP=mmPP, dmPP = dmPP,  mdPP=mdPP, ddPP=ddPP)
 
     return derPP
 
+def accum_derPP(PP, derPP, fPPd):
 
-def comp_PP_recursive(PP_, PP, fPd, fPPd):
-
-    for PP in PP_: # loop PP and compare them recursively
-        if fPd: derP__ = PP.derPd__  # derPd
-        else: derP__ = PP.derP__     # derPm
-
-        # need further review, suppose we need find connected PPs, but upconnect should be already merged into the PP ?
-        # search upconnects via PP's derPs
-        for derP in derP__:
-            for upconnect in derP._P.upconnect_:
-                if upconnect not in derP__:
-
-                    _PP = upconnect.PP
-                    derPP = comp_PP(PP, _PP) # comp_PP
-
-                    if fPPd:                   # d component
-                        mPP = derPP.mdPP       # match of d
-                        if not isinstance(PP.derPPd, CderPP): # init new derPP of PP
-                            PP.derPPd = CderPP()
-                        accum_derPP(PP.derPPd, derPP)         # accumulate derPPd
-                    else:                     # m component
-                        mPP = derPP.mmPP      # match of m
-                        if not isinstance(PP.derPPm, CderPP): # init new derPP of PP
-                            PP.derPPm = CderPP()
-                        accum_derPP(PP.derPPm, derPP)         # accumulate derPPm
-
-                    if mPP>0: # _PP replace PP to continue the searching
-                        comp_PP_recursive(PP_, _PP,  fPd, fPPd)
-                    elif not fPPd and PP.neg_mmPP > ave_mPP: # evaluation to extend PP comparison
-                        PP.neg_mmPP += derPP.mmPP
-                        comp_PP_recursive(PP_, PP,  fPd, fPPd)
-                    elif fPPd and PP.neg_mdPP > ave_mPP: # evaluation to extend PP comparison
-                        PP.neg_mdPP += derPP.mdPP
-                        comp_PP_recursive(PP_, PP,  fPd, fPPd)
-
-
-def accum_derPP(_derPP, derPP):
-
-    _derPP.accumulate(**{param:getattr(derPP, param) for param in _derPP.numeric_params})
+    if fPPd: # PP cluster by d
+        PP.derPPd_.append(derPP)
+        PP.accumulate(mdPP=derPP.mdPP, ddPP=derPP.ddPP)
+    else:    # PP cluster by m
+        PP.derPPm_.append(derPP)
+        PP.accumulate(mmPP=derPP.mmPP, dmPP=derPP.dmPP)
