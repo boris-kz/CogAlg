@@ -32,6 +32,23 @@ ave_ortho = 20
 
 # comp_PP
 ave_mPP = 100
+ave_rM  = .7
+
+'''
+CP should be a nested class, which may have multiple layers of nesting, as we discussed.
+if PP: CP contains P, 
+   each param contains summed values of: param, (m,d),
+   and each dert in dert_ is actually P
+
+if PPP: CP contains P which also contains P?
+   each param contains summed values of: param, (m,d ((mm,dm), (md,dd)) 
+   and each dert in dert_ is actually PP
+   
+All of them and also derPs can be an instance of CP, 
+but it's better to have a factory function to recursively extend CP in new modules?
+
+Same for CBlob, CBblob, derBlob, etc.
+'''
 
 class CP(ClusterStructure):
 
@@ -170,16 +187,30 @@ class CPP(ClusterStructure):
     PPdd_ = list  # comp_dx params
 
     # comp_PP
-    #derPPm = object
-    #derPPd = object
     derPPm_ = []
     derPPd_ = []
+    distance = int
     mmPP = int
     dmPP = int
     mdPP = int
     ddPP = int
     neg_mmPP = int
     neg_mdPP = int
+
+    PPPm = object
+    PPPd = object
+
+
+class CPPP(ClusterStructure):
+
+    PPm_ = list
+    PPd_ = list
+    mmPP = int
+    dmPP = int
+    mdPP = int
+    ddPP = int
+
+
 
 # Functions:
 '''
@@ -650,20 +681,75 @@ def comp_PP_recursive(PP, upconnect_, derPP_, fPPd):
             if mPP>0: # _PP replace PP to continue the searching
                 comp_PP_recursive(_PP, _PP.upconnect_, derPP_, fPPd)
 
-            elif fPPd and PP.neg_mdPP > ave_mPP: # evaluation to extend PPd comparison
+            elif fPPd and PP.neg_mdPP + PP.mdPP > ave_mPP: # evaluation to extend PPd comparison
+                PP.distance += len(_PP.Pd__) # approximate using number of Py, not so sure
                 PP.neg_mdPP += derPP.mdPP
                 comp_PP_recursive(PP, _PP.upconnect_, derPP_, fPPd)
 
-            elif not fPPd and PP.neg_mmPP > ave_mPP: # evaluation to extend PPm comparison
+            elif not fPPd and PP.neg_mmPP + PP.mmPP > ave_mPP: # evaluation to extend PPm comparison
+                PP.distance += len(_PP.P__) # approximate using number of Py, not so sure
                 PP.neg_mmPP += derPP.mmPP
                 comp_PP_recursive(PP, _PP.upconnect_, derPP_, fPPd)
 
+# draft
+def form_PPP_(PP_, fPPd):
 
-def form_PPP_():
-    '''
-    work in progress
-    '''
-    pass
+    PPP_ = []
+    for PP in PP_:
+
+        if fPPd: mPP = PP.mdPP # match of PP's d
+        else:    mPP = PP.mdPP # match of PP's m
+
+        if mPP > 0 and not isinstance(PP.PPP, CPPP):
+            PPP = CPPP()                    # init new PPP
+            accum_PPP(PPP_, PPP, PP, fPPd)  # accum PP into PPP
+            form_PPP_recursive(PPP_, PPP, PP.upconnect_, checked_ids=[PP.id], fPPd=fPPd)
+            PPP_.append(PPP) # pack PPP after scanning all upconnects
+
+    return PPP_
+
+def form_PPP_recursive(PPP_, PPP, upconnect_,  checked_ids, fPPd):
+
+    for _PP in upconnect_:
+        if fPPd: _mPP = _PP.mdPP   # match of _PPs' d
+        else:    _mPP = _PP.mmPP   # match of _PPs' m
+
+        if mPP>0 and _PP.id not in checked_ids:
+            checked_ids.append(_PP.id)
+
+            if fPPd: _PPP = _PP.PPPd
+            else:    _PPP = _PP.PPPm
+
+            if isinstance(_PPP, CPPP):  # _PP's PPP exists, merge with current PPP
+                PPP_.remove(PPP_, _PPP) # remove the merging PPP from PPP_
+                merge_PPP(PPP, _PPP, fPPd)
+            else:
+                accum_PPP(PPP_, PPP, _PP, merged_ids)  # accum PP into PPP
+                if _PP.upconnect_:                     # continue with _PP upconnects
+                    form_PPP_recursive(PPP_, PPP, _PP.upconnect_,  checked_ids, fPPd)
+
+
+def accum_PPP(PPP, PP, fPPd):
+
+    PPP.accum_from(PP) # accumulate parameter
+    if fPPd:
+        PPP.PPd_.append(PP) # add PPd to PPP's PPd_
+        PP.PPPd = PPP       # update PPP reference of PP
+    else:
+        PPP.PPm_.append(PP) # add PPm to PPP's PPm_
+        PP.PPPm = PPP       # update PPP reference of PP
+
+
+def merge_PPP(PPP, _PPP, fPPd):
+    if fPPd:
+        for _PP in _PPP.PPd_:
+            if _PP not in PPP.PPd_:
+                accum_PPP(PPP, _PP, fPPd)
+    else:
+        for _PP in _PPP.PPm_:
+            if _PP not in PPP.PPm_:
+                accum_PPP(PPP, _PP, fPPd)
+
 
 
 def comp_PP(PP, _PP):
@@ -671,6 +757,9 @@ def comp_PP(PP, _PP):
     # match and difference of _PP and PP
     difference = _PP.difference(PP)
     match = _PP.min_match(PP)
+
+    # do we need this?
+    # match = match - ave_mPP * (ave_rM ** ((1+PP.distance) / len(PP.P__)))
 
     # match of compared PPs' m components
     mmPP = match['mP'] + match['mx'] + match['mL'] + match['mDx'] + match['mDy']
