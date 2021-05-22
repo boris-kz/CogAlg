@@ -139,18 +139,20 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     az__top = az__[:-1, 1:]  # was topright
     az__right = az__[1:, 1:]  # was botright
     az__bottom = az__[1:, :-1]  # was botleft
-
-    dazx__ = angle_diff(az__right, az__left)
-    dazy__ = angle_diff(az__bottom, az__top)
-    # (a__ is rotated 45 degrees counter-clockwise)
+    '''
+    imags and reals of the result are sines and cosines of difference between angles
+    a__ is rotated 45 degrees counter-clockwise:
+    '''
+    dazx__ = az__right * az__left.conj()  # cos_az__right + j * sin_az__left
+    dazy__ = az__bottom * az__top.conj()  # cos_az__bottom * j * sin_az__top
 
     dax__ = np.angle(dazx__)  # phase angle of the complex number, same as np.atan2(dazx__.imag, dazx__.real)
     day__ = np.angle(dazy__)
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = .125 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi   # the result is in range in 0-1
+        ma__ = .125 - (np.abs(dax__) + np.abs(day__)) / 2 * np.pi  # the result is in range in 0-1
     '''
-    ma deviation from ave = ma @ 22.5 deg = 0.875: 1 - (π/8 + π/8)/(2*π), or ma @ 45 deg = 0.75:  1 - (π/4 + π/4)/(2*π)
+    da deviation from ave da: 0.125 @ 22.5 deg: (π/8 + π/8) / 2*π, or 0.75 @ 45 deg: (π/4 + π/4) / 2*π
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
     '''
@@ -176,8 +178,10 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     return (i__, dy__, dx__, g__, m__, dazy__, dazx__, ga__, ma__), majority_mask__  # dazx__, dazy__ may not be needed
 
 
-def angle_diff(az2, az1):  # compare phase angle of az1 to that of az2
+def angle_diff(az2, az1):  # unpacked in comp_a
     '''
+    compare phase angle of az1 to that of az2
+
     az1 = cos_1 + j*sin_1
     az2 = cos_2 + j*sin_2
     (sin_1, cos_1, sin_2, cos_2 below in angle_diff2)
@@ -193,7 +197,6 @@ def angle_diff(az2, az1):  # compare phase angle of az1 to that of az2
         = (ac + bd) + (ad - bc)j
         (same as old formula, in angle_diff2() below)
      '''
-
     return az2 * az1.conj()  # imags and reals of the result are sines and cosines of difference between angles
 
 '''

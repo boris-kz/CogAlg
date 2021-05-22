@@ -15,7 +15,6 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType
-
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
@@ -31,23 +30,19 @@ ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form
 ave_ortho = 20
 
 # comp_PP
-ave_mPP = 100
+ave_mPP = 0
 ave_rM  = .7
 
 '''
-CP should be a nested class, which may have multiple layers of nesting, as we discussed.
+CP should be a nested class, including derP, possibly multi-layer:
 if PP: CP contains P, 
    each param contains summed values of: param, (m,d),
    and each dert in dert_ is actually P
-
-if PPP: CP contains P which also contains P?
-   each param contains summed values of: param, (m,d ((mm,dm), (md,dd)) 
+if PPP: CP contains P which also contains P
+   each param contains summed values of: param, (m,d), ((mm,dm), (md,dd)) 
    and each dert in dert_ is actually PP
    
-All of them and also derPs can be an instance of CP, 
-but it's better to have a factory function to recursively extend CP in new modules?
-
-Same for CBlob, CBblob, derBlob, etc.
+or a factory function to recursively extend CP in new modules?  Same for CBlob, CBblob, derBlob, etc.
 '''
 
 class CP(ClusterStructure):
@@ -68,7 +63,7 @@ class CP(ClusterStructure):
     Ddx = int
 
     L = int
-    x0 = int
+    x = int
     dX = int  # shift of average x between P and _P, if any
     y = int  # for visualization only
     sign = NoneType  # sign of gradient deviation
@@ -210,8 +205,6 @@ class CPPP(ClusterStructure):
     mdPP = int
     ddPP = int
 
-
-
 # Functions:
 '''
 leading '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
@@ -273,7 +266,7 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
 
     if ~_mask:
         # initialize P with first dert
-        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8], x0=0, L=1, y=y, dert_=dert_)
+        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8], x=0, L=1, y=y, dert_=dert_)
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
@@ -310,8 +303,8 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
             dert_ = [_dert]
             _sign = _dert[2] > 0
             # initialize P with first dert
-            P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8], x0=iP.x0, dert_=dert_, L=1, y=iP.y, sign=_sign, Pm=iP)
-
+            P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8],
+                   x0=iP.x0, dert_=dert_, L=1, y=iP.y, sign=_sign, Pm=iP)
             x = 1  # relative x within P
 
             for dert in iP.dert_[1:]:
@@ -327,8 +320,8 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                         comp_dx(P); P_Ddx += P.Ddx; P_Mdx += P.Mdx
                     Pd_.append(P)
                     # reinitialize params
-                    P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8], x0=iP.x0+x, dert_=[dert], L=1, y=iP.y, sign=sign, Pm=iP)
-
+                    P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8],
+                           x0=iP.x0+x, dert_=[dert], L=1, y=iP.y, sign=sign, Pm=iP)
                 _sign = sign
                 x += 1
             # terminate last P
@@ -649,6 +642,8 @@ def comp_PP_(blob, fPPd):
                 if len(PP.derPPd_) == 0: # PP doesn't perform any searching in prior function call
                     comp_PP_recursive(PP, PP.upconnect_, derPP_=[], fPPd=fPPd)
 
+            form_PPP_(PP_, fPPd)
+
         else: # cluster by m sign
             if fPd: # using derPd (PPmd)
                 PP_ = blob.PPmd_
@@ -658,6 +653,7 @@ def comp_PP_(blob, fPPd):
                 if len(PP.derPPm_) == 0: # PP doesn't perform any searching in prior function call
                     comp_PP_recursive(PP, PP.upconnect_, derPP_=[], fPPd=fPPd)
 
+            form_PPP_(PP_, fPPd)
 
 def comp_PP_recursive(PP, upconnect_, derPP_, fPPd):
 
@@ -697,12 +693,16 @@ def form_PPP_(PP_, fPPd):
     PPP_ = []
     for PP in PP_:
 
-        if fPPd: mPP = PP.mdPP # match of PP's d
-        else:    mPP = PP.mdPP # match of PP's m
+        if fPPd:
+            mPP = PP.mdPP # match of PP's d
+            PPP = PP.PPPd
+        else:
+            mPP = PP.mmPP # match of PP's m
+            PPP = PP.PPPm
 
-        if mPP > 0 and not isinstance(PP.PPP, CPPP):
-            PPP = CPPP()                    # init new PPP
-            accum_PPP(PPP_, PPP, PP, fPPd)  # accum PP into PPP
+        if mPP > 0 and not isinstance(PPP, CPPP):
+            PPP = CPPP()              # init new PPP
+            accum_PPP(PPP, PP, fPPd)  # accum PP into PPP
             form_PPP_recursive(PPP_, PPP, PP.upconnect_, checked_ids=[PP.id], fPPd=fPPd)
             PPP_.append(PPP) # pack PPP after scanning all upconnects
 
@@ -711,22 +711,24 @@ def form_PPP_(PP_, fPPd):
 def form_PPP_recursive(PPP_, PPP, upconnect_,  checked_ids, fPPd):
 
     for _PP in upconnect_:
-        if fPPd: _mPP = _PP.mdPP   # match of _PPs' d
-        else:    _mPP = _PP.mmPP   # match of _PPs' m
-
-        if mPP>0 and _PP.id not in checked_ids:
+        if _PP.id not in checked_ids:
             checked_ids.append(_PP.id)
 
-            if fPPd: _PPP = _PP.PPPd
-            else:    _PPP = _PP.PPPm
+            if fPPd: _mPP = _PP.mdPP   # match of _PPs' d
+            else:    _mPP = _PP.mmPP   # match of _PPs' m
 
-            if isinstance(_PPP, CPPP):  # _PP's PPP exists, merge with current PPP
-                PPP_.remove(PPP_, _PPP) # remove the merging PPP from PPP_
-                merge_PPP(PPP, _PPP, fPPd)
-            else:
-                accum_PPP(PPP_, PPP, _PP, merged_ids)  # accum PP into PPP
-                if _PP.upconnect_:                     # continue with _PP upconnects
-                    form_PPP_recursive(PPP_, PPP, _PP.upconnect_,  checked_ids, fPPd)
+            if _mPP>0 :  # _PP.mPP >0
+
+                if fPPd: _PPP = _PP.PPPd
+                else:    _PPP = _PP.PPPm
+
+                if isinstance(_PPP, CPPP):     # _PP's PPP exists, merge with current PPP
+                    PPP_.remove(_PPP)    # remove the merging PPP from PPP_
+                    merge_PPP(PPP, _PPP, fPPd)
+                else:
+                    accum_PPP(PPP, _PP, fPPd)  # accum PP into PPP
+                    if _PP.upconnect_:         # continue with _PP upconnects
+                        form_PPP_recursive(PPP_, PPP, _PP.upconnect_,  checked_ids, fPPd)
 
 
 def accum_PPP(PPP, PP, fPPd):
@@ -756,7 +758,7 @@ def comp_PP(PP, _PP):
 
     # match and difference of _PP and PP
     difference = _PP.difference(PP)
-    match = _PP.min_match(PP)
+    match = _PP.min_match_da(PP)
 
     # do we need this?
     # match = match - ave_mPP * (ave_rM ** ((1+PP.distance) / len(PP.P__)))
