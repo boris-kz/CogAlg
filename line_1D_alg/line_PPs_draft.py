@@ -1,25 +1,21 @@
 '''
 line_PPs is a 2nd-level 1D algorithm, its input is Ps formed by the 1st-level line_patterns.
 It cross-compares Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
+Range or derivation of cross-comp is selectively increased if the match from prior-order cross-comp is above threshold,
+search up to max rel distance +|- contrast borrow, with bi-directional selection?
 
-Range or derivation of cross-comp is selectively increased if the match from prior-order cross-comp is above threshold:
-comp s: if same-sign,
-        cross-sign comp is borrow, also default L and M (core param) comp?
-        discontinuous comp up to max rel distance +|- contrast borrow, with bi-directional selection?
-    comp (L, I, D, M): equal-weight, select redundant I | (D,M),  div L if V_var * D_vars, and same-sign d_vars?
-        comp (dert_):  lower composition than layers, if any
-    comp (layers):  same-derivation elements
-        comp (P_):  sub patterns
+comp s: if same-sign, cross-sign comp is borrow, also default L and M (core param) comp?
+comp (L, I, D, M): equal-weight, select redundant I | (D,M),  div L if V_var * D_vars, and same-sign d_vars?
+comp (dert_):  lower composition than layers, if any
+comp (layers):  same-derivation elements
+comp (P_):  sub patterns
 
 Increment of 2nd level alg over 1st level alg should be made recursive, forming relative-level meta-algorithm.
 Comparison distance is extended to first match or maximal accumulated miss over compared derPs, measured by roL*roM?
-
 Match or miss may be between Ps of either sign, but comparison of lower P layers is conditional on higher-layer match
 Comparison between two Ps is of variable-depth P hierarchy, with sign at the top, until max higher-layer miss.
-
 This is vertical induction: results of higher-layer comparison predict results of next-layer comparison,
 similar to lateral induction: variable-range comparison among Ps, until first match or max prior-Ps miss.
-
 Resulting PPs will be more like 1D graphs, with explicit distances between nearest element Ps.
 This is different from 1st level connectivity clustering, where all distances between nearest elements = 1.
 '''
@@ -30,33 +26,33 @@ from class_cluster import ClusterStructure, NoneType
 
 class CderP(ClusterStructure):
     smP = NoneType
-    MP = int
-    Neg_M = int
-    Neg_L = int
+    mP = int
+    neg_M = int
+    neg_L = int
     P = object
-    ML = int
-    DL = int
-    MI = int
-    DI = int
-    MD = int
-    DD = int
-    MM = int
-    DM = int
+    mL = int
+    dL = int
+    mI = int
+    dI = int
+    mD = int
+    dD = int
+    mM = int
+    dM = int
 
 class CPP(ClusterStructure):
     smP = NoneType
-    MP = int
-    Neg_M = int
-    Neg_L = int
+    mP = int
+    neg_M = int
+    neg_L = int
     P_ = list
-    ML = int
-    DL = int
-    MI = int
-    DI = int
-    MD = int
-    DD = int
-    MM = int
-    DM = int
+    mL = int
+    dL = int
+    mI = int
+    dI = int
+    mD = int
+    dD = int
+    mM = int
+    dM = int
 
 ave = 100  # ave dI -> mI, * coef / var type
 '''
@@ -65,6 +61,7 @@ no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per
 ave_div = 50
 ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
 ave_M = 100  # search stop
+ave_sub_M = 50  # sub_H comp filter
 ave_Ls = 3
 
 def comp_P_(P_):  # cross-compare patterns within horizontal line
@@ -75,10 +72,11 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
         neg_M = vmP = smP = _smP = neg_L = 0  # initialization
 
         for j, _P in enumerate(P_[i + 1:]):  # variable-range comp, no last-P displacement, just shifting first _P
-            if P.M - neg_M > ave_M:  # search while net_M > ave or 1st _P, no selection by M sign
+            if P.M + neg_M > 0:  # search while net_M > ave_M * nparams or 1st _P, no selection by M sign
+               # add ave_M decay with distance?
 
                 derP, _L, _smP = comp_P(P, _P, neg_M, neg_L)
-                smP, vmP, neg_M, neg_L, P = derP.smP, derP.MP, derP.Neg_M, derP.Neg_L, derP.P
+                smP, vmP, neg_M, neg_L, P = derP.smP, derP.mP, derP.neg_M, derP.neg_L, derP.P
                 if smP:
                     P_[i + 1 + j].smP = True  # backward match per P: __smP = True
                     derP_.append(derP)
@@ -88,12 +86,12 @@ def comp_P_(P_):  # cross-compare patterns within horizontal line
                     neg_L += _L   # accumulate distance to match
                     if j == len(P_):
                         # last P is a singleton derP, derivatives are ignored:
-                        derP_.append(CderP(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P ))
+                        derP_.append(CderP(smP=smP or _smP, mP=vmP, neg_M=neg_M, neg_L=neg_L, P=P ))
                     '''                     
                     no contrast value in neg derPs and PPs: initial opposite-sign P miss is expected
                     neg_derP derivatives are not significant; neg_M obviates distance * decay_rate * M '''
             else:
-                derP_.append(CderP(smP=smP or _smP, MP=vmP, Neg_M=neg_M, Neg_L=neg_L, P=P))
+                derP_.append(CderP(smP=smP or _smP, mP=vmP, neg_M=neg_M, neg_L=neg_L, P=P))
                 # smP is ORed bilaterally, negative for singleton derPs only
                 break  # neg net_M: stop search
 
@@ -134,17 +132,17 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
                     # fork comparison:
                     if fdP == _fdP and rng == _rng and min(Ls, _Ls) > ave_Ls:
                         dert_sub_P_ = []
-                        sub_MP = 0
+                        sub_mP = 0
                         # compare all sub_Ps to each _sub_P, form dert_sub_P per compared pair
                         for sub_P in sub_P_:  # note name recycling in nested loop
                             for _sub_P in _sub_P_:
                                 dert_sub_P, _, _ = comp_P(sub_P, _sub_P, neg_M=0, neg_L=0)  # ignore _sub_L, _sub_smP?
-                                sub_MP += dert_sub_P.MP  # sum sub_vmPs in derP_layer
+                                sub_mP += dert_sub_P.mP  # sum sub_vmPs in derP_layer
                                 dert_sub_P_.append(dert_sub_P)
 
                         dert_sub_H.append((fdP, fid, rdn, rng, dert_sub_P_))  # add only layers that have been compared
-                        mP += sub_MP  # of compared H, no specific mP?
-                        if sub_MP < ave_M:
+                        mP += sub_mP  # of compared H, no specific mP?
+                        if sub_mP < ave_sub_M:
                             # potentially mH: trans-layer induction?
                             break  # low vertical induction, deeper sub_layers are not compared
                     else:
@@ -160,42 +158,41 @@ def form_PPm(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp p
     PPm_ = []
     derP = derP_[0]  # initialize PPm with first derP (positive PPms only, no contrast: miss over discontinuity is expected):
 
-    _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
-    derP.smP, derP.MP, derP.Neg_M, derP.Neg_L, derP.P, derP.ML, derP.DL, derP.MI, derP.DI, derP.MD, derP.DD, derP.MM, derP.DM
+    _smP, mP, neg_M, neg_L, _P, mL, dL, mI, dI, mD, dD, mM, dM = \
+    derP.smP, derP.mP, derP.neg_M, derP.neg_L, derP.P, derP.mL, derP.dL, derP.mI, derP.dI, derP.mD, derP.dD, derP.mM, derP.dM
     P_ = [_P]
 
     for i, derP in enumerate(derP_, start=1):
         smP = derP.smP
         if smP != _smP:
             # terminate PPm:
-            PPm_.append(CPP(smP=smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))
+            PPm_.append(CPP(smP=smP, mP=mP, neg_M=neg_M, neg_L=neg_L, P_=P_, mL=mL, dL=dL, mI=mI, dI=dI, mD=mD, dD=dD, mM=mM, dM=dM))
             # initialize PPm with current derP:
-            _smP, MP, Neg_M, Neg_L, _P, ML, DL, MI, DI, MD, DD, MM, DM = \
-            derP.smP, derP.MP, derP.Neg_M, derP.Neg_L, derP.P, derP.ML, derP.DL, derP.MI, derP.DI, derP.MD, derP.DD, derP.MM, derP.DM
+            _smP, mP, neg_M, neg_L, _P, mL, dL, mI, dI, mD, dD, mM, dM = \
+            derP.smP, derP.mP, derP.neg_M, derP.Neg_L, derP.P, derP.mL, derP.dL, derP.mI, derP.dI, derP.mD, derP.dD, derP.mM, derP.dM
             P_ = [_P]
         else:
             # accumulate PPm with current derP:
-            MP += derP.MP
-            Neg_M += derP.Neg_M
-            Neg_L += derP.Neg_L
-            ML += derP.ML
-            DL += derP.DL
-            MI += derP.MI
-            DI += derP.DI
-            MD += derP.MD
-            DD += derP.DD
-            MM += derP.MM
-            DM += derP.DM
+            mP += derP.mP
+            neg_M += derP.neg_M
+            neg_L += derP.neg_L
+            mL += derP.mL
+            dL += derP.dL
+            mI += derP.mI
+            dI += derP.dI
+            mD += derP.mD
+            dD += derP.dD
+            mM += derP.mM
+            dM += derP.dM
             P_.append(derP.P)
         _smP = smP
     # pack last PP:
-    PPm_.append(CPP(smP=_smP, MP=MP, Neg_M=Neg_M, Neg_L=Neg_L, P_=P_, ML=ML, DL=DL,MI=MI, DI=DI, MD=MD, DD=DD, MM=MM, DM=DM))
+    PPm_.append(CPP(smP=_smP, mP=mP, neg_M=neg_M, neg_L=neg_L, P_=P_, mL=mL, dL=dL, mI=mI, dI=dI, mD=mD, dD=dD, mM=mM, dM=dM))
 
     return PPm_
 
 ''' 
     Each PP is evaluated for intra-processing, not per P: results must be comparable between consecutive Ps): 
-
     - incremental range and derivation as in line_patterns intra_P, but over multiple params, 
     - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef? 
     - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
@@ -210,7 +207,6 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
     '''
     div x param if projected div match: compression per PP, no internal range for ind eval.
     ~ (L*D + L*M) * rm: L=min, positive if same-sign L & S, proportional to both but includes fractional miss
-
     + PPm' DL * DS: xP difference compression, additive to x param (intra) compression: S / L -> comp rS
     also + ML * MS: redundant unless min or converted?
     vs. norm param: Var*rL-> comp norm param, simpler but diffs are not L-proportional?
@@ -265,7 +261,6 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
 
 
 ''' non-class version: 
-
 def accum_PP(PP: dict, **params) -> None:
     PP.update({param: PP[param] + value for param, value in params.items()})
 def comp_P_(P_):  # cross-compare patterns within horizontal line
