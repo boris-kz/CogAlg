@@ -3,6 +3,7 @@ Cross-compare blobs with incrementally intermediate adjacency, within a frame
 '''
 
 from class_cluster import ClusterStructure, NoneType
+from frame_blobs import ave
 import numpy as np
 import cv2
 
@@ -39,6 +40,8 @@ class CBblob(ClusterStructure):
 
 ave_mB = 0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
+ave_da = 1  # da at 45 degree?
+
 
 def cross_comp_blobs(frame):
     '''
@@ -93,9 +96,18 @@ def comp_blob(blob, _blob):
     difference = _blob.difference(blob)
     match = _blob.min_match(blob)
 
-    mB = match['I'] + match['A'] + match['G'] + match['M'] - ave_mB * (ave_rM ** ((1+blob.distance) / np.sqrt(blob.A)))
-    # deviation from average blob match at current distance
-    dB = difference['I'] + difference['A'] + difference['G'] + difference['M']
+    Ave = ave * blob.A; _Ave = ave *_blob.A
+    sin = blob.Dy / (blob.G + Ave); _sin = _blob.Dy / (_blob.G + _Ave)
+    cos = blob.Dx / (blob.G + Ave); _cos = _blob.Dx / (_blob.G + _Ave)
+    sin_da = (cos * _sin) - (sin * _cos)
+    cos_da = (cos * _cos) + (sin * _sin)
+    da = np.arctan2( sin_da, cos_da )
+    ma = ave_da - abs(da)
+
+    mB = match['I'] + match['A'] + match['G'] + match['M'] + ma \
+    - ave_mB * (ave_rM ** ((1+blob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
+
+    dB = difference['I'] + difference['A'] + difference['G'] + difference['M'] + da
 
     derBlob  = CderBlob(blob=blob, _blob=_blob, mB=mB, dB=dB)  # blob is core node, _blob is adjacent blob
 

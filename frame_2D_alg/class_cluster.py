@@ -51,6 +51,15 @@ class MetaCluster(type):
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
         # get fields/params and numeric params
 
+        # inherit params
+        for base in bases:
+            if issubclass(base, ClusterStructure):
+                for key in base.__dict__:
+                    if key[-5:] == "_type":
+                        param = key[:-5]
+                        if param not in attrs:
+                            attrs[param] = list
+
         # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
                        if not attr.startswith('__') and
@@ -58,7 +67,7 @@ class MetaCluster(type):
 
         numeric_params = tuple(param for param in params
                                if (issubclass(attrs[param], Number)) and
-                               not (issubclass(attrs[param], bool)) ) # avoid accumulate bool, which is flag
+                               not (issubclass(attrs[param], bool))) # avoid accumulate bool, which is flag
 
         # Fill in the template
         methods_definitions = _methods_template.format(
@@ -186,26 +195,28 @@ class ClusterStructure(metaclass=MetaCluster):
     def __init__(self, **kwargs):
         pass
 
-    def accum_from(self, other):
+    def accum_from(self, other, excluded=()):
         """Accumulate params from another structure."""
-        self.accumulate(**{p: getattr(other, p, 0)
-                           for p in self.numeric_params})
+        self.accumulate(**{param: getattr(other, p, 0)
+                           for param in self.numeric_params
+                           if param not in excluded})
 
     def difference(self, other, excluded=()):
         return {param:(getattr(self, param) - getattr(other, param))
                 for param in self.numeric_params if param not in excluded}
 
-    '''
-    It should be generic min_match, no two separate versions:
+    def min_match(self, other, excluded=()):
+        return {param: min(getattr(self, param), getattr(other, param))
+                for param in self.numeric_params if param not in excluded}
 
-    if self_param>0 == other_param>0:
+    def abs_min_match(self, other, excluded=()):
         return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
                 for param in self.numeric_params if param not in excluded}
-    else:
-        return negative param ( one of comparands is always negative here, it should become min_match )
 
-    How do we put it in code?
-    '''
+
+if __name__ == "__main__":  # for debugging
+    from sys import getsizeof as size
+    size(ClusterStructure)
     def min_match(self, other, excluded=()):
 
         return {param: min(getattr(self, param), getattr(other, param))
@@ -215,7 +226,7 @@ class ClusterStructure(metaclass=MetaCluster):
 
         return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
                 for param in self.numeric_params if param not in excluded}
-
+'''
     def min_match_da(self, other):
         results = {}
         for param in self.numeric_params:
@@ -226,6 +237,7 @@ class ClusterStructure(metaclass=MetaCluster):
             else:
                 results[param] = min(_e, e)
         return results
+'''
 
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size

@@ -28,7 +28,7 @@ ave_Dx = 10
 ave_mP = 8  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
-
+ave_da = 1  # da at 45 degree?
 # comp_PP
 ave_mPP = 0
 ave_rM  = .7
@@ -63,7 +63,8 @@ class CP(ClusterStructure):
     Ddx = int
 
     L = int
-    x = int
+    x0 = int
+    x = int  # median x
     dX = int  # shift of average x between P and _P, if any
     y = int  # for visualization only
     sign = NoneType  # sign of gradient deviation
@@ -195,7 +196,6 @@ class CPP(ClusterStructure):
     PPPm = object
     PPPd = object
 
-
 class CPPP(ClusterStructure):
 
     PPm_ = list
@@ -266,26 +266,29 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
 
     if ~_mask:
         # initialize P with first dert
-        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8], x=0, L=1, y=y, dert_=dert_)
+        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8], L=1, y=y, dert_=dert_)
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
 
         if mask:  # masks: if 1,_0: P termination, if 0,_1: P initialization, if 0,_0: P accumulation:
             if ~_mask:  # _dert is not masked, dert is masked, terminate P:
+                P.x = P.x0 + (P.L-1) // 2
                 P_.append(P)
         else:  # dert is not masked
             if _mask:  # _dert is masked, initialize P params:
                 # initialize P with first dert
-                P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8], x0=x, L=1, y=y, dert_=dert_)
+                P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8],
+                       x0=x, L=1, y=y, dert_=dert_)
             else:
-                # _dert is not masked, accumulate P params with (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) = dert
-                P.accumulate(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8],L=1)
+                # _dert is not masked, accumulate P params with (p, dy, dx, g, m, day, dax, ga, ma) = dert
+                P.accumulate(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8], L=1)
                 P.dert_.append(dert)
 
         _mask = mask
 
     if ~_mask:  # terminate last P in a row
+        P.x = P.x0 + (P.L-1) // 2
         P_.append(P)
 
     return P_
@@ -318,6 +321,7 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                     if P.Dx > ave_Dx:
                         # cross-comp of dx in P.dert_
                         comp_dx(P); P_Ddx += P.Ddx; P_Mdx += P.Mdx
+                    P.x = P.x0 + (P.L-1) // 2
                     Pd_.append(P)
                     # reinitialize params
                     P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8],
@@ -327,6 +331,7 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
             # terminate last P
             if P.Dx > ave_Dx:
                 comp_dx(P); P_Ddx += P.Ddx; P_Mdx += P.Mdx
+            P.x = P.x0 + (P.L-1) // 2
             Pd_.append(P)
             # update Pd params in P
             iP.Pd_ = Pd_; iP.Ddx = P_Ddx; iP.Mdx = P_Mdx
@@ -345,7 +350,7 @@ def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
 
                 fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
                 if not fcomp:
-                    derP = comp_slice_full(_P, P)  # form vertical and directional derivatives
+                    derP = comp_slice(_P, P)  # form vertical and directional derivatives
                     derP_.append(derP)
                     P.upconnect_.append(derP)
                     _P.downconnect_cnt += 1
@@ -367,7 +372,7 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
 
                         fcomp = [1 for derPd in Pd.upconnect_ if Pd is derPd.P]  # upconnect could be derP or dirP
                         if not fcomp:
-                            derPd = comp_slice_full(_Pd, Pd)
+                            derPd = comp_slice(_Pd, Pd)
                             derPd_.append(derPd)
                             Pd.upconnect_.append(derPd)
                             _Pd.downconnect_cnt += 1
@@ -502,8 +507,16 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     M /= hyp  # orthogonal M is reduced by hyp
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
 
-    dP = dL + dM  # -> directional PPd, equal-weight params, no rdn?
-    mP = mL + mM  # -> complementary PPm, rdn *= Pd | Pm rolp?
+    Ave = ave * P.L; _Ave = ave *_P.L
+    sin = P.Dy / (P.G + Ave); _sin = _P.Dy / (_P.G + _Ave)
+    cos = P.Dx / (P.G + Ave); _cos = _P.Dx / (_P.G + _Ave)
+    sin_da = (cos * _sin) - (sin * _cos)
+    cos_da = (cos * _cos) + (sin * _sin)
+    da = np.arctan2( sin_da, cos_da )
+    ma = ave_da - abs(da)
+
+    dP = dL + dM + da  # -> directional PPd, equal-weight params, no rdn?
+    mP = mL + mM + ma  # -> complementary PPm, rdn *= Pd | Pm rolp?
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
 
     P.flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # +.001 to avoid division by zero

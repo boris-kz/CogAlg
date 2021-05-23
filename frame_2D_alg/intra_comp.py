@@ -282,3 +282,4 @@ def angle_diff_simple(a2, a1):  # compare angle_1 to angle_2
     cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
 
     return [sin_da, cos_da]
+
