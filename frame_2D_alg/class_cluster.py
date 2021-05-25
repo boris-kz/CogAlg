@@ -197,7 +197,7 @@ class ClusterStructure(metaclass=MetaCluster):
 
     def accum_from(self, other, excluded=()):
         """Accumulate params from another structure."""
-        self.accumulate(**{param: getattr(other, p, 0)
+        self.accumulate(**{param: getattr(other, param, 0)
                            for param in self.numeric_params
                            if param not in excluded})
 
@@ -207,7 +207,8 @@ class ClusterStructure(metaclass=MetaCluster):
 
     def min_match(self, other, excluded=()):
         return {param: min(getattr(self, param), getattr(other, param))
-                for param in self.numeric_params if param not in excluded}
+                for param in self.numeric_params if (param not in excluded) and \
+                not (isinstance(getattr(self, param),complex))} # exclude min match for complex
 
     def abs_min_match(self, other, excluded=()):
         return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))

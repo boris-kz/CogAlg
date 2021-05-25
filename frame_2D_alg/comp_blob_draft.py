@@ -40,7 +40,7 @@ class CBblob(ClusterStructure):
 
 ave_mB = 0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
-ave_da = 1  # da at 45 degree?
+ave_da = 0.7853  # da at 45 degree
 
 
 def cross_comp_blobs(frame):
@@ -96,11 +96,18 @@ def comp_blob(blob, _blob):
     difference = _blob.difference(blob)
     match = _blob.min_match(blob)
 
-    Ave = ave * blob.A; _Ave = ave *_blob.A
-    sin = blob.Dy / (blob.G + Ave); _sin = _blob.Dy / (_blob.G + _Ave)
-    cos = blob.Dx / (blob.G + Ave); _cos = _blob.Dx / (_blob.G + _Ave)
-    sin_da = (cos * _sin) - (sin * _cos)
-    cos_da = (cos * _cos) + (sin * _sin)
+    Ave = ave * blob.A; _Ave = ave *_blob.A  # why ave is defined size? Is it due to relative to size of blob?
+
+    # prevent zero division
+    if blob.G + Ave == 0: G = blob.G + Ave+1
+    else: G = blob.G + Ave
+    if _blob.G + _Ave == 0: _G = _blob.G + _Ave + 1
+    else: _G = _blob.G + _Ave
+
+    sin = blob.Dy / (G); _sin = _blob.Dy / (_G)   # sine component   = dy/g
+    cos = blob.Dx / (G); _cos = _blob.Dx / (_G)   # cosine component = dx/g
+    sin_da = (cos * _sin) - (sin * _cos)          # using formula : sin(α − β) = sin α cos β − cos α sin β
+    cos_da = (cos * _cos) + (sin * _sin)          # using formula : cos(α − β) = cos α cos β + sin α sin β
     da = np.arctan2( sin_da, cos_da )
     ma = ave_da - abs(da)
 
