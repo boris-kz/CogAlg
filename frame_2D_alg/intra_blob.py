@@ -29,7 +29,6 @@ from intra_comp import comp_r, comp_a
 from draw_frame_blobs import visualize_blobs
 from itertools import zip_longest
 from comp_slice_ import *
-from slice_utils import *
 from segment_by_direction import segment_by_direction
 
 # filters, All *= rdn:
@@ -53,7 +52,7 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
         # root fork is comp_a -> slice_blob
         if blob.mask__.shape[0] > 2 and blob.mask__.shape[1] > 2 and False in blob.mask__:  # min size in y and x, at least one dert in dert__
 
-            if (-blob.M * blob.Ma - AveB > 0) and blob.Dx:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+            if (-blob.M * blob.Ma - AveB > 0) and blob.Cos:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
                 blob.f_comp_a = 0
                 blob.prior_forks.extend('p')
                 if kwargs.get('verbose'): print('\nslice_blob fork\n')
@@ -71,8 +70,8 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
             if kwargs.get('verbose'): print('\na fork\n')
             blob.prior_forks.extend('a')
 
-            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, least one dert in dert__
-                sign__ = adert__[3] * adert__[8] > 0   # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
+            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
+                sign__ = adert__[3] * adert__[8] > 0   # g * ma: not co-measurable with g
                 dert__ = adert__  # already flat, adert__[[5, 6]] are now complex
 
                 cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)  # forms sub_blobs of sign in unmasked area
@@ -110,16 +109,16 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
     blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
     for sub_blob in sub_blobs:  # evaluate sub_blob
-        G = blob.G  # Gr, Grr...
-        # adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
-        # adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
-        # track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
-        # G indicates or dert__ extend per blob G?
-
-        # borrow_M = min(G, adj_M / 2)
+        '''
+        adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
+        adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
+        track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
+        G indicates or dert__ extend per blob G?
+        borrow_M = min(G, adj_M / 2)
+        '''
         sub_blob.prior_forks = blob.prior_forks.copy()  # increments forking sequence: g->a, g->a->p, etc.
 
-        if sub_blob.G > AveB:  # replace with borrow_M when known
+        if sub_blob.G > AveB:  # G = blob.G  # Gr, Grr..' borrow_M, replace with known borrow_M if any
             # comp_a:
             sub_blob.f_root_a = 1
             sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub_blob, currently not used

@@ -197,9 +197,12 @@ class ClusterStructure(metaclass=MetaCluster):
 
     def accum_from(self, other, excluded=()):
         """Accumulate params from another structure."""
+
         self.accumulate(**{param: getattr(other, param, 0)
                            for param in self.numeric_params
-                           if param not in excluded})
+                           if param not in excluded and \
+                           not (issubclass(attrs[param], bool))  # bools are compared by AND, XOR
+                           })
 
     def difference(self, other, excluded=()):
         return {param:(getattr(self, param) - getattr(other, param))
@@ -210,23 +213,11 @@ class ClusterStructure(metaclass=MetaCluster):
                 for param in self.numeric_params if (param not in excluded) and \
                 not (isinstance(getattr(self, param),complex))} # exclude min match for complex
 
-    def abs_min_match(self, other, excluded=()):
-        return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
-                for param in self.numeric_params if param not in excluded}
-
 
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size
     size(ClusterStructure)
-    def min_match(self, other, excluded=()):
 
-        return {param: min(getattr(self, param), getattr(other, param))
-                for param in self.numeric_params if param not in excluded}
-
-    def abs_min_match(self, other, excluded=()):
-
-        return {param: min(abs(getattr(self, param)), abs(getattr(other, param)))
-                for param in self.numeric_params if param not in excluded}
 '''
     def min_match_da(self, other):
         results = {}
