@@ -28,7 +28,7 @@ ave_Dx = 10
 ave_mP = 8  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
-ave_da = 1  # da at 45 degree?
+ave_da = 0.78  # da at 45 degree
 # comp_PP
 ave_mPP = 0
 ave_rM  = .7
@@ -266,7 +266,8 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
 
     if ~_mask:
         # initialize P with first dert
-        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8], x0=0, L=1, y=y, dert_=dert_)
+        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8],
+               x0=0, L=1, y=y, dert_=dert_)
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
@@ -493,10 +494,10 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
 
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
-    x, M, L =  P.x, P.M, P.L # params per comp branch
-    _x, _M, _dX, _L =  _P.x, _P.M, _P.dX, _P.L
+    s, x0, Dx, Dy, G, M, L, Ddx, Mdx = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L, P.Ddx, P.Mdx  # params per comp branch
+    _s, _x0, _Dx, _Dy, _G, _M, _dX, _L, _Ddx, _Mdx = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L, _P.Ddx, _P.Mdx
 
-    dX = x - _x  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
+    dX = (x0 + (L-1) / 2) - (_x0 + (_L-1) / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
 
     ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
     mdX = min(dX, _dX)  # dX is inversely predictive of mP?
@@ -508,27 +509,18 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
 
     Ave = ave * P.L; _Ave = ave *_P.L
-
-    # prevent zero division
-    if P.G + Ave == 0:
-        G = P.G + Ave+1;
-    else:
-        G = P.G + Ave;
-    if _P.G + _Ave == 0:
-        _G = _P.G + _Ave + 1;
-    else:
-        _G = _P.G + _Ave;
-
-    sin = P.Dy / (G); _sin = _P.Dy / (_G)  # sine component   = dy/g
-    cos = P.Dx / (G); _cos = _P.Dx / (_G)  # cosine component = dx/g
-    sin_da = (cos * _sin) - (sin * _cos)   # using formula : sin(α − β) = sin α cos β − cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)   # using formula : cos(α − β) = cos α cos β + sin α sin β
+    sin = P.Dy / (P.G + Ave); _sin = _P.Dy / (_P.G + _Ave)
+    cos = P.Dx / (P.G + Ave); _cos = _P.Dx / (_P.G + _Ave)
+    sin_da = (cos * _sin) - (sin * _cos)
+    cos_da = (cos * _cos) + (sin * _sin)
     da = np.arctan2( sin_da, cos_da )
     ma = ave_da - abs(da)
 
     dP = dL + dM + da  # -> directional PPd, equal-weight params, no rdn?
     mP = mL + mM + ma  # -> complementary PPm, rdn *= Pd | Pm rolp?
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
+
+    P.flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # +.001 to avoid division by zero
 
     derP = CderP(mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, P=P, _P=_P)
     P.derP = derP
@@ -609,33 +601,12 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
         if (P.Mdx > 0) != (_P.Mdx > 0): mMdx = -mMdx
     else:
         fdx = 0
-
-
-    Ave = ave * P.L; _Ave = ave *_P.L
-
-    # prevent zero division
-    if P.G + Ave == 0:
-        G = P.G + Ave+1;
-    else:
-        G = P.G + Ave;
-    if _P.G + _Ave == 0:
-        _G = _P.G + _Ave + 1;
-    else:
-        _G = _P.G + _Ave;
-
-    sin = P.Dy / (G); _sin = _P.Dy / (_G)  # sine component   = dy/g
-    cos = P.Dx / (G); _cos = _P.Dx / (_G)  # cosine component = dx/g
-    sin_da = (cos * _sin) - (sin * _cos)   # using formula : sin(α − β) = sin α cos β − cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)   # using formula : cos(α − β) = cos α cos β + sin α sin β
-    da = np.arctan2( sin_da, cos_da )
-    ma = ave_da - abs(da)
-
     # coeff = 0.7 for semi redundant parameters, 0.5 for fully redundant parameters:
-    dP = da + ddX + dL + 0.7*(dM + dDx + dDy)  # -> directional PPd, equal-weight params, no rdn?
+    dP = ddX + dL + 0.7*(dM + dDx + dDy)  # -> directional PPd, equal-weight params, no rdn?
     # correlation: dX -> L, oDy, !oDx, ddX -> dL, odDy ! odDx? dL -> dDx, dDy?
     if fdx: dP += 0.7*(dDdx + dMdx)
 
-    mP = ma + mdX + mL + 0.7*(mM + mDx + mDy)  # -> complementary PPm, rdn *= Pd | Pm rolp?
+    mP = mdX + mL + 0.7*(mM + mDx + mDy)  # -> complementary PPm, rdn *= Pd | Pm rolp?
     if fdx: mP += 0.7*(mDdx + mMdx)
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
 
@@ -800,7 +771,7 @@ def comp_PP(PP, _PP):
 
     # match and difference of _PP and PP
     difference = _PP.difference(PP)
-    match = _PP.min_match(PP)
+    match = _PP.min_match_da(PP)
 
     # match of compared PPs' m components
     mmPP = match['mP'] + match['mx'] + match['mL'] + match['mDx'] + match['mDy'] - ave_mPP

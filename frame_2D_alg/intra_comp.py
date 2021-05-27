@@ -9,7 +9,6 @@ import functools
 Sobel coefficients to decompose ds into dy and dx:
 YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
 XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
-
     |--(clockwise)--+  |--(clockwise)--+
     YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
             0       0  ¦          -2       2  ¦
@@ -71,16 +70,18 @@ def comp_r(dert__, ave, root_fia, mask__=None):
                           ) > 1
     else:
         majority_mask__ = None  # returned at the end of function
-
-    if root_fia:  # initialize derivatives:
+    '''
+    can't happen:
+    if root_fia:  # initialize derivatives:  
         dy__ = np.zeros_like(i__center)  # sparse to align with i__center
         dx__ = np.zeros_like(dy__)
         m__ = np.zeros_like(dy__)
-
-    else:  # root fork is comp_r, accumulate derivatives:
-        dy__ = dert__[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
-        dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
-        m__ = dert__[4][1:-1:2, 1:-1:2].copy()
+    else: 
+    '''
+     # root fork is comp_r, accumulate derivatives:
+    dy__ = dert__[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
+    dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
+    m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
     # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs:
 
@@ -181,7 +182,6 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
 def angle_diff(az2, az1):  # unpacked in comp_a
     '''
     compare phase angle of az1 to that of az2
-
     az1 = cos_1 + j*sin_1
     az2 = cos_2 + j*sin_2
     (sin_1, cos_1, sin_2, cos_2 below in angle_diff2)
@@ -282,4 +282,3 @@ def angle_diff_simple(a2, a1):  # compare angle_1 to angle_2
     cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
 
     return [sin_da, cos_da]
-

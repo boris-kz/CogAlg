@@ -45,7 +45,7 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED_ID = -2
 
-FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Sin, Cos, G, M, blob_, dert__')
+FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, G, M, blob_, dert__')
 
 
 class CDert(ClusterStructure):
@@ -80,6 +80,7 @@ class CFlatBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     # Dert params, comp_dx:
     Mdx = int
     Ddx = int
+
     # blob params
     A = int  # blob area
     sign = NoneType
@@ -95,8 +96,8 @@ class CBlob(ClusterStructure):
 
     # Dert params, comp_pixel:
     I = int
-    Sin = int
-    Cos = int
+    Dy = int
+    Dx = int
     G = int
     M = int
     # Dert params, comp_angle:
@@ -148,7 +149,6 @@ class CBlob(ClusterStructure):
     neg_mB = int    # common per derBlob_
     bblob = object
 
-
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
     # see comp_pixel_versions file for other versions and more explanation
 
@@ -161,17 +161,16 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard e
     rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
     rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
 
-    G__ = np.hypot(rot_Gy__, rot_Gx__)  # central gradient per kernel, between four vertex pixels
-    # if G == 0: G = 1?
-    sin__, cos__ = (rot_Gy__, rot_Gx__) / G__
-    vG__ = (G__ - ave).astype('int')  # deviation of gradient
-    M__ = int(ave * 1.2) - (abs(rot_Gy__) + abs(rot_Gx__))  # inverse deviation of SAD (variation), ave * (ave_SAD / ave_G): 1.2?
+    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int')
+    # deviation of central gradient per kernel, between four vertex pixels
+    M__ = int(ave * 1.2) - (abs(rot_Gy__) + abs(rot_Gx__))
+    # inverse deviation of SAD, which is a measure of variation. Ave * coeff = ave_SAD / ave_G, 1.2 is a guess
 
-    return (topleft__, sin__, cos__, vG__, M__)  # tuple of 2D arrays per param of dert (derivatives tuple), topleft__ is off by .5 pixels
+    return (topleft__, rot_Gy__, rot_Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 '''
     rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy of Gy, Gx
-    Gy, Gx are used in comp_a, which returns them (as well as day, dax) back to orthogonal orientation
+    Gy, Gx are used in comp_a, which returns them, as well as day, dax back to orthogonal
     
     Sobel version:
     Gy__ = -(topleft__ - bottomright__) - (topright__ - bottomleft__)   # decomposition of two diagonal differences into Gy
@@ -191,14 +190,14 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
     else:
         # [flood_fill](https://en.wikipedia.org/wiki/Flood_fill)
         blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  verbose=verbose)
-        I, Sin, Cos, G, M = 0, 0, 0, 0, 0
+        I, Dy, Dx, G, M = 0, 0, 0, 0, 0
         for blob in blob_:
             I += blob.I
-            Sin += blob.Sin
-            Cos += blob.Cos
+            Dy += blob.Dy
+            Dx += blob.Dx
             G += blob.G
             M += blob.M
-        frame = FrameOfBlobs(I=I, Sin=Sin, Cos=Cos, G=G, M=M, blob_=blob_, dert__=dert__)
+        frame = FrameOfBlobs(I=I, Dy=Dy, Dx=Dx, G=G, M=M, blob_=blob_, dert__=dert__)
 
     assign_adjacents(adj_pairs)  # f_segment_by_direction=False
 
@@ -206,6 +205,7 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
     if render: visualize_blobs(idmap, frame.blob_)
 
     return frame
+
 
 
 def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=False, prior_forks=[]):
@@ -245,8 +245,8 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                     y1, x1 = unfilled_derts.popleft()
                     # add dert to blob
                     blob.accumulate(I =dert__[0][y][x],
-                                    Sin=dert__[1][y][x],
-                                    Cos=dert__[2][y][x],
+                                    Dy=dert__[1][y][x],
+                                    Dx=dert__[2][y][x],
                                     G =dert__[3][y][x],
                                     M =dert__[4][y][x])
 
@@ -394,8 +394,8 @@ if __name__ == "__main__":
         empty = np.zeros_like(frame.dert__[0])
         root_dert__ = (  # update root dert__
             frame.dert__[0],  # i
-            frame.dert__[1],  # sin
-            frame.dert__[2],  # cos
+            frame.dert__[1],  # dy
+            frame.dert__[2],  # dx
             frame.dert__[3],  # g
             frame.dert__[4],  # m
             )
@@ -406,10 +406,10 @@ if __name__ == "__main__":
             +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
             positive value of adjacent -G "flat" blobs.
             '''
-            G = blob.vG
+            G = blob.G
             M = blob.M
             blob.root_dert__=root_dert__
-            blob.prior_forks=['g']
+            blob.prior_forks=['g']  # not sure about this
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
 
