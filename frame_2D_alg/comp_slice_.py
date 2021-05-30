@@ -8,7 +8,9 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat or high-
 Vectorization is clustering of Ps + their derivatives (derPs) into PPs: patterns of Ps that describe an edge.
 This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
 As we add higher dimensions (2D alg, 3D alg), this dimensionality reduction is done in salient high-aspect blobs
-(likely edges / contours in 2D or surfaces in 3D) to form more compressed skeletal representations of full-D patterns.
+(likely edges / contours in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-D patterns.
+
+Most functions should be replaced by casting generic Search, Compare, Cluster functions
 '''
 
 from collections import deque
@@ -508,9 +510,14 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     M /= hyp  # orthogonal M is reduced by hyp
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
 
-    Ave = ave * P.L; _Ave = ave *_P.L
-    sin = P.Dy / (P.G + Ave); _sin = _P.Dy / (_P.G + _Ave)
-    cos = P.Dx / (P.G + Ave); _cos = _P.Dx / (_P.G + _Ave)
+    # G + Ave was wrong because Dy, Dx are summed as signed, resulting G is different from summed abs G
+    G = np.hypot(P.Dy, P.Dx)
+    if G == 0: G = 1
+    _G = np.hypot(_P.Dy, _P.Dx)
+    if _G == 0: _G = 1
+
+    sin = P.Dy / G; _sin = _P.Dy / _G
+    cos = P.Dx / G; _cos = _P.Dx / _P
     sin_da = (cos * _sin) - (sin * _cos)
     cos_da = (cos * _cos) + (sin * _sin)
     da = np.arctan2( sin_da, cos_da )

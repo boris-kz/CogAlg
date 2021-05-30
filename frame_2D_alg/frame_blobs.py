@@ -48,7 +48,7 @@ EXCLUDED_ID = -2
 FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, G, M, blob_, dert__')
 
 
-class CDert(ClusterStructure):
+class CDert(ClusterStructure):  # not used
     # Dert params, comp_pixel:
     I = int
     Dy = int
@@ -148,6 +148,11 @@ class CBlob(ClusterStructure):
     distance = int  # common per derBlob_
     neg_mB = int    # common per derBlob_
     bblob = object
+
+class CderBlob(CBlob):
+    Vector = complex
+    aVector = complex
+
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
     # see comp_pixel_versions file for other versions and more explanation

@@ -3,46 +3,25 @@ Cross-compare blobs with incrementally intermediate adjacency, within a frame
 '''
 
 from class_cluster import ClusterStructure, NoneType
-from frame_blobs import ave
+from frame_blobs import ave, CBlob
 import numpy as np
 import cv2
 
-class CderBlob(ClusterStructure):
+class CderBlob(CBlob):
 
     blob = object
     _blob = object
     mB = int
     dB = int
-    # not in used for accumulation now
-    dI = int
-    mI = int
-    dA = int
-    mA = int
-    dG = int
-    mG = int
-    dM = int
-    mM = int
 
-class CBblob(ClusterStructure):
-
-    # derBlob params
-    mB = int
-    dB = int
-    # not in used for accumulation now
-    dI = int
-    mI = int
-    dA = int
-    mA = int
-    dG = int
-    mG = int
-    dM = int
-    mM = int
+class CBblob(CderBlob):
 
     blob_ = list
 
+
 ave_mB = 0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
-ave_da = 0.7853  # da at 45 degree
+ave_da = 0.7853  # da at 45 degrees
 
 
 def cross_comp_blobs(frame):
@@ -95,22 +74,23 @@ def comp_blob(blob, _blob):
     cross compare _blob and blob
     '''
 
-    derBlob = blob.compare(_blob, blob.A)
+    derBlob = blob.comp_param(_blob, blob.A)
 
-    derBlob.mB = derBlob.I.m + derBlob.A.m + derBlob.G.m + derBlob.M.m +  derBlob.Vector.M  \
+    derBlob.mB = derBlob.I.m + derBlob.A.m + derBlob.G.m + derBlob.M.m +  derBlob.Vector.m  \
     - ave_mB * (ave_rM ** ((1+blob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
 
     derBlob.dB = derBlob.I.d + derBlob.A.d + derBlob.G.d + derBlob.M.d +  derBlob.Vector.d
+
     '''
     difference = _blob.difference(blob)
     match = _blob.min_match(blob)
     
-    Ave = ave * blob.A; _Ave = ave *_blob.A  # why ave is defined size? Is it due to relative to size of blob?
-    # prevent zero division
-    if blob.G + Ave == 0: G = 1
-    else: G = blob.G + Ave
-    if _blob.G + _Ave == 0: _G = 1
-    else: _G = _blob.G + _Ave
+    # G + Ave was wrong because Dy, Dx are summed as signed, resulting G is different from summed abs G 
+    G = hypot(blob.Dy, blob.Dx)  
+    if G==0: G=1
+    _G = hypot(_blob.Dy, _blob.Dx)
+    if _G==0: _G=1
+
     sin = blob.Dy / (G); _sin = _blob.Dy / (_G)   # sine component   = dy/g
     cos = blob.Dx / (G); _cos = _blob.Dx / (_G)   # cosine component = dx/g
     sin_da = (cos * _sin) - (sin * _cos)          # using formula : sin(α − β) = sin α cos β − cos α sin β

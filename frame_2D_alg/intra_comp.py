@@ -133,7 +133,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     az__ = dx__ + 1j * dy__  # take the complex number (z), phase angle is now atan2(dy, dx)
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        az__ /=  g__ + ave + 0.001  # normalized by abs g -> cosine = a__.real, sine = a__.imag
+        az__ /=  np.absolute(az__)  # normalized, cosine = a__.real, sine = a__.imag
 
     # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
     az__left = az__[:-1, :-1]  # was topleft

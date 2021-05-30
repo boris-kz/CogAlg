@@ -354,7 +354,7 @@ if __name__ == "__main__":
     frame_PPm_ = []
     if fline_PPs:  # debug line_PPs
         for y, P_ in enumerate(frame_of_patterns_):
-            dert_P_ = comp_P_(P_[0])
+            dert_P_ = search_P_(P_[0])
             frame_dert_P_.append(dert_P_)
             if len(dert_P_) > 1:
                 frame_PPm_.append(form_PPm(dert_P_))

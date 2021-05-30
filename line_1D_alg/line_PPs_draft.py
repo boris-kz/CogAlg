@@ -24,35 +24,15 @@ import numpy as np
 from line_patterns import *
 from class_cluster import ClusterStructure, NoneType
 
-class CderP(ClusterStructure):
+class CderP(CP):
     smP = NoneType
     mP = int
     neg_M = int
     neg_L = int
     P = object
-    mL = int
-    dL = int
-    mI = int
-    dI = int
-    mD = int
-    dD = int
-    mM = int
-    dM = int
 
-class CPP(ClusterStructure):
-    smP = NoneType
-    mP = int
-    neg_M = int
-    neg_L = int
+class CPP(CderP):
     P_ = list
-    mL = int
-    dL = int
-    mI = int
-    dI = int
-    mD = int
-    dD = int
-    mM = int
-    dM = int
 
 ave = 100  # ave dI -> mI, * coef / var type
 '''
@@ -64,7 +44,7 @@ ave_M = 100  # search stop
 ave_sub_M = 50  # sub_H comp filter
 ave_Ls = 3
 
-def comp_P_(P_):  # cross-compare patterns within horizontal line
+def search_P_(P_):  # cross-compare patterns within horizontal line
 
     derP_ = []  # comp_P_ forms array of alternating-sign derPs (derivatives + P): output of pair-wise comp_P
 
