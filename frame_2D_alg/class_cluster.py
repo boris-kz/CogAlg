@@ -49,13 +49,19 @@ class MetaCluster(type):
     """
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
         # get fields/params and numeric params
+        replace = attrs.get('replace', {})
 
         # inherit params
         for base in bases:
             if issubclass(base, ClusterStructure):
                 for param in base.numeric_params:
                     if param not in attrs:  # prevents duplication of base params
-                        attrs[param] = Cdert
+                        if param in replace:
+                            new_param, new_type = replace[param]
+                            if new_param is not None:
+                                attrs[new_param] = new_type
+                        else:
+                            attrs[param] = Cdm
 
         # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
@@ -140,6 +146,7 @@ class MetaCluster(type):
     def instance_cnt(cls):
         return len(cls._instances)
 
+
 # ----------------------------------------------------------------------------
 # ClusterStructure class
 class ClusterStructure(metaclass=MetaCluster):
@@ -197,51 +204,12 @@ class ClusterStructure(metaclass=MetaCluster):
                            for param in self.numeric_params
                            if param not in excluded})
 
-    def comp_param_dert(self, other, ave, excluded=()):
-        # Get the subclass (inherited class) and init a new instance
-        dert = self.__class__.__subclasses__()[0]()
 
-        excluded += ('Dy', 'Dx', 'Day', 'Dax') # always exclude dy and dx related components
+    def comp_param(self, other, ave, excluded=()):  # compare root layer to get 1st dm_layer
 
-        for param in self.numeric_params:
-            if param not in excluded and param in other.numeric_params:
-                p = getattr(self, param)
-                _p = getattr(other, param)
-                d = p - _p  # difference
-                if param == 'I':
-                    m = ave - abs(d)  # indirect match
-                else:
-                    m = min(p,_p) - abs(d)/2 - ave  # direct match
-                # assign to dert:
-                setattr(dert, param, Cdert(p, d, m))
-
-        if 'Dy' in self.numeric_params and 'Dy' in other.numeric_params:
-            dy = getattr(self, 'Dy'); _dy = getattr(other, 'Dy')
-            dx = getattr(self, 'Dx'); _dx = getattr(other, 'Dx')
-            a =  dx + 1j * dy; _a = _dx + 1j * _dy # angle in complex form
-            da = a * _a.conjugate()                # angle difference
-            ma = ave - abs(da)                     # match
-            setattr(dert, 'Vector', Cdert(a, da, ma))
-
-        if 'Day' in self.numeric_params and 'Day' in other.numeric_params:
-            day = getattr(self, 'Day'); _day = getattr(other, 'Day')
-            dax = getattr(self, 'Dax'); _dax = getattr(other, 'Dax')
-
-            dday = day * _day.conjugate() # angle difference of complex day
-            ddax = dax * _dax.conjugate() # angle difference of complex dax
-            # formula for sum of angles, ~ angle_diff:
-            # daz = (cos_1*cos_2 - sin_1*sin_2) + j*(cos_1*sin_2 + sin_1*cos_2)
-            #     = (cos_1 + j*sin_1)*(cos_2 + j*sin_2)
-            #     = az1 * az2
-            dda = dday * ddax   # sum of angle difference
-            mda = ave - abs(dda) # match
-            setattr(dert, 'aVector', Cdert((day, dax), dda, mda))
-
-        return dert
-
-    def comp_param(self, other, ave, excluded=()):
         # Get the subclass (inherited class) and init a new instance
         dm = self.__class__.__subclasses__()[0]()
+        dm.dm_layer = self.__class__.__subclasses__()[0]()
 
         excluded += ('Dy', 'Dx', 'Day', 'Dax') # always exclude dy and dx related components
 
@@ -249,13 +217,23 @@ class ClusterStructure(metaclass=MetaCluster):
             if param not in excluded and param in other.numeric_params:
                 p = getattr(self, param)
                 _p = getattr(other, param)
+                '''
+                not needed
+                if isinstance(p, Cdm) and isinstance(_p, Cdm):  # compute dm recursively through binary tree of d|m
+                    dmi = p.comp_dm(_p, ave) # dm instance
+                else:
+                '''
                 d = p - _p  # difference
                 if param == 'I':
                     m = ave - abs(d)  # indirect match
                 else:
                     m = min(p,_p) - abs(d)/2 - ave  # direct match
+                dmi = Cdm(d, m)  # dm instance
+
                 # assign:
-                setattr(dm, param, Cdm(d, m))
+                setattr(dm, param,dm)           # if dm is set in dm_layer, what would we set in der's param?
+                setattr(dm.dm_layer, param, dmi) # set dm in dm_layer
+
 
         if 'Dy' in self.numeric_params and 'Dy' in other.numeric_params:
             dy = getattr(self, 'Dy'); _dy = getattr(other, 'Dy')
@@ -264,11 +242,13 @@ class ClusterStructure(metaclass=MetaCluster):
             da = a * _a.conjugate()                # angle difference
             ma = ave - abs(da)                     # match
             setattr(dm, 'Vector', Cdm(da, ma))
+            setattr(dm.dm_layer, 'Vector', Cdm(da, ma)) # set dm in dm_layer
 
         if 'Day' in self.numeric_params and 'Day' in other.numeric_params:
             day = getattr(self, 'Day'); _day = getattr(other, 'Day')
             dax = getattr(self, 'Dax'); _dax = getattr(other, 'Dax')
 
+            # temporary workaround until there is a better way to find angle difference between Day, Dax
             dday = day * _day.conjugate() # angle difference of complex day
             ddax = dax * _dax.conjugate() # angle difference of complex dax
             # formula for sum of angles, ~ angle_diff:
@@ -278,66 +258,31 @@ class ClusterStructure(metaclass=MetaCluster):
             dda = dday * ddax   # sum of angle difference
             mda = ave - abs(dda) # match
             setattr(dm, 'aVector', Cdm(dda, mda))
+            setattr(dm.dm_layer, 'aVector', Cdm(dda, mda)) # set dm in dm_layer
 
         return dm
 
 
-# ----------------------------------------------------------------------------
-
-'''
-class Clayer(object): no new params, base params are replaced by d,m after comp_param
-'''
-
 class Cdm(Number):
     __slots__ = ('d', 'm')
+
     def __init__(self, d=0, m=0):
         self.d, self.m = d, m
 
-    def accum(self, other):
-        return Cdert(self.d + other.d, self.m + other.m)
-
-    def comp_dm(self, other, ave):  # adds a level of nesting to self dert
-
-        d = self.p - other.p
-        m = min(self.p, other.p) - abs(d)/2 - ave
-        return Cdm(d,m)
-
-# old:
-
-class Cdert(Number):
-    __slots__ = ('p', 'd', 'm')
-    def __init__(self, p=0, d=0, m=0):
-        self.p, self.d, self.m = p, d, m
-
-    def accum(self, other):
-
-        return Cdert(self.p + other.p, self.d + other.d, self.m + other.m)
-
-    def comp_dert(self, other, ave):  # adds a level of nesting to self dert
-
-        p = self.comp_dert_par(self.p, other.p, ave)
-        m = self.comp_dert_par(self.m, other.m, ave)
-        d = self.comp_dert_par(self.d, other.d, ave)
-
-        return Cdert(p, m, d)
+    def __add__(self, other):
+        return Cdm(self.d + other.d, self.m + other.m)
 
 
-    def comp_dert_par(self, param, _param, ave):
-
-        d = param - _param
-        if param == self.p and (self == 'I' or self == 'Vector' or self == 'aVector'):
-            m = ave - abs(d)
+    def __repr__(self):  # representation of object
+        if isinstance(self.d, Cdm) or isinstance(self.m, Cdm):
+            return "Cdm(d=Cdm, m=Cdm)"
         else:
-            m = min(param, _param) - abs(d)/2 - ave
-
-        return Cdert(param, d, m)
-
-    def __repr__(self):
-        return "(p={}, d={}, m={})".format(self.p, self.d, self.m)
+            return "Cdm(d={}, m={})".format(self.d, self.m)
 
 
 if __name__ == "__main__":  # for tests
-    class CTest(ClusterStructure):
+    # using blob as example
+    class CBlob(ClusterStructure):
         I = int
         Dy = int
         Dx = int
@@ -346,17 +291,87 @@ if __name__ == "__main__":  # for tests
         Day = int
         Dax = int
 
-    class CTestSub(CTest):
-        vector = complex
-        avector = complex
+    class CDerBlob(CBlob):
+        dm_layer = object
+        Vector = complex
+        aVector = complex
 
-    b = CTest(I = 5, Dy=5, Dx=7, G=5, M=6, Day=4+5j, Dax = 8+9j)
-    c = CTest(I = 9, Dy=2, Dx=3, G=8, M=7, Day=5+6j, Dax = 6+7j)
-    d = CTest(I = 3, Dy=5, Dx=4, G=9, M=9, Day=3+7j, Dax = 7+10j)
+    class CBblob(CDerBlob):
+        pass
 
-    der1 = b.comp_param(c, ave=1)
-    der2 = c.comp_param(d, ave=1)
-    print(der1)  # automatically return the inherited class (it is assumed to contain ders)
-    print(der2)
-    print(der1.I.comp_dert(der2.I,ave=1))
-    print(der1.G.comp_dert(der2.G,ave=1))
+    class CDerBblob(CBblob):
+        pass
+
+
+    # root layer
+    blob1 = CBlob(I=5, Dy=5, Dx=7, G=5, M=6, Day=4 + 5j, Dax=8 + 9j)
+    blob2 = CBlob(I=9, Dy=2, Dx=3, G=8, M=7, Day=5 + 6j, Dax=6 + 7j)
+    blob3 = CBlob(I=3, Dy=5, Dx=4, G=9, M=9, Day=3 + 7j, Dax=7 + 10j)
+
+    # root layer derivatives
+    derBlob1 = blob1.comp_param(blob2, ave=1)
+    derBlob2 = blob2.comp_param(blob3, ave=1)
+
+    print(derBlob1)  # automatically return the inherited class (it is assumed to contain ders)
+    print(derBlob2)
+
+    # 1st layer (assume bblob = derBlob, their parameter should be the same)
+    bblob1 = derBlob1
+    bblob2 = derBlob2
+
+    # 1st layer derivatives
+    derBblob1 = bblob1.comp_param(bblob2, 1)
+
+    '''
+    not needed
+
+        def comp_dm_recursive(self, dm, _dm, ave):  # comp_dm recursively, return binary tree of d|m
+
+            if isinstance(dm.d, Cdm) and isinstance(_dm.d, Cdm) and \
+                    isinstance(dm.m, Cdm) and isinstance(_dm.m, Cdm):
+
+                d = self.comp_dm_recursive(self, dm.d, _dm.d, ave)  # nested d
+                m = ()
+                if dm.m < _dm.m:
+                    m = self.comp_dm_recursive(self, dm.m, _dm.m, ave)  # nested m
+
+            else:
+                if isinstance(self.d, complex):  # vector and avector
+                    dd = dm.d * _dm.d.conjugate()  # angle difference of d
+                    md = ave - abs(dd)  # match of d
+                    dm = dm.m - _dm.m  # difference of m
+                    mm = min(dm.m, _dm.m) - abs(dm) / 2 - ave  # match of m
+                else:
+                    dd = dm.d - _dm.d  # difference of d
+                    md = min(dm.d, _dm.d) - abs(dd) / 2 - ave  # match of d
+                    dm = dm.m - _dm.m  # difference of m
+                    mm = min(dm.m, _dm.m) - abs(dm) / 2 - ave  # match of m
+
+                d = Cdm(dd, md)  # difference and match of d
+                m = Cdm(dm, mm)  # difference and match of m
+
+            return Cdm(d, m)
+            
+    def comp_dm(self, other, ave):  # adds a level of nesting to self dm
+        
+    if isinstance(self.d, Cdm) and isinstance(other.d, Cdm) and \
+            isinstance(self.m, Cdm) and isinstance(other.m, Cdm):
+        d = self.comp_dm_recursive(self, self.d, other.d, ave)  # nested d
+        m = ()
+        # this is not correct yet:
+        # as discussed previously: "m=min as a comparand is redundant to the smaller root param"
+        # to access the root param, we would need p in Cdm: Cdm(p,d,m), so add p in Cdm?
+        if self.m < other.m:
+            m = self.comp_dm_recursive(self, self.m, other.m, ave)  # nested m
+    else:
+        
+        if isinstance(self.d, complex):  # vector and avector
+            d = self.d * other.d.conjugate()  # angle difference
+            m = ave - abs(d)  # match
+        else:
+            d = self.d - other.d
+            m = min(self.m, other.m) - abs(d) / 2 - ave
+
+    return Cdm(d, m)
+
+    '''

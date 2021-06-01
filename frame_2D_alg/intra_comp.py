@@ -31,8 +31,7 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     rng = 2: 5x5 kernel,
     rng = 4: 9x9 kernel,
     ...
-    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, and we use Sobel coeffs,
-    see:
+    Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, using Sobel coeffs, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
     '''
@@ -133,7 +132,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     az__ = dx__ + 1j * dy__  # take the complex number (z), phase angle is now atan2(dy, dx)
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        az__ /=  np.absolute(az__)  # normalized, cosine = a__.real, sine = a__.imag
+        az__ /=  np.absolute(az__)  # normalize by g, cosine = a__.real, sine = a__.imag
 
     # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
     az__left = az__[:-1, :-1]  # was topleft
