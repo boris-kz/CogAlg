@@ -2,22 +2,10 @@
 Cross-compare blobs with incrementally intermediate adjacency, within a frame
 '''
 
-from class_cluster import ClusterStructure, NoneType
-from frame_blobs import ave, CBlob
+from class_cluster import ClusterStructure, NoneType, comp_param, comp_param_complex
+from frame_blobs import ave, CBlob, CDerBlob, CBblob
 import numpy as np
 import cv2
-
-class CderBlob(CBlob):
-
-    blob = object
-    _blob = object
-    mB = int
-    dB = int
-
-class CBblob(CderBlob):
-
-    blob_ = list
-
 
 ave_mB = 0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
@@ -57,12 +45,13 @@ def comp_blob_recursive(blob, adj_blob_, derBlob_):
             derBlob_.append(derBlob)             # also frame-wide
 
         if "derBlob" in locals(): # derBlob exists
-            accum_derBlob(blob, derBlob)         # from all compared blobs, regardless of mB sign
+            # blob accmulate base param of derBlob
+            blob.derBlob_.append(derBlob)         # from all compared blobs, regardless of mB sign
 
             if derBlob.mB > 0:  # replace blob with adj_blob for continued adjacency search:
                 comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], derBlob_)  # search depth could be different, compare anyway
                 break
-            elif blob.M + blob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
+            elif blob.layer0[4] + blob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
                 # extend blob comparison to adjacents of adjacent, depth-first
                 blob.neg_mB += derBlob.mB  # mB and distance are accumulated over comparison scope
                 blob.distance += np.sqrt(adj_blob.A)
@@ -73,13 +62,40 @@ def comp_blob(blob, _blob):
     '''
     cross compare _blob and blob
     '''
+    # derBlob's layer1 param = 'I', 'G', 'M', 'Ga', 'Ma', 'Mdx', 'Ddx', 'A', 'Vector', 'aVector'
+    derBlob = CDerBlob()
+    mB = dB = 0
 
-    derBlob = blob.comp_param(_blob, blob.A)
+    # non complex numeric params
+    for param, _param, param_name in zip(blob.layer0, _blob.layer0, blob.layer_names):
+        if not isinstance(param, complex) and param_name not in ['Dy', 'Dx', 'Day', 'Dax']:
 
-    derBlob.mB = derBlob.I.m + derBlob.A.m + derBlob.G.m + derBlob.M.m +  derBlob.Vector.m  \
+            d, m = comp_param(param, _param, param_name, blob.A)
+            mB += m; dB += d
+            derBlob.layer1.append([d,m])
+            derBlob.layer1_names.append(param_name)
+    
+    # A
+    derBlob.layer1.append(comp_param(blob.A, _blob.A, param_name, blob.A))
+    derBlob.layer1_names.append('A')
+    
+    # Vector from dy and dx
+    derBlob.layer1.append(comp_param_complex(blob.layer0[1], blob.layer0[2], _blob.layer0[1], _blob.layer0[2], blob.A, 0))
+    derBlob.layer1_names.append('Vector')
+    
+    # aVector from day and dax
+    derBlob.layer1.append(comp_param_complex(blob.layer0[5], blob.layer0[6], _blob.layer0[5], _blob.layer0[6], blob.A, 1))
+    derBlob.layer1_names.append('aVector')
+
+    # compute mB from I.m, A.m, G.m, M.m, Vector.m                     
+    derBlob.mB = derBlob.layer1[0][1] + derBlob.layer1[7][1] + derBlob.layer1[1][1] + derBlob.layer1[2][1] +  derBlob.layer1[8][1]  \
     - ave_mB * (ave_rM ** ((1+blob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
 
-    derBlob.dB = derBlob.I.d + derBlob.A.d + derBlob.G.d + derBlob.M.d +  derBlob.Vector.d
+    # compute dB from I.d, A.d, G.d, M.d, Vector.d
+    derBlob.dB = derBlob.layer1[0][0] + derBlob.layer1[7][0] + derBlob.layer1[1][0] + derBlob.layer1[2][0] +  derBlob.layer1[8][0]
+
+    derBlob.blob = blob
+    derBlob._blob = _blob
 
     '''
     difference = _blob.difference(blob)
@@ -90,7 +106,6 @@ def comp_blob(blob, _blob):
     if G==0: G=1
     _G = hypot(_blob.Dy, _blob.Dx)
     if _G==0: _G=1
-
     sin = blob.Dy / (G); _sin = _blob.Dy / (_G)   # sine component   = dy/g
     cos = blob.Dx / (G); _cos = _blob.Dx / (_G)   # cosine component = dx/g
     sin_da = (cos * _sin) - (sin * _cos)          # using formula : sin(α − β) = sin α cos β − cos α sin β
@@ -115,8 +130,14 @@ def form_bblob_(blob_):
     '''
     bblob_ = []
     for blob in blob_:
-        if blob.mB > 0 and not isinstance(blob.bblob, CBblob):  # init bblob with current blob
-            bblob = CBblob()
+        MB = sum([derBlob.mB for derBlob in blob.derBlob_]) # blob's mB, sum from blob's derBlobs' mB
+        
+        if MB > 0 and not isinstance(blob.bblob, CBblob):  # init bblob with current blob
+            bblob = CBblob(layer0=[0 for _ in range(11)],
+                           layer0_param = ['I', 'Dy', 'Dx', 'G', 'M', 'Day', 'Dax', 'Ga', 'Ma', 'Mdx', 'Ddx'],
+                           layer1=[[0,0] for _ in range(10)],
+                           layer1_param = ['I', 'G', 'M', 'Ga', 'Ma', 'Mdx', 'Ddx', 'A', 'Vector', 'aVector'])
+
             merged_ids = [bblob.id]
             accum_bblob(bblob_, bblob, blob, merged_ids)  # accum blob into bblob
             form_bblob_recursive(bblob_, bblob, bblob.blob_, merged_ids)
@@ -135,7 +156,9 @@ def form_bblob_recursive(bblob_, bblob, blob_, merged_ids):
     blobs2check = []  # list of blobs to check for inclusion in bblob
 
     for blob in blob_:  # search new added blobs to get potential border clustering blob
-        if (blob.mB > 0):  # positive summed mBs
+        
+        MB = sum([derBlob.mB for derBlob in blob.derBlob_]) # blob's mB, sum from blob's derBlobs' mB
+        if (MB > 0):  # positive summed mBs
 
             if isinstance(blob.bblob, CBblob) and blob.bblob.id not in merged_ids:  # merge existing bblobs
                 if blob.bblob in bblob_:
@@ -144,10 +167,12 @@ def form_bblob_recursive(bblob_, bblob, blob_, merged_ids):
             else:
                 for derBlob in blob.derBlob_:
                     # blob is in bblob.blob_, but derBlob._blob is not in bblob_blob_ and (DerBlob.mB > 0 and blob.mB > 0):
-                    if (derBlob._blob not in bblob.blob_) and (derBlob._blob.mB + blob.mB > 0):
+                    bblob_mB = sum([blob_derBlob.mB for blob_derBlob in derBlob.blob.derBlob_])
+                    
+                    if (derBlob._blob not in bblob.blob_) and (bblob_mB + MB > 0):
                         accum_bblob(bblob_, bblob, derBlob._blob, merged_ids)  # pack derBlob._blob in bblob
                         blobs2check.append(derBlob._blob)
-                    elif (derBlob.blob not in bblob.blob_) and (derBlob.blob.mB + blob.mB > 0):
+                    elif (derBlob.blob not in bblob.blob_) and (bblob_mB + MB > 0):
                         accum_bblob(bblob_, bblob, derBlob.blob, merged_ids)
                         blobs2check.append(derBlob.blob)
 
@@ -180,14 +205,15 @@ def merge_bblob(bblob_, _bblob, bblob, merged_ids):
                             merge_bblob(bblob_, _bblob, merge_blob.bblob, merged_ids)
                     else:
                         # accumulate derBlob only if either one of _blob or blob (adjacent) not in _bblob
-                        _bblob.accum_from(derBlob)
+                        for i, param in enumerate(derBlob.blob.layer0): # accumulate base params of blob
+                            _bblob.layer0[i]+=param
+                        for i, (d,m) in enumerate(derBlob.layer1):    # accumulate layer 1 - dm value of derBlob
+                            _bblob.layer1[i][0] += d  
+                            _bblob.layer1[i][1] += m
+                        
                         _bblob.blob_.append(merge_blob)
                         merge_blob.bblob = _bblob
 
-def accum_derBlob(blob, derBlob):
-
-    blob.accum_from(derBlob)
-    blob.derBlob_.append(derBlob)
 
 def accum_bblob(bblob_, bblob, blob, merged_ids):
 
@@ -208,7 +234,11 @@ def accum_bblob(bblob_, bblob, blob, merged_ids):
                     merge_bblob(bblob_, bblob, merge_blob.bblob, merged_ids)
             else:
                 # accumulate derBlob only if either one of _blob or blob (adjacent) not in bblob
-                bblob.accum_from(derBlob)
+                for i, param in enumerate(derBlob.blob.layer0): # accumulate base params of blob
+                    bblob.layer0[i]+=param
+                for i, (d,m) in enumerate(derBlob.layer1):    # accumulate layer 1 - dm value of derBlob
+                    bblob.layer1[i][0] += d  
+                    bblob.layer1[i][1] += m      
                 bblob.blob_.append(merge_blob)
                 merge_blob.bblob = bblob
 
