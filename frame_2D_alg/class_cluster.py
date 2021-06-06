@@ -232,7 +232,7 @@ def comp_param(param, _param, param_name, ave):
     else:
         m = min(param,_param) - abs(d)/2 - ave  # direct match
 
-    return [d,m]
+    return Cdm(d,m)
 
 def comp_param_complex(dy, dx, _dy, _dx, ave, fda):
 
@@ -253,7 +253,7 @@ def comp_param_complex(dy, dx, _dy, _dx, ave, fda):
         da = dday * ddax   # sum of angle difference
         ma = ave - abs(da) # match
 
-    return [da,ma]
+    return Cdm(da,ma)
 
 
 if __name__ == "__main__":  # for tests
