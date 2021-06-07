@@ -1,5 +1,5 @@
 """
-Provide a base class for cluster objects in 2D implementation of CogAlg.
+Provide a base class for cluster objects in CogAlg.
 Features:
 - Unique instance ids per class.
 - Instances are retrievable by ids via class.
@@ -11,9 +11,12 @@ differences in interfaces are mostly eliminated.
 
 import weakref
 from numbers import Number
+from inspect import isclass
 
 NoneType = type(None)
 
+# ----------------------------------------------------------------------------
+# Template for class method generation
 _methods_template = '''
 @property
 def id(self):
@@ -38,22 +41,41 @@ def __repr__(self):
     return "{typename}({repr_fmt})" % ({numeric_param_vals})
 '''
 
+# ----------------------------------------------------------------------------
+# MetaCluster meta-class
 class MetaCluster(type):
     """
     Serve as a factory for creating new cluster classes.
     """
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
         # get fields/params and numeric params
+        replace = attrs.get('replace', {})
 
-        # params = tuple(attr for attr in attrs if not callable(attr))  # callable: _id, hid and weakref (see attrs['slots']
+        # inherit params
+        for base in bases:
+            if issubclass(base, ClusterStructure):
+                for param in base.numeric_params:
+                    if param not in attrs:  # prevents duplication of base params
+                        # not all inherited params are Cdm
+                        if param in replace:
+                            new_param, new_type = replace[param]
+                            if new_param is not None:
+                                attrs[new_param] = new_type
+                        else:
+                            attrs[param] = getattr(base,param+'_type') # if the param is not replaced, it will following type of base param
 
-        # only ignore param name start with double underscore
+        # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
-                   if not attr.startswith('__')
-                   and not callable(attr))
+                       if not attr.startswith('__') and
+                       isclass(attrs[attr]))
 
         numeric_params = tuple(param for param in params
-                               if (issubclass(attrs[param], Number)) and not (issubclass(attrs[param], bool)) ) # avoid accumulate bool, which is flag
+                               if (issubclass(attrs[param], Number)) and
+                               not (issubclass(attrs[param], bool))) # avoid accumulate bool, which is flag
+
+        list_params = tuple(param for param in params
+                               if (issubclass(attrs[param], list)))
+
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -62,6 +84,8 @@ class MetaCluster(type):
                                  for param in params),
             numeric_param_vals=', '.join(f'self.{param}'
                                          for param in numeric_params),
+            list_param_vals=', '.join(f'self.{param}'
+                                         for param in list_params),
             pack_args=', '.join(param for param in ('', *params)),
             pack_assignments='; '.join(f'self.{param} = {param}'
                                   for param in params)
@@ -87,6 +111,7 @@ class MetaCluster(type):
             attrs[param + '_type'] = attrs.pop(param)
         # attrs['params'] = params
         attrs['numeric_params'] = numeric_params
+        attrs['list_params'] = list_params
 
         # Add fields/params and other instance attributes
         attrs['__slots__'] = (('_id', 'hid', *params, '__weakref__')
@@ -100,10 +125,41 @@ class MetaCluster(type):
 
         return cls
 
-    def __call__(cls, *args, **kwargs):  # call right before a new instace is created
-        # register new instace
+    def __call__(cls, *args, **kwargs):  # call right before a new instance is created
+        # register new instance
         instance = super().__call__(*args, **kwargs)
 
+        # initialize fields/params
+        for param in cls.__slots__[2:]:  # Exclude _id and __weakref__
+            setattr(instance, param,
+                    kwargs.get(param,
+                               getattr(cls, param + '_type')()))
+
+        # set inherited params
+        if kwargs.get('inherit') is not None:
+            for inherit_instance in kwargs.get('inherit'):
+                for param in cls.numeric_params: # inherit numeric params
+                    if hasattr(inherit_instance,param):
+                        setattr(instance, param, getattr(inherit_instance, param))
+
+                for param in cls.list_params: # inherit list params
+                    if hasattr(inherit_instance,param):
+                        setattr(instance, param, getattr(inherit_instance, param))
+
+        # Set id
+        instance._id = len(cls._instances)
+        # Create ref
+        cls._instances.append(weakref.ref(instance))
+        # no default higher cluster id, set to None
+        instance.hid = None  # higher cluster's id
+
+        return instance
+
+    # original
+    '''
+    def __call__(cls, *args, **kwargs):  # call right before a new instance is created
+        # register new instance
+        instance = super().__call__(*args, **kwargs)
         # initialize fields/params
         for param in cls.__slots__[2:]:  # Exclude _id and __weakref__
             setattr(instance, param,
@@ -115,8 +171,8 @@ class MetaCluster(type):
         cls._instances.append(weakref.ref(instance))
         # no default higher cluster id, set to None
         instance.hid = None  # higher cluster's id
-
         return instance
+    '''
 
     def get_instance(cls, cluster_id):
         try:
@@ -129,9 +185,11 @@ class MetaCluster(type):
         return len(cls._instances)
 
 
+# ----------------------------------------------------------------------------
+# ClusterStructure class
 class ClusterStructure(metaclass=MetaCluster):
     """
-    Base class for cluster objects in 2D implementation of CogAlg.
+    Class for cluster objects in CogAlg.
     Each time a new instance is created, four things are done:
     - Set initialize field/param.
     - Set id.
@@ -142,8 +200,8 @@ class ClusterStructure(metaclass=MetaCluster):
     - Set higher cluster id to None (no higher cluster structure yet)
     Examples
     --------
-    >>> from frame_class import Cluster
-    >>> class CP(Cluster):
+    >>> from class_cluster import ClusterStructure
+    >>> class CP(ClusterStructure):
     >>>     L = int  # field/param name and default type
     >>>     I = int
     >>>
@@ -161,6 +219,14 @@ class ClusterStructure(metaclass=MetaCluster):
     >>> P2.L += 1; P2.I += 10  # assignment, fields are mutable
     >>> print(P2)
     CP(L=1, I=10)
+    >>> # Accumulate using accumulate()
+    >>> P1.accumulate(L=1, I=2)
+    >>> print(P1)
+    CP(L=2, I=7)
+    >>> # ... or accum_from()
+    >>> P2.accum_from(P1)
+    >>> print(P2)
+    CP(L=3, I=17)
     >>> # field/param types are not constrained, so be careful!
     >>> P2.L = 'something'
     >>> print(P2)
@@ -170,6 +236,147 @@ class ClusterStructure(metaclass=MetaCluster):
     def __init__(self, **kwargs):
         pass
 
-if __name__ == "__main__":  # for debugging
-    from sys import getsizeof as size
-    size(ClusterStructure)
+    def accum_from(self, other, excluded=()):
+        """Accumulate params from another structure."""
+
+        # accumulate numeric params
+        self.accumulate(**{param: getattr(other, param, 0)
+                           for param in self.numeric_params
+                           if param not in excluded})
+
+        # accumulate layers
+        for layer_num in self.list_params:
+            if (layer_num in other.list_params) and ('layer' in layer_num) and ('names' not in layer_num):
+
+                layer = getattr(self,layer_num)   # self layer params
+                _layer = getattr(other,layer_num) # other layer params
+                _layer_names = getattr(other,layer_num+'_names') # target params' name
+
+                if not isinstance(layer[0], Cdm): # layer 0
+                    for i, (p, _p) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
+                        if _layer_names[i] not in ['Dy','Dx','Day','Dax']:
+                            layer[i] += _p
+
+                        elif _layer_names[i] == 'Dy':
+                            dy = p;  _dy = _p
+                            dx = layer[i+1]; _dx = _layer[i+1];
+                            if dx ==0: dx = 1
+                            sum_dydx = (dx + dy*1j) * (_dx + _dy*1j) # summation for complex = complex 1 * complex 2
+                            layer[i] = sum_dydx.imag    # decomposed dy
+                            layer[i+1] = sum_dydx.real  # decomposed dx
+
+                        elif _layer_names[i] == 'Day':
+                            day = p;  _day = _p
+                            dax = layer[i+1]; _dax = _layer[i+1];
+                            if dax ==0: dax = 1
+                            sum_day = day * _day
+                            sum_dax = dax * _dax
+                            sum_daydax = sum_day * sum_dax
+                            layer[i] = sum_daydax.imag    # decomposed day
+                            layer[i+1] = sum_daydax.real  # decomposed dax
+
+                else: # layer 1 and above
+                    for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
+                        if _layer_names[i] in ['Vector','aVector']:
+                            if dm.d == 0: dm.d = 1
+                            dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
+                        else:
+                            dm.d += _dm.d
+                        dm.m += _dm.m
+
+
+class Cdm(Number):
+    __slots__ = ('d', 'm')
+
+    def __init__(self, d=0, m=0):
+        self.d, self.m = d, m
+
+    def __add__(self, other):
+        return Cdm(self.d + other.d, self.m + other.m)
+
+
+    def __repr__(self):  # representation of object
+        if isinstance(self.d, Cdm) or isinstance(self.m, Cdm):
+            return "Cdm(d=Cdm, m=Cdm)"
+        else:
+            return "Cdm(d={}, m={})".format(self.d, self.m)
+
+
+def comp_param(param, _param, param_name, ave):
+
+    d = param - _param    # difference
+    if param_name == 'I':
+        m = ave - abs(d)  # indirect match
+    else:
+        m = min(param,_param) - abs(d)/2 - ave  # direct match
+
+    return Cdm(d,m)
+
+def comp_param_complex(dy, dx, _dy, _dx, ave, fda):
+
+    if not fda: # input is dy and dx
+
+        a =  dx + 1j * dy; _a = _dx + 1j * _dy # angle in complex form
+        da = a * _a.conjugate()                # angle difference
+        ma = ave - abs(da)
+
+    else: # dy and dax is day and dax
+
+        dday = dy * _dy.conjugate() # angle difference of complex day
+        ddax = dx * _dx.conjugate() # angle difference of complex dax
+        # formula for sum of angles, ~ angle_diff:
+        # daz = (cos_1*cos_2 - sin_1*sin_2) + j*(cos_1*sin_2 + sin_1*cos_2)
+        #     = (cos_1 + j*sin_1)*(cos_2 + j*sin_2)
+        #     = az1 * az2
+        da = dday * ddax   # sum of angle difference
+        ma = ave - abs(da) # match
+
+    return Cdm(da,ma)
+
+
+if __name__ == "__main__":  # for tests
+
+
+    # ---- root layer  --------------------------------------------------------
+    # using blob as example
+    class CBlob(ClusterStructure):
+        I = int
+        Dy = int
+        Dx = int
+        G = int
+        M = int
+        Day = int
+        Dax = int
+
+    # blob derivative
+    class CDerBlob(ClusterStructure):
+        mB = int
+        dB = int
+        blob = object
+        _blob = object
+
+
+    # ---- 1st layer  ---------------------------------------------------------
+    # bblob
+    class CBblob(ClusterStructure):
+        I = int
+        Dy = int
+        Dx = int
+        G = int
+        M = int
+        Day = int
+        Dax = int
+        mB = int
+        dB = int
+        derBlob_ = list
+
+    # ---- example  -----------------------------------------------------------
+
+    # root layer
+    blob1 = CBlob(I=5, Dy=5, Dx=7, G=5, M=6, Day=4 + 5j, Dax=8 + 9j)
+    derBlob1 = CDerBlob(mB=5, dB=5)
+
+    # example of value inheritance, bblob now will having parameter values from blob1 and derBlob1
+    bblob = CBblob(inherit=[blob1, derBlob1])
+
+    print(bblob)

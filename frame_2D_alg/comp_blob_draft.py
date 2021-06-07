@@ -92,8 +92,7 @@ def comp_blob(blob, _blob):
     derBlob._blob = _blob
 
     '''
-    difference = _blob.difference(blob)
-    match = _blob.min_match(blob)
+    In comp_param:
     # G + Ave was wrong because Dy, Dx are summed as signed, resulting G is different from summed abs G 
     G = hypot(blob.Dy, blob.Dx)  
     if G==0: G=1
@@ -177,26 +176,6 @@ def form_bblob_recursive(bblob_, bblob, blob_, merged_ids):
     bblob_.append(bblob)  # pack bblob after scanning all accessible derBlobs
 
 
-
-def add_param(bblob, derBlob):
-    '''
-    accumulate param between layers
-    '''
-
-    bblob.mB += derBlob.mB
-    bblob.dB += derBlob.dB
-
-    for i, param in enumerate(derBlob.blob.layer0): # accumulate base params of blob
-        bblob.layer0[i]+=param
-
-    for i, dm in enumerate(derBlob.layer1): # accumulate layer 1 - dm value of derBlob
-        if derBlob.layer1_names[i] in ['Vector','aVector']:
-            bblob.layer1[i].d *= dm.d  # summation for complex = complex 1 * complex 2
-        else:
-            bblob.layer1[i].d += dm.d
-        bblob.layer1[i].m += dm.m
-
-
 def merge_bblob(bblob_, _bblob, bblob, merged_ids):
 
     merged_ids.append(bblob.id)
@@ -220,7 +199,8 @@ def merge_bblob(bblob_, _bblob, bblob, merged_ids):
                             merge_bblob(bblob_, _bblob, merge_blob.bblob, merged_ids)
                     else:
                         # accumulate derBlob only if either one of _blob or blob (adjacent) not in _bblob
-                        add_param(_bblob, derBlob)
+                        _bblob.accum_from(derBlob)
+                        _bblob.accum_from(derBlob.blob)
                         _bblob.blob_.append(merge_blob)
                         merge_blob.bblob = _bblob
 
@@ -243,7 +223,8 @@ def accum_bblob(bblob_, bblob, blob, merged_ids):
                     merge_bblob(bblob_, bblob, merge_blob.bblob, merged_ids)
             else:
                 # accumulate derBlob only if either one of _blob or blob (adjacent) not in bblob
-                add_param(bblob, derBlob)
+                bblob.accum_from(derBlob)
+                bblob.accum_from(derBlob.blob)
                 bblob.blob_.append(merge_blob)
                 merge_blob.bblob = bblob
 

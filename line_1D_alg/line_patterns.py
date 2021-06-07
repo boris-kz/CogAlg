@@ -26,7 +26,7 @@ import argparse
 from time import time
 from utils import *
 from itertools import zip_longest
-from frame_2D_alg.class_cluster import *
+from class_cluster import ClusterStructure, NoneType, comp_param, comp_param_complex, Cdm
 
 class Cdert(ClusterStructure):
     p = int
@@ -34,6 +34,7 @@ class Cdert(ClusterStructure):
     m = int
 
 class CP(ClusterStructure):
+
     sign = NoneType
     L = int
     I = int
@@ -42,6 +43,7 @@ class CP(ClusterStructure):
     dert_ = list
     sub_layers = list
     fdert = bool
+    ileft = int  # index of left _P that P was compared to, initialize at max X?
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
