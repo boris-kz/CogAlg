@@ -74,12 +74,12 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
                 print("\rblob:",
                       "id =", blob.id,
                       "sign =", "'+'" if blob.sign else "'-'",
-                      "I =", blob.layer0[0],
-                      "Dy =", blob.layer0[1],
-                      "Dx =", blob.layer0[2],
-                      "G =", blob.layer0[3],
-                      "M = ",blob.layer0[4],
-                      "A =", blob.layer0[10],
+                      "I =", blob.I,
+                      "Dy =", blob.Dy,
+                      "Dx =", blob.Dx,
+                      "G =", blob.G,
+                      "M = ",blob.M,
+                      "A =", blob.A,
                       "box =", blob.box,
                       end="\t\t\t")
                 sys.stdout.flush()

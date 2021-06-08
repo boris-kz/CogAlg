@@ -137,13 +137,18 @@ class MetaCluster(type):
 
         # set inherited params
         if kwargs.get('inherit') is not None:
+
+            excluded = []
+            if kwargs.get('excluded') is not None:
+                excluded = kwargs.get('excluded')
+
             for inherit_instance in kwargs.get('inherit'):
                 for param in cls.numeric_params: # inherit numeric params
-                    if hasattr(inherit_instance,param):
+                    if hasattr(inherit_instance,param) and (param not in excluded):
                         setattr(instance, param, getattr(inherit_instance, param))
 
                 for param in cls.list_params: # inherit list params
-                    if hasattr(inherit_instance,param):
+                    if hasattr(inherit_instance,param) and (param not in excluded):
                         setattr(instance, param, getattr(inherit_instance, param))
 
         # Set id
@@ -239,12 +244,37 @@ class ClusterStructure(metaclass=MetaCluster):
     def accum_from(self, other, excluded=()):
         """Accumulate params from another structure."""
 
-        # accumulate numeric params
-        self.accumulate(**{param: getattr(other, param, 0)
-                           for param in self.numeric_params
-                           if param not in excluded})
+        # accumulate layer 0 or base params
+        for param in self.numeric_params:
+            if (param not in excluded) and (param in other.numeric_params):
+                p = getattr(self,param)
+                _p = getattr(other,param)
 
-        # accumulate layers
+                if param not in ['Dy','Dx','Day','Dax']:
+                    setattr(self, param, p+_p)
+                    self.layer0[self.layer_names.index(param)] = p+_p # update layer 0 reference
+
+                elif param == 'Dy':
+                    dy = p;  _dy = _p
+                    dx = getattr(self,'Dx'); _dx = getattr(other,'Dx')
+                    if dx ==0: dx = 1
+                    Vector = (dx + dy*1j) * (_dx + _dy*1j) # summation for complex = complex 1 * complex 2
+                    setattr(self, 'Dy', Vector.imag)
+                    setattr(self, 'Dx', Vector.real)
+                    self.layer0[self.layer_names.index('Vector')] = Vector # update layer 0 Vector
+
+                elif param == 'Day':
+                    day = p;  _day = _p
+                    dax = getattr(self,'Dax'); _dax = getattr(other,'Dax')
+                    if dax ==0: dax = 1
+                    sum_day = day * _day
+                    sum_dax = dax * _dax
+                    aVector = sum_day * sum_dax
+                    setattr(self, 'Day', aVector.imag)
+                    setattr(self, 'Dax', aVector.real)
+                    self.layer0[self.layer_names.index('aVector')] = aVector # update layer 0 aVector
+
+        # accumulate layers 1 and above
         for layer_num in self.list_params:
             if (layer_num in other.list_params) and ('layer' in layer_num) and ('names' not in layer_num):
 
@@ -252,37 +282,13 @@ class ClusterStructure(metaclass=MetaCluster):
                 _layer = getattr(other,layer_num) # other layer params
                 _layer_names = getattr(other,layer_num+'_names') # target params' name
 
-                if not isinstance(layer[0], Cdm): # layer 0
-                    for i, (p, _p) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
-                        if _layer_names[i] not in ['Dy','Dx','Day','Dax']:
-                            layer[i] += _p
-
-                        elif _layer_names[i] == 'Dy':
-                            dy = p;  _dy = _p
-                            dx = layer[i+1]; _dx = _layer[i+1];
-                            if dx ==0: dx = 1
-                            sum_dydx = (dx + dy*1j) * (_dx + _dy*1j) # summation for complex = complex 1 * complex 2
-                            layer[i] = sum_dydx.imag    # decomposed dy
-                            layer[i+1] = sum_dydx.real  # decomposed dx
-
-                        elif _layer_names[i] == 'Day':
-                            day = p;  _day = _p
-                            dax = layer[i+1]; _dax = _layer[i+1];
-                            if dax ==0: dax = 1
-                            sum_day = day * _day
-                            sum_dax = dax * _dax
-                            sum_daydax = sum_day * sum_dax
-                            layer[i] = sum_daydax.imag    # decomposed day
-                            layer[i+1] = sum_daydax.real  # decomposed dax
-
-                else: # layer 1 and above
-                    for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
-                        if _layer_names[i] in ['Vector','aVector']:
-                            if dm.d == 0: dm.d = 1
-                            dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
-                        else:
-                            dm.d += _dm.d
-                        dm.m += _dm.m
+                for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
+                    if _layer_names[i] in ['Vector','aVector']:
+                        if dm.d == 0: dm.d = 1
+                        dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
+                    else:
+                        dm.d += _dm.d
+                    dm.m += _dm.m
 
 
 class Cdm(Number):
@@ -304,34 +310,17 @@ class Cdm(Number):
 
 def comp_param(param, _param, param_name, ave):
 
-    d = param - _param    # difference
-    if param_name == 'I':
-        m = ave - abs(d)  # indirect match
+    if isinstance(param, complex):
+        d = param * _param.conjugate() # ma
+        m = ave - abs(d)               # da
     else:
-        m = min(param,_param) - abs(d)/2 - ave  # direct match
+        d = param - _param    # difference
+        if param_name == 'I':
+            m = ave - abs(d)  # indirect match
+        else:
+            m = min(param,_param) - abs(d)/2 - ave  # direct match
 
     return Cdm(d,m)
-
-def comp_param_complex(dy, dx, _dy, _dx, ave, fda):
-
-    if not fda: # input is dy and dx
-
-        a =  dx + 1j * dy; _a = _dx + 1j * _dy # angle in complex form
-        da = a * _a.conjugate()                # angle difference
-        ma = ave - abs(da)
-
-    else: # dy and dax is day and dax
-
-        dday = dy * _dy.conjugate() # angle difference of complex day
-        ddax = dx * _dx.conjugate() # angle difference of complex dax
-        # formula for sum of angles, ~ angle_diff:
-        # daz = (cos_1*cos_2 - sin_1*sin_2) + j*(cos_1*sin_2 + sin_1*cos_2)
-        #     = (cos_1 + j*sin_1)*(cos_2 + j*sin_2)
-        #     = az1 * az2
-        da = dday * ddax   # sum of angle difference
-        ma = ave - abs(da) # match
-
-    return Cdm(da,ma)
 
 
 if __name__ == "__main__":  # for tests
@@ -377,6 +366,7 @@ if __name__ == "__main__":  # for tests
     derBlob1 = CDerBlob(mB=5, dB=5)
 
     # example of value inheritance, bblob now will having parameter values from blob1 and derBlob1
-    bblob = CBblob(inherit=[blob1, derBlob1])
+    # In this example, Dy and Dx are excluded from the inheritance
+    bblob = CBblob(inherit=[blob1, derBlob1], excluded=['Dy','Dx'])
 
     print(bblob)

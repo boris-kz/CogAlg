@@ -95,10 +95,26 @@ class CFlatBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
 
 class CBlob(ClusterStructure):
 
-    layer0 = list      # base params
-    layer0_names = list  # name of base params
+    # layer0 params
+    I = int
+    Dy = int
+    Dx = int
+    G = int
+    M = int
+    # comp_angle:
+    Day = complex
+    Dax = complex
+    Ga = int
+    Ma = int
+    # comp_dx:
+    Mdx = int
+    Ddx = int
+
+    layer0 = list       # base params
+    layer_names = list  # name of base params
 
     # blob params:
+    A = int  # blob area
     sign = NoneType
     box = list
     mask__ = bool
@@ -141,7 +157,7 @@ class CBlob(ClusterStructure):
 class CDerBlob(ClusterStructure):
 
     layer1 = list       # dm layer params
-    layer1_names = list # name of dm layer's params
+    layer_names = list # name of dm layer's params
 
     mB = int
     dB = int
@@ -150,10 +166,9 @@ class CDerBlob(ClusterStructure):
 
 class CBblob(ClusterStructure):
 
+    layer_names = list     # name of base params
     layer0 = list           # base params
-    layer0_names = list     # name of base params
     layer1 = list         # dm layer params
-    layer1_names = list # name of dm layer's params
 
     mB = int
     dB = int
@@ -242,7 +257,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
                 # initialize new blob
                 blob = blob_cls(layer0=[0 for _ in range(11)],sign=sign__[y, x], root_dert__=dert__)
-                blob.layer0_names = ['I', 'Dy', 'Dx', 'G', 'M', 'Day', 'Dax', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
+                blob.layer_names = ['I', 'G', 'M', 'Vector', 'aVector', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
 
                 if prior_forks: # update prior forks in deep blob
                     blob.prior_forks= prior_forks.copy()
@@ -256,8 +271,49 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                 while unfilled_derts:
                     y1, x1 = unfilled_derts.popleft()
                     # add dert to blob
-                    for i, param__ in enumerate(dert__): blob.layer0[i]+=param__[y][x]
-                    blob.layer0[10] += 1 # increase A
+                    blob.accumulate(I =dert__[0][y][x],
+                                    G =dert__[3][y][x],
+                                    M =dert__[4][y][x])
+
+                    if blob.Dx==0: blob.Dx =1 # prevent 0 value after summation of complex
+                    Vector = (blob.Dx + 1j*blob.Dy) * (dert__[2][y][x] + 1j*dert__[1][y][x]) # sum of complex = complex1 * complex2
+                    # update blob
+                    blob.Dy = Vector.imag
+                    blob.Dx = Vector.real
+                    # update layer0
+                    blob.layer0[0] = blob.I
+                    blob.layer0[1] = blob.G
+                    blob.layer0[2] = blob.M
+                    blob.layer0[3] = Vector
+
+                    if len(dert__)>5: # comp_angle
+                        blob.accumulate(Day =dert__[5][y][x],
+                                        Dax =dert__[6][y][x],
+                                        Ga  =dert__[7][y][x],
+                                        Ma  =dert__[8][y][x])
+
+                        if blob.Dax==0: blob.Dax = 1
+                        sum_day = (blob.Day * dert__[5][y][x])
+                        sum_dax = (blob.Dax * dert__[6][y][x])
+                        aVector = sum_day * sum_dax
+                        # update blob
+                        blob.Day = aVector.imag
+                        blob.Day = aVector.real
+                        # update layer 0
+                        blob.layer0[4] = aVector
+                        blob.layer0[5] = blob.Ga
+                        blob.layer0[6] = blob.Ma
+
+                    if len(dert__)>10: # comp_dx
+                        blob.accumulate(Mdx =dert__[9][y][x],
+                                        Ddx =dert__[10][y][x])
+                        # update layer0
+                        blob.layer0[8] = blob.Mdx
+                        blob.layer0[9] = blob.Ddx
+
+
+                    blob.A += 1;   # increase A
+                    blob.layer0[7] = blob.A
 
                     if y1 < y0:
                         y0 = y1
@@ -405,8 +461,8 @@ if __name__ == "__main__":
             +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
             positive value of adjacent -G "flat" blobs.
             '''
-            G = blob.layer0[blob.layer0_param.index['G']] # or simply blob.layer0[3]
-            M = blob.layer0[blob.layer0_param.index['M']] # or simply blob.layer0[4]
+            G = blob.G
+            M = blob.M
             blob.root_dert__=root_dert__
             blob.prior_forks=['g']  # not sure about this
             blob_height = blob.box[1] - blob.box[0]

@@ -21,12 +21,17 @@
   The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_P.
 '''
 
+# add ColAlg folder to system path
+import sys
+from os.path import dirname, join, abspath
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+
 import cv2
 import argparse
 from time import time
 from utils import *
 from itertools import zip_longest
-from class_cluster import ClusterStructure, NoneType, comp_param, comp_param_complex, Cdm
+from frame_2D_alg.class_cluster import ClusterStructure, NoneType, comp_param, Cdm
 
 class Cdert(ClusterStructure):
     p = int
@@ -35,15 +40,17 @@ class Cdert(ClusterStructure):
 
 class CP(ClusterStructure):
 
-    sign = NoneType
+    sign = bool
+    _sign = bool  # temporary, for
     L = int
     I = int
     D = int
     M = int
     dert_ = list
     sub_layers = list
-    fdert = bool
-    ileft = int  # index of left _P that P was compared to, initialize at max X?
+    fdert = bool  # forgot
+    ileft = int=1024  # index of left-most _P that P was compared to in line_PPs, initialize at max X?
+
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
