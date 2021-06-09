@@ -66,7 +66,22 @@ def comp_blob(blob, _blob):
     derBlob = CDerBlob()
 
     # non complex numeric params
-    for i, (param, _param, param_name) in enumerate(zip(blob.layer0, _blob.layer0, blob.layer_names)):
+    for param_name in blob.layer_names:
+
+        if param_name == "Vector":
+            dy= getattr(blob,'Dy'); _dy = getattr(_blob,'Dy')
+            dx= getattr(blob,'Dx'); _dx = getattr(_blob,'Dx')
+            param = dx + 1j*dy
+            _param = _dx + 1j*_dy
+
+        elif param_name == "aVector":
+            day= getattr(blob,'Day'); _day = getattr(_blob,'Day')
+            dax= getattr(blob,'Dax'); _dax = getattr(_blob,'Dax')
+            param = [day,dax];
+            _param = [_day,_dax]
+        else:
+            param = getattr(blob, param_name)
+            _param = getattr(_blob, param_name)
 
         dm = comp_param(param, _param, param_name, blob.A)
         derBlob.mB += dm.m;
@@ -116,10 +131,8 @@ def form_bblob_(blob_):
         MB = sum([derBlob.mB for derBlob in blob.derBlob_]) # blob's mB, sum from blob's derBlobs' mB
 
         if MB > 0 and not isinstance(blob.bblob, CBblob):  # init bblob with current blob
-            bblob = CBblob(layer0=[0 for _ in range(11)],
-                           layer0_param = ['I', 'Dy', 'Dx', 'G', 'M', 'Day', 'Dax', 'Ga', 'Ma','A', 'Mdx', 'Ddx'],
-                           layer1=[Cdm() for _ in range(10)],
-                           layer1_param = ['I', 'G', 'M', 'Ga', 'Ma', 'Mdx', 'Ddx', 'A', 'Vector', 'aVector'])
+            bblob = CBblob(layer1=[Cdm() for _ in range(10)],
+                           layer_names = ['I', 'G', 'M', 'Vector', 'aVector', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx'])
 
             merged_ids = [bblob.id]
             accum_bblob(bblob_, bblob, blob, merged_ids)  # accum blob into bblob

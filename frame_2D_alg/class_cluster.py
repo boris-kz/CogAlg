@@ -64,6 +64,8 @@ class MetaCluster(type):
                         else:
                             attrs[param] = getattr(base,param+'_type') # if the param is not replaced, it will following type of base param
 
+        if len(bases)>1: bases=(bases[0],)
+
         # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
                        if not attr.startswith('__') and
@@ -149,7 +151,9 @@ class MetaCluster(type):
 
                 for param in cls.list_params: # inherit list params
                     if hasattr(inherit_instance,param) and (param not in excluded):
-                        setattr(instance, param, getattr(inherit_instance, param))
+                        list_param = getattr(inherit_instance, param)
+                        if len(list_param)>0: # not empty list
+                            setattr(instance, param, list_param )
 
         # Set id
         instance._id = len(cls._instances)
@@ -244,24 +248,14 @@ class ClusterStructure(metaclass=MetaCluster):
     def accum_from(self, other, excluded=()):
         """Accumulate params from another structure."""
 
-        # accumulate layer 0 or base params
+        # accumulate base params
         for param in self.numeric_params:
             if (param not in excluded) and (param in other.numeric_params):
                 p = getattr(self,param)
                 _p = getattr(other,param)
 
-                if param not in ['Dy','Dx','Day','Dax']:
+                if param not in ['Day','Dax']:
                     setattr(self, param, p+_p)
-                    self.layer0[self.layer_names.index(param)] = p+_p # update layer 0 reference
-
-                elif param == 'Dy':
-                    dy = p;  _dy = _p
-                    dx = getattr(self,'Dx'); _dx = getattr(other,'Dx')
-                    if dx ==0: dx = 1
-                    Vector = (dx + dy*1j) * (_dx + _dy*1j) # summation for complex = complex 1 * complex 2
-                    setattr(self, 'Dy', Vector.imag)
-                    setattr(self, 'Dx', Vector.real)
-                    self.layer0[self.layer_names.index('Vector')] = Vector # update layer 0 Vector
 
                 elif param == 'Day':
                     day = p;  _day = _p
@@ -280,15 +274,16 @@ class ClusterStructure(metaclass=MetaCluster):
 
                 layer = getattr(self,layer_num)   # self layer params
                 _layer = getattr(other,layer_num) # other layer params
-                _layer_names = getattr(other,layer_num+'_names') # target params' name
+                _layer_names = getattr(other,'layer_names') # target params' name
 
-                for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
-                    if _layer_names[i] in ['Vector','aVector']:
-                        if dm.d == 0: dm.d = 1
-                        dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
-                    else:
-                        dm.d += _dm.d
-                    dm.m += _dm.m
+                if len(layer) == len(_layer): # both layers are having same params
+                    for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
+                        if _layer_names[i] in ['Vector','aVector']:
+                            if dm.d == 0: dm.d = 1
+                            dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
+                        else:
+                            dm.d += _dm.d
+                        dm.m += _dm.m
 
 
 class Cdm(Number):
@@ -310,9 +305,14 @@ class Cdm(Number):
 
 def comp_param(param, _param, param_name, ave):
 
-    if isinstance(param, complex):
+    if param_name == "Vector":
         d = param * _param.conjugate() # ma
         m = ave - abs(d)               # da
+    elif param_name == "aVector":
+        dy = param[0] * _param[0].conjugate() # difference in day
+        dx = param[1] * _param[1].conjugate() # difference in dax
+        d = dy * dx # sum of difference (sum of 2 complex)
+        m = ave - abs(d)
     else:
         d = param - _param    # difference
         if param_name == 'I':
