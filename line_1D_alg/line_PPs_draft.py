@@ -55,7 +55,8 @@ class CPP(CderP):
     layer1 = list
     add_comparands = list
     sign = bool
-    P_ = list  #  maybe sub_PPm_
+    derP_ = list  # this needs to be checked
+    # maybe sub_PPm_
     replace = {'ileft': (None, None)}
 
 
@@ -115,21 +116,10 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     mP = dP = 0
     layer1 = []
     # names are not needed:
-    dm = comp_param(P.I, _P.I, ave)
-    layer1.append([dm.d, dm.m])
-    mP += dm.m; dP += dm.d
-
-    dm = comp_param(P.L, _P.L, ave)
-    layer1.append([dm.d, dm.m])
-    mP += dm.m; dP += dm.d
-
-    dm = comp_param(P.D, _P.D, ave)
-    layer1.append([dm.d, dm.m])
-    mP += dm.m; dP += dm.d
-
-    dm = comp_param(P.M, _P.M, ave)
-    layer1.append([dm.d, dm.m])
-    mP += dm.m; dP += dm.d
+    dm = comp_param(P.I, _P.I, ave); layer1.append([dm.d, dm.m]); mP += dm.m; dP += dm.d
+    dm = comp_param(P.L, _P.L, ave); layer1.append([dm.d, dm.m]); mP += dm.m; dP += dm.d
+    dm = comp_param(P.D, _P.D, ave); layer1.append([dm.d, dm.m]); mP += dm.m; dP += dm.d
+    dm = comp_param(P.M, _P.M, ave); layer1.append([dm.d, dm.m]); mP += dm.m; dP += dm.d
 
     mP -= ave_M * ave_rM ** (1 + neg_L / P.L)  # average match projected at current distance: neg_L, add coef / var?
     # match(P,_P), ave_M is addition to ave? or abs for projection in search?
@@ -184,7 +174,6 @@ def form_PPm_(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp 
             PP = CPP( P_=[derP.P], inherit=[derP])  # reinitialize PPm with current derP
             derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
         else:
-            PP.accum_from(derP.P)
             PP.accum_from(derP)  # accumulate PPm numerical params with same-name current derP params, exclusions?
 
     PPm_.append(PP)  # pack last PP
@@ -192,24 +181,37 @@ def form_PPm_(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp 
     return PPm_
 
 
-def back_search_extend_Kelvin( PPm_, derP_, P_):  # evaluate for the 1st P in PP, merge with _P.PP if any
+def back_search_extend( PPm_, derP_):  # each P should form derP, evaluate for the 1st P in PP, merge with _P.PP if any
 
     # search by PP.P_[0] over P_, starting from PP.P_[0].ileft, as in forward search() but with decreasing indices.
 
     for PP in PPm_:
-        # neg_M = vmP = sign = _sign = neg_L = 0
-        # Those params are already computed and should be accessed from derP_, so we can evaluate immediately:
+        neg_M = vmP = sign = _sign = neg_L = 0
 
-        illeft = PP.P_[0].ileft -1  # might be wrong
-        derP = derP_[illeft]
+        derP = PP.derP_[0]
+        illeft = PP.derP_[0].ileft - 1
 
-        while PP.P_[0].M + derP.neg_M > 0:
-            illeft -= 1
-            derP = derP_[illeft]  # and so on.
+        while illeft > 0:
+            _derP = derP_[ PP.derP_[0].illeft ]
 
-        # Not revised yet:
+            while (derP.M + _derP.neg_M > 0):  # _derP is assigned to P previous in P_?
+                illeft -= 1
+                _derP, _L, _sign = comp_P(derP.P, derP_[illeft].P, neg_M, neg_L)
+                # no need for _L, _sign?
+                if _sign:
+                    derP_[illeft]._derP = _derP  # add separate leftward derP?
+                    merge(derP.PP, derP.PP)
+                    break  # nearest-neighbour search is terminated by first match
+                    
+                else:
+                    neg_M += _derP.mP  # accumulate contiguous miss: negative mP
+                    neg_L += _L   # accumulate distance to match
 
-        for x in range(PP.P_[0].ileft, 0, -1): # backward search
+            break
+
+        # Kelvin's, Not revised yet:
+
+        for x in range(PP.P_[0].ileft, 0, -1):  # backward search
 
             if P.M + neg_M > 0:  # search while net_M > ave_M * nparams or 1st _P, no selection by M sign
                 # P.M decay with distance: * ave_rM ** (1 + neg_L / P.L): only for abs P.M?

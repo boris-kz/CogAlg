@@ -9,14 +9,13 @@ Vectorization is clustering of Ps + their derivatives (derPs) into PPs: patterns
 This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
 As we add higher dimensions (2D alg, 3D alg), this dimensionality reduction is done in salient high-aspect blobs
 (likely edges / contours in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-D patterns.
-
 Most functions should be replaced by casting generic Search, Compare, Cluster functions
 '''
 
 from collections import deque
 import sys
 import numpy as np
-from class_cluster import ClusterStructure, NoneType
+from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
@@ -35,35 +34,28 @@ ave_da = 0.78  # da at 45 degree
 ave_mPP = 0
 ave_rM  = .7
 
-'''
-CP should be a nested class, including derP, possibly multi-layer:
-if PP: CP contains P, 
-   each param contains summed values of: param, (m,d),
-   and each dert in dert_ is actually P
-if PPP: CP contains P which also contains P
-   each param contains summed values of: param, (m,d), ((mm,dm), (md,dd)) 
-   and each dert in dert_ is actually PP
-   
-or a factory function to recursively extend CP in new modules?  Same for CBlob, CBblob, derBlob, etc.
-'''
+
+layer_names = ['I', 'G', 'M', 'Vector', 'aVector', 'Ga', 'Ma', 'Mdx', 'Ddx', 'x', 'L' ]
 
 class CP(ClusterStructure):
 
-    # Dert params, comp_pixel:
+    layer0 = list
+    layer_names = list
+    # comp_pixel:
     I = int
     Dy = int
     Dx = int
     G = int
     M = int
-    # Dert params, comp_angle:
+    # comp_angle:
     Day = complex
     Dax = complex
     Ga = int
     Ma = int
-    # Dert params, comp_dx:
+    # comp_dx:
     Mdx = int
     Ddx = int
-
+    # new:
     L = int
     x0 = int
     x = int  # median x
@@ -80,91 +72,25 @@ class CP(ClusterStructure):
     # only in Pm:
     Pd_ = list
 
-class CderP(ClusterStructure):
+class CderP(CP):
 
+    layer1 = list
+    layer_names = list
     # derP params
     mP = int
     dP = int
-    mx = int
-    dx = int
-    mL = int
-    dL = int
-    mDx = int
-    dDx = int
-    mDy = int
-    dDy = int
-    # dDdx,mDdx,dMdx,mMdx is used by comp_dx
-    mDay = complex
-    mDax = complex
-    mGa = int
-    mMa = int
-    mMdx = int
-    mDdx = int
-    dDay = complex
-    dDax = complex
-    dGa = int
-    dMa = int
-    dMdx = int
-    dDdx = int
-
     P = object   # lower comparand
     _P = object  # higher comparand
     PP = object  # FPP if flip_val, contains this derP
     # from comp_dx
     fdx = NoneType
+    distance = int  # d_ave_x
 
+class CPP(CderP):
 
-class CderPP(ClusterStructure):
-
-    PP = object
-    _PP = object
-    mmPP = int
-    dmPP = int
-    mdPP = int
-    ddPP = int
-
-class CPP(ClusterStructure):
-
-    # Dert params, comp_pixel:
-    I = int
-    Dy = int
-    Dx = int
-    G = int
-    M = int
-    # Dert params, comp_angle:
-    Day = complex
-    Dax = complex
-    Ga = int
-    Ma = int
-    # Dert params, comp_dx:
-    Mdx = int
-    Ddx = int
-
-    # derP params
-    mP = int
-    dP = int
-    mx = int
-    dx = int
-    mL = int
-    dL = int
-    mDx = int
-    dDx = int
-    mDy = int
-    dDy = int
-    # dDdx,mDdx,dMdx,mMdx is used by comp_dx
-    mDay = complex
-    mDax = complex
-    mGa = int
-    mMa = int
-    mMdx = int
-    mDdx = int
-    dDay = complex
-    dDax = complex
-    dGa = int
-    dMa = int
-    dMdx = int
-    dDdx = int
-
+    layer0 = list
+    layer1 = list
+    layer_names = list
     # between PPs:
     upconnect_ = list
     downconnect_cnt = int
@@ -181,31 +107,32 @@ class CPP(ClusterStructure):
     # PPd params
     derPd__ = list
     Pd__ = list
+    # comp_dx params
     PPmd_ = list
-    PPdd_ = list  # comp_dx params
-
+    PPdd_ = list
     # comp_PP
     derPPm_ = []
     derPPd_ = []
-    distance = int
-    mmPP = int
-    dmPP = int
-    mdPP = int
-    ddPP = int
-    neg_mmPP = int
-    neg_mdPP = int
-
     PPPm = object
     PPPd = object
 
-class CPPP(ClusterStructure):
+class CderPP(CPP):
+    layer0 = list
+    layer1 = list
+    layer2 = list
+    layer_names = list
 
-    PPm_ = list
-    PPd_ = list
+    PP = object
+    _PP = object
     mmPP = int
     dmPP = int
     mdPP = int
     ddPP = int
+
+class CPPP(CderPP):
+
+    PPm_ = list
+    PPd_ = list
 
 # Functions:
 '''
@@ -269,7 +196,7 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
     if ~_mask:
         # initialize P with first dert
         P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8],
-               x0=0, L=1, y=y, dert_=dert_)
+               x0=0, L=1, y=y, dert_=dert_, layer_names=layer_names)
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
@@ -282,7 +209,7 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
             if _mask:  # _dert is masked, initialize P params:
                 # initialize P with first dert
                 P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8],
-                       x0=x, L=1, y=y, dert_=dert_)
+                       x0=x, L=1, y=y, dert_=dert_, layer_names=layer_names)
             else:
                 # _dert is not masked, accumulate P params with (p, dy, dx, g, m, day, dax, ga, ma) = dert
                 P.accumulate(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8], L=1)
@@ -310,7 +237,7 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
             _sign = _dert[2] > 0
             # initialize P with first dert
             P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4], Day=_dert[5], Dax=_dert[6], Ga=_dert[7], Ma=_dert[8],
-                   x0=iP.x0, dert_=dert_, L=1, y=iP.y, sign=_sign, Pm=iP)
+                   x0=iP.x0, dert_=dert_, L=1, y=iP.y, sign=_sign, Pm=iP, layer_names=layer_names)
             x = 1  # relative x within P
 
             for dert in iP.dert_[1:]:
@@ -328,7 +255,7 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                     Pd_.append(P)
                     # reinitialize params
                     P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4], Day=dert[5], Dax=dert[6], Ga=dert[7], Ma=dert[8],
-                           x0=iP.x0+x, dert_=[dert], L=1, y=iP.y, sign=sign, Pm=iP)
+                           x0=iP.x0+x, dert_=[dert], L=1, y=iP.y, sign=sign, Pm=iP, layer_names=layer_names)
                 _sign = sign
                 x += 1
             # terminate last P
@@ -496,40 +423,79 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
 
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
+    mP = 0
+    dP = 0
+    layer1 = []
+
+    for param_name in _P.layer_names:
+
+        if param_name == "Vector":
+            dy= P.Dy/max(1, P.G); _dy = _P.Dy/max(1,_P.G)
+            dx= P.Dx/max(1, P.G); _dx = _P.Dx/max(1,_P.G)
+            param = dx + 1j*dy
+            _param = _dx + 1j*_dy
+
+        elif param_name == "aVector":
+            day= P.Day/max(1, P.Ga); _day = _P.Day/max(1,_P.Ga)
+            dax= P.Dax/max(1, P.Ga); _dax = _P.Dax/max(1,_P.Ga)
+            param = [day,dax];
+            _param = [_day,_dax]
+
+        elif param_name == "x":
+            _param = _P.dX # _dX
+            param = P.x    # dX
+
+        elif param_name == "L" or param_name == "M":
+            hyp = np.hypot(P.x, 1)  # ratio of local segment of long (vertical) axis to dY = 1
+            _param = getattr(_P,param_name)
+            param = getattr(P,param_name) / hyp # orthogonal L & M are reduced by hyp
+
+        else:
+            param = getattr(P, param_name)
+            _param = getattr(_P, param_name)
+
+        dm = comp_param(param, _param, param_name, P.L)
+        mP += dm.m;
+        if not isinstance(param, complex): # do we need to accumulate d of Vector and aVector, which is in complex form?
+            dP += dm.d
+
+        layer1.append(dm)
+
+
+    '''
     s, x0, Dx, Dy, G, M, L, Ddx, Mdx = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L, P.Ddx, P.Mdx  # params per comp branch
     _s, _x0, _Dx, _Dy, _G, _M, _dX, _L, _Ddx, _Mdx = _P.sign, _P.x0, _P.Dx, _P.Dy, _P.G, _P.M, _P.dX, _P.L, _P.Ddx, _P.Mdx
-
     dX = (x0 + (L-1) / 2) - (_x0 + (_L-1) / 2)  # x shift: d_ave_x, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
-
     ddX = dX - _dX  # long axis curvature, if > ave: ortho eval per P, else per PP_dX?
     mdX = min(dX, _dX)  # dX is inversely predictive of mP?
     hyp = np.hypot(dX, 1)  # ratio of local segment of long (vertical) axis to dY = 1
-
     L /= hyp  # orthogonal L is reduced by hyp
     dL = L - _L; mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
     M /= hyp  # orthogonal M is reduced by hyp
     dM = M - _M; mM = min(M, _M)  # use abs M?  no Mx, My: non-core, lesser and redundant bias?
-
     # G + Ave was wrong because Dy, Dx are summed as signed, resulting G is different from summed abs G
     G = np.hypot(P.Dy, P.Dx)
     if G == 0: G = 1
     _G = np.hypot(_P.Dy, _P.Dx)
     if _G == 0: _G = 1
-
     sin = P.Dy / G; _sin = _P.Dy / _G
-    cos = P.Dx / G; _cos = _P.Dx / _P
+    cos = P.Dx / G; _cos = _P.Dx / _G
     sin_da = (cos * _sin) - (sin * _cos)
     cos_da = (cos * _cos) + (sin * _sin)
     da = np.arctan2( sin_da, cos_da )
     ma = ave_da - abs(da)
-
+    
+    
     dP = dL + dM + da  # -> directional PPd, equal-weight params, no rdn?
     mP = mL + mM + ma  # -> complementary PPm, rdn *= Pd | Pm rolp?
+    
+    
     mP -= ave_mP * ave_rmP ** (dX / L)  # dX / L is relative x-distance between P and _P,
+    '''
 
-    P.flip_val = (dX * (P.Dy / (P.Dx+.001)) - flip_ave)  # +.001 to avoid division by zero
+    mP -= ave_mP * ave_rmP ** (P.dX / P.L)
 
-    derP = CderP(mP=mP, dP=dP, dX=dX, mL=mL, dL=dL, P=P, _P=_P)
+    derP = CderP(mP=mP, dP=dP, P=P, _P=_P, layer1=layer1)
     P.derP = derP
 
     return derP
@@ -778,7 +744,7 @@ def comp_PP(PP, _PP):
 
     # match and difference of _PP and PP
     difference = _PP.difference(PP)
-    match = _PP.min_match_da(PP)
+    match = _PP.min_match(PP)
 
     # match of compared PPs' m components
     mmPP = match['mP'] + match['mx'] + match['mL'] + match['mDx'] + match['mDy'] - ave_mPP

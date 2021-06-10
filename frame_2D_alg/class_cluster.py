@@ -274,16 +274,20 @@ class ClusterStructure(metaclass=MetaCluster):
 
                 layer = getattr(self,layer_num)   # self layer params
                 _layer = getattr(other,layer_num) # other layer params
-                _layer_names = getattr(other,'layer_names') # target params' name
+
+                if hasattr(other,'layer_names'):
+                    _layer_names = getattr(other,'layer_names') # target params' name
 
                 if len(layer) == len(_layer): # both layers are having same params
                     for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
-                        if _layer_names[i] in ['Vector','aVector']:
+                        if hasattr(other,'layer_names') and (_layer_names[i] in ['Vector','aVector']):
                             if dm.d == 0: dm.d = 1
                             dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
                         else:
                             dm.d += _dm.d
                         dm.m += _dm.m
+                elif len(_layer)>0: # _layer is not empty but layer is empty
+                    layer = _layer.copy()
 
 
 class Cdm(Number):
@@ -306,8 +310,8 @@ class Cdm(Number):
 def comp_param(param, _param, param_name, ave):
 
     if param_name == "Vector":
-        d = param * _param.conjugate() # ma
-        m = ave - abs(d)               # da
+        d = param * _param.conjugate() # da
+        m = ave - abs(d)               # ma
     elif param_name == "aVector":
         dy = param[0] * _param[0].conjugate() # difference in day
         dx = param[1] * _param[1].conjugate() # difference in dax
