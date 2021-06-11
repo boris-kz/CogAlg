@@ -3,13 +3,36 @@ Cross-compare blobs with incrementally intermediate adjacency, within a frame
 '''
 
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
-from frame_blobs import ave, CBlob, CDerBlob, CBblob
+from frame_blobs import ave, CBlob
 import numpy as np
 import cv2
 
 ave_mB =  0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
 ave_da = 0.7853  # da at 45 degrees
+
+
+class CderBlob(ClusterStructure):
+
+    layer1 = list      # dm layer params
+    layer_names = list # name of dm layer's params
+    mB = int
+    dB = int
+    derBlob_ = list # not sure?
+    distance = int  # common per derBlob_
+    neg_mB = int    # common per derBlob_
+    blob = object
+    _blob = object
+    subH = object  # represents hierarchy of sub_blobs, if any
+
+
+class CBblob(CBlob, CderBlob):
+
+    layer_names = list  # name of base params
+    layer0 = list       # base params
+    layer1 = list       # dm layer params
+    derBlob_ = list
+    blob_ = list
 
 
 def cross_comp_blobs(frame):
@@ -63,7 +86,7 @@ def comp_blob(blob, _blob):
     cross compare _blob and blob
     '''
     # derBlob's layer1 param = 'I', 'G', 'M', 'Vector', 'aVector','Ga', 'Ma', 'A', 'Mdx', 'Ddx'
-    derBlob = CDerBlob()
+    derBlob = CderBlob()
 
     # non complex numeric params
     for param_name in blob.layer_names:

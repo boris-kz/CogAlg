@@ -47,9 +47,10 @@ class CP(ClusterStructure):
     M = int
     dert_ = list
     sub_layers = list
-    # for line_PPs:
+    # for line_PPs
+    derP = object  # forward comp_P derivatives
+    left_derP = object  # backward comp_P derivatives
     _smP = bool  # backward mP sign, for derP.sign determination
-    ileft = int  # index of left-most _P that P was compared to in line_PPs, initialize at max X
 
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
@@ -116,14 +117,14 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
     for dert in P_dert_[1:]:
         sign = dert.m > 0
         if sign != _sign:  # sign change, terminate P
-            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False, ileft=1024))
+            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))
             L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset params
 
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, bilateral m: for eval per pixel
         dert_ += [dert]
         _sign = sign
 
-    P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False, ileft=1024))  # incomplete P
+    P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
     return P_
 
 
@@ -137,14 +138,14 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
     for dert in P_dert_[2:]:
         sign = dert.d > 0
         if sign != _sign:  # sign change, terminate P
-            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False, ileft=1024))
+            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))
             L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset accumulated params
 
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, m for eval per pixel is bilateral
         dert_ += [dert]
         _sign = sign
 
-    P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False, ileft=1024))  # incomplete P
+    P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
     return P_
 
 

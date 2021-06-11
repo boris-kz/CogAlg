@@ -75,25 +75,18 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     adj_blobs = list
     prior_forks = list
     fopen = bool
-
-    root_bblob = object
-    subH = object  # represents hierarchy of sub_blobs, if any
-
-
-class CsubH(ClusterStructure):
-
-    # draft:
+    # intra_blob params:
     f_root_a = bool  # input is from comp angle
     f_comp_a = bool  # current fork is comp angle
     fflip = bool     # x-y swap
     rdn = float      # redundancy to higher blob layers
     rng = int        # comp range
-    # deep and external params:
+    # derivation hierarchy:
     Ls = int   # for visibility and next-fork rdn
     sub_layers = list
+    # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blobs
     fsliced = bool
-
     PPmm_ = list  # comp_slice_ if not empty
     PPdm_ = list  # comp_slice_ if not empty
     derP__ = list
@@ -103,29 +96,7 @@ class CsubH(ClusterStructure):
     derPd__ = list
     Pd__ = list
 
-# do we meed these here:?
-
-class CderBlob(CBlob):
-
-    layer1 = list      # dm layer params
-    layer_names = list # name of dm layer's params
-    mB = int
-    dB = int
-    derBlob_ = list # not sure?
-    distance = int  # common per derBlob_
-    neg_mB = int    # common per derBlob_
-    blob = object
-    _blob = object
-    subH = object  # represents hierarchy of sub_blobs, if any
-
-
-class CBblob(CderBlob):
-
-    layer_names = list  # name of base params
-    layer0 = list       # base params
-    layer1 = list       # dm layer params
-    derBlob_ = list
-    blob_ = list
+    root_bblob = object
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
@@ -354,7 +325,7 @@ if __name__ == "__main__":
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     args = argument_parser.parse_args()
