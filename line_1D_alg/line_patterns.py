@@ -14,9 +14,9 @@
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
 
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
-  Both forks are currently exclusive per P to avoid redundancy, but they can be made partly or fully overlapping.
+  These forks here are exclusive per P to avoid redundancy, but they overlap in line_patterns_olp.
 
-  Initial bilateral cross-comp here is 1D slice of 2D 3x3 kernel, while unilateral d is equivalent to 2x2 kernel.
+  Initial bilateral cross-comp here is 1D slice of 2D 3x3 kernel, while unilateral d is a slice of 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
   The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_P.
 '''
@@ -49,8 +49,7 @@ class CP(ClusterStructure):
     sub_layers = list
     # for line_PPs
     derP = object  # forward comp_P derivatives
-    left_derP = object  # backward comp_P derivatives
-    _smP = bool  # backward mP sign, for derP.sign determination
+    _smP = bool  # backward mP sign, for derP.sign determination, not needed thereafter
 
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
@@ -111,7 +110,7 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
     dert = P_dert_[0]
 
     _sign = dert.m > 0
-    D = dert.d or 0  # if no dert.d
+    D = dert.d or 0  # 0 if no dert.d
     L, I, M, dert_, sub_H = 1, dert.p, dert.m, [dert], []
     # cluster P_derts by m sign
     for dert in P_dert_[1:]:
@@ -152,9 +151,9 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
     '''
     Value is projected match, while variation has contrast value only: it matters to the extent that it interrupts adjacent match: adj_M.
-    In noise, there is a lot of variation. but no adjacent match to cancel, so noise has no predictive value.
-    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it defines a large adjacent uniform span.
-    That contrast is salient because it borrows predictive value from adjacent uniform span of inputs.
+    In noise, there is a lot of variation. but no adjacent match to cancel, so variation in noise has no predictive value.
+    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates adjacent uniform span.
+    That contrast may be salient if it can borrow sufficient predictive value from that adjacent high-match span.
     '''
 
     pri_M = Pm_[0].M  # comp_g value is borrowed from adjacent opposite-sign Ms
@@ -192,9 +191,15 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
 
         if P.sign:  # +Pm: low-variation span, eval comp at rng=2^n: 2, 4., kernel: 5, 9., rng=1 cross-comp is kernels 2 and 3
             if P.M - adj_M > ave_M * rdn and P.L > 4:  # reduced by lending to contrast: all comps form params for hLe comp?
-
-                r_dert_ = range_comp(P.dert_, fid)  # rng+ comp, skip predictable next dert
-                sub_Pm_ = form_Pm_(r_dert_)  # cluster by m sign
+                '''
+                if localized filters:
+                P_ave = (P.M - adj_M) / P.L  
+                loc_ave = (ave - P_ave) / 2  # ave is reduced because it's for inverse deviation, possibly negative?
+                loc_ave_min = (ave_min + P_ave) / 2
+                rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
+                '''
+                rdert_ = range_comp(P.dert_, fid)  # rng+ comp with localized ave, skip predictable next dert
+                sub_Pm_ = form_Pm_(rdert_)  # cluster by m sign
                 Ls = len(sub_Pm_)
                 P.sub_layers += [[(Ls, False, fid, rdn, rng, sub_Pm_)]]  # 1st layer, Dert=[], fill if Ls > min?
                 if len(sub_Pm_) > 4:
@@ -227,8 +232,8 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
         if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
             # if fid: abs(D), else: M + ave*L: complementary m is more precise than inverted diff?
 
-            d_dert_ = deriv_comp(P.dert_)  # cross-comp of uni_ds
-            sub_Pm_ = form_Pm_(d_dert_)  # cluster Pd derts by md, won't happen
+            ddert_ = deriv_comp(P.dert_)  # cross-comp of uni_ds
+            sub_Pm_ = form_Pm_(ddert_)  # cluster Pd derts by md, won't happen
             Ls = len(sub_Pm_)
             P.sub_layers += [[(Ls, 1, 1, rdn, rng, sub_Pm_)]]  # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_
             if len(sub_Pm_) > 3:

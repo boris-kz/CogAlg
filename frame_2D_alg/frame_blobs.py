@@ -95,7 +95,9 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     PPdd_ = list  # PP_derPd_
     derPd__ = list
     Pd__ = list
-
+    # from comp_blob:
+    derBlob__ = list
+    # from form_bblob:
     root_bblob = object
 
 
