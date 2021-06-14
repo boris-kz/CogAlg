@@ -95,6 +95,7 @@ OUTPUT_PATH = "./images/g_SAD_x/"
 def comp_pixel_m(image):  # current version of 2x2 pixel cross-correlation within image
 
     # following four slices provide inputs to a sliding 2x2 kernel:
+
     topleft__ = image[:-1, :-1]
     topright__ = image[:-1, 1:]
     botleft__ = image[1:, :-1]
@@ -333,6 +334,7 @@ if __name__ == "__main__":
 
     print('Reading image...')
     image = imread(arguments.image)
+    image = image.astype('int32')  # it appears that we had overflow in G computation
 
     dert_ = comp_pixel_m(image)
     ave = 50
