@@ -5,6 +5,9 @@ Cross-comparison of pixels 3x3 kernels or gradient angles in 2x2 kernels
 import numpy as np
 import functools
 
+ave_ga = .78
+ave_ma = 2  # at 22.5 degrees?
+
 ''' 
 Sobel coefficients to decompose ds into dy and dx:
 YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
@@ -113,7 +116,82 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     return (i__center, dy__, dx__, g__, m__), majority_mask__
 
 
-def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+def comp_a(dert__, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+
+    if mask__ is not None:
+        majority_mask__ = (mask__[:-1, :-1].astype(int) +
+                           mask__[:-1, 1:].astype(int) +
+                           mask__[1:, 1:].astype(int) +
+                           mask__[1:, :-1].astype(int)
+                           ) > 1
+    else:
+        majority_mask__ = None
+
+    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
+
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or g + ave
+
+    # angle__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
+    angle__left = angle__[:-1, :-1]  # was topleft
+    angle__top = angle__[:-1, 1:]  # was topright
+    angle__right = angle__[1:, 1:]  # was botright
+    angle__bottom = angle__[1:, :-1]  # was botleft
+    '''
+    a__ is rotated 45 degrees counter-clockwise:
+    '''
+    sin_da0__, cos_da0__ = angle_diff(angle__right, angle__left)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
+    sin_da1__, cos_da1__ = angle_diff(angle__bottom, angle__top)  # ... same for day
+
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        ma__ = (cos_da0__ + 1.001) + (cos_da1__ + 1.001) - ave_ma  # +1 to convert to all positives, +.001 to avoid / 0, ave ma = 2
+
+    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
+    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
+    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    '''
+    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
+    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
+    '''
+    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
+    '''
+    ga value is a deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
+    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
+    '''
+    # if root fork is frame_blobs, recompute orthogonal dy and dx
+    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
+        i__topleft = i__[:-1, :-1]
+        i__topright = i__[:-1, 1:]
+        i__botright = i__[1:, 1:]
+        i__botleft = i__[1:, :-1]
+        dy__ = (i__botleft + i__botright) - (i__topleft + i__topright)  # decomposition of two diagonal differences
+        dx__ = (i__topright + i__botright) - (i__topleft + i__botleft)  # decomposition of two diagonal differences
+    else:
+        dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
+        dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
+
+    i__ = i__[:-1, :-1]  # for summation in Dert
+    g__ = g__[:-1, :-1]  # for summation in Dert
+    m__ = m__[:-1, :-1]
+
+    return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask__
+
+
+def angle_diff(a2, a1):  # compare angle_1 to angle_2
+
+    sin_1, cos_1 = a1[:]
+    sin_2, cos_2 = a2[:]
+
+    # sine and cosine of difference between angles:
+
+    sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
+    cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
+
+    return [sin_da, cos_da]
+
+
+def comp_a_complex(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     '''
     More concise but also more opaque version
     https://github.com/khanh93vn/CogAlg/commit/1f3499c4545742486b89e878240d5c291b81f0ac
@@ -178,7 +256,7 @@ def comp_a(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient ang
     return (i__, dy__, dx__, g__, m__, dazy__, dazx__, ga__, ma__), majority_mask__  # dazx__, dazy__ may not be needed
 
 
-def angle_diff(az2, az1):  # unpacked in comp_a
+def angle_diff_complex(az2, az1):  # unpacked in comp_a
     '''
     compare phase angle of az1 to that of az2
     az1 = cos_1 + j*sin_1
@@ -197,87 +275,3 @@ def angle_diff(az2, az1):  # unpacked in comp_a
         (same as old formula, in angle_diff2() below)
      '''
     return az2 * az1.conj()  # imags and reals of the result are sines and cosines of difference between angles
-
-'''
-old version:
-'''
-def comp_a_simple(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
-
-    # angles can't be summed: https://rosettacode.org/wiki/Averages/Mean_angle
-
-    if mask__ is not None:
-        majority_mask__ = (mask__[:-1, :-1].astype(int) +
-                           mask__[:-1, 1:].astype(int) +
-                           mask__[1:, 1:].astype(int) +
-                           mask__[1:, :-1].astype(int)
-                           ) > 1
-    else:
-        majority_mask__ = None
-
-    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
-
-    a__ = [dy__, dx__] / (g__ + ave + 0.001)  # + ave to restore abs g, + .001 to avoid / 0
-    # g and m are rotation invariant, but da is more accurate with rot_a__:
-
-    # a__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
-    a__left   = a__[:, :-1, :-1]  # was topleft
-    a__top    = a__[:, :-1, 1:]   # was topright
-    a__right  = a__[:, 1:, 1:]    # was botright
-    a__bottom = a__[:, 1:, :-1]   # was botleft
-
-    sin_da0__, cos_da0__ = angle_diff(a__right, a__left)
-    sin_da1__, cos_da1__ = angle_diff(a__bottom, a__top)
-
-    ''' 
-    match of angle = inverse deviation rate of SAD of angles from ave ma of all possible angles.
-    we use ave 2: (2 + 2) / 2, 2 is average not-deviation ma, when da is 90 degree (because da varies from 0-180 degree). 
-    That's just a rough guess, as all filter initializations, actual average will be lower because adjacent angles don't vary as much, 
-    there is general correlation between proximity and similarity.
-    Normally, we compute match as inverse deviation: ave - value. Here match is defined directly(?), so it's value - ave
-    '''
-    ma__ = (cos_da0__ + 1.001) + (cos_da1__ + 1.001) - 2  # +1 to convert to all positives, +.001 to avoid / 0, ave ma = 2
-
-    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
-    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
-    '''
-    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
-    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    '''
-    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - 2
-    '''
-    ga value is a deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
-    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
-    '''
-    # if root fork is frame_blobs, recompute orthogonal dy and dx
-    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
-        i__topleft = i__[:-1, :-1]
-        i__topright = i__[:-1, 1:]
-        i__botright = i__[1:, 1:]
-        i__botleft = i__[1:, :-1]
-        dy__ = (i__botleft + i__botright) - (i__topleft + i__topright)  # decomposition of two diagonal differences
-        dx__ = (i__topright + i__botright) - (i__topleft + i__botleft)  # decomposition of two diagonal differences
-    else:
-        dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
-        dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
-
-    i__ = i__[:-1, :-1]  # for summation in Dert
-    g__ = g__[:-1, :-1]  # for summation in Dert
-    m__ = m__[:-1, :-1]
-
-
-    return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask__
-
-
-def angle_diff_simple(a2, a1):  # compare angle_1 to angle_2
-
-    sin_1, cos_1 = a1[:]
-    sin_2, cos_2 = a2[:]
-
-    # sine and cosine of difference between angles:
-
-    sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
-    cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
-
-    return [sin_da, cos_da]
