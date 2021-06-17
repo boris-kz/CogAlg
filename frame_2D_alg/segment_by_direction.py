@@ -138,9 +138,6 @@ def merge_blobs(blob, adj_blob, strong_adj_blobs):  # merge blob and adj_blob by
         extended_mask__[cby0:cbyn, cbx0:cbxn] = np.logical_and(adj_blob.mask__, extended_mask__[cby0:cbyn, cbx0:cbxn])
         # create extended derts from combined box
         extended_dert__ = [np.zeros((cyn-cy0,cxn-cx0)) for _ in range(len(blob.dert__))]
-        extended_dert__[5] = np.zeros((cyn-cy0,cxn-cx0),dtype=np.complex_) # complex day
-        extended_dert__[6] = np.zeros((cyn-cy0,cxn-cx0),dtype=np.complex_) # complex dax
-
         for i in range(len(blob.dert__)):
             extended_dert__[i][cay0:cayn, cax0:caxn] = blob.dert__[i]
             extended_dert__[i][cby0:cbyn, cbx0:cbxn] = adj_blob.dert__[i]

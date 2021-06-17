@@ -12,6 +12,7 @@ differences in interfaces are mostly eliminated.
 import weakref
 from numbers import Number
 from inspect import isclass
+import numpy as np
 
 NoneType = type(None)
 
@@ -52,8 +53,10 @@ class MetaCluster(type):
         replace = attrs.get('replace', {})
 
         # inherit params
+        new_bases = []
         for base in bases:
             if issubclass(base, ClusterStructure):
+                new_bases.append(base)
                 for param in base.numeric_params:
                     if param not in attrs:  # prevents duplication of base params
                         # not all inherited params are Cdm
@@ -63,8 +66,13 @@ class MetaCluster(type):
                                 attrs[new_param] = new_type
                         else:
                             attrs[param] = getattr(base,param+'_type') # if the param is not replaced, it will following type of base param
+            else:
+                print(f"Warning: {base} is not a subclass of {ClusterStructure}")
 
-        if len(bases)>1: bases=(bases[0],)
+        bases = tuple(new_bases)   # remove
+
+        if len(bases)>1:
+            bases=(bases[0],)
 
         # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
@@ -253,20 +261,7 @@ class ClusterStructure(metaclass=MetaCluster):
             if (param not in excluded) and (param in other.numeric_params):
                 p = getattr(self,param)
                 _p = getattr(other,param)
-
-                if param not in ['Day','Dax']:
-                    setattr(self, param, p+_p)
-
-                elif param == 'Day':
-                    day = p;  _day = _p
-                    dax = getattr(self,'Dax'); _dax = getattr(other,'Dax')
-                    if dax ==0: dax = 1
-                    sum_day = day * _day
-                    sum_dax = dax * _dax
-                    aVector = sum_day * sum_dax
-                    setattr(self, 'Day', aVector.imag)
-                    setattr(self, 'Dax', aVector.real)
-                    self.layer0[self.layer_names.index('aVector')] = aVector # update layer 0 aVector
+                setattr(self, param, p+_p)
 
         # accumulate layers 1 and above
         for layer_num in self.list_params:
@@ -280,14 +275,23 @@ class ClusterStructure(metaclass=MetaCluster):
 
                 if len(layer) == len(_layer): # both layers are having same params
                     for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
-                        if hasattr(other,'layer_names') and (_layer_names[i] in ['Vector','aVector']):
-                            if dm.d == 0: dm.d = 1
-                            dm.d *= _dm.d  # summation for complex = complex 1 * complex 2
+
+                        if hasattr(other,'layer_names') and (_layer_names[i] in ['Da','Dady','Dadx']):
+                            # convert da to vector, sum them and convert them back to angle
+                            da = dm.d; _da= _dm.d
+                            sin = np.sin(da); _sin = np.sin(_da)
+                            cos = np.cos(da); _cos = np.cos(_da)
+                            sin_sum = (cos * _sin) + (sin * _cos)  # sin(α + β) = sin α cos β + cos α sin β
+                            cos_sum= (cos * _cos) - (sin * _sin)   # cos(α + β) = cos α cos β - sin α sin β
+                            a_sum = np.arctan2(sin_sum, cos_sum)
+                            layer[i].d = a_sum
                         else:
                             dm.d += _dm.d
+
                         dm.m += _dm.m
                 elif len(_layer)>0: # _layer is not empty but layer is empty
-                    layer = _layer.copy()
+                    setattr(self,layer_num,_layer.copy())
+
 
 
 class Cdm(Number):
@@ -309,22 +313,26 @@ class Cdm(Number):
 
 def comp_param(param, _param, param_name, ave):
 
-    if param_name == "Vector":
-        d = param * _param.conjugate() # da
-        m = ave - abs(d)               # ma
-    elif param_name == "aVector":
-        dy = param[0] * _param[0].conjugate() # difference in day
-        dx = param[1] * _param[1].conjugate() # difference in dax
-        d = dy * dx # sum of difference (sum of 2 complex)
-        m = ave - abs(d)
-    else:
+    if isinstance(param,list): # vector
+        sin, cos = param[0], param[1]
+        _sin, _cos = _param[0], _param[1]
+        # difference of dy and dx
+        sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+        cos_da= (cos * _cos) + (sin * _sin)   # cos(α - β) = cos α cos β + sin α sin β
+        # da and ma
+        da = np.arctan2(sin_da, cos_da)
+        mda = ave - abs(da)
+        # compute dm
+        dm = Cdm(d=da,m=mda)   # dm of da
+    else: # numeric
         d = param - _param    # difference
         if param_name == 'I':
             m = ave - abs(d)  # indirect match
         else:
             m = min(param,_param) - abs(d)/2 - ave  # direct match
+        dm = Cdm(d,m) # pack d follow by m, must follow this sequence
 
-    return Cdm(d,m)
+    return dm
 
 
 if __name__ == "__main__":  # for tests
@@ -351,17 +359,18 @@ if __name__ == "__main__":  # for tests
 
     # ---- 1st layer  ---------------------------------------------------------
     # bblob
-    class CBblob(ClusterStructure):
-        I = int
-        Dy = int
-        Dx = int
-        G = int
-        M = int
-        Day = int
-        Dax = int
-        mB = int
-        dB = int
-        derBlob_ = list
+    class CBblob(CBlob, CDerBlob):
+        pass
+#        I = int
+#        Dy = int
+#        Dx = int
+#        G = int
+#        M = int
+#        Day = int
+#        Dax = int
+#        mB = int
+#        dB = int
+#        derBlob_ = list
 
     # ---- example  -----------------------------------------------------------
 

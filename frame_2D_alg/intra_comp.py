@@ -116,7 +116,7 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     return (i__center, dy__, dx__, g__, m__), majority_mask__
 
 
-def comp_a(dert__, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
 
     if mask__ is not None:
         majority_mask__ = (mask__[:-1, :-1].astype(int) +
@@ -133,10 +133,10 @@ def comp_a(dert__, prior_forks, mask__=None):  # cross-comp of gradient angle in
         angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or g + ave
 
     # angle__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
-    angle__left = angle__[:-1, :-1]  # was topleft
-    angle__top = angle__[:-1, 1:]  # was topright
-    angle__right = angle__[1:, 1:]  # was botright
-    angle__bottom = angle__[1:, :-1]  # was botleft
+    angle__left = angle__[:, :-1, :-1]  # was topleft # a is 3 dimensional
+    angle__top = angle__[:, :-1, 1:]  # was topright
+    angle__right = angle__[:, 1:, 1:]  # was botright
+    angle__bottom = angle__[:, 1:, :-1]  # was botleft
     '''
     a__ is rotated 45 degrees counter-clockwise:
     '''
@@ -144,7 +144,7 @@ def comp_a(dert__, prior_forks, mask__=None):  # cross-comp of gradient angle in
     sin_da1__, cos_da1__ = angle_diff(angle__bottom, angle__top)  # ... same for day
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = (cos_da0__ + 1.001) + (cos_da1__ + 1.001) - ave_ma  # +1 to convert to all positives, +.001 to avoid / 0, ave ma = 2
+        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1) - ave_ma  # +1 to convert to all positives, ave ma = 2?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
@@ -156,8 +156,8 @@ def comp_a(dert__, prior_forks, mask__=None):  # cross-comp of gradient angle in
     '''
     ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
     '''
-    ga value is a deviation; interruption | wave is sign-agnostic: expected reversion, same for d sign?
-    extended-kernel gradient from decomposed diffs: np.hypot(dydy, dxdy) + np.hypot(dydx, dxdx)?
+    ga: deviation of magnitude of gradient of angle
+    in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)
     '''
     # if root fork is frame_blobs, recompute orthogonal dy and dx
     if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
@@ -175,7 +175,7 @@ def comp_a(dert__, prior_forks, mask__=None):  # cross-comp of gradient angle in
     g__ = g__[:-1, :-1]  # for summation in Dert
     m__ = m__[:-1, :-1]
 
-    return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask__
+    return (i__, dy__, dx__, g__, m__, day__[0], day__[1], dax__[0], dax__[1], ga__, ma__), majority_mask__
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2
