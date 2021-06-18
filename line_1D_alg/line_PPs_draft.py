@@ -102,6 +102,7 @@ def search(P_):  # cross-compare patterns within horizontal line
                 break  # neg net_M: stop search
 
     PPm_ = form_PPm_(derP_)  # cluster derPs into PPms by the sign of mP
+    PPd_ = form_PPd_(PPm_, derP_)  # cluster derPs into PPgs by the sign of dP
 
     return PPm_
 
@@ -110,7 +111,8 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
     mP = dP = 0
     layer1 = []
     L= P.L; _L=_P.L
-    distance_ave = ave_M * ave_rM ** (1 + neg_L / P.L)  # average match projected at current distance: neg_L, add coef / var?
+    distance_ave = ave_M * ave_rM ** (1 + neg_L / P.L)
+    # average match projected at current distance from P: neg_L, separate for min_match, add coef / var?
 
     for (param, _param) in zip([P.I/L, P.D/L, P.M/L], [_P.I/_L, _P.D/_L, _P.M/_L]):
         dm = comp_param(param, _param, [], distance_ave)
@@ -196,14 +198,24 @@ def form_PPm_(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp 
     return PPm_
 
 
-def form_PPd(PPm_,derP_):
+def form_PPd_(PPm_, derP_):
     '''
     Compare dPs when they have high value than ave. diff doesn't have independent value
-    contrastive borrow from adjacent M i-e _PP.mP(_PP.mP+_PP.M)? How much raw value abs(dP) can borrow from adjacent match
+    contrastive borrow from co-derived P.M + adjacent (PP.mP +_PP.mP) /2? How much raw value abs(dP) can borrow from adjacent match
     Criteria of forming PPd - PP.mP(PP.mP+PP.M)*abs(derP.dP) > ave ?
-    terminate PPd when ?
     '''
     PPd_ = []
+    PP = PPm_[0]
+    for i,derP in enumerate(derP_):
+        if PP.mP + PP.M * abs(derP.dP) > ave:  #dP_ave?
+            #terminate PPd
+            PPd_.append(PP)
+            PP = PPm_[i]
+        else:
+            PP.accum_from(derP.P)
+            PP.accum_from(derP)
+
+    return PPd_
 
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division between element Ps

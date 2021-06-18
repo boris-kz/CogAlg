@@ -115,7 +115,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard e
     rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
     rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
 
-    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave).astype('int32')
+    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave)
     # deviation of central gradient per kernel, between four vertex pixels
     M__ = int(ave * 1.2) - (abs(rot_Gy__) + abs(rot_Gx__))
     # inverse deviation of SAD, which is a measure of variation. Ave * coeff = ave_SAD / ave_G, 1.2 is a guess

@@ -46,7 +46,7 @@ def cross_comp_blobs(frame):
 
     for blob in blob_:  # each blob forms derBlob per compared adj_blob and accumulates adj_blobs'derBlobs:
         if len(blob.derBlob_) == 0:
-            comp_blob_recursive(blob, blob.adj_blobs[0], derBlob_=[])
+            search_blob_recursive(blob, blob.adj_blobs[0], derBlob_=[], _derBlob=[])
         # derBlob_ is local per blob, not frame-wide
 
     bblob_ = form_bblob_(blob_)  # form blobs of blobs, connected by mutual match
@@ -56,7 +56,7 @@ def cross_comp_blobs(frame):
     return bblob_
 
 
-def comp_blob_recursive(blob, adj_blob_, derBlob_):
+def search_blob_recursive(blob, adj_blob_, _derBlob, derBlob_):
     '''
     called by cross_comp_blob to recursively compare blob to adj_blobs in incremental layers of adjacency
     '''
@@ -67,7 +67,7 @@ def comp_blob_recursive(blob, adj_blob_, derBlob_):
             derBlob = derBlob_[derBlob_pair_.index([adj_blob,blob])]
             # also adj_blob.rdn += 1?
         elif [blob, adj_blob] not in derBlob_pair_:  # form new derBlob if blob pair wasn't compared in prior function call
-            derBlob = comp_blob(blob, adj_blob)  # compare blob and adjacent blob
+            derBlob = comp_blob(blob, adj_blob, _derBlob)  # compare blob and adjacent blob
             derBlob_.append(derBlob)             # also frame-wide
 
         if "derBlob" in locals(): # derBlob exists
@@ -75,38 +75,46 @@ def comp_blob_recursive(blob, adj_blob_, derBlob_):
             blob.derBlob_.append(derBlob)         # from all compared blobs, regardless of mB sign
 
             if derBlob.mB > 0:  # replace blob with adj_blob for continued adjacency search:
-                comp_blob_recursive(adj_blob, adj_blob.adj_blobs[0], derBlob_)  # search depth could be different, compare anyway
+                search_blob_recursive(adj_blob, adj_blob.adj_blobs[0], [], derBlob_)  # search depth could be different, compare anyway
                 break
-            elif blob.M + blob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
+            elif blob.M + derBlob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
                 # extend blob comparison to adjacents of adjacent, depth-first
-                blob.neg_mB += derBlob.mB  # mB and distance are accumulated over comparison scope
-                derBlob.distance += np.sqrt(adj_blob.A)
-                comp_blob_recursive(blob, adj_blob.adj_blobs[0], derBlob_)
+                derBlob.neg_mB = derBlob.mB + _derBlob.neg_mB  # mB and distance are accumulated over comparison scope
+                derBlob.distance = np.sqrt(adj_blob.A) + _derBlob.distance
+                search_blob_recursive(blob, adj_blob.adj_blobs[0], derBlob, derBlob_)
 
 
-def comp_blob(blob, _blob):
+def comp_blob(blob, _blob, _derBlob):
     '''
-    cross compare _blob and blob
+    compare _blob and blob
     '''
-    # derBlob's layer param =['I', 'Da', 'G', 'M', 'Day','Dax', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
+    # derBlob's layer param =['I', 'Da', 'G', 'M', 'Dady','Dadx', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
     derBlob = CderBlob()
 
     for i,param_name in enumerate(layer0_names):
+        f_comp=0
         if param_name in ['Dy', 'Dydy', 'Dydx']:
             # sin and cos components
-            sin = getattr(blob,layer0_names[i]); cos = getattr(blob,layer0_names[i+1])
-            _sin = getattr(_blob,layer0_names[i]); _cos = getattr(_blob,layer0_names[i+1])
+            sin = getattr(blob,layer0_names[i]); cos = getattr(blob,layer0_names[i+1]);
+            _sin = getattr(_blob,layer0_names[i]); _cos = getattr(_blob,layer0_names[i+1]);
             param = [sin, cos]
             _param = [_sin, _cos]
+            f_comp=1
 
-        elif param_name not in ['Dy','Dx', 'Dydy', 'Dxdy', 'Dydx', 'Dxdx']:
+        elif param_name not in ['Dx', 'Dxdy', 'Dxdx']:
             param = getattr(blob, param_name)
             _param = getattr(_blob, param_name)
-        
-        dm = comp_param(param, _param, param_name, blob.A)
-        derBlob.mB += dm.m; derBlob.dB += dm.d
-        derBlob.layer1.append(dm)
+            f_comp=1
+
+        if f_comp:
+            dm = comp_param(param, _param, param_name, blob.A)
+            derBlob.mB += dm.m; derBlob.dB += dm.d
+            derBlob.layer1.append(dm)
     derBlob.layer_names = layer1_names
+
+    if _derBlob:
+        derBlob.distance = _derBlob.distance # accumulate distance
+        derBlob.neg_mB = _derBlob.neg_mB # accumulate neg_mB
 
     derBlob.mB -=  ave_mB * (ave_rM ** ((1+derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
 
