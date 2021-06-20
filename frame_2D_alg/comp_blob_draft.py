@@ -7,23 +7,20 @@ from frame_blobs import ave, CBlob
 import numpy as np
 import cv2
 
+# change ave to Ave from the root intra_blob?
+ave_min = 5  # change to Ave_min from the root intra_blob?
 ave_mB =  0  # ave can't be negative
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
-ave_da = 0.7853  # da at 45 degrees
+ave_da = 0.7853  # da at 45 degree, = ga at 22.5 degree
 ave_comp = 0   # ave for comp_param to get next level derivatives
-
-layer0_names = ['I', 'Dy', 'Dx', 'G', 'M', 'Dydy', 'Dxdy', 'Dydx', 'Dxdx', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
-layer1_names = ['I', 'Da', 'G', 'M', 'Dady','Dadx', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
-
 
 class CderBlob(ClusterStructure):
 
-    layer1 = list      # dm layer params
-    layer_names = list # name of dm layer's params
-    mB = int
-    dB = int
-    distance = int  # common per derBlob_
-    neg_mB = int    # common per derBlob_
+    layer1 = dict      # dm layer params
+    mB = float
+    dB = float
+    distance = float  # common per derBlob_
+    neg_mB = float    # common per derBlob_
     blob = object
     _blob = object
     subH = object  # represents hierarchy of sub_blobs, if any
@@ -31,9 +28,8 @@ class CderBlob(ClusterStructure):
 
 class CBblob(CBlob, CderBlob):
 
-    layer_names = list  # name of base params
-    layer0 = list       # base params
-    layer1 = list       # dm layer params
+    # base params are retrieved from CBlob and CderBlob
+    layer1 = dict       # dm layer params
     derBlob_ = list
     blob_ = list
 
@@ -79,8 +75,12 @@ def search_blob_recursive(blob, adj_blob_, _derBlob, derBlob_):
                 break
             elif blob.M + derBlob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
                 # extend blob comparison to adjacents of adjacent, depth-first
-                derBlob.neg_mB = derBlob.mB + _derBlob.neg_mB  # mB and distance are accumulated over comparison scope
-                derBlob.distance = np.sqrt(adj_blob.A) + _derBlob.distance
+                derBlob.neg_mB = derBlob.mB   # mB and distance are accumulated over comparison scope
+                derBlob.distance = np.sqrt(adj_blob.A)
+                if _derBlob:
+                     derBlob.neg_mB += _derBlob.neg_mB
+                     derBlob.distance += _derBlob.distance
+
                 search_blob_recursive(blob, adj_blob.adj_blobs[0], derBlob, derBlob_)
 
 
@@ -88,35 +88,47 @@ def comp_blob(blob, _blob, _derBlob):
     '''
     compare _blob and blob
     '''
-    # derBlob's layer param =['I', 'Da', 'G', 'M', 'Dady','Dadx', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
     derBlob = CderBlob()
+    layer1 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'A':.0,'Mdx':.0, 'Ddx':.0})
 
-    for i,param_name in enumerate(layer0_names):
-        f_comp=0
-        if param_name in ['Dy', 'Dydy', 'Dydx']:
-            # sin and cos components
-            sin = getattr(blob,layer0_names[i]); cos = getattr(blob,layer0_names[i+1]);
-            _sin = getattr(_blob,layer0_names[i]); _cos = getattr(_blob,layer0_names[i+1]);
+    absG = blob.G + (ave*blob.A); _absG = _blob.G + (ave*_blob.A)
+    absGa = blob.Ga + (ave_da*blob.A); _absGa = _blob.Ga + (ave_da*_blob.A)
+
+    for param_name in layer1:
+        if param_name == 'Da':
+            sin = blob.Dy/absG ; cos = blob.Dx/absG
+            _sin = _blob.Dy/_absG; _cos = _blob.Dx/_absG
             param = [sin, cos]
             _param = [_sin, _cos]
-            f_comp=1
 
-        elif param_name not in ['Dx', 'Dxdy', 'Dxdx']:
+        elif param_name == 'Dady':
+            sin = blob.Dydy/absGa; cos = blob.Dxdy/absGa
+            _sin = _blob.Dydy/_absGa; _cos = _blob.Dxdy/_absGa
+            param = [sin, cos]
+            _param = [_sin, _cos]
+
+        elif param_name == 'Dadx':
+            sin = blob.Dydx/absGa; cos = blob.Dxdx/absGa
+            _sin = _blob.Dydx/_absGa; _cos = _blob.Dxdx/_absGa
+            param = [sin, cos]
+            _param = [_sin, _cos]
+
+        elif param_name not in ['Da', 'Dady', 'Dadx']:
             param = getattr(blob, param_name)
             _param = getattr(_blob, param_name)
-            f_comp=1
 
-        if f_comp:
-            dm = comp_param(param, _param, param_name, blob.A)
-            derBlob.mB += dm.m; derBlob.dB += dm.d
-            derBlob.layer1.append(dm)
-    derBlob.layer_names = layer1_names
+        dist_ave = ave * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
+
+        dm = comp_param(param, _param, param_name, dist_ave_mB)
+        layer1[param_name] = dm
+        derBlob.mB += dm.m; derBlob.dB += dm.d
+
+    derBlob.layer1 = layer1
 
     if _derBlob:
         derBlob.distance = _derBlob.distance # accumulate distance
         derBlob.neg_mB = _derBlob.neg_mB # accumulate neg_mB
-
-    derBlob.mB -=  ave_mB * (ave_rM ** ((1+derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
+    # ave_mB * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
 
     derBlob.blob = blob
     derBlob._blob = _blob
@@ -155,8 +167,7 @@ def form_bblob_(blob_):
         MB = sum([derBlob.mB for derBlob in blob.derBlob_]) # blob's mB, sum from blob's derBlobs' mB
 
         if MB > 0 and not isinstance(blob.bblob, CBblob):  # init bblob with current blob
-            bblob = CBblob(layer1=[Cdm() for _ in range(10)], layer_names = layer1_names)
-
+            bblob = CBblob()
             merged_ids = [bblob.id]
             accum_bblob(bblob_, bblob, blob, merged_ids)  # accum blob into bblob
             form_bblob_recursive(bblob_, bblob, bblob.blob_, merged_ids)

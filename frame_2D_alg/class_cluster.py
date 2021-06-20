@@ -86,6 +86,9 @@ class MetaCluster(type):
         list_params = tuple(param for param in params
                                if (issubclass(attrs[param], list)))
 
+        dict_params = tuple(param for param in params
+                               if (issubclass(attrs[param], dict)))
+
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -96,6 +99,8 @@ class MetaCluster(type):
                                          for param in numeric_params),
             list_param_vals=', '.join(f'self.{param}'
                                          for param in list_params),
+            dict_param_vals=', '.join(f'self.{param}'
+                                         for param in dict_params),
             pack_args=', '.join(param for param in ('', *params)),
             pack_assignments='; '.join(f'self.{param} = {param}'
                                   for param in params)
@@ -122,6 +127,7 @@ class MetaCluster(type):
         # attrs['params'] = params
         attrs['numeric_params'] = numeric_params
         attrs['list_params'] = list_params
+        attrs['dict_params'] = dict_params
 
         # Add fields/params and other instance attributes
         attrs['__slots__'] = (('_id', 'hid', *params, '__weakref__')
@@ -264,19 +270,16 @@ class ClusterStructure(metaclass=MetaCluster):
                 setattr(self, param, p+_p)
 
         # accumulate layers 1 and above
-        for layer_num in self.list_params:
-            if (layer_num in other.list_params) and ('layer' in layer_num) and ('names' not in layer_num):
+        for layer_num in self.dict_params:
+            if (layer_num in other.dict_params):
 
                 layer = getattr(self,layer_num)   # self layer params
                 _layer = getattr(other,layer_num) # other layer params
 
-                if hasattr(other,'layer_names'):
-                    _layer_names = getattr(other,'layer_names') # target params' name
-
                 if len(layer) == len(_layer): # both layers are having same params
-                    for i, (dm, _dm) in enumerate(zip(layer, _layer)):  # accumulate _dm to dm in layer
+                    for i, ((param_name,dm), (_param_name,_dm)) in enumerate(zip(layer.items(), _layer.items())):  # accumulate _dm to dm in layer
 
-                        if hasattr(other,'layer_names') and (_layer_names[i] in ['Da','Dady','Dadx']):
+                        if param_name in ['Da','Dady','Dadx'] and _param_name in ['Da','Dady','Dadx'] : # check both names, just in case
                             # convert da to vector, sum them and convert them back to angle
                             da = dm.d; _da= _dm.d
                             sin = np.sin(da); _sin = np.sin(_da)
@@ -284,10 +287,9 @@ class ClusterStructure(metaclass=MetaCluster):
                             sin_sum = (cos * _sin) + (sin * _cos)  # sin(α + β) = sin α cos β + cos α sin β
                             cos_sum= (cos * _cos) - (sin * _sin)   # cos(α + β) = cos α cos β - sin α sin β
                             a_sum = np.arctan2(sin_sum, cos_sum)
-                            layer[i].d = a_sum
+                            layer[param_name].d = a_sum
                         else:
                             dm.d += _dm.d
-
                         dm.m += _dm.m
                 elif len(_layer)>0: # _layer is not empty but layer is empty
                     setattr(self,layer_num,_layer.copy())
