@@ -4,15 +4,15 @@ Cross-compare blobs with incrementally intermediate adjacency, within a frame
 
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
 from frame_blobs import ave, CBlob
+from intra_blob import ave_ga, ave_ma
 import numpy as np
 import cv2
 
-# change ave to Ave from the root intra_blob?
-ave_min = 5  # change to Ave_min from the root intra_blob?
-ave_mB =  0  # ave can't be negative
+ave_inv = 20 # ave inverse m, change to Ave from the root intra_blob?
+ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
+ave_mB = 1   # search termination crit
 ave_rM = .7  # average relative match at rL=1: rate of ave_mB decay with relative distance, due to correlation between proximity and similarity
 ave_da = 0.7853  # da at 45 degree, = ga at 22.5 degree
-ave_comp = 0   # ave for comp_param to get next level derivatives
 
 class CderBlob(ClusterStructure):
 
@@ -100,26 +100,32 @@ def comp_blob(blob, _blob, _derBlob):
             _sin = _blob.Dy/_absG; _cos = _blob.Dx/_absG
             param = [sin, cos]
             _param = [_sin, _cos]
+            ave_mPar = ave_ma  # average for comp_param
 
         elif param_name == 'Dady':
             sin = blob.Dydy/absGa; cos = blob.Dxdy/absGa
             _sin = _blob.Dydy/_absGa; _cos = _blob.Dxdy/_absGa
             param = [sin, cos]
             _param = [_sin, _cos]
+            ave_mPar = ave_ma
 
         elif param_name == 'Dadx':
             sin = blob.Dydx/absGa; cos = blob.Dxdx/absGa
             _sin = _blob.Dydx/_absGa; _cos = _blob.Dxdx/_absGa
             param = [sin, cos]
             _param = [_sin, _cos]
+            ave_mPar = ave_ma
 
         elif param_name not in ['Da', 'Dady', 'Dadx']:
             param = getattr(blob, param_name)
             _param = getattr(_blob, param_name)
+            if param_name == "I":
+                ave_mPar = ave_inv
+            else:
+                ave_mPar = ave_min
 
-        dist_ave = ave * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
-
-        dm = comp_param(param, _param, param_name, dist_ave_mB)
+        dist_ave = ave_mPar * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
+        dm = comp_param(param, _param, param_name, dist_ave)
         layer1[param_name] = dm
         derBlob.mB += dm.m; derBlob.dB += dm.d
 
@@ -128,8 +134,7 @@ def comp_blob(blob, _blob, _derBlob):
     if _derBlob:
         derBlob.distance = _derBlob.distance # accumulate distance
         derBlob.neg_mB = _derBlob.neg_mB # accumulate neg_mB
-    # ave_mB * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
-
+   
     derBlob.blob = blob
     derBlob._blob = _blob
 

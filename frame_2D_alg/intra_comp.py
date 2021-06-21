@@ -21,7 +21,7 @@ YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
 XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 '''
 
-def comp_r(dert__, ave, root_fia, mask__=None):
+def comp_r(dert__, ave, rng, root_fia, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -32,7 +32,7 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     rng (distance between centers of compared derts) increases as 2^n, with n starting at 0:
     rng = 1: 3x3 kernel,
     rng = 2: 5x5 kernel,
-    rng = 4: 9x9 kernel,
+    rng = 3: 9x9 kernel,
     ...
     Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, using Sobel coeffs, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
@@ -86,6 +86,7 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
     # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs:
+    # use rng COEFFS?
 
     dy__ += ((i__topleft - i__bottomright) * -1 +
              (i__top - i__bottom) * -2 +
@@ -103,6 +104,7 @@ def comp_r(dert__, ave, root_fia, mask__=None):
     (all diagonal derivatives can be imported from prior 2x2 comp)
     ave SAD = ave g * 1.2:
     '''
+    # use rng COEFFS?
     m__ += int(ave * 1.2) - ( abs(i__center - i__topleft)
                             + abs(i__center - i__top) * 2
                             + abs(i__center - i__topright)

@@ -19,7 +19,7 @@ from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
-ave = 30  # change to Ave from the root intra_blob?
+ave_g = 30  # change to Ave from the root intra_blob?
 ave_min = 5  # change to Ave_min from the root intra_blob?
 aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = .1
@@ -30,7 +30,7 @@ ave_Dx = 10
 ave_mP = 8  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
-ave_da = 0.78  # da at 45 degree
+ave_ga = 0.78  # ga at 22.5 degree
 # comp_PP
 ave_mPP = 0
 ave_rM  = .7
@@ -441,8 +441,8 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
 
     layer1 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mP, dP = 0, 0
-    absG = P.G + (ave*P.L); _absG = _P.G + (ave*_P.L)
-    absGa = P.Ga + (ave*P.L); _absGa = _P.Ga + (ave*_P.L)
+    absG = P.G + (ave_g*P.L); _absG = _P.G + (ave_g*_P.L)
+    absGa = P.Ga + (ave_ga *P.L); _absGa = _P.Ga + (ave_ga *_P.L)
     
     for param_name in layer1:
         if param_name == 'Da':
@@ -497,7 +497,7 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     sin_da = (cos * _sin) - (sin * _cos)
     cos_da = (cos * _cos) + (sin * _sin)
     da = np.arctan2( sin_da, cos_da )
-    ma = ave_da - abs(da)
+    ma = ave_ga - abs(da)
         
     dP = dL + dM + da  # -> directional PPd, equal-weight params, no rdn?
     mP = mL + mM + ma  # -> complementary PPm, rdn *= Pd | Pm rolp?    
@@ -754,8 +754,8 @@ def comp_PP(PP, _PP):
     # compare PP and _PP base params to get layer 1 of derPP #-----------------
     layer1 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mP, dP = 0, 0
-    absG = PP.G + (ave*PP.L); _absG = _PP.G + (ave*_PP.L)
-    absGa = PP.Ga + (ave*PP.L); _absGa = _PP.Ga + (ave*_PP.L)
+    absG = PP.G + (ave_g*PP.L); _absG = _PP.G + (ave_g*_PP.L)
+    absGa = PP.Ga + (ave_ga*PP.L); _absGa = _PP.Ga + (ave_ga*_PP.L)
     for param_name in layer1:
         if param_name == 'Da':
             # sin and cos components

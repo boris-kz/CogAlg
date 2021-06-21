@@ -82,7 +82,8 @@ def search(P_):  # cross-compare patterns within horizontal line
 
                 derP, _L, _smP = comp_P(P, _P, neg_M, neg_L)
                 sign, mP, dP, neg_M, neg_L, P = derP.sign, derP.mP, derP.dP, derP.neg_M, derP.neg_L, derP.P
-                derP_d_.append(derP)
+
+                derP_d_.append(derP)  # appended at each comp_P: if induction = lend value, for form_PPd_
 
                 if sign:
                     P_[i + 1 + j]._smP = True  # backward match per P, or set _smP in derP_ with empty CderPs?
@@ -102,14 +103,12 @@ def search(P_):  # cross-compare patterns within horizontal line
                 # sign is ORed bilaterally, negative for singleton derPs only
                 break  # neg net_M: stop search
 
-    derP_d_ = form_adjacent_mP(derP_d_)
-
     PPm_ = form_PPm_(derP_)  # cluster derPs into PPms by the sign of mP
 
     derP_d_ = form_adjacent_mP(derP_d_)
-    PPd_ = form_PPd_(derP_d_)
+    PPd_ = form_PPd_(derP_d_)  # cluster derP_ds into PPds by the sign of vdP
 
-    return PPm_
+    return PPm_, PPd_
 
 
 def form_adjacent_mP(derP_d_):
@@ -148,10 +147,11 @@ def comp_P(P, _P, neg_M, neg_L):  # multi-variate cross-comp, _smP = 0 in line_p
         merge(_P, P)  # splice proximate and param/L- similar Ps
         # re_search (merged _P, P_)?
 
-    else: # form derP:
+    else:  # form derP:
+        dist_ave = ave_M * ave_rM ** (1 + neg_L / P.L)  # average match projected at current distance: neg_L, add coef / var?
 
         for (param, _param) in zip([P.I, P.L, P.D, P.M], [_P.I, _P.L, _P.D, _P.M]):
-            dm = comp_param(param, _param, [], ave)
+            dm = comp_param(param, _param, [], dist_ave)
             layer1.append([dm.d, dm.m])
             mP += dm.m; dP += dm.d
 
@@ -293,7 +293,8 @@ def form_PPd_(derP_d_):
     PP.derP = derP_d
 
     for i, derP_d in enumerate(derP_d_, start=1):
-        if derP_d.adj_mP + derP_d.P.M * abs(derP_d.dP) > ave:     #adj_mP required here?
+        vdP = derP_d.adj_mP + derP_d.P.M * abs(derP_d.dP) - ave
+        if vdP <= 0:
             # terminate PPd:
             PPd_.append(PP)
             PP = CPP( derP_=[derP_d], inherit=([derP_d.P],[derP_d]) )

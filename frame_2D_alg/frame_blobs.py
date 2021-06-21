@@ -80,7 +80,7 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     f_comp_a = bool  # current fork is comp angle
     fflip = bool     # x-y swap
     rdn = float      # redundancy to higher blob layers
-    rng = int        # comp range
+    rng = int        # comp range, set before intra_comp
     # derivation hierarchy:
     Ls = int   # for visibility and next-fork rdn
     sub_layers = list
