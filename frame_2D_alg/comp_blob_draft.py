@@ -91,8 +91,9 @@ def comp_blob(blob, _blob, _derBlob):
     derBlob = CderBlob()
     layer1 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'A':.0,'Mdx':.0, 'Ddx':.0})
 
-    absG = blob.G + (ave*blob.A); _absG = _blob.G + (ave*_blob.A)
-    absGa = blob.Ga + (ave_da*blob.A); _absGa = _blob.Ga + (ave_da*_blob.A)
+    absG = max(1, blob.G + (ave * blob.A)); _absG = max(1, _blob.G + (ave * _blob.A))
+    # use max to avoid zero division, this is possible when -blob.G = (ave*_blob.A)
+    absGa = max(1, blob.Ga + (ave_da * blob.A)); _absGa = max(1, _blob.Ga + (ave_da * _blob.A))
 
     for param_name in layer1:
         if param_name == 'Da':

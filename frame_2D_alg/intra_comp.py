@@ -86,7 +86,7 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
     # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs:
-    # use rng COEFFS?
+    # if rng == 3: skip ratio = 4, so dy, dx *= 2?
 
     dy__ += ((i__topleft - i__bottomright) * -1 +
              (i__top - i__bottom) * -2 +
@@ -104,7 +104,7 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     (all diagonal derivatives can be imported from prior 2x2 comp)
     ave SAD = ave g * 1.2:
     '''
-    # use rng COEFFS?
+    #  if rng == 3: skip ratio = 4, so m__ *= 2?
     m__ += int(ave * 1.2) - ( abs(i__center - i__topleft)
                             + abs(i__center - i__top) * 2
                             + abs(i__center - i__topright)

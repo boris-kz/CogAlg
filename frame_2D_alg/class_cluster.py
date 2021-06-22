@@ -89,6 +89,9 @@ class MetaCluster(type):
         dict_params = tuple(param for param in params
                                if (issubclass(attrs[param], dict)))
 
+        dict_params = tuple(param for param in params
+                               if (issubclass(attrs[param], dict)))
+
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -279,18 +282,21 @@ class ClusterStructure(metaclass=MetaCluster):
                 if len(layer) == len(_layer): # both layers are having same params
                     for i, ((param_name,dm), (_param_name,_dm)) in enumerate(zip(layer.items(), _layer.items())):  # accumulate _dm to dm in layer
 
-                        if param_name in ['Da','Dady','Dadx'] and _param_name in ['Da','Dady','Dadx'] : # check both names, just in case
-                            # convert da to vector, sum them and convert them back to angle
-                            da = dm.d; _da= _dm.d
-                            sin = np.sin(da); _sin = np.sin(_da)
-                            cos = np.cos(da); _cos = np.cos(_da)
-                            sin_sum = (cos * _sin) + (sin * _cos)  # sin(α + β) = sin α cos β + cos α sin β
-                            cos_sum= (cos * _cos) - (sin * _sin)   # cos(α + β) = cos α cos β - sin α sin β
-                            a_sum = np.arctan2(sin_sum, cos_sum)
-                            layer[param_name].d = a_sum
-                        else:
-                            dm.d += _dm.d
-                        dm.m += _dm.m
+                        if not isinstance(dm, Cdm) and isinstance(_dm, Cdm): # dm is not dm, due to base param < ave_comp
+                            layer[param_name] = _dm
+                        elif isinstance(dm, Cdm) and isinstance(_dm, Cdm): # both params are having dm
+                            if param_name in ['Da','Dady','Dadx'] and _param_name in ['Da','Dady','Dadx'] : # check both names, just in case
+                                # convert da to vector, sum them and convert them back to angle
+                                da = dm.d; _da= _dm.d
+                                sin = np.sin(da); _sin = np.sin(_da)
+                                cos = np.cos(da); _cos = np.cos(_da)
+                                sin_sum = (cos * _sin) + (sin * _cos)  # sin(α + β) = sin α cos β + cos α sin β
+                                cos_sum= (cos * _cos) - (sin * _sin)   # cos(α + β) = cos α cos β - sin α sin β
+                                a_sum = np.arctan2(sin_sum, cos_sum)
+                                layer[param_name].d = a_sum
+                            else:
+                                dm.d += _dm.d
+                            dm.m += _dm.m
                 elif len(_layer)>0: # _layer is not empty but layer is empty
                     setattr(self,layer_num,_layer.copy())
 
