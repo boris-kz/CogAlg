@@ -1,21 +1,22 @@
 '''
   line_patterns is a principal version of 1st-level 1D algorithm
-  Operations:
 
+  Operations:
 - Cross-compare consecutive pixels within each row of image, forming dert_: queue of derts, each a tuple of derivatives per pixel.
   dert_ is then segmented into patterns Pms and Pds: contiguous sequences of pixels forming same-sign match or difference.
   Initial match is inverse deviation of variation: m = ave_|d| - |d|, rather than minimum for directly defined match:
   albedo or intensity of reflected light doesn't correlate with predictive value of the object that reflects it.
-
+  -
 - Match patterns Pms are spans of inputs forming same-sign match. Positive Pms contain high-match pixels, which are likely
   to match more distant pixels. Thus, positive Pms are evaluated for cross-comp of pixels over incremented range.
+  -
 - Difference patterns Pds are spans of inputs forming same-sign ds. d sign match is a precondition for d match, so only
   same-sign spans (Pds) are evaluated for cross-comp of constituent differences, which forms higher derivatives.
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
-
+  -
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
   These forks here are exclusive per P to avoid redundancy, but they overlap in line_patterns_olp.
-
+  -
   Initial bilateral cross-comp here is 1D slice of 2D 3x3 kernel, while unilateral d is a slice of 2x2 kernel.
   Odd kernels preserve resolution of pixels, while 2x2 kernels preserve resolution of derivatives, in resulting derts.
   The former should be used in rng_comp and the latter in der_comp, which may alternate with intra_P.
@@ -45,6 +46,7 @@ class CP(ClusterStructure):
     I = int
     D = int
     M = int
+    x0 = int
     dert_ = list
     sub_layers = list
     # for line_PPs
@@ -111,17 +113,18 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
 
     _sign = dert.m > 0
     D = dert.d or 0  # 0 if no dert.d
-    L, I, M, dert_, sub_H = 1, dert.p, dert.m, [dert], []
+    L, I, M, dert_, sub_H, x = 1, dert.p, dert.m, [dert], [], 0
     # cluster P_derts by m sign
     for dert in P_dert_[1:]:
         sign = dert.m > 0
         if sign != _sign:  # sign change, terminate P
-            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))
+            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, x0=x-(L-1), dert_=dert_, sub_layers=sub_H, _smP=False))
             L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset params
 
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, bilateral m: for eval per pixel
         dert_ += [dert]
         _sign = sign
+        x += 1
 
     P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
     return P_
@@ -132,12 +135,12 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
     P_ = []  # initialization:
     dert = P_dert_[1]  # skip dert_[0]: d is None
     _sign = dert.d > 0
-    L, I, D, M, dert_, sub_H = 1, dert.p, 0, dert.m, [dert], []
+    L, I, D, M, dert_, sub_H, x = 1, dert.p, 0, dert.m, [dert], [], 0
     # cluster P_derts by d sign
     for dert in P_dert_[2:]:
         sign = dert.d > 0
         if sign != _sign:  # sign change, terminate P
-            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))
+            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, x0=x-(L-1), dert_=dert_, sub_layers=sub_H, _smP=False))
             L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset accumulated params
 
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, m for eval per pixel is bilateral
@@ -363,11 +366,11 @@ if __name__ == "__main__":
     fline_PPs = 0
     if fline_PPs:  # debug line_PPs_draft
         from line_PPs_draft import *
-        frame_PPm_ = []
+        frame_PP_ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            PPm_ = search(P_)
-            frame_PPm_.append(PPm_)
+            PPm_, PPd_ = search(P_)
+            frame_PP_.append([PPm_, PPd_])
 
     end_time = time() - start_time
     print(end_time)
