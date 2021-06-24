@@ -126,7 +126,7 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
         _sign = sign
         x += 1
 
-    P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
+    P_.append(CP(sign=_sign, L=L, x0=x-(L-1), I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
     return P_
 
 
@@ -147,7 +147,7 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
         dert_ += [dert]
         _sign = sign
 
-    P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
+    P_.append(CP(sign=_sign, x0=x-(L-1), L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
     return P_
 
 

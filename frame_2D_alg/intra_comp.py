@@ -85,34 +85,34 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
     m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
-    # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs:
-    # if rng == 3: skip ratio = 4, so dy, dx *= 2?
+    # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs * rim skip ratio:
 
-    dy__ += ((i__topleft - i__bottomright) * -1 +
-             (i__top - i__bottom) * -2 +
-             (i__topright - i__bottomleft) * -1 +
+    rngSkip = 1
+    if rng>2: rngSkip *= (rng-2)*2  # *2 for 9x9, *4 for 17x17
+
+    dy__ += ((i__topleft - i__bottomright) * -1 * rngSkip +
+             (i__top - i__bottom) * -2  * rngSkip +
+             (i__topright - i__bottomleft) * -1 * rngSkip +
              (i__right - i__left) * 0)
 
-    dx__ += ((i__topleft - i__bottomright) * -1 +
+    dx__ += ((i__topleft - i__bottomright) * -1 * rngSkip +
              (i__top - i__bottom) * 0 +
-             (i__topright - i__bottomleft) * 1 +
-             (i__right - i__left) * 2)
+             (i__topright - i__bottomleft) * 1 * rngSkip+
+             (i__right - i__left) * 2 * rngSkip)
 
     g__ = np.hypot(dy__, dx__) - ave  # gradient, recomputed at each comp_r
     '''
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
-    ave SAD = ave g * 1.2:
     '''
-    #  if rng == 3: skip ratio = 4, so m__ *= 2?
-    m__ += int(ave * 1.2) - ( abs(i__center - i__topleft)
-                            + abs(i__center - i__top) * 2
-                            + abs(i__center - i__topright)
-                            + abs(i__center - i__right) * 2
-                            + abs(i__center - i__bottomright)
-                            + abs(i__center - i__bottom) * 2
-                            + abs(i__center - i__bottomleft)
-                            + abs(i__center - i__left) * 2
+    m__ += int(ave * 1.2) - ( abs(i__center - i__topleft) * 1 * rngSkip
+                            + abs(i__center - i__top) * 2 * rngSkip
+                            + abs(i__center - i__topright) * 1 * rngSkip
+                            + abs(i__center - i__right) * 2 * rngSkip
+                            + abs(i__center - i__bottomright) * 1 * rngSkip
+                            + abs(i__center - i__bottom) * 2 * rngSkip
+                            + abs(i__center - i__bottomleft) * 1 * rngSkip
+                            + abs(i__center - i__left) * 2 * rngSkip
                             )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask__
@@ -133,6 +133,7 @@ def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of g
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or g + ave
+        for angle_ in angle__: angle_[np.where(np.isnan(angle_))] = 0 # set nan to 0, to avoid error later
 
     # angle__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
     angle__left = angle__[:, :-1, :-1]  # was topleft # a is 3 dimensional

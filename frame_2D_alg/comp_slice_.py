@@ -31,7 +31,6 @@ ave_mP = 8  # just a random number right now.
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
 ave_ga = 0.78  # ga at 22.5 degree
-ave_min = 10
 # comp_PP
 ave_mPP = 0
 ave_rM  = .7
@@ -128,8 +127,9 @@ class CPP(CP, CderP):
 
 class CderPP(ClusterStructure):
 
+    layer01 = dict
     layer1 = dict
-    layer2 = dict
+    layer11 = dict
     PP = object
     _PP = object
     mmPP = int
@@ -139,8 +139,9 @@ class CderPP(ClusterStructure):
 
 class CPPP(CPP, CderPP):
 
+    layer01 = dict
     layer1 = dict
-    layer2 = dict
+    layer11 = dict
     PPm_ = list
     PPd_ = list
 
@@ -165,7 +166,7 @@ if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FP
 else       (PP is PP):  pack PP in blob.PP_
 '''
 
-def slice_blob(blob, verbose=False):
+def slice_blob(blob, Ave, verbose=False): # where should we use this Ave?
     '''
     Slice_blob converts selected smooth-edge blobs (high G, low Ga or low M, high Ma) into sliced blobs,
     adding horizontal blob slices: Ps or 1D patterns
@@ -451,6 +452,7 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     absG = max(1,P.G + (ave_g*P.L)); _absG = max(1,_P.G + (ave_g*_P.L))         # use max to avoid zero division
     absGa = max(1,P.Ga + (ave_ga *P.L)); _absGa = max(1,_P.Ga + (ave_ga *_P.L))
 
+    # compare base param to get layer1
     for param_name in layer1:
         if param_name == 'Da':
             sin  = P.Dy/absG  ;  cos = P.Dx/absG
@@ -736,20 +738,19 @@ def form_PPP_recursive(PPP_, PPP, upconnect_,  checked_ids, fPPd):
 
 def accum_PPP(PPP, PP, fPPd):
 
-    # accumulate layer 1 of PP into PPP too?
-    PPP.accum_from(PP) # accumulate parameter
+    PPP.accum_from(PP) # accumulate parameter, including layer1
 
     if fPPd:
         PPP.PPd_.append(PP) # add PPd to PPP's PPd_
         PP.PPPd = PPP       # update PPP reference of PP
-        for derPPd in PP.derPPd_: # accumulate derPPd params, layer1 and layer2
+        for derPPd in PP.derPPd_: # accumulate derPPd params, layer01 and layer11
             PPP.accum_from(derPPd)
             PPP.derPPd_.append(derPPd)
 
     else:
         PPP.PPm_.append(PP) # add PPm to PPP's PPm_
         PP.PPPm = PPP       # update PPP reference of PP
-        for derPPm in PP.derPPm_: # accumulate derPPm params, layer1 and layer2
+        for derPPm in PP.derPPm_: # accumulate derPPm params, layer01 and layer11
             PPP.accum_from(derPPm)
             PPP.derPPm_.append(derPPm)
 
@@ -768,12 +769,12 @@ def merge_PPP(PPP, _PPP, fPPd):
 
 def comp_PP(PP, _PP):
 
-    # compare PP and _PP base params to get layer 1 of derPP #-----------------
-    layer1 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
+    # compare PP and _PP base params to get layer 01 of derPP #-----------------
+    layer01 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mP, dP = 0, 0
     absG = max(1, PP.G + (ave_g*PP.L)); _absG = max(1, _PP.G + (ave_g*_PP.L))      # use max to avoid zero division
     absGa = max(1,PP.Ga + (ave_ga*PP.L)); _absGa = max(1, _PP.Ga + (ave_ga*_PP.L))
-    for param_name in layer1:
+    for param_name in layer01:
         if param_name == 'Da':
             # sin and cos components
             sin = PP.Dy/absG; cos = PP.Dx/absG
@@ -804,13 +805,13 @@ def comp_PP(PP, _PP):
             _param = getattr(_PP, param_name)
 
         dm = comp_param(param, _param, param_name, ave_mPP)
-        layer1[param_name] = dm
+        layer01[param_name] = dm
         mP += dm.m
         dP += dm.d
 
-    # compare layer1 to get layer2 #-------------------------------------------
+    # compare layer1 to get layer11 #-------------------------------------------
 
-    layer2 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
+    layer11 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mmPP, dmPP, mdPP, ddPP = 0, 0, 0, 0
     for i, ((param_name, dm), (_param_name, _dm)) in enumerate(zip(PP.layer1.items(), _PP.layer1.items())):
 
@@ -831,7 +832,7 @@ def comp_PP(PP, _PP):
         if f_comp:
             dmd = comp_param(param_d, _param_d, param_name, ave_mPP)  # dm of d
             dmm = comp_param(param_m, _param_m, param_name, ave_mPP)  # dm of m
-            layer2[param_name] = [dmd, dmm]      # layer 2 in list ,storing dm of each d and m
+            layer11[param_name] = [dmd, dmm]      # layer 2 in list ,storing dm of each d and m
             mdPP += dmd.m # m from dm of d
             ddPP += dmd.d # d from dm of d
             mmPP += dmm.m # m from dm of m
@@ -853,7 +854,7 @@ def comp_PP(PP, _PP):
     mmPP -= ave_mPP # match of compared PPs' m components
     dmPP -= ave_mPP # difference of compared PPs' m components
 
-    derPP = CderPP(PP=PP, _PP=_PP, mmPP=mmPP, dmPP = dmPP, mdPP=mdPP, ddPP=ddPP,layer1=layer1, layer2=layer2)
+    derPP = CderPP(PP=PP, _PP=_PP, mmPP=mmPP, dmPP = dmPP, mdPP=mdPP, ddPP=ddPP,layer01=layer01, layer11=layer11)
 
     '''
     # match of compared PPs' m components

@@ -5,6 +5,7 @@ Cross-compare blobs with incrementally intermediate adjacency, within a frame
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
 from frame_blobs import ave, CBlob
 from intra_blob import ave_ga, ave_ma
+
 import numpy as np
 import cv2
 
@@ -121,9 +122,9 @@ def comp_blob(blob, _blob, _derBlob):
             param = getattr(blob, param_name)
             _param = getattr(_blob, param_name)
             if param_name == "I":
-                ave_mPar = ave_inv
+                ave_mPar = ave_inv   # ave_inv
             else:
-                ave_mPar = ave_min
+                ave_mPar = ave_min  # ave_min
 
         dist_ave = ave_mPar * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
         dm = comp_param(param, _param, param_name, dist_ave)

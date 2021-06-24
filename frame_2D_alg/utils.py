@@ -31,6 +31,43 @@ SIGN_MAPS = {
 # ----------------------------------------------------------------------------
 # General purpose functions
 
+
+
+def generate_sobel(shape, axis):
+    """
+    shape must be odd: eg. (5,5)
+    axis is the direction, with 0 to positive x and 1 to positive y
+
+    example usage:
+    y_3x3 = generate_sobel((3,3),1)
+    x_3x3 = generate_sobel((3,3),0)
+
+    y_5x5 = generate_sobel((5,5),1)
+    x_5x5 = generate_sobel((5,5),0)
+
+    y_7x7 = generate_sobel((7,7),1)
+    x_7x7 = generate_sobel((7,7),0)
+
+    y_9x9 = generate_sobel((9,9),1)
+    x_9x9 = generate_sobel((9,9),0)
+
+    y_17x17 = generate_sobel((17,17),1)
+    x_17x17 = generate_sobel((17,17),0)
+
+    """
+    k = np.zeros(shape)
+    p = [(j,i) for j in range(shape[0])
+           for i in range(shape[1])
+           if not (i == (shape[1] -1)/2. and j == (shape[0] -1)/2.)]
+
+    for j, i in p:
+        j_ = int(j - (shape[0] -1)/2.)
+        i_ = int(i - (shape[1] -1)/2.)
+        k[j,i] = (i_ if axis==0 else j_)/float(i_*i_ + j_*j_)
+
+    return k
+
+
 def is_close(x1, x2):
     '''Recursively check equality of two objects containing floats.'''
     # Numeric
@@ -94,7 +131,7 @@ def array2image(a):
 def imread(filename, raise_if_not_read=True):
     "Read an image in grayscale, return array."
     try:
-        return cv2.imread(filename, 0).astype(int)
+        return cv2.imread(filename, 0).astype(float)
     except AttributeError:
         if raise_if_not_read:
             raise SystemError('image is not read')
