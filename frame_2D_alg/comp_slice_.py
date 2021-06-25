@@ -16,12 +16,11 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
+from comp_blob import ave_min, ave_inv
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
 ave_g = 30  # change to Ave from the root intra_blob?
-ave_min = 5  # change to Ave_min from the root intra_blob?
-aveG = 50  # filter for comp_g, assumed constant direction
 flip_ave = .1
 flip_ave_FPP = 0  # flip large FPPs only (change to 0 for debug purpose)
 div_ave = 200
@@ -166,7 +165,7 @@ if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FP
 else       (PP is PP):  pack PP in blob.PP_
 '''
 
-def slice_blob(blob, Ave, verbose=False): # where should we use this Ave?
+def slice_blob(blob, verbose=False): # where should we use this Ave?
     '''
     Slice_blob converts selected smooth-edge blobs (high G, low Ga or low M, high Ma) into sliced blobs,
     adding horizontal blob slices: Ps or 1D patterns
@@ -479,6 +478,7 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
         else:
             param = getattr(P, param_name)
             _param = getattr(_P, param_name)
+
 
         dm = comp_param(param, _param, param_name, ave_min)  # add ave_min, * P.L is not needed?
         layer1[param_name] = dm
