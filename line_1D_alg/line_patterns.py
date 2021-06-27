@@ -48,11 +48,11 @@ class CP(ClusterStructure):
     M = int
     x0 = int
     dert_ = list
-    sub_layers = list
+    sublayers = list
     # for line_PPs
     derP = object  # forward comp_P derivatives
     _smP = bool  # backward mP sign, for derP.sign determination, not needed thereafter
-
+    fPd = bool  # P is Pd if true, else Pm
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 
@@ -117,7 +117,7 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
     for dert in P_dert_[1:]:
         sign = dert.m > 0
         if sign != _sign:  # sign change, terminate P
-            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, x0=x-(L-1), dert_=dert_, sub_layers=sub_H, _smP=False))
+            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, x0=x-(L-1), dert_=dert_, sublayers=sub_H, _smP=False))
             L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset params
 
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, bilateral m: for eval per pixel
@@ -125,7 +125,7 @@ def form_Pm_(P_dert_):  # initialization, accumulation, termination
         _sign = sign
         x += 1
 
-    P_.append(CP(sign=_sign, L=L, x0=x-(L-1), I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
+    P_.append(CP(sign=_sign, L=L, x0=x-(L-1), I=I, D=D, M=M, dert_=dert_, sublayers=sub_H, _smP=False))  # incomplete P
     return P_
 
 
@@ -139,14 +139,14 @@ def form_Pd_(P_dert_):  # cluster by d sign, within -Pms: min neg m spans
     for dert in P_dert_[2:]:
         sign = dert.d > 0
         if sign != _sign:  # sign change, terminate P
-            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, x0=x-(L-1), dert_=dert_, sub_layers=sub_H, _smP=False))
+            P_.append(CP(sign=_sign, L=L, I=I, D=D, M=M, x0=x-(L-1), dert_=dert_, sublayers=sub_H, _smP=False, fPd=True))
             L, I, D, M, dert_, sub_H = 0, 0, 0, 0, [], []  # reset accumulated params
 
         L += 1; I += dert.p; D += dert.d; M += dert.m  # accumulate params, m for eval per pixel is bilateral
         dert_ += [dert]
         _sign = sign
 
-    P_.append(CP(sign=_sign, x0=x-(L-1), L=L, I=I, D=D, M=M, dert_=dert_, sub_layers=sub_H, _smP=False))  # incomplete P
+    P_.append(CP(sign=_sign, x0=x-(L-1), L=L, I=I, D=D, M=M, dert_=dert_, sublayers=sub_H, _smP=False, fPd=True))  # incomplete P
     return P_
 
 
@@ -181,15 +181,15 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     fid, # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
     rdn, # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
     rng, # comp range
-    sub_layers: # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
+    sublayers: # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
                 # for layer-parallel access and comp, as in frequency domain representation
-                # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sub_layers[ sub_Ps[ derts]] 
+                # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sublayers[ sub_Ps[ derts]] 
 '''
 
 def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
 
-    comb_layers = []  # combine into root P sub_layers[1:]
-    for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sub_layers[n]
+    comb_layers = []  # combine into root P sublayers[1:]
+    for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sublayers[n]
 
         if P.sign:  # +Pm: low-variation span, eval comp at rng=2^n: 2, 4., kernel: 5, 9., rng=1 cross-comp is kernels 2 and 3
             if P.M - adj_M > ave_M * rdn and P.L > 4:  # reduced by lending to contrast: all comps form params for hLe comp?
@@ -203,13 +203,13 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
                 rdert_ = range_comp(P.dert_, fid)  # rng+ comp with localized ave, skip predictable next dert
                 sub_Pm_ = form_Pm_(rdert_)  # cluster by m sign
                 Ls = len(sub_Pm_)
-                P.sub_layers += [[(Ls, False, fid, rdn, rng, sub_Pm_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_)]]  # 1st layer, Dert=[], fill if Ls > min?
                 if len(sub_Pm_) > 4:
                     sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                    P.sub_layers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng * 2 + 1)  # feedback
-                    # splice sub_layers across sub_Ps:
-                    comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                                   zip_longest(comb_layers, P.sub_layers, fillvalue=[])]
+                    P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng * 2 + 1)  # feedback
+                    # splice sublayers across sub_Ps:
+                    comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                                   zip_longest(comb_layers, P.sublayers, fillvalue=[])]
 
         else:  # -Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
             if min(-P.M, adj_M) > ave_D * rdn and P.L > 3:  # cancelled M+ val, M = min | ~v_SAD
@@ -217,12 +217,12 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
                 rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
                 sub_Pd_ = form_Pd_(P.dert_)  # cluster by input d sign match: partial d match
                 Ls = len(sub_Pd_)
-                P.sub_layers += [[(Ls, True, 1, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                P.sublayers += [[(Ls, True, 1, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
 
-                P.sub_layers += intra_Pd_(sub_Pd_, rel_adj_M, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nPm
-                # splice sub_layers across sub_Ps, for return as root sub_layers[1:]:
-                comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                               zip_longest(comb_layers, P.sub_layers, fillvalue=[])]
+                P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nPm
+                # splice sublayers across sub_Ps, for return as root sublayers[1:]:
+                comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                               zip_longest(comb_layers, P.sublayers, fillvalue=[])]
 
     return comb_layers
 
@@ -237,13 +237,13 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
             ddert_ = deriv_comp(P.dert_)  # cross-comp of uni_ds
             sub_Pm_ = form_Pm_(ddert_)  # cluster Pd derts by md, won't happen
             Ls = len(sub_Pm_)
-            P.sub_layers += [[(Ls, 1, 1, rdn, rng, sub_Pm_)]]  # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_
+            P.sublayers += [[(Ls, 1, 1, rdn, rng, sub_Pm_)]]  # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_
             if len(sub_Pm_) > 3:
                 sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                P.sub_layers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng + 1)
-                # splice sub_layers across sub_Ps:
-                comb_layers = [comb_layers + sub_layers for comb_layers, sub_layers in
-                               zip_longest(comb_layers, P.sub_layers, fillvalue=[])]
+                P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng + 1)
+                # splice sublayers across sub_Ps:
+                comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                               zip_longest(comb_layers, P.sublayers, fillvalue=[])]
     ''' 
     adj_M is not affected by primary range_comp per Pm?
     no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
