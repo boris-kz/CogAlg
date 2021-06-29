@@ -207,6 +207,7 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
                 if len(sub_Pm_) > 4:
                     sub_adj_M_ = form_adjacent_M_(sub_Pm_)
                     P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng * 2 + 1)  # feedback
+                    # add param summation within sublayer, for comp_sublayers?
                     # splice sublayers across sub_Ps:
                     comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
                                    zip_longest(comb_layers, P.sublayers, fillvalue=[])]
