@@ -62,30 +62,19 @@ ave_div = 50
 ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
 ave_M = 100  # search stop
 ave_D = 100
-ave_sub_M = 50  # sub_H comp filter
+ave_sub_M = 500  # sub_H comp filter
 ave_Ls = 3
 ave_PPM = 200
 ave_merge = -50  # merge adjacent Ps
 ave_inv = 20 # ave inverse m, change to Ave from the root intra_blob?
 ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 
+layer0_rdn = {'L': .25, 'I': .5, 'D': .25, 'M': .25}
+
 
 def search(P_):  # cross-compare patterns within horizontal line
 
-    # search in sublayers, top-down:
-    for P in P_:  # cross-sub_P search before cross-P search: proceed with incremental distance
-        if P.fPd:
-            if abs(P.D) > ave_D:  # better use sublayers.D|M, but we don't have it yet
-                for sublayer in P.sublayers:
-                    # this is correct for sublayer[0] only, search in deeper sublayers should be selective per sublayer[0] of sub_P
-                    if len(sublayer[5]) > 2:
-                        sub_PPm_, sub_PPd_ = search(sublayer[5])  # sub_P_
-                        sublayer[5].clear(); sublayer[5].append([sub_PPm_, sub_PPd_])  # tuple is immutable
-        elif P.M > ave_M:
-            for sublayer in P.sublayers:
-                if len(sublayer[5]) > 2:
-                    sub_PPm_, sub_PPd_ = search(sublayer[5])  # sub_P_
-                    sublayer[5].clear(); sublayer[5].append([sub_PPm_, sub_PPd_])  # tuple is immutable
+    sub_search_recursive_draft(P_, fderP=0)  # search in sublayers first: proceed with incremental distance
 
     # search in P_:
     derP_ = []  # search forms array of derPs (P + P'derivatives): combined output of pair-wise comp_P
@@ -135,6 +124,27 @@ def search(P_):  # cross-compare patterns within horizontal line
     return PPm_, PPd_
 
 
+def sub_search_recursive_draft(P_, fderP):  # search in sublayer[0] per P
+    
+    for P in P_:
+        sub_P_ = P.sublayers[0][5]  
+        if len(sub_P_) > 2:
+            PM = P.M; PD = P.D
+            if fderP:
+                PM += P.derP.mP; PD += P.derP.mP  # include match added by last search?
+
+            if P.fPd:
+                if abs(PD) > ave_D:  # better use sublayers.D|M, but we don't have it yet
+                    sub_PPm_, sub_PPd_ = search(sub_P_)
+                    P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_  # extended in line_patterns
+                    sub_search_recursive_draft(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
+
+            elif PM > ave_M:
+                sub_PPm_, sub_PPd_ = search(sub_P_)
+                P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_  # extended in line_patterns
+                sub_search_recursive_draft(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
+
+
 def merge_comp_P(P_, _P, P, i, j, neg_M, neg_L, remove_index):  # multi-variate cross-comp, _smP = 0 in line_patterns
 
     mP = dP = 0
@@ -148,8 +158,11 @@ def merge_comp_P(P_, _P, P, i, j, neg_M, neg_L, remove_index):  # multi-variate 
         param = getattr(_P, param_name) / _P.L  # swap _ convention here, it's different in search
         _param = getattr(P, param_name) / P.L
         dm = comp_param(_param, param, [], dist_ave)
-        mP += dm.m; dP += dm.d
+        rdn = layer0_rdn[param_name]
+        mP += dm.m*rdn
+        dP += dm.d*rdn
         layer1[param_name] = dm
+
     if neg_L == 0:
         mP += _P.dert_[0].m; dP += _P.dert_[0].d
 
@@ -190,7 +203,9 @@ def comp_P(_P, P, neg_L, neg_M):  # multi-variate cross-comp, _smP = 0 in line_p
         param = getattr(_P, param_name)
         _param = getattr(P, param_name)
         dm = comp_param(_param, param, [], dist_ave)
-        mP += dm.m; dP += dm.d
+        rdn = layer0_rdn[param_name]
+        mP += dm.m * rdn
+        dP += dm.d * rdn
         layer1[param_name] = dm
         '''
         main comp is between summed params, with an option for div_comp, etc.
@@ -246,8 +261,8 @@ def comp_sublayers(_P, P, mP):  # also add dP?
                     mP += sub_mP  # of compared H, no specific mP?
                     if sub_mP < ave_sub_M:
                         # potentially mH: trans-layer induction?
-                        # could you elaborate more on the process here?
-
+                        # f mP + sub_mP < ave_sub_M:
+                        # so selection considers both local and global values of mP.
                         break  # low vertical induction, deeper sublayers are not compared
                 else:
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?

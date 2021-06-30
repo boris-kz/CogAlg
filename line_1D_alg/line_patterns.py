@@ -203,7 +203,8 @@ def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line 
                 rdert_ = range_comp(P.dert_, fid)  # rng+ comp with localized ave, skip predictable next dert
                 sub_Pm_ = form_Pm_(rdert_)  # cluster by m sign
                 Ls = len(sub_Pm_)
-                P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_
+                # 1st layer, Dert=[], fill if Ls > min?
                 if len(sub_Pm_) > 4:
                     sub_adj_M_ = form_adjacent_M_(sub_Pm_)
                     P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng * 2 + 1)  # feedback
@@ -238,7 +239,8 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
             ddert_ = deriv_comp(P.dert_)  # cross-comp of uni_ds
             sub_Pm_ = form_Pm_(ddert_)  # cluster Pd derts by md, won't happen
             Ls = len(sub_Pm_)
-            P.sublayers += [[(Ls, 1, 1, rdn, rng, sub_Pm_)]]  # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_
+            P.sublayers += [[(Ls, 1, 1, rdn, rng, sub_Pm_, [], [] )]]  # sub_PPm_, sub_PPd_
+            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_
             if len(sub_Pm_) > 3:
                 sub_adj_M_ = form_adjacent_M_(sub_Pm_)
                 P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng + 1)
