@@ -21,7 +21,7 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 
 import cv2
 import argparse
@@ -83,10 +83,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             d_.append(p -_p)  # m = ave - abs(d) is defined for accumulation only, otherwise redundant
             _p = p
 
-        Pm_ = form_P_(pixel_, d_, fms=True)  # forms m-sign patterns
+        Pm_ = form_P_(pixel_, d_, fPd=False)  # forms m-sign patterns
         if len(Pm_) > 4:
             adj_M_ = form_adjacent_M_(Pm_)  # compute adjacent Ms to evaluate contrastive borrow potential
-            intra_Pm_(Pm_, adj_M_, fid=False, rdn=1, rng=3)  # evaluates for sub-recursion per Pm
+            intra_Pm_(Pm_, adj_M_, fid=False, rdn=1, rng=2)  # rng is unilateral, evaluates for sub-recursion per Pm
 
         frame_of_patterns_.append(Pm_)
         # line of patterns is added to frame of patterns
@@ -94,27 +94,27 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     return frame_of_patterns_  # frame of patterns will be output to level 2
 
 
-def form_P_(p_, d_, fms):  # initialization, accumulation, termination
+def form_P_(p_, d_, fPd):  # initialization, accumulation, termination
 
     P_ = []  # initialization:
     x=0
     _d = d_[0]
     _p = p_[0]
     _m = ave - abs(_d)
-    if fms: _sign = _m > 0
-    else: _sign = _d > 0
+    if fPd: _sign = _d > 0
+    else: _sign = _m > 0
 
-    P = CP(sign=_sign, L=1, I=_p, D=_d, M=_m, x0=0, p_=[_p], d_=[_d], sublayers=[], _smP=False, fPd=~fms)
+    P = CP(sign=_sign, L=1, I=_p, D=_d, M=_m, x0=0, p_=[_p], d_=[_d], sublayers=[], _smP=False, fPd=fPd)
     # segment by m sign:
     for p, d in zip( p_[1:], d_[1:] ):
         m = ave - abs(d)
-        if fms: sign = m > 0
-        else: sign = d > 0
+        if fPd: sign = d > 0
+        else: sign = m > 0
 
         if sign != _sign:  # sign change, terminate P
             P_.append(P)
             # re-initialization:
-            P = CP(sign=_sign, L=1, I=p, D=d, M=m, x0=P.x-(P.L-1), p_=[p], d_=[d], sublayers=[], _smP=False, fPd=~fms)
+            P = CP(sign=_sign, L=1, I=p, D=d, M=m, x0=x-(P.L-1), p_=[p], d_=[d], sublayers=[], _smP=False, fPd=fPd)
         else:
             # accumulate params:
             P.L += 1; P.I += p; P.D += d; P.M += m
@@ -166,42 +166,43 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
 def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
 
     comb_layers = []  # combine into root P sublayers[1:]
-    for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sublayers[n]
 
-        if P.sign:  # +Pm: low-variation span, eval comp at rng=2^n: kernel size 2, 4, 8...
-            if P.M - adj_M > ave_M * rdn and P.L > 4:  # reduced by lending to contrast: all comps form params for hLe comp?
-                '''
-                if localized filters:
-                P_ave = (P.M - adj_M) / P.L  
-                loc_ave = (ave - P_ave) / 2  # ave is reduced because it's for inverse deviation, possibly negative?
-                loc_ave_min = (ave_min + P_ave) / 2
-                rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
-                '''
-                rdert_ = range_comp(P.dert_, fid)  # rng+ comp with localized ave, skip predictable next dert
-                sub_Pm_ = form_P_(P.p_, rdert_, fms=True)  # cluster by m sign
-                Ls = len(sub_Pm_)
-                P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_
-                # 1st layer, Dert=[], fill if Ls > min?
-                if len(sub_Pm_) > 4:
-                    sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                    P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn + 1 + 1 / Ls, rng * 2 + 1)  # feedback
-                    # add param summation within sublayer, for comp_sublayers?
-                    # splice sublayers across sub_Ps:
+    for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sublayers[n]
+        if P.L > 2 ** rng:
+            if P.sign:  # +Pm: low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8...
+                if P.M - adj_M > ave_M * rdn:  # reduced by lending to contrast: all comps form params for hLe comp?
+                    '''
+                    if localized filters:
+                    P_ave = (P.M - adj_M) / P.L  
+                    loc_ave = (ave - P_ave) / 2  # ave is reduced because it's for inverse deviation, possibly negative?
+                    loc_ave_min = (ave_min + P_ave) / 2
+                    rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
+                    '''
+                    rd_ = range_comp(P.p_, P.d_, fid)  # rng+ comp with localized ave, skip predictable next dert
+                    sub_Pm_ = form_P_(P.p_, rd_, fPd=False)  # cluster by m sign
+                    Ls = len(sub_Pm_)
+                    P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_
+                    # 1st layer, Dert=[], fill if Ls > min?
+                    if len(sub_Pm_) > 4:
+                        sub_adj_M_ = form_adjacent_M_(sub_Pm_)
+                        P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn+1 + 1/Ls, rng+1)  # feedback
+                        # add param summation within sublayer, for comp_sublayers?
+                        # splice sublayers across sub_Ps:
+                        comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                                       zip_longest(comb_layers, P.sublayers, fillvalue=[])]
+
+            else:  # -Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
+                if min(-P.M, adj_M) > ave_D * rdn:  # cancelled M+ val, M = min | ~v_SAD
+
+                    rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
+                    sub_Pd_ = form_P_(P.p_, P.d_, fPd=True)  # cluster by input d sign match: partial d match
+                    Ls = len(sub_Pd_)
+                    P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
+
+                    P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1 + 1/Ls, rng)  # der_comp eval per nPm
+                    # splice sublayers across sub_Ps, for return as root sublayers[1:]:
                     comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
                                    zip_longest(comb_layers, P.sublayers, fillvalue=[])]
-
-        else:  # -Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
-            if min(-P.M, adj_M) > ave_D * rdn and P.L > 3:  # cancelled M+ val, M = min | ~v_SAD
-
-                rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
-                sub_Pd_ = form_P_(P.p_, P.d_, fms=False)  # cluster by input d sign match: partial d match
-                Ls = len(sub_Pd_)
-                P.sublayers += [[(Ls, True, 1, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
-
-                P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn + 1 + 1 / Ls, rng + 1)  # der_comp eval per nPm
-                # splice sublayers across sub_Ps, for return as root sublayers[1:]:
-                comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
-                               zip_longest(comb_layers, P.sublayers, fillvalue=[])]
 
     return comb_layers
 
@@ -210,17 +211,18 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
 
     comb_layers = []
     for P in Pd_:  # each sub in sub_ is nested to depth = sub_[n]
-        if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
-            # if fid: abs(D), else: M + ave*L: complementary m is more precise than inverted diff?
 
-            ddert_ = deriv_comp(P.dert_)  # cross-comp of uni_ds
-            sub_Pm_ = form_P_(P.p_, ddert_, fms=False)  # cluster Pd derts by md, won't happen
+        if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
+            # cross-comp of ds:
+            dd_ = deriv_comp(P.d_)
+            sub_Pm_ = form_P_(P.d_, dd_, fPd=True)  # cluster Pd derts by md, won't happen
             Ls = len(sub_Pm_)
-            P.sublayers += [[(Ls, 1, 1, rdn, rng, sub_Pm_, [], [] )]]  # sub_PPm_, sub_PPd_
-            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_
+            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_, sub_PPm_, sub_PPd_:
+            P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pm_, [], [] )]]
+
             if len(sub_Pm_) > 3:
                 sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn + 1 + 1 / Ls, rng + 1)
+                P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn+1 + 1/Ls, rng + 1)
                 # splice sublayers across sub_Ps:
                 comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
                                zip_longest(comb_layers, P.sublayers, fillvalue=[])]
@@ -231,13 +233,15 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
     '''
     return comb_layers
 
+'''
+The below is not revised yet:
+'''
+def range_comp(p_, d_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
 
-def range_comp(dert_, fid):  # skip odd derts for sparse rng+ comp: 1 skip / 1 add, to maintain 2x overlap
-
-    rdert_ = []  # prefix '_' denotes the prior of same-name variables, initialization:
-    __dert = dert_[0]  # prior-prior dert
+    rd_ = []  # prefix '_' denotes the prior of same-name variables, initialization:
+    __d = dert_[0]  # prior-prior dert
     __i = __dert.p
-    _dert = dert_[2]  # initialize _dert with sparse p_, skipping odd ps
+    _dert = dert_[2]  # initialize _p with sparse p_, skipping odd ps compared in prior rng
     _i = _dert.p
     _short_rng_d = _dert.d
     _short_rng_m = _dert.m
