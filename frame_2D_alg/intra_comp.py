@@ -8,18 +8,54 @@ import functools
 ave_ga = .78
 ave_ma = 2  # at 22.5 degrees?
 
-''' 
-Sobel coefficients to decompose ds into dy and dx:
-YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
-XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
-    |--(clockwise)--+  |--(clockwise)--+
-    YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
-            0       0  ¦          -2       2  ¦
-            1   2   1  ¦          -1   0   1  ¦
-Scharr coefs:
-YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
-XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
-'''
+def comp_r2(dert__, ave, rng, mask__=None):
+    '''
+    Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
+    This fork is selective for blobs with below-average gradient,
+    where input intensity didn't vary much in shorter-range cross-comparison.
+    Such input is predictable enough for selective sampling: skipping current rim in following comparison kernels.
+    Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
+    kernel width increases as 2^rng: 1: 2x2 kernel, 2: 4x4 kernel, 3: 8x8 kernel...
+    ...
+    Due to skipping, configuration of input derts in next-rng kernel will always be 2x2 see:
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
+    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
+    '''
+
+    i__ = dert__[0]  # i is pixel intensity
+    # sparse aligned rim arrays:
+    i__topleft = i__[:-1:2, :-1:2]  # also assignment to new_dert__[0]
+    i__topright = i__[:-1:2, 1::2]
+    i__bottomleft = i__[1::2, :-1:2]
+    i__bottomright = i__[1::2, 1::2]
+    ''' 
+    unmask all derts in kernels with only one masked dert (can be set to any number of masked derts), 
+    to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
+    unmasked derts were computed due to extend_dert() in intra_blob   
+    '''
+    if mask__ is not None:
+        majority_mask__ = ( mask__[:-1:2, :-1:2].astype(int)
+                          + mask__[:-1:2, 1::2].astype(int)
+                          + mask__[1::2, 1::2].astype(int)
+                          + mask__[1::2, :-1:2].astype(int)
+                          ) > 1
+    else:
+        majority_mask__ = None  # returned at the end of function
+
+    dy__ = dert__[1][:-1:2, :-1:2].copy()  # sparse to align with i__center
+    dx__ = dert__[2][:-1:2, :-1:2].copy()
+    rngSkip = 1
+    if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
+    # compare four corner rim pixels diagonally,
+    # rotate in the opposite direction from prior rng, if rng is odd: clock-wise, else counter-clock-wise:
+
+    rot_dy__ = dy__ + (i__topleft - i__bottomright) * rngSkip
+    rot_dx__ = dx__ + (i__topright - i__bottomleft) * rngSkip
+
+    g__ = np.hypot(rot_dy__, rot_dx__) - ave  # gradient, recomputed at each comp_r
+
+    return (i__topleft, rot_dy__, rot_dx__, g__), majority_mask__
+
 
 def comp_r(dert__, ave, rng, root_fia, mask__=None):
     '''
@@ -34,6 +70,17 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     rng = 2: 5x5 kernel,
     rng = 3: 9x9 kernel,
     ...
+    Sobel coefficients to decompose ds into dy and dx:
+    YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
+    XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
+        |--(clockwise)--+  |--(clockwise)--+
+        YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
+                0       0  ¦          -2       2  ¦
+                1   2   1  ¦          -1   0   1  ¦
+    Scharr coefs:
+    YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
+    XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
+
     Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, using Sobel coeffs, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
