@@ -33,11 +33,11 @@ from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 
 from line_patterns import CP
-from frame_2D_alg.class_cluster import ClusterStructure, comp_param, Cdm
+from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 
 class CderP(ClusterStructure):
 
-    sign = bool
+    sign = bool  # bilateral? or local?
     rrdn =int
     mP = int
     dP = int
@@ -52,7 +52,6 @@ class CderP(ClusterStructure):
 class CPP(CP, CderP):
 
     layer1 = dict
-    sign = bool
     derP_ = list  # constituents, maybe sub_PPm_
 
 
@@ -69,7 +68,7 @@ ave_merge = -50  # merge adjacent Ps
 ave_inv = 20 # ave inverse m, change to Ave from the root intra_blob?
 ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 
-layer0_rdn = {'L': .25, 'I': .5, 'D': .25, 'M': .25}
+layer0_rdn = {'L': .25, 'I': .5, 'D': .25, 'M': .5}  # M is doubled because it represents both comparands
 
 
 def search(P_):  # cross-compare patterns within horizontal line
@@ -268,12 +267,35 @@ def comp_sublayers(_P, P, mP):  # also add dP?
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
 
 
+def form_PP_(derP_):  # cluster derPs into PP s by derP sign,
+
+    PP_ = []
+    derP = derP_[0]  # 1st derP
+    PP = CPP( derP_=[derP],inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
+    # positive PPms only, miss over discontinuity is expected, contrast dP -> PPd: if PP.mP * abs(dP) > ave_dP: explicit borrow only?
+
+    for i, derP in enumerate(derP_, start=1):
+        if derP.sign != PP.sign:  # sign != _sign: same-sign derPs in PP
+            # terminate PPm:
+            PP_.append(PP)
+            PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )  # reinitialize PPm with current derP
+            PP.derP = derP
+            derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
+        else:
+            PP.accum_from(derP.P)
+        PP.accum_from(derP)  # accumulate PPm numerical params with same-name current derP params, exclusions?
+
+    PP_.append(PP)  # pack last PP
+
+    return PPm_
+
+
 def form_PPm_(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp per PPm
 
     PPm_ = []
     derP = derP_[0]  # 1st derP
     PP = CPP( derP_=[derP],inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
-    PP.derP = derP  #needs explicit assignment
+    PP.derP = derP
     PP.derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
     # positive PPms only, miss over discontinuity is expected, contrast dP -> PPd: if PP.mP * abs(dP) > ave_dP: explicit borrow only?
 
@@ -293,42 +315,28 @@ def form_PPm_(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp 
     return PPm_
 
 
-def form_adjacent_mP(derP_d_):
-
-    pri_mP = derP_d_[0].mP
-    mP = derP_d_[1].mP
-    derP_d_[0].adj_mP = derP_d_[1].mP
-
-    for i, derP in enumerate(derP_d_[2:]):
-        next_mP = derP.mP
-        derP_d_[i+1].adj_mP = (pri_mP + next_mP)/2
-        pri_mP = mP
-        mP = next_mP
-
-    return derP_d_
-
-
-def form_PPd_(derP_d_):
+def form_PPd_(derP_):
     '''
     Compare Pds with vdP (value of dP) > ave, defined by contrast it forms relative to co-projected match:
     Diff doesn't have independent value, it's borrowed from co-derived P.M + adjacent (PP.mP/len(PP.derP_) +_PP.mP/len(_PP.derP_)) /2:
     '''
     PPd_ = []
-    derP_d = derP_d_[0]
-    PP = CPP( derP_=[derP_d],inherit=([derP_d.P, derP_d]) )  # those inherited instances need to be in a list
-    PP.derP = derP_d
+    derP = derP_[0]
+    PP = CPP( derP_=[derP],inherit=([derP.P, derP]) )  # inherited instances need to be in a list
+    PP.derP = derP
+    derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
 
-    for i, derP_d in enumerate(derP_d_, start=1):
-        vdP = (derP_d.adj_mP + derP_d.P.M) * abs(derP_d.dP) - ave
+    for i, derP in enumerate(derP_, start=1):
+        vdP = (derP.adj_mP + derP.P.M) * abs(derP.dP) - ave
         if vdP <= 0:
             # terminate PPd:
             PPd_.append(PP)
-            PP = CPP( derP_=[derP_d], inherit=([derP_d.P, derP_d]) )
-            PP.derP = derP_d
-            derP_d.PP = PP
+            PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )
+            PP.derP = derP
+            derP.PP = PP
         else:
-            PP.accum_from(derP_d.P)
-            PP.accum_from(derP_d)
+            PP.accum_from(derP.P)
+            PP.accum_from(derP)
 
     PPd_.append(PP)
     return PPd_
@@ -403,6 +411,21 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                 else:        dPP_rdn = 1; ndPP_rdn = 0
                 '''
     return PP_
+
+
+def form_adjacent_mP(derP_d_):
+
+    pri_mP = derP_d_[0].mP
+    mP = derP_d_[1].mP
+    derP_d_[0].adj_mP = derP_d_[1].mP
+
+    for i, derP in enumerate(derP_d_[2:]):
+        next_mP = derP.mP
+        derP_d_[i+1].adj_mP = (pri_mP + next_mP)/2
+        pri_mP = mP
+        mP = next_mP
+
+    return derP_d_
 
 
 def intra_PPm_(PPm_, rdn):

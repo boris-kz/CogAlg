@@ -17,9 +17,7 @@ def comp_r2(dert__, ave, rng, mask__=None):
     Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
     kernel width increases as 2^rng: 1: 2x2 kernel, 2: 4x4 kernel, 3: 8x8 kernel...
     ...
-    Due to skipping, configuration of input derts in next-rng kernel will always be 2x2 see:
-    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
-    https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
+    Due to skipping, configuration of input derts in next-rng kernel will always be 2x2
     '''
 
     i__ = dert__[0]  # i is pixel intensity
