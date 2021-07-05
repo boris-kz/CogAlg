@@ -318,6 +318,22 @@ class Cdm(Number):
         else:
             return "Cdm(d={}, m={})".format(self.d, self.m)
 
+# Kelvin:
+class Cdm_(Number):
+    __slots__ = ('d', 'Ppd_' ,'m', 'Ppm_')
+
+    def __init__(self, d=0,Ppd_=[], m=0, Ppm_=[]):
+        self.d, self.Ppd_, self.m, self.Ppm_ = d, Ppd_, m, Ppm_
+
+    def __add__(self, other):
+        return Cdm_(self.d + other.d, self.m + other.m)
+
+    def __repr__(self):  # representation of object
+        if isinstance(self.d, Cdm_) or isinstance(self.m, Cdm_):
+            return "Cdm_(d=Cdm_, m=Cdm_)"
+        else:
+            return "Cdm_(d={}, Ppd_=[], m={}, Ppm_=[])".format(self.d, self.Ppd_, self.m, self.Ppm_)
+
 
 def comp_param(param, _param, param_name, ave):
 
@@ -339,6 +355,8 @@ def comp_param(param, _param, param_name, ave):
         else:
             m = min(param,_param) - abs(d)/2 - ave  # direct match
         dm = Cdm(d,m) # pack d follow by m, must follow this sequence
+
+        # dm = Cdm_(d, [], m, []) if Pp
 
     return dm
 

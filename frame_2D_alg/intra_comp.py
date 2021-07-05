@@ -8,7 +8,7 @@ import functools
 ave_ga = .78
 ave_ma = 2  # at 22.5 degrees?
 
-def comp_r2(dert__, ave, rng, mask__=None):
+def comp_r(dert__, ave, rng, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -40,19 +40,17 @@ def comp_r2(dert__, ave, rng, mask__=None):
     else:
         majority_mask__ = None  # returned at the end of function
 
-    dy__ = dert__[1][:-1:2, :-1:2].copy()  # sparse to align with i__center
-    dx__ = dert__[2][:-1:2, :-1:2].copy()
+    d_upleft__ = dert__[1][:-1:2, :-1:2].copy()  # sparse to align with i__center
+    d_upright__= dert__[2][:-1:2, :-1:2].copy()
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
-    # compare four corner rim pixels diagonally,
-    # rotate in the opposite direction from prior rng, if rng is odd: clock-wise, else counter-clock-wise:
+    # compare pixels diagonally:
+    d_upleft__ += (i__bottomright - i__topleft) * rngSkip
+    d_upright__+= (i__bottomleft - i__topright) * rngSkip
 
-    rot_dy__ = dy__ + (i__topleft - i__bottomright) * rngSkip
-    rot_dx__ = dx__ + (i__topright - i__bottomleft) * rngSkip
+    g__ = np.hypot(d_upleft__, d_upright__) - ave  # gradient, recomputed at each comp_r
 
-    g__ = np.hypot(rot_dy__, rot_dx__) - ave  # gradient, recomputed at each comp_r
-
-    return (i__topleft, rot_dy__, rot_dx__, g__), majority_mask__
+    return (i__topleft, d_upleft__, d_upright__, g__), majority_mask__
 
 
 def comp_r(dert__, ave, rng, root_fia, mask__=None):

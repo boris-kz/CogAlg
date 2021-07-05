@@ -33,7 +33,7 @@ from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 
 from line_patterns import CP
-from frame_2D_alg.class_cluster import ClusterStructure, comp_param
+from frame_2D_alg.class_cluster import ClusterStructure, comp_param, Cdm_
 
 class CderP(ClusterStructure):
 
@@ -478,8 +478,66 @@ def rng_search(P_, ave):
         sub_PPm_ = form_PPm_(rderP_)  # cluster derPs into PPms by the sign of mP, same form_PPm_?
 
     return sub_PPm_
+'''
+with Kelvin:
+'''
+def eval_params(PPm_):
+
+    for PP in PPm_:  # interae ove PPm_ in search of strong Ps
+        if PP.layer1:  # if layer1 is not empty
+            for param_name in PP.layer0:
+                if PP.layer1[param_name].m > ave_M:
+                    form_Pp_draft(PP, param_name, fPd = False)
+                if PP.layer1[param_name].d > ave_D:
+                    form_Pp_draft(PP, param_name, fPd = True)
+
+
+def form_Pp_draft(PP, param_name, fPd):
+
+    rdn = layer0_rdn[param_name]
+    if fPd:
+        _sign = PP.derP_[0].layer1[param_name].d > 0
+    else: _sign = PP.derP_[0].layer1[param_name].m > 0
+
+    # probably needs extension:
+    Pp = CP(derP_=[PP.derP_[0]], _smP=False, sign=_sign)
+
+    for derP in PP.derP[1:]:
+        if fPd:
+            sign = derP.layer1[param_name].d > 0
+        else: sign = derP.layer1[param_name].m > 0
+
+        if sign == _sign:
+            if fPd: Pp_ = "Ppd_"
+            else: Pp_ = "Ppm_"
+            PP.layer1[param_name].Pp_.append(Pp)
+            # add Pp initialization here
+        else:
+            # edit a bunch
+            Pp.L += 1; Pp.M += m * rdn
+            Pp.dert_.append(dert)
+
+        _sign = sign
 
 '''
+    comp_P draft - Needs further changes
+    
+    if _P.M/_P.L > ave_aM: #ave_aM = ?
+        _P.I *= 2*rdn ; _P.layer00['p_'] = [p*2*rdn for p in p_]    #rdn = ?
+        #(L,D,M, d_,m_) *= 1 should remain the same
+    else:
+        _P.L *= 2*rdn;_P.D *= 2*rdn;_P.M *= 2*rdn
+        _P.layer00['d_'] = [d*2*rdn for d in d_]
+        _P.layer00['m_'] = [m*2*rdn for m in m_]
+    if P.M/P.L > ave_aM: #should be computed for both _P and P?
+        P.I *= 2*rdn ; P.layer00['p_'] = [p*2*rdn for p in p_]
+        #(L,D,M, d_,m_) *= 1 should remain the same
+    else:
+        P.L *= 2*rdn;P.D *= 2*rdn;P.M *= 2*rdn
+        P.layer00['d_'] = [d*2*rdn for d in d_]
+        P.layer00['m_'] = [m*2*rdn for m in m_]
+
+
 if i < _P.derP.ileft: _P.derP.ileft = i  # index of leftmost P that _P was compared to, for back_search_extend()
 PPm_ = back_search_extend( PPm_, P_)  # evaluate for 1st P in each PP, merge with _P.derP.PP if any
 def back_search_extend( PPm_, P_):  # each P should form derP, evaluate for the 1st P in PP, merge with _P.PP if any

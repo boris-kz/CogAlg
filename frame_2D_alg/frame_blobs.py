@@ -101,31 +101,24 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     root_bblob = object
 
 
-def comp_pixel(image):  # 2x2 pixel cross-correlation within image, a standard edge detection operator
-    # see comp_pixel_versions file for other versions and more explanation
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
 
     # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
-    image = image.astype('int32')  # it appears that we had overflow in G computation
-
     topleft__ = image[:-1, :-1]
     topright__ = image[:-1, 1:]
     bottomleft__ = image[1:, :-1]
     bottomright__ = image[1:, 1:]
 
-    rot_Gy__ = bottomright__ - topleft__  # rotated to bottom__ - top__
-    rot_Gx__ = topright__ - bottomleft__  # rotated to right__ - left__
+    d_upleft__ = bottomright__ - topleft__
+    d_upright__= bottomleft__ - topright__
 
-    G__ = (np.hypot(rot_Gy__, rot_Gx__) - ave)
-    # deviation of central gradient per kernel, between four vertex pixels
-    M__ = int(ave * 1.2) - (abs(rot_Gy__) + abs(rot_Gx__))
-    # inverse deviation of SAD, which is a measure of variation. Ave * coeff = ave_SAD / ave_G, 1.2 is a guess
+    G__ = (np.hypot(d_upleft__, d_upright__) - ave)  # deviation of kernel gradient, between four pixels
+    # M__ = ave - (abs(Gy__) + abs(Gx__))  # inverse deviation of SAD, a measure of variation, redundant here
+    p__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels
 
-    return (topleft__, rot_Gy__, rot_Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
+    return (p__, d_upleft__, d_upright__, G__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__ = (p__, dy__, dx__, g__) for readability in functions below
 '''
-    rotate dert__ 45 degrees clockwise, convert diagonals into orthogonals to avoid summation, which degrades accuracy of Gy, Gx
-    Gy, Gx are used in comp_a, which returns them, as well as day, dax back to orthogonal
-    
     Sobel version:
     Gy__ = -(topleft__ - bottomright__) - (topright__ - bottomleft__)   # decomposition of two diagonal differences into Gy
     Gx__ = -(topleft__ - bottomright__) + (topright__ - bottomleft__))  # decomposition of two diagonal differences into Gx
