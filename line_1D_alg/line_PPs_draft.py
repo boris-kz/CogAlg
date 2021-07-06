@@ -73,7 +73,7 @@ layer0_rdn = {'L': .25, 'I': .5, 'D': .25, 'M': .5}  # M is doubled because it r
 
 def search(P_):  # cross-compare patterns within horizontal line
 
-    sub_search_recursive_draft(P_, fderP=0)  # search in sublayers first: proceed with incremental distance
+    sub_search_recursive(P_, fderP=0)  # search in sublayers first: proceed with incremental distance
 
     # search in P_:
     derP_ = []  # search forms array of derPs (P + P'derivatives): combined output of pair-wise comp_P
@@ -111,37 +111,37 @@ def search(P_):  # cross-compare patterns within horizontal line
                         break  # neg net_M: stop search
 
     for index in sorted(remove_index, reverse=True):
-         del P_[index]  # delete the merged Ps
+        del P_[index]  # delete the merged Ps
 
     if derP_:
-        PPm_ = form_PPm_(derP_)  # cluster derPs into PPms by the sign of mP
+        PPm_ = form_PP_(derP_, fPd=False)  # cluster derPs into PPms by the sign of mP
 
     if len(derP_d_)>1:
         derP_d_ = form_adjacent_mP(derP_d_)
-        PPd_ = form_PPd_(derP_d_)  # cluster derP_ds into PPds by the sign of vdP
+        PPd_ = form_PP_(derP_d_, fPd=True)  # cluster derP_ds into PPds by the sign of vdP
 
     return PPm_, PPd_
 
 
-def sub_search_recursive_draft(P_, fderP):  # search in sublayer[0] per P
+def sub_search_recursive(P_, fderP):  # search in sublayer[0] per P
     
     for P in P_:
         sub_P_ = P.sublayers[0][5]  
         if len(sub_P_) > 2:
             PM = P.M; PD = P.D
             if fderP:
-                PM += P.derP.mP; PD += P.derP.mP  # include match added by last search?
+                PM += P.derP.mP; PD += P.derP.mP  # include match added by last search
 
             if P.fPd:
                 if abs(PD) > ave_D:  # better use sublayers.D|M, but we don't have it yet
                     sub_PPm_, sub_PPd_ = search(sub_P_)
                     P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_  # extended in line_patterns
-                    sub_search_recursive_draft(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
+                    sub_search_recursive(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
 
             elif PM > ave_M:
                 sub_PPm_, sub_PPd_ = search(sub_P_)
                 P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_  # extended in line_patterns
-                sub_search_recursive_draft(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
+                sub_search_recursive(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
 
 
 def merge_comp_P(P_, _P, P, i, j, neg_M, neg_L, remove_index):  # multi-variate cross-comp, _smP = 0 in line_patterns
@@ -259,87 +259,46 @@ def comp_sublayers(_P, P, mP):  # also add dP?
 
                     mP += sub_mP  # of compared H, no specific mP?
                     if sub_mP < ave_sub_M:
-                        # potentially mH: trans-layer induction?
-                        # f mP + sub_mP < ave_sub_M:
-                        # so selection considers both local and global values of mP.
+                        # potentially mH: trans-layer induction: if mP + sub_mP < ave_sub_M: both local and global values of mP.
                         break  # low vertical induction, deeper sublayers are not compared
                 else:
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
 
 
-def form_PP_(derP_):  # cluster derPs into PP s by derP sign,
+def form_PP_(derP_, fPd):  # cluster derPs into PP s by derP sign,
 
     PP_ = []
-    derP = derP_[0]  # 1st derP
-    PP = CPP( derP_=[derP],inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
-    # positive PPms only, miss over discontinuity is expected, contrast dP -> PPd: if PP.mP * abs(dP) > ave_dP: explicit borrow only?
+    derP = derP_[0]
+    '''
+    Compare Pds with vdP (value of dP) > ave, defined by contrast it forms relative to co-projected match:
+    Diff it's not independent, it's value is borrowed from co-derived P.M + adjacent (PP.mP/len(PP.derP_) +_PP.mP/len(_PP.derP_)) /2:
+    '''
+    if fPd: _sign = (derP.adj_mP + derP.P.M) * abs(derP.dP) > ave
+    else:   _sign = derP.mP > 0
 
-    for i, derP in enumerate(derP_, start=1):
-        if derP.sign != PP.sign:  # sign != _sign: same-sign derPs in PP
+    PP = CPP( derP_=[derP], inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
+    # positive PPs only, miss over discontinuity is expected, contrast dP -> PPd: if PP.mP * abs(dP) > ave_dP: explicit borrow only?
+
+    for derP in derP_[1:]:
+        if fPd: sign = (derP.adj_mP + derP.P.M) * abs(derP.dP) > ave
+        else:   sign = derP.mP > 0
+
+        if sign != sign:  # sign != _sign: same-sign derPs in PP
             # terminate PPm:
             PP_.append(PP)
             PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )  # reinitialize PPm with current derP
-            PP.derP = derP
-            derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
-        else:
-            PP.accum_from(derP.P)
-        PP.accum_from(derP)  # accumulate PPm numerical params with same-name current derP params, exclusions?
-
-    PP_.append(PP)  # pack last PP
-
-    return PPm_
-
-
-def form_PPm_(derP_):  # cluster derPs into PPm s by mP sign, eval for div_comp per PPm
-
-    PPm_ = []
-    derP = derP_[0]  # 1st derP
-    PP = CPP( derP_=[derP],inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
-    PP.derP = derP
-    PP.derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
-    # positive PPms only, miss over discontinuity is expected, contrast dP -> PPd: if PP.mP * abs(dP) > ave_dP: explicit borrow only?
-
-    for i, derP in enumerate(derP_, start=1):
-        if derP.sign != PP.sign:  # sign != _sign: same-sign derPs in PP
-            # terminate PPm:
-            PPm_.append(PP)
-            PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )  # reinitialize PPm with current derP
-            PP.derP = derP
-            derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
+            PP.derP = derP  # forgot what that's for?
+            derP.PP = PP  # PP that derP belongs to, not used
         else:
             PP.accum_from(derP.P)
             PP.accum_from(derP)  # accumulate PPm numerical params with same-name current derP params, exclusions?
+            PP.derP_.append(derP)
 
-    PPm_.append(PP)  # pack last PP
+        _sign - sign
 
-    return PPm_
+    PP_.append(PP)  # pack last PP
 
-
-def form_PPd_(derP_):
-    '''
-    Compare Pds with vdP (value of dP) > ave, defined by contrast it forms relative to co-projected match:
-    Diff doesn't have independent value, it's borrowed from co-derived P.M + adjacent (PP.mP/len(PP.derP_) +_PP.mP/len(_PP.derP_)) /2:
-    '''
-    PPd_ = []
-    derP = derP_[0]
-    PP = CPP( derP_=[derP],inherit=([derP.P, derP]) )  # inherited instances need to be in a list
-    PP.derP = derP
-    derP.PP = PP  # PP that derP belongs to, for merging PPs in back_search_extend
-
-    for i, derP in enumerate(derP_, start=1):
-        vdP = (derP.adj_mP + derP.P.M) * abs(derP.dP) - ave
-        if vdP <= 0:
-            # terminate PPd:
-            PPd_.append(PP)
-            PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )
-            PP.derP = derP
-            derP.PP = PP
-        else:
-            PP.accum_from(derP.P)
-            PP.accum_from(derP)
-
-    PPd_.append(PP)
-    return PPd_
+    return PP_
 
 
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division between element Ps
@@ -404,9 +363,7 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                 '''
                 m and d from comp_rate is more accurate than comp_norm?
                 rm, rd: rate value is relative? 
-                
                 also define Pd, if strongly directional? 
-                   
                 if dP > ndP: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
                 else:        dPP_rdn = 1; ndPP_rdn = 0
                 '''
@@ -475,9 +432,10 @@ def rng_search(P_, ave):
                 # sign is ORed bilaterally, negative for singleton derPs only
                 break  # neg net_M: stop search
 
-        sub_PPm_ = form_PPm_(rderP_)  # cluster derPs into PPms by the sign of mP, same form_PPm_?
+        sub_PPm_ = form_PP_(rderP_, fPd=False)  # cluster derPs into PPms by the sign of mP, same form_PPm_?
 
     return sub_PPm_
+
 '''
 with Kelvin:
 '''
@@ -485,37 +443,42 @@ def eval_params(PPm_):
 
     for PP in PPm_:  # interae ove PPm_ in search of strong Ps
         if PP.layer1:  # if layer1 is not empty
-            for param_name in PP.layer0:
-                if PP.layer1[param_name].m > ave_M:
-                    form_Pp_draft(PP, param_name, fPd = False)
-                if PP.layer1[param_name].d > ave_D:
-                    form_Pp_draft(PP, param_name, fPd = True)
+            for param_name in PP.layer1:
+
+                M = PP.layer1[param_name].m - ave_M
+                D = PP.layer1[param_name].d - ave_D
+                if M > 0 or D > 0:
+                    if M > D: D -= ave_D
+                    else: M -= ave_M  # filter*2 if redundant
+                    if M > ave_M: form_Pp_draft(PP, param_name, fPd = False)
+                    if D > ave_D: form_Pp_draft(PP, param_name, fPd = True)
 
 
 def form_Pp_draft(PP, param_name, fPd):
 
     rdn = layer0_rdn[param_name]
-    if fPd:
-        _sign = PP.derP_[0].layer1[param_name].d > 0
-    else: _sign = PP.derP_[0].layer1[param_name].m > 0
+    if fPd: _sign = PP.derP_[0].layer1[param_name].d > 0
+    else:   _sign = PP.derP_[0].layer1[param_name].m > 0
 
-    # probably needs extension:
-    Pp = CP(derP_=[PP.derP_[0]], _smP=False, sign=_sign)
+    # needs extension:
+    Pp = CP(_smP=False, sign=_sign)
 
     for derP in PP.derP[1:]:
-        if fPd:
-            sign = derP.layer1[param_name].d > 0
-        else: sign = derP.layer1[param_name].m > 0
+        d = derP.layer1[param_name].d
+        m = derP.layer1[param_name].m
+        if fPd: sign = d > 0
+        else:   sign = m > 0
 
-        if sign == _sign:
-            if fPd: Pp_ = "Ppd_"
-            else: Pp_ = "Ppm_"
-            PP.layer1[param_name].Pp_.append(Pp)
-            # add Pp initialization here
+        if sign != _sign:
+            if fPd: PP.layer1[param_name].Ppd_.append(Pp)
+            else:   PP.layer1[param_name].Ppm_.append(Pp)
+            Pp = CP(_smP=False, sign=_sign)
         else:
-            # edit a bunch
-            Pp.L += 1; Pp.M += m * rdn
-            Pp.dert_.append(dert)
+            # accumulate Pp params
+            Pp.L += 1
+            Pp.D += d
+            Pp.M += m
+            Pp.dert_.append((d,m))
 
         _sign = sign
 
@@ -536,7 +499,6 @@ def form_Pp_draft(PP, param_name, fPd):
         P.L *= 2*rdn;P.D *= 2*rdn;P.M *= 2*rdn
         P.layer00['d_'] = [d*2*rdn for d in d_]
         P.layer00['m_'] = [m*2*rdn for m in m_]
-
 
 if i < _P.derP.ileft: _P.derP.ileft = i  # index of leftmost P that _P was compared to, for back_search_extend()
 PPm_ = back_search_extend( PPm_, P_)  # evaluate for 1st P in each PP, merge with _P.derP.PP if any

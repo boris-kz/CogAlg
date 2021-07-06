@@ -109,14 +109,14 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     bottomleft__ = image[1:, :-1]
     bottomright__ = image[1:, 1:]
 
+    d_upright__ = bottomleft__ - topright__
     d_upleft__ = bottomright__ - topleft__
-    d_upright__= bottomleft__ - topright__
 
-    G__ = (np.hypot(d_upleft__, d_upright__) - ave)  # deviation of kernel gradient, between four pixels
+    G__ = (np.hypot(d_upright__, d_upleft__) - ave)  # deviation of kernel gradient, between four pixels
     # M__ = ave - (abs(Gy__) + abs(Gx__))  # inverse deviation of SAD, a measure of variation, redundant here
-    p__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels
+    rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels
 
-    return (p__, d_upleft__, d_upright__, G__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    return (rp__, d_upleft__, d_upright__, G__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (p__, dy__, dx__, g__) for readability in functions below
 '''
     Sobel version:

@@ -1,5 +1,5 @@
 """
-Cross-comparison of pixels 3x3 kernels or gradient angles in 2x2 kernels
+Cross-comparison of pixels or gradient angles in 2x2 kernels
 """
 
 import numpy as np
@@ -7,17 +7,16 @@ import functools
 
 ave_ga = .78
 ave_ma = 2  # at 22.5 degrees?
+# https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
 
 def comp_r(dert__, ave, rng, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
-    This fork is selective for blobs with below-average gradient,
-    where input intensity didn't vary much in shorter-range cross-comparison.
+    This fork is selective for blobs with below-average gradient in shorter-range cross-comp: input intensity didn't vary much.
     Such input is predictable enough for selective sampling: skipping current rim in following comparison kernels.
-    Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
-    kernel width increases as 2^rng: 1: 2x2 kernel, 2: 4x4 kernel, 3: 8x8 kernel...
-    ...
-    Due to skipping, configuration of input derts in next-rng kernel will always be 2x2
+    Skipping forms increasingly sparse dert__ for next-range cross-comp,
+    hence kernel width increases as 2^rng: 1: 2x2 kernel, 2: 4x4 kernel, 3: 8x8 kernel
+    There is also skipping within greater-rng rims, so configuration of compared derts is always 2x2
     '''
 
     i__ = dert__[0]  # i is pixel intensity
@@ -40,20 +39,87 @@ def comp_r(dert__, ave, rng, mask__=None):
     else:
         majority_mask__ = None  # returned at the end of function
 
-    d_upleft__ = dert__[1][:-1:2, :-1:2].copy()  # sparse to align with i__center
+    d_upleft__ = dert__[1][:-1:2, :-1:2].copy()  # sparse step=2 sampling
     d_upright__= dert__[2][:-1:2, :-1:2].copy()
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
+    # combined distance and extrapolation coeffs, need to separate them
     # compare pixels diagonally:
-    d_upleft__ += (i__bottomright - i__topleft) * rngSkip
     d_upright__+= (i__bottomleft - i__topright) * rngSkip
+    d_upleft__ += (i__bottomright - i__topleft) * rngSkip
 
-    g__ = np.hypot(d_upleft__, d_upright__) - ave  # gradient, recomputed at each comp_r
+    g__ = np.hypot(d_upright__, d_upleft__) - ave  # gradient, recomputed at each comp_r
 
     return (i__topleft, d_upleft__, d_upright__, g__), majority_mask__
 
 
-def comp_r(dert__, ave, rng, root_fia, mask__=None):
+def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+
+    if mask__ is not None:
+        majority_mask__ = (mask__[:-1, :-1].astype(int) +
+                           mask__[:-1, 1:].astype(int) +
+                           mask__[1:, 1:].astype(int) +
+                           mask__[1:, :-1].astype(int)
+                           ) > 1
+    else:
+        majority_mask__ = None
+
+    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
+
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or g + ave
+        for angle_ in angle__: angle_[np.where(np.isnan(angle_))] = 0 # set nan to 0, to avoid error later
+
+    # angle__ shifted in 2x2 kernels:
+    angle__topleft  = angle__[:, :-1, :-1]  # a is 3 dimensional
+    angle__topright = angle__[:, :-1, 1:]
+    angle__botright = angle__[:, 1:, 1:]
+    angle__botleft  = angle__[:, 1:, :-1]
+
+    sin_da0__, cos_da0__ = angle_diff(angle__botleft, angle__topright)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
+    sin_da1__, cos_da1__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
+
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1) - ave_ma  # +1 to convert to all positives, ave ma = 2?
+
+    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
+    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
+    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    '''
+    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
+    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
+    '''
+    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
+    '''
+    ga: deviation of magnitude of gradient of angle
+    in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)
+    '''
+    dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
+    dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
+    i__ = i__[:-1, :-1]  # for summation in Dert
+    g__ = g__[:-1, :-1]  # for summation in Dert
+    m__ = m__[:-1, :-1]
+
+    return (i__, dy__, dx__, g__, m__, day__[0], day__[1], dax__[0], dax__[1], ga__, ma__), majority_mask__
+
+
+def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)
+
+    sin_1, cos_1 = a1[:]
+    sin_2, cos_2 = a2[:]
+
+    # sine and cosine of difference between angles:
+
+    sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
+    cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
+
+    return [sin_da, cos_da]
+
+'''
+alternative versions:
+'''
+def comp_r_odd(dert__, ave, rng, root_fia, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -159,82 +225,6 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
                             )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask__
-
-
-def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
-
-    if mask__ is not None:
-        majority_mask__ = (mask__[:-1, :-1].astype(int) +
-                           mask__[:-1, 1:].astype(int) +
-                           mask__[1:, 1:].astype(int) +
-                           mask__[1:, :-1].astype(int)
-                           ) > 1
-    else:
-        majority_mask__ = None
-
-    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
-
-    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or g + ave
-        for angle_ in angle__: angle_[np.where(np.isnan(angle_))] = 0 # set nan to 0, to avoid error later
-
-    # angle__ shifted in 2x2 kernel, rotate 45 degrees counter-clockwise to cancel clockwise rotation in frame_blobs:
-    angle__left = angle__[:, :-1, :-1]  # was topleft # a is 3 dimensional
-    angle__top = angle__[:, :-1, 1:]  # was topright
-    angle__right = angle__[:, 1:, 1:]  # was botright
-    angle__bottom = angle__[:, 1:, :-1]  # was botleft
-    '''
-    a__ is rotated 45 degrees counter-clockwise:
-    '''
-    sin_da0__, cos_da0__ = angle_diff(angle__right, angle__left)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
-    sin_da1__, cos_da1__ = angle_diff(angle__bottom, angle__top)  # ... same for day
-
-    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1) - ave_ma  # +1 to convert to all positives, ave ma = 2?
-
-    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
-    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
-    '''
-    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
-    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    '''
-    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
-    '''
-    ga: deviation of magnitude of gradient of angle
-    in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)
-    '''
-    # if root fork is frame_blobs, recompute orthogonal dy and dx
-    if (prior_forks[-1] == 'g') or (prior_forks[-1] == 'a'):
-        i__topleft = i__[:-1, :-1]
-        i__topright = i__[:-1, 1:]
-        i__botright = i__[1:, 1:]
-        i__botleft = i__[1:, :-1]
-        dy__ = (i__botleft + i__botright) - (i__topleft + i__topright)  # decomposition of two diagonal differences
-        dx__ = (i__topright + i__botright) - (i__topleft + i__botleft)  # decomposition of two diagonal differences
-    else:
-        dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
-        dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
-
-    i__ = i__[:-1, :-1]  # for summation in Dert
-    g__ = g__[:-1, :-1]  # for summation in Dert
-    m__ = m__[:-1, :-1]
-
-    return (i__, dy__, dx__, g__, m__, day__[0], day__[1], dax__[0], dax__[1], ga__, ma__), majority_mask__
-
-
-def angle_diff(a2, a1):  # compare angle_1 to angle_2
-
-    sin_1, cos_1 = a1[:]
-    sin_2, cos_2 = a2[:]
-
-    # sine and cosine of difference between angles:
-
-    sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
-    cos_da = (cos_1 * cos_2) + (sin_1 * sin_2)
-
-    return [sin_da, cos_da]
 
 
 def comp_a_complex(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
