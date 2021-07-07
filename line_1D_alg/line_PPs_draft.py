@@ -51,7 +51,6 @@ class CderP(ClusterStructure):
 
 class CPP(CP, CderP):
 
-    layer1 = dict
     derP_ = list  # constituents, maybe sub_PPm_
 
 
@@ -115,10 +114,12 @@ def search(P_):  # cross-compare patterns within horizontal line
 
     if derP_:
         PPm_ = form_PP_(derP_, fPd=False)  # cluster derPs into PPms by the sign of mP
+        eval_params(PPm_)
 
     if len(derP_d_)>1:
         derP_d_ = form_adjacent_mP(derP_d_)
         PPd_ = form_PP_(derP_d_, fPd=True)  # cluster derP_ds into PPds by the sign of vdP
+        eval_params(PPd_)
 
     return PPm_, PPd_
 
@@ -135,12 +136,12 @@ def sub_search_recursive(P_, fderP):  # search in sublayer[0] per P
             if P.fPd:
                 if abs(PD) > ave_D:  # better use sublayers.D|M, but we don't have it yet
                     sub_PPm_, sub_PPd_ = search(sub_P_)
-                    P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_  # extended in line_patterns
+                    P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_
                     sub_search_recursive(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
 
             elif PM > ave_M:
                 sub_PPm_, sub_PPd_ = search(sub_P_)
-                P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_  # extended in line_patterns
+                P.sublayers[0][6] += sub_PPm_; P.sublayers[0][7] += sub_PPd_
                 sub_search_recursive(sub_P_, fderP=1)  # deeper sublayers search is selective per sub_P
 
 
@@ -234,8 +235,8 @@ def comp_sublayers(_P, P, mP):  # also add dP?
         for _sub_layer, sub_layer in zip(_P.sublayers, P.sublayers):
 
             if _sub_layer and sub_layer:
-                _Ls, _fdP, _fid, _rdn, _rng, _sub_P_ = _sub_layer[0]
-                Ls, fdP, fid, rdn, rng, sub_P_ = sub_layer[0]
+                _Ls, _fdP, _fid, _rdn, _rng, _sub_P_, [], [] = _sub_layer[0]
+                Ls, fdP, fid, rdn, rng, sub_P_, [], [] = sub_layer[0]
                 # fork comparison:
                 if fdP == _fdP and rng == _rng and min(Ls, _Ls) > ave_Ls:
                     der_sub_P_ = []
@@ -265,15 +266,12 @@ def comp_sublayers(_P, P, mP):  # also add dP?
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
 
 
-def form_PP_(derP_, fPd):  # cluster derPs into PP s by derP sign,
+def form_PP_(derP_, fPd):  # cluster derPs into PP s by derP sign
 
     PP_ = []
     derP = derP_[0]
-    '''
-    Compare Pds with vdP (value of dP) > ave, defined by contrast it forms relative to co-projected match:
-    Diff it's not independent, it's value is borrowed from co-derived P.M + adjacent (PP.mP/len(PP.derP_) +_PP.mP/len(_PP.derP_)) /2:
-    '''
-    if fPd: _sign = (derP.adj_mP + derP.P.M) * abs(derP.dP) > ave
+
+    if fPd: _sign = (derP.adj_mP + derP.P.M) * abs(derP.dP) > ave  # value of difference is contrast: borrowed from co-projected match
     else:   _sign = derP.mP > 0
 
     PP = CPP( derP_=[derP], inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
@@ -287,14 +285,13 @@ def form_PP_(derP_, fPd):  # cluster derPs into PP s by derP sign,
             # terminate PPm:
             PP_.append(PP)
             PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )  # reinitialize PPm with current derP
-            PP.derP = derP  # forgot what that's for?
             derP.PP = PP  # PP that derP belongs to, not used
         else:
             PP.accum_from(derP.P)
             PP.accum_from(derP)  # accumulate PPm numerical params with same-name current derP params, exclusions?
             PP.derP_.append(derP)
 
-        _sign - sign
+        _sign = sign
 
     PP_.append(PP)  # pack last PP
 
@@ -436,13 +433,11 @@ def rng_search(P_, ave):
 
     return sub_PPm_
 
-'''
-with Kelvin:
-'''
+
 def eval_params(PPm_):
 
     for PP in PPm_:  # interae ove PPm_ in search of strong Ps
-        if PP.layer1:  # if layer1 is not empty
+        if PP.layer1:  # how can layer1 be empty?
             for param_name in PP.layer1:
 
                 M = PP.layer1[param_name].m - ave_M
@@ -450,20 +445,19 @@ def eval_params(PPm_):
                 if M > 0 or D > 0:
                     if M > D: D -= ave_D
                     else: M -= ave_M  # filter*2 if redundant
-                    if M > ave_M: form_Pp_draft(PP, param_name, fPd = False)
-                    if D > ave_D: form_Pp_draft(PP, param_name, fPd = True)
+                    if M > ave_M: form_Pp_(PP, param_name, fPd = False)
+                    if D > ave_D: form_Pp_(PP, param_name, fPd = True)
 
 
-def form_Pp_draft(PP, param_name, fPd):
+def form_Pp_(PP, param_name, fPd):
 
     rdn = layer0_rdn[param_name]
     if fPd: _sign = PP.derP_[0].layer1[param_name].d > 0
     else:   _sign = PP.derP_[0].layer1[param_name].m > 0
 
-    # needs extension:
-    Pp = CP(_smP=False, sign=_sign)
+    Pp = CP(_smP=False, sign=_sign)  # both probably not needed
 
-    for derP in PP.derP[1:]:
+    for derP in PP.derP_[1:]:
         d = derP.layer1[param_name].d
         m = derP.layer1[param_name].m
         if fPd: sign = d > 0
@@ -472,7 +466,7 @@ def form_Pp_draft(PP, param_name, fPd):
         if sign != _sign:
             if fPd: PP.layer1[param_name].Ppd_.append(Pp)
             else:   PP.layer1[param_name].Ppm_.append(Pp)
-            Pp = CP(_smP=False, sign=_sign)
+            Pp = CP(_smP=False, sign=_sign)  # both probably not needed
         else:
             # accumulate Pp params
             Pp.L += 1

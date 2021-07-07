@@ -42,8 +42,8 @@ class CP(ClusterStructure):
     D = int
     M = int
     x0 = int
-    p_ = list
-    d_ = list
+    p_ = list  # accumulated with rng
+    d_ = list  # accumulated with rng
     sublayers = list
     # for line_PPs
     derP = object  # forward comp_P derivatives
@@ -237,25 +237,19 @@ def intra_Pd_(Pd_, irp_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in 
 
 
 def range_comp(p_, rp_, rd_):
-    # no rp_, rd_ = [], []: should be cumulative? unless preserve rim layers
 
+    rng_p_, rng_d_ = [], []  # returned as rp_, rd_
     p_ = p_[::2]  # sparse p_ and d_, skipping odd ps compared in prior rng: 1 skip / 1 add, to maintain 2x overlap
     rp_ = rp_[::2]
     rd_ = rd_[::2]
-
     _p = p_[0]
-    _pri_rng_p = rp_[0]
-    _pri_rng_d = rd_[0]
 
-    rng_p_ = [_pri_rng_p]
-    rng_d_ = [_pri_rng_d]
-
-    for p, pri_rng_p, pri_rng_d in zip(p_[1:], rp_[1:], rd_[1:]):
+    for p, rp, rd in zip(p_[1:], rp_, rd_):
         d = p -_p
-        rng_p =_p + pri_rng_p  # intensity accumulated in rng
-        rng_d = d + pri_rng_d  # difference accumulated in rng
-        rng_p_.append(rng_p)
-        rng_d_.append(rng_d)
+        rp += _p  # intensity accumulated in rng
+        rd += d  # difference accumulated in rng
+        rng_p_.append(rp)
+        rng_d_.append(rd)
         _p = p
 
     return rng_p_, rng_d_
@@ -274,7 +268,7 @@ def deriv_comp(d_):  # cross-comp consecutive ds in same-sign dert_: sign match 
         md_.append(md)
         _d = d
 
-    return md_, dd_  # if fid: P. rp_ = md_
+    return md_, dd_  # if fid: P. rp_ = md_?
 
 
 def cross_comp_spliced(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested

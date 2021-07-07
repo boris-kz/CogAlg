@@ -44,6 +44,7 @@ def comp_r(dert__, ave, rng, mask__=None):
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
     # combined distance and extrapolation coeffs, need to separate them
+    # distance coef should really be ave * (rave / dist), rave = ave abs d / ave p?
     # compare pixels diagonally:
     d_upright__+= (i__bottomleft - i__topright) * rngSkip
     d_upleft__ += (i__bottomright - i__topleft) * rngSkip
