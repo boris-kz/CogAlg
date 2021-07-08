@@ -16,10 +16,11 @@ from collections import deque
 import sys
 import numpy as np
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
-from comp_blob import ave_min, ave_inv
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
+ave_inv = 20 # ave inverse m, change to Ave from the root intra_blob?
+ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 ave_g = 30  # change to Ave from the root intra_blob?
 flip_ave = .1
 flip_ave_FPP = 0  # flip large FPPs only (change to 0 for debug purpose)
@@ -45,14 +46,12 @@ class CP(ClusterStructure):
     I = int
     Dy = int
     Dx = int
-    G = int
     M = int
     # comp_angle:
     Dydy = int
     Dxdy = int
     Dydx = int
     Dxdx = int
-    Ga = int
     Ma = int
     # comp_dx:
     Mdx = int
@@ -77,7 +76,6 @@ class CP(ClusterStructure):
 class CderP(ClusterStructure):
 
     layer1 = dict
-    # derP params
     mP = int
     dP = int
     P = object   # lower comparand
@@ -211,8 +209,8 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
 
     if ~_mask:
         # initialize P with first dert
-        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4],
-               Dydy=_dert[5], Dxdy=_dert[6], Dydx=_dert[7], Dxdx=_dert[8], Ga=_dert[9], Ma=_dert[10],
+        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
+               Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8],
                x0=0, L=1, y=y, dert_=dert_)
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
@@ -225,13 +223,13 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
         else:  # dert is not masked
             if _mask:  # _dert is masked, initialize P params:
                 # initialize P with first dert
-                P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4],
-                       Dydy=_dert[5], Dxdy=_dert[6], Dydx=_dert[7], Dxdx=_dert[8], Ga=_dert[9], Ma=_dert[10],
+                P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
+                       Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8],
                        x0=x, L=1, y=y, dert_=dert_)
             else:
                 # _dert is not masked, accumulate P params with (p, dy, dx, g, m, day, dax, ga, ma) = dert
-                P.accumulate(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4],
-                             Dydy=dert[5], Dxdy=dert[6], Dydx=dert[7], Dxdx=dert[8], Ga=dert[9], Ma=dert[10], L=1)
+                P.accumulate(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
+                             Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8], L=1)
                 P.dert_.append(dert)
 
         _mask = mask
@@ -255,8 +253,8 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
             dert_ = [_dert]
             _sign = _dert[2] > 0
             # initialize P with first dert
-            P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3], M=_dert[4],
-                   Dydy=_dert[5], Dxdy=_dert[6], Dydx=_dert[7], Dxdx=_dert[8], Ga=_dert[9], Ma=_dert[10],
+            P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
+               Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8],
                    x0=iP.x0, dert_=dert_, L=1, y=iP.y, sign=_sign, Pm=iP)
             x = 1  # relative x within P
 
@@ -264,8 +262,8 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                 sign = dert[2] > 0
                 if sign == _sign: # same Dx sign
                     # accumulate P params with (p, dy, dx, g, m, dyy, dyx, dxy, dxx, ga, ma) = dert
-                    P.accumulate(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4],
-                                 Dydy=_dert[5], Dxdy=_dert[6], Dydx=_dert[7], Dxdx=_dert[8], Ga=_dert[9], Ma=_dert[10], L=1)
+                    P.accumulate(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
+                                 Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8], L=1)
                     P.dert_.append(dert)
 
                 else:  # sign change, terminate P
@@ -275,8 +273,8 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                     P.x = P.x0 + (P.L-1) // 2
                     Pd_.append(P)
                     # reinitialize params
-                    P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3], M=dert[4],
-                           Dydy=_dert[5], Dxdy=_dert[6], Dydx=_dert[7], Dxdx=_dert[8], Ga=_dert[9], Ma=_dert[10],
+                    P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
+                           Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8],
                            x0=iP.x0+x, dert_=[dert], L=1, y=iP.y, sign=sign, Pm=iP)
                 _sign = sign
                 x += 1
@@ -446,10 +444,15 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
 
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
-    layer1 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
+    layer1 = dict({'I':.0,'Da':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mP, dP = 0, 0
-    absG = max(1,P.G + (ave_g*P.L)); _absG = max(1,_P.G + (ave_g*_P.L))         # use max to avoid zero division
-    absGa = max(1,P.Ga + (ave_ga *P.L)); _absGa = max(1,_P.Ga + (ave_ga *_P.L))
+
+    G = np.hypot(P.Dy, P.Dx) - ave_g * P.L
+    _G = np.hypot(_P.Dy, _P.Dx) - ave_g * _P.L
+    absG = max(1,G + (ave_g*P.L)); _absG = max(1,_G + (ave_g*_P.L))         # use max to avoid zero division
+    Ga = np.hypot( np.arctan2(P.Dydy, P.Dxdy), np.arctan2(P.Dydx, P.Dxdx) ) - ave_ga * P.L
+    _Ga = np.hypot( np.arctan2(_P.Dydy, _P.Dxdy), np.arctan2(_P.Dydx, _P.Dxdx) ) - ave_ga * _P.L
+    absGa = max(1,Ga + (ave_ga *P.L)); _absGa = max(1,_Ga + (ave_ga *_P.L))
 
     # compare base param to get layer1
     for param_name in layer1:
@@ -770,10 +773,17 @@ def merge_PPP(PPP, _PPP, fPPd):
 def comp_PP(PP, _PP):
 
     # compare PP and _PP base params to get layer 01 of derPP #-----------------
-    layer01 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
+    layer01 = dict({'I':.0,'Da':.0,'M':.0,'Dady':.0,'Dadx':.0, 'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mP, dP = 0, 0
-    absG = max(1, PP.G + (ave_g*PP.L)); _absG = max(1, _PP.G + (ave_g*_PP.L))      # use max to avoid zero division
-    absGa = max(1,PP.Ga + (ave_ga*PP.L)); _absGa = max(1, _PP.Ga + (ave_ga*_PP.L))
+
+    G = np.hypot(PP.Dy, PP.Dx) - ave_g * PP.L
+    _G = np.hypot(_PP.Dy, _PP.Dx) - ave_g * _PP.L
+    absG = max(1,G + (ave_g*PP.L)); _absG = max(1,_G + (ave_g*_PP.L))         # use max to avoid zero division
+    Ga = np.hypot( np.arctan2(PP.Dydy, PP.Dxdy), np.arctan2(PP.Dydx, PP.Dxdx) ) - ave_ga * PP.L
+    _Ga = np.hypot( np.arctan2(_PP.Dydy, _PP.Dxdy), np.arctan2(_PP.Dydx, _PP.Dxdx) ) - ave_ga * _PP.L
+    absGa = max(1,Ga + (ave_ga *PP.L)); _absGa = max(1,_Ga + (ave_ga *_PP.L))
+
+
     for param_name in layer01:
         if param_name == 'Da':
             # sin and cos components
@@ -811,7 +821,7 @@ def comp_PP(PP, _PP):
 
     # compare layer1 to get layer11 #-------------------------------------------
 
-    layer11 = dict({'I':.0,'Da':.0,'G':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ga':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
+    layer11 = dict({'I':.0,'Da':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mmPP, dmPP, mdPP, ddPP = 0, 0, 0, 0
     for i, ((param_name, dm), (_param_name, _dm)) in enumerate(zip(PP.layer1.items(), _PP.layer1.items())):
 

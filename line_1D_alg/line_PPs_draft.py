@@ -52,7 +52,7 @@ class CderP(ClusterStructure):
 class CPP(CP, CderP):
 
     derP_ = list  # constituents, maybe sub_PPm_
-    layer1 = dict  # d, m per comparand (dict is not inherited automatically)
+    layer1 = dict  # d,m per comparand (dict is not inherited automatically)
 
 ave = 100  # ave dI -> mI, * coef / var type
 # no ave_mP: deviation computed via rM  # ave_mP = ave* n_comp_params: comp cost, or n vars per P: rep cost?

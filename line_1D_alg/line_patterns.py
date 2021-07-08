@@ -14,7 +14,7 @@
   (d match = min: rng+ comp value: predictive value of difference is proportional to its magnitude, although inversely so)
   -
   Both extended cross-comp forks are recursive: resulting sub-patterns are evaluated for deeper cross-comp, same as top patterns.
-  These forks here are exclusive per P to avoid redundancy, but they overlap in line_patterns_olp.
+  These forks here are exclusive per P to avoid redundancy, but they do overlap in line_patterns_olp.
 '''
 
 # add ColAlg folder to system path

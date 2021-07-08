@@ -4,9 +4,7 @@ Cross-comparison of pixels or gradient angles in 2x2 kernels
 
 import numpy as np
 import functools
-
-ave_ga = .78
-ave_ma = 2  # at 22.5 degrees?
+# no ave_ga = .78, ave_ma = 2  # at 22.5 degrees
 # https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
 
 def comp_r(dert__, ave, rng, mask__=None):
@@ -19,7 +17,7 @@ def comp_r(dert__, ave, rng, mask__=None):
     There is also skipping within greater-rng rims, so configuration of compared derts is always 2x2
     '''
 
-    i__ = dert__[0]  # i is pixel intensity
+    i__ = dert__[0]  # pixel intensity, should be separate from i__sum
     # sparse aligned rim arrays:
     i__topleft = i__[:-1:2, :-1:2]  # also assignment to new_dert__[0]
     i__topright = i__[:-1:2, 1::2]
@@ -43,18 +41,18 @@ def comp_r(dert__, ave, rng, mask__=None):
     d_upright__= dert__[2][:-1:2, :-1:2].copy()
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
-    # combined distance and extrapolation coeffs, separate distance coef: ave * (rave / dist), rave = ave abs d / ave p?
+    # combined distance and extrapolation coeffs, or separate distance coef: ave * (rave / dist), rave = ave abs d / ave i?
     # compare pixels diagonally:
     d_upright__+= (i__bottomleft - i__topright) * rngSkip
     d_upleft__ += (i__bottomright - i__topleft) * rngSkip
 
-    g__ = np.hypot(d_upright__, d_upleft__) - ave  # gradient, recomputed at each comp_r
-    m__= - g__ # match = inverse of variation
+    m__ = ave - np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
+    i__sum = i__topleft + i__topright + i__bottomleft + i__bottomright
 
-    return (i__topleft, d_upleft__, d_upright__, m__), majority_mask__
+    return (i__topleft, d_upleft__, d_upright__, m__, i__sum), majority_mask__
 
 
-def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
 
     if mask__ is not None:
         majority_mask__ = (mask__[:-1, :-1].astype(int) +
@@ -65,10 +63,10 @@ def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of g
     else:
         majority_mask__ = None
 
-    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
+    i__, dy__, dx__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or g + ave
+        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or / ave + m
         for angle_ in angle__: angle_[np.where(np.isnan(angle_))] = 0 # set nan to 0, to avoid error later
 
     # angle__ shifted in 2x2 kernels:
@@ -81,7 +79,7 @@ def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of g
     sin_da1__, cos_da1__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1) - ave_ma  # +1 to convert to all positives, ave ma = 2?
+        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1)  # +1 for all positives
         # or ma__ = ave_ga - ga__?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines

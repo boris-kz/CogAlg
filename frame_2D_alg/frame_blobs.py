@@ -48,7 +48,6 @@ EXCLUDED_ID = -2
 
 FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, M, blob_, dert__')
 
-
 class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
 
     # comp_pixel:
@@ -76,14 +75,13 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     prior_forks = list
     fopen = bool
     # intra_blob params:
-    f_root_a = bool  # input is from comp angle
-    f_comp_a = bool  # current fork is comp angle
+    f_comp_a = bool  # current fork is comp angle, else comp_r
     fflip = bool     # x-y swap
     rdn = float      # redundancy to higher blob layers
     rng = int        # comp range, set before intra_comp
     # derivation hierarchy:
     Ls = int   # for visibility and next-fork rdn
-    sub_layers = list
+    sub_layers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks
     # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blobs
     fsliced = bool
@@ -113,12 +111,11 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     d_upright__ = bottomleft__ - topright__
     d_upleft__ = bottomright__ - topleft__
 
-    G__ = (np.hypot(d_upright__, d_upleft__) - ave)  # deviation of kernel gradient, between four pixels
-    # M__ = ave - (abs(Gy__) + abs(Gx__))  # inverse deviation of SAD, a measure of variation, redundant here
-    rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels
+    M__ = ave - np.hypot(d_upright__, d_upleft__)  # match = inverse deviation of kernel gradient (variation), between four pixels
+    rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
 
-    return (rp__, d_upleft__, d_upright__, G__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__ = (rp__, dy__, dx__, g__) for readability in functions below
+    return (topleft__, d_upleft__, d_upright__, M__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__ = (p__, dy__, dx__, m__, rp__) for readability in functions below
 '''
     Sobel version:
     Gy__ = -(topleft__ - bottomright__) - (topright__ - bottomleft__)   # decomposition of two diagonal differences into Gy
@@ -178,7 +175,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
                 # initialize new blob
                 blob = blob_cls(layer0=[0 for _ in range(11)],sign=sign__[y, x], root_dert__=dert__)
-                # not updated
+                # it's not in range(11) now?
 
                 if prior_forks: # update prior forks in deep blob
                     blob.prior_forks= prior_forks.copy()
@@ -196,13 +193,14 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                                     Dy = dert__[1][y1][x1],
                                     Dx = dert__[2][y1][x1],
                                     M  = -dert__[3][y1][x1]) # M -= g
-                    if len(dert__)>5: # comp_angle
+                    if len(dert__) > 5: # comp_angle
+                        # dert__[4] is now rp__, increment below?
                         blob.accumulate(Dydy = dert__[4][y1][x1],
                                         Dxdy = dert__[5][y1][x1],
                                         Dydx = dert__[6][y1][x1],
                                         Dxdx = dert__[7][y1][x1],
                                         Ma = dert__[8][y1][x1])
-                    if len(dert__)>11: # comp_dx
+                    if len(dert__) > 10: # comp_dx
                         blob.accumulate(Mdx = dert__[9][y1][x1],
                                         Ddx = dert__[10][y1][x1])
                     blob.A += 1
@@ -359,19 +357,19 @@ if __name__ == "__main__":
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
 
-            if blob.sign:  # +G on first fork
-                if G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+            if blob.sign:  # +M on first fork, remove blob.sign?
+                if (M > aveB) and (blob_height > 3 and blob_width > 3):  # min blob dimensions
                     blob.rdn = 1
-                    blob.f_comp_a = 1
+                    blob.rng = 1
+                    blob.f_root_a = 0
                     deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
-                    # dert__ comp_a in 2x2 kernels
+                    # dert__ comp_r in 4x4 kernels
 
-            elif M > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+            elif G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
                 blob.rdn = 1
-                blob.rng = 1
-                blob.f_root_a = 0
+                blob.f_comp_a = 1
                 deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
-                # dert__ comp_r in 3x3 kernels
+                # dert__ comp_a in 2x2 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers

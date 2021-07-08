@@ -37,7 +37,7 @@ def segment_by_direction(iblob, **kwargs):
 
             if (blob.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
                 blob.fsliced = True
-                slice_blob(blob,verbose)  # slice and comp_slice_ across directional sub-blob
+                slice_blob(blob, verbose)  # slice and comp_slice_ across directional sub-blob
             iblob.dir_blobs.append(blob)
 
         for dir_blob in iblob.dir_blobs:
@@ -60,13 +60,13 @@ def segment_by_direction(iblob, **kwargs):
 
 def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
 
-    if dir_eval(blob.Dy, blob.Dx, blob.G):  # directionally weak blob, merge with all adjacent weak blobs
+    if dir_eval(blob.Dy, blob.Dx):  # directionally weak blob, merge with all adjacent weak blobs
 
         if blob in adj_blobs: adj_blobs.remove(blob)  # remove current blob from adj adj blobs (assigned bilaterally)
         merged_adj_blobs = []  # weak adj_blobs
         for adj_blob in adj_blobs:
 
-            if dir_eval(adj_blob.Dy, adj_blob.Dx, adj_blob.G):  # also directionally weak, merge adj blob in blob:
+            if dir_eval(adj_blob.Dy, adj_blob.Dx):  # also directionally weak, merge adj blob in blob:
                 if adj_blob.id not in merged_ids:
                     merged_ids.append(adj_blob.id)
                     blob = merge_blobs(blob, adj_blob, strong_adj_blobs)
@@ -98,8 +98,9 @@ def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
     return blob
 
 
-def dir_eval(Dy, Dx, G):  # blob direction strength eval
+def dir_eval(Dy, Dx):  # blob direction strength eval
 
+    G = np.hypot(Dy,Dx)
     rD = Dy / Dx if Dx else 2 * Dy
     if abs(G * rD) < ave_dir_val:
         return True
