@@ -43,15 +43,15 @@ def comp_r(dert__, ave, rng, mask__=None):
     d_upright__= dert__[2][:-1:2, :-1:2].copy()
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
-    # combined distance and extrapolation coeffs, need to separate them
-    # distance coef should really be ave * (rave / dist), rave = ave abs d / ave p?
+    # combined distance and extrapolation coeffs, separate distance coef: ave * (rave / dist), rave = ave abs d / ave p?
     # compare pixels diagonally:
     d_upright__+= (i__bottomleft - i__topright) * rngSkip
     d_upleft__ += (i__bottomright - i__topleft) * rngSkip
 
     g__ = np.hypot(d_upright__, d_upleft__) - ave  # gradient, recomputed at each comp_r
+    m__= - g__ # match = inverse of variation
 
-    return (i__topleft, d_upleft__, d_upright__, g__), majority_mask__
+    return (i__topleft, d_upleft__, d_upright__, m__), majority_mask__
 
 
 def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
@@ -82,6 +82,7 @@ def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of g
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         ma__ = (cos_da0__ + 1) + (cos_da1__ + 1) - ave_ma  # +1 to convert to all positives, ave ma = 2?
+        # or ma__ = ave_ga - ga__?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
@@ -90,19 +91,16 @@ def comp_a(dert__, ave_ma, ave_ga, prior_forks, mask__=None):  # cross-comp of g
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    '''
-    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
-    '''
-    ga: deviation of magnitude of gradient of angle
+    
+    deviation of abs gradient of angle: ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
     in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)
     '''
     dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
     dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
     i__ = i__[:-1, :-1]  # for summation in Dert
-    g__ = g__[:-1, :-1]  # for summation in Dert
     m__ = m__[:-1, :-1]
 
-    return (i__, dy__, dx__, g__, m__, day__[0], day__[1], dax__[0], dax__[1], ga__, ma__), majority_mask__
+    return (i__, dy__, dx__, m__, day__[0], day__[1], dax__[0], dax__[1], ma__), majority_mask__
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)
@@ -118,7 +116,7 @@ def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)
     return [sin_da, cos_da]
 
 '''
-alternative versions:
+alternative versions below:
 '''
 def comp_r_odd(dert__, ave, rng, root_fia, mask__=None):
     '''
@@ -143,7 +141,6 @@ def comp_r_odd(dert__, ave, rng, root_fia, mask__=None):
     Scharr coefs:
     YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
     XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
-
     Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, using Sobel coeffs, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio

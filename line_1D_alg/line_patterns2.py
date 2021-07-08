@@ -44,6 +44,7 @@ class CP(ClusterStructure):
     x0 = int
     p_ = list  # accumulated with rng
     d_ = list  # accumulated with rng
+    m_ = list  # only needed for deriv_comp
     sublayers = list
     # for line_PPs
     derP = object  # forward comp_P derivatives
@@ -104,7 +105,7 @@ def form_P_(p_, d_, fPd):  # initialization, accumulation, termination
     if fPd: _sign = _d > 0
     else: _sign = _m > 0
 
-    P = CP(sign=_sign, L=1, I=_p, D=_d, M=_m, x0=0, p_=[_p], d_=[_d], sublayers=[], _smP=False, fPd=fPd)
+    P = CP(sign=_sign, L=1, I=_p, D=_d, M=_m, x0=0, p_=[_p], d_=[_d], m_=[_m], sublayers=[], _smP=False, fPd=fPd)
     # segment by m sign:
     for p, d in zip( p_[1:], d_[1:] ):
         m = ave - abs(d)
@@ -114,11 +115,11 @@ def form_P_(p_, d_, fPd):  # initialization, accumulation, termination
         if sign != _sign:  # sign change, terminate P
             P_.append(P)
             # re-initialization:
-            P = CP(sign=_sign, L=1, I=p, D=d, M=m, x0=x-(P.L-1), p_=[p], d_=[d], sublayers=[], _smP=False, fPd=fPd)
+            P = CP(sign=_sign, L=1, I=p, D=d, M=m, x0=x-(P.L-1), p_=[p], d_=[d], m_=[_m], sublayers=[], _smP=False, fPd=fPd)
         else:
             # accumulate params:
             P.L += 1; P.I += p; P.D += d; P.M += m
-            P.p_ += [p]; P.d_ += [d]
+            P.p_ += [p]; P.d_ += [d]; P.m_ += [_m]
 
         _sign = sign
         x += 1
@@ -182,8 +183,8 @@ def intra_Pm_(P_, irp_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in
                     rp_, rd_ = range_comp(irp_, P.p_, P.d_)  # rng+ comp with localized ave, skip predictable next dert
                     sub_Pm_ = form_P_(rp_, rd_, fPd=False)  # cluster by m sign
                     Ls = len(sub_Pm_)
-                    P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_
-                    # 1st layer, Dert=[], fill if Ls > min?
+                    P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_, add Dert=[] if Ls > min?
+                    # 1st sublayer, pack in double brackets only to allow nesting for deeper sublayers
                     if len(sub_Pm_) > 4:
                         sub_adj_M_ = form_adjacent_M_(sub_Pm_)
                         P.sublayers += intra_Pm_(sub_Pm_, irp_, sub_adj_M_, fid, rdn+1 + 1/Ls, rng+1)  # feedback

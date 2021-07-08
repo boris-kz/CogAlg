@@ -52,18 +52,19 @@ FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, M, blob_, dert__')
 class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
 
     # comp_pixel:
-    I = int
-    Dy = int
-    Dx = int
-    M = int
+    I = float
+    Dy = float
+    Dx = float
+    M = float
     # comp_angle:
-    Day = complex
-    Dax = complex
-    Ga = int
-    Ma = int
+    Dydy = float
+    Dxdy = float
+    Dydx = float
+    Dxdx = float
+    Ma = float
     # comp_dx:
-    Mdx = int
-    Ddx = int
+    Mdx = float
+    Ddx = float
     # new params:
     A = int  # blob area
     sign = bool
@@ -95,7 +96,8 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     derPd__ = list
     Pd__ = list
     # from comp_blob:
-    derBlob__ = list
+    derBlob_ = list
+    bblob = object
     # from form_bblob:
     root_bblob = object
 
@@ -177,7 +179,6 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                 # initialize new blob
                 blob = blob_cls(layer0=[0 for _ in range(11)],sign=sign__[y, x], root_dert__=dert__)
                 # not updated
-                blob.layer_names = ['I', 'G', 'M', 'Vector', 'aVector', 'Ga', 'Ma', 'A', 'Mdx', 'Ddx']
 
                 if prior_forks: # update prior forks in deep blob
                     blob.prior_forks= prior_forks.copy()
@@ -194,22 +195,16 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                     blob.accumulate(I  = dert__[0][y1][x1],
                                     Dy = dert__[1][y1][x1],
                                     Dx = dert__[2][y1][x1],
-                                    M  = -dert__[3][y1][x1]  # inverted g
-                                    )
-                    # below is not updated
-                    if len(dert__)>4: # comp_angle
-                        blob.accumulate(Ma = dert__[6][y1][x1])
-                                        #Ma  =dert__[8][y1][x1])
-                        if blob.Dax==0: blob.Dax = 1
-                        sum_day = (blob.Day * dert__[5][y1][x1])
-                        sum_dax = (blob.Dax * dert__[6][y1][x1])
-                        aVector = sum_day * sum_dax
-                        # update blob
-                        blob.Day = aVector.imag
-                        blob.Day = aVector.real
-                    if len(dert__)>10: # comp_dx
-                        blob.accumulate(Mdx =dert__[9][y1][x1],
-                                        Ddx =dert__[10][y1][x1])
+                                    M  = -dert__[3][y1][x1]) # M -= g
+                    if len(dert__)>5: # comp_angle
+                        blob.accumulate(Dydy = dert__[4][y1][x1],
+                                        Dxdy = dert__[5][y1][x1],
+                                        Dydx = dert__[6][y1][x1],
+                                        Dxdx = dert__[7][y1][x1],
+                                        Ma = dert__[8][y1][x1])
+                    if len(dert__)>11: # comp_dx
+                        blob.accumulate(Mdx = dert__[9][y1][x1],
+                                        Ddx = dert__[10][y1][x1])
                     blob.A += 1
 
                     if y1 < y0:
@@ -348,8 +343,7 @@ if __name__ == "__main__":
             frame.dert__[0],  # i
             frame.dert__[1],  # dy
             frame.dert__[2],  # dx
-            frame.dert__[3],  # g
-            frame.dert__[4],  # m
+            frame.dert__[3]   # m
             )
 
         for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
@@ -358,10 +352,10 @@ if __name__ == "__main__":
             +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
             positive value of adjacent -G "flat" blobs.
             '''
-            G = np.hypot(blob.Dy, blob.Dx)
+            G = np.hypot(blob.Dy, blob.Dx) - ave * blob.A
             M = blob.M
             blob.root_dert__=root_dert__
-            blob.prior_forks=['g']  # not sure about this
+            blob.prior_forks=['g']
             blob_height = blob.box[1] - blob.box[0]
             blob_width = blob.box[3] - blob.box[2]
 

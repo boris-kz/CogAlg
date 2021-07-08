@@ -89,9 +89,6 @@ class MetaCluster(type):
         dict_params = tuple(param for param in params
                                if (issubclass(attrs[param], dict)))
 
-        dict_params = tuple(param for param in params
-                               if (issubclass(attrs[param], dict)))
-
         # Fill in the template
         methods_definitions = _methods_template.format(
             typename=typename,
@@ -171,6 +168,10 @@ class MetaCluster(type):
                         list_param = getattr(inherit_instance, param)
                         if len(list_param)>0: # not empty list
                             setattr(instance, param, list_param )
+
+                for param in cls.dict_params: # inherit dict params
+                    if hasattr(inherit_instance,param) and (param not in excluded):
+                        setattr(instance, param, getattr(inherit_instance, param))
 
         # Set id
         instance._id = len(cls._instances)
