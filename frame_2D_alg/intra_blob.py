@@ -17,11 +17,9 @@ from comp_slice_ import *
 from segment_by_direction import segment_by_direction
 
 # filters, All *= rdn:
-ave = 50  # comp_a cost per dert, from average m, reflects blob definition cost
-aveB = 50  # comp_a cost per intra_blob comp and clustering
-# no ave_ga = .78, ave_ma = 2: no indep eval
-pcoef = 2  # ave_comp_P / ave: relative cost of p fork
-rcoef = 1  # ave_comp_r / ave: relative cost of r fork
+ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different
+aveB = 50  # cost / blob: fixed syntactic overhead
+pcoef = 2  # ave_comp_slice / ave: relative cost of p fork;  no ave_ga = .78, ave_ma = 2: no indep eval
 
 # --------------------------------------------------------------------------------------------------------------
 # functions:
@@ -39,33 +37,29 @@ def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cr
     # root fork is frame_blobs or comp_r
     ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, for cross-comp in larger kernels
 
-    G = np.hypot(blob.Dy,blob.Dx)
-
-    if G > AveB:  # comp_a fork, replace G with borrow_M if known
-        adert__, mask__ = comp_a(ext_dert__, ext_mask__)  # compute abs ma, no indep eval
-        blob.f_comp_a = 1
+    if -blob.M > AveB:  # comp_a fork, replace with borrow_M if known
         blob.rng = 0
+        blob.f_comp_a = 1
+        adert__, mask__ = comp_a(ext_dert__, ext_mask__)  # compute abs ma, no indep eval
         if kwargs.get('verbose'): print('\na fork\n')
         blob.prior_forks.extend('a')
 
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, least one dert in dert__
-            sign__ = ((np.hypot(adert__[1],adert__[2])) * adert__[8]) > ave * pcoef  # variable value of comp_P
-            # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
+            sign__ = (-adert__[3] * adert__[9]) > ave * pcoef  # -m * ma: variable value of comp_slice_, no ave_ma in comp_a
 
             cluster_sub_eval(blob, adert__, sign__, mask__, **kwargs)  # forms sub_blobs of fork p sign in unmasked area
             spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                               zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-    elif blob.M > AveB * rcoef:  # comp_r fork
-        blob.rng += 1  # rng counter for comp_r
-
-        dert__, mask__ = comp_r(ext_dert__, Ave, blob.rng, ext_mask__)
+    elif blob.M > AveB:  # comp_r fork
+        blob.rng += 1
         blob.f_comp_a = 0
+        dert__, mask__ = comp_r(ext_dert__, Ave, blob.rng, ext_mask__)
         if kwargs.get('verbose'): print('\na fork\n')
         blob.prior_forks.extend('r')
 
         if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
-            sign__ = dert__[3] > 0  # m__ is inverse deviation of SAD
+            sign__ = dert__[3] > 0  # m__: inverse deviation of g
 
             cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)  # forms sub_blobs of sign in unmasked area
             spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
@@ -90,9 +84,8 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
         sub_blob.prior_forks = blob.prior_forks.copy()  # increments forking sequence: m->r, g->a, a->p
         if sub_blob.mask__.shape[0] > 2 and sub_blob.mask__.shape[1] > 2 and False in sub_blob.mask__:  # min size in y and x, at least one dert in dert__
 
-            sub_G = np.hypot(sub_blob.Dy,sub_blob.Dx)
             if sub_blob.prior_forks[-1] == 'a':  # p fork
-                if (sub_G * sub_blob.Ma - AveB * pcoef > 0):  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+                if -sub_blob.M * sub_blob.Ma > AveB * pcoef:
                     sub_blob.prior_forks.extend('p')
                     if kwargs.get('verbose'): print('\nslice_blob fork\n')
                     segment_by_direction(sub_blob, verbose=True)
@@ -106,13 +99,13 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
                 G indicates or dert__ extend per blob G?
                 borrow_M = min(G, adj_M / 2): usually not available, use average
                 '''
-                if sub_G > AveB:  # replace with borrow_M when known
+                if -sub_blob.M > AveB:  # replace with borrow_M when known
                     # comp_a:
                     sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub_blob, currently not used ( do we want to keep this?)
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
                     blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
-                elif sub_blob.M > AveB * mB_coef:
+                elif sub_blob.M > AveB:
                     # comp_r:
                     sub_blob.rng = blob.rng
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls

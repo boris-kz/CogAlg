@@ -47,9 +47,9 @@ def comp_r(dert__, ave, rng, mask__=None):
     d_upleft__ += (i__bottomright - i__topleft) * rngSkip
 
     m__ = ave - np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
-    i__sum = i__topleft + i__topright + i__bottomleft + i__bottomright
+    ri__ = i__topleft + i__topright + i__bottomleft + i__bottomright
 
-    return (i__topleft, d_upleft__, d_upright__, m__, i__sum), majority_mask__
+    return (i__topleft, d_upleft__, d_upright__, m__, ri__), majority_mask__
 
 
 def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
@@ -63,7 +63,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     else:
         majority_mask__ = None
 
-    i__, dy__, dx__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
+    i__, dy__, dx__, m__, rp__ = dert__[:5]  # day__,dax__,ma__ are recomputed
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or / ave + m
@@ -89,16 +89,17 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    
-    deviation of abs gradient of angle: ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
+    deviation of abs gradient of angle: 
+    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
     in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)
     '''
+    i__ = i__[:-1, :-1]
     dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
     dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
-    i__ = i__[:-1, :-1]  # for summation in Dert
     m__ = m__[:-1, :-1]
+    rp__ = rp__[:-1, :-1]  # for summation in Dert
 
-    return (i__, dy__, dx__, m__, day__[0], day__[1], dax__[0], dax__[1], ma__), majority_mask__
+    return (i__, dy__, dx__, m__, rp__, day__[0], day__[1], dax__[0], dax__[1], ma__), majority_mask__
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)
