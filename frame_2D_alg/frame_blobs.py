@@ -115,7 +115,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
 
     return (topleft__, d_upleft__, d_upright__, M__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__ = (p__, dy__, dx__, m__, rp__) for readability in functions below
+    # renamed dert__ = (i__, dy__, dx__, m__, ri__) for readability in functions below
 '''
     old version:
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
@@ -333,17 +333,18 @@ if __name__ == "__main__":
         deep_layers = [[]] * len(frame.blob_)  # for visibility only
         empty = np.zeros_like(frame.dert__[0])
         root_dert__ = (  # update root dert__
-            frame.dert__[4],  # i
+            frame.dert__[0],  # i
             frame.dert__[1],  # dy
             frame.dert__[2],  # dx
-            frame.dert__[3]   # m
+            frame.dert__[3],  # m
+            frame.dert__[4]   # ri
             )
 
         for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
             '''
-            Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
-            +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
-            positive value of adjacent -G "flat" blobs.
+            Blob M: -|+ predictive value, positive value of M blobs is lent to the value of their adjacent -M blobs. 
+            -M "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
+            positive value of adjacent M "flat" blobs.
             '''
             M = blob.M
             blob.root_dert__=root_dert__
@@ -355,7 +356,6 @@ if __name__ == "__main__":
                 if (M > aveB) and (blob_height > 3 and blob_width > 3):  # min blob dimensions
                     blob.rdn = 1
                     blob.rng = 1
-                    blob.f_root_a = 0
                     deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
                     # dert__ comp_r in 4x4 kernels
 

@@ -101,7 +101,6 @@ def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_
                 '''
                 if -sub_blob.M > AveB:  # replace with borrow_M when known
                     # comp_a:
-                    sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub_blob, currently not used ( do we want to keep this?)
                     sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
                     blob.sub_layers += intra_blob(sub_blob, **kwargs)
 

@@ -93,9 +93,8 @@ def search(P_):  # cross-compare patterns within horizontal line
                             derP_d_.append(derP)  # at each comp_P: induction = lend value for form_PPd_
                             if sign:
                                 P_[j+i]._smP = True  # backward match per P, or set _smP in derP_ with empty CderPs?
-                                derP_.append(derP)
-                                derP=[]
-                                break  # nearest-neighbour search is terminated by first match
+                                derP_.append(derP);  del derP
+                                break  # nearest-neighbour search is terminated by 1st matching P, which latter searches as _P in line 81
                             else:
                                 neg_M += mP  # accumulate contiguous P miss, or all derivatives?
                                 neg_L += _L  # accumulate distance to matching P
@@ -103,7 +102,7 @@ def search(P_):  # cross-compare patterns within horizontal line
                                 no contrast value in neg derPs and PPs: initial opposite-sign P miss is expected
                                 neg_derP derivatives are not significant; neg_M obviates distance * decay_rate * M '''
                     else:
-                        if derP:  # current _P has been compared before
+                        if "derP" in locals():  # current _P has been compared before
                             derP.sign=sign or _smP  # sign is ORed bilaterally, negative for singleton derPs only
                             derP_.append(derP)  # vs. derP_.append( CderP(sign=sign or _smP, mP=mP,dP=dP, neg_M=neg_M, neg_L=neg_L, P=_P, layer1={}))
                         break  # neg net_M: stop search
@@ -112,13 +111,13 @@ def search(P_):  # cross-compare patterns within horizontal line
         del P_[index]  # delete the merged Ps
 
     if derP_:
-        PPm_ = form_PP_(derP_, fPd=False)  # cluster derPs into PPms by the sign of mP
-        eval_params(PPm_)
-
+        form_Pp_(derP_, fPd=False)
+        # PPm_ = form_PP_(derP_, fPd=False)  # cluster derPs into PPms by the sign of mP
+        # eval_params(PPm_)
     if len(derP_d_)>1:
         derP_d_ = form_adjacent_mP(derP_d_)
-        PPd_ = form_PP_(derP_d_, fPd=True)  # cluster derP_ds into PPds by the sign of vdP
-        eval_params(PPd_)
+        form_Pp_(derP_, fPd=True)
+
 
     return PPm_, PPd_
 
@@ -434,9 +433,88 @@ def rng_search(P_, ave):
     return sub_PPm_
 
 
+def form_Pp_(derP_, fPd):  # this is a draft, please check
+
+    # rdn = layer0_rdn[param_name]
+    param_names = derP_[0].layer1.key  #?
+
+    for param_name in param_names:
+        if fPd:
+            derP_[0].layer1.Ppd_[0] = CP(sign = derP_[0].layer1[param_name].d > 0)  # not sure this is correct?
+        else:
+            derP_[0].layer1.Ppm_[0] = CP(sign = derP_[0].layer1[param_name].m > 0)
+
+    for derP in derP_:
+        for param_name in param_names:  # this is not correct, we two loops
+            if fPd:
+                _sign = derP_[0].layer1.param_name.Ppd_[0].sign
+                sign = derP.layer1[param_name].d > 0
+            else:
+                _sign = derP_[0].layer1.param_name.Ppm_[0].sign
+                sign = derP.layer1[param_name].m > 0
+
+            for derP in derP_[1:]:
+                d = derP.layer1[param_name].d
+                m = derP.layer1[param_name].m
+                if fPd: sign = d > 0
+                else:   sign = m > 0
+
+            if sign != _sign:
+                if fPd: derP.layer1[param_name].Ppd_.append(Pp)
+                else:   derP.layer1[param_name].Ppm_.append(Pp)
+                Pp = CP(sign=_sign)
+            else:
+                # accumulate Pp params
+                Pp.L += 1
+                Pp.D += d
+                Pp.M += m
+                Pp.d_.append(d)
+                Pp.m_.append(m)
+
+    merge_Pp_Kelvin(derP_, fPd)
+
+def merge_Pp_Kelvin(derP_, fPd):  # merge low value Pps into negative Pp
+    Pp_ = []
+    remove_index = []
+    for i,derP in enumerate(derP_):  # interae ove PPm_ in search of strong Ps
+        if derP.layer1:  # how can layer1 be empty?
+            for param_name in derP.layer1:
+                if fPd:
+                    Pp.append(derP.layer1.Ppd_[0])
+                    for j,Pp in enumerate(derP.layer1.Ppd_):
+                        if not Pp.sign: # if negative Pps then merge low value Pps
+                            for _Pp in Pp_:
+                                Pp.accum_from(_Pp)  #merge all low value Ppsinto negative Pp
+                            derP_[i].layer1.Ppd_[j] = Pp
+
+                        else:
+                            if Pp.D < ave_param_d:  #low value Pp? ave_param_d=?
+                                Pp_.append(Pp)
+                                remove_index.append(j) #get low value Pps index
+                    for index in sorted(remove_index, reverse=True):
+                        del derP.Ppd_[index]
+                    remove_index = []
+                else:
+                    Pp_.append(derP.layer1.Ppm_[0])
+                    for j,Pp in enumerate(derP.layer1.Ppm_):
+                        if not Pp.sign: # if negative Pps then merge low value Pps
+                            for _Pp in Pp_:
+                                Pp.accum_from(_Pp)  #merge all low value Ppsinto negative Pp
+                            derP_[i].layer1.Ppm_[j] = Pp
+
+                        else:
+                            if Pp.M < ave_param_m:  #low value Pp? ave_param_m=?
+                                Pp_.append(Pp)
+                                remove_index.append(j) #get low value Pps index
+                    for index in sorted(remove_index, reverse=True):
+                        del derP.Ppm_[index]
+                    remove_index = []
+    return derP_
+
+
 def eval_params(PPm_):
 
-    for PP in PPm_:  # interae ove PPm_ in search of strong Ps
+    for PP in PPm_:
         if PP.layer1:  # how can layer1 be empty?
             for param_name in PP.layer1:
 
@@ -448,52 +526,7 @@ def eval_params(PPm_):
                     if M > ave_M: form_Pp_(PP, param_name, fPd = False)
                     if D > ave_D: form_Pp_(PP, param_name, fPd = True)
 
-
-def form_Pp_(PP, param_name, fPd):
-
-    rdn = layer0_rdn[param_name]
-    if fPd: _sign = PP.derP_[0].layer1[param_name].d > 0
-    else:   _sign = PP.derP_[0].layer1[param_name].m > 0
-
-    Pp = CP(_smP=False, sign=_sign)  # both probably not needed
-
-    for derP in PP.derP_[1:]:
-        d = derP.layer1[param_name].d
-        m = derP.layer1[param_name].m
-        if fPd: sign = d > 0
-        else:   sign = m > 0
-
-        if sign != _sign:
-            if fPd: PP.layer1[param_name].Ppd_.append(Pp)
-            else:   PP.layer1[param_name].Ppm_.append(Pp)
-            Pp = CP(_smP=False, sign=_sign)  # both probably not needed
-        else:
-            # accumulate Pp params
-            Pp.L += 1
-            Pp.D += d
-            Pp.M += m
-            Pp.d_.append(d)
-            Pp.m_.append(m)
-
-        _sign = sign
-
 '''
-    comp_P draft - Needs further changes
-    
-    if _P.M/_P.L > ave_aM: #ave_aM = ?
-        _P.I *= 2*rdn ; _P.layer00['p_'] = [p*2*rdn for p in p_]    #rdn = ?
-        #(L,D,M, d_,m_) *= 1 should remain the same
-    else:
-        _P.L *= 2*rdn;_P.D *= 2*rdn;_P.M *= 2*rdn
-        _P.layer00['d_'] = [d*2*rdn for d in d_]
-        _P.layer00['m_'] = [m*2*rdn for m in m_]
-    if P.M/P.L > ave_aM: #should be computed for both _P and P?
-        P.I *= 2*rdn ; P.layer00['p_'] = [p*2*rdn for p in p_]
-        #(L,D,M, d_,m_) *= 1 should remain the same
-    else:
-        P.L *= 2*rdn;P.D *= 2*rdn;P.M *= 2*rdn
-        P.layer00['d_'] = [d*2*rdn for d in d_]
-        P.layer00['m_'] = [m*2*rdn for m in m_]
 if i < _P.derP.ileft: _P.derP.ileft = i  # index of leftmost P that _P was compared to, for back_search_extend()
 PPm_ = back_search_extend( PPm_, P_)  # evaluate for 1st P in each PP, merge with _P.derP.PP if any
 def back_search_extend( PPm_, P_):  # each P should form derP, evaluate for the 1st P in PP, merge with _P.PP if any
