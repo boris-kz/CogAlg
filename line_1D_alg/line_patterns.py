@@ -20,9 +20,10 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '../../../AppData/Roaming/JetBrains/PyCharmCE2021.1')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 
 import cv2
+import csv
 import argparse
 from time import time
 from utils import *
@@ -81,7 +82,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
         for i in pixel_[1:]:  # pixel p is compared to prior pixel _p in a row
             d = i -_i
-            p = ( i +_i)
+            p = i +_i
             m = ave - abs(d)  # for consistency with deriv_comp output, otherwise redundant
             dert_.append(Cdert(i=i,p=p,d=d,m=m))
             _i = i
@@ -124,6 +125,13 @@ def form_P_(dert_, fPd):  # initialization, accumulation, termination
         x += 1
 
     P_.append(P)  # last incomplete P
+
+    with open("frame_of_patterns_2.csv", "a") as csvFile: # +++
+        write = csv.writer(csvFile, delimiter=",")
+        for item in range(len(P_)): # +++
+            # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0) # +++
+            write.writerow([P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0]) # +++
+
     return P_
 
 
@@ -242,12 +250,12 @@ def range_comp(dert_):  # cross-comp of 2**rng- distant pixels: 4,8,16.., skippi
 
     for dert in dert_[2::2]:  # all inputs are sparse, skip odd pixels compared in prior rng: 1 skip / 1 add, to maintain 2x overlap
         d = dert.i -_i
-        rng_p = dert.p + _i  # intensity accumulated in rng
-        rng_d = dert.d + d   # difference accumulated in rng
-        rng_m = dert.m + ave - abs(d)  # m accumulated in rng
+        rp = dert.p + _i  # intensity accumulated in rng
+        rd = dert.d + d   # difference accumulated in rng
+        rm = dert.m + ave - abs(d)  # m accumulated in rng
         # for consistency with deriv_comp, else m is redundant
 
-        rdert_.append( Cdert( i=dert.i,p=rng_p,d=rng_d,m=rng_m ))
+        rdert_.append( Cdert( i=dert.i,p=rp,d=rd,m=rm ))
         _i = dert.i
 
     return rdert_
@@ -285,7 +293,7 @@ def cross_comp_spliced(frame_of_pixels_):  # converts frame_of_pixels to frame_o
 
     for i in pixel_[1:]:  # pixel p is compared to prior pixel _p in a row
         d = i -_i
-        p = ( i +_i)
+        p = i +_i
         m = ave - abs(d)  # for consistency with deriv_comp output, otherwise redundant
         dert_.append(Cdert(i=i,p=p,d=d,m=m))
         _i = i
@@ -299,21 +307,32 @@ def cross_comp_spliced(frame_of_pixels_):  # converts frame_of_pixels to frame_o
 
 
 if __name__ == "__main__":
-    # Parse argument (image)
+    ''' 
+    Parse argument (image)
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image',
-                                 help='path to image file',
-                                 default='.//raccoon.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='.//raccoon.jpg')
     arguments = vars(argument_parser.parse_args())
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
+    '''
+    # show image in the same window as a code
+    % matplotlib inline
+    image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
+    plt.imshow(image, cmap='gray')  # show the image below in gray
+    plt.show()
     assert image is not None, "No image in the path"
     image = image.astype(int)
+    from pprint import pprint
+
+    with open("frame_of_patterns_2.csv", "w") as csvFile:
+        write = csv.writer(csvFile, delimiter=",")
+        fieldnames = ("L=", "I=", "D=", "M=", "x0=")
+        write.writerow(fieldnames)
 
     start_time = time()
     # Main
     frame_of_patterns_ = cross_comp(image)  # returns Pm__
-
+    pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
     fline_PPs = 0
     if fline_PPs:  # debug line_PPs_draft
         from line_PPs_draft import *
