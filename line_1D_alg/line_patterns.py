@@ -316,14 +316,12 @@ if __name__ == "__main__":
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
     # show image in the same window as a code
-    % matplotlib inline
     image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
     plt.imshow(image, cmap='gray')  # show the image below in gray
     plt.show()
     assert image is not None, "No image in the path"
     image = image.astype(int)
-    from pprint import pprint
-
+    # optional:
     with open("frame_of_patterns_2.csv", "w") as csvFile:
         write = csv.writer(csvFile, delimiter=",")
         fieldnames = ("L=", "I=", "D=", "M=", "x0=")
@@ -332,7 +330,9 @@ if __name__ == "__main__":
     start_time = time()
     # Main
     frame_of_patterns_ = cross_comp(image)  # returns Pm__
-    pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
+    # from pprint import pprint
+    # pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
+
     fline_PPs = 0
     if fline_PPs:  # debug line_PPs_draft
         from line_PPs_draft import *

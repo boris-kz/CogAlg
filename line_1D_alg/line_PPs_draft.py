@@ -35,14 +35,14 @@ sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 from line_patterns import CP
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param, Cdm_
 
-class CderP(ClusterStructure):
+class Cdert(ClusterStructure):
 
     sign = bool  # bilateral? or local?
     rrdn =int
     mP = int
     dP = int
-    neg_M = int
-    neg_L = int
+    negM = int
+    negL = int
     adj_mP = int
     P = object
     layer1 = dict  # d, m per comparand
