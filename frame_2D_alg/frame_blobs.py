@@ -37,7 +37,7 @@ from collections import deque
 from draw_frame_blobs import visualize_blobs
 from utils import minmax
 from collections import namedtuple
-from class_cluster import ClusterStructure, NoneType, Cdm
+from class_cluster import ClusterStructure
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveB = 50
@@ -342,9 +342,8 @@ if __name__ == "__main__":
 
         for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
             '''
-            Blob M: -|+ predictive value, positive value of M blobs is lent to the value of their adjacent -M blobs. 
-            -M "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
-            positive value of adjacent M "flat" blobs.
+            Blob M: -|+ predictive value, positive in +M blobs and lent to contrast value of adjacent -M blobs. 
+            -M "edge" blobs are valuable as contrast: their negative value cancels positive value of adjacent "flat" +M blobs.
             '''
             M = blob.M
             blob.root_dert__=root_dert__
