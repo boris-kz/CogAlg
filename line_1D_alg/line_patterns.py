@@ -28,7 +28,7 @@ import argparse
 from time import time
 from utils import *
 from itertools import zip_longest
-from frame_2D_alg.class_cluster import ClusterStructure, NoneType, comp_param, Cdm
+from frame_2D_alg.class_cluster import ClusterStructure, NoneType, comp_param, Cdert
 
 class Cdert(ClusterStructure):
     i = int  # input for range_comp only
@@ -48,7 +48,6 @@ class CP(ClusterStructure):
     sublayers = list
     # for line_PPs
     derP = object  # forward comp_P derivatives
-    _smP = bool  # backward mP sign, for derP.sign determination, not needed thereafter
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
 
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
@@ -98,39 +97,33 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     return frame_of_patterns_  # frame of patterns is an output to level 2
 
 
-def form_P_(dert_, fPd):  # initialization, accumulation, termination
-
+def form_P_(dert_, fPd):  # accumulation and termination
     # initialization:
-    P_ = []; x=0
-    _dert = dert_[0]
-    if fPd: _sign = _dert.d > 0
-    else:   _sign = _dert.m > 0
+    P_ = []
+    x = 0
+    _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
 
-    P = CP(sign=_sign, L=1, I=_dert.p, D=_dert.d, M=_dert.m, x0=0, dert_=[_dert], sublayers=[], _smP=False, fPd=fPd)
-    # segment by sign:
-    for dert in dert_[1:]:
+    for dert in dert_:  # segment by sign
         if fPd: sign = dert.d > 0
         else:   sign = dert.m > 0
 
-        if sign != _sign:  # sign change, terminate P
-            P_.append(P)
-            # re-initialization:
-            P = CP(sign=_sign, L=1, I=dert.p, D=dert.d, M=dert.m, x0=x-(P.L-1), dert_=[dert], sublayers=[], _smP=False, fPd=fPd)
+        if sign != _sign:
+            # sign change, initialize P and append it to P_
+            P = CP(sign=_sign, L=1, I=dert.p, D=dert.d, M=dert.m, x0=x, dert_=[dert], sublayers=[], fPd=fPd)
+            P_.append(P)  # updated with accumulation below
         else:
             # accumulate params:
             P.L += 1; P.I += dert.p; P.D += dert.d; P.M += dert.m
             P.dert_ += [dert]
-
-        _sign = sign
         x += 1
+        _sign = sign
 
-    P_.append(P)  # last incomplete P
-
-    with open("frame_of_patterns_2.csv", "a") as csvFile: # +++
+    # for visualization only:
+    with open("frame_of_patterns_2.csv", "a") as csvFile:
         write = csv.writer(csvFile, delimiter=",")
-        for item in range(len(P_)): # +++
-            # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0) # +++
-            write.writerow([P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0]) # +++
+        for item in range(len(P_)):
+            # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0)
+            write.writerow([P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0])
 
     return P_
 
@@ -138,9 +131,9 @@ def form_P_(dert_, fPd):  # initialization, accumulation, termination
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
     '''
     Value is projected match, while variation has contrast value only: it matters to the extent that it interrupts adjacent match: adj_M.
-    In noise, there is a lot of variation. but no adjacent match to cancel, so variation in noise has no predictive value.
-    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates adjacent uniform span.
-    That contrast may be salient if it can borrow sufficient predictive value from that adjacent high-match span.
+    In noise, there is a lot of variation. but no adjacent match to cancel, so that variation has no predictive value.
+    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates uniform area.
+    That contrast may be salient if it can borrow sufficient predictive value from that adjacent high-match area.
     '''
 
     pri_M = Pm_[0].M  # comp_g value is borrowed from adjacent opposite-sign Ms
@@ -223,7 +216,7 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
 
         if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
             # cross-comp of ds:
-            ddert_ = deriv_comp(P.dert_)  # i_ is d
+            ddert_ = deriv_comp(P.dert_)  # i is d
             sub_Pm_ = form_P_(ddert_, fPd=True)  # cluster Pd derts by md, won't happen
             Ls = len(sub_Pm_)
             # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_, sub_PPm_, sub_PPd_:
@@ -317,11 +310,14 @@ if __name__ == "__main__":
     '''
     # show image in the same window as a code
     image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
-    plt.imshow(image, cmap='gray')  # show the image below in gray
-    plt.show()
     assert image is not None, "No image in the path"
-    image = image.astype(int)
-    # optional:
+    render = 0
+    verbose = 0
+
+    if render:
+        plt.figure();plt.imshow(image, cmap='gray')  # show the image below in gray
+
+    # for visualization:
     with open("frame_of_patterns_2.csv", "w") as csvFile:
         write = csv.writer(csvFile, delimiter=",")
         fieldnames = ("L=", "I=", "D=", "M=", "x0=")
@@ -335,12 +331,12 @@ if __name__ == "__main__":
 
     fline_PPs = 0
     if fline_PPs:  # debug line_PPs_draft
-        from line_PPs_draft import *
+        from line_Pparam_draft import *
         frame_PP_ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            PPm_, PPd_ = search(P_)
-            frame_PP_.append([PPm_, PPd_])
+            layer0 = search(P_)
+            frame_PP_.append(layer0)
 
     end_time = time() - start_time
     print(end_time)
