@@ -7,7 +7,7 @@ import sys  # add ColAlg folder to system path
 from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 
-from line_patterns import CP
+from line_patterns import *
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 
 class CderP(ClusterStructure):  # not used
@@ -31,11 +31,10 @@ class Cpdert(ClusterStructure):
 
 class CPp(CP):
 
-    sign = bool
+    sign = bool  # shouln't be used
     dert_ = list # contains i, p, d, m
     sublayers = list
-    derPp = object  # forward comp_P derivatives
-
+    # derPp = object  # forward comp_P derivatives
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
     negL = int  # in mdert only
     negM = int  # in mdert only
@@ -50,15 +49,13 @@ ave_D = 100  # search stop
 ave_sub_M = 500  # sub_H comp filter
 ave_Ls = 3
 ave_PPM = 200
-ave_merge = 50  # merge adjacent Ps
+ave_merge = 50  # merge a kernel of 3 adjacent Pps
 ave_inv = 20 # ave inverse m, change to Ave from the root intra_blob?
 ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 
 
 def search(P_):  # cross-compare patterns within horizontal line
-
     # sub_search_recursive(P_, fderP=0)  # search with incremental distance: first inside sublayers
-    merge_P_(P_, fPd=0)  # merge I- or D- similar and weakly separated Ps
 
     layer0 = {'L_': [[],.25], 'I_': [[],.5], 'D_': [[],.25], 'M_': [[],.5]}  # M is doubled because it represents both comparands
     if len(P_) > 1:  # at least 2 comparands, unpack P_:
@@ -83,10 +80,8 @@ def search_param_(param_name, iparam):
     negL=negM=0
 
     for i, (param, L, x0) in enumerate(param_[1:], start=1):
-        # ave match projected at distance=negL and contrast=negM, rough draft:
-        dist_ave = ave * (ave_rM * (1 + negL / ((param.L+_param.L)/2))) / (1 + negM / ave_negM)
         # param is compared to prior-P param:
-        dert = comp_param(_param, param, param_name, dist_ave/rdn)
+        dert = comp_param(_param, param, param_name, ave/rdn)
         # negL, negM stay 0:
         ddert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m))
         negL=negM=0
@@ -104,13 +99,15 @@ def search_param_(param_name, iparam):
 
         _param = param
 
-    Ppm_ = form_Pp_(mdert_, fPd=0)
-    Ppd_ = form_Pp_(ddert_, fPd=1)
+    # needs a review, the process is different in line_patterns
+    Ppm_ = form_Pp_(mdert_, rdn, rng, fPd=0)
+    Ppd_ = form_Pp_(ddert_, rdn, rng, fPd=1)
 
     iparam[0] = (Ppm_, Ppd_)
 
 
-def form_Pp_(dert_, fPd):  # almost the same as form_P_ for now
+def form_Pp_(dert_, rdn, rng, fPd):  # almost the same as line_patterns form_P_ for now
+    # Needs to be updated as current form_P_ in line patterns
     # initialization:
     Pp_ = []
     x = 0
@@ -119,98 +116,26 @@ def form_Pp_(dert_, fPd):  # almost the same as form_P_ for now
     for dert in dert_:  # segment by sign
         if fPd: sign = dert.d > 0
         else:   sign = dert.m > 0
+                # m needs to be adjusted by ave projected at distance=negL and contrast=negM, if significant:
+                # dist_ave = ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)
         if sign != _sign:
             # sign change, initialize P and append it to P_
             Pp = CPp(sign=_sign, L=1, I=dert.p, D=dert.d, M=dert.m, negL=dert.negL, negM=dert.negM, x0=0, dert_=[dert], sublayers=[], fPd=fPd)
             Pp_.append(Pp)  # updated with accumulation below
         else:
             # accumulate params:
-            Pp.L += 1; Pp.I += dert.p; Pp.D += dert.d; Pp.M += Pp.dert.m; Pp.negL+=dert.negL; Pp.negM+=dert.negM
+            Pp.L += 1; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.negL+=dert.negL; Pp.negM+=dert.negM
             Pp.dert_ += [dert]
         x += 1
         _sign = sign
 
-    Pp_.append(Pp)  # last incomplete Pp
-    merge_P_(Pp_, fPd=fPd)  # add eval by negL and negM
+    if len(P_) > 4:
+        splice_P_(Pp_, fPd=0)  # merge mean_I- or mean_D- similar and weakly separated Ps
+        if len(P_) > 4:
+            adj_M_ = form_adjacent_M_(Pp_)  # compute adjacent Ms to evaluate contrastive borrow potential
+            intra_Ppm_(P_, adj_M_, rdn, rng, fid=False)  # rng is unilateral, evaluates for sub-recursion per Pm
 
     return Pp_
-
-
-def merge_P_(P_, fPd):
-    '''
-    Initial P separation is determined by pixel-level sign change, but resulting opposite-sign pattern may be relatively weak,
-    and same-sign patterns it separates relatively strong.
-    Another criterion to re-evaluate separation is similarity of defining param: M/L for Pm, D/L for Pd, among the three Ps
-    If relative proximity * relative similarity > ave? all three Ps should be merged into one.
-    '''
-    new_P_ = []
-    while len(P_) > 2:  # at least 3 Ps
-        __P = P_.pop(0)
-        _P = P_.pop(0)
-        P = P_.pop(0)
-
-        if merge_eval(__P, _P, P, fPd) > ave_merge * ave_rM * (1 + _P.L / (__P.L+P.L) / 2):  # ave match projected at distance between P,__P
-            # for debugging
-            print('P_'+str(_P.id)+' and P_'+str(P.id)+' are merged into P_'+str(__P.id))
-            # merge _P and P into __P
-            for merge_P in [_P, P]:
-                __P.x0 = min(__P.x0, merge_P.x0)
-                __P.accum_from(merge_P)
-                __P.dert_+= merge_P.dert_
-            # back merging
-            __P = merge_P_back(new_P_, __P, fPd)
-            P_.insert(0, __P)  # insert merged __P back into P_ to continue merging
-        else:
-            new_P_.append(__P) # append __P to P_ when there is no further merging process for __P
-            P_.insert(0, P)    # insert P back into P_ for the consecutive merging process
-            P_.insert(0, _P)  # insert _P back into P_ for the consecutive merging process
-
-    # pack remaining Ps:
-    if P_: new_P_ += P_
-
-    return new_P_
-
-def merge_P_back(new_P_, P, fPd):  # P is __P in calling merge_P_draft
-
-    while len(new_P_) > 2:  # at least 3 Ps
-        _P = new_P_.pop()
-        __P = new_P_.pop()
-
-        if merge_eval(__P, _P, P, fPd) > ave_merge * ave_rM * (1 + _P.L / (__P.L+P.L) / 2):  # ave match projected at distance between P,__P
-            # for debug purpose
-            print('P_'+str(_P.id)+' and P_'+str(P.id)+' are backward merged into P_'+str(__P.id))
-            # merge _P and P into __P
-            for merge_P in [_P, P]:
-                __P.x0 = min(__P.x0, merge_P.x0)
-                __P.accum_from(merge_P)
-                __P.dert_+= merge_P.dert_
-            P = __P  # also returned
-        else:
-            new_P_+= [__P, _P]
-            break
-
-    return P
-
-def merge_eval(__P, _P, P, fPd):  # should work for merging Pps too
-    '''
-    For 3 Pms, same-sign P1 and P3, and opposite-sign P2:
-    relative proximity = abs((M1+M3) / M2)
-    relative similarity = match (M1/L1, M3/L3) / miss (match (M1/L1, M2/L2) + match (M3/L3, M2/L2)) # both should be negative
-    '''
-    if fPd:
-        proximity = abs((__P.D + P.D) / _P.D) if _P.D != 0 else 0  # prevents /0
-        __mean=__P.D/__P.L; _mean=_P.D/_P.L; mean=P.D/P.L
-    else:
-        proximity = abs((__P.M + P.M) / _P.M) if _P.M != 0 else 0  # prevents /0
-        __mean=__P.M/__P.L; _mean=_P.M/_P.L; mean=P.M/P.L
-    m13 = min(mean, __mean) - abs(mean-__mean)/2   # P1 & P3
-    m12 = min(_mean, __mean) - abs(_mean-__mean)/2 # P1 & P2
-    m23 = min(_mean, mean) - abs(_mean- mean)/2    # P2 & P3
-
-    similarity = m13 / abs( m12 + m23)  # both should be negative
-    merge_value = proximity * similarity
-
-    return merge_value
 
 # below is not revised
 
@@ -312,6 +237,7 @@ def comp_sublayers(_P, P, mP):  # also add dP?
                 else:
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
 
+
 def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division between element Ps
     '''
     div x param if projected div match: compression per PP, no internal range for ind eval.
@@ -394,7 +320,8 @@ def form_adjacent_mP(derP_d_):
 
     return derP_d_
 
-def intra_PPm_(PPm_, rdn):
+
+def intra_Ppm_(PPm_, rdn):
     '''
     Each PP is evaluated for intra-processing, non-recursive here:
     - incremental range and derivation, as in line_patterns intra_P but over multiple params,
@@ -411,7 +338,38 @@ def intra_PPm_(PPm_, rdn):
 
             return sub_PPm_
 
-# below is likely obsolete:
+# below is mostly obsolete:
+
+def form_PP_(derP_, fPd):  # cluster derPs into PP s by derP sign
+
+    PP_ = []
+    derP = derP_[0]
+
+    if fPd: _sign = (derP.adj_mP + derP.P.M) * abs(derP.dP) > ave  # value of difference is contrast: borrowed from co-projected match
+    else:   _sign = derP.mP > 0
+
+    PP = CPP( derP_=[derP], inherit=([derP.P,derP]) )  # initialize PP with 1st derP params
+    # positive PPs only, miss over discontinuity is expected, contrast dP -> PPd: if PP.mP * abs(dP) > ave_dP: explicit borrow only?
+
+    for derP in derP_[1:]:
+        if fPd: sign = (derP.adj_mP + derP.P.M) * abs(derP.dP) > ave
+        else:   sign = derP.mP > 0
+
+        if sign != _sign:  # sign != _sign: same-sign derPs in PP
+            # terminate PPm:
+            PP_.append(PP)
+            PP = CPP( derP_=[derP], inherit=([derP.P, derP]) )  # reinitialize PPm with current derP
+        else:
+            PP.accum_from(derP.P)
+            PP.accum_from(derP)  # accumulate PPm numerical params with same-name current derP params, exclusions?
+            PP.derP_.append(derP)
+
+        _sign = sign
+
+    PP_.append(PP)  # pack last PP
+
+    return PP_
+
 
 def rng_search(P_, ave):
     '''

@@ -25,7 +25,7 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
 
 import cv2
 import argparse
