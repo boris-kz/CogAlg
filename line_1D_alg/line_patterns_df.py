@@ -30,6 +30,7 @@ from time import time
 from utils import *
 from itertools import zip_longest
 import pandas as pd
+
 ave = 15  # |difference| between pixels that coincides with average value of Pm
 ave_min = 2  # for m defined as min |d|: smaller?
 ave_M = 50  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
@@ -46,6 +47,7 @@ init_y = 0  # starting row, the whole frame doesn't need to be processed
     df = dataframe
     prefix 'F' Filtered dataframe  
 '''
+
 def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
 
     Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
@@ -53,46 +55,49 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
     for y in range(init_y + 1, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
         # initialization:
-
         dert_ = []  # line-wide i_, p_, d_, m__
         pixel_ = frame_of_pixels_[y, :]
         _i = pixel_[0]
 
         for i in pixel_[1:]:  # pixel p is compared to prior pixel _p in a row
-            d = i -_i
-            p = ( i +_i)
+            d = i - _i
+            p = i + _i
             m = ave - abs(d)  # for consistency with deriv_comp output, otherwise redundant
-            dert_.append({'i':i,'p':p,'d':d,'m':m}) #append dict to create df in the end
+            dert_.append({'i': i, 'p': p, 'd': d, 'm': m})  # append dict to create df in the end
             _i = i
-        df_dert = pd.DataFrame(dert_) #create dert as dataframe
+        df_dert = pd.DataFrame(dert_)  # create dert as dataframe
+
         Pm_ = form_P_(df_dert, fPd=False)  # forms m-sign patterns
         if len(Pm_) > 4:
             adj_M_ = form_adjacent_M_(Pm_)  # compute adjacent Ms to evaluate contrastive borrow potential
             intra_Pm_(Pm_, fid=False, rdn=1, rng=1)  # rng is unilateral, evaluates for sub-recursion per Pm
 
-        frame_of_patterns_.append(Pm_) #list of P dfs
+        frame_of_patterns_.append(Pm_)  # list of P dfs
         # line of patterns is added to frame of patterns
 
     return frame_of_patterns_  # frame of patterns is an output to level 2
 
+
 def form_P_(df_dert, fPd=False):  # initialization, accumulation, termination
 
     # initialization:
-    P_ = [] #list of dfs
-    #vectorized methods are used to apply transformations on whole data at once
-    if fPd: df_dert['sign'] = df_dert.d.all() > 0  # create a new column'sign' based on d,m signs - Vectorized
-    else:   df_dert['sign'] = df_dert.m.all() > 0
-
-    for i,dert_  in df_dert.groupby((df_dert['sign'].shift() != df_dert['sign']).cumsum()): #Group same sign dert
-        #groupby df_dert.sign - it returns groups of similar signs in incremental fashion
-        #shift() creates a mask of provided column by hsifting down the values by 1, so 1st value shifted to 2nd index and so on, useful for forward comparison
-        #cumsum() is used to differentiate the each group from the previous group
-        dert = dert_.sum(axis=0) #accumulate each group/ sum rows of each group its a vectorized operation
-        #append dict into P_ for later assignment into dataframe
-        P_.append({'sign':dert.sign>0, 'L':len(dert_), 'I':dert.p, 'D':dert.d, 'M':dert.m, 'x0':i, 'dert_':dert_, 'sublayers':[], '_smP':False, 'fPd':fPd})
-    df_P = pd.DataFrame(P_) #form dataframe of P_
+    P_ = []  # list of dfs
+    # vectorized methods are used to apply transformations on whole data at once
+    if fPd:
+        df_dert['sign'] = df_dert.d > 0  # create a new column'sign' based on d,m signs - Vectorized
+    else:
+        df_dert['sign'] = df_dert.m > 0
+    for i, dert_ in df_dert.groupby((df_dert['sign'].shift() != df_dert['sign']).cumsum()):  # Group same sign dert
+        # groupby df_dert.sign - it returns groups of similar signs in incremental fashion
+        # shift() creates a mask of provided column by hsifting down the values by 1, so 1st value shifted to 2nd index and so on, useful for forward comparison
+        # cumsum() is used to differentiate the each group from the previous group
+        dert = dert_.sum(axis=0)  # accumulate each group/ sum rows of each group its a vectorized operation
+        # append dict into P_ for later assignment into dataframe
+        P_.append({'sign': dert.sign > 0, 'L': len(dert_), 'I': dert.p, 'D': dert.d, 'M': dert.m, 'x0': i, 'dert_': dert_, 'sublayers': [], '_smP': False, 'fPd': fPd})
+    df_P = pd.DataFrame(P_)  # form dataframe of P_
 
     return df_P
+
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
     '''
@@ -101,18 +106,18 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates adjacent uniform span.
     That contrast may be salient if it can borrow sufficient predictive value from that adjacent high-match span.
     '''
-
-    Pm_['adj_M'] = Pm_['M']/2 + Pm_['M'].shift()/2 #shift Pm_['M'] by one and compute adj_M - vectorized operaiton
-    Pm_['adj_M'][0] = Pm_['M'][1] #assign 1st adj_M as after shifting 1st index of M becomes nan
-
+    Pm_['adj_M'] = Pm_['M'] / 2 + Pm_['M'].shift() / 2  # shift Pm_['M'] by one and compute adj_M - vectorized operaiton
+    # Pm_['adj_M'].iloc[0] = Pm_['M'].iloc[1] #assign 1st adj_M as after shifting 1st index of M becomes nan
+    Pm_.at[0, 'adj_M'] = Pm_['M'].iloc[1]  # assign 1st adj_M as after shifting 1st index of M becomes nan
     return Pm_
 
+
 def intra_Pm_(P_, fid=False, rdn=1, rng=1):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
-    #not revised completely
+    # need to be vectorized
     comb_layers = []  # combine into root P sublayers[1:]
 
     for P in P_.itertuples():  # each sub_layer is nested to depth = sublayers[n]
-        if P.L > 2 ** (rng+1):  # rng+1 because rng is initialized at 0, as all params
+        if P.L > 2 ** (rng + 1):  # rng+1 because rng is initialized at 0, as all params
 
             if P.sign:  # +Pm: low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8...
                 if P.M - P.adj_M > ave_M * rdn:  # reduced by lending to contrast: all comps form params for hLe comp?
@@ -126,11 +131,12 @@ def intra_Pm_(P_, fid=False, rdn=1, rng=1):  # evaluate for sub-recursion in lin
                     rdert_ = range_comp(P.dert_)  # rng+ comp with localized ave, skip predictable next dert
                     sub_Pm_ = form_P_(rdert_, fPd=False)  # cluster by m sign
                     Ls = len(sub_Pm_)
-                    P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_, add Dert=[] if Ls > min?
+                    # P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_, add Dert=[] if Ls > min?
+                    P_.at[P.Index, 'sublayers'] += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]
                     # 1st sublayer is single-element, packed in double brackets only to allow nesting for deeper sublayers
                     if len(sub_Pm_) > 4:
-                        sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                        P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn+1 + 1/Ls, rng+1)  # feedback
+                        sub_Pm_ = form_adjacent_M_(sub_Pm_)
+                        P_.at[P.Index, 'sublayers'] += intra_Pm_(sub_Pm_, fid, rdn=rdn + 1 + 1 / Ls, rng=rng + 1)  # feedback
                         # add param summation within sublayer, for comp_sublayers?
                         # splice sublayers across sub_Ps:
                         comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
@@ -142,9 +148,9 @@ def intra_Pm_(P_, fid=False, rdn=1, rng=1):  # evaluate for sub-recursion in lin
                     rel_adj_M = P.adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
                     sub_Pd_ = form_P_(P.dert_, fPd=True)  # cluster by input d sign match: partial d match
                     Ls = len(sub_Pd_)
-                    P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                    P_.at[P.Index, 'sublayers'] += [[(Ls, True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
 
-                    P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1 + 1/Ls, rng)  # der_comp eval per nPm
+                    P_.at[P.Index, 'sublayers'] += intra_Pd_(sub_Pd_, rel_adj_M, rdn + 1 + 1 / Ls, rng)  # der_comp eval per nPm
                     # splice sublayers across sub_Ps, for return as root sublayers[1:]:
                     comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
                                    zip_longest(comb_layers, P.sublayers, fillvalue=[])]
@@ -163,11 +169,11 @@ def intra_Pd_(Pd_, rel_adj_M, rdn=1, rng=1):  # evaluate for sub-recursion in li
             sub_Pm_ = form_P_(ddert_, fPd=True)  # cluster Pd derts by md, won't happen
             Ls = len(sub_Pm_)
             # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_, sub_PPm_, sub_PPd_:
-            P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pm_, [], [] )]]
+            Pd_.at[P.Index, 'sublayers'] += [[(Ls, True, True, rdn, rng, sub_Pm_, [], [])]]
 
             if len(sub_Pm_) > 3:
-                sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn+1 + 1/Ls, rng + 1)
+                sub_Pm_ = form_adjacent_M_(sub_Pm_)
+                Pd_.at[P.Index, 'sublayers'] += intra_Pm_(sub_Pm_, fid=True, rdn=rdn + 1 + 1 / Ls, rng=rng + 1)
                 # splice sublayers across sub_Ps:
                 comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
                                zip_longest(comb_layers, P.sublayers, fillvalue=[])]
@@ -178,21 +184,22 @@ def intra_Pd_(Pd_, rel_adj_M, rdn=1, rng=1):  # evaluate for sub-recursion in li
     '''
     return comb_layers
 
+
 def range_comp(dert_):  # cross-comp of 2**rng- distant pixels: 4,8,16.., skipping intermediate pixels
 
     rdert_ = []
-    _i = dert_.head(1).i #get 1st row of df
+    _i = dert_.head(1).i  # get 1st row of df
 
     for dert in dert_.loc[2::2].itertuples():  # all inputs are sparse, skip odd pixels compared in prior rng: 1 skip / 1 add, to maintain 2x overlap
-        d = dert.i -_i
+        d = dert.i - _i
         rng_p = dert.p + _i  # intensity accumulated in rng
-        rng_d = dert.d + d   # difference accumulated in rng
+        rng_d = dert.d + d  # difference accumulated in rng
         rng_m = dert.m + ave - abs(d)  # m accumulated in rng
         # for consistency with deriv_comp, else m is redundant
 
-        rdert_.append({'i':dert.i,'p':rng_p,'d':rng_d,'m':rng_m })
+        rdert_.append({'i': int(dert.i), 'p': int(rng_p), 'd': int(rng_d), 'm': int(rng_m)})
         _i = dert.i
-    df_rdert = pd.DataFrame(rdert_)
+    df_rdert = pd.DataFrame(data=rdert_)
 
     return df_rdert
 
@@ -201,20 +208,19 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
     # dd and md may match across d sign, but likely in high-match area, spliced by spec in comp_P?
     # initialization:
     ddert_ = []
-    _d = abs( dert_.head(0).d)  # same-sign in Pd
+    _d = abs(dert_['d'].iloc[0])  # same-sign in Pd
 
-    for dert in dert_,loc[1:].itertuples():
+    for dert in dert_.loc[1:].itertuples():
         # same-sign in Pd
-        d = abs( dert.d )
+        d = abs(dert.d)
         rd = d + _d
         dd = d - _d
-        md = min(d, _d) - abs( dd/2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
-        ddert_.append({'i':dert.d,'p':rd,'d':dd,'m':md })
+        md = min(d, _d) - abs(dd / 2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
+        ddert_.append({'i': int(dert.d), 'p': int(rd), 'd': int(dd), 'm': int(md)})
         _d = d
-    df_ddert = pd.DataFrame(ddert_)
+    df_ddert = pd.DataFrame(data=ddert_)
 
     return df_ddert
-
 
 if __name__ == "__main__":
     # Parse argument (image)
@@ -236,7 +242,6 @@ if __name__ == "__main__":
     if fline_PPs:  # debug line_PPs_draft
         from line_PPs_draft import *
         frame_PP_ = []
-
         for y, P_ in enumerate(frame_of_patterns_):
             PPm_, PPd_ = search(P_)
             frame_PP_.append([PPm_, PPd_])

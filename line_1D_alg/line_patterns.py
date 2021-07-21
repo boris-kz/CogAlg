@@ -38,14 +38,15 @@ class Cdert(ClusterStructure):
 
 class CP(ClusterStructure):
 
-    sign = bool  # shouln't be used
+    sign = bool  # replace by if P.M > 0
     L = int
     I = int
     D = int
     M = int
     x0 = int
     dert_ = list  # contains (i, p, d, m)
-    sublayers = list
+    sublayers = list  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
+    # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sublayers[ sub_Ps[ derts]]
     # for line_PPs
     derP = object  # forward comp_P derivatives
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
@@ -73,7 +74,14 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
     Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []
-
+    '''
+    if cross_comp_spliced: process all image rows as a single line, vertically consecutive and preserving horizontal direction:
+    pixel_=[]; dert_=[]  
+    for y in range(init_y + 1, Y):  
+        pixel_.append([ frame_of_pixels_[y, :]])  # splice all rows into pixel_
+    _i = pixel_[0]
+    else:
+    '''
     for y in range(init_y + 1, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
         # initialization:
         dert_ = []  # line-wide i_, p_, d_, m__
@@ -86,15 +94,15 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             m = ave - abs(d)  # for consistency with deriv_comp output, otherwise redundant
             dert_.append( Cdert(i=i,p=p,d=d,m=m) )
             _i = i
-        # form m-patterns:
+        # form m Patterns, evaluate intra_Pm_ per Pm:
         Pm_ = form_P_(dert_, rdn=1, rng=1, fPd=False)
         # add line of patterns to frame of patterns:
-        frame_of_patterns_.append(Pm_)
+        frame_of_patterns_.append(Pm_)  # skip if cross_comp_spliced
 
-    return frame_of_patterns_  # frame of patterns is an output to level 2
+    return frame_of_patterns_  # frame of patterns is an intput to level 2
 
 
-def form_P_(dert_, fPd, rdn, rng):  # accumulation and termination
+def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
     # initialization:
     P_ = []
     x = 0
@@ -115,13 +123,11 @@ def form_P_(dert_, fPd, rdn, rng):  # accumulation and termination
         _sign = sign
 
     if len(P_) > 4:
-        splice_P_(P_, fPd=0)  # merge mean_I- or mean_D- similar and weakly separated Ps
+        splice_P_(P_, fPd=0)  # merge meanI- or meanD- similar and weakly separated Ps
         if len(P_) > 4:
-            adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
-            intra_Pm_(P_, adj_M_, rdn, rng, fid=False)  # rng is unilateral, evaluates for sub-recursion per Pm
+            intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
 
-    # for visualization only:
-    with open("frame_of_patterns_2.csv", "a") as csvFile:
+    with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
         write = csv.writer(csvFile, delimiter=",")
         for item in range(len(P_)):
             # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0)
@@ -129,19 +135,91 @@ def form_P_(dert_, fPd, rdn, rng):  # accumulation and termination
 
     return P_
 
+''' 
+Sub-recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
+'''
+def intra_Pm_(P_, rdn, rng, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
+
+    adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
+    comb_layers = []  # combine into root P sublayers[1:]
+
+    for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sublayers[n]
+        if P.L > 2 ** (rng+1):  # rng+1 because rng is initialized at 0, as all params
+
+            if P.M > 0:  # low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8...
+                if P.M - adj_M > ave_M * rdn:  # reduced by lending to contrast: all comps form params for hLe comp?
+                    '''
+                    if localized filters:
+                    P_ave = (P.M - adj_M) / P.L  
+                    loc_ave = (ave - P_ave) / 2  # ave is reduced because it's for inverse deviation, possibly negative?
+                    loc_ave_min = (ave_min + P_ave) / 2
+                    rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
+                    '''
+                    rdert_ = range_comp(P.dert_)  # rng+ comp with localized ave, skip predictable next dert
+                    rdn += 1; rng += 1
+                    sub_Pm_ = form_P_(rdert_, rdn, rng, fPd=False)  # cluster by m sign, eval intra_Pm_
+                    Ls = len(sub_Pm_)
+                    P.sublayers += [[(Ls, False, fPd, rdn, rng, sub_Pm_)]]  # add Dert=[] if Ls > min?
+                    # 1st sublayer is single-element, packed in double brackets only to allow nesting for deeper sublayers
+                    if len(sub_Pm_) > 4:
+                        P.sublayers += intra_Pm_(sub_Pm_, rdn+1 + 1/Ls, rng+1, fPd)  # feedback
+                        # add param summation within sublayer, for comp_sublayers?
+                        # splice sublayers across sub_Ps:
+                        comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                                       zip_longest(comb_layers, P.sublayers, fillvalue=[])]
+
+            else:  # neg Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
+                if min(-P.M, adj_M) > ave_D * rdn:  # cancelled M+ val, M = min | ~v_SAD
+
+                    rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
+                    sub_Pd_ = form_P_(P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
+                    Ls = len(sub_Pd_)
+                    P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
+
+                    P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1 + 1/Ls, rng)  # der_comp eval per nPm
+                    # splice sublayers across sub_Ps, for return as root sublayers[1:]:
+                    comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                                   zip_longest(comb_layers, P.sublayers, fillvalue=[])]
+
+    return comb_layers
+
+def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P_, packing results in sub_P_
+
+    comb_layers = []
+    for P in Pd_:  # each sub in sub_ is nested to depth = sub_[n]
+
+        if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
+            # cross-comp of ds:
+            ddert_ = deriv_comp(P.dert_)  # i is d
+            sub_Pm_ = form_P_(ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
+            Ls = len(sub_Pm_)
+            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_:
+            P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pm_ )]]
+
+            if len(sub_Pm_) > 3:
+                P.sublayers += intra_Pm_(sub_Pm_, rdn+1 + 1/Ls, rng + 1, fPd=True)
+                # splice sublayers across sub_Ps:
+                comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                               zip_longest(comb_layers, P.sublayers, fillvalue=[])]
+    ''' 
+    adj_M is not affected by primary range_comp per Pm?
+    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
+    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+    '''
+    return comb_layers
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
     '''
     Value is projected match, while variation has contrast value only: it matters to the extent that it interrupts adjacent match: adj_M.
     In noise, there is a lot of variation. but no adjacent match to cancel, so that variation has no predictive value.
-    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates uniform area.
-    That contrast may be salient if it can borrow sufficient predictive value from that adjacent high-match area.
+    On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates some high-match area.
+    Contrast is salient to the extent that it can borrow sufficient predictive value from adjacent high-match area.
     '''
     M_ = [Pm.M for Pm in Pm_]  # list of Ms in the order of Pm_
 
-    adj_M_ = [(abs(pri_M)+abs(next_M)) / 2
-              for pri_M, next_M in zip(M_[:-2], M_[2:])]  # adjacent Ms, exclude prior and later Ms
-    adj_M_ = [M_[1]] + adj_M_ + [M_[-2]]                  # sum prior and later adjacent Ms
+    adj_M_ = [(abs(prev_M) + abs(next_M)) / 2
+              for prev_M, next_M in zip(M_[:-2], M_[2:])]  # adjacent Ms, first and last Ms
+    adj_M_ = [M_[1]] + adj_M_ + [M_[-2]]  # sum previous and next adjacent Ms
 
     ''' expanded:
     pri_M = Pm_[0].M  # deriv_comp value is borrowed from adjacent opposite-sign Ms
@@ -155,94 +233,6 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     adj_M_.append(abs(pri_M))  # no / 2: projection for last P
     '''
     return adj_M_
-
-''' 
-    Recursion in intra_P extends pattern with sub_: hierarchy of sub-patterns, to be adjusted by macro-feedback:
-    # P:
-    sign,  # of m | d 
-    dert_, # buffer of elements, input for extended cross-comp
-    # next fork:
-    fPd, # flag: select Pd vs. Pm forks in form_P_
-    fid, # flag: input is derived: magnitude correlates with predictive value: m = min-ave, else m = ave-|d|
-    rdn, # redundancy to higher layers, possibly lateral overlap of rng+ & der+, rdn += 1 * typ coef?
-    rng, # comp range
-    sublayers: # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
-               # for layer-parallel access and comp, as in frequency domain representation
-               # orders of composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sublayers[ sub_Ps[ derts]] 
-'''
-
-def intra_Pm_(P_, adj_M_, fid, rdn, rng):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
-
-    comb_layers = []  # combine into root P sublayers[1:]
-
-    for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sublayers[n]
-        if P.L > 2 ** (rng+1):  # rng+1 because rng is initialized at 0, as all params
-
-            if P.sign:  # +Pm: low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8...
-                if P.M - adj_M > ave_M * rdn:  # reduced by lending to contrast: all comps form params for hLe comp?
-                    '''
-                    if localized filters:
-                    P_ave = (P.M - adj_M) / P.L  
-                    loc_ave = (ave - P_ave) / 2  # ave is reduced because it's for inverse deviation, possibly negative?
-                    loc_ave_min = (ave_min + P_ave) / 2
-                    rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
-                    '''
-                    rdert_ = range_comp(P.dert_)  # rng+ comp with localized ave, skip predictable next dert
-                    rdn += 1; rng += 1
-                    sub_Pm_ = form_P_(rdert_, rdn, rng, fPd=False)  # cluster by m sign
-                    Ls = len(sub_Pm_)
-                    P.sublayers += [[(Ls, False, fid, rdn, rng, sub_Pm_, [], [])]]  # sub_PPm_, sub_PPd_, add Dert=[] if Ls > min?
-                    # 1st sublayer is single-element, packed in double brackets only to allow nesting for deeper sublayers
-                    if len(sub_Pm_) > 4:
-                        sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                        P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, fid, rdn+1 + 1/Ls, rng+1)  # feedback
-                        # add param summation within sublayer, for comp_sublayers?
-                        # splice sublayers across sub_Ps:
-                        comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
-                                       zip_longest(comb_layers, P.sublayers, fillvalue=[])]
-
-            else:  # -Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
-                if min(-P.M, adj_M) > ave_D * rdn:  # cancelled M+ val, M = min | ~v_SAD
-
-                    rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
-                    sub_Pd_ = form_P_(P.dert_, rdn+1, rng, fPd=True)  # cluster by input d sign match: partial d match
-                    Ls = len(sub_Pd_)
-                    P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
-
-                    P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1 + 1/Ls, rng)  # der_comp eval per nPm
-                    # splice sublayers across sub_Ps, for return as root sublayers[1:]:
-                    comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
-                                   zip_longest(comb_layers, P.sublayers, fillvalue=[])]
-
-    return comb_layers
-
-
-def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P_, packing results in sub_P_
-
-    comb_layers = []
-    for P in Pd_:  # each sub in sub_ is nested to depth = sub_[n]
-
-        if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
-            # cross-comp of ds:
-            ddert_ = deriv_comp(P.dert_)  # i is d
-            sub_Pm_ = form_P_(ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md, won't happen
-            Ls = len(sub_Pm_)
-            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_, sub_PPm_, sub_PPd_:
-            P.sublayers += [[(Ls, True, True, rdn, rng, sub_Pm_, [], [] )]]
-
-            if len(sub_Pm_) > 3:
-                sub_adj_M_ = form_adjacent_M_(sub_Pm_)
-                P.sublayers += intra_Pm_(sub_Pm_, sub_adj_M_, 1, rdn+1 + 1/Ls, rng + 1)
-                # splice sublayers across sub_Ps:
-                comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
-                               zip_longest(comb_layers, P.sublayers, fillvalue=[])]
-    ''' 
-    adj_M is not affected by primary range_comp per Pm?
-    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
-    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
-    '''
-    return comb_layers
-
 
 def range_comp(dert_):  # cross-comp of 2**rng- distant pixels: 4,8,16.., skipping intermediate pixels
     rdert_ = []
@@ -309,7 +299,6 @@ def splice_P_(P_, fPd):
     if P_: new_P_ += P_
     return new_P_
 
-
 def splice_P_back(new_P_, P, fPd):  # P is __P in calling splice_P_
 
     while len(new_P_) > 2:  # at least 3 Ps
@@ -352,31 +341,6 @@ def splice_eval(__P, _P, P, fPd):  # should work for splicing Pps too
     merge_value = proximity * similarity
 
     return merge_value
-
-
-def cross_comp_spliced(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
-    '''
-    process all image rows as a single line, vertically consecutive and preserving horizontal direction
-    '''
-    Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
-    dert_ = []  # line-wide i_, p_, d_, m__.
-    pixel_ = []
-
-    for y in range(init_y + 1, Y):  # y is index of new line
-        pixel_.append([ frame_of_pixels_[y, :] ])  # splice all rows into pixel_
-    _i = pixel_[0]
-
-    for i in pixel_[1:]:  # pixel p is compared to prior pixel _p in a row
-        d = i -_i
-        p = i +_i
-        m = ave - abs(d)  # for consistency with deriv_comp output, otherwise redundant
-        dert_.append(Cdert(i=i,p=p,d=d,m=m))
-        _i = i
-    # form m-patterns
-    Pm_ = form_P_(dert_, rdn=1, rng=1, fPd=False)
-
-    return Pm_  # frame of patterns, an output to line_PPs (level 2 processing)
-
 
 if __name__ == "__main__":
     ''' 
