@@ -287,7 +287,7 @@ def splice_P_(P_, fPd):
                 __P.x0 = min(__P.x0, merge_P.x0)
                 __P.accum_from(merge_P)
                 __P.dert_+= merge_P.dert_
-            # back merging
+            # back splicing
             __P = splice_P_back(new_P_, __P, fPd)
             P_.insert(0, __P)  # insert merged __P back into P_ to continue merging
         else:
@@ -378,8 +378,8 @@ if __name__ == "__main__":
         frame_PP_ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            layer0 = search(P_)
-            frame_PP_.append(layer0)
+            PP_ = search(P_)
+            frame_PP_.append(PP_)
 
     end_time = time() - start_time
     print(end_time)
