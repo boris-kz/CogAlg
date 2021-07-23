@@ -21,10 +21,10 @@ class Cpdert(ClusterStructure):
     negM = int  # in mdert only
     x0 = int  # pixel-level
     L = int
-    # P = object  # _P of compared pair?
 
 class CPp(CP):
-    dert_ = list
+    pdert_ = list
+    N = int  # n of Ps in Pp, similar to L in P
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
     negL = int  # in mdert only
     negM = int  # in mdert only
@@ -58,7 +58,7 @@ ave_D = 100  # search stop
 ave_sub_M = 500  # sub_H comp filter
 ave_Ls = 3
 ave_PPM = 200
-ave_merge = 50  # merge a kernel of 3 adjacent Pps
+ave_splice = 50  # merge a kernel of 3 adjacent Pps
 ave_inv = 20 # ave inverse m, change to Ave from the root intra_blob?
 ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 ave_rolp = .5  # ave overlap ratio for comp_Pp
@@ -78,17 +78,17 @@ def search(P_):  # cross-compare patterns within horizontal line
             layer0['M_'][0].append((P.M, P.L, P.x0))  # M
 
         for n, param_name in enumerate(layer0):  # loop L_, I_, D_, M_
+            # we need to arrange this to get unique pairs of names, as discussed?
             search_param_(param_name, layer0[param_name])  # layer0[param_name][0].append((Ppm_, Ppd_))
 
-    derPp__ = compute_overlap(layer0, fPd=0)
-    form_PP_(PP_, derPp__)  # form PP from current overlapping derPps
+        derPp__ = compute_overlap(layer0, fPd=0)
+        form_PP_(PP_, derPp__)  # form PP from current overlapping derPps
 
     return PP_
 
 def search_param_(param_name, iparam):
 
     ddert_, mdert_ = [], []  # line-wide (i, p, d, m)_, + (negL, negM) in mdert: variable-range search
-
     rdn = iparam[1]  # iparam = (param_, P.L, P.x0), rdn
     param_ = iparam[0]
     _param, _L, _x0 = param_[0]
@@ -105,11 +105,14 @@ def search_param_(param_name, iparam):
             j += 1
             ext_param, ext_L, ext_x0 = param_[j]  # extend search beyond next param
             dert = comp_param(param, ext_param, param_name, ave)
-            comb_M = dert.m + negM - ave_M  # adjust ave_M for relative proximity and similarity?
-            negM += dert.m
-            negL += ext_L
+            if dert.m > 0:
+                break
+            else:
+                comb_M = dert.m + negM - ave_M  # adjust ave_M for relative continuity and similarity?
+                negM += dert.m
+                negL += ext_L
         # after extended search, if any:
-        mdert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, negL=negL, negM=negM))
+        mdert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, negL=negL, negM=negM))
         _param = param
 
     # needs a review
@@ -131,18 +134,18 @@ def form_Pp_(dert_, param_name, rdn, fPd):  # almost the same as line_patterns f
                 # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
         if sign != _sign:
             # sign change, initialize P and append it to P_
-            Pp = CPp(sign=_sign, L=dert.L, I=dert.p, D=dert.d, M=dert.m, negL=dert.negL, negM=dert.negM, x0=dert.x0, dert_=[dert], sublayers=[], fPd=fPd)
+            Pp = CPp(N=1, L=dert.L, I=dert.p, D=dert.d, M=dert.m, negL=dert.negL, negM=dert.negM, x0=dert.x0, dert_=[dert], sublayers=[], fPd=fPd)
             Pp_.append(Pp)  # updated with accumulation below
         else:
             # accumulate params:
-            Pp.L += 1; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.negL+=dert.negL; Pp.negM+=dert.negM
+            Pp.N += 1; Pp.L += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.negL+=dert.negL; Pp.negM+=dert.negM
             Pp.dert_ += [dert]
         x += 1
         _sign = sign
 
-    if len(Pp_) > 4:
+    if len(Pp_) > 2:
         splice_P_(Pp_, fPd=0)  # merge mean_I- or mean_D- similar and weakly separated Ps
-        if len(P_) > 4:
+        if len(Pp_) > 4:
             intra_Ppm_(Pp_, param_name, rdn, fPd)  # evaluates for sub-recursion per Pm
 
     return Pp_
@@ -194,15 +197,14 @@ def compute_overlap(layer0, fPd):  # find Pps that overlap across 4 Pp_s, comput
 
 def form_PP_(PP_, derPp__):
     '''
-    Draft
-    form PP from derPps formed from different overlapping Pps
+    Draft: form PP from derPps formed from different overlapping Pps
     '''
     for derPp_ in derPp__:
         fPP = 0
         PP = CPP() # initialize 1st PP
 
         for derPp in derPp_:
-            if derPp.mP > -ave_M*100  and derPp.dP > -ave_D*100 :
+            if derPp.mPp > -ave_M*100 and derPp.dPp > -ave_D*100:
                 fPP = 1
                 PP.accum_from(derPp)
                 PP.derPp_.append(derPp)
@@ -381,19 +383,19 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                 '''
     return PP_
 
-def form_adjacent_mP(derP_d_):
+def form_adjacent_mP(derPp_):
 
-    pri_mP = derP_d_[0].mP
-    mP = derP_d_[1].mP
-    derP_d_[0].adj_mP = derP_d_[1].mP
+    pri_mP = derPp_[0].mP
+    mP = derPp_[1].mP
+    derPp_[0].adj_mP = derPp_[1].mP
 
-    for i, derP in enumerate(derP_d_[2:]):
+    for i, derP in enumerate(derPp_[2:]):
         next_mP = derP.mP
-        derP_d_[i+1].adj_mP = (pri_mP + next_mP)/2
+        derPp_[i+1].adj_mP = (pri_mP + next_mP)/2
         pri_mP = mP
         mP = next_mP
 
-    return derP_d_
+    return derPp_
 
 def intra_Ppm_(Pp_, param_name, rdn, fPd):
     '''
@@ -405,8 +407,19 @@ def intra_Ppm_(Pp_, param_name, rdn, fPd):
     if comp I -> dI ~ combined d_derivatives, then project ave_d?
     '''
     for Pp in Pp_:
-        if Pp.M > ave_M and Pp.M / Pp.L > ave:
 
-            Pp.sub_layers = search_param_(param_name, ((Pp.dert_, Pp.L, Pp.x0), rdn) )  # iparam = (param_, P.L, P.x0), rdn
+        if Pp.M > -ave_M and Pp.M / Pp.L > -ave:
+            sub_param_ = []
+
+            for pdert in Pp.dert_:
+                if fPd:
+                    param_name = "D_"  # comp d
+                    sub_param_.append((pdert.d, pdert.x0, pdert.L))
+                else:
+                    param_name = "I_"  # comp i @ local ave_M
+                    sub_param_.append((pdert.i, pdert.x0, pdert.L))
+
+            Pp.sublayers = search_param_(param_name, [sub_param_, rdn] )  # iparam = [sub_param_, rdn], where sub_param_ = (param1, x01, L1),(param2, x02, L2),...
+
             # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match
             # extended search needs to be restricted to ave_M-terminated derts
