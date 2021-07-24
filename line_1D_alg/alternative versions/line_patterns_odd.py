@@ -376,3 +376,56 @@ if __name__ == "__main__":
 
     end_time = time() - start_time
     print(end_time)
+
+
+def splice_P_loop(P_, fPd):
+    '''
+    Initial P separation is determined by pixel-level sign change, but resulting opposite-sign pattern may be relatively weak,
+    and same-sign patterns it separates relatively strong.
+    Another criterion to re-evaluate separation is similarity of defining param: M/L for Pm, D/L for Pd, among the three Ps
+    If relative proximity * relative similarity > merge_ave: all three Ps should be merged into one.
+    '''
+    new_P_ = []
+    while len(P_) > 2:
+        __P = P_.pop(0)
+        _P = P_.pop(0)
+        P = P_.pop(0)
+
+        if splice_eval(__P, _P, P, fPd) > ave_splice:  # no * ave_rM * (1 + _P.L / (__P.L+P.L) / 2): _P.L is not significant
+            if verbose:
+                print('P_'+str(_P.id)+' and P_'+str(P.id)+' are merged into P_'+str(__P.id))
+            # merge _P and P into __P
+            for merge_P in [_P, P]:
+                __P.accum_from(merge_P, excluded=['x0','ix0'])
+                __P.dert_+= merge_P.dert_
+            # back splicing
+            __P = splice_P_back(new_P_, __P, fPd)
+            P_.insert(0, __P)  # insert merged __P back into P_ to continue merging
+        else:
+            new_P_.append(__P) # append __P to P_ when there is no further merging process for __P
+            P_.insert(0, P)    # insert P back into P_ for the consecutive merging process
+            P_.insert(0, _P)  # insert _P back into P_ for the consecutive merging process
+
+    # pack remaining Ps, if any:
+    if P_: new_P_ += P_
+    return new_P_
+
+def splice_P_back(new_P_, P, fPd):  # P is __P in calling splice_P_
+
+    while len(new_P_) > 2:  # at least 3 Ps
+        _P = new_P_.pop()
+        __P = new_P_.pop()
+
+        if splice_eval(__P, _P, P, fPd) > ave_splice:  # no * ave_rM * (1 + _P.L / (__P.L+P.L) / 2): rM should be insignificant
+            if verbose:
+                print('P_'+str(_P.id)+' and P_'+str(P.id)+' are backward merged into P_'+str(__P.id))
+            # merge _P and P into __P
+            for merge_P in [_P, P]:
+                __P.accum_from(merge_P, excluded=['x0','ix0'])
+                __P.dert_+= merge_P.dert_
+            P = __P  # also returned
+        else:
+            new_P_+= [__P, _P]
+            break
+
+    return P

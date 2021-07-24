@@ -284,28 +284,14 @@ class ClusterStructure(metaclass=MetaCluster):
                 layer = getattr(self,layer_num)   # self layer params
                 _layer = getattr(other,layer_num) # other layer params
 
-                if len(layer) == len(_layer): # both layers are having same params
-                    for i, ((param_name,dert), (_param_name,_dert)) in enumerate(zip(layer.items(), _layer.items())):  # accumulate _dert to dert in layer
-
-                        if not isinstance(dert, Cdert) and isinstance(_dert, Cdert):  # dert is not dert if base param < ave_comp?
+                if len(layer) == len(_layer):  # both layers have the same params
+                    for i, ((param_name,dert), (_param_name,_dert)) in enumerate(zip(layer.items(), _layer.items())):
+                        # accumulate _dert into dert
+                        if not isinstance(dert, Cdert) and isinstance(_dert, Cdert):  # if base param < ave_comp?
                             layer[param_name] = _dert
-                        elif isinstance(dert, Cdert) and isinstance(_dert, Cdert):  # both params have dm
-                            if param_name in ['Da','Dady','Dadx'] and _param_name in ['Da','Dady','Dadx']:  # we shouldn't need both
-                                ''' 
-                                we shouldn't have da, daa, only ma, maa?
-                                da = dert.d; _da= _dert.d
-                                sin = np.sin(da); _sin = np.sin(_da)
-                                cos = np.cos(da); _cos = np.cos(_da)
-                                sin_sum = (cos * _sin) + (sin * _cos)  # sin(α + β) = sin α cos β + cos α sin β
-                                cos_sum= (cos * _cos) - (sin * _sin)   # cos(α + β) = cos α cos β - sin α sin β
-                                a_sum = np.arctan2(sin_sum, cos_sum)
-                                layer[param_name].d = a_sum
-                                '''
-                                pass
-                            else:
-                                dert.d += _dert.d
-
+                        elif isinstance(dert, Cdert) and isinstance(_dert, Cdert):
                             dert.p += _dert.p
+                            dert.d += _dert.d
                             dert.m += _dert.m
                 elif len(_layer)>0: # _layer is not empty but layer is empty
                     setattr(self,layer_num,_layer.copy())

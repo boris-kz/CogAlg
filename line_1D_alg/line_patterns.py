@@ -37,8 +37,6 @@ class Cdert(ClusterStructure):
     m = int  # distinct in deriv_comp only
 
 class CP(ClusterStructure):
-
-    sign = bool  # replace by if P.M > 0
     L = int
     I = int
     D = int
@@ -266,55 +264,46 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
 
 def splice_P_(P_, fPd):
     '''
-    Initial P separation is determined by pixel-level sign change, but resulting opposite-sign pattern may be relatively weak,
-    and same-sign patterns it separates relatively strong.
-    Another criterion to re-evaluate separation is similarity of defining param: M/L for Pm, D/L for Pd, among the three Ps
-    If relative proximity * relative similarity > merge_ave: all three Ps should be merged into one.
+    Initial P termination is by pixel-level sign change, but resulting separation may be insignificant on a pattern level.
+    That is, separating opposite-sign pattern is weak relative to separated same-sign patterns.
+    The criterion to re-evaluate separation is similarity of P-defining param: M/L for Pm, D/L for Pd, among the three Ps
+    If relative similarity > merge_ave: all three Ps are merged into one.
     '''
-    new_P_ = []
-    while len(P_) > 2:
-        __P = P_.pop(0)
-        _P = P_.pop(0)
-        P = P_.pop(0)
+    splice_val_ = [splice_eval(__P, _P, P, fPd)  # compute splice values
+                   for __P, _P, P in zip(P_, P_[1:], P_[2:])]
+    sorted_splice_val_ = sorted(enumerate(splice_val_),
+                                key=lambda k: k[1],
+                                reverse=True)   # sort index by splice_val_
+    if sorted_splice_val_[0][1] <= ave_splice:  # exit recursion
+        return P_
 
-        if splice_eval(__P, _P, P, fPd) > ave_splice:  # no * ave_rM * (1 + _P.L / (__P.L+P.L) / 2): _P.L is not significant
-            if verbose:
-                print('P_'+str(_P.id)+' and P_'+str(P.id)+' are merged into P_'+str(__P.id))
-            # merge _P and P into __P
-            for merge_P in [_P, P]:
-                __P.accum_from(merge_P, excluded=['x0'])
-                __P.dert_+= merge_P.dert_
-            # back splicing
-            __P = splice_P_back(new_P_, __P, fPd)
-            P_.insert(0, __P)  # insert merged __P back into P_ to continue merging
-        else:
-            new_P_.append(__P) # append __P to P_ when there is no further merging process for __P
-            P_.insert(0, P)    # insert P back into P_ for the consecutive merging process
-            P_.insert(0, _P)  # insert _P back into P_ for the consecutive merging process
-
-    # pack remaining Ps, if any:
-    if P_: new_P_ += P_
-    return new_P_
-
-def splice_P_back(new_P_, P, fPd):  # P is __P in calling splice_P_
-
-    while len(new_P_) > 2:  # at least 3 Ps
-        _P = new_P_.pop()
-        __P = new_P_.pop()
-
-        if splice_eval(__P, _P, P, fPd) > ave_merge:  # no * ave_rM * (1 + _P.L / (__P.L+P.L) / 2): rM should be insignificant
-            if verbose:
-                print('P_'+str(_P.id)+' and P_'+str(P.id)+' are backward merged into P_'+str(__P.id))
-            # merge _P and P into __P
-            for merge_P in [_P, P]:
-                __P.accum_from(merge_P, excluded=['x0'])
-                __P.dert_+= merge_P.dert_
-            P = __P  # also returned
-        else:
-            new_P_+= [__P, _P]
+    folp_ = np.zeros(len(P_), bool)  # if True: P is included in another spliced triplet
+    spliced_P_ = []
+    for i, splice_val in sorted_splice_val_:  # loop through splice vals
+        if splice_val <= ave_splice:  # stop, following splice_vals will be even smaller
             break
+        if folp_[i : i+3].any():  # skip if overlap
+            continue
+        folp_[i : i+3] = True     # splice_val > ave_splice: overlapping Ps folp=True
+        __P, _P, P = P_[i : i+3]  # unpack the triple
+        # merge _P and P into __P
+        __P.accum_from(_P, excluded=['x0', 'ix0'])
+        __P.accum_from(P, excluded=['x0', 'ix0'])
+        __P.dert_ += _P.dert_ + P.dert_
 
-    return P
+        spliced_P_.append(__P)
+        # to be removed:
+        assert isinstance(__P.dert_, list)
+
+    # add remaining Ps into spliced_P
+    spliced_P_ += [P_[i] for i, folp in enumerate(folp_) if not folp]
+    spliced_P_.sort(key=lambda P: P.x0)  # back to original sequence
+
+    if len(spliced_P_) > 4:
+        splice_P_(spliced_P_, fPd)
+
+    return spliced_P_
+
 
 def splice_eval(__P, _P, P, fPd):  # should work for splicing Pps too
     '''
@@ -324,21 +313,22 @@ def splice_eval(__P, _P, P, fPd):  # should work for splicing Pps too
     1/overlap = fractional distance: reduces ave, not m?
     '''
     if fPd:
-        rel_continuity = abs((__P.D + P.D) / _P.D) if _P.D != 0 else 0  # prevents /0
-        __mean= abs(__P.D)/__P.L; _mean= abs(_P.D)/_P.L; mean= abs(P.D)/P.L
+        if _P.D==0: _P.D =.1  # prevents /0
+        rel_continuity = abs((__P.D + P.D) / _P.D)
+        __mean= __P.D/__P.L; _mean= _P.D/_P.L; mean= P.D/P.L
     else:
-        rel_continuity = abs((__P.M + P.M) / _P.M) if _P.M != 0 else 0  # prevents /0
-        __mean= abs(__P.M)/__P.L; _mean= abs(_P.M)/_P.L; mean= abs(P.M)/P.L
+        if _P.M == 0: _P.M =.1  # prevents /0
+        rel_continuity = abs((__P.M + P.M) / _P.M)
+        __mean= __P.M/__P.L; _mean= _P.M/_P.L; mean= P.M/P.L
 
     m13 = min(mean, __mean) - abs(mean-__mean)/2    # inverse match of P1, P3
-    m12 = min(_mean, __mean) - abs(_mean-__mean)/2  # inverse match of P1, P2
-    m23 = min(_mean, mean) - abs(_mean- mean)/2     # inverse match of P2, P3
+    m12 = min(_mean, __mean) - abs(_mean-__mean)/2  # inverse match of P1, P2, should be negative
+    m23 = min(_mean, mean) - abs(_mean- mean)/2     # inverse match of P2, P3, should be negative
 
-    rel_similarity = (m13 * rel_continuity) / abs(m12 + m23)  # m12 and m23 should be negative
-    # * rel_continuity: relative value of m13 vs m12 and m23
-    splice_value = rel_continuity * rel_similarity
+    rel_similarity = (m13 * rel_continuity) / abs(m12 + m23)  # * rel_continuity: relative value of m13 vs m12 and m23
+    # splice_value = rel_continuity * rel_similarity
 
-    return splice_value
+    return rel_similarity
 
 if __name__ == "__main__":
     ''' 
@@ -354,9 +344,8 @@ if __name__ == "__main__":
     assert image is not None, "No image in the path"
     render = 0
     verbose = 0
-
     if render:
-        plt.figure();plt.imshow(image, cmap='gray')  # show the image below in gray
+        plt.figure();plt.imshow(image, cmap='gray')  # show the image in gray
 
     # for visualization:
     with open("frame_of_patterns_2.csv", "w") as csvFile:
@@ -369,6 +358,15 @@ if __name__ == "__main__":
     frame_of_patterns_ = cross_comp(image)  # returns Pm__
     # from pprint import pprint
     # pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
+    if render:
+        # Khanh's visualization
+        img = np.full((image.shape[0] - 1, image.shape[1] - 1), 128, np.uint8)  # dert size is smaller by the size of 1
+        for y, P_ in enumerate(frame_of_patterns_):
+            for P in P_:
+                wd = img[y, P.x0:P.x0 + P.L]
+                wd[:] = (P.M > 0) * 255
+        plt.figure(); plt.imshow(img, cmap='gray'); plt.title('merged image')
+        # cv2.imwrite("img_merged.bmp",img)
 
     fline_PPs = 0
     if fline_PPs:  # debug line_PPs_draft
