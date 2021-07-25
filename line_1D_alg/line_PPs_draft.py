@@ -77,12 +77,10 @@ def search(P_):  # cross-compare patterns within horizontal line
             layer0['D_'][0].append((P.D, P.L, P.x0))  # D
             layer0['M_'][0].append((P.M, P.L, P.x0))  # M
 
-        for n, param_name in enumerate(layer0):  # loop L_, I_, D_, M_
-            # we need to arrange this to get unique pairs of names, as discussed?
+        for param_name in layer0:  # loop L_, I_, D_, M_
             search_param_(param_name, layer0[param_name])  # layer0[param_name][0].append((Ppm_, Ppd_))
 
-        derPp__ = comp_overlaps(layer0, fPd=0)
-        form_PP_(PP_, derPp__)  # form PP from current overlapping derPps
+        PP_ = comp_overlaps(layer0, fPd=0)  # calls form PP for overlapping derPp__s
 
     return PP_
 
@@ -106,7 +104,7 @@ def search_param_(param_name, iparam):
             ext_param, ext_L, ext_x0 = param_[j]  # extend search beyond next param
             dert = comp_param(param, ext_param, param_name, ave)
             if dert.m > 0:
-                break  # connectivity search is terminated by 1st match
+                break  # 1st matching param takes over connectivity search form _param, to continue in the next loop
             else:
                 comb_M = dert.m + negM - ave_M  # adjust ave_M for relative continuity and similarity?
                 negM += dert.m
@@ -134,12 +132,12 @@ def form_Pp_(dert_, param_name, rdn, fPd):  # almost the same as line_patterns f
                 # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
         if sign != _sign:
             # sign change, initialize P and append it to P_
-            Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, negL=dert.negL, negM=dert.negM, x0=x, ix0=dert.x0, dert_=[dert], sublayers=[], fPd=fPd)
+            Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, negL=dert.negL, negM=dert.negM, x0=x, ix0=dert.x0, pdert_=[dert], sublayers=[], fPd=fPd)
             Pp_.append(Pp)  # updated with accumulation below
         else:
             # accumulate params:
-            Pp.L += 1; Pp.iL += dert.iL; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.negL+=dert.negL; Pp.negM+=dert.negM
-            Pp.dert_ += [dert]
+            Pp.L += 1; Pp.iL += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.negL+=dert.negL; Pp.negM+=dert.negM
+            Pp.pdert_ += [dert]
         x += 1
         _sign = sign
 
@@ -151,7 +149,7 @@ def form_Pp_(dert_, param_name, rdn, fPd):  # almost the same as line_patterns f
     return Pp_
 
 
-def comp_overlaps(layer0, fPd):  # find Pps that overlap across 4 Pp_s, compute overlap ratio
+def comp_overlaps(layer0, fPd):  # find Pps that overlap across 4 Pp_s, compute overlap ratio, call comp_Pp_ and form_PP_
 
     derPp__ = []  # from comp_Pp of all overlapping Pps
 
@@ -175,27 +173,49 @@ def comp_overlaps(layer0, fPd):  # find Pps that overlap across 4 Pp_s, compute 
                             if rolp > ave_rolp:
                                 derPp = comp_Pp(_Pp,Pp,layer0)
                                 derPp_.append(derPp)
+                        else:
+                            break  # if current Pp doesn't overlap _Pp, the next one won't either, but next _Pp overlaps current Pp?
+                            # then next _Pp should start looping from current Pp, not from the beginning of Pp_?
 
                     derPp__.append(derPp_)
+
+            if derPp__:  # derPp_s per _Pp
+                form_PP_(PP_, derPp__)
 
     return derPp__  # not sure about this derPp__, maybe it should be per _Pp?
 
 
-def form_PP_(PP_, derPp__):
+def form_PP_(PP_, derPp_):
     '''
+    not reviewed
     Draft: form PP from derPps formed from different overlapping Pps
     '''
+    fPP = 0
+    PP = CPP()  # initialize 1st PP
+    for derPp in derPp_:
+        if derPp.mPp > -ave_M * 100 and derPp.dPp > -ave_D * 100:  # ave is just a placeholder
+            fPP = 1
+            PP.accum_from(derPp)
+            PP.derPp_.append(derPp)
+
+    if fPP: PP_.append(PP)
+'''
+We should get 4-layer nesting in derPp____: names ( _ Pp ( names ( Pp ) ) ), and form PP_ out of it.
+PP should combine all matching overlapping Pps, including multiple matches in each dimension.
+
+We can do it bottom-up from derPp_, and try to eliminate lower-layer redundancies on higher layers?
+
+def form_PP_(PP_, derPp__):  # Draft: form PP from derPps formed from different overlapping Pps
     for derPp_ in derPp__:
         fPP = 0
         PP = CPP() # initialize 1st PP
-
         for derPp in derPp_:
             if derPp.mPp > -ave_M*100 and derPp.dPp > -ave_D*100:
                 fPP = 1
                 PP.accum_from(derPp)
                 PP.derPp_.append(derPp)
-
         if fPP: PP_.append(PP)
+'''
 
 def comp_Pp(_Pp, Pp, layer0):
     '''
@@ -397,7 +417,7 @@ def intra_Ppm_(Pp_, param_name, rdn, fPd):
         if Pp.M > -ave_M and Pp.M / Pp.L > -ave:
             sub_param_ = []
 
-            for pdert in Pp.dert_:
+            for pdert in Pp.pdert_:
                 if fPd:
                     param_name = "D_"  # comp d
                     sub_param_.append((pdert.d, pdert.x0, pdert.L))
