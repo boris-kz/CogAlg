@@ -119,9 +119,8 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
         _sign = sign
 
     if len(P_) > 4:
-        P_ = splice_P_(P_, fPd=0)  # merge meanI- or meanD- similar and weakly separated Ps
-        if len(P_) > 4:
-            intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
+        P_ = splice_P_(P_, fPd=0)  # merge meanI- or meanD- similar and weakly separated Ps; move to comp_param instead?
+        intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
 
     with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
         write = csv.writer(csvFile, delimiter=",")
@@ -312,10 +311,11 @@ def splice_eval(__P, _P, P, fPd):  # should work for splicing Pps too
     relative continuity vs separation = abs(( M2/ ( M1+M3 )))
     relative similarity = match (M1/L1, M3/L3) / miss (match (M1/L1, M2/L2) + match (M3/L3, M2/L2)) # both should be negative
 
-    or P2 is reinforced as contrast - weakened as distance -> same value, not merged?
+    or P2 is reinforced as contrast - weakened as distant -> same value, not merged?
     splice P1, P3: by proj mean comp, ~ comp_param, ave / contrast P2
+    re-run intra_P in line_PPs Pps?
 
-    also distance / meanL, fractional distance = meanL / olp? reduces ave, not m?
+    also distance / meanL, if 0: fractional distance = meanL / olp? reduces ave, not m?
     '''
     if fPd:
         if _P.D==0: _P.D =.1  # prevents /0
