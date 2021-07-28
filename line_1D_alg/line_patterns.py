@@ -122,12 +122,12 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
         P_ = splice_P_(P_, fPd=0)  # merge meanI- or meanD- similar and weakly separated Ps; move to comp_param instead?
         intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
 
-    with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
-        write = csv.writer(csvFile, delimiter=",")
-        for item in range(len(P_)):
-            # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0)
-            write.writerow([P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0])
-
+    if render:
+        with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
+            write = csv.writer(csvFile, delimiter=",")
+            for item in range(len(P_)):
+                # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0)
+                write.writerow([P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0])
     return P_
 
 ''' 
@@ -351,12 +351,10 @@ if __name__ == "__main__":
     verbose = 0
     if render:
         plt.figure();plt.imshow(image, cmap='gray')  # show the image in gray
-
-    # for visualization:
-    with open("frame_of_patterns_2.csv", "w") as csvFile:
-        write = csv.writer(csvFile, delimiter=",")
-        fieldnames = ("L=", "I=", "D=", "M=", "x0=")
-        write.writerow(fieldnames)
+        with open("frame_of_patterns_2.csv", "w") as csvFile:
+            write = csv.writer(csvFile, delimiter=",")
+            fieldnames = ("L=", "I=", "D=", "M=", "x0=")
+            write.writerow(fieldnames)
 
     start_time = time()
     # Main

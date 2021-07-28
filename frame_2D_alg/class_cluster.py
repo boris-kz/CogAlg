@@ -301,7 +301,7 @@ class Cdert(Number): # Ppd and Ppdm might not relevant now, so remove it
     __slots__ = ('i','p','d','m')
 
     def __init__(self, i=0, p=0, d=0, m=0):
-        self.i, self.p, self.d, self.m = i, d, m, p
+        self.i, self.p, self.d, self.m = i, p, d, m
 
     def __add__(self, other):
         return Cdert(self.i, self.p + other.p, self.d + other.d, self.m + other.m)
@@ -310,7 +310,7 @@ class Cdert(Number): # Ppd and Ppdm might not relevant now, so remove it
         if isinstance(self.i, Cdert) or isinstance(self.p, Cdert) or isinstance(self.d, Cdert) or isinstance(self.m, Cdert):
             return "Cdert(i=Cdert, p=Cdert, d=Cdert, m=Cdert)"
         else:
-            return "Cdert(i={}, p={}, d={}, m={})".format(self.i, self.p, self.d, self.m, self.p)
+            return "Cdert(i={}, p={}, d={}, m={})".format(self.i, self.p, self.d, self.m)
 
 
 def comp_param(param, _param, param_name, ave):
@@ -330,7 +330,7 @@ def comp_param(param, _param, param_name, ave):
             m = ave - abs(d)  # indirect match
         else:
             m = min(param,_param) - abs(d)/2 - ave  # direct match
-        dert = Cdert(i=param, p=param+_param, d=d,m=m)
+        dert = Cdert(i=param, p=param+_param, d=d, m=m)
 
     return dert
 
