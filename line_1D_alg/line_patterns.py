@@ -21,7 +21,6 @@
 import sys
 from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
-
 import cv2
 import csv
 import argparse
@@ -29,6 +28,7 @@ from time import time
 from utils import *
 from itertools import zip_longest
 from frame_2D_alg.class_cluster import ClusterStructure, NoneType, comp_param
+from line_PPs_draft import draw_PP_
 
 class Cdert(ClusterStructure):
     i = int  # input for range_comp only
@@ -330,7 +330,8 @@ def splice_eval(__P, _P, P, fPd):  # should work for splicing Pps too
     m12 = min(_mean, __mean) - abs(_mean-__mean)/2  # inverse match of P1, P2, should be negative
     m23 = min(_mean, mean) - abs(_mean- mean)/2     # inverse match of P2, P3, should be negative
 
-    rel_similarity = (m13 * rel_continuity) / abs(m12 + m23)  # * rel_continuity: relative value of m13 vs m12 and m23
+    miss = abs(m12 + m23) if not 0 else .1
+    rel_similarity = (m13 * rel_continuity) / miss  # * rel_continuity: relative value of m13 vs m12 and m23
     # splice_value = rel_continuity * rel_similarity
 
     return rel_similarity
@@ -379,6 +380,7 @@ if __name__ == "__main__":
         for y, P_ in enumerate(frame_of_patterns_):
             PP_ = search(P_)
             frame_PP_.append(PP_)
+        draw_PP_(image, frame_PP_)  # debugging
 
     end_time = time() - start_time
     print(end_time)
