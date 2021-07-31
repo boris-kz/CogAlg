@@ -45,7 +45,7 @@ class CderPp(ClusterStructure):
 
 class CPP(CPp, CderPp):
     layer1 = dict
-    derPp____ = [[[[]]]]  # _names ( _Pp_ ( names ( Pp_ )))
+    derPp____ = list  # _names ( _Pp_ ( names ( Pp_ )))
     param_name_= list # for visualization purpose
 
 
@@ -172,9 +172,9 @@ def comp_overlaps(layer0, fPd):  # find Pps that overlap across 4 Pp_s, compute 
                 if i<j:  # Pp pair is unique: https://stackoverflow.com/questions/16691524/calculating-the-overlap-distance-of-two-1d-line-segments
                     if fPd: Pp_ = layer0[param_name][0][1]  # Ppd
                     else:   Pp_ = layer0[param_name][0][0]  # Ppm
+
                     for k, Pp in enumerate(Pp_[start_Pp_[j]:], start=start_Pp_[j]):  # check Pps of the other param for x overlap:
                         if (Pp.ix0 - 1 < (_Pp.ix0 + _Pp.iL) and (Pp.ix0 + Pp.iL) + 1 > _Pp.ix0):
-
                             olpL = max(0, min(_Pp.ix0+_Pp.iL, Pp.ix0+Pp.iL) - max(_Pp.ix0, Pp.ix0))  # L of overlap
                             rolp = olpL / ((_Pp.iL + Pp.iL) / 2)  # mean of Ls
                             if rolp > ave_rolp:
@@ -204,6 +204,11 @@ def form_PP_(params_derPp____, fPd):  # Draft:
     Rolp = 0
     PP_ = []
     _sign = None
+    # init new empty derPp____ with the same list structure as params_derPp____, for [i][j][k] indexing later
+    derPp____ = [[[[]  for param_derPp_   in param_derPp__] \
+                       for param_derPp__  in param_derPp___] \
+                       for param_derPp___ in params_derPp____]
+    param_name_ = derPp____.copy()
 
     for i, _param_derPp___ in enumerate( params_derPp____):  # derPp___ from comp_Pp (across params)
         for j, _Pp_derPp__ in enumerate( _param_derPp___):  # from comp_Pp (param_Pp_, other params)
@@ -213,39 +218,50 @@ def form_PP_(params_derPp____, fPd):  # Draft:
                     if names[i] != _name: raise ValueError("Wrong _name")
                     if names[k] != name: raise ValueError("Wrong name")
 
-                    mean_rdn = (rdn[i] + rdn[k]) / 2  # of compared params
-                    if "pre_PP" not in locals(): pre_PP = CPP()
-                    if fPd: derPp_val = derPp.dPp; ave = ave_D
-                    else:   derPp_val = derPp.mPp; ave = ave_M
-
-                    if derPp_val * mean_rdn > ave:
-                        Rolp += rolp
-                        pre_PP.accum_from(derPp)
-                        pre_PP.derPp____[i][j][k].append(derPp)
-                        pre_PP.param_name_.append((names[i], names[k]))
-                    else:
-                        pre_PP = CPP()
-                # tentative:
+                    if "pre_PP" not in locals(): pre_PP = CPP(derPp____=derPp____.copy())
+                    # if fPd: derPp_val = derPp.dPp; ave = ave_D
+                    # else:   derPp_val = derPp.mPp; ave = ave_M
+                    # mean_rdn = (rdn[i] + rdn[k]) / 2  # of compared params
+                    # if derPp_val * mean_rdn > ave:
+                    # else: pre_PP = CPP(derPp____=derPp____.copy())
+                    # accum either sign, no eval or sub_PP_ per layer:
+                    Rolp += rolp
+                    pre_PP.accum_from(derPp)
+                    pre_PP.derPp____[i][j][k].append(derPp)
+                    pre_PP.param_name_.append((names[i], names[k]))
+        '''    
+        We can't evaluate until the top loop because any overlap may form sufficient match. 
+        Then we only define pre_PPs by overlap of any element of any layer to any other element of any other layer.
+        But there are so many possible overlaps that pre_PP may never terminate.
+        Another way to define them is by minimal combined-layers' match per x (iP). 
+        But then we are back to immediate multi-param comp_P_, which is pointless because different derivatives anti-correlate.
+         
                 # inclusion into higher layer of pre_PP by the sum of concurrent mPps > ave_M * Rolp, over all lower layers:
-                # use pre_PP_val instead of pre_PP.mPp?
-                if pre_PP.derPp____[i][j][k] and pre_PP.mPp > ave_M * Rolp:
-                    pre_PP.derPp____[i][j].append(pre_PP.derPp____[i][j][k])
-                else:
-                    pre_PP = CPP()
-            if pre_PP.derPp____[i][j] and pre_PP.mPp > ave_M * Rolp:
-                pre_PP.derPp____[i].append(pre_PP.derPp____[i][j])
-            else:
-                pre_PP = CPP()
-        if pre_PP.derPp____[i]:
+                if "pre_PP" in locals() and pre_PP.derPp____[i][j][k] and not pre_PP.mPp > ave_M * Rolp:
+                    pre_PP = CPP(derPp____=derPp____.copy())
+
+            # pre_PP.derPp____[i][j] is a nested list, we need to check recursively to determine whether there is any appended derPp
+            if "pre_PP" in locals() and not emptylist(pre_PP.derPp____[i][j]) and not pre_PP.mPp > ave_M * Rolp:
+                pre_PP = CPP(derPp____=derPp____.copy())
+        '''
+        if "pre_PP" in locals() and not emptylist(pre_PP.derPp____[i]):
             if pre_PP.mPp > ave_M * Rolp:
-                pre_PP.derPp____.append(pre_PP.derPp____[i])
+                PP_.append(pre_PP)  # no negative PPs?
                 _sign = True
             else:
-                if _sign==True: PP_.append(pre_PP)  # terminate previous PP
-                pre_PP = CPP()
+                _sign=False
+                pre_PP = CPP(derPp____=derPp____.copy())
 
     return PP_
 
+# https://stackoverflow.com/questions/1593564/python-how-to-check-if-a-nested-list-is-essentially-empty
+def emptylist(in_list):
+    '''
+    check if nested list is totally empty
+    '''
+    if isinstance(in_list, list): # Is a list
+        return all( map(emptylist, in_list) )
+    return False # Not a list
 
 def comp_Pp(_Pp, Pp, layer0):
     '''
@@ -459,7 +475,7 @@ def intra_Ppm_(Pp_, param_name, rdn, fPd):
             # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match
             # extended search needs to be restricted to ave_M-terminated derts
 
-
+# yet to be updated
 def draw_PP_(image, frame_PP_):
     # init every possible combinations
     img_mparams = {'L_I_': np.zeros_like(image), 'L_D_': np.zeros_like(image),
