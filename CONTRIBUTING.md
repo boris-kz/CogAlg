@@ -53,15 +53,21 @@ Kok Wei Chee, $14200, team developer
 
 2021:
 
-Kok Wei Chee, $9700, team developer, January-June
+Kok Wei Chee, $11870, team developer, January-July
 
-Khanh Nguyen, $2100, team developer, April-June
+Khanh Nguyen, $3000, team developer, April-July
+
+Kelvin Spacey, $1840: port to dataframes, various, May-July
+
+Yura Guruel, $1000: various, May-July
+
+Alex Pitertsev, $500: mostly visualization and testing dfs, July
 
 Aqib Mumtaz and Ayesha Ali, $1400: audio interfacing for 1D alg, April-May
 
-Kelvin Spacey, $870: various, May-June
 
-Yura Guruel, $600: various, May-June
+
+
 
 
 
