@@ -17,6 +17,7 @@ class Cpdert(ClusterStructure):
     p = int  # accumulated in rng
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
+    negiL = int
     negL = int  # in mdert only
     negM = int  # in mdert only
     x0 = int  # pixel-level
@@ -28,6 +29,7 @@ class CPp(CP):
     iL = int  # length of Pp in pixels
     ix0 = int  # x starting pixel coordinate
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
+    negiL = int
     negL = int  # in mdert only
     negM = int  # in mdert only
     sublayers = list
@@ -71,10 +73,10 @@ def search(P_):  # cross-compare patterns within horizontal line
     if len(P_) > 1:
         # at least 2 comparands, unpack P_:
         for P in P_:
-            layer0['L_'][0].append((P.L, P.L, P.x0))  # L: (2 Ls for code-consistent processing later)
-            layer0['I_'][0].append((P.I, P.L, P.x0))  # I
-            layer0['D_'][0].append((P.D, P.L, P.x0))  # D
-            layer0['M_'][0].append((P.M, P.L, P.x0))  # M
+            layer0['L_'].append((P.L, P.L, P.x0))  # L: (2 Ls for code-consistent processing later)
+            layer0['I_'].append((P.I, P.L, P.x0))  # I
+            layer0['D_'].append((P.D, P.L, P.x0))  # D
+            layer0['M_'].append((P.M, P.L, P.x0))  # M
 
         mdert__ = []; ddert__ = []
         for param_name in layer0:  # loop L_, I_, D_, M_
@@ -85,12 +87,12 @@ def search(P_):  # cross-compare patterns within horizontal line
         mrdn_ = sum_rdn_(layer0, mdert__, fPd=True)
         drdn_ = sum_rdn_(layer0, ddert__, fPd=False)
 
-        for i, (param_name, mdert_, ddert_, rdn_mparam_, rdn_dparam_) in enumerate(zip(layer0, mdert__, ddert__, mrdn_, drdn_)):
-            Ppm_ = form_Pp_(mdert_, param_name, rdn_mparam_, fPd=0)
-            Ppd_ = form_Pp_(ddert_, param_name, rdn_dparam_, fPd=1)
+        for i, (param_name, mdert_, ddert_, mpar_rdn_, dpar_rdn_) in enumerate(zip(layer0, mdert__, ddert__, mrdn_, drdn_)):
+            Ppm_ = form_Pp_(mdert_, param_name, mpar_rdn_, fPd=0)
+            Ppd_ = form_Pp_(ddert_, param_name, dpar_rdn_, fPd=1)
         '''
         PPm_ = search_Pp_(layer0, fPd=0)  # calls comp_Pp_ and form_PP_ per param
-        PPd_ = search_Pp(layer0, fPd=1)
+        PPd_ = search_Pp_(layer0, fPd=1)
         '''
         # dummy list
         PPm_ = []
@@ -105,39 +107,40 @@ def sum_rdn_(layer0, pdert__, fPd):
     '''
     if fPd: alt='M'
     else: alt='D'
-    pair_names = (('I','L'), ('I','D'), ('I','M'), ('L',alt), ('D','M'))
-    pair_rdns = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]  # initialized redundancy per name
+    name_pairs = (('I','L'), ('I','D'), ('I','M'), ('L',alt), ('D','M'))
+    pderts = {'L':[],'I':[],'D':[],'M':[]}
+    pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns
 
-    pdert_Rdn=[]
-    # search is variable-range, have to x-align pdert_s one-by-one, no zipping?
+    # there is pdert for each _P
     for L_dert, I_dert, D_dert, M_dert in zip(pdert__[0], pdert__[1], pdert__[2], pdert__[3]):
+        rdn_pairs = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
 
-        for rdn_pair, name_pair in zip(pair_rdns, pair_names):
-            # pseudocode: assign rdn in each pair, using names in the pair as layer0 param_names:
-            if 'name_pair[0]'_dert.m > 'name_pair[1]'_dert.m:
+        for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
+            # assign rdn in each pair using partial name replacement: https://www.w3schools.com/python/ref_func_eval.asp
+            if name_pair[0] + "_dert.m > " + name_pair[1] + "_dert.m":
                 rdn_pair[1] = 1
-            else: rdn_pair[0] = 1  # weaker pair rdn=1
-
-        # sum rdn per param from all pairs it is in, pseudocode:
+            else:
+                rdn_pair[0] = 1  # weaker pair rdn=1
+        # sum rdn per param from all pairs it is in, probably not correct:
         # flatten pair_names, pair_rdns?
-        Rdn_=[]
-        Rdn=0
+        Rdn_ = []
+        Rdn = 0
         for param_name in layer0:
-            for name_in_pair, rdn in zip(pair_names, pair_rdns):
-                if param_name==name_in_pair:
-                    Rdn+=rdn  # M*=2: represents both comparands?
+            for name_in_pair, rdn in zip(name_pairs, rdn_pairs):
+                if param_name == name_in_pair:
+                    Rdn += rdn  # M*=2: represents both comparands?
             Rdn_.append(Rdn)  # Rdn per name in pdert
 
-        pdert_Rdn_.append(Rdn_)  # same length as pdert_
-
-    return pdert_Rdn_
+        pderts_Rdn.append(Rdn_)  # same length as pdert_
 
 
-def search_param_(param_name, iparam):
+    return pderts_Rdn
+
+
+def search_param_(param_name, param_):
 
     ddert_, mdert_ = [], []  # line-wide (i, p, d, m)_, + (negL, negM) in mdert: variable-range search
     # rdn = iparam[1]  # iparam = (param_, P.L, P.x0), rdn
-    param_ = iparam[0]
     _param, _L, _x0 = param_[0]
 
     for i, (param, L, x0) in enumerate(param_[1:], start=1):
@@ -146,7 +149,7 @@ def search_param_(param_name, iparam):
         # or div_comp(L), norm_comp(I, D, M): value conserve, mean doesn't?
         # -> splice or higher composition: preserve inputs?
         ddert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L) )
-        negL=negM=0  # comp next only
+        negiL=negL=negM=0  # comp next only
         comb_M = dert.m
         j = i
         while comb_M > 0 and j+1 < len(param_):
@@ -158,9 +161,10 @@ def search_param_(param_name, iparam):
             else:
                 comb_M = dert.m + negM - ave_M  # adjust ave_M for relative continuity and similarity?
                 negM += dert.m
-                negL += ext_L
+                negiL += ext_L
+                negL += 1
         # after extended search, if any:
-        mdert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, negL=negL, negM=negM))
+        mdert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, negiL=negiL,negL=negL, negM=negM))
         _param = param
 
     return mdert_, ddert_
@@ -178,11 +182,12 @@ def form_Pp_(dert_, param_name, rdn_, fPd):  # almost the same as line_patterns 
                 # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
         if sign != _sign:
             # sign change, initialize P and append it to P_
-            Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, negL=dert.negL, negM=dert.negM, x0=x, ix0=dert.x0, pdert_=[dert], sublayers=[], fPd=fPd)
+            Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, negiL=dert.negiL, negL=dert.negL, negM=dert.negM,
+                     x0=x, ix0=dert.x0, pdert_=[dert], sublayers=[], fPd=fPd)
             Pp_.append(Pp)  # updated with accumulation below
         else:
             # accumulate params:
-            Pp.L += 1; Pp.iL += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn+=rdn; Pp.negL+=dert.negL; Pp.negM+=dert.negM
+            Pp.L += 1; Pp.iL += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn+=rdn; Pp.negiL+=dert.negiL; Pp.negL+=dert.negL; Pp.negM+=dert.negM
             Pp.pdert_ += [dert]
         x += 1
         _sign = sign
