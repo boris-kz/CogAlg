@@ -84,55 +84,58 @@ def search(P_):  # cross-compare patterns within horizontal line
             mdert__.append(mdert_)
             ddert__.append(ddert_)
 
-        mrdn_ = sum_rdn_(layer0, mdert__, fPd=True)
-        drdn_ = sum_rdn_(layer0, ddert__, fPd=False)
+        mrdn__ = sum_rdn_(layer0, mdert__, fPd=True)
+        drdn__ = sum_rdn_(layer0, ddert__, fPd=False)
 
-        for i, (param_name, mdert_, ddert_, mpar_rdn_, dpar_rdn_) in enumerate(zip(layer0, mdert__, ddert__, mrdn_, drdn_)):
-            Ppm_ = form_Pp_(mdert_, param_name, mpar_rdn_, fPd=0)
-            Ppd_ = form_Pp_(ddert_, param_name, dpar_rdn_, fPd=1)
-        '''
-        PPm_ = search_Pp_(layer0, fPd=0)  # calls comp_Pp_ and form_PP_ per param
-        PPd_ = search_Pp_(layer0, fPd=1)
-        '''
-        # dummy list
-        PPm_ = []
-        PPd_ = []
-        return (PPm_, PPd_)
+        for param_name, mdert_, ddert_, mrdn_, drdn_ in zip(layer0, mdert__, ddert__, mrdn__, drdn__):
 
+            Ppm_ = form_Pp_(mdert_, param_name, mrdn_, fPd=0)
+            rdn_Ppm_ = form_rdnPp_(Ppm_, fPd=0)
+            Ppd_ = form_Pp_(ddert_, param_name, drdn_, fPd=1)
+            rdn_Ppd_ = form_rdnPp_(Ppd_, fPd=1)
+
+        return (rdn_Ppm_, rdn_Ppd_)
+
+'''
+next level line_PPPs:
+PPm_ = search_Pp_(layer0, fPd=0)  # calls comp_Pp_ and form_PP_ per param
+PPd_ = search_Pp_(layer0, fPd=1)
+'''
 
 def sum_rdn_(layer0, pdert__, fPd):
     '''
-    access same-P_-index pderts of all params, to compute m|d redundancy to ms|ds of other params.
+    access same-index pderts of all params, to compute m|d redundancy to ms|ds of other params.
     if other-param same-P_-index pdert is missing, rdn doesn't change.
     '''
     if fPd: alt='M'
     else: alt='D'
     name_pairs = (('I','L'), ('I','D'), ('I','M'), ('L',alt), ('D','M'))
-    pderts = {'L':[],'I':[],'D':[],'M':[]}
-    pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns
+    pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns , same structure with pdert__
 
-    # there is pdert for each _P
-    for L_dert, I_dert, D_dert, M_dert in zip(pdert__[0], pdert__[1], pdert__[2], pdert__[3]):
+    for L_dert, I_dert, D_dert, M_dert in zip(pdert__[0], pdert__[1], pdert__[2], pdert__[3]):  # there is one pdert for each _P
         rdn_pairs = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
 
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
-            # assign rdn in each pair using partial name replacement: https://www.w3schools.com/python/ref_func_eval.asp
-            if name_pair[0] + "_dert.m > " + name_pair[1] + "_dert.m":
-                rdn_pair[1] = 1
+            # assign rdn in each rdn_pair using partial name replacement: https://www.w3schools.com/python/ref_func_eval.asp
+
+            if fPd:  # we need to compare abs ds here, how is it done with strings?
+                if eval(name_pair[0]+"_dert.d > " + name_pair[1] + "_dert.d"):
+                    rdn_pair[1] = 1
+                else: rdn_pair[0] = 1  # weaker pair rdn=1
             else:
-                rdn_pair[0] = 1  # weaker pair rdn=1
-        # sum rdn per param from all pairs it is in, probably not correct:
-        # flatten pair_names, pair_rdns?
-        Rdn_ = []
-        Rdn = 0
-        for param_name in layer0:
+                if eval(name_pair[0]+"_dert.m > " + name_pair[1] + "_dert.m"):
+                    rdn_pair[1] = 1
+                else: rdn_pair[0] = 1  # weaker pair rdn=1
+
+        for i, param_name in enumerate(layer0):  # sum param rdn from all pairs it is in, flatten pair_names, pair_rdns?
+            Rdn = 0
             for name_in_pair, rdn in zip(name_pairs, rdn_pairs):
-                if param_name == name_in_pair:
-                    Rdn += rdn  # M*=2: represents both comparands?
-            Rdn_.append(Rdn)  # Rdn per name in pdert
+                if param_name[0] == name_in_pair[0]:  # param_name = "L_", param_name[0] = "L"
+                    Rdn += rdn[0]  # M*=2: represents both comparands?
+                elif param_name[0] == name_in_pair[1]:
+                    Rdn += rdn[1]  # M*=2: represents both comparands?
 
-        pderts_Rdn.append(Rdn_)  # same length as pdert_
-
+            pderts_Rdn[i].append(Rdn)  # same length as pdert_
 
     return pderts_Rdn
 
@@ -192,140 +195,44 @@ def form_Pp_(dert_, param_name, rdn_, fPd):  # almost the same as line_patterns 
         x += 1
         _sign = sign
 
-    '''
-    if len(Pp_) > 2:
-        splice_P_(Pp_, fPd=0)  # merge mean_I- or mean_D- similar and weakly separated Ps; move to comp_param instead?
-        intra_Ppm_(Pp_, param_name, rdn, fPd)  # evaluates for sub-recursion per Pm
-    '''
+    # replace with splicing per core param Pp:
+    # if len(Pp_) > 2:
+    #    splice_P_(Pp_, fPd=0)  # merge mean_I- or mean_D- similar and weakly separated Ps; move to comp_param instead?
+    #    intra_Ppm_(Pp_, param_name, rdn, fPd)  # evaluates for sub-recursion per Pm
     return Pp_
 
+def form_rdnPp_(Pp_, fPd):
 
-def generate_rdn_(layer0, mdert__, ddert__):
-
-    rdn_mL_,rdn_mI_,rdn_mD_,rdn_mM_ =[], [], [], [] # init rdn_
-    # search is variable-range, we may have to align pdert_s one-by-one, no zipping?
-    for L_mdert, I_mdert, D_mdert, M_mdert in zip(mdert__[0], mdert__[1], mdert__[2], mdert__[3]):
-
-        rdn_L=rdn_I=rdn_D=rdn_M= 0 # init rdn
-
-        for param_name in layer0:
-            for param_name_rdn in layer0[param_name][1][0]:
-
-                if param_name_rdn == "L_": # redundant pair is L
-                    # check I as redundant pair
-                    if I_mdert.m > L_mdert.m:
-                        rdn_L += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_I += 1
-                    # check D as redundant pair
-                    if D_mdert.m > L_mdert.m:
-                        rdn_L += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_D += 1
-
-                elif param_name_rdn == "I_": # redundant pair is I
-                    # check D as redundant pair
-                    if D_mdert.m > I_mdert.m:
-                        rdn_I += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_D += 1
-
-                elif param_name_rdn == "D_": # redundant pair is D
-                    # check I as redundant pair
-                    if I_mdert.m > D_mdert.m:
-                        rdn_D += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_I += 1
-
-                elif param_name_rdn == "M_": # redundant pair is M
-                    # check L as redundant pair
-                    if L_mdert.m > M_mdert.m:
-                        rdn_M += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_L += 1
-                    # check I as redundant pair
-                    if I_mdert.m > M_mdert.m:
-                        rdn_M += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_I += 1
-                    # check D as redundant pair
-                    if D_mdert.m > M_mdert.m:
-                        rdn_M += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_D += 1
-
-        rdn_mL_.append(rdn_L)
-        rdn_mI_.append(rdn_I)
-        rdn_mD_.append(rdn_D)
-        rdn_mM_.append(rdn_M)
-
-    rdn_m_ = [rdn_mL_,rdn_mI_,rdn_mD_,rdn_mM_]
-
-    # ddert
-    rdn_dL_,rdn_dI_,rdn_dD_,rdn_dM_ =[], [], [], [] # init rdn_
-    for L_ddert, I_ddert, D_ddert, M_ddert in zip(ddert__[0], ddert__[1], ddert__[2], ddert__[3]):
-
-        rdn_L=rdn_I=rdn_D=rdn_M= 0 # init rdn
-
-        for param_name in layer0:
-            for param_name_rdn in layer0[param_name][1][1]:
-
-                if param_name_rdn == "L_": # redundant pair is L
-                    # check I as redundant pair
-                    if I_mdert.m > L_mdert.m:
-                        rdn_L += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_I += 1
-                    # check M as redundant pair
-                    if M_mdert.m > L_mdert.m:
-                        rdn_L += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_M += 1
-
-                elif param_name_rdn == "I_": # redundant pair is I
-                    # check L as redundant pair
-                    if L_mdert.m > I_mdert.m:
-                        rdn_I += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_L += 1
-                    # check M as redundant pair
-                    if M_mdert.m > I_mdert.m:
-                        rdn_I += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_M += 1
-
-                elif param_name_rdn == "D_": # redundant pair is D
-                    # check L as redundant pair
-                    if L_mdert.m > D_mdert.m:
-                        rdn_D += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_L += 1
-                    # check I as redundant pair
-                    if I_mdert.m > D_mdert.m:
-                        rdn_D += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_I += 1
-                    # check M as redundant pair
-                    if M_mdert.m > D_mdert.m:
-                        rdn_D += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_M += 1
-                elif param_name_rdn == "M_": # redundant pair is M
-                    # check I as redundant pair
-                    if I_mdert.m > M_mdert.m:
-                        rdn_M += 1 # weaker pair rdn += 1
-                    else:
-                        rdn_I += 1
-
-        rdn_dL_.append(rdn_L)
-        rdn_dI_.append(rdn_I)
-        rdn_dD_.append(rdn_D)
-        rdn_dM_.append(rdn_M)
+    # then call splicing / P-level removal per rdn_Pp_
+    pass
 
 
-    rdn_d_ = [rdn_dL_,rdn_dI_,rdn_dD_,rdn_dM_]
+def intra_Ppm_(Pp_, param_name, rdn, fPd):
+    '''
+    Draft
+    Each Pp is evaluated for sub-recursion: incremental range and derivation, as in line_patterns but via adjusted ave_M,
+    - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef?
+    - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
+    form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
+    if comp I -> dI ~ combined d_derivatives, then project ave_d?
+    '''
+    for Pp in Pp_:
 
-    return rdn_m_, rdn_d_
+        if (Pp.L > 2) and (Pp.M > -ave_M and Pp.M / Pp.L > -ave):
+            sub_param_ = []
+
+            for pdert in Pp.pdert_:
+                if fPd:
+                    param_name = "D_"  # comp d
+                    sub_param_.append((pdert.d, pdert.x0, pdert.L))
+                else:
+                    param_name = "I_"  # comp i @ local ave_M
+                    sub_param_.append((pdert.i, pdert.x0, pdert.L))
+
+            Pp.sublayers = search_param_(param_name, [sub_param_, rdn] )  # iparam = [sub_param_, rdn], where sub_param_ = (param1, x01, L1),(param2, x02, L2),...
+
+            # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match
+            # extended search needs to be restricted to ave_M-terminated derts
 
 # below obsolete:
 
@@ -420,6 +327,8 @@ def comp_Pp(_Pp, Pp, layer0):
 
     negM = _Pp.negM - Pp.negM
     negL = _Pp.L - Pp.negL
+    negiL = _Pp.iL - Pp.negiL
+
     '''
     options for div_comp, etc.    
     if P.sign == _P.sign: mP *= 2  # sign is MSB, value of sign match = full magnitude match?
@@ -435,7 +344,7 @@ def comp_Pp(_Pp, Pp, layer0):
         derP = CderP(sign=sign, mP=mP, neg_M=neg_M, neg_L=neg_L, P=_P, layer1=layer1)
         _P.derP = derP
     '''
-    derPp = CderPp( mPp=mPp, dPp=dPp, negM=negM, negL=negL, _Pp=_Pp, Pp=Pp, layer1=layer1)
+    derPp = CderPp( mPp=mPp, dPp=dPp, negM=negM, negL=negL, negiL=negiL, _Pp=_Pp, Pp=Pp, layer1=layer1)
 
     return derPp
 
@@ -582,32 +491,6 @@ def form_adjacent_mP(derPp_):
 
     return derPp_
 
-def intra_Ppm_(Pp_, param_name, rdn, fPd):
-    '''
-    Draft
-    Each Pp is evaluated for sub-recursion: incremental range and derivation, as in line_patterns but via adjusted ave_M,
-    - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef?
-    - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
-    form_PPd: dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
-    if comp I -> dI ~ combined d_derivatives, then project ave_d?
-    '''
-    for Pp in Pp_:
-
-        if (Pp.L > 2) and (Pp.M > -ave_M and Pp.M / Pp.L > -ave):
-            sub_param_ = []
-
-            for pdert in Pp.pdert_:
-                if fPd:
-                    param_name = "D_"  # comp d
-                    sub_param_.append((pdert.d, pdert.x0, pdert.L))
-                else:
-                    param_name = "I_"  # comp i @ local ave_M
-                    sub_param_.append((pdert.i, pdert.x0, pdert.L))
-
-            Pp.sublayers = search_param_(param_name, [sub_param_, rdn] )  # iparam = [sub_param_, rdn], where sub_param_ = (param1, x01, L1),(param2, x02, L2),...
-
-            # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match
-            # extended search needs to be restricted to ave_M-terminated derts
 
 # yet to be updated
 def draw_PP_(image, frame_PP_):
