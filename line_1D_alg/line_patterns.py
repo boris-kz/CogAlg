@@ -118,10 +118,9 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
         x += 1
         _sign = sign
 
-    if len(P_) > 4:
-        P_ = splice_P_(P_, fPd=0)  # merge meanI- or meanD- similar and weakly separated Ps; move to comp_param instead?
-        intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
-
+    intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
+    # if len(P_) > 4: P_ = splice_P_(P_, fPd=0)  # merge aI- | aD- similar weakly separated Ps
+    # replace by comp_param(P.M | P.D) in line_PPs
     if render:
         with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
             write = csv.writer(csvFile, delimiter=",")
@@ -360,10 +359,10 @@ if __name__ == "__main__":
     start_time = time()
     # Main
     frame_of_patterns_ = cross_comp(image)  # returns Pm__
-    # from pprint import pprint
-    # pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
     if render:
-        # Khanh's visualization
+        # from pprint import pprint
+        # pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
+        # Khanh's visualization:
         img = np.full((image.shape[0] - 1, image.shape[1] - 1), 128, np.uint8)  # dert size is smaller by the size of 1
         for y, P_ in enumerate(frame_of_patterns_):
             for P in P_:

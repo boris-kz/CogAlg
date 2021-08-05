@@ -25,7 +25,8 @@ class Cpdert(ClusterStructure):
 
 class CPp(CP):
     pdert_ = list
-    Rdn = int # accumulate rdn from their pderts
+    Rdn = int # accumulate cross-param rdn from their pderts
+    rval = int  # Pp value (M | abs D) adjusted for cross-param Rdn
     iL = int  # length of Pp in pixels
     ix0 = int  # x starting pixel coordinate
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
@@ -90,9 +91,9 @@ def search(P_):  # cross-compare patterns within horizontal line
         for param_name, mdert_, ddert_, mrdn_, drdn_ in zip(layer0, mdert__, ddert__, mrdn__, drdn__):
 
             Ppm_ = form_Pp_(mdert_, param_name, mrdn_, fPd=0)
-            rdn_Ppm_ = form_rdnPp_(Ppm_, fPd=0)
+            rdn_Ppm_ = form_rdn_Pp_(Ppm_, fPd=0)
             Ppd_ = form_Pp_(ddert_, param_name, drdn_, fPd=1)
-            rdn_Ppd_ = form_rdnPp_(Ppd_, fPd=1)
+            rdn_Ppd_ = form_rdn_Pp_(Ppd_, fPd=1)
 
         return (rdn_Ppm_, rdn_Ppd_)
 
@@ -110,16 +111,16 @@ def sum_rdn_(layer0, pdert__, fPd):
     if fPd: alt='M'
     else: alt='D'
     name_pairs = (('I','L'), ('I','D'), ('I','M'), ('L',alt), ('D','M'))
-    pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns , same structure with pdert__
+    pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns, as in pdert__
 
     for L_dert, I_dert, D_dert, M_dert in zip(pdert__[0], pdert__[1], pdert__[2], pdert__[3]):  # there is one pdert for each _P
         rdn_pairs = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
 
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
             # assign rdn in each rdn_pair using partial name replacement: https://www.w3schools.com/python/ref_func_eval.asp
-
-            if fPd:  # we need to compare abs ds here, how is it done with strings?
-                if eval(name_pair[0]+"_dert.d > " + name_pair[1] + "_dert.d"):
+            if fPd:
+                # we need to compare abs ds here, how is it done with strings?
+                if eval(name_pair[0]+"_dert.d > " + name_pair[1] + "_dert.d"):  # (param_name)_dert.d|m
                     rdn_pair[1] = 1
                 else: rdn_pair[0] = 1  # weaker pair rdn=1
             else:
@@ -149,8 +150,7 @@ def search_param_(param_name, param_):
     for i, (param, L, x0) in enumerate(param_[1:], start=1):
         # param is compared to prior-P param:
         dert = comp_param(_param, param, param_name, ave)
-        # or div_comp(L), norm_comp(I, D, M): value conserve, mean doesn't?
-        # -> splice or higher composition: preserve inputs?
+        # or div_comp(L), norm_comp(I, D, M): mean doesn't conserve value, if param is I | D: eval pdert_ for level-rdn?
         ddert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L) )
         negiL=negL=negM=0  # comp next only
         comb_M = dert.m
@@ -195,19 +195,57 @@ def form_Pp_(dert_, param_name, rdn_, fPd):  # almost the same as line_patterns 
         x += 1
         _sign = sign
 
-    # replace with splicing per core param Pp:
-    # if len(Pp_) > 2:
-    #    splice_P_(Pp_, fPd=0)  # merge mean_I- or mean_D- similar and weakly separated Ps; move to comp_param instead?
-    #    intra_Ppm_(Pp_, param_name, rdn, fPd)  # evaluates for sub-recursion per Pm
+    intra_Ppm_(Pp_, param_name, fPd)  # evaluates for sub-recursion per Pm
+
     return Pp_
 
-def form_rdnPp_(Pp_, fPd):
+def form_rdn_Pp_(Pp_, fPd):
+    rPp_ = []
+    x = 0
+    _sign = None  # to initialize 1st rdn Pp, (None != True) and (None != False) are both True
 
-    # then call splicing / P-level removal per rdn_Pp_
-    pass
+    for Pp in Pp_:
+        if fPd: Pp.rval = abs(Pp.D) - Pp.Rdn * ave_D * Pp.L
+        else:   Pp.rval = Pp.M - Pp.Rdn * ave_D * Pp.L
+        sign =  Pp.rval > 0
+        if sign != _sign:  # sign change, initialize rPp and append it to rPp_
+
+            rPp = CPp(L=1, iL=Pp.iL, I=Pp.I, D=Pp.D, M=Pp.M, Rdn=Pp.Rdn, rval = Pp.rval, negiL=Pp.negiL, negL=Pp.negL, negM=Pp.negM,
+                      x0=x, ix0=Pp.ix0, pdert_=[Pp], sublayers=[], fPd=fPd)
+                       # or no summed params, rPp is Pp_?
+            if _sign:  # negative rPps are not processed?
+                for Pp in rPp.pdert_:
+                    Pp_x_pdert_rdn_eval(Pp)
+            rPp_.append(rPp)  # updated with accumulation below
+        else:
+            # accumulate params:
+            rPp.L+=1; rPp.iL+=Pp.iL; rPp.I+=Pp.I; rPp.D+=Pp.D; rPp.M+=Pp.M; rPp.Rdn+=Pp.Rdn; rPp.rval+=Pp.rval
+            rPp.negiL+=Pp.negiL; rPp.negL+=Pp.negL; rPp.negM+=Pp.negM
+            rPp.pdert_ += [Pp]
+        x += 1
+        _sign = sign
+
+    return rPp_
 
 
-def intra_Ppm_(Pp_, param_name, rdn, fPd):
+def Pp_x_pdert_rdn_eval(Pp):  # adjust for cross-level rdn, then Pp and Pp.pdert_P_ eval to keep or remove
+    '''
+    Pp value = rval / P.L (resolution reduction) - ave
+    pdert_ value: rval - Pp value - ave * P.L (cost = number of representations)?
+
+    If Pp value > pdert_ value:
+        pdert_ value -= ave (rdn)
+    else:
+        Pp value -= ave (rdn)
+
+    If Pp value <= 0:
+        Pp remove: Pp = current param' list from _Ps in pdert_?
+    pdert_ value <= 0:
+        pdert_ remove: Pp = spliced pdert_'_Ps, including spliced dert_s, only for I-> Pm or D-> Pd?
+    '''
+
+
+def intra_Ppm_(Pp_, param_name, fPd):
     '''
     Draft
     Each Pp is evaluated for sub-recursion: incremental range and derivation, as in line_patterns but via adjusted ave_M,
@@ -217,7 +255,6 @@ def intra_Ppm_(Pp_, param_name, rdn, fPd):
     if comp I -> dI ~ combined d_derivatives, then project ave_d?
     '''
     for Pp in Pp_:
-
         if (Pp.L > 2) and (Pp.M > -ave_M and Pp.M / Pp.L > -ave):
             sub_param_ = []
 
@@ -229,12 +266,11 @@ def intra_Ppm_(Pp_, param_name, rdn, fPd):
                     param_name = "I_"  # comp i @ local ave_M
                     sub_param_.append((pdert.i, pdert.x0, pdert.L))
 
-            Pp.sublayers = search_param_(param_name, [sub_param_, rdn] )  # iparam = [sub_param_, rdn], where sub_param_ = (param1, x01, L1),(param2, x02, L2),...
-
-            # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match
+            Pp.sublayers = search_param_(param_name, sub_param_)  # iparam = sub_param_: (param1, x01, L1),(param2, x02, L2),...
+            # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match?
             # extended search needs to be restricted to ave_M-terminated derts
 
-# below obsolete:
+# below is obsolete:
 
 def form_PP_(params_derPp____, fPd):  # Draft:
     '''
