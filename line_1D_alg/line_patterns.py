@@ -209,11 +209,14 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     On the other hand, we may have a 2D outline or 1D contrast with low gradient / difference, but it terminates some high-match area.
     Contrast is salient to the extent that it can borrow sufficient predictive value from adjacent high-match area.
     '''
-    M_ = [Pm.M for Pm in Pm_]  # list of Ms in the order of Pm_
+    M_ = [0]
+    M_ += [Pm.M for Pm in Pm_]  # list of adj M components in the order of Pm_
+    M_ += [0]
 
-    adj_M_ = [(abs(prev_M) + abs(next_M)) / 2
-              for prev_M, next_M in zip(M_[:-2], M_[2:])]  # adjacent Ms, first and last Ms
-    adj_M_ = [M_[1]] + adj_M_ + [M_[-2]]  # sum previous and next adjacent Ms
+    adj_M_ = [ (abs(prev_M) + abs(next_M)) / 2  # mean adjacent Ms
+               for prev_M, next_M in zip(M_[:-1], M_[1:])  # exclude 1st and last Ms, added below:
+             ]
+    # adj_M_ = [ M_[1]] + adj_M_ + [M_[-2] ]  # extend adj_M_ with first and last Ms, ~[ M_[1]], [adj_M_], [M_[-2] ]?
 
     ''' expanded:
     pri_M = Pm_[0].M  # deriv_comp value is borrowed from adjacent opposite-sign Ms

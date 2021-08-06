@@ -25,7 +25,7 @@ class Cpdert(ClusterStructure):
 
 class CPp(CP):
     pdert_ = list
-    Rdn = int # accumulate cross-param rdn from their pderts
+    Rdn = int  # cross-param rdn accumulated from pderts
     rval = int  # Pp value (M | abs D) adjusted for cross-param Rdn
     iL = int  # length of Pp in pixels
     ix0 = int  # x starting pixel coordinate
@@ -119,8 +119,7 @@ def sum_rdn_(layer0, pdert__, fPd):
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
             # assign rdn in each rdn_pair using partial name replacement: https://www.w3schools.com/python/ref_func_eval.asp
             if fPd:
-                # we need to compare abs ds here, how is it done with strings?
-                if eval(name_pair[0]+"_dert.d > " + name_pair[1] + "_dert.d"):  # (param_name)_dert.d|m
+                if eval("abs("+name_pair[0]+"_dert.d) >  abs("+name_pair[1]+"_dert.d)"): # (param_name)_dert.d|m
                     rdn_pair[1] = 1
                 else: rdn_pair[0] = 1  # weaker pair rdn=1
             else:
@@ -150,7 +149,8 @@ def search_param_(param_name, param_):
     for i, (param, L, x0) in enumerate(param_[1:], start=1):
         # param is compared to prior-P param:
         dert = comp_param(_param, param, param_name, ave)
-        # or div_comp(L), norm_comp(I, D, M): mean doesn't conserve value, if param is I | D: eval pdert_ for level-rdn?
+        # or div_comp(L), norm_comp(I, D, M): mean doesn't conserve value,
+        # if param is I: norm_comp(I, I+D/2), I is D in deriv_comp sub_Ps?
         ddert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L) )
         negiL=negL=negM=0  # comp next only
         comb_M = dert.m
@@ -211,11 +211,20 @@ def form_rdn_Pp_(Pp_, fPd):
         if sign != _sign:  # sign change, initialize rPp and append it to rPp_
 
             rPp = CPp(L=1, iL=Pp.iL, I=Pp.I, D=Pp.D, M=Pp.M, Rdn=Pp.Rdn, rval = Pp.rval, negiL=Pp.negiL, negL=Pp.negL, negM=Pp.negM,
-                      x0=x, ix0=Pp.ix0, pdert_=[Pp], sublayers=[], fPd=fPd)
-                       # or no summed params, rPp is Pp_?
-            if _sign:  # negative rPps are not processed?
-                for Pp in rPp.pdert_:
-                    Pp_x_pdert_rdn_eval(Pp)
+                      x0=x, ix0=Pp.ix0, pdert_=[Pp], sublayers=[], fPd=fPd)  # or no summed params, rPp is Pp_?
+            if _sign: # -rPps not processed?
+                for i, Pp in enumerate( rPp.pdert_):
+                    # assign cross-level rdn, re-eval Pp and pdert_:
+                    Pp_val = Pp.rval / Pp.L - ave     # / Pp.L: resolution reduction, but lower rdn:
+                    pdert_val = Pp.rval - ave * Pp.L  # * Pp.L: ave cost * number of representations
+
+                    if Pp_val > pdert_val: pdert_val -= ave * Pp.Rdn
+                    else:                  Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
+                    if Pp_val <= 0:
+                        rPp.pdert_[i] = CPp(Pp.pdert_)  # Pp remove: reset Pp vars to 0
+                    elif pdert_val <= 0:
+                        Pp.pdert_ = []  # pdert_ remove, splice pdert_'_Ps if param is I: P-defining on a dert level?
+
             rPp_.append(rPp)  # updated with accumulation below
         else:
             # accumulate params:
@@ -229,20 +238,16 @@ def form_rdn_Pp_(Pp_, fPd):
 
 
 def Pp_x_pdert_rdn_eval(Pp):  # adjust for cross-level rdn, then Pp and Pp.pdert_P_ eval to keep or remove
-    '''
-    Pp value = rval / P.L (resolution reduction) - ave
-    pdert_ value: rval - Pp value - ave * P.L (cost = number of representations)?
 
-    If Pp value > pdert_ value:
-        pdert_ value -= ave (rdn)
-    else:
-        Pp value -= ave (rdn)
+    Pp_val = Pp.rval / Pp.L - ave     # / Pp.L: resolution reduction
+    pdert_val = Pp.rval - ave * Pp.L  # * Pp.L: ave cost * number of representations
 
-    If Pp value <= 0:
-        Pp remove: Pp = current param' list from _Ps in pdert_?
-    pdert_ value <= 0:
-        pdert_ remove: Pp = spliced pdert_'_Ps, including spliced dert_s, only for I-> Pm or D-> Pd?
-    '''
+    if Pp_val > pdert_val: pdert_val -= ave * Pp.Rdn
+    else:                  Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
+    if Pp_val <= 0:
+        Pp = CPp(Pp.pdert_)  # Pp remove: reset Pp vars to 0
+    elif pdert_val <= 0:
+        Pp.pdert_ = []  # pdert_ remove: Pp = spliced pdert_'_Ps, including spliced dert_s, only for I-> Pm or D-> Pd?
 
 
 def intra_Ppm_(Pp_, param_name, fPd):
