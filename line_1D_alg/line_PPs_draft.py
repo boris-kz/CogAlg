@@ -73,15 +73,22 @@ def search(P_):  # cross-compare patterns within horizontal line
     layer0 = {'L_':[],'I_':[],'D_':[],'M_':[]}  # param_name: [params]
     if len(P_) > 1:
         # at least 2 comparands, unpack P_:
+        fPd_=[]
         for P in P_:
             layer0['L_'].append((P.L, P.L, P.x0))  # L: (2 Ls for code-consistent processing later)
             layer0['I_'].append((P.I, P.L, P.x0))  # I
             layer0['D_'].append((P.D, P.L, P.x0))  # D
             layer0['M_'].append((P.M, P.L, P.x0))  # M
+            fPd_.append(P.fPd)
 
-        mdert__ = []; ddert__ = []
-        for param_name in layer0:  # loop L_, I_, D_, M_
-            mdert_, ddert_ = search_param_(param_name, layer0[param_name])  # layer0[param_name][0].append((Ppm_, Ppd_))
+        mdert__ = []; ddert__ = []; param_ = []
+
+        for param_name, fPd in zip(layer0, fPd_):  # loop L_, I_, D_, M_
+            if param_name == "I_" and not fPd:  # project by D
+                for (I,L,x0 ), (D,_,_) in zip(param_, layer0["D_"]):
+                    param_.append(((I, D), L, x0))
+
+            mdert_, ddert_ = search_param_(param_name, param_, fPd_)  # layer0[param_name][0].append((Ppm_, Ppd_))
             mdert__.append(mdert_)
             ddert__.append(ddert_)
 
@@ -96,7 +103,6 @@ def search(P_):  # cross-compare patterns within horizontal line
             rdn_Ppd_ = form_rdn_Pp_(Ppd_, fPd=1)
 
         return (rdn_Ppm_, rdn_Ppd_)
-
 '''
 next level line_PPPs:
 PPm_ = search_Pp_(layer0, fPd=0)  # calls comp_Pp_ and form_PP_ per param
@@ -105,7 +111,7 @@ PPd_ = search_Pp_(layer0, fPd=1)
 
 def sum_rdn_(layer0, pdert__, fPd):
     '''
-    access same-index pderts of all params, to compute m|d redundancy to ms|ds of other params.
+    access same-index pderts of all params, assign redundancy to lesser-magnitude m|d per param pair.
     if other-param same-P_-index pdert is missing, rdn doesn't change.
     '''
     if fPd: alt='M'
@@ -133,24 +139,32 @@ def sum_rdn_(layer0, pdert__, fPd):
                 if param_name[0] == name_in_pair[0]:  # param_name = "L_", param_name[0] = "L"
                     Rdn += rdn[0]  # M*=2: represents both comparands?
                 elif param_name[0] == name_in_pair[1]:
-                    Rdn += rdn[1]  # M*=2: represents both comparands?
+                    Rdn += rdn[1]
 
             pderts_Rdn[i].append(Rdn)  # same length as pdert_
 
     return pderts_Rdn
 
 
-def search_param_(param_name, param_):
+def search_param_(param_name, param_, fPd_):
 
     ddert_, mdert_ = [], []  # line-wide (i, p, d, m)_, + (negL, negM) in mdert: variable-range search
     # rdn = iparam[1]  # iparam = (param_, P.L, P.x0), rdn
     _param, _L, _x0 = param_[0]
-
-    for i, (param, L, x0) in enumerate(param_[1:], start=1):
+    if _param is tuple:
+        _par = _param[0] + _param[1]/2  # I+=D/2: forward proj for template
+    else: _par = _param
+    _fPd = fPd_[0]
+    i = 0
+    for (param, L, x0), fPd in zip( param_[1:], fPd_[1:], start=1):  # sorry, how is it done?
+        if param is tuple:
+            par = param[0] - _param[1] / 2  # I-=D/2: backward proj for input
+        else:
+            par = param
         # param is compared to prior-P param:
-        dert = comp_param(_param, param, param_name, ave)
+        dert = comp_param(_par, par, param_name, ave)
         # or div_comp(L), norm_comp(I, D, M): mean doesn't conserve value,
-        # if param is I: norm_comp(I, I+D/2), I is D in deriv_comp sub_Ps?
+        # if param is I: norm_comp(I, I+D/2), I is D in deriv_comp sub_Ps.
         ddert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L) )
         negiL=negL=negM=0  # comp next only
         comb_M = dert.m
@@ -168,7 +182,10 @@ def search_param_(param_name, param_):
                 negL += 1
         # after extended search, if any:
         mdert_.append( Cpdert( i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, negiL=negiL,negL=negL, negM=negM))
-        _param = param
+        if param is tuple:
+            _par = param[0] + param[1] / 2  # I+=D/2: forward proj
+        else: _par = param
+        i+=1
 
     return mdert_, ddert_
 
@@ -221,9 +238,15 @@ def form_rdn_Pp_(Pp_, fPd):
                     if Pp_val > pdert_val: pdert_val -= ave * Pp.Rdn
                     else:                  Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
                     if Pp_val <= 0:
-                        rPp.pdert_[i] = CPp(Pp.pdert_)  # Pp remove: reset Pp vars to 0
+                        rPp.pdert_[i] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
                     elif pdert_val <= 0:
-                        Pp.pdert_ = []  # pdert_ remove, splice pdert_'_Ps if param is I: P-defining on a dert level?
+                        if ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd): # splice all Ps (or = splice all pderts into 1 pdert)
+                            _pdert = Pp.pdert_[0]
+                            for pdert in Pp.pdert_[1:]:
+                                _pdert.accum_from(pdert,excluded=["x0"])
+                            Pp.pdert_ = [_pdert]
+                        else:
+                            Pp.pdert_ = []  # pdert_ remove, splice pdert_'_Ps if param is I: P-defining on a dert level?
 
             rPp_.append(rPp)  # updated with accumulation below
         else:
@@ -235,19 +258,6 @@ def form_rdn_Pp_(Pp_, fPd):
         _sign = sign
 
     return rPp_
-
-
-def Pp_x_pdert_rdn_eval(Pp):  # adjust for cross-level rdn, then Pp and Pp.pdert_P_ eval to keep or remove
-
-    Pp_val = Pp.rval / Pp.L - ave     # / Pp.L: resolution reduction
-    pdert_val = Pp.rval - ave * Pp.L  # * Pp.L: ave cost * number of representations
-
-    if Pp_val > pdert_val: pdert_val -= ave * Pp.Rdn
-    else:                  Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
-    if Pp_val <= 0:
-        Pp = CPp(Pp.pdert_)  # Pp remove: reset Pp vars to 0
-    elif pdert_val <= 0:
-        Pp.pdert_ = []  # pdert_ remove: Pp = spliced pdert_'_Ps, including spliced dert_s, only for I-> Pm or D-> Pd?
 
 
 def intra_Ppm_(Pp_, param_name, fPd):
@@ -269,7 +279,7 @@ def intra_Ppm_(Pp_, param_name, fPd):
                     sub_param_.append((pdert.d, pdert.x0, pdert.L))
                 else:
                     param_name = "I_"  # comp i @ local ave_M
-                    sub_param_.append((pdert.i, pdert.x0, pdert.L))
+                    sub_param_.append((pdert.i + (pdert.d/2), pdert.x0, pdert.L))
 
             Pp.sublayers = search_param_(param_name, sub_param_)  # iparam = sub_param_: (param1, x01, L1),(param2, x02, L2),...
             # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match?
