@@ -313,7 +313,7 @@ class Cdert(Number): # Ppd and Ppdm might not relevant now, so remove it
             return "Cdert(i={}, p={}, d={}, m={})".format(self.i, self.p, self.d, self.m)
 
 
-def comp_param(param, _param, param_name, ave):
+def comp_param(_param, param, param_name, ave):
 
     if isinstance(param,list):  # vector
         sin, cos = param[0], param[1]

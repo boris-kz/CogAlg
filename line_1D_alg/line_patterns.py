@@ -376,7 +376,7 @@ if __name__ == "__main__":
         frame_PP_ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            PP_ = search(P_)
+            PP_ = search(P_, fPd=0)
             frame_PP_.append(PP_)
         # draw_PP_(image, frame_PP_)  # debugging
 
