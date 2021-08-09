@@ -22,8 +22,8 @@ import sys
 from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import cv2
-import csv
 import argparse
+import pickle
 from time import time
 from utils import *
 from itertools import zip_longest
@@ -120,12 +120,14 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
     intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
     # if len(P_) > 4: P_ = splice_P_(P_, fPd=0)  # merge aI- | aD- similar weakly separated Ps
     # replace by comp_param(P.M | P.D) in line_PPs
+    '''    
     if render:
         with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
             write = csv.writer(csvFile, delimiter=",")
             for item in range(len(P_)):
                 # print(P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0)
                 write.writerow([P_[item].L, P_[item].I, P_[item].D, P_[item].M, P_[item].x0])
+    '''
     return P_
 
 ''' 
@@ -308,11 +310,9 @@ def splice_eval(__P, _P, P, fPd):  # should work for splicing Pps too
     For 3 Pms, same-sign P1, P3, opposite-sign P2:
     relative continuity vs separation = abs(( M2/ ( M1+M3 )))
     relative similarity = match (M1/L1, M3/L3) / miss (match (M1/L1, M2/L2) + match (M3/L3, M2/L2)) # both should be negative
-
     or P2 is reinforced as contrast - weakened as distant -> same value, not merged?
     splice P1, P3: by proj mean comp, ~ comp_param, ave / contrast P2
     re-run intra_P in line_PPs Pps?
-
     also distance / meanL, if 0: fractional distance = meanL / olp? reduces ave, not m?
     '''
     if fPd:
@@ -343,34 +343,34 @@ if __name__ == "__main__":
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
-    # show image in the same window as a code
-    image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
-    assert image is not None, "No image in the path"
     render = 0
-    verbose = 0
-    if render:
-        plt.figure();plt.imshow(image, cmap='gray')  # show the image in gray
-        with open("frame_of_patterns_2.csv", "w") as csvFile:
-            write = csv.writer(csvFile, delimiter=",")
-            fieldnames = ("L=", "I=", "D=", "M=", "x0=")
-            write.writerow(fieldnames)
+    fpickle = 0
+    fline_PPs = 0
 
     start_time = time()
-    # Main
-    frame_of_patterns_ = cross_comp(image)  # returns Pm__
-    if render:
-        # from pprint import pprint
-        # pprint(frame_of_patterns_[0])  # shows 1st layer Pm_ only
-        # Khanh's visualization:
-        img = np.full((image.shape[0] - 1, image.shape[1] - 1), 128, np.uint8)  # dert size is smaller by the size of 1
-        for y, P_ in enumerate(frame_of_patterns_):
-            for P in P_:
-                wd = img[y, P.x0:P.x0 + P.L]
-                wd[:] = (P.M > 0) * 255
-        plt.figure(); plt.imshow(img, cmap='gray'); plt.title('merged image')
-        # cv2.imwrite("img_merged.bmp",img)
+    if pickle:
+        # Read frame_of_patterns from saved file instead
+        with open("frame_of_patterns_.pkl", 'rb') as file:
+            frame_of_patterns_ = pickle.load(file)
+    else:
+        # show image in the same window as a code
+        image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
+        assert image is not None, "No image in the path"
+        if render:
+            plt.figure();plt.imshow(image, cmap='gray')  # show the image in gray
+            '''
+            with open("frame_of_patterns_2.csv", "w") as csvFile:
+                write = csv.writer(csvFile, delimiter=",")
+                fieldnames = ("L=", "I=", "D=", "M=", "x0=")
+                write.writerow(fieldnames)
+            '''
 
-    fline_PPs = 0
+        # Main
+        frame_of_patterns_ = cross_comp(image)  # returns Pm__
+        # save to file
+        with open("frame_of_patterns_.pkl", 'wb') as file:
+            pickle.dump(frame_of_patterns_, file)
+
     if fline_PPs:  # debug line_PPs_draft
         from line_PPs_draft import *
         frame_PP_ = []
