@@ -65,7 +65,7 @@ init_y = 0  # starting row, the whole frame doesn't need to be processed
     capitalized variables are normally summed small-case variables
 '''
 
-def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern maybe nested
+def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern may be nested
 
     Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []
@@ -87,7 +87,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             d = i -_i  # accum in rng
             p = i +_i  # accum in rng
             m = ave - abs(d)  # accum in rng, for consistency with deriv_comp output, else redundant
-            dert_.append( Cdert(i=i,p=p,d=d,m=m) )
+            dert_.append( Cdert( i=i, p=p, d=d, m=m) )
             _i = i
         # form m Patterns, evaluate intra_Pm_ per Pm:
         Pm_ = form_P_(dert_, rdn=1, rng=1, fPd=False)
@@ -118,9 +118,9 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
         _sign = sign
 
     intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
-    # if len(P_) > 4: P_ = splice_P_(P_, fPd=0)  # merge aI- | aD- similar weakly separated Ps
-    # replace by comp_param(P.M | P.D) in line_PPs
     '''    
+    replace by comp_param(P.M | P.D) in line_PPs:
+    if len(P_) > 4: P_ = splice_P_(P_, fPd=0)  # merge aI- | aD- similar weakly separated Ps
     if render:
         with open("frame_of_patterns_2.csv", "a") as csvFile:  # current layer visualization
             write = csv.writer(csvFile, delimiter=",")
@@ -348,7 +348,7 @@ if __name__ == "__main__":
     fline_PPs = 0
 
     start_time = time()
-    if pickle:
+    if fpickle:
         # Read frame_of_patterns from saved file instead
         with open("frame_of_patterns_.pkl", 'rb') as file:
             frame_of_patterns_ = pickle.load(file)

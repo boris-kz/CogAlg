@@ -73,67 +73,69 @@ ave_rolp = .5  # ave overlap ratio for comp_Pp
 
 
 def search(P_, fPd):  # cross-compare patterns within horizontal line
-    # sub_search_recursive(P_, fderP=0)  # search with incremental distance: first inside sublayers
 
+    # sub_search_recursive(P_, fderP=0)  # search with incremental distance: first inside sublayers
     layer0 = {'L_': [], 'I_': [], 'D_': [], 'M_': []}  # param_name: [params]
-    if len(P_) > 1:
-        # at least 2 comparands, unpack P_:
+
+    if len(P_) > 1:  # at least 2 comparands
+        Ldert_ = []; rL_ = []
+        # unpack Ps:
         for P in P_:
-            layer0['L_'].append([P.L, P.L, P.x0])  # L: (2 Ls for code-consistent processing later)
+            if _P in locals:  # not 1st P,
+                L=P.L; _L=_P.L
+                rL = max(L,_L) / min(L,_L)  # div_comp L: higher-scale, not accumulated: no search
+                if L <_L: rL *= -1  # rL is signed
+                mL = int(rL) * min(L,_L)  # definition of match in comp by division
+                Ldert_.append(Cpdert(i=L, p=L+_L, d=rL, m=mL, x0=P.x0, L=L, P=P))
+                rL_.append(rL)
+            _P = P
+            layer0['L_'].append([P.L, P.x0])
+            # not sure this is needed now?
             layer0['I_'].append([P.I, P.L, P.x0])  # I
             layer0['D_'].append([P.D, P.L, P.x0])  # D
             layer0['M_'].append([P.M, P.L, P.x0])  # M
-        mdert__ = []
-        ddert__ = []
-        # not using search_param, comp_param for comp_L,
-        # pseudo:
-        rL_ = layer0[0][1:][0] / layer0[0][:-1][0]  # div_comp L: new vs. accumulated, no search?
-        mL_ = int(rL_) * np.minimum(layer0[0][1:][0] / layer0[0][:-1][0])  # definition of div_match
-        '''
-        need to implement: 
-        ddert__.append: ddert_.append(Cpdert(i=_L, p=L+_L, d=rL, m=mL, x0=x0, L=L, P=P))
-        mdert__.append: mdert_=ddert_ # same, no search?
-        '''
-        for param_name in layer0[1:]:  # loop I_, D_, M_
 
+        mdert__ = [Ldert_]; ddert__ = [Ldert_]  # no search for L: same Ldert_ for ddert_ and mdert_
+
+        for param_name in ["I_", "D_", "M_"]:
             param_ = layer0[param_name]
-            _par_ = param_[:-1] * rL_  # normalize by rL
+            _par_ =[ [_par*rL, L, x0] for [_par,L,x0], rL in zip(param_[:-1], rL_) ]  # normalize by rL
             par_ = param_[1:]  # compared vectors
 
             if param_name == "I_" and not fPd:  # project by D  # I=D in deriv_comp sub_Ps
-                _par_[:][0] -= layer0["D_"][:-1][0] / 2  # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
-                par_[:][0] += layer0["D_"][1:][0] / 2  # I in (I,L,x0) is backward projected by D in (D,L,x0)
+                _par_ = [ [_par-(D/2), L, x0] for [_par,L,x0], [D,_,_] in zip(_par_,layer0["D_"][:-1]) ]
+                # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
+                par_  = [ [ par+(D/2), L, x0] for [ par,L,x0], [D,_,_] in zip( par_,layer0["D_"][1:]) ]
+                # I in (I,L,x0) is backward projected by D in (D,L,x0)
 
             mdert_, ddert_ = search_param_(_par_, par_, P_[:-1], param_name)  # layer0[param_name][0].append((Ppm_, Ppd_))
-            mdert__.append(mdert_)
-            ddert__.append(ddert_)
+            mdert__.append(mdert_); ddert__.append(ddert_)
 
-        mrdn__ = sum_rdn_(layer0, mdert__, fPd=True)
-        drdn__ = sum_rdn_(layer0, ddert__, fPd=False)
+        mrdn__ = sum_rdn_(layer0, mdert__, fPd=1)
+        drdn__ = sum_rdn_(layer0, ddert__, fPd=0)
 
         for param_name, mdert_, ddert_, mrdn_, drdn_ in zip(layer0, mdert__, ddert__, mrdn__, drdn__):
+
             Ppm_ = form_Pp_(mdert_, param_name, mrdn_, fPd=0)
             rdn_Ppm_ = form_rdn_Pp_(Ppm_, param_name, fPd=0)
             Ppd_ = form_Pp_(ddert_, param_name, drdn_, fPd=1)
             rdn_Ppd_ = form_rdn_Pp_(Ppd_, param_name, fPd=1)
 
         return (rdn_Ppm_, rdn_Ppd_)
-
-
 '''
 next level line_PPPs:
 PPm_ = search_Pp_(layer0, fPd=0)  # calls comp_Pp_ and form_PP_ per param
 PPd_ = search_Pp_(layer0, fPd=1)
 '''
 
+def search_param_(_param_, param_, P_, param_name):  # variable-range search in mdert only
 
-def search_param_(_param_, param_, P_, param_name):
-    ddert_, mdert_ = [], []  # line-wide (i, p, d, m)_, + (negL, negM) in mdert: variable-range search
+    ddert_, mdert_ = [], []  # line-wide (i, p, d, m)_, + (negL, negM) in mdert
 
-    for i, ((_param, _L, _x0), (param, L, x0), P) in enumerate(zip(_param_, param_, P_)):
+    for i, ((_param, _L, _x0), (param, L, x0), P) in enumerate( zip(_param_, param_, P_)):
 
         dert = comp_param(_param, param, param_name[0], ave)  # param is compared to prior-P _param
-        ddert_.append(Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, P=P))
+        ddert_.append(Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, _P=P))
         negiL = negL = negM = 0  # comp next only
         comb_M = dert.m
         j = i
@@ -149,7 +151,7 @@ def search_param_(_param_, param_, P_, param_name):
                 negiL += ext_L
                 negL += 1
         # after extended search, if any:
-        mdert_.append(Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, P=P, negiL=negiL, negL=negL, negM=negM))
+        mdert_.append(Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, _P=P, negiL=negiL, negL=negL, negM=negM))
 
     return mdert_, ddert_
 
@@ -161,11 +163,10 @@ def form_Pp_(dert_, param_name, rdn_, fPd):  # almost the same as line_patterns 
     _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
 
     for dert, rdn in zip(dert_, rdn_):  # segment by sign
-        if fPd:
-            sign = dert.d > 0
-        else:
-            sign = dert.m > 0  # adjust by ave projected at distance=negL and contrast=negM, if significant:
+        if fPd: sign = dert.d > 0
+        else:   sign = dert.m > 0  # adjust by ave projected at distance=negL and contrast=negM, if significant:
         # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
+
         if sign != _sign:
             # sign change, initialize P and append it to P_
             Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, negiL=dert.negiL, negL=dert.negL, negM=dert.negM,
@@ -173,15 +174,8 @@ def form_Pp_(dert_, param_name, rdn_, fPd):  # almost the same as line_patterns 
             Pp_.append(Pp)  # updated with accumulation below
         else:
             # accumulate params:
-            Pp.L += 1;
-            Pp.iL += dert.L;
-            Pp.I += dert.p;
-            Pp.D += dert.d;
-            Pp.M += dert.m;
-            Pp.Rdn += rdn;
-            Pp.negiL += dert.negiL;
-            Pp.negL += dert.negL;
-            Pp.negM += dert.negM
+            Pp.L += 1; Pp.iL += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.negiL += dert.negiL
+            Pp.negL += dert.negL; Pp.negM += dert.negM
             Pp.pdert_ += [dert]
         x += 1
         _sign = sign
@@ -197,10 +191,8 @@ def form_rdn_Pp_(Pp_, param_name, fPd):  # cluster Pps by cross-param redundant 
     _sign = None  # to initialize 1st rdn Pp, (None != True) and (None != False) are both True
 
     for Pp in Pp_:
-        if fPd:
-            Pp.rval = abs(Pp.D) - Pp.Rdn * ave_D * Pp.L
-        else:
-            Pp.rval = Pp.M - Pp.Rdn * ave_D * Pp.L
+        if fPd: Pp.rval = abs(Pp.D) - Pp.Rdn * ave_D * Pp.L
+        else:   Pp.rval = Pp.M - Pp.Rdn * ave_D * Pp.L
         sign = Pp.rval > 0
         if sign != _sign:  # sign change, initialize rPp and append it to rPp_
 
@@ -209,14 +201,13 @@ def form_rdn_Pp_(Pp_, param_name, fPd):  # cluster Pps by cross-param redundant 
             # or rPp is sign, Pp_?
             if _sign:  # -rPps are not processed?
                 for i, Pp in enumerate(rPp.pdert_):
+
                     # assign cross-level rdn, re-eval Pp and pdert_:
                     Pp_val = Pp.rval / Pp.L - ave  # / Pp.L: resolution reduction, but lower rdn:
                     pdert_val = Pp.rval - ave * Pp.L  # * Pp.L: ave cost * number of representations
 
-                    if Pp_val > pdert_val:
-                        pdert_val -= ave * Pp.Rdn
-                    else:
-                        Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
+                    if Pp_val > pdert_val: pdert_val -= ave * Pp.Rdn
+                    else:                  Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
                     if Pp_val <= 0:
                         rPp.pdert_[i] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
                     elif pdert_val <= 0:
@@ -225,24 +216,18 @@ def form_rdn_Pp_(Pp_, param_name, fPd):  # cluster Pps by cross-param redundant 
                             for pdert in Pp.pdert_:
                                 P.accum_from(pdert._P, excluded=["x0"])  # different from Pp params
                                 P.dert_ += [pdert._P.dert_]  # splice dert_s, eval intra_P?
-
-                            rPp.pdert_[i] = P  # replace Pp with spliced P
+                            # replace Pp with spliced P:
+                            rPp.pdert_[i] = P  # regardless of value, I_pderts always merge into P?
+                            # or merge high relative continuity Pps regardless of pdert_val:
+                            # rel_similarity = (m13 * rel_continuity) / miss?
                         else:
                             Pp.pdert_ = []  # pdert_ remove
 
             rPp_.append(rPp)  # updated with accumulation below
         else:
             # accumulate params:
-            rPp.L += 1;
-            rPp.iL += Pp.iL;
-            rPp.I += Pp.I;
-            rPp.D += Pp.D;
-            rPp.M += Pp.M;
-            rPp.Rdn += Pp.Rdn;
-            rPp.rval += Pp.rval
-            rPp.negiL += Pp.negiL;
-            rPp.negL += Pp.negL;
-            rPp.negM += Pp.negM
+            rPp.L += 1; rPp.iL += Pp.iL; rPp.I += Pp.I; rPp.D += Pp.D; rPp.M += Pp.M; rPp.Rdn += Pp.Rdn; rPp.rval += Pp.rval
+            rPp.negiL += Pp.negiL; rPp.negL += Pp.negL; rPp.negM += Pp.negM
             rPp.pdert_ += [Pp]
         x += 1
         _sign = sign
@@ -255,10 +240,8 @@ def sum_rdn_(layer0, pdert__, fPd):
     access same-index pderts of all params, assign redundancy to lesser-magnitude m|d per param pair.
     if other-param same-P_-index pdert is missing, rdn doesn't change.
     '''
-    if fPd:
-        alt = 'M'
-    else:
-        alt = 'D'
+    if fPd: alt = 'M'
+    else:   alt = 'D'
     name_pairs = (('I', 'L'), ('I', 'D'), ('I', 'M'), ('L', alt), ('D', 'M'))
     pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns, as in pdert__
 
@@ -317,16 +300,12 @@ def intra_Ppm_(Pp_, param_name, fPd):
 
             if param_name == "I_" and not fPd:
 
-                D_ = [pdert.d for pdert in Pp.pdert_]
+                _D_ = [pdert.d for pdert in Pp.pdert_][:-1]
+                D_ = [pdert.d for pdert in Pp.pdert_][1:]
+                _sub_par_ = [[_par-(D/2), L, x0] for [_par,L,x0], D in zip(sub_param_[:-1], _D_)] # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
+                sub_par_ = [[par+(D/2), L, x0] for [par,L,x0], D in zip(sub_param_[1:], D_)]      # I in (I,L,x0) is backward projected by D in (D,L,x0)
 
-                _sub_par_ = []
-                for (I, L, x0), D in zip(sub_param_[:-1], D_[:-1]):  # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
-                    _sub_par_.append((I - (D / 2), L, x0))
-                sub_par_ = []
-                for (I, L, x0), D in zip(sub_param_[1:], D_[1:]):  # I in (I,L,x0) is backward projected by D in (D,L,x0)
-                    sub_par_.append((I + (D / 2), L, x0))
-
-            Pp.sublayers = search_param_(_sub_par_, sub_par_, param_name)  # iparam = sub_param_: (param1, x01, L1),(param2, x02, L2),...
+            Pp.sublayers = search_param_(_sub_par_, sub_par_, Pp.pdert_[:-1], param_name)  # iparam = sub_param_: (param1, x01, L1),(param2, x02, L2),...
             # add: ave_M + (Pp.M / len(Pp.P_)) / 2 * rdn: ave_M is average of local and global match?
             # extended search needs to be restricted to ave_M-terminated derts
 
@@ -339,6 +318,9 @@ for (I, L, x0),(D,_,_) in zip(param_[:-1], layer0["D_"][:-1]):  # _I in (I,L,x0)
 par_= []
 for (I, L, x0),(D,_,_) in zip(param_[1:], layer0["D_"][1:]): # I in (I,L,x0) is backward projected by D in (D,L,x0)
     par_.append((I+(D/2), L, x0))
+    
+rL_ = [_L[0]/L[0] for _L, L in zip(layer0["L_"][:-1],layer0["L_"][1:])] # _L = L_[:-1], L = L_[1:], div_comp L, no search?
+mL_ = [int(rL) * min(_L[0],L[0]) for _L, L, rL in zip(layer0["L_"][:-1],layer0["L_"][1:], rL_)] # definition of div_match
 '''
 
 
@@ -383,7 +365,6 @@ def form_PP_(params_derPp____, fPd):  # Draft:
         But there are so many possible overlaps that pre_PP may never terminate.
         Another way to define them is by minimal combined-layers' match per x (iP). 
         But then we are back to immediate multi-param comp_P_, which is pointless because different derivatives anti-correlate.
-
                 # inclusion into higher layer of pre_PP by the sum of concurrent mPps > ave_M * Rolp, over all lower layers:
                 if "pre_PP" in locals() and pre_PP.derPp____[i][j][k] and not pre_PP.mPp > ave_M * Rolp:
                     pre_PP = CPP(derPp____=derPp____.copy())
@@ -560,15 +541,12 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                 for (param, _param) in zip([P.I, P.D, P.M], [_P.I, _P.D, _P.M]):
                     dm = comp_param(param, _param, [], ave, rL)
                     layer1.append([dm.d, dm.m])
-                    mP += dm.m;
-                    dP += dm.d
+                    mP += dm.m; dP += dm.d
 
                 if dP > P.derP.dP:
-                    ndP_rdn = 1;
-                    dP_rdn = 0  # Not sure what to do with these
+                    ndP_rdn = 1; dP_rdn = 0  # Not sure what to do with these
                 else:
-                    dP_rdn = 1;
-                    ndP_rdn = 0
+                    dP_rdn = 1;  ndP_rdn = 0
 
                 if mP > derP.mP:
                     rrdn = 1  # added to rdn, or diff alt, olp, div rdn?
@@ -581,7 +559,7 @@ def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division betwee
                     rvars = []
                 # append rrdn and ratio variables to current derP:
                 # PP.derP_[i] += [rrdn, rvars]
-                PP.derP_[i].rrdn = rrdn;
+                PP.derP_[i].rrdn = rrdn
                 PP.derP_[i].layer1 = rvars
                 # P vars -> _P vars:
                 _P = P
