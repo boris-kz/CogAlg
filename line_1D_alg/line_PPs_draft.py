@@ -5,12 +5,9 @@ It cross-compares P params (initially L, I, D, M) and forms param_Ps (Pps) for e
 
 import sys  # add CogAlg folder to system path
 from os.path import dirname, join, abspath
-
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
-
 from line_patterns import *
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
-
 
 class Cpdert(ClusterStructure):
     # P param dert
@@ -25,7 +22,6 @@ class Cpdert(ClusterStructure):
     L = int  # pixel-level
     _P = object  # input P reference
 
-
 class CPp(CP):
     pdert_ = list
     Rdn = int  # cross-param rdn accumulated from pderts
@@ -37,7 +33,6 @@ class CPp(CP):
     negL = int  # in mdert only
     negM = int  # in mdert only
     sublayers = list
-
 
 class CderPp(ClusterStructure):
     mPp = int
@@ -51,10 +46,8 @@ class CderPp(ClusterStructure):
     layer1 = dict  # dert per compared param
     der_sub_H = list  # sub hierarchy of derivatives, from comp sublayers
 
-
 class CPP(CPp, CderPp):
     layer1 = dict
-
 
 ave = 100  # ave dI -> mI, * coef / var type
 # no ave_mP: deviation computed via rM  # ave_mP = ave* n_comp_params: comp cost, or n vars per P: rep cost?
@@ -81,16 +74,14 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
         Ldert_ = []; rL_ = []
         # unpack Ps:
         for P in P_:
-            if _P in locals:  # not 1st P,
+            if "_P" in locals():  # not 1st P
                 L=P.L; _L=_P.L
                 rL = max(L,_L) / min(L,_L)  # div_comp L: higher-scale, not accumulated: no search
                 if L <_L: rL *= -1  # rL is signed
-                mL = int(rL) * min(L,_L)  # definition of match in comp by division
+                mL = abs( int(rL)) * min(L,_L)  # definition of match in comp by division
                 Ldert_.append(Cpdert(i=L, p=L+_L, d=rL, m=mL, x0=P.x0, L=L, P=P))
                 rL_.append(rL)
             _P = P
-            layer0['L_'].append([P.L, P.x0])
-            # not sure this is needed now?
             layer0['I_'].append([P.I, P.L, P.x0])  # I
             layer0['D_'].append([P.D, P.L, P.x0])  # D
             layer0['M_'].append([P.M, P.L, P.x0])  # M
@@ -98,14 +89,16 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
         mdert__ = [Ldert_]; ddert__ = [Ldert_]  # no search for L: same Ldert_ for ddert_ and mdert_
 
         for param_name in ["I_", "D_", "M_"]:
-            param_ = layer0[param_name]
-            _par_ =[ [_par*rL, L, x0] for [_par,L,x0], rL in zip(param_[:-1], rL_) ]  # normalize by rL
-            par_ = param_[1:]  # compared vectors
+            param_ = layer0[param_name]  # param values
+            # compared vectors:
+            _par_ = [[ _par*rL, L, x0] for [_par,L,x0], rL in zip(param_[:-1], rL_) ]  # normalize by rL
+            par_ = param_[1:]
 
-            if param_name == "I_" and not fPd:  # project by D  # I=D in deriv_comp sub_Ps
-                _par_ = [ [_par-(D/2), L, x0] for [_par,L,x0], [D,_,_] in zip(_par_,layer0["D_"][:-1]) ]
+            if param_name == "I_" and not fPd:
+                # project by D  # I=D in deriv_comp sub_Ps:
+                _par_ = [[_par - (D / 2), L, x0] for [_par, L, x0], [D, _, _] in zip(_par_, layer0["D_"][:-1])]
                 # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
-                par_  = [ [ par+(D/2), L, x0] for [ par,L,x0], [D,_,_] in zip( par_,layer0["D_"][1:]) ]
+                par_ = [[par + (D / 2), L, x0] for [par, L, x0], [D, _, _] in zip(par_, layer0["D_"][1:])]
                 # I in (I,L,x0) is backward projected by D in (D,L,x0)
 
             mdert_, ddert_ = search_param_(_par_, par_, P_[:-1], param_name)  # layer0[param_name][0].append((Ppm_, Ppd_))
@@ -202,7 +195,7 @@ def form_rdn_Pp_(Pp_, param_name, fPd):  # cluster Pps by cross-param redundant 
             if _sign:  # -rPps are not processed?
                 for i, Pp in enumerate(rPp.pdert_):
 
-                    # assign cross-level rdn, re-eval Pp and pdert_:
+                    # assign cross-level rdn (Pp vs. pdert_), re-evaluate Pp and pdert_:
                     Pp_val = Pp.rval / Pp.L - ave  # / Pp.L: resolution reduction, but lower rdn:
                     pdert_val = Pp.rval - ave * Pp.L  # * Pp.L: ave cost * number of representations
 
@@ -210,18 +203,21 @@ def form_rdn_Pp_(Pp_, param_name, fPd):  # cluster Pps by cross-param redundant 
                     else:                  Pp_val -= ave * Pp.Rdn  # ave scaled by rdn
                     if Pp_val <= 0:
                         rPp.pdert_[i] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
-                    elif pdert_val <= 0:
-                        if ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # dert-level P-defining params
-                            P = CP()
-                            for pdert in Pp.pdert_:
-                                P.accum_from(pdert._P, excluded=["x0"])  # different from Pp params
-                                P.dert_ += [pdert._P.dert_]  # splice dert_s, eval intra_P?
-                            # replace Pp with spliced P:
-                            rPp.pdert_[i] = P  # regardless of value, I_pderts always merge into P?
-                            # or merge high relative continuity Pps regardless of pdert_val:
-                            # rel_similarity = (m13 * rel_continuity) / miss?
-                        else:
-                            Pp.pdert_ = []  # pdert_ remove
+
+                    elif ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # dert-level P-defining params
+                        '''
+                        if step=2 match (m13) / abs( step=1 miss) (m12) > ave_splice:  # similarity / separation?
+                        strong Pp, weak Pp.pdert_, 
+                        for all summed param types, but step=2 and dert_ splicing if P-defining param only?
+                        '''
+                        P = CP()
+                        for pdert in Pp.pdert_:
+                            P.accum_from(pdert._P, excluded=["x0"])  # different from Pp params
+                            P.dert_ += [pdert._P.dert_]  # splice dert_s, eval intra_P?
+                        rPp.pdert_[i] = P     # replace Pp with spliced P
+
+                    if pdert_val <= 0:
+                        Pp.pdert_ = []  # pdert_ remove
 
             rPp_.append(rPp)  # updated with accumulation below
         else:
@@ -312,6 +308,9 @@ def intra_Ppm_(Pp_, param_name, fPd):
 
 # below is obsolete:
 '''     
+param_ = [[ getattr( P, param_name[0]), P.L, P.x0] for P in P_]  # param values
+D_ = [ getattr(P, "D") for P in P_]
+
 _par_= []
 for (I, L, x0),(D,_,_) in zip(param_[:-1], layer0["D_"][:-1]):  # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
     _par_.append((I-(D/2), L, x0))
@@ -322,7 +321,6 @@ for (I, L, x0),(D,_,_) in zip(param_[1:], layer0["D_"][1:]): # I in (I,L,x0) is 
 rL_ = [_L[0]/L[0] for _L, L in zip(layer0["L_"][:-1],layer0["L_"][1:])] # _L = L_[:-1], L = L_[1:], div_comp L, no search?
 mL_ = [int(rL) * min(_L[0],L[0]) for _L, L, rL in zip(layer0["L_"][:-1],layer0["L_"][1:], rL_)] # definition of div_match
 '''
-
 
 def form_PP_(params_derPp____, fPd):  # Draft:
     '''
