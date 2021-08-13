@@ -22,10 +22,9 @@ import sys
 from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import cv2
-# import argparse # not used in current edition
-import pickle # already imported in
+# import argparse
+import pickle
 from time import time
-# from utils import * # only NumPy really used from here, see next line
 # import numpy as np
 from matplotlib import pyplot as plt
 import csv
