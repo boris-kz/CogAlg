@@ -67,7 +67,7 @@ ave_rolp = .5  # ave overlap ratio for comp_Pp
 
 def search(P_, fPd):  # cross-compare patterns within horizontal line
 
-    # sub_search_recursive(P_, fPd)  # search with incremental distance: first inside sublayers
+    sub_search_recursive(P_, fPd)  # search with incremental distance: first inside sublayers
     layer0 = {'L_': [], 'I_': [], 'D_': [], 'M_': []}  # param_name: [params]
 
     if len(P_) > 1:  # at least 2 comparands
@@ -76,7 +76,7 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
         for P in P_:
             if "_P" in locals():  # not the 1st P
                 L=P.L; _L=_P.L
-                rL = L /_L  # div_comp L: higher-scale, not accumulated: no search
+                rL = L / _L  # div_comp L: higher-scale, not accumulated: no search
                 mL = int(max(rL, 1/rL)) * min(L,_L)  # match in comp by division as additive compression, not directional
                 Ldert_.append(Cpdert(i=L, p=L+_L, d=rL, m=mL, x0=P.x0, L=L, P=P))
                 rL_.append(rL)
@@ -85,7 +85,7 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
             layer0['D_'].append([P.D, P.L, P.x0])  # D tuple
             layer0['M_'].append([P.M, P.L, P.x0])  # M tuple
 
-        pdert__ = [Ldert_]; pdert1__ = [Ldert_]  # param pdert_s, step=1 for P splicing, no search for L
+        pdert__ = [Ldert_]; pdert1__ = [Ldert_]; pdert2__= []  # param pdert_s, step=2 for P splicing:  # no search for L
 
         for param_name in ["I_", "D_", "M_"]:
             param_ = layer0[param_name]  # param values
@@ -100,31 +100,32 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
                     par_ = [[ par + (D / 2), L, x0] for [ par, L, x0], [D, _, _] in zip(par_, layer0["D_"][1:])]
                     # I in (I,L,x0) is backward projected by D in (D,L,x0)
 
-                pdert__ += [ search_param_(_par_, par_, P_[:-1], param_name) ]
+                pdert__.append([ search_param_(_par_, par_, P_[:-1], param_name) ])
                 _rL_=[]
-                for P in P_:  # form rLs to normalize cross-comp of same-M-sign Ps in pdert2_
+                for P in P_:
                     if "_P" in locals():  # not the 1st P
                         if "__P" in locals():  # not the 2nd P
-                            _rL_.append(P.L / __P.L)
+                            _rL_.append(P.L/__P.L)
                         __P = _P
                     _P = P
                 __par_ = [[__par * _rL, L, x0] for [__par, L, x0], _rL in zip(param_[:-2], _rL_)]  # normalize by _rL
-                # step=2 comp for P splice, only one param, (I and not fPd) or (D and fPd), no pdert2__:
-                pdert2_ = [comp_param(__par, par, param_name[0], ave) for __par, par in zip(__par_, par_[1:])]
+                # step=2 comp for P splicing
+                pdert2__.append([ comp_param(__par, par, param_name[0], ave) for __par, par, param_name[0] in zip(__par_, par_[1:]) ])
 
-            # no else: pdert__+= [search_param_(_par_, par_, P_[:-1], param_name)] is for core param, else step=1 comp only:
-            pdert1__ += [[ comp_param(_par, par, param_name[0], ave) for _par, par in zip(_par_, par_) ]]  # append pdert1_ per param_
+            # step=1 comp for optional ddert_ and P splicing
+            pdert1__.append([ comp_param(_par, par, param_name[0], ave) for _par, par, param_name[0] in zip(_par_, par_) ])
 
         rdn__ = sum_rdn_(layer0, pdert__, fPd=1)
         for param_name, pdert_, rdn_ in zip(layer0, pdert__, rdn__):
 
-            Ppm_ = form_Pp_(pdert_, param_name, rdn_, fPd=0)  # Ppd_ formed in -Ppms only, in intra_Ppm_
-            rdn_Ppm_ = form_rdn_Pp_(Ppm_, param_name, pdert1__, pdert2_, fPd=0)
+            Ppm_ = form_Pp_(pdert_, param_name, rdn_, layer_rdn=1, fPd=0)
+            rdn_Ppm_ = form_rdn_Pp_(Ppm_, param_name, pdert1__, pdert2__, fPd=0)
+            # Ppd_ is selective for -Ppms in intra_Ppm_, needs to be revised similar to intra_Pm_
 
     return rdn_Ppm_
 
 
-def search_param_(_param_, param_, P_, param_name):  # variable-range search in mdert_, only if param is core param?
+def search_param_(_param_, param_, P_, param_name):  # variable-range search in mdert only, if param is core param?
 
     mdert_ = []  # line-wide (i, p, d, m, negL, negM, x0, L, P)
     for i, ((_param, _L, _x0), (param, L, x0), P) in enumerate( zip(_param_, param_, P_)):
@@ -161,9 +162,10 @@ def sum_rdn_(layer0, pdert__, fPd):
     pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns, as in pdert__
 
     for Ldert, Idert, Ddert, Mdert in zip(pdert__[0], pdert__[1], pdert__[2], pdert__[3]):  # 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
-        # pdert per _P
-        rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Pms, Pds: if fPd: I, M rdn+=1, else: D rdn+=1
-        # names:    ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))
+        # one pdert per _P
+        rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # initial rdn values in name_pairs:
+        #           ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))
+        # redundancy of params in overlapping Pms and Pds: if fPd: I, M rdn+=1, else: D rdn+=1
 
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
             # assign rdn in each rdn_pair using partial name substitution: https://www.w3schools.com/python/ref_func_eval.asp
@@ -176,6 +178,7 @@ def sum_rdn_(layer0, pdert__, fPd):
                     rdn_pair[1] += 1
                 else: rdn_pair[0] += 1  # weaker pair rdn+1
 
+        # below is not revised, looping is probably wrong
         for i, param_name in enumerate(layer0):  # sum param rdn from all pairs it is in, flatten pair_names, pair_rdns?
             Rdn = 0
             for name_in_pair, rdn in zip(name_pairs, rdn_pairs):
@@ -189,19 +192,13 @@ def sum_rdn_(layer0, pdert__, fPd):
     return pderts_Rdn  # rdn__
 
 
-def form_Pp_(dert_, param_name, rdn_, fPd):
-
+def form_Pp_(dert_, param_name, rdn_, layer_rdn, fPd):  # need to check use of rdn_, each rdn *= layer_rdn?
     # initialization:
     Pp_ = []
     x = 0
     _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
 
     for dert, rdn in zip(dert_, rdn_):  # segment by sign
-        '''
-        if negL mderts: dert pair must have a common P:  
-        if (_dert.m and dert.m) and (P_[_dert.x0 + _dert.negL] is dert._P)
-        else keep scanning multiple _Ps in _P_, Pps may overlap?
-        '''
         if fPd: sign = dert.d > 0
         else:   sign = dert.m > 0  # adjust by ave projected at distance=negL and contrast=negM, if significant:
         # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
@@ -210,7 +207,7 @@ def form_Pp_(dert_, param_name, rdn_, fPd):
             # sign change, initialize P and append it to P_
             Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, negiL=dert.negiL, negL=dert.negL, negM=dert.negM,
                      x0=x, ix0=dert.x0, pdert_=[dert], sublayers=[], fPd=fPd)
-            Pp_.append(Pp)  # updated by accumulation below
+            Pp_.append(Pp)  # updated with accumulation below
         else:
             # accumulate params:
             Pp.L += 1; Pp.iL += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.negiL += dert.negiL
@@ -219,8 +216,7 @@ def form_Pp_(dert_, param_name, rdn_, fPd):
         x += 1
         _sign = sign
 
-    intra_Ppm_(Pp_, param_name, rdn_, fPd)  # evaluates for sub-recursion and forming Ppd_ per Pm
-    # rng_search and der_comp for core param only?
+    intra_Ppm_(Pp_, param_name, rdn_, layer_rdn, fPd)  # evaluates for sub-recursion and forming Ppd_ per Pm
 
     return Pp_
 
@@ -241,7 +237,8 @@ def form_rdn_Pp_(Pp_, param_name, pdert1__, pdert2__, fPd):  # cluster Pps by cr
             # or rPp is sign, Pp_?
             if _sign:  # -rPps are not processed?
                 consolidate(rPp, pdert1__, pdert2__, param_name, fPd)  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
-            rPp_.append(rPp)  # updated by accumulation below
+
+            rPp_.append(rPp)  # updated in accumulation below
         else:
             # accumulate params:
             rPp.L += 1; rPp.iL += Pp.iL; rPp.I += Pp.I; rPp.D += Pp.D; rPp.M += Pp.M; rPp.Rdn += Pp.Rdn; rPp.rval += Pp.rval
@@ -252,7 +249,7 @@ def form_rdn_Pp_(Pp_, param_name, pdert1__, pdert2__, fPd):  # cluster Pps by cr
 
     return rPp_
 
-def consolidate(rPp, pdert1__, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
+def consolidate(rPp, pdert1__, pdert2__, param_name, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
 
     for i, Pp in enumerate(rPp.pdert_):
         # assign cross-level rdn (Pp vs. pdert_), re-evaluate Pp and pdert_:
@@ -265,15 +262,15 @@ def consolidate(rPp, pdert1__, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pde
             rPp.pdert_[i] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
 
         elif ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # P-defining params, else no separation
-            M2 = M1 = 0
-            # param match over step=2 and step=1:
-            for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D): only one pdert2_
+            M2 = M1 = 0  # param match over step=2 and step=1
             if fPd:
+                for pdert2 in pdert2__[2]: M2 += pdert2.m  # match(D, __D),
                 for pdert1 in pdert1__[2]: M1 += pdert1.m  # match(D, _D)
             else:
+                for pdert2 in pdert2__[1]: M2 += pdert2.m  # match(I, __I),
                 for pdert1 in pdert1__[1]: M1 += pdert1.m  # match(I, _I)
 
-            if M2 / abs(M1) > -ave_splice:  # similarity / separation: splice Ps in Pp, also implies weak Pp.pdert_?
+            if M2 / abs(M1) > ave_splice:  # similarity / separation: splice Ps in Pp, also implies weak Pp.pdert_?
                 P = CP()
                 for pdert in Pp.pdert_:
                     P.accum_from(pdert._P, excluded=["x0"])  # different from Pp params
@@ -284,100 +281,76 @@ def consolidate(rPp, pdert1__, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pde
             Pp.pdert_ = []  # pdert_ remove
 
 
-def intra_Ppm_(Pp_, param_name, rdn_, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
+def intra_Ppm_(Pp_, param_name, rdn_, layer_rdn, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
+
+    # need to implement use of rdn_ -> rdn: *= layer_rdn
 
     comb_layers = []  # combine into root P sublayers[1:]
 
-    for Pp, rdn in zip( Pp_, rdn_):  # each sub_layer is nested to depth = sublayers[n]
+    for Pp in Pp_:  # each sub_layer is nested to depth = sublayers[n]
         if Pp.L > 2:
             if Pp.M > 0:  # low-variation span, eval rng_comp
-                if Pp.M > ave_M * rdn and param_name=="I_":  # and if variable cost: Pp.M / Pp.L? reduced by lending to contrast?
-                    # use local filters?
-                    rdn_ = [rdn+1 for rdn in rdn_]
-                    rpdert_ = rng_search(Pp, Pp_, ave)  # variable-range search for terminated-search mderts, param_name=I
-                    sub_Ppm_ = form_Pp_(rpdert_, param_name, rdn_, fPd=False)  # cluster by m sign, eval intra_Pm_
+                if Pp.M > ave_M * layer_rdn:  # and if variable cost: Pp.M / Pp.L? reduced by lending to contrast, localized filters?
+                    layer_rdn += 1
+                    rpdert_ = rng_search(Pp.pdert_)  # for terminated-search pderts only
+                    sub_Ppm_ = form_Pp_(rpdert_, param_name, rdn_, layer_rdn, fPd=False)  # cluster by m sign, eval intra_Pm_
                     Ls = len(sub_Ppm_)
-                    Pp.sublayers += [[(Ls, fPd, sub_Ppm_)]]  # 1st sublayer is single element, double brackets for common format only
+                    Pp.sublayers += [[(Ls, False, fPd, layer_rdn, sub_Ppm_)]]  # 1st sublayer is single element, double brackets for common format
                     if len(sub_Ppm_) > 4:
-                        Pp.sublayers += intra_Ppm_(sub_Ppm_, param_name, rdn_, fPd)  # feedback, add sum params for comp_sublayers?
-                        comb_layers = [ comb_layers + sublayers for comb_layers, sublayers in
-                                        zip_longest(comb_layers, Pp.sublayers, fillvalue=[])
-                                      ]  # splice sublayers across sub_Pps
+                        Pp.sublayers += intra_Ppm_(sub_Ppm_, param_name, rdn_, layer_rdn+1 + 1/Ls, fPd)  # feedback, add param summation for comp_sublayers?
+                        comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                                       zip_longest(comb_layers, Pp.sublayers, fillvalue=[])]
+                                       # splice sublayers across sub_Pps
             else:  # neg Ppm: high-variation span, min neg M is contrast value, borrowed from adjacent +Ppms:
-                if -Pp.M > ave_D * rdn:
-                    # or abs D: likely sign match span?
-                    rdn_ = [rdn+1 for rdn in rdn_]
+                if -Pp.M > ave_D * layer_rdn:  # or abs D: likely sign match span?
+                    layer_rdn += 1
                     mean_M = -Pp.M/Pp.L  # for allocation to each internal Pd?
-                    sub_Ppd_ = form_Pp_(Pp.pdert_, param_name, rdn_, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
+                    sub_Ppd_ = form_Pp_(Pp.pdert_, param_name, rdn_, layer_rdn, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
                     Ls = len(sub_Ppd_)
-                    Pp.sublayers += [[(Ls, True, sub_Ppd_)]]  # 1st layer, Dert=[], fill if Ls > min?
-                    Pp.sublayers += intra_Ppd_(sub_Ppd_, param_name, mean_M, rdn_)  # der_comp eval, rdn_?
-                    comb_layers = [ comb_layers + sublayers for comb_layers, sublayers in
-                                    zip_longest(comb_layers, Pp.sublayers, fillvalue=[])
-                                  ]  # splice sublayers across sub_Pps
+                    Pp.sublayers += [[(Ls, True, True, layer_rdn, sub_Ppd_)]]  # 1st layer, Dert=[], fill if Ls > min?
+                    Pp.sublayers += intra_Ppd_(sub_Ppd_, param_name, mean_M, rdn_, layer_rdn + 1/Ls)  # der_comp eval, rdn_?
+                    comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                                   zip_longest(comb_layers, Pp.sublayers, fillvalue=[])]
+                                   # splice sublayers across sub_Pps
     return comb_layers
 
 
-def intra_Ppd_(Pd_, param_name, mean_M, rdn_):  # evaluate for sub-recursion in line P_, packing results in sub_P_
+def intra_Ppd_(Pd_, param_name, mean_M, rdn_, layer_rdn):  # evaluate for sub-recursion in line P_, packing results in sub_P_
 
     comb_layers = []
-    for P, rdn in zip( Pd_, rdn_):  # each sub in sub_ is nested to depth = sub_[n]
+    for P in Pd_:  # each sub in sub_ is nested to depth = sub_[n]
 
-        if min(abs(P.D), abs(P.D) * mean_M) > ave_D * rdn and P.L > 3:  # abs(D) * mean_M: allocated mean_M?
-            rdn_ = [rdn + 1 for rdn in rdn_]
-            ddert_ = []
-            for _pdert, pdert in zip( P.pdert_[:-1], P.pdert_[1:]):
-                _param = _pdert.d; param = pdert.d
-                dert = comp_param(_param, param, param_name[0], ave)  # cross-comp of ds
-                ddert_ += [Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=P.x0, L=P.L, _P=[], negiL=P.negiL, negL=P.negL, negM=P.negM)]
-            # cluster Pd derts by md sign:
-            sub_Pm_ = form_Pp_(ddert_, param_name, rdn_, fPd=True)
+        if min(abs(P.D), abs(P.D) * mean_M) > ave_D * layer_rdn and P.L > 3:  # abs(D) * rel_adj_M: allocated adj_M
+            # cross-comp of ds:
+            ddert_ = deriv_comp(P.dert_)  # i is d
+            sub_Pm_ = form_P_(ddert_, rdn_, layer_rdn+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
             Ls = len(sub_Pm_)
-            P.sublayers += [[(Ls, True, True, sub_Pm_ )]]  # 1st layer: Ls, fid, fPd, rdn, rng, sub_P_
+            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_:
+            P.sublayers += [[(Ls, True, True, layer_rdn, sub_Pm_ )]]
+
             if len(sub_Pm_) > 3:
-                P.sublayers += intra_Ppm_(sub_Pm_, param_name, rdn_, fPd=True)
-                comb_layers = [ comb_layers + sublayers for comb_layers, sublayers in
-                                zip_longest(comb_layers, P.sublayers, fillvalue=[])
-                              ]  # splice sublayers across sub_Ps
+                P.sublayers += intra_Pm_(sub_Pm_, rdn_, layer_rdn+1 + 1/Ls, fPd=True)
+                # splice sublayers across sub_Ps:
+                comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
+                               zip_longest(comb_layers, P.sublayers, fillvalue=[])]
+    ''' 
+    adj_M is not affected by primary range_comp per Pm?
+    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
+    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
+    '''
     return comb_layers
-
-def rng_search(Pp, Pp_, ave):  # ~ search_param_ with local ave and for miss-terminated pderts only
-
-    mdert_ = []  # line-wide (i, p, d, m, negL, negM, x0, L, P)
-    _param_ = [(pdert.m,pdert.L,pdert.x0) for pdert in Pp.pdert_[:-1]]
-    param_ = [(pdert.m,pdert.L,pdert.x0) for pdert in Pp.pdert_[1:]]
-
-    for i,  ((_param, _L, _x0), (param, L, x0), P) in enumerate(zip(_param_, param_, Pp_)):
-        # add: select miss-terminated pderts?
-        dert = comp_param(_param, param, "I_", ave)  # param is compared to prior-P _param
-        negiL = negL = negM = 0  # comp next only
-        comb_M = dert.m
-        j = i
-        while comb_M > 0 and j + 1 < len(param_):
-            j += 1
-            ext_param, ext_L, ext_x0 = param_[j]  # extend search beyond next param
-            dert = comp_param(_param, ext_param, "I_", ave)
-            if dert.m > 0:
-                break  # 1st matching param takes over connectivity search from _param, in the next loop
-            else:
-                comb_M = dert.m + negM - ave_M  # adjust ave_M for relative continuity and similarity?
-                negM += dert.m
-                negiL += ext_L
-                negL += 1
-        # after extended search, if any:
-        mdert_.append(Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, _P=P, negiL=negiL, negL=negL, negM=negM))
-
-    return mdert_
 
 
 def intra_Ppm_old(Pp_, param_name, fPd):
     '''
     Draft
     form_Ppd_ in neg Ppm: ~ line 168 in line_patterns:
+
     else:  # neg Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
         if min(-P.M, adj_M) > ave_D * rdn:  # cancelled M+ val, M = min | ~v_SAD
             rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
             sub_Pd_ = form_P_(P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
+
     Each Pp is evaluated for sub-recursion: incremental range and derivation, as in line_patterns but via adjusted ave_M,
     - x param div_comp: if internal compression: rm * D * L, * external compression: PP.L * L-proportional coef?
     - form_par_P if param Match | x_param Contrast: diff (D_param, ave_D_alt_params: co-derived co-vary? neg val per P, else delete?
@@ -482,7 +455,6 @@ for (I, L, x0),(D,_,_) in zip(param_[1:], layer0["D_"][1:]): # I in (I,L,x0) is 
 rL_ = [_L[0]/L[0] for _L, L in zip(layer0["L_"][:-1],layer0["L_"][1:])] # _L = L_[:-1], L = L_[1:], div_comp L, no search?
 mL_ = [int(rL) * min(_L[0],L[0]) for _L, L, rL in zip(layer0["L_"][:-1],layer0["L_"][1:], rL_)] # definition of div_match
 '''
-
 def form_PP_(params_derPp____, fPd):  # Draft:
     '''
     unpack 4-layer derPp____: _names ( _Pp_ ( names ( Pp_ ))),
