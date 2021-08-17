@@ -15,23 +15,22 @@ class Cpdert(ClusterStructure):
     p = int  # accumulated in rng
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
-    negiL = int
-    negL = int  # in mdert only
     negM = int  # in mdert only
-    x0 = int  # pixel-level
-    L = int  # pixel-level
-    _P = object  # input P reference
+    negL = int  # in mdert only
+    negiL = int
+    # x0 = int  # _P index in P_?  store P_ instead!
+    # _P = object  # input P reference
 
 class CPp(CP):
     pdert_ = list
+    P_ = list  # instead of making them pdert param
     Rdn = int  # cross-param rdn accumulated from pderts
     rval = int  # Pp value (M | abs D) adjusted for cross-param Rdn
     iL = int  # length of Pp in pixels
-    ix0 = int  # x starting pixel coordinate
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
-    negiL = int
-    negL = int  # in mdert only
     negM = int  # in mdert only
+    negL = int  # in mdert only
+    negiL = int
     sublayers = list
 
 class CderPp(ClusterStructure):
@@ -40,7 +39,7 @@ class CderPp(ClusterStructure):
     rrdn = int
     negM = int
     negL = int
-    adj_mP = int
+    adj_mP = int  # not needed?
     _Pp = object
     Pp = object
     layer1 = dict  # dert per compared param
@@ -78,14 +77,16 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
                 L=P.L; _L=_P.L
                 rL = L /_L  # div_comp L: higher-scale, not accumulated: no search
                 mL = int(max(rL, 1/rL)) * min(L,_L)  # match in comp by division as additive compression, not directional
-                Ldert_.append(Cpdert(i=L, p=L+_L, d=rL, m=mL, x0=P.x0, L=L, P=P))
+                Ldert_.append(Cdert(i=L, p=L+_L, d=rL, m=mL))
                 rL_.append(rL)
             _P = P
             layer0['I_'].append([P.I, P.L, P.x0])  # I tuple
             layer0['D_'].append([P.D, P.L, P.x0])  # D tuple
             layer0['M_'].append([P.M, P.L, P.x0])  # M tuple
 
-        pdert__ = [Ldert_]; pdert1__ = [Ldert_]  # param pdert_s, step=1 for P splicing, no search for L
+        dert1__ = [Ldert_]  # no search for L, step=1 only, contains derts vs. pderts
+        Pdert__ = [Ldert_]  # Pp elements: pderts if fcore, else derts
+        frng = 0  # dert = comp_param, else pdert_ = search_param_
 
         for param_name in ["I_", "D_", "M_"]:
             param_ = layer0[param_name]  # param values
@@ -93,14 +94,16 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
             _par_ = [[ _par*rL, L, x0] for [_par,L,x0], rL in zip(param_[:-1], rL_) ]  # normalize by rL
 
             if ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # dert-level P-defining params
+
                 if not fPd:
+                    frng = 1  # pdert_ = search_param_
                     # project I by D, or D by Dd in deriv_comp sub_Ps:
                     _par_ = [[_par - (D / 2), L, x0] for [_par, L, x0], [D, _, _] in zip(_par_, layer0["D_"][:-1])]
                     # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
                     par_ = [[ par + (D / 2), L, x0] for [ par, L, x0], [D, _, _] in zip(par_, layer0["D_"][1:])]
                     # I in (I,L,x0) is backward projected by D in (D,L,x0)
-
-                pdert__ += [ search_param_(_par_, par_, P_[:-1], param_name) ]
+                    pdert_ = [ search_param_(_par_, par_, P_[:-1]) ]
+                    # only one param
                 _rL_=[]
                 for P in P_:  # form rLs to normalize cross-comp of same-M-sign Ps in pdert2_
                     if "_P" in locals():  # not the 1st P
@@ -109,34 +112,41 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
                         __P = _P
                     _P = P
                 __par_ = [[__par * _rL, L, x0] for [__par, L, x0], _rL in zip(param_[:-2], _rL_)]  # normalize by _rL
-                # step=2 comp for P splice, only one param, (I and not fPd) or (D and fPd), no pdert2__:
-                pdert2_ = [comp_param(__par, par, param_name[0], ave) for __par, par in zip(__par_, par_[1:])]
 
-            # no else: pdert__+= [search_param_(_par_, par_, P_[:-1], param_name)] is for core param, else step=1 comp only:
-            pdert1__ += [[ comp_param(_par, par, param_name[0], ave) for _par, par in zip(_par_, par_) ]]  # append pdert1_ per param_
+                # step=2 comp for P splice, one param: (I and not fPd) or (D and fPd):
+                dert2_ = [comp_param(__par, par, param_name[0], ave) for __par, par in zip(__par_, par_[1:])]
+                Pdert__.append(dert2_)  # else step=1 comp only:
 
-        rdn__ = sum_rdn_(layer0, pdert__, fPd=1)
-        for param_name, pdert_, rdn_ in zip(layer0, pdert__, rdn__):
+            dert1_ = [ comp_param(_par, par, param_name[0], ave) for _par, par in zip(_par_, par_) ]  # append pdert1_ per param_
+            # add conversion to Cdert
+            dert1__ += [dert1_]
+            if not frng: Pdert__ += [dert1_]  # dert_ = comp_param_
 
-            Ppm_ = form_Pp_(pdert_, param_name, rdn_, fPd=0)  # Ppd_ formed in -Ppms only, in intra_Ppm_
-            rdn_Ppm_ = form_rdn_Pp_(Ppm_, param_name, pdert1__, pdert2_, fPd=0)
+        rdn__ = sum_rdn_(layer0, Pdert__, fPd=1)
+        for param_name, Pdert_, rdn_ in zip(layer0, Pdert__, rdn__):
+
+            if Pdert_[0] is instance Cpdert:
+                Ppm_ = form_Pp_rng(Pdert_, rdn_, P_)  # P_ is stored per Pp,
+            else:
+                Ppm_ = form_Pp_(Pdert_, param_name, rdn_, P_, fPd=0)  # Ppd_formed in -Ppms only, in intra_Ppm_
+            rdn_Ppm_ = form_rdn_Pp_(Ppm_, param_name, dert1__, dert2_, fPd=0)
 
     return rdn_Ppm_
 
 
-def search_param_(_param_, param_, P_, param_name):  # variable-range search in mdert_, only if param is core param?
+def search_param_(_param_, param_, P_):  # variable-range search in mdert_, only if param is core param?
 
     mdert_ = []  # line-wide (i, p, d, m, negL, negM, x0, L, P)
     for i, ((_param, _L, _x0), (param, L, x0), P) in enumerate( zip(_param_, param_, P_)):
 
-        dert = comp_param(_param, param, param_name[0], ave)  # param is compared to prior-P _param
+        dert = comp_param(_param, param, "I_", ave)  # param is compared to prior-P _param
         negiL = negL = negM = 0  # comp next only
         comb_M = dert.m
         j = i
         while comb_M > 0 and j + 1 < len(param_):
             j += 1
             ext_param, ext_L, ext_x0 = param_[j]  # extend search beyond next param
-            dert = comp_param(_param, ext_param, param_name[0], ave)
+            dert = comp_param(_param, ext_param, "I_", ave)
             if dert.m > 0:
                 break  # 1st matching param takes over connectivity search from _param, in the next loop
             else:
@@ -145,12 +155,12 @@ def search_param_(_param_, param_, P_, param_name):  # variable-range search in 
                 negiL += ext_L
                 negL += 1
         # after extended search, if any:
-        mdert_.append(Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, x0=x0, L=L, _P=P, negiL=negiL, negL=negL, negM=negM))
+        mdert_.append( Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, negiL=negiL, negL=negL, negM=negM))
 
     return mdert_
 
 
-def sum_rdn_(layer0, pdert__, fPd):
+def sum_rdn_(layer0, Pdert__, fPd):
     '''
     access same-index pderts of all P params, assign redundancy to lesser-magnitude m|d in param pair.
     if other-param same-P_-index pdert is missing, rdn doesn't change.
@@ -160,7 +170,7 @@ def sum_rdn_(layer0, pdert__, fPd):
     name_pairs = (('I', 'L'), ('I', 'D'), ('I', 'M'), ('L', alt), ('D', 'M'))  # pairs of params redundant to each other
     pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns, as in pdert__
 
-    for Ldert, Idert, Ddert, Mdert in zip(pdert__[0], pdert__[1], pdert__[2], pdert__[3]):  # 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
+    for Ldert, Idert, Ddert, Mdert in zip(Pdert__[0], Pdert__[1], Pdert__[2], Pdert__[3]):  # 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
         # pdert per _P
         rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Pms, Pds: if fPd: I, M rdn+=1, else: D rdn+=1
         # names:    ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))
@@ -189,19 +199,14 @@ def sum_rdn_(layer0, pdert__, fPd):
     return pderts_Rdn  # rdn__
 
 
-def form_Pp_(dert_, param_name, rdn_, fPd):
+def form_Pp_(dert_, param_name, rdn_, P_, fPd):
 
     # initialization:
     Pp_ = []
     x = 0
     _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
 
-    for dert, rdn in zip(dert_, rdn_):  # segment by sign
-        '''
-        if negL mderts: dert pair must have a common P:  
-        if (_dert.m and dert.m) and (P_[_dert.x0 + _dert.negL] is dert._P)
-        else keep scanning multiple _Ps in _P_, Pps may overlap?
-        '''
+    for dert, rdn, P in zip(dert_, rdn_, P_):  # segment by sign
         if fPd: sign = dert.d > 0
         else:   sign = dert.m > 0  # adjust by ave projected at distance=negL and contrast=negM, if significant:
         # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
@@ -209,13 +214,14 @@ def form_Pp_(dert_, param_name, rdn_, fPd):
         if sign != _sign:
             # sign change, initialize P and append it to P_
             Pp = CPp(L=1, iL=dert.L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, negiL=dert.negiL, negL=dert.negL, negM=dert.negM,
-                     x0=x, ix0=dert.x0, pdert_=[dert], sublayers=[], fPd=fPd)
+                     x0=x, ix0=dert.x0, pdert_=[dert], P_=[], sublayers=[], fPd=fPd)
             Pp_.append(Pp)  # updated by accumulation below
         else:
             # accumulate params:
             Pp.L += 1; Pp.iL += dert.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.negiL += dert.negiL
             Pp.negL += dert.negL; Pp.negM += dert.negM
             Pp.pdert_ += [dert]
+            Pp.P_  += [dert]
         x += 1
         _sign = sign
 
@@ -223,6 +229,13 @@ def form_Pp_(dert_, param_name, rdn_, fPd):
     # rng_search and der_comp for core param only?
 
     return Pp_
+
+def form_Pp_rng(dert_, rdn_, P_):
+    '''
+    if negL mderts: dert pair must have a common P:
+    if (_dert.m and dert.m) and (P_[_dert.x0 + _dert.negL] is dert._P)
+    else keep scanning multiple _Ps in _P_, Pps may overlap?
+    '''
 
 
 def form_rdn_Pp_(Pp_, param_name, pdert1__, pdert2__, fPd):  # cluster Pps by cross-param redundant value sign, re-evaluate them for cross-level rdn
