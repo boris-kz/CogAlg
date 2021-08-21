@@ -1,11 +1,11 @@
 '''
-  line_patterns is a principal version of 1st-level 1D algorithm
+  Alex' version of line_patterns to log output as multi-index df
   Operations:
 
 - Cross-compare consecutive pixels within each row of image, forming dert_: queue of derts, each a tuple of derivatives per pixel.
   dert_ is then segmented into patterns Pms and Pds: contiguous sequences of pixels forming same-sign match or difference.
-  Initial match is inverse deviation of variation: m = ave_|d| - |d|,
-  rather than a minimum for directly defined match: albedo of an object doesn't correlate with its predictive value.
+  Initial match is inverse deviation of variation: m = ave_|d| - |d|, rather than minimum for directly defined match:
+  albedo or intensity of reflected light doesn't correlate with predictive value of the object that reflects it.
   -
 - Match patterns Pms are spans of inputs forming same-sign match. Positive Pms contain high-match pixels, which are likely
   to match more distant pixels. Thus, positive Pms are evaluated for cross-comp of pixels over incremented range.
@@ -21,14 +21,14 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
+
+from numpy import int16, int32
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import cv2
 # import argparse
 import pickle
 from time import time
-# import numpy as np
 from matplotlib import pyplot as plt
-import csv
 from itertools import zip_longest
 from frame_2D_alg.class_cluster import ClusterStructure, NoneType, comp_param
 
@@ -81,6 +81,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     else:
     '''
     for y in range(init_y + 1, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
+        if logging:
+            global log_data_2D, log_data_3D # to share between functions
+            log_data_2D = np.empty((0, 4), dtype=int32) # empty 2D array for filling by layer0 output variables
+
         # initialization:
         dert_ = []  # line-wide i_, p_, d_, m__
         pixel_ = frame_of_pixels_[y, :]
@@ -96,6 +100,30 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         Pm_ = form_P_(dert_, rdn=1, rng=1, fPd=False)
         # add line of patterns to frame of patterns:
         frame_of_patterns_.append(Pm_)  # skip if cross_comp_spliced
+
+        if logging:
+            if len(log_data_2D) < max_P_len:  # number of Ps per row, align arrays before stacking:
+                no_data = np.zeros((max_P_len - len(log_data_2D), 4), dtype=int32)
+                log_data_2D = np.append(log_data_2D, no_data, axis=0)
+            log_data_3D = np.dstack((log_data_3D, log_data_2D))  # form 3D array of log data by stacking 2D arrays
+
+    if logging:
+        log_data_3D = log_data_3D.T # rotates the data for better readability
+        data_dim1, data_dim2, data_dim3 = log_data_3D.shape # define the dimensions of the array
+        # add first line (header) to the log file
+        with open("layer0_log.csv", "w") as csvFile:
+            write = csv.writer(csvFile, delimiter=",")
+            csv_header = ("row", "parameter", "values...")
+            write.writerow(csv_header)
+
+        # define the formatting of the log file
+        parameter_names = ["L=", "I=", "D=", "M=", "x0=", "depth="]  # add P.x0 and depth of sublayers: nesting
+        row_numbers = list(range(data_dim1))  # P_len for every image row
+        log_data_flat = log_data_3D.reshape(data_dim1 * data_dim2, data_dim3) # transform 3D array to 2D table
+        df = pd.DataFrame(  # write log data to dataframe and save them as csv file with multiIndex tool
+            data=log_data_flat,
+            index=pd.MultiIndex.from_product([row_numbers, parameter_names]))
+        df.to_csv('layer0_log.csv', mode='a', header=True, index=True)
 
     return frame_of_patterns_  # frame of patterns is an intput to level 2
 
@@ -121,6 +149,17 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
         _sign = sign
 
     intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
+    '''    
+    replace by comp_param(P.M | P.D) in line_PPs:
+    if len(P_) > 4: P_ = splice_P_(P_, fPd=0)  # merge aI- | aD- similar weakly separated Ps
+    '''
+    if logging: # fill the array by layer0 output parameters
+        global log_data_2D # need to reset for every new image row data
+        for item in range(len(P_)): # do every time when new batch of data appeared
+            log_data_1D = np.array(([P_[item].L], [P_[item].I], [P_[item].D], [P_[item].M], [P_[item].x0], len([P_[item].sublayers]) )).T  # need 2D structure
+            log_data_2D = np.append(log_data_2D, log_data_1D, axis=0) # logging data for every image row
+
+    # # print(log_data_2D.shape)
     return P_
 
 ''' 
@@ -160,7 +199,7 @@ def intra_Pm_(P_, rdn, rng, fPd):  # evaluate for sub-recursion in line Pm_, pac
 
                     rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
                     sub_Pd_ = form_P_(P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
-                    P.sublayers += [[(True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if long?
+                    P.sublayers += [[(True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if Ls > min?
 
                     P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1, rng)  # der_comp eval per nPm
                     # splice sublayers across sub_Ps, for return as root sublayers[1:]:
@@ -178,7 +217,7 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
             # cross-comp of ds:
             ddert_ = deriv_comp(P.dert_)  # i is d
             sub_Pm_ = form_P_(ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
-            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_:
+            # 1st layer: fPd, fid, rdn, rng, sub_P_:
             P.sublayers += [[(True, True, rdn, rng, sub_Pm_ )]]
             if len(sub_Pm_) > 3:
                 P.sublayers += intra_Pm_(sub_Pm_, rdn+1, rng + 1, fPd=True)
@@ -204,6 +243,7 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     adj_M_ = [ (abs(prev_M) + abs(next_M)) / 2  # mean adjacent Ms
                for prev_M, next_M in zip(M_[:-2], M_[2:])  # exclude first and last Ms
              ]
+    # adj_M_ = [ M_[1]] + adj_M_ + [M_[-2] ]
     ''' expanded:
     pri_M = Pm_[0].M  # deriv_comp value is borrowed from adjacent opposite-sign Ms
     M = Pm_[1].M
@@ -249,7 +289,7 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
 
     return ddert_
 
-def splice_P_(P_, fPd):  # currently not used, replaced by compact() in line_PPs
+def splice_P_(P_, fPd):
     '''
     Initial P termination is by pixel-level sign change, but resulting separation may be insignificant on a pattern level.
     That is, separating opposite-sign pattern is weak relative to separated same-sign patterns.
@@ -331,23 +371,33 @@ if __name__ == "__main__":
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
-    logging = 0  # log dataframes
+    logging = 1  # log dataframes
     fpickle = 2  # 0: read from the dump; 1: pickle dump; 2: no pickling
     render = 0
     fline_PPs = 0
     start_time = time()
 
+    if logging:
+        import csv
+        import numpy as np
+        import pandas as pd
+
+        # initialize the 3D stack to store the nested structure of layer0 parameters
+        max_P_len = 375 # defined empirically
+        log_data_3D = np.zeros((max_P_len, 4), dtype=int32) # empty array to store all log data
+
     if fpickle == 0:
         # Read frame_of_patterns from saved file instead
         with open("frame_of_patterns_.pkl", 'rb') as file:
             frame_of_patterns_ = pickle.load(file)
+
     else:
-        # Run functions
+        # Run calculations
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         assert image is not None, "No image in the path"
         # Main
         frame_of_patterns_ = cross_comp(image)  # returns Pm__
-        if fpickle == 1: # save the dump of the whole data to file
+        if fpickle == 1: # save the dump of the whole data_1D to file
             with open("frame_of_patterns_.pkl", 'wb') as file:
                 pickle.dump(frame_of_patterns_, file)
 
