@@ -21,14 +21,14 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
+
+from numpy import int16, int32
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import cv2
 # import argparse
 import pickle
 from time import time
-# import numpy as np
 from matplotlib import pyplot as plt
-import csv
 from itertools import zip_longest
 from frame_2D_alg.class_cluster import ClusterStructure, NoneType, comp_param
 
@@ -53,7 +53,7 @@ verbose = False
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
 ave = 15  # |difference| between pixels that coincides with average value of Pm
 ave_min = 2  # for m defined as min |d|: smaller?
-ave_M = 50  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
+ave_M = 20  # min M for initial incremental-range comparison(t_), higher cost than der_comp?
 ave_D = 5  # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdm = .5  # obsolete: average dm / m, to project bi_m = m * 1.5
@@ -75,12 +75,16 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     '''
     if cross_comp_spliced: process all image rows as a single line, vertically consecutive and preserving horizontal direction:
     pixel_=[]; dert_=[]  
-    for y in range(init_y + 1, Y):  
+    for y in range(init_y, Y):  
         pixel_.append([ frame_of_pixels_[y, :]])  # splice all rows into pixel_
     _i = pixel_[0]
     else:
     '''
-    for y in range(init_y + 1, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
+    for y in range(init_y, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
+        if logging:
+            global logs_2D, logs_3D  # to share between functions
+            logs_2D = np.empty((0, 6), dtype=int32) # empty 2D array for filling by layer0 output variables
+
         # initialization:
         dert_ = []  # line-wide i_, p_, d_, m__
         pixel_ = frame_of_pixels_[y, :]
@@ -97,7 +101,30 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         # add line of patterns to frame of patterns:
         frame_of_patterns_.append(Pm_)  # skip if cross_comp_spliced
 
-    return frame_of_patterns_  # frame of patterns is an intput to level 2
+        if logging:
+            if len(logs_2D) < max_P_len:  # number of Ps per row, align arrays before stacking:
+                no_data = np.zeros((max_P_len - len(logs_2D), 6), dtype=int32)
+                logs_2D = np.append(logs_2D, no_data, axis=0)
+            logs_3D = np.dstack((logs_3D, logs_2D))  # form 3D array of logs by stacking 2D arrays
+
+    if logging:
+        logs_3D = logs_3D.T  # rotate for readability
+        data_dim1, data_dim2, data_dim3 = logs_3D.shape # define the dimensions of the array
+        # add headers to log file
+        with open("layer0_log.csv", "w") as csvFile:
+            write = csv.writer(csvFile, delimiter=",")
+            csv_header = ("row", "parameter", "values...")
+            write.writerow(csv_header)
+        # define the formatting
+        parameter_names = ["L=", "I=", "D=", "M=", "x0=", "depth="]  # depth: nesting in sublayers
+        row_numbers = list(range(data_dim1))  # P_len for every image row
+        logs_flat = logs_3D.reshape(data_dim1 * data_dim2, data_dim3) # transform 3D array to 2D table
+        df = pd.DataFrame(  # write log to dataframe and save as csv file
+            data=logs_flat,
+            index=pd.MultiIndex.from_product([row_numbers, parameter_names]))
+        df.to_csv('layer0_log.csv', mode='a', header=True, index=True)
+
+    return frame_of_patterns_  # frame of patterns is an input to level 2
 
 
 def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
@@ -121,6 +148,14 @@ def form_P_(dert_, rdn, rng, fPd):  # accumulation and termination
         _sign = sign
 
     intra_Pm_(P_, rdn, rng, not fPd)  # evaluates range_comp | deriv_comp sub-recursion per Pm
+
+    if logging:  # fill the array with layer0 params
+        global logs_2D  # reset for each row
+        for i in range(len(P_)):  # for each P
+            logs_1D = np.array(([P_[i].L], [P_[i].I], [P_[i].D], [P_[i].M], [P_[i].x0], [len(P_[i].sublayers)] )).T  # 2D structure
+            logs_2D = np.append(logs_2D, logs_1D, axis=0)  # log for every image row
+
+    # print(logs_2D.shape)
     return P_
 
 ''' 
@@ -132,35 +167,32 @@ def intra_Pm_(P_, rdn, rng, fPd):  # evaluate for sub-recursion in line Pm_, pac
     comb_layers = []  # combine into root P sublayers[1:]
 
     for P, adj_M in zip(P_, adj_M_):  # each sub_layer is nested to depth = sublayers[n]
-        if P.L > 2 ** (rng+1):  # rng+1 because rng is initialized at 0, as all params
+        if P.L > 2 * (rng+1):  # vs. **? rng+1 because rng is initialized at 0, as all params
 
             if P.M > 0:  # low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8...
-                if P.M - adj_M > ave_M * rdn:  # reduced by lending to contrast: all comps form params for hLe comp?
+                if P.M > ave_M * rdn:  # no -adj_M: reduced by lending to contrast, should be reflected in ave?
                     '''
                     if localized filters:
-                    P_ave = (P.M - adj_M) / P.L  
-                    loc_ave = (ave - P_ave) / 2  # ave is reduced because it's for inverse deviation, possibly negative?
-                    loc_ave_min = (ave_min + P_ave) / 2
+                    loc_ave = (ave + (P.M - adj_M) / P.L) / 2  # mean ave + P_ave, possibly negative?
+                    loc_ave_min = (ave_min + (P.M - adj_M) / P.L) / 2  # if P.M is min?
                     rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
                     '''
                     rdert_ = range_comp(P.dert_)  # rng+ comp, skip predictable next dert, localized ave?
-                    rdn += 1; rng += 1
+                    rng += 1; rdn += 1  # redundancy to higher levels, or +=1 for the weaker layer? 
                     sub_Pm_ = form_P_(rdert_, rdn, rng, fPd=False)  # cluster by m sign, eval intra_Pm_
-                    P.sublayers += [[(False, fPd, rdn, rng, sub_Pm_)]]  # add Dert=[] if Ls > min?
-                    # 1st sublayer is single-element, packed in double brackets only to allow nesting for deeper sublayers
+                    # 1st sublayer is one element, double brackets for consistency:
+                    P.sublayers += [[ (False, fPd, rdn, rng, sub_Pm_, []) ]]  # sub_Ppm__=[], + Dert=[]?
                     if len(sub_Pm_) > 4:
-                        P.sublayers += intra_Pm_(sub_Pm_, rdn+1, rng+1, fPd)  # feedback
-                        # add param summation within sublayer, for comp_sublayers?
-                        # splice sublayers across sub_Ps:
+                        P.sublayers += intra_Pm_(sub_Pm_, rdn+1, rng+1, fPd)  # feedback, add sublayer param summing for comp_sublayers?
                         comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
-                                       zip_longest(comb_layers, P.sublayers, fillvalue=[])]
+                                       zip_longest(comb_layers, P.sublayers, fillvalue=[])]  # splice sublayers across sub_Ps
 
             else:  # neg Pm: high-variation span, min neg M is contrast value, borrowed from adjacent +Pms:
                 if min(-P.M, adj_M) > ave_D * rdn:  # cancelled M+ val, M = min | ~v_SAD
 
                     rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
                     sub_Pd_ = form_P_(P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
-                    P.sublayers += [[(True, True, rdn, rng, sub_Pd_)]]  # 1st layer, Dert=[], fill if long?
+                    P.sublayers += [[(True, True, rdn, rng, sub_Pd_, []) ]]  # 1st sublayer, sub_Ppm__=[], + Dert=[]?
 
                     P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1, rng)  # der_comp eval per nPm
                     # splice sublayers across sub_Ps, for return as root sublayers[1:]:
@@ -178,8 +210,7 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
             # cross-comp of ds:
             ddert_ = deriv_comp(P.dert_)  # i is d
             sub_Pm_ = form_P_(ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
-            # 1st layer: Ls, fPd, fid, rdn, rng, sub_P_:
-            P.sublayers += [[(True, True, rdn, rng, sub_Pm_ )]]
+            P.sublayers += [[(True, True, rdn, rng, sub_Pm_, []) ]]  # 1st sublayer: fPd, fid, rdn, rng, sub_P_, sub_Ppm__=[], + Dert=[]?
             if len(sub_Pm_) > 3:
                 P.sublayers += intra_Pm_(sub_Pm_, rdn+1, rng + 1, fPd=True)
                 # splice sublayers across sub_Ps:
@@ -331,23 +362,33 @@ if __name__ == "__main__":
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
-    logging = 0  # log dataframes
+    logging = 1  # log dataframes
     fpickle = 2  # 0: read from the dump; 1: pickle dump; 2: no pickling
     render = 0
     fline_PPs = 0
     start_time = time()
 
+    if logging:
+        import csv
+        import numpy as np
+        import pandas as pd
+
+        # initialize the 3D stack to store the nested structure of layer0 parameters
+        max_P_len = 375 # defined empirically
+        logs_3D = np.zeros((max_P_len, 6), dtype=int32) # empty array to store all log data
+
     if fpickle == 0:
         # Read frame_of_patterns from saved file instead
         with open("frame_of_patterns_.pkl", 'rb') as file:
             frame_of_patterns_ = pickle.load(file)
+
     else:
-        # Run functions
+        # Run calculations
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         assert image is not None, "No image in the path"
         # Main
         frame_of_patterns_ = cross_comp(image)  # returns Pm__
-        if fpickle == 1: # save the dump of the whole data to file
+        if fpickle == 1: # save the dump of the whole data_1D to file
             with open("frame_of_patterns_.pkl", 'wb') as file:
                 pickle.dump(frame_of_patterns_, file)
 
