@@ -105,7 +105,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             if len(logs_2D) < max_P_len:  # number of Ps per row, align arrays before stacking:
                 no_data = np.zeros((max_P_len - len(logs_2D), 6), dtype=int32)
                 logs_2D = np.append(logs_2D, no_data, axis=0)
-            logs_3D = np.dstack((logs_3D, logs_2D))  # form 3D array of logs by stacking 2D arrays
+            if logs_3D is not None:
+                logs_3D = np.dstack((logs_3D, logs_2D))  # form 3D array of logs by stacking 2D arrays
+            else:
+                logs_3D = logs_2D # form 3D array of logs by stacking 2D arrays
 
     if logging:
         logs_3D = logs_3D.T  # rotate for readability
@@ -180,8 +183,8 @@ def intra_Pm_(P_, rdn, rng, fPd):  # evaluate for sub-recursion in line Pm_, pac
                     rdert_ = range_comp(P.dert_)  # rng+ comp, skip predictable next dert, localized ave?
                     rng += 1; rdn += 1  # redundancy to higher levels, or +=1 for the weaker layer? 
                     sub_Pm_ = form_P_(rdert_, rdn, rng, fPd=False)  # cluster by m sign, eval intra_Pm_
-                    # 1st sublayer is one element, double brackets for consistency:
-                    P.sublayers += [[ (False, fPd, rdn, rng, sub_Pm_, []) ]]  # sub_Ppm__=[], + Dert=[]?
+                    # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]:
+                    P.sublayers += [(False, fPd, rdn, rng, sub_Pm_, [])]
                     if len(sub_Pm_) > 4:
                         P.sublayers += intra_Pm_(sub_Pm_, rdn+1, rng+1, fPd)  # feedback, add sublayer param summing for comp_sublayers?
                         comb_layers = [comb_layers + sublayers for comb_layers, sublayers in
@@ -192,7 +195,7 @@ def intra_Pm_(P_, rdn, rng, fPd):  # evaluate for sub-recursion in line Pm_, pac
 
                     rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds
                     sub_Pd_ = form_P_(P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
-                    P.sublayers += [[(True, True, rdn, rng, sub_Pd_, []) ]]  # 1st sublayer, sub_Ppm__=[], + Dert=[]?
+                    P.sublayers += [(True, True, rdn, rng, sub_Pd_, [])]  # 1st sublayer, sub_Ppm__=[], + Dert=[]?
 
                     P.sublayers += intra_Pd_(sub_Pd_, rel_adj_M, rdn+1, rng)  # der_comp eval per nPm
                     # splice sublayers across sub_Ps, for return as root sublayers[1:]:
@@ -210,7 +213,7 @@ def intra_Pd_(Pd_, rel_adj_M, rdn, rng):  # evaluate for sub-recursion in line P
             # cross-comp of ds:
             ddert_ = deriv_comp(P.dert_)  # i is d
             sub_Pm_ = form_P_(ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
-            P.sublayers += [[(True, True, rdn, rng, sub_Pm_, []) ]]  # 1st sublayer: fPd, fid, rdn, rng, sub_P_, sub_Ppm__=[], + Dert=[]?
+            P.sublayers += [(True, True, rdn, rng, sub_Pm_, [])]  # 1st sublayer: fPd, fid, rdn, rng, sub_P_, sub_Ppm__=[], + Dert=[]?
             if len(sub_Pm_) > 3:
                 P.sublayers += intra_Pm_(sub_Pm_, rdn+1, rng + 1, fPd=True)
                 # splice sublayers across sub_Ps:
@@ -372,18 +375,15 @@ if __name__ == "__main__":
         import csv
         import numpy as np
         import pandas as pd
-
         # initialize the 3D stack to store the nested structure of layer0 parameters
-        max_P_len = 375 # defined empirically
-        logs_3D = np.zeros((max_P_len, 6), dtype=int32) # empty array to store all log data
-
+        max_P_len = 380 # defined empirically
+        logs_3D = None  # empty array to store all log data
     if fpickle == 0:
         # Read frame_of_patterns from saved file instead
         with open("frame_of_patterns_.pkl", 'rb') as file:
             frame_of_patterns_ = pickle.load(file)
-
     else:
-        # Run calculations
+        # Run functions
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         assert image is not None, "No image in the path"
         # Main
@@ -398,11 +398,11 @@ if __name__ == "__main__":
 
     if fline_PPs:  # debug line_PPs_draft
         from line_PPs_draft import *
-        frame_PP_ = []
+        frame_PP__ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            PP_ = search(P_, fPd=0)
-            frame_PP_.append(PP_)
+            rdn_Pp__ = search(P_, fPd=0)
+            frame_PP__.append(rdn_Pp__)
         # draw_PP_(image, frame_PP_)  # debugging
 
     end_time = time() - start_time
