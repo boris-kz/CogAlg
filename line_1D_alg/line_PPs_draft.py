@@ -307,7 +307,8 @@ def compact(rPp, pdert1__, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pdert_s
                 _P = CP()
                 for P in Pp.P_:
                     _P.accum_from(P, excluded=["x0"])  # different from Pp params
-                    _P.dert_ += [P.dert_]  # splice dert_s, eval intra_P?
+                    _P.dert_ += [P.dert_]  # splice dert_s within Pp
+                # rerun form_P_(P.dert_)?
                 rPp.pdert_[i] = _P  # replace Pp with spliced P
 
         if pdert_val <= 0:
