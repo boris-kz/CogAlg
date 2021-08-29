@@ -217,7 +217,6 @@ def intra_P_(P_, rdn, rng, fPd):
 
     return comb_layers
 
-
 ''' 
 Sub-recursion in intra_P extends pattern with a hierarchy of sub-patterns (sub_), to be adjusted by feedback:
 '''
@@ -470,3 +469,282 @@ if __name__ == "__main__":
 
     end_time = time() - start_time
     print(end_time)
+
+
+    # below is old parts of line_PPs:
+
+    '''     
+    param_ = [[ getattr( P, param_name[0]), P.L, P.x0] for P in P_]  # param values
+    D_ = [ getattr(P, "D") for P in P_]
+    _par_= []
+    for (I, L, x0),(D,_,_) in zip(param_[:-1], layer0["D_"][:-1]):  # _I in (I,L,x0) is forward projected by _D in (D,L,x0)
+        _par_.append((I-(D/2), L, x0))
+    par_= []
+    for (I, L, x0),(D,_,_) in zip(param_[1:], layer0["D_"][1:]): # I in (I,L,x0) is backward projected by D in (D,L,x0)
+        par_.append((I+(D/2), L, x0))
+
+    rL_ = [_L[0]/L[0] for _L, L in zip(layer0["L_"][:-1],layer0["L_"][1:])] # _L = L_[:-1], L = L_[1:], div_comp L, no search?
+    mL_ = [int(rL) * min(_L[0],L[0]) for _L, L, rL in zip(layer0["L_"][:-1],layer0["L_"][1:], rL_)] # definition of div_match
+    '''
+    def search_old(P_, fPd):  # cross-compare patterns within horizontal line
+
+        sub_search_recursive(P_, fPd)  # search with incremental distance: first inside sublayers
+        layer0 = {'L_': [], 'I_': [], 'D_': [], 'M_': []}  # param_name: [params]
+
+        if len(P_) > 1:  # at least 2 comparands
+            Ldert_ = []; rL_ = []
+            # unpack Ps:
+            for P in P_:
+                if "_P" in locals():  # not the 1st P
+                    L = P.L; _L = _P.L
+                    rL = L / _L  # div_comp L: higher-scale, not accumulated: no search
+                    mL = int(max(rL, 1 / rL)) * min(L, _L)  # match in comp by division as additive compression, not directional
+                    Ldert_.append(Cdert(i=L, p=L + _L, d=rL, m=mL))
+                    rL_.append(rL)
+                _P = P
+                layer0['I_'].append([P.I, P.L, P.x0])  # I tuple
+                layer0['D_'].append([P.D, P.L, P.x0])  # D tuple
+                layer0['M_'].append([P.M, P.L, P.x0])  # M tuple
+
+            dert1__ = [Ldert_]  # no search for L, step=1 only, contains derts vs. pderts
+            Pdert__ = [Ldert_]  # Pp elements: pderts if param is core m, else derts
+
+            for param_name in ["I_", "D_", "M_"]:
+                param_ = layer0[param_name]  # param values
+                par_ = param_[1:]  # compared vectors:
+                _par_ = [[_par * rL, L, x0] for [_par, L, x0], rL in zip(param_[:-1], rL_)]  # normalize by rL
+
+                if ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # dert-level P-defining params
+                    if not fPd:
+                        # project I by D, or D by Dd in deriv_comp sub_Ps:
+                        _par_ = [[_par - (D / 2), L, x0] for [_par, L, x0], [D, _, _] in zip(_par_, layer0["D_"][:-1])]
+                        # _I in (I,L,x0) is  - (D / 2): forward projected by _D in (D,L,x0)
+                        par_ = [[par + (D / 2), L, x0] for [par, L, x0], [D, _, _] in zip(par_, layer0["D_"][1:])]
+                        # I in (I,L,x0) is backward projected by D in (D,L,x0)
+                        Pdert__ += [search_param_(_par_, par_, P_[:-1], ave, rave=1)]  # pdert_ if "I_"
+                    del _P
+                    _rL_ = []
+                    for P in P_:  # form rLs to normalize cross-comp of same-M-sign Ps in pdert2_
+                        if "_P" in locals():  # not the 1st P
+                            if "__P" in locals():  # not the 2nd P
+                                _rL_.append(P.L / __P.L)
+                            __P = _P
+                        _P = P
+                    __par_ = [[__par * _rL, L, x0] for [__par, L, x0], _rL in zip(param_[:-2], _rL_)]  # normalize by _rL
+                    # step=2 comp for P splice, one param: (I and not fPd) or (D and fPd):
+                    dert2_ = [comp_param(__par, par, param_name[0], ave) for __par, par in zip(__par_, par_[1:])]
+                # else step=1 only:
+
+                dert1_ = [comp_param(_par, par, param_name[0], ave) for _par, par in zip(_par_, par_)]  # append pdert1_ per param_
+                dert1__ += [dert1_]
+                if not param_name == "I_": Pdert__ += [dert1_]  # dert_ = comp_param_
+
+            rdn__ = sum_rdn_(layer0, Pdert__, fPd=1)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
+            rdn_Ppm__ = []
+
+            for param_name, Pdert_, rdn_ in zip(layer0, Pdert__, rdn__):  # segment Pdert__ into Pps
+                if param_name == "I_" and not fPd:  # = isinstance(Pdert_[0], Cpdert)
+                    Ppm_ = form_Pp_rng(Pdert_, rdn_, P_)
+                else:
+                    Ppm_ = form_Pp_(Pdert_, param_name, rdn_, P_, fPd=0)  # Ppd_ is formed in -Ppms only, in intra_Ppm_
+                # list of param rdn_Ppm_s:
+                rdn_Ppm__ += [form_rdn_Pp_(Ppm_, param_name, dert1__, dert2_, fPd=0)]
+
+        return rdn_Ppm__
+
+
+    def form_PP_(params_derPp____, fPd):  # Draft:
+        '''
+        unpack 4-layer derPp____: _names ( _Pp_ ( names ( Pp_ ))),
+        pack derPps with overlapping match: sum of concurrent mPps > ave_M * rolp, into PPs of PP_
+        '''
+        rdn = [.25, .5, .25, .5]  # {'L_': .25, 'I_': .5, 'D_': .25, 'M_': .5}
+        names = ['L_', 'I_', 'D_', 'M_']
+        Rolp = 0
+        PP_ = []
+        _sign = None
+        # init new empty derPp____ with the same list structure as params_derPp____, for [i][j][k] indexing later
+        derPp____ = [[[[] for param_derPp_ in param_derPp__] \
+                      for param_derPp__ in param_derPp___] \
+                     for param_derPp___ in params_derPp____]
+        param_name_ = derPp____.copy()
+
+        for i, _param_derPp___ in enumerate(params_derPp____):  # derPp___ from comp_Pp (across params)
+            for j, _Pp_derPp__ in enumerate(_param_derPp___):  # from comp_Pp (param_Pp_, other params)
+                for k, param_derPp_ in enumerate(_Pp_derPp__):  # from comp_Pp (_Pp, other params)
+                    for (derPp, rolp, _name, name) in param_derPp_:  # from comp_Pp (_Pp, other param' Pp_)
+                        # debugging
+                        if names[i] != _name: raise ValueError("Wrong _name")
+                        if names[k] != name: raise ValueError("Wrong name")
+
+                        if "pre_PP" not in locals(): pre_PP = CPP(derPp____=derPp____.copy())
+                        # if fPd: derPp_val = derPp.dPp; ave = ave_D
+                        # else:   derPp_val = derPp.mPp; ave = ave_M
+                        # mean_rdn = (rdn[i] + rdn[k]) / 2  # of compared params
+                        # if derPp_val * mean_rdn > ave:
+                        # else: pre_PP = CPP(derPp____=derPp____.copy())
+                        # accum either sign, no eval or sub_PP_ per layer:
+                        Rolp += rolp
+                        pre_PP.accum_from(derPp)
+                        pre_PP.derPp____[i][j][k].append(derPp)
+                        pre_PP.param_name_.append((names[i], names[k]))
+            '''    
+            We can't evaluate until the top loop because any overlap may form sufficient match. 
+            Then we only define pre_PPs by overlap of any element of any layer to any other element of any other layer.
+            But there are so many possible overlaps that pre_PP may never terminate.
+            Another way to define them is by minimal combined-layers' match per x (iP). 
+            But then we are back to immediate multi-param comp_P_, which is pointless because different derivatives anti-correlate.
+                    # inclusion into higher layer of pre_PP by the sum of concurrent mPps > ave_M * Rolp, over all lower layers:
+                    if "pre_PP" in locals() and pre_PP.derPp____[i][j][k] and not pre_PP.mPp > ave_M * Rolp:
+                        pre_PP = CPP(derPp____=derPp____.copy())
+                # pre_PP.derPp____[i][j] is a nested list, we need to check recursively to determine whether there is any appended derPp
+                if "pre_PP" in locals() and not emptylist(pre_PP.derPp____[i][j]) and not pre_PP.mPp > ave_M * Rolp:
+                    pre_PP = CPP(derPp____=derPp____.copy())
+            '''
+            if "pre_PP" in locals() and not emptylist(pre_PP.derPp____[i]):
+                if pre_PP.mPp > ave_M * Rolp:
+                    PP_.append(pre_PP)  # no negative PPs?
+                    _sign = True
+                else:
+                    _sign = False
+                    pre_PP = CPP(derPp____=derPp____.copy())
+        return PP_
+
+    # https://stackoverflow.com/questions/1593564/python-how-to-check-if-a-nested-list-is-essentially-empty
+    def emptylist(in_list):
+        '''
+        check if nested list is totally empty
+        '''
+        if isinstance(in_list, list):  # Is a list
+            return all(map(emptylist, in_list))
+        return False  # Not a list
+
+    def comp_Pp(_Pp, Pp, layer0):
+        '''
+        next level line_PPPs:
+        PPm_ = search_Pp_(layer0, fPd=0)  # calls comp_Pp_ and form_PP_ per param
+        PPd_ = search_Pp_(layer0, fPd=1)
+        '''
+        mPp = dPp = 0
+        layer1 = dict({'L': .0, 'I': .0, 'D': .0, 'M': .0})
+        dist_coef = ave_rM * (1 + _Pp.negL / _Pp.L)
+        # average match projected at current distance, needs a review
+        for param_name in layer1:
+            if param_name == "I":
+                ave = ave_inv  # * dist_coef
+            else:
+                ave = ave_min  # * dist_coef
+            param = getattr(_Pp, param_name)
+            _param = getattr(Pp, param_name)
+            dert = comp_param(_param, param, [], ave)
+            rdn = layer0[param_name + '_'][1]  # index 1 =rdn
+            mPp += dert.m * rdn
+            dPp += dert.d * rdn
+            layer1[param_name] = dert
+
+        negM = _Pp.negM - Pp.negM
+        negL = _Pp.L - Pp.negL
+        negiL = _Pp.iL - Pp.negiL
+
+        '''
+        options for div_comp, etc.    
+        if P.sign == _P.sign: mP *= 2  # sign is MSB, value of sign match = full magnitude match?
+        if mP > 0
+            # positive forward match, compare sublayers between P.sub_H and _P.sub_H:
+           comp_sublayers(_P, P, mP)
+        if isinstance(_P.derP, CderP):  # derP is created in comp_sublayers
+            _P.derP.sign = sign
+            _P.derP.layer1 = layer1
+            _P.derP.accumulate(mP=mP, neg_M=neg_M, neg_L=neg_L, P=_P)
+            derP = _P.derP
+        else:
+            derP = CderP(sign=sign, mP=mP, neg_M=neg_M, neg_L=neg_L, P=_P, layer1=layer1)
+            _P.derP = derP
+        '''
+        derPp = CderPp(mPp=mPp, dPp=dPp, negM=negM, negL=negL, negiL=negiL, _Pp=_Pp, Pp=Pp, layer1=layer1)
+
+        return derPp
+
+
+    def div_comp_P(PP_):  # draft, check all PPs for x-param comp by division between element Ps
+        '''
+        div x param if projected div match: compression per PP, no internal range for ind eval.
+        ~ (L*D + L*M) * rm: L=min, positive if same-sign L & S, proportional to both but includes fractional miss
+        + PPm' DL * DS: xP difference compression, additive to x param (intra) compression: S / L -> comp rS
+        also + ML * MS: redundant unless min or converted?
+        vs. norm param: Var*rL-> comp norm param, simpler but diffs are not L-proportional?
+        '''
+        for PP in PP_:
+            vdP = (PP.adj_mP + PP.P.M) * abs(PP.dP) - ave_div
+            if vdP > 0:
+                # if irM * D_vars: match rate projects der and div match,
+                # div if scale invariance: comp x dVars, signed
+                ''' 
+                | abs(dL + dI + dD + dM): div value ~= L, Vars correlation: stability of density, opposite signs cancel-out?
+                | div_comp value is match: min(dL, dI, dD, dM) * 4, | sum of pairwise mins?
+                '''
+                _derP = PP.derP_[0]
+                # smP, vmP, neg_M, neg_L, iP, mL, dL, mI, dI, mD, dD, mM, dM = P,
+                # _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _derP.P
+                _P = _derP.P
+                for i, derP in enumerate(PP.derP_[1:]):
+                    P = derP.P
+                    # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
+                    rL = P.L / _P.L
+                    # mL = whole_rL * min_L?
+                    '''
+                    dI = I * rL - _I  # rL-normalized dI, vs. nI = dI * rL or aI = I / L
+                    mI = ave - abs(dI)  # I is not derived, match is inverse deviation of miss
+                    dD = D * rL - _D  # sum if opposite-sign
+                    mD = min(D, _D)   # same-sign D in dP?
+                    dM = M * rL - _M  # sum if opposite-sign
+                    mM = min(M, _M)   # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
+                    mP = mI + mM + mD  # match(P, _P) for derived vars, defines norm_PPm, no ndx: single, but nmx is summed
+                    '''
+                    for (param, _param) in zip([P.I, P.D, P.M], [_P.I, _P.D, _P.M]):
+                        dm = comp_param(param, _param, [], ave, rL)
+                        layer1.append([dm.d, dm.m])
+                        mP += dm.m; dP += dm.d
+
+                    if dP > P.derP.dP:
+                        ndP_rdn = 1; dP_rdn = 0  # Not sure what to do with these
+                    else:
+                        dP_rdn = 1; ndP_rdn = 0
+
+                    if mP > derP.mP:
+                        rrdn = 1  # added to rdn, or diff alt, olp, div rdn?
+                    else:
+                        rrdn = 2
+                    if mP > ave * 3 * rrdn:
+                        # rvars = mP, mI, mD, mM, dI, dD, dM  # redundant vars: dPP_rdn, ndPP_rdn, assigned in each fork?
+                        rvars = layer1
+                    else:
+                        rvars = []
+                    # append rrdn and ratio variables to current derP:
+                    # PP.derP_[i] += [rrdn, rvars]
+                    PP.derP_[i].rrdn = rrdn
+                    PP.derP_[i].layer1 = rvars
+                    # P vars -> _P vars:
+                    _P = P
+                    '''
+                    m and d from comp_rate is more accurate than comp_norm?
+                    rm, rd: rate value is relative? 
+                    also define Pd, if strongly directional? 
+                    if dP > ndP: ndPP_rdn = 1; dPP_rdn = 0  # value = D | nD
+                    else:        dPP_rdn = 1; ndPP_rdn = 0
+                    '''
+        return PP_
+
+    def form_adjacent_mP(derPp_):  # not used in discontinuous search?
+        pri_mP = derPp_[0].mP
+        mP = derPp_[1].mP
+        derPp_[0].adj_mP = derPp_[1].mP
+
+        for i, derP in enumerate(derPp_[2:]):
+            next_mP = derP.mP
+            derPp_[i + 1].adj_mP = (pri_mP + next_mP) / 2
+            pri_mP = mP
+            mP = next_mP
+
+        return derPp_
+
