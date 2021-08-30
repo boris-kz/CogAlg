@@ -32,7 +32,7 @@ class CPp(CP):
     negiL = int
     sublayers = list
 
-class CderPp(ClusterStructure):
+class CderPp(ClusterStructure):  # for line_PPPs only, if PPP comb x Pps?
     mPp = int
     dPp = int
     rrdn = int
@@ -99,16 +99,18 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
 
     rdn__ = sum_rdn_(layer0, Pdert__, fPd=1)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
     rdn_Ppm__ = []
+    Ppm__ = [] # for visualization
 
     for param_name, Pdert_, rdn_ in zip(layer0, Pdert__, rdn__):  # segment Pdert__ into Pps
-        if param_name == "I_" and not fPd:  # = isinstance(Pdert_[0], Cpdert)
+        if param_name == "I_" and not fPd:
             Ppm_ = form_Pp_rng(None, Pdert_, rdn_, P_)
         else:
             Ppm_ = form_Pp_(None, Pdert_, param_name, rdn_, P_, fPd=0)  # Ppd_ is formed in -Ppms only, in intra_Ppm_
         # list of param rdn_Ppm_s:
         rdn_Ppm__ += [form_rdn_Pp_(Ppm_, param_name, dert1__, dert2_, fPd=0)]  # evaluates for compact()
+        Ppm__ += [Ppm_]
 
-    return rdn_Ppm__
+    return rdn_Ppm__, Ppm__
 
 
 def search_param_(I_, D_, P_, ave, rave):  # variable-range search in mdert_, only if param is core param?
@@ -190,20 +192,16 @@ def form_Pp_(rootPp, dert_, param_name, rdn_, P_, fPd):
 
     for dert, rdn, P in zip(dert_, rdn_, P_):  # segment by sign
         if fPd: sign = dert.d > 0
-        else:   sign = dert.m > 0  # adjust by ave projected at distance=negL and contrast=negM, if significant:
+        else:   sign = dert.m > 0
+        # adjust by ave projected at distance=negL and contrast=negM, if significant:
         # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
         if sign != _sign:
-            # sign change, initialize P and append it to P_
-            Pp = CPp(L=1, iL=P_[x].L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, x0=x, ix0=P_[x].x0, pdert_=[dert], P_=[P_[x]], sublayers=[], fPd=fPd)
-
-            if hasattr(dert, "negL"):  # easier with is instance dert, Cpdert?
-                Pp.accumulate(negiL=dert.negiL, negL=dert.negL, negM=dert.negM)
+            # sign change, initialize Pp and append it to Pp_
+            Pp = CPp( L=1, iL=P_[x].L, I=dert.p, D=dert.d, M=dert.m, Rdn=rdn, x0=x, ix0=P_[x].x0, pdert_=[dert], P_=[P_[x]], sublayers=[], fPd=fPd)
             Pp_.append(Pp)  # updated by accumulation below
         else:
             # accumulate params:
             Pp.L += 1; Pp.iL += P_[x].L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.pdert_ += [dert]; Pp.P_ += [P]
-            if hasattr(dert, "negL"):
-                Pp.accumulate(negiL=dert.negiL, negL=dert.negL, negM=dert.negM)
         x += 1
         _sign = sign
 
@@ -219,11 +217,13 @@ def form_Pp_(rootPp, dert_, param_name, rdn_, P_, fPd):
 
 def form_Pp_rng(rootPp, dert_, rdn_, P_):  # cluster Pps by cross-param redundant value sign, eval for cross-level rdn
     # multiple Pps may overlap within _dert.negL
+    # needs a review
     Pp_ = []
     merged_idx_ = []  # indices of merged derts P in P_
 
     for i, (_dert, _P, _rdn) in enumerate(zip(dert_, P_, rdn_)):
         if _dert.m > ave*_rdn:  # positive Pps only, else too much overlap?
+            # initialize Pp:
             if not isinstance(_dert.Pp, CPp):
                 Pp = CPp(L=1, iL=_P.L, I=_dert.p, D=_dert.d, M=_dert.m, Rdn=_rdn, negiL=_dert.negiL, negL=_dert.negL, negM=_dert.negM,
                          x0=i, ix0=_P.x0, pdert_=[_dert], P_=[_P], sublayers=[], fPd=0)
@@ -245,7 +245,6 @@ def form_Pp_rng(rootPp, dert_, rdn_, P_):  # cluster Pps by cross-param redundan
                     else:  # accumulate params:
                         Pp.L += 1; Pp.iL += P.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.negiL += dert.negiL
                         Pp.negL += dert.negL; Pp.negM += dert.negM; Pp.pdert_ += [dert]; Pp.P_ += [P]
-                        dert.Pp = Pp
                         # Pp derts already searched through dert_, so they won't be used as _derts:
                         merged_idx_.append(j)
                         j += dert.negL
@@ -408,48 +407,46 @@ def comp_sublayers(_P, P, mP, dP):  # not revised; also add dP?
                 else:
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
 
-# to be updated
 
-def draw_PP_(image, frame_PP_):
-    # init every possible combinations
-    img_mparams = {'L_I_': np.zeros_like(image), 'L_D_': np.zeros_like(image),
-                   'L_M_': np.zeros_like(image), 'I_D_': np.zeros_like(image),
-                   'I_M_': np.zeros_like(image), 'D_M_': np.zeros_like(image)}
+def draw_PP_(image, frame_Pp__):
 
-    img_dparams = {'L_I_': np.zeros_like(image), 'L_D_': np.zeros_like(image),
-                   'L_M_': np.zeros_like(image), 'I_D_': np.zeros_like(image),
-                   'I_M_': np.zeros_like(image), 'D_M_': np.zeros_like(image)}
+    from matplotlib import pyplot as plt
+    import numpy as np
 
-    for y, (PPm_, PPd_) in enumerate(frame_PP_):  # draw each line
-        if PPm_ or PPd_:
-            for PPm, PPd in zip_longest(PPm_, PPd_, fillvalue=[]):
+    # initialization
+    img_rdn_Pp_ = [np.zeros_like(image) for _ in range(4)]
+    img_Pp_ = [np.zeros_like(image) for _ in range(4)]
+    param_names = ['L', 'I', 'D', 'M']
 
-                if PPm:
-                    draw_PP(img_mparams, PPm, y)
-                if PPd:
-                    draw_PP(img_dparams, PPd, y)
-    # plot diagram of each pair PPs
+    for y, (rdn_Pp__, Pp__) in enumerate(frame_Pp__):  # loop each line
+        for i, (rdn_Pp_, Pp_) in enumerate(zip(rdn_Pp__, Pp__)): # loop each rdn_Pp or Pp
+
+            draw_value_rdn_Pp = 0
+            draw_value_Pp = 0
+
+            # rdn_Pp
+            for rdn_Pp in rdn_Pp_:
+                draw_value_rdn_Pp = (draw_value_rdn_Pp + 127) % 255 # increase draw value for each new rdn_Pp
+                for Pp in rdn_Pp.pdert_:
+                    for P in Pp.P_:
+                        img_rdn_Pp_[i][y,P.x0:P.x0+P.L] += draw_value_rdn_Pp
+
+            # Pp
+            for Pp in Pp_:
+                draw_value_Pp = (draw_value_Pp + 127) % 255 # increase draw value for each new Pp
+                for P in Pp.P_:
+                    img_Pp_[i][y,P.x0:P.x0+P.L] += draw_value_Pp
+
+
+    # plot diagram of params
     plt.figure()
-    for i, param in enumerate(img_mparams):
-        plt.subplot(2, 3, i + 1)
-        plt.imshow(img_mparams[param], vmin=0, vmax=255)
-        plt.title("pair = " + param + " m param")
+    for i, param in enumerate(param_names):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img_rdn_Pp_[i], vmin=0, vmax=255)
+        plt.title("Rdn Pp, Param = " + param)
 
     plt.figure()
-    for i, param in enumerate(img_dparams):
-        plt.subplot(2, 3, i + 1)
-        plt.imshow(img_dparams[param], vmin=0, vmax=255)
-        plt.title("pair = " + param + " d param")
-
-
-def draw_PP(img_params, PP, y):
-    for (derPp___) in PP.derPp____:
-        for derPp__ in derPp___:
-            for (derPp_) in derPp__:
-                for derPp in derPp_:
-                    Pp = derPp.Pp
-                    _Pp = derPp._Pp
-                    _name, name = PP.param_name_.pop(0)
-                    # values draw
-                    img_params[_name + name][y, _Pp.ix0:_Pp.ix0 + _Pp.iL] += 32
-                    img_params[_name + name][y, Pp.ix0:Pp.ix0 + Pp.iL] += 32
+    for i, param in enumerate(param_names):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img_Pp_[i], vmin=0, vmax=255)
+        plt.title("Pp, Param = " + param)

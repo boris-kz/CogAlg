@@ -58,7 +58,7 @@ ave_D = 5  # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdm = .5  # obsolete: average dm / m, to project bi_m = m * 1.5
 ave_splice = 50  # to merge a kernel of 3 adjacent Ps
-init_y = 0  # starting row, the whole frame doesn't need to be processed
+init_y = 500  # starting row, the whole frame doesn't need to be processed
 
 '''
     Conventions:
@@ -97,7 +97,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             dert_.append( Cdert( i=i, p=p, d=d, m=m) )
             _i = i
         # form m-sign patterns, rootP=None:
-        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # eval intra_Pm_ per Pm
+        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # eval intra_Pm_ per Pm in
         frame_of_patterns_.append(Pm_)  # add line of patterns to frame of patterns, skip if cross_comp_spliced
 
         if logging:
@@ -140,7 +140,7 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         else:   sign = dert.m > 0
         if sign != _sign:
             # sign change, initialize and append P
-            P = CP(L=1, I=dert.p, D=dert.d, M=dert.m, x0=x, dert_=[dert], sublayers=[], fPd=fPd)
+            P = CP( L=1, I=dert.p, D=dert.d, M=dert.m, x0=x, dert_=[dert], sublayers=[], fPd=fPd)
             P_.append(P)  # updated with accumulation below
         else:
             # accumulate params:
@@ -303,19 +303,18 @@ if __name__ == "__main__":
 
     if render:
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
-        plt.figure(); plt.imshow(image, cmap='gray'); plt.show() # show the image below in gray
+        plt.figure(); plt.imshow(image, cmap='gray'); plt.show()  # show the image below in gray
 
-    if fline_PPs:  # debug line_PPs_draft
+    if fline_PPs:  # debug line_PPs
         from line_PPs import *
-        frame_PP__ = []
+        frame_Pp__ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            if len(P_) > 1: # at least 2 comparands
-                rdn_Pp__ = search(P_, fPd=0)
-            else:
-                rdn_Pp__ = None
-            frame_PP__.append(rdn_Pp__)
-        # draw_PP_(image, frame_PP_)  # debugging
+            if len(P_) > 1: rdn_Pp__, Pp__ = search(P_, fPd=0)
+            else:           rdn_Pp__, Pp__ = [], []
+            frame_Pp__.append(( rdn_Pp__, Pp__))
+
+            draw_PP_(image, frame_Pp__)  # debugging
 
     end_time = time() - start_time
     print(end_time)
