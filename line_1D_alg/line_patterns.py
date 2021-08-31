@@ -83,7 +83,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     for y in range(init_y, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
         if logging:
             global logs_2D, logs_3D  # to share between functions
-            logs_2D = np.empty((0, 6), dtype=int32) # empty 2D array for filling by layer0 output variables
+            logs_2D = np.empty((0, 6), dtype=int32)  # 2D array for layer0 params
 
         # initialization:
         dert_ = []  # line-wide i_, p_, d_, m__
@@ -151,7 +151,7 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
 
     if rootP:  # call from intra_P_
         # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layer depth hierarchy
-        rootP.sublayers = [[( fPd, rdn, rng, P_, [] )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
+        rootP.sublayers = [[( fPd, rdn, rng, P_, [] )]]  # 1st sublayer is one param set, sub_Ppm__=[], + Dert=[]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sum params for comp sublayers?
     else:
@@ -314,7 +314,7 @@ if __name__ == "__main__":
             else:           rdn_Pp__, Pp__ = [], []
             frame_Pp__.append(( rdn_Pp__, Pp__))
 
-            draw_PP_(image, frame_Pp__)  # debugging
+        draw_PP_(image, frame_Pp__)  # debugging
 
     end_time = time() - start_time
     print(end_time)
