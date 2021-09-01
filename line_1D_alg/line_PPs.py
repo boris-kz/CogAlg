@@ -61,6 +61,7 @@ ave_splice = 50  # merge Ps within core-param Pp
 ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
 ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 ave_rolp = .5  # ave overlap ratio for comp_Pp
+ave_mL = 2  # needs to be tuned
 ave_mI = 5  # needs to be tuned
 ave_mD = 5  # needs to be tuned
 ave_mM = 5  # needs to be tuned
@@ -77,35 +78,40 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
         if "_P" in locals():  # not the 1st P
             _L = _P.L
             rL = L / _L  # div_comp L: higher-scale, not accumulated: no search
-            mL = int(max( rL, 1 / rL)) * min(L, _L)  # div_comp match is additive compression, not directional
+            # add ave_Ls to L param match computation?
+            mL = int(max( rL, 1 / rL)) * min(L, _L) - ave_Ls  # div_comp match is additive compression, not directional
             Ldert_.append( Cdert( i=L, p=L + _L, d=rL, m=mL))
         _P = P
         layer0['I_'].append(P.I / L)  # mean values for comp_param
         layer0['D_'].append(P.D / L)
         layer0['M_'].append(P.M / L)
-    # dert1__ = [Ldert_] not needed, for splice only
-    Pdert__ = [Ldert_]  # no search for L, step=1 only, contains derts. Pp elements are pderts if param is core I
+    Pdert__ = [Ldert_]  # no search for L, step=1 only
 
-    # tentative:
-    param_ = layer0["I_"]
-    if not fPd:  # core param
-        Pdert__ += [search_param_(param_, layer0["D_"], P_, ave_mI, rave=1)]  # pdert_ if "I_"
-        # step=2 comp for P splice only:
-        dert2_ = [comp_param(__par, par, "I_", ave_mI) for __par, par in zip(param_[:-2], param_[2:])]
-        # else step=1 per param only:
-    dert1_ = [[ comp_param(_par, par, "I_", ave_mI) for _par, par in zip(param_[:-1], param_[1:]) ]]
-    if fPd:
-        dert2_ = [ comp_param(_par, par, "D_", ave_mD) for _par, par in zip(layer0["D_"][:-2], layer0["D_"][2:]) ]
-        Pdert__ += [dert2_]
+    if fPd:  # comp | search per param type, separate dert1_ and dert2_ (step=1 and step=2 comp) for P splice only
+        # I
+        dert1_I = [ comp_param(_par, par, "I_", ave_mI) for _par, par in zip(layer0["I_"][:-1], layer0["I_"][1:]) ]
+        # D: Pd-defining param
+        dert1_D = [ comp_param(_par, par, "D_", ave_mD) for _par, par in zip(layer0["D_"][:-1], layer0["D_"][1:]) ]
+        dert2_D = [ comp_param(_par, par, "D_", ave_mD) for _par, par in zip(layer0["D_"][:-2], layer0["D_"][2:]) ]
+        # M
+        dert1_M = [ comp_param(_par, par, "M_", ave_mM) for _par, par in zip(layer0["M_"][:-1], layer0["M_"][1:]) ]
+        # generic
+        Pdert__ += [dert1_I, dert1_D, dert1_M]
+        dert1_ = dert1_D  # for Pd splicing
+        dert2_ = dert2_D
     else:
-        dert1_ = [ comp_param(_par, par, "D_", ave_mD) for _par, par in zip(layer0["D_"][:-1], layer0["D_"][1:]) ]
-        Pdert__ += [dert1_]  # no dert1__ += [dert1_]: for P splice only?
-    if fPd:
-        dert1_ = [ comp_param(_par, par, "M_", ave_mM) for _par, par in zip(layer0["M_"][:-1], layer0["M_"][1:]) ]
-        Pdert__ += [dert1_]  # no dert1__ += [dert1_]: for P splice only?
-    else:
-        dert_ = [ comp_param(_par, par, "M_", ave_mM) for _par, par in zip(layer0["M_"][:-2], layer0["M_"][2:]) ]
-        Pdert__ += [dert_]  # no dert2_: for Pd | Pm splice only?
+        # I: Pm-defining param
+        pdert_I = search_param_(layer0["I_"], layer0["D_"], P_, ave_mI, rave=1)  # forms variable-negL pderts
+        dert1_I = [comp_param(__par, par, "I_", ave_mI) for __par, par in zip(layer0["I_"][:-1], layer0["I_"][1:])]
+        dert2_I = [comp_param(__par, par, "I_", ave_mI) for __par, par in zip(layer0["I_"][:-2], layer0["I_"][2:])]
+        # D
+        dert1_D = [comp_param(_par, par, "D_", ave_mD) for _par, par in zip(layer0["D_"][:-1], layer0["D_"][1:]) ]
+        # M
+        dert2_M = [comp_param(_par, par, "M_", ave_mM) for _par, par in zip(layer0["M_"][:-2], layer0["M_"][2:]) ]
+        # generic
+        Pdert__ += [pdert_I, dert1_D, dert2_M]
+        dert1_ = dert1_I  # for Pm splicing
+        dert2_ = dert2_I
     '''
     for param_name in ["I_", "D_", "M_"]:
         param_ = layer0[param_name]  # param values
@@ -229,13 +235,14 @@ def form_Pp_(rootPp, dert_, param_name, rdn_, P_, fPd):
             Pp.L += 1; Pp.iL += P_[x].L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.pdert_ += [dert]; Pp.P_ += [P]
         x += 1
         _sign = sign
+    Pp.P_ += [P_[-1]]  # last P
 
-    if rootPp:  # call from intra_Pp_
-        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
+    if rootPp:
+        # call from intra_Pp_; sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
         rootPp.sublayers = [[( fPd, Pp_ )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
             rootPp.sublayers += intra_Pp_(Pp_, param_name, rdn_, fPd)  # deeper comb_layers feedback, sum params for comp_sublayers?
-    else:  
+    else:
         # call from search
         intra_Pp_(Pp_, param_name, rdn_, fPd)   # evaluates for sub-recursion and forming Ppd_ per Pm
         return Pp_  # else packed in P.sublayers
@@ -250,40 +257,41 @@ def form_Pp_rng(rootPp, dert_, rdn_, P_):  # cluster Pps by cross-param redundan
     for i, (_dert, _P, _rdn) in enumerate(zip(dert_, P_, rdn_)):
         if _dert.m > ave*_rdn:  # positive Pps only, else too much overlap?
             # initialize Pp:
-            if not isinstance(_dert.Pp, CPp):  # tha condition may not be needed?
+            if not isinstance(_dert.Pp, CPp):
                 Pp = CPp(L=1, iL=_P.L, I=_dert.p, D=_dert.d, M=_dert.m, Rdn=_rdn, negiL=_dert.negiL, negL=_dert.negL, negM=_dert.negM,
                          x0=i, ix0=_P.x0, pdert_=[_dert], P_=[_P], sublayers=[], fPd=0)
                 _dert.Pp = Pp
+                Pp_.append(Pp)
             else:
                 Pp = _dert.Pp
             j = i + _dert.negL + 1
-            while (j <= len(dert_)-1) and (j not in merged_idx_):
+            while (j <= len(rdn_)-1) and (j not in merged_idx_):
                 dert = dert_[j]; P = P_[j]; rdn = rdn_[j]  # no pop: maybe used by other _derts
-
                 if dert.m > ave*rdn:
-                    if isinstance(dert.Pp, CPp):
+                    if isinstance(dert.Pp, CPp):  # unique Pp per dert in row Pdert_?
                         # merge Pp with dert.Pp, if any:
                         Pp.accum_from(dert.Pp,excluded=['x0'])
                         Pp.P_ += dert.Pp.P_
                         Pp.pdert_ += dert.Pp.pdert_
                         Pp.sublayers += dert.Pp.sublayers
+                        del dert.Pp  # actually, we need to remove it from Pp_?
+                        dert.Pp = Pp  # reassignment, any conflicts?
+                        break  # dert already searched forward
                     else:  # accumulate params:
                         Pp.L += 1; Pp.iL += P.L; Pp.I += dert.p; Pp.D += dert.d; Pp.M += dert.m; Pp.Rdn += rdn; Pp.negiL += dert.negiL
                         Pp.negL += dert.negL; Pp.negM += dert.negM; Pp.pdert_ += [dert]; Pp.P_ += [P]
                         # Pp derts already searched through dert_, so they won't be used as _derts:
                         merged_idx_.append(j)
                         j += dert.negL
-                    break  # term by match?
                 else:
-                    Pp_.append(Pp)  # even if single-dert
-                    # break  # Pp is terminated?
+                    break  # Pp is terminated
 
-    if rootPp:  # call from intra_Pp_
-        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layer depth hierarchy
+    if rootPp:
+        # call from intra_Pp_; sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
         rootPp.sublayers = [[( 0, Pp_ )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
             rootPp.sublayers += intra_Pp_(Pp_, "I_", rdn_, fPd=0)  # deeper comb_layers feedback, sum params for comp_sublayers?
-    else:  
+    else:
         # call from search
         intra_Pp_(Pp_, "I_", rdn_, fPd=0)   # evaluates for sub-recursion and forming Ppd_ per Pm
         return Pp_  # else packed in P.sublayers
@@ -333,11 +341,8 @@ def compact(rPp, pdert1_, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pdert_s 
         elif ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # P-defining params, else no separation
             M2 = M1 = 0
             # param match over step=2 and step=1:
-            for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D): only one pdert2_
-            if fPd:
-                for pdert1 in pdert1_[2]: M1 += pdert1.m  # match(D, _D)
-            else:
-                for pdert1 in pdert1_[1]: M1 += pdert1.m  # match(I, _I)
+            for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D)
+            for pdert1 in pdert1_: M1 += pdert1.m  # match(I, _I or D, _D)
 
             if M2 / abs(M1) > -ave_splice:  # similarity / separation: splice Ps in Pp, also implies weak Pp.pdert_?
                 _P = CP()
@@ -442,26 +447,36 @@ def draw_PP_(image, frame_Pp__):
 
     # initialization
     img_rdn_Pp_ = [np.zeros_like(image) for _ in range(4)]
-    
+
     img_Pp_ = [np.zeros_like(image) for _ in range(4)]
     img_Pp_pdert_ = [np.zeros_like(image) for _ in range(4)]
-    
+
     param_names = ['L', 'I', 'D', 'M']
 
-    for y, (rdn_Pp__, Pp__) in enumerate(frame_Pp__):  # loop each line 
+    for y, (rdn_Pp__, Pp__) in enumerate(frame_Pp__):  # loop each line
         for i, (rdn_Pp_, Pp_) in enumerate(zip(rdn_Pp__, Pp__)): # loop each rdn_Pp or Pp
             # rdn_Pp
             for j, rdn_Pp in enumerate(rdn_Pp_):
-                for k, Pp in enumerate(rdn_Pp.pdert_): 
+                for k, Pp in enumerate(rdn_Pp.pdert_):
                     for m, P in enumerate(Pp.P_):
-                        img_rdn_Pp_[i][y,P.x0:P.x0+P.L] = ((j%2)+1) *127
 
+                        if rdn_Pp.M>0:
+                            img_rdn_Pp_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                        else:
+                            img_rdn_Pp_[i][y,P.x0:P.x0+P.L] = 128 # - sign
             # Pp
             for j, Pp in enumerate(Pp_): # each Pp
                 for k, P in enumerate(Pp.P_): # each P or pdert
-                    img_Pp_[i][y,P.x0:P.x0+P.L] = ((j%2)+1) *127
-                    img_Pp_pdert_[i][y,P.x0:P.x0+P.L] = ((k%2)+1) *127
 
+                    if Pp.M>0:
+                        img_Pp_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                    else:
+                        img_Pp_[i][y,P.x0:P.x0+P.L] = 128 # - sign
+
+                    if P.M>0:
+                        img_Pp_pdert_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                    else:
+                        img_Pp_pdert_[i][y,P.x0:P.x0+P.L] = 128 # - sign
 
 
     # plot diagram of params
@@ -476,7 +491,7 @@ def draw_PP_(image, frame_Pp__):
         plt.subplot(2, 2, i + 1)
         plt.imshow(img_Pp_[i], vmin=0, vmax=255)
         plt.title("Pps, Param = " + param)
-        
+
     plt.figure()
     for i, param in enumerate(param_names):
         plt.subplot(2, 2, i + 1)
