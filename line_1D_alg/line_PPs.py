@@ -160,8 +160,9 @@ def search_param_(I_, D_, P_, ave, rave):  # variable-range search in mdert_, on
             I = I_[j]; D = D_[j]; P = P_[j]
             pI = I - (D / 2)  # backward project by D
             dert = comp_param(_pI, pI, "I_", ave)  # param is compared to prior-P _param
-            if dert.m + _P.M > 0:
-                comp_sublayers(P_[i], P_[j], dert.m, dert.d)
+            if dert.m > 0:
+                if dert.m + _P.M > 0:
+                    comp_sublayers(P_[i], P_[j], dert.m, dert.d)
                 break  # 1st matching param takes over connectivity search from _param, in the next loop
             else:
                 proj_M = dert.m * rave + negM - ave_M  # lower ave_M instead of projection?
