@@ -3,11 +3,13 @@ line_PPs is a 2nd-level 1D algorithm, its input is P_ formed by the 1st-level li
 It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per image row.
 
 Subsequent cross-comp between Pps of different params is exclusive of x overlap: redundant?
+Local consolidation, or 3rd level: Pps are higher level of composition, same-type or cross-type?
+(params are not compared cross-type in overlaps: their relationship is already known)
 '''
 
 import sys  # add CogAlg folder to system path
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '../../../AppData/Roaming/JetBrains/PyCharmCE2021.2')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 from line_patterns import *
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 
@@ -21,6 +23,7 @@ class Cpdert(ClusterStructure):
     negL = int  # in mdert only
     negiL = int
     sub_M = int  # match from comp_sublayers, if any
+    sub_D = int
     Pp = object  # Pp that pdert is in, for merging in form_Pp_rng, temporary?
 
 class CPp(CP):
@@ -56,8 +59,8 @@ ave = 1  # ave dI -> mI, * coef / var type
 ave_div = 50
 ave_rM = .5  # average relative match per input magnitude, at rl=1 or .5?
 ave_negM = 10  # or rM?
-ave_M = 500  # search stop
-ave_D = 500  # search stop
+ave_M = 10  # search stop
+ave_D = 10  # search stop
 ave_sub_M = 500  # sub_H comp filter
 ave_Ls = 3
 ave_PPM = 200
@@ -72,7 +75,7 @@ ave_mM = 5  # needs to be tuned
 ave_sub = 20  # for comp_sub_layers
 
 def search(P_, fPd):  # cross-compare patterns within horizontal line
-
+    IP_=[]
     sub_search_recursive(P_, fPd)  # search with incremental distance: first inside sublayers?
 
     param_names = ["L_", "I_", "D_", "M_"]
@@ -84,7 +87,7 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
 
     for i, (P, P2) in enumerate(zip_longest(P_[1:], P_[2:], fillvalue=CP())):  # unpack Ps:
         L, I, D, M = P.L, P.I, P.D, P.M
-        L2, I2, D2, M2 = P2.L, P2.I, P2.D, P2.M
+        D2, M2 = P2.D, P2.M
         # div_comp for L:
         rL = L / _L  # higher order of scale, not accumulated: no search, rL is directional
         int_rL = int( max(rL, 1/rL))
@@ -96,25 +99,24 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
             Idert_ += [comp_param(_I, I, "I_", ave_mI)]
             Ddert = comp_param(_D, D2, "D_", ave_mD)  # step=2 for same-D-sign comp
             Ddert_ += [Ddert]
-            Mdert_ += [comp_param(_M, M, "M_", ave_mM)]
-            # to splice Pds:
-            dert1_ += [comp_param(_D, D, "D_", ave_mD)]
             dert2_ += [Ddert.copy]
+            Mdert_ += [comp_param(_M, M, "M_", ave_mM)]
+            dert1_ += [comp_param(_D, D, "D_", ave_mD)]  # to splice Pds
         else:
             Ddert_ += [comp_param(_D, D, "D_", ave_mD)]
-            Mdert_ += [comp_param(_M, M2, "M_", ave_mM)]  # step=2 for same-M-sign comp
-            # to splice Pms:
-            dert1_ += [comp_param(_I, I, "I_", ave_mI)]
-            dert2_ += [comp_param(_I, I2, "I_", ave_mI)]  # or get both from search_param_, if min range=2?
+            Mdert = comp_param(_M, M2, "M_", ave_mM)  # step=2 for same-M-sign comp
+            Mdert_ += [Mdert]
+            dert2_ += [Mdert.copy]
+            dert1_ += [comp_param(_M, M, "M_", ave_mM)]  # to splice Pms
 
         _L, _I, _D, _M = L, I, D, M
 
-    if not fPd:
-        Idert_ = search_param_(P_, ave_mI, rave=1)  # comp x variable range, depending on M of Is
-        Mdert_ = Mdert_[:-1]  # due to zip_longest in search_param
     dert2_ = dert2_[:-1]  # due to zip_longest in line 82
+    if not fPd:
+        Idert_, IP_ = search_param_(P_, ave_mI, rave=1)  # comp x variable range, depending on M of Is
+        Mdert_ = Mdert_[:-1]  # due to zip_longest in search_param
 
-    Pdert__ = [Ldert_, Idert_, Ddert_, Mdert_]
+    Pdert__ = [Ldert_, Idert_, Ddert_, Mdert_, IP_]
 
     rdn__ = sum_rdn_(param_names, Pdert__, fPd=1)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
     rval_Pp__ = []
@@ -135,32 +137,35 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
 def search_param_(P_, ave, rave):  # variable-range search in mdert_, only if param is core param?
 
     # higher local ave for extended rng: -> lower m and term by match, and higher proj_M?
-    Idert_ = []  # line-wide (i, p, d, m, negL, negM, negiL)
+    Idert_, _P_ = [], []  # line-wide (i, p, d, m, negL, negM, negiL)
 
     for i, _P in enumerate( P_[:-1]):
-        negiL = negL = negM = 0
+        pdert = Cpdert
         _pI = _P.I - (_P.D / 2)  # forward project by _D
-        j = i + 1  # or min rng=2, then per combined M, still of positive-M Is only: internal match projects xP I match?
+        j = i + 1  # init with positive-M Is only: internal match projects xP I match:
 
-        while _P.M + negM > ave_M and j < len(P_):  # for positive _P.Ms only?
+        while _P.M + pdert.negM > ave_M and j < len(P_):  # starts with positive _P.Ms, but continues over negM if > ave_M
             P = P_[j]
             pI = P.I + (P.D / 2)  # backward project by D
             dert = comp_param(_pI, pI, "I_", ave)  # param is compared to prior-P _param
-            curr_M = dert.m * rave + (_P.M + P.M) / 2  # P.M is bidirectional
+            pdert.i=dert.i, pdert.p=dert.p, pdert.d=dert.d, pdert.m=dert.m  # convert Cdert to Cpdert
+            curr_M = pdert.m * rave + (_P.M + P.M) / 2  # P.M is bidirectional
 
             if curr_M > ave_sub:  # comp all sub_P_ params, for core I only?
-                comp_sublayers_draft(P_[i], P_[j], dert)  # should set dert.sub_M
-            if curr_M + dert.sub_M > ave_M:  # match between sublayers; or > ave_cM?
+                comp_sublayers_draft(P_[i], P_[j], pdert)  # should set dert.sub_M
+            if curr_M + pdert.sub_M > ave_M:  # match between sublayers; or > ave_cM?
                 break  # 1st match takes over connectivity search in the next loop
             else:
-                negM += curr_M - ave_M  # known to be negative, accum per dert
-                negiL += P.L
-                negL += 1
+                pdert.negM += curr_M - ave_M  # known to be negative, accum per dert
+                pdert.negiL += P.L
+                pdert.negL += 1
                 j += 1
-        # after extended search, if any:
-        Idert_.append( Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m, negiL=negiL, negL=negL, negM=negM))
 
-    return Idert_
+        if pdert in locals:  # after extended search, if any:
+            Idert_.append(pdert)
+            _P_.append(_P)
+
+    return Idert_, _P_
 
 
 def sum_rdn_(param_name_, Pdert__, fPd):
@@ -175,7 +180,7 @@ def sum_rdn_(param_name_, Pdert__, fPd):
 
     for Ldert, Idert, Ddert, Mdert in zip_longest(Pdert__[0], Pdert__[1], Pdert__[2], Pdert__[3], fillvalue=Cdert()):
         # pdert per _P in P_, 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
-        rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Pms, Pds: if fPd: I, M rdn+=1, else: D rdn+=1
+        rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Ps: if fPd: I, M rdn+=1, else: D rdn+=1
         # names:    ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))  # I.m + P.M: value is combined across P levels?
 
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
@@ -239,7 +244,7 @@ def form_Pp_rng(rootPp, dert_, rdn_, P_):  # cluster Pps by cross-param redundan
     Pp_ = []
 
     for i, (_dert, _P, _rdn) in enumerate(zip(dert_, P_, rdn_)):
-        if _dert.m + _P.M > ave*_rdn:  # positive Pps only, else too much overlap? + _P.M: value is combined across P levels?
+        if _dert.m + _P.M > ave*_rdn:  # positive Pps only, else too much overlap? +_P.M: value is combined across P levels?
             # initialize Pp:
             if not isinstance(_dert.Pp, CPp):  # _dert is not in any Pp
                 Pp = CPp(L=1, iL=_P.L, I=_dert.p, D=_dert.d, M=_dert.m, Rdn=_rdn, rdn_ = [_rdn], negiL=_dert.negiL, negL=_dert.negL, negM=_dert.negM,
@@ -363,7 +368,7 @@ def intra_Pp_(Pp_, param_name, fPd):  # evaluate for sub-recursion in line Pm_, 
                     rdn_ = [rdn+1 for rdn in Pp.rdn_[:-1]]
                     P_ave = Pp.M / Pp.L  # also I,D,M /= L?
                     # range extended by incr ave: less term by match, and decr proj_P = dert.m * rave ((Pp.M / Pp.L) / ave): less term by miss
-                    rpdert_ = search_param_(Pp.P_, (ave + P_ave) / 2, rave = P_ave / ave )  # rpdert_len-=1 in search_param:
+                    rpdert_, _, _ = search_param_(Pp.P_, (ave + P_ave) / 2, rave = P_ave / ave )  # rpdert_len-=1 in search_param:
                     form_Pp_(Pp, rpdert_, param_name, rdn_[:-1], Pp.P_[:-1], fPd=False)  # cluster by m sign, eval intra_Pm_
                 # -Ppm -> sub_Ppd:
                 elif -Pp.M > ave_D * Pp.Rdn:  # high-variation span, -M is contrast borrowed from adjacent +Ppms: or abs D: likely sign match span?
@@ -399,7 +404,7 @@ def comp_sublayers_draft(_P, P, dert):
 
     if P.sublayers and _P.sublayers:  # not empty sub layers
         for _sub_layer, sub_layer in zip(_P.sublayers[0], P.sublayers[0]):
-            # accumulate dert.sub_M, where dert
+            # accumulate dert.sub_M, dert maps to P
 
             if _sub_layer and sub_layer:
                 _fPd, _rdn, _rng, _sub_P_, _sub_Pp__, = _sub_layer
@@ -410,9 +415,9 @@ def comp_sublayers_draft(_P, P, dert):
                     # compare all sub_Ps to each _sub_P:
                     for _sub_P in _sub_P_:
                         for sub_P in sub_P_:
-                            sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave)
-                    dert.sub_M += sub_dert.m  # of compared H, no specific mP?
-                    dert.sub_D += sub_dert.d  # not sure this is needed
+                            sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave_mI)
+                    dert.sub_M += sub_dert.m  # between whole compared Hs
+                    dert.sub_D += sub_dert.d  # not sure
                     if dert.sub_M + P.M < ave_sub_M:
                         # potentially mH: trans-layer induction: if mP + sub_mP < ave_sub_M: both local and global values of mP.
                         break  # low vertical induction, deeper sublayers are not compared
@@ -462,18 +467,18 @@ def draw_PP_(image, frame_Pp__):
     plt.figure()
     for i, param in enumerate(param_names):
         plt.subplot(2, 2, i + 1)
-        plt.imshow(img_rval_Pp_[i], vmin=0, vmax=255, cmap="gray")
+        plt.imshow(img_rval_Pp_[i], vmin=0, vmax=255)
         plt.title("Rval Pps, Param = " + param)
 
     plt.figure()
     for i, param in enumerate(param_names):
         plt.subplot(2, 2, i + 1)
-        plt.imshow(img_Pp_[i], vmin=0, vmax=255, cmap="gray")
+        plt.imshow(img_Pp_[i], vmin=0, vmax=255)
         plt.title("Pps, Param = " + param)
 
     plt.figure()
     for i, param in enumerate(param_names):
         plt.subplot(2, 2, i + 1)
-        plt.imshow(img_Pp_pdert_[i], vmin=0, vmax=255, cmap="gray")
+        plt.imshow(img_Pp_pdert_[i], vmin=0, vmax=255)
         plt.title("Pderts, Param = " + param)
     pass
