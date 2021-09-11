@@ -128,7 +128,6 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
     return frame_of_patterns_  # frame of patterns is an input to level 2
 
-
 def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through intra_P_
     # initialization:
     P_ = []
@@ -150,10 +149,23 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         _sign = sign
 
     if rootP:  # call from intra_P_
-        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layer depth hierarchy
-        rootP.sublayers = [[( fPd, rdn, rng, P_, [] )]]  # 1st sublayer is one param set, sub_Ppm__=[], + Dert=[]
+        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3th: hierarchy
+        rootP.sublayers = [[( fPd, rdn, rng, P_, [] )]]  # 1st sublayer is one param set, last []: sub_Ppm__
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-           rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sum params for comp sublayers?
+            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback
+        '''
+        if sum params into layer_Dert:
+        # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
+        rootP.sublayers = [([], [( fPd, rdn, rng, P_, [] )])]  # 1st sublayer is one param set, 1st[]: Dert, last[]: sub_Ppm__
+        if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
+            L, I, D, M = 0,0,0,0
+            for P in P_:
+                L+=P.L; I+=P.I; D+=P.D; M+=P.M
+            rootP.sublayers[0][0][:] = L, I, D, M
+            
+            # add Dert summation between sub_Ps here, per sublayer:
+            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sum params for comp sublayers?
+         '''
     else:
         # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
@@ -196,6 +208,7 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
             if P.sublayers:   # splice sublayers from all sub_P calls within P:
+                # add layer Dert summation?
                 comb_layers = [ comb_layer + sublayer for comb_layer, sublayer in
                                 zip_longest(comb_layers, P.sublayers, fillvalue=[])
                                 ]
