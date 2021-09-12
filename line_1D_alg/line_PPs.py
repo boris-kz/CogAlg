@@ -432,7 +432,7 @@ def comp_sublayers_draft(_P, P, pdert):
                     # compare Derts and accumulate dert.sub_M:
                     if _Dert and Dert:
                         for _param, param in zip(_Dert, Dert):
-                            dert = comp_param(_param, param, param_name[0], ave)
+                            dert = comp_param(_param, param, "I_", ave_mI))
                             pdert.sub_M += dert.m
                     if pdert.sub_M:
                     '''

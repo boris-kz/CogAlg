@@ -156,15 +156,15 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         '''
         if sum params into layer_Dert:
         # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
-        rootP.sublayers = [([], [( fPd, rdn, rng, P_, [] )])]  # 1st sublayer is one param set, 1st[]: Dert, last[]: sub_Ppm__
+        Dert = []  # P params summed within a layer
+
+        rootP.sublayers = [(Dert, [fPd, rdn, rng, P_, [] )])]  # 1st sublayer is one param set, last[] is sub_Ppm__
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
             L, I, D, M = 0,0,0,0
             for P in P_:
                 L+=P.L; I+=P.I; D+=P.D; M+=P.M
-            rootP.sublayers[0][0][:] = L, I, D, M
-            
-            # add Dert summation between sub_Ps here, per sublayer:
-            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sum params for comp sublayers?
+            Dert[:] = L, I, D, M
+            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sub_P params are summed per sublayer             
          '''
     else:
         # call from cross_comp
@@ -207,8 +207,14 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     # or if min(-P.M, adj_M),  rel_adj_M = adj_M / -P.M  # allocate -Pm adj_M to each sub_Pd?
                     form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
-            if P.sublayers:   # splice sublayers from all sub_P calls within P:
-                # add layer Dert summation?
+            if P.sublayers:  # splice sublayers from all sub_P calls within P:
+                ''' each sublayer is now (Dert, param_set_), so it should be:
+                
+                for comb_layer, sublayer in zip_longest(comb_layers, P.sublayers, fillvalue=[]):
+                    for comb_param, sub_param in zip(comb_layer[0], sublayer[0]):
+                        comb_param += sub_param  # sum Derts
+                    comb_layer[0] += sublayer[0]  # append sub_P param sets
+                '''
                 comb_layers = [ comb_layer + sublayer for comb_layer, sublayer in
                                 zip_longest(comb_layers, P.sublayers, fillvalue=[])
                                 ]
