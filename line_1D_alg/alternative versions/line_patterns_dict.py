@@ -5,7 +5,7 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
 
 import cv2
 import csv
@@ -314,7 +314,7 @@ if __name__ == "__main__":
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
     # show image in the same window as a code
-    image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
+    image = cv2.imread('../raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
     assert image is not None, "No image in the path"
     render = 0
     verbose = 0

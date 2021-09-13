@@ -4,7 +4,7 @@
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '../../../AppData/Roaming/JetBrains/PyCharmCE2021.1')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../../../../AppData/Roaming/JetBrains/PyCharmCE2021.1')))
 
 import cv2
 import argparse
