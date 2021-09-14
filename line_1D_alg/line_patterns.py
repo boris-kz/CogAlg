@@ -58,7 +58,7 @@ ave_D = 5  # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdm = .5  # obsolete: average dm / m, to project bi_m = m * 1.5
 ave_splice = 50  # to merge a kernel of 3 adjacent Ps
-init_y = 500  # starting row, the whole frame doesn't need to be processed
+init_y = 0  # starting row, the whole frame doesn't need to be processed
 
 '''
     Conventions:
@@ -73,14 +73,14 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []
     '''
-    if cross_comp_spliced: process all image rows as a single line, vertically consecutive and preserving horizontal direction:
-    pixel_=[]; dert_=[]  
-    for y in range(init_y, Y):  
-        pixel_.append([ frame_of_pixels_[y, :]])  # splice all rows into pixel_
-    _i = pixel_[0]
+    if cross_comp_spliced:  # process all image rows as a single line, vertically consecutive and preserving horizontal direction:
+        pixel_=[]; dert_=[]  
+        for y in range(init_y, Y):  
+            pixel_.append([ frame_of_pixels_[y, :]])  # splice all rows into pixel_
+        _i = pixel_[0]
     else:
     '''
-    for y in range(init_y, Y):  # y is index of new line pixel_, a brake point here, we only need one row to process
+    for y in range(init_y, init_y+2):  # y is index of new line pixel_, init_y+2: we only need one row to process, use Y for full frame
         if logging:
             global logs_2D, logs_3D  # to share between functions
             logs_2D = np.empty((0, 6), dtype=int32)  # 2D array for layer0 params
@@ -149,23 +149,13 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         _sign = sign
 
     if rootP:  # call from intra_P_
-        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3th: hierarchy
-        rootP.sublayers = [[( fPd, rdn, rng, P_, [] )]]  # 1st sublayer is one param set, last []: sub_Ppm__
-        if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback
-        '''
-        if sum params into layer_Dert:
+        Dert = [0,0,0,0]  # P.L, I, D, M summed within a layer
         # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
-        Dert = []  # P params summed within a layer
-
-        rootP.sublayers = [(Dert, [fPd, rdn, rng, P_, [] )])]  # 1st sublayer is one param set, last[] is sub_Ppm__
+        rootP.sublayers = [( Dert, [(fPd, rdn, rng, P_, [])] )]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-            L, I, D, M = 0,0,0,0
             for P in P_:
-                L+=P.L; I+=P.I; D+=P.D; M+=P.M
-            Dert[:] = L, I, D, M
-            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sub_P params are summed per sublayer             
-         '''
+                Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
+            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sub_P params are summed per sublayer
     else:
         # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
@@ -181,7 +171,7 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
 
 def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
-    comb_layers = []
+    comb_layers= [] # empty Dert will be initialized per layer below
     adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
 
     for P, adj_M in zip(P_, adj_M_):
@@ -208,21 +198,12 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
             if P.sublayers:  # splice sublayers from all sub_P calls within P:
-                ''' each sublayer is now (Dert, param_set_), so it should be:
-                
-                for comb_layer, sublayer in zip_longest(comb_layers, P.sublayers, fillvalue=[]):
-                    for comb_param, sub_param in zip(comb_layer[0], sublayer[0]):
-                        comb_param += sub_param  # sum Derts
-                    comb_layer[0] += sublayer[0]  # append sub_P param sets
-                '''
-                comb_layers = [ comb_layer + sublayer for comb_layer, sublayer in
-                                zip_longest(comb_layers, P.sublayers, fillvalue=[])
-                                ]
-    ''' 
-    adj_M is not affected by primary range_comp per Pm?
-    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
-    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
-    '''
+                for i, (comb_layer, sublayer) in enumerate(zip_longest(comb_layers, P.sublayers, fillvalue=([0,0,0,0], []))):
+                    if sublayer[1]:  # sublayer is not empty
+                        if not comb_layer[1]: comb_layers.append(comb_layer)  # ([0,0,0,0], [])
+                        for j, param_value in enumerate(sublayer[0]): comb_layer[0][j] += param_value  # accumulate Dert
+                        comb_layer[1].append( sublayer[1])  # append sublayer' subset_
+
     return comb_layers
 
 
@@ -232,6 +213,10 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     In noise, there is a lot of variation. but no adjacent match to cancel, so that variation has no predictive value.
     On the other hand, 2D outline or 1D contrast may have low gradient / difference, but it terminates some high-match span.
     Such contrast is salient to the extent that it can borrow predictive value from adjacent high-match area.
+
+    adj_M is not affected by primary range_comp per Pm?
+    no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
+    same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
     '''
     M_ = [0] + [Pm.M for Pm in Pm_] + [0]  # list of adj M components in the order of Pm_, + first and last M=0,
 
@@ -296,7 +281,7 @@ if __name__ == "__main__":
     logging = 0  # log dataframes
     fpickle = 2  # 0: read from the dump; 1: pickle dump; 2: no pickling
     render = 0
-    fline_PPs = 0
+    fline_PPs = 1
     start_time = time()
 
     if logging:

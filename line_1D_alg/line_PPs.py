@@ -235,8 +235,7 @@ def form_Pp_(rootPp, dert_, param_name, rdn_, P_, fPd):
         # call from intra_Pp_; sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
         rootPp.sublayers = [[( fPd, Pp_ )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-            rootPp.sublayers += intra_Pp_(Pp_, param_name, fPd)  # deeper comb_layers, each concatenated from feedback of sublayers[n-1] from multiple sub_Ps
-            # sum params for comp_sublayers
+            rootPp.sublayers += intra_Pp_(Pp_, param_name, fPd)  # deeper comb_layers, each appended with feedback of sublayers[n-1] from mult sub_Ps
     else:
         # call from search
         intra_Pp_(Pp_, param_name, fPd)   # evaluates for sub-recursion and forming Ppd_ per Pm
@@ -284,8 +283,7 @@ def form_Pp_rng(rootPp, dert_, rdn_, P_):  # cluster Pps by cross-param redundan
         # call from intra_Pp_; sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
         rootPp.sublayers = [[( 0, Pp_ )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-            rootPp.sublayers += intra_Pp_(Pp_, "I_", fPd=0)  # deeper comb_layers, each concatenated from feedback of sublayers[n-1] from multiple sub_Ps
-            # sum params for comp_sublayers
+            rootPp.sublayers += intra_Pp_(Pp_, "I_", fPd=0)  # deeper comb_layers, each appended with feedback of sublayers[n-1] from mult sub_Ps
     else:
         # call from search
         intra_Pp_(Pp_, "I_", fPd=0)   # evaluates for sub-recursion and forming Ppd_ per Pm
@@ -399,21 +397,22 @@ def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_
     # called from intra_Pp_, especially MPp: init select by P.M, then combined Pp match?
 
     for P in P_:
-        if P.sublayers:
-            sublayer = P.sublayers[0][0]  # top sublayer has one array
-            # if pdert.m, eval per P, Idert or Ddert only?
-            sub_P_ = sublayer[3]
-            if len(sub_P_) > 2:
-                if fPd:
-                    if abs(P.D) > ave_D:  # better use sublayers.D|M, but we don't have it yet
+        if P.sublayers: # not empty sublayer
+            if P.sublayers[0][1]:  # not empty 1st layer subset, P.sublayers[0][0] is Dert
+                sublayer = P.sublayers[0][1][0]  # top sublayer has one array
+                # if pdert.m, eval per P, Idert or Ddert only?
+                sub_P_ = sublayer[3]
+                if len(sub_P_) > 2:
+                    if fPd:
+                        if abs(P.D) > ave_D:  # better use sublayers.D|M, but we don't have it yet
+                            sub_rdn_Pp__ = search(sub_P_, fPd)
+                            sublayer[4].append(sub_rdn_Pp__)
+                            # no direct recursion: sub_search_recursive(sub_P_, fPd)  # deeper sublayers search is selective per sub_P
+
+                    elif P.M > ave_M:  # + pdert.m?
                         sub_rdn_Pp__ = search(sub_P_, fPd)
                         sublayer[4].append(sub_rdn_Pp__)
                         # no direct recursion: sub_search_recursive(sub_P_, fPd)  # deeper sublayers search is selective per sub_P
-
-                elif P.M > ave_M:  # + pdert.m?
-                    sub_rdn_Pp__ = search(sub_P_, fPd)
-                    sublayer[4].append(sub_rdn_Pp__)
-                    # no direct recursion: sub_search_recursive(sub_P_, fPd)  # deeper sublayers search is selective per sub_P
 
 
 def comp_sublayers_draft(_P, P, pdert):
@@ -421,10 +420,12 @@ def comp_sublayers_draft(_P, P, pdert):
     dist_decay = 2  # decay of projected match with relative distance between sub_Ps
 
     if P.sublayers and _P.sublayers:  # not empty sub layers
-        for _sub_layer, sub_layer in zip(_P.sublayers[0], P.sublayers[0]):
-            if _sub_layer and sub_layer:
-                _Dert, (_fPd, _rdn, _rng, _sub_P_, _sub_Pp__) = _sub_layer
-                Dert, (fPd, rdn, rng, sub_P_, sub_Pp__) = sub_layer
+        if _P.sublayers[0][1] and P.sublayers[0][1]:
+            _Dert, _subset_ = _P.sublayers[0]  # 1st layer only
+            Dert, subset_ = P.sublayers[0]
+            for _subset, subset in zip(_subset_, subset_):
+                _fPd, _rdn, _rng, _sub_P_, _sub_Pp__ = _subset
+                fPd, rdn, rng, sub_P_, sub_Pp__ = subset
                 # fork comparison:
                 if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls:
                     # compare Derts and accumulate dert.sub_M:
@@ -450,15 +451,13 @@ def comp_sublayers_draft(_P, P, pdert):
 
 
 def sub_search_param_(_P_, P_, ipdert):  # variable-range search
-    # this for single param only, most likely incorrect
-
+    # this is for single param only, most likely incorrect
     rave = 1
     for i, _P in enumerate(_P_):
         negM = 0 # per _P
 
         for j, P in enumerate(P_):
             if (_P.M + P.M) / 2 + ipdert.m + negM > ave_M :
-
                 _pI = _P.I - (_P.D / 2)  # forward project by _D
                 pI = P.I + (P.D / 2)     # backward project by D
                 dert = comp_param(_pI, pI, "I_", ave_mI)  # param is compared to prior-P _param
