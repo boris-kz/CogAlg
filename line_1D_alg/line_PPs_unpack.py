@@ -539,3 +539,31 @@ def draw_PP_(image, frame_Pp__):
         plt.subplot(2, 2, i + 1)
         plt.imshow(img_Pp_pdert_[i], vmin=0, vmax=255)
         plt.title("Pderts, Param = " + param)
+
+
+def sub_search_param_(_P_, P_, ipdert):  # variable-range search
+    # this is for single param only, most likely incorrect
+    rave = 1
+    for i, _P in enumerate(_P_):
+        negM = 0 # per _P
+
+        for j, P in enumerate(P_):
+            if (_P.M + P.M) / 2 + ipdert.m + negM > ave_M :
+                _pI = _P.I - (_P.D / 2)  # forward project by _D
+                pI = P.I + (P.D / 2)     # backward project by D
+                dert = comp_param(_pI, pI, "I_", ave_mI)  # param is compared to prior-P _param
+                pdert = Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m)  # convert Cdert to Cpdert
+                ipdert.accumulate(sub_M=pdert.m, sub_D=pdert.d)
+
+                curr_M = pdert.m * rave + (_P.M + P.M) / 2  # P.M is bidirectional (include ipdert.m?)
+
+                if curr_M > ave_sub:  # comp all sub_P_ params, for core I only?
+                    comp_sublayers_draft(_P, P, pdert)  # should set dert.sub_M
+                if curr_M + pdert.sub_M > ave_M:  # match between sublayers; or > ave_cM?
+                    break  # 1st match takes over connectivity search in the next loop
+                else:
+                    pdert.negM += curr_M - ave_M  # known to be negative, accum per dert
+                    pdert.negiL += P.L
+                    pdert.negL += 1
+                    negM = pdert.negM
+

@@ -73,11 +73,23 @@ ave_mD = 1  # needs to be tuned
 ave_mM = 5  # needs to be tuned
 ave_sub = 20  # for comp_sub_layers
 
+ave_Dave = 100  # summed feedback filter
+ave_dave = 20   # mean feedback filter
+# def feedback(P_):  # adjust line_patterns filters
+
+
 def search(P_, fPd):  # cross-compare patterns within horizontal line
 
     param_names = ["L_", "I_", "D_", "M_"]
+    fbM = fbL = 0
     Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_ = [], [], [], [], [], []
     for P in P_:
+        fbM += P.M; fbL += P.L
+        if fbM > ave_Dave:
+            if fbM / fbL > ave_dave:
+                pass  # eventually feedback: line_patterns' cross_comp(frame_of_pixels_, ave + fbM / fbL)
+                # also terminate Fspan: same-filter frame_ with summed params
+
         P.I /= P.L; P.D /= P.L; P.M /= P.L  # immediate normalization to a mean
     _P = P_[0]
     _L, _I, _D, _M = _P.L, _P.I, _P.D, _P.M
@@ -437,7 +449,7 @@ def comp_sublayers_draft(_P, P, pdert):
                         for _sub_P in _sub_P_:
                             for sub_P in sub_P_:
                                 distance = sub_P.x0 - (_sub_P.x0 + _sub_P.L)  # always sub_P.x0 >_sub_P.x0?
-                                rel_distance = distance / (1 + (_sub_P.L + sub_P.L)) / 2  # distance / (distance + mean length)
+                                rel_distance = distance / (distance + (_sub_P.L + sub_P.L)) / 2  # distance / (distance + mean length)?
                                 if ((_sub_P.M + sub_P.M) / 2 + pdert.m) * rel_distance * dist_decay > ave_M:
                                     # comp I only, call from search_param?
                                     sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave_mI)
@@ -448,33 +460,6 @@ def comp_sublayers_draft(_P, P, pdert):
                         break  # low vertical induction, deeper sublayers are not compared
                 else:
                     break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
-
-
-def sub_search_param_(_P_, P_, ipdert):  # variable-range search
-    # this is for single param only, most likely incorrect
-    rave = 1
-    for i, _P in enumerate(_P_):
-        negM = 0 # per _P
-
-        for j, P in enumerate(P_):
-            if (_P.M + P.M) / 2 + ipdert.m + negM > ave_M :
-                _pI = _P.I - (_P.D / 2)  # forward project by _D
-                pI = P.I + (P.D / 2)     # backward project by D
-                dert = comp_param(_pI, pI, "I_", ave_mI)  # param is compared to prior-P _param
-                pdert = Cpdert(i=dert.i, p=dert.p, d=dert.d, m=dert.m)  # convert Cdert to Cpdert
-                ipdert.accumulate(sub_M=pdert.m, sub_D=pdert.d)
-
-                curr_M = pdert.m * rave + (_P.M + P.M) / 2  # P.M is bidirectional (include ipdert.m?)
-
-                if curr_M > ave_sub:  # comp all sub_P_ params, for core I only?
-                    comp_sublayers_draft(_P, P, pdert)  # should set dert.sub_M
-                if curr_M + pdert.sub_M > ave_M:  # match between sublayers; or > ave_cM?
-                    break  # 1st match takes over connectivity search in the next loop
-                else:
-                    pdert.negM += curr_M - ave_M  # known to be negative, accum per dert
-                    pdert.negiL += P.L
-                    pdert.negL += 1
-                    negM = pdert.negM
 
 
 def draw_PP_(image, frame_Pp__):
