@@ -78,19 +78,23 @@ ave_dave = 20   # mean feedback filter
 # def feedback(P_):  # adjust line_patterns filters
 
 
-def search(P_, fPd):  # cross-compare patterns within horizontal line
+def norm_feedback(P_, fPd):
 
-    param_names = ["L_", "I_", "D_", "M_"]
-    fbM = fbL = 0
-    Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_ = [], [], [], [], [], []
     for P in P_:
+        fbM = fbL = 0
         fbM += P.M; fbL += P.L
         if fbM > ave_Dave:
             if fbM / fbL > ave_dave:
                 pass  # eventually feedback: line_patterns' cross_comp(frame_of_pixels_, ave + fbM / fbL)
                 # also terminate Fspan: same-filter frame_ with summed params
-
         P.I /= P.L; P.D /= P.L; P.M /= P.L  # immediate normalization to a mean
+    search(P_, fPd)
+
+
+def search(P_, fPd):  # cross-compare patterns within horizontal line
+
+    param_names = ["L_", "I_", "D_", "M_"]
+    Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_ = [], [], [], [], [], []
     _P = P_[0]
     _L, _I, _D, _M = _P.L, _P.I, _P.D, _P.M
 
@@ -457,25 +461,33 @@ def comp_sublayers_draft(_P, P, pdert):
                         pdert.sub_M += dert.m  # high-value mL: macro-param?
 
                     if pdert.sub_M:  # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
-                        # or reuse search, but with 2 P_ arrays instead of one?
-                        for i, _sub_P in enumerate(_sub_P_):
-                            sub_pdert = Cpdert  # per _sub_P
-                            for sub_P in sub_P_[i:]:  # for x0 > _x0, but sub_P.x0 may still be < _sub_P.x0 + _sub_P.L:
-                                distance = sub_P.x0 - (_sub_P.x0 + _sub_P.L)  # negative distance is overlap, not sure how to treat it
+                        _SL = SL = 0  # summed Ls
+                        index = 0  # index of starting sub_P for last _sub_P
+                        for _sub_P in _sub_P_:
+                            sub_pdert = Cpdert()  # per _sub_P
+                            for sub_P in sub_P_[index:]:  # for ix0 > _ix0
+                                if SL >= _SL:
+                                    distance = sub_P.x0 - (_sub_P.x0 + _sub_P.L)  # negative distance is overlap, not sure how to treat it
+                                    rel_distance = distance / (distance + (_sub_P.L + sub_P.L)) / 2
+                                    # distance / (distance + mean L)?
+                                    if ((_sub_P.M + sub_P.M) / 2 + pdert.m) * rel_distance * dist_decay > ave_M:
+                                        # the rest of search() below?
+                                        for _param, param, param_name, ave in \
+                                            zip( (_sub_P.L,_sub_P.I,_sub_P.D,_sub_P.M), (sub_P.L,sub_P.I,sub_P.D,sub_P.M),
+                                                 ("L_", "I_", "D_", "M_"), (ave_mL, ave_mI, ave_mD, ave_mM) ):
+                                            if param_name != "I_" or _sub_P_.fPd:
+                                                dert = comp_param(_param, param, param_name, ave)
+                                                sub_pdert.sub_M += dert.m  # high-value mL: macro-param?
+                                        # if param_name == "I_": sub_pdert = search_param_(param_)
+                                        sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave_mI)
+                                        sub_pdert.sub_M += sub_dert.m  # between whole compared sub_Hs
+                                        sub_pdert.sub_D += sub_dert.d
+                                    else:
+                                        break  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
 
-                                rel_distance = distance / (distance + (_sub_P.L + sub_P.L)) / 2  # distance / (distance + mean length)
-                                if ((_sub_P.M + sub_P.M) / 2 + pdert.m) * rel_distance * dist_decay > ave_M:
-                                    for _param, param, param_name, ave in \
-                                        zip( (_sub_P.L,_sub_P.I,_sub_P.D,_sub_P.M), (sub_P.L,sub_P.I,sub_P.D,sub_P.M),
-                                        ("L_", "I_", "D_", "M_"), (ave_mL, ave_mI, ave_mD, ave_mM) ):
-                                        dert = comp_param(_param, param, param_name, ave)
-                                        sub_pdert.sub_M += dert.m  # high-value mL: macro-param?
-
-                                    sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave_mI)
-                                    sub_pdert.sub_M += sub_dert.m  # between whole compared sub_Hs
-                                    sub_pdert.sub_D += sub_dert.d
-                                else:
-                                    break  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
+                                else: index+=1  # try next sub_P
+                            SL += sub_P.L + 1  # next ix0
+                        _SL += _sub_P.L + 1  # next _ix0
 
                     if pdert.sub_M + pdert.m + P.M < ave_sub_M:  # combine match values across all P levels.
                         break  # low vertical induction, deeper sublayers are not compared

@@ -197,14 +197,16 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     # or if min(-P.M, adj_M),  rel_adj_M = adj_M / -P.M  # allocate -Pm adj_M to each sub_Pd?
                     form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
-            if P.sublayers:  # combine sublayers of all sub_Ps:
-                for comb_layer, sublayer in zip_longest(comb_layers, P.sublayers, fillvalue=([0,0,0,0], []) ):
-                    if sublayer[1]:  # sublayer (Dert, subset_) is not empty
-                        if not comb_layer[1]: comb_layers.append(comb_layer)  # initialized ([0,0,0,0], [])
-                        # accumulate combined Dert:
-                        for i, param_value in enumerate(sublayer[0]): comb_layer[0][i] += param_value
-                        # append combined subset_ (array of sub_P_ param sets):
-                        comb_layer[1].extend( sublayer[1])  # append would increase nesting
+            new_comp_layers = []
+            for (comb_Dert, comb_subset_), (Dert, subset_) in zip_longest(comb_layers, P.sublayers, fillvalue=([0, 0, 0, 0], [])):
+                # Accumulate combined Dert:
+                new_comb_Dert = [(comb_param + param) for comb_param, param in zip(comb_Dert, Dert)]
+                # Append combined subset_ (array of sub_P_ param sets)
+                new_comb_subset_ = comb_subset_ + subset_
+                # append layer = (Dert, subset_)
+                new_comp_layers.append((new_comb_Dert, new_comb_subset_))
+
+            comb_layers = new_comp_layers
 
     return comb_layers
 

@@ -437,6 +437,26 @@ def intra_Pp_(Pp_, param_name, rdn_, fPd):  # evaluate for sub-recursion in line
                 comb_layers = [comb_layer + sublayer for comb_layer, sublayer in
                                zip_longest(comb_layers, Pp.sublayers, fillvalue=[])
                                ]
+                ''' list comprehension:
+                            if P.sublayers:  # combine sublayers of all sub_Ps:
+                comb_layers = [([(comb_param + param)       # \
+                                 for comb_param, param      #  } Accumulated Dert
+                                 in zip(comb_Dert, Dert)],  # /
+                                comb_subset_ + subset_)     # Accumulated subset_
+                               for (comb_Dert, comb_subset_), (Dert, subset_)   # zipped Dert and subset_ from 2 layer lists
+                               in zip_longest(comb_layers, P.sublayers, fillvalue=([0,0,0,0], []))]
+                '''
+                # old:
+
+                if P.sublayers:  # combine sublayers of all sub_Ps:
+                    for comb_layer, sublayer in zip_longest(comb_layers, P.sublayers, fillvalue=([0, 0, 0, 0], [])):
+                        if sublayer[1]:  # sublayer (Dert, subset_) is not empty
+                            if not comb_layer[1]: comb_layers.append(comb_layer)  # initialized ([0,0,0,0], [])
+                            # accumulate combined Dert:
+                            for i, param_value in enumerate(sublayer[0]): comb_layer[0][i] += param_value
+                            # append combined subset_ (array of sub_P_ param sets):
+                            comb_layer[1].extend(sublayer[1])  # append would increase nesting
+
     return comb_layers
 
 
