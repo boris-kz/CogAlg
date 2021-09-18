@@ -45,8 +45,9 @@ class CP(ClusterStructure):
     M = int
     x0 = int
     dert_ = list  # contains (i, p, d, m)
+    # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ dert_], 3rd: sublayers[ sub_P_[ dert_]]:
     sublayers = list  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
-    # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ derts], 3rd: sublayers[ sub_Ps[ derts]]
+    subDerts = list  # conditionally summed [L,I,D,M] per sublayer, most are empty
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
 
 verbose = False
@@ -149,13 +150,19 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         _sign = sign
 
     if rootP:  # call from intra_P_
-        Dert = [0,0,0,0]  # P.L, I, D, M summed within a layer
+        Dert = []
         # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
         rootP.sublayers = [( Dert, [(fPd, rdn, rng, P_, [])] )]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-            for P in P_:
-                Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
-            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, sub_P params are summed per sublayer
+
+            if rootP.M * len(P_) > ave_M * 5:
+                Dert[:] = [0, 0, 0, 0]  # P.L, I, D, M summed within a layer
+                for P in P_:
+                    Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
+
+            comb_sublayers, comb_subDerts = intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, subDerts is selective
+            rootP.sublayers += comb_sublayers
+            rootP.subDerts += comb_subDerts
     else:
         # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
@@ -171,7 +178,6 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
 
 def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
-    comb_layers= [] # empty Dert will be initialized per layer below
     adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
 
     for P, adj_M in zip(P_, adj_M_):
@@ -197,18 +203,30 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     # or if min(-P.M, adj_M),  rel_adj_M = adj_M / -P.M  # allocate -Pm adj_M to each sub_Pd?
                     form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
-            new_comp_layers = []
-            for (comb_Dert, comb_subset_), (Dert, subset_) in zip_longest(comb_layers, P.sublayers, fillvalue=([0, 0, 0, 0], [])):
-                # Accumulate combined Dert:
-                new_comb_Dert = [(comb_param + param) for comb_param, param in zip(comb_Dert, Dert)]
-                # Append combined subset_ (array of sub_P_ param sets)
-                new_comb_subset_ = comb_subset_ + subset_
-                # append layer = (Dert, subset_)
-                new_comp_layers.append((new_comb_Dert, new_comb_subset_))
+            comb_layers=[]
+            if P.sublayers:
+                new_sublayers = []
+                for comb_subset_, subset_ in zip_longest(comb_layers, P.sublayers, fillvalue=([])):
+                    # append combined subset_ (array of sub_P_ param sets):
+                    new_sublayers += [ comb_subset_.extend(subset_) ]
+                comb_layers = [new_sublayers]
 
-            comb_layers = new_comp_layers
+                comb_subDerts=[]
+                for comb_subset_ in comb_layers:
+                    if P.M * len(comb_subset_) > ave_M * 5:  # 5 is a placeholder, form subDert:
+                        new_subDerts = []
+                        for comb_Dert, subset_ in zip_longest(comb_subDerts, comb_subset_, fillvalue=([])):
+                            if subset_:
+                                if not comb_Dert: comb_Dert=[0,0,0,0]
+                                for subset in subset_:
+                                    for sub_P in subset[3]:  # accumulate combined Dert:
+                                        comb_Dert[0]+=sub_P.L; comb_Dert[1]+=sub_P.I; comb_Dert[2]+=sub_P.D; comb_Dert[3]+=sub_P.M
+                            new_subDerts += comb_Dert
+                        comb_subDerts = new_subDerts
+                    else:
+                        break  # no skip to deeper layers
 
-    return comb_layers
+    return comb_layers, comb_subDerts
 
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
