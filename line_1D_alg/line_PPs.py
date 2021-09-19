@@ -37,6 +37,7 @@ class CPp(CP):
     negL = int  # in mdert only
     negiL = int
     sublayers = list
+    subDerts = list
 
 class CderPp(ClusterStructure):  # for line_PPPs only, if PPP comb x Pps?
     mPp = int
@@ -84,7 +85,7 @@ def norm_feedback(P_, fPd):
         fbM = fbL = 0
         fbM += P.M; fbL += P.L
         if fbM > ave_Dave:
-            if fbM / fbL > ave_dave:
+            if fbM / fbL > ave_dave: # and this ave_dave will be adjusted by higher level again?
                 pass  # eventually feedback: line_patterns' cross_comp(frame_of_pixels_, ave + fbM / fbL)
                 # also terminate Fspan: same-filter frame_ with summed params
         P.I /= P.L; P.D /= P.L; P.M /= P.L  # immediate normalization to a mean
@@ -250,11 +251,15 @@ def form_Pp_(rootPp, dert_, param_name, rdn_, P_, fPd):
     if rootPp:
         Dert = [0,0,0,0]  # P.L, I, D, M summed within a layer
         # call from intra_Pp_; sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
-        rootPp.sublayers = [(Dert, [( fPd, Pp_ )])]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
-        if len(Pp_) > 4:  # 2 * (rng+1) = 2*2 =4
+        rootPp.sublayers = [[( fPd, Pp_ )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
+        rootPp.subDerts = [Dert]
+        if (len(Pp_) > 4) and (rootPp.M * len(Pp_) > ave_M): # 2 * (rng+1) = 2*2 =4
+            Dert[:] = [0, 0, 0, 0]  # P.L, I, D, M summed within a layer
             for Pp in Pp_:
                 Dert[0] += Pp.L; Dert[1] += Pp.I; Dert[2] += Pp.D; Dert[3] += Pp.M
-            rootPp.sublayers += intra_Pp_(Pp_, param_name, fPd)  # deeper comb_layers, each appended with feedback of sublayers[n-1] from mult sub_Ps
+            comb_sublayers, comb_subDerts = intra_Pp_(Pp_, param_name, fPd)  # deeper comb_layers feedback, subDerts is selective
+            rootPp.sublayers += comb_sublayers
+            rootPp.subDerts += comb_subDerts
     else:
         # call from search
         intra_Pp_(Pp_, param_name, fPd)   # evaluates for sub-recursion and forming Ppd_ per Pm
@@ -301,11 +306,15 @@ def form_Pp_rng(rootPp, dert_, rdn_, P_):  # cluster Pps by cross-param redundan
     if rootPp:
         Dert = [0,0,0,0]  # P.L, I, D, M summed within a layer
         # call from intra_Pp_; sublayers brackets: 1st: param set, 2nd: sublayer concatenated from n root_Ps, 3rd: layers depth hierarchy
-        rootPp.sublayers = [(Dert, [( 0, Pp_ )])]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
-        if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
+        rootPp.sublayers = [[( fPd, Pp_ )]]  # 1st sublayer is one element, sub_Ppm__=[], + Dert=[]
+        rootPp.subDerts = [Dert]
+        if (len(Pp_) > 4) and (rootPp.M * len(Pp_) > ave_M): # 2 * (rng+1) = 2*2 =4
+            Dert[:] = [0, 0, 0, 0]  # P.L, I, D, M summed within a layer
             for Pp in Pp_:
                 Dert[0] += Pp.L; Dert[1] += Pp.I; Dert[2] += Pp.D; Dert[3] += Pp.M
-            rootPp.sublayers += intra_Pp_(Pp_, "I_", fPd=0)  # deeper comb_layers, each appended with feedback of sublayers[n-1] from mult sub_Ps
+            comb_sublayers, comb_subDerts = intra_Pp_(Pp_, "I_", fPd=0)  # deeper comb_layers feedback, subDerts is selective
+            rootPp.sublayers += comb_sublayers
+            rootPp.subDerts += comb_subDerts
     else:
         # call from search
         intra_Pp_(Pp_, "I_", fPd=0)   # evaluates for sub-recursion and forming Ppd_ per Pm
@@ -372,7 +381,8 @@ def compact(rval_Pp_, pdert1_, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pde
 
 def intra_Pp_(Pp_, param_name, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
 
-    comb_layers = []  # combine into root P sublayers[1:]
+    comb_sublayers = []  # combine into root P sublayers[1:]
+    comb_subDerts=[]
     # each Pp is evaluated for incremental range and derivation xcomp, as in line_patterns but with local aves
 
     for Pp in Pp_:  # each sub_layer is nested to depth = sublayers[n]
@@ -408,17 +418,25 @@ def intra_Pp_(Pp_, param_name, fPd):  # evaluate for sub-recursion in line Pm_, 
                     rdn_ = [rdn+1 for rdn in Pp.rdn_]
                     form_Pp_(Pp, Pp.pdert_, param_name, rdn_, Pp.P_, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
-            if Pp.sublayers:  # splice sublayers from all sub_Pp calls in Pp:
 
-                for comb_layer, sublayer in zip_longest(comb_layers, Pp.sublayers, fillvalue=([0,0,0,0], []) ):
-                    if sublayer[1]:  # sublayer (Dert, subset_) is not empty
-                        if not comb_layer[1]: comb_layers.append(comb_layer)  # initialized ([0,0,0,0], [])
-                        # accumulate combined Dert:
-                        for i, param_value in enumerate(sublayer[0]): comb_layer[0][i] += param_value
-                        # append combined subset_ (array of sub_Pp_ param sets):
-                        comb_layer[1].extend(sublayer[1])  # append would preserve nesting
+            if Pp.sublayers: # splice sublayers from all sub_Pp calls in Pp:
+                # combine sublayers
+                new_sublayers = []
+                for comb_subset_, subset_ in zip_longest(comb_sublayers, Pp.sublayers, fillvalue=([])):
+                    # append combined subset_ (array of sub_P_ param sets):
+                    new_sublayers.append(comb_subset_ + subset_)
+                comb_sublayers = new_sublayers
+                # combine subDerts
+                new_subDerts = []
+                for comb_Dert_, Dert_ in zip_longest(comb_subDerts, Pp.subDerts, fillvalue=([])):
+                    if Dert_ or comb_Dert_: # at least one is not empty
+                        new_Dert_ = [comb_param + param
+                                    for comb_param, param in
+                                    zip_longest(comb_Dert_, Dert_, fillvalue=0)]
+                        new_subDerts.append(new_Dert_)
+                comb_subDerts = new_subDerts
 
-    return comb_layers
+    return comb_sublayers, comb_subDerts
 
 
 def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_ search: top-down induction,
@@ -426,8 +444,8 @@ def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_
 
     for P in P_:
         if P.sublayers: # not empty sublayer
-            if P.sublayers[0][1]:  # not empty 1st layer subset, P.sublayers[0][0] is Dert
-                subset = P.sublayers[0][1][0]  # top sublayer subset_ is one array
+            if P.sublayers[0]:  # not empty 1st layer subset, P.sublayers[0][0] is Dert
+                subset = P.sublayers[0][0]  # top sublayer subset_ is one array
                 # if pdert.m, eval per P, Idert or Ddert only?
                 sub_P_ = subset[3]
                 if len(sub_P_) > 2:
@@ -447,52 +465,52 @@ def comp_sublayers_draft(_P, P, pdert):
     dist_decay = 2  # decay of projected match with relative distance between sub_Ps
 
     if P.sublayers and _P.sublayers:  # not empty sub layers
-        if _P.sublayers[0][1] and P.sublayers[0][1]:
-            _Dert, _subset_ = _P.sublayers[0]  # 1st layer only
-            Dert, subset_ = P.sublayers[0]
-            for _subset, subset in zip(_subset_, subset_):
-                _fPd, _rdn, _rng, _sub_P_, _sub_Pp__ = _subset
-                fPd, rdn, rng, sub_P_, sub_Pp__ = subset
-                # fork comparison:
-                if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls:
-                    # compare Derts and accumulate dert.sub_M:
-                    for _param, param, param_name, ave in zip(_Dert, Dert, ("L_","I_","D_","M_"), (ave_mL, ave_mI, ave_mD, ave_mM)):
-                        dert = comp_param(_param, param, param_name, ave)
-                        pdert.sub_M += dert.m  # high-value mL: macro-param?
+        _Dert, _subset_ = _P.subDerts[0], _P.sublayers[0]  # 1st layer only
+        Dert, subset_ = P.subDerts[0], P.sublayers[0]
 
-                    if pdert.sub_M:  # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
-                        _SL = SL = 0  # summed Ls
-                        index = 0  # index of starting sub_P for last _sub_P
-                        for _sub_P in _sub_P_:
-                            sub_pdert = Cpdert()  # per _sub_P
-                            for sub_P in sub_P_[index:]:  # for ix0 > _ix0
-                                if SL >= _SL:
-                                    distance = sub_P.x0 - (_sub_P.x0 + _sub_P.L)  # negative distance is overlap, not sure how to treat it
-                                    rel_distance = distance / (distance + (_sub_P.L + sub_P.L)) / 2
-                                    # distance / (distance + mean L)?
-                                    if ((_sub_P.M + sub_P.M) / 2 + pdert.m) * rel_distance * dist_decay > ave_M:
-                                        # the rest of search() below?
-                                        for _param, param, param_name, ave in \
-                                            zip( (_sub_P.L,_sub_P.I,_sub_P.D,_sub_P.M), (sub_P.L,sub_P.I,sub_P.D,sub_P.M),
-                                                 ("L_", "I_", "D_", "M_"), (ave_mL, ave_mI, ave_mD, ave_mM) ):
-                                            if param_name != "I_" or _sub_P_.fPd:
-                                                dert = comp_param(_param, param, param_name, ave)
-                                                sub_pdert.sub_M += dert.m  # high-value mL: macro-param?
-                                        # if param_name == "I_": sub_pdert = search_param_(param_)
-                                        sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave_mI)
-                                        sub_pdert.sub_M += sub_dert.m  # between whole compared sub_Hs
-                                        sub_pdert.sub_D += sub_dert.d
-                                    else:
-                                        break  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
+        for _subset, subset in zip(_subset_, subset_):
+            _fPd, _rdn, _rng, _sub_P_, _sub_Pp__ = _subset
+            fPd, rdn, rng, sub_P_, sub_Pp__ = subset
+            # fork comparison:
+            if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls:
+                # compare Derts and accumulate dert.sub_M:
+                for _param, param, param_name, ave in zip(_Dert, Dert, ("L_","I_","D_","M_"), (ave_mL, ave_mI, ave_mD, ave_mM)):
+                    dert = comp_param(_param, param, param_name, ave)
+                    pdert.sub_M += dert.m  # high-value mL: macro-param?
 
-                                else: index+=1  # try next sub_P
-                            SL += sub_P.L + 1  # next ix0
-                        _SL += _sub_P.L + 1  # next _ix0
+                if pdert.sub_M:  # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
+                    _SL = SL = 0  # summed Ls
+                    index = 0  # index of starting sub_P for last _sub_P
+                    for _sub_P in _sub_P_:
+                        sub_pdert = Cpdert()  # per _sub_P
+                        for sub_P in sub_P_[index:]:  # for ix0 > _ix0
+                            if SL >= _SL:
+                                distance = sub_P.x0 - (_sub_P.x0 + _sub_P.L)  # negative distance is overlap, not sure how to treat it
+                                rel_distance = distance / (distance + (_sub_P.L + sub_P.L)) / 2
+                                # distance / (distance + mean L)?
+                                if ((_sub_P.M + sub_P.M) / 2 + pdert.m) * rel_distance * dist_decay > ave_M:
+                                    # the rest of search() below?
+                                    for _param, param, param_name, ave in \
+                                        zip( (_sub_P.L,_sub_P.I,_sub_P.D,_sub_P.M), (sub_P.L,sub_P.I,sub_P.D,sub_P.M),
+                                             ("L_", "I_", "D_", "M_"), (ave_mL, ave_mI, ave_mD, ave_mM) ):
+                                        if param_name != "I_" or _sub_P.fPd:
+                                            dert = comp_param(_param, param, param_name, ave)
+                                            sub_pdert.sub_M += dert.m  # high-value mL: macro-param?
+                                    # if param_name == "I_": sub_pdert = search_param_(param_)
+                                    sub_dert = comp_param(_sub_P.I, sub_P.I, "I_", ave_mI)
+                                    sub_pdert.sub_M += sub_dert.m  # between whole compared sub_Hs
+                                    sub_pdert.sub_D += sub_dert.d
+                                else:
+                                    break  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
 
-                    if pdert.sub_M + pdert.m + P.M < ave_sub_M:  # combine match values across all P levels.
-                        break  # low vertical induction, deeper sublayers are not compared
-                else:
-                    break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
+                            else: index+=1  # try next sub_P
+                        SL += sub_P.L + 1  # next P' ix0
+                    _SL += _sub_P.L + 1  # next _P' ix0
+
+                if pdert.sub_M + pdert.m + P.M < ave_sub_M:  # combine match values across all P levels.
+                    break  # low vertical induction, deeper sublayers are not compared
+            else:
+                break  # deeper P and _P sublayers are from different intra_comp forks, not comparable?
 
 
 def draw_PP_(image, frame_Pp__):
@@ -539,7 +557,7 @@ def draw_PP_(image, frame_Pp__):
                 # sub_Pps
                 for k, sub_P_layers in enumerate(Pp.sublayers): # each layer
                     if k+1 == draw_layer:
-                        for m, (_, Pp_) in enumerate(sub_P_layers[1]): # each sub_P's Pps
+                        for (_, Pp_) in enumerate(sub_P_layers[0]): # each sub_P's Pps
                             for n, P in enumerate(Pp.P_): # each P or pdert
                                 if Pp.M>0:
                                     img_Pp_layer_[i][y,P.x0:P.x0+P.L] = 255 # + sign

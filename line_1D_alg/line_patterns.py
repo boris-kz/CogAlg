@@ -129,6 +129,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
 
     return frame_of_patterns_  # frame of patterns is an input to level 2
 
+
 def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through intra_P_
     # initialization:
     P_ = []
@@ -152,13 +153,13 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
     if rootP:  # call from intra_P_
         Dert = []
         # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
-        rootP.sublayers = [( Dert, [(fPd, rdn, rng, P_, [])] )]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
+        rootP.sublayers = [[(fPd, rdn, rng, P_, [])]]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
+        rootP.subDerts = [Dert]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
 
-            if rootP.M * len(P_) > ave_M * 5:
-                Dert[:] = [0, 0, 0, 0]  # P.L, I, D, M summed within a layer
-                for P in P_:
-                    Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
+            if rootP.M * len(P_) > ave_M * 5:  # or in line_PPs?
+                Dert[:] = [0, 0, 0, 0]  # P. L, I, D, M summed within a layer
+                for P in P_:  Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
 
             comb_sublayers, comb_subDerts = intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, subDerts is selective
             rootP.sublayers += comb_sublayers
@@ -166,7 +167,6 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
     else:
         # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
-        return P_  # else packed in P.sublayers
 
     if logging:  # fill the array with layer0 params
         global logs_2D  # reset for each row
@@ -175,10 +175,14 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
             logs_2D = np.append(logs_2D, logs_1D, axis=0)  # log for every image row
     # print(logs_2D.shape)
 
+    return P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
+
 
 def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
     adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
+    comb_sublayers = []
+    comb_subDerts = []
 
     for P, adj_M in zip(P_, adj_M_):
         if P.L > 2 * (rng+1):  # vs. **? rng+1 because rng is initialized at 0, as all params
@@ -203,30 +207,24 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     # or if min(-P.M, adj_M),  rel_adj_M = adj_M / -P.M  # allocate -Pm adj_M to each sub_Pd?
                     form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
-            comb_layers=[]
             if P.sublayers:
                 new_sublayers = []
-                for comb_subset_, subset_ in zip_longest(comb_layers, P.sublayers, fillvalue=([])):
+                for comb_subset_, subset_ in zip_longest(comb_sublayers, P.sublayers, fillvalue=([])):
                     # append combined subset_ (array of sub_P_ param sets):
-                    new_sublayers += [ comb_subset_.extend(subset_) ]
-                comb_layers = [new_sublayers]
+                    new_sublayers.append(comb_subset_ + subset_)
+                comb_sublayers = new_sublayers
 
-                comb_subDerts=[]
-                for comb_subset_ in comb_layers:
-                    if P.M * len(comb_subset_) > ave_M * 5:  # 5 is a placeholder, form subDert:
-                        new_subDerts = []
-                        for comb_Dert, subset_ in zip_longest(comb_subDerts, comb_subset_, fillvalue=([])):
-                            if subset_:
-                                if not comb_Dert: comb_Dert=[0,0,0,0]
-                                for subset in subset_:
-                                    for sub_P in subset[3]:  # accumulate combined Dert:
-                                        comb_Dert[0]+=sub_P.L; comb_Dert[1]+=sub_P.I; comb_Dert[2]+=sub_P.D; comb_Dert[3]+=sub_P.M
-                            new_subDerts += comb_Dert
-                        comb_subDerts = new_subDerts
-                    else:
-                        break  # no skip to deeper layers
+                new_subDerts = []
+                for comb_Dert, Dert in zip_longest(comb_subDerts, P.subDerts, fillvalue=([])):
+                    new_Dert = []
+                    if Dert or comb_Dert:  # at least one is not empty, from form_P_
+                        new_Dert = [comb_param + param
+                                   for comb_param, param in
+                                   zip_longest(comb_Dert, Dert, fillvalue=0)]
+                    new_subDerts.append(new_Dert)
+                comb_subDerts = new_subDerts
 
-    return comb_layers, comb_subDerts
+    return comb_sublayers, comb_subDerts
 
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
@@ -235,7 +233,6 @@ def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borr
     In noise, there is a lot of variation. but no adjacent match to cancel, so that variation has no predictive value.
     On the other hand, 2D outline or 1D contrast may have low gradient / difference, but it terminates some high-match span.
     Such contrast is salient to the extent that it can borrow predictive value from adjacent high-match area.
-
     adj_M is not affected by primary range_comp per Pm?
     no comb_m = comb_M / comb_S, if fid: comb_m -= comb_|D| / comb_S: alt rep cost
     same-sign comp: parallel edges, cross-sign comp: M - (~M/2 * rL) -> contrast as 1D difference?
@@ -303,7 +300,7 @@ if __name__ == "__main__":
     logging = 0  # log dataframes
     fpickle = 2  # 0: read from the dump; 1: pickle dump; 2: no pickling
     render = 0
-    fline_PPs = 1
+    fline_PPs = 0
     start_time = time()
 
     if logging:

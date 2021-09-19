@@ -447,7 +447,6 @@ def intra_Pp_(Pp_, param_name, rdn_, fPd):  # evaluate for sub-recursion in line
                                in zip_longest(comb_layers, P.sublayers, fillvalue=([0,0,0,0], []))]
                 '''
                 # old:
-
                 if P.sublayers:  # combine sublayers of all sub_Ps:
                     for comb_layer, sublayer in zip_longest(comb_layers, P.sublayers, fillvalue=([0, 0, 0, 0], [])):
                         if sublayer[1]:  # sublayer (Dert, subset_) is not empty
@@ -456,6 +455,31 @@ def intra_Pp_(Pp_, param_name, rdn_, fPd):  # evaluate for sub-recursion in line
                             for i, param_value in enumerate(sublayer[0]): comb_layer[0][i] += param_value
                             # append combined subset_ (array of sub_P_ param sets):
                             comb_layer[1].extend(sublayer[1])  # append would increase nesting
+
+                comb_layers = []
+                if P.sublayers:
+                    new_sublayers = []
+                    for comb_subset_, subset_ in zip_longest(comb_layers, P.sublayers, fillvalue=([])):
+                        # append combined subset_ (array of sub_P_ param sets):
+                        new_sublayers += [comb_subset_.extend(subset_)]
+                    comb_layers = [new_sublayers]
+
+                # to be used de novo in line_PPs, depending on pdert.m, sub_M, and rdn,
+                # line_patterns should only form sublayers?
+                    comb_subDerts = []
+                    for comb_subset_ in comb_layers:
+                        if P.M * len(comb_subset_) > ave_M * 5:  # 5 is a placeholder, form subDert:
+                            new_subDerts = []
+                            for comb_Dert, subset_ in zip_longest(comb_subDerts, comb_subset_, fillvalue=([])):
+                                if subset_:
+                                    if not comb_Dert: comb_Dert = [0, 0, 0, 0]
+                                    for subset in subset_:
+                                        for sub_P in subset[3]:  # accumulate combined Dert:
+                                            comb_Dert[0] += sub_P.L; comb_Dert[1] += sub_P.I; comb_Dert[2] += sub_P.D; comb_Dert[3] += sub_P.M
+                                new_subDerts += comb_Dert
+                            comb_subDerts = new_subDerts
+                        else:
+                            break  # no skip to deeper layers
 
     return comb_layers
 
