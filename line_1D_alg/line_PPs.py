@@ -369,7 +369,7 @@ def compact(rval_Pp_, pdert1_, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pde
                 _P = CP()
                 for P in Pp.P_:
                     _P.accum_from(P, excluded=["x0"])  # different from Pp params
-                    _P.dert_ += [P.dert_]  # splice dert_s within Pp
+                    _P.dert_ += P.dert_  # splice dert_s within Pp
 
                 form_P_(_P, _P.dert_, rdn=1, rng=1, fPd=fPd)  # rerun on spliced Ps
                 rval_Pp_[i] = (rval, _P)  # replace Pp with spliced P,
@@ -428,12 +428,12 @@ def intra_Pp_(Pp_, param_name, fPd):  # evaluate for sub-recursion in line Pm_, 
                 comb_sublayers = new_sublayers
                 # combine subDerts
                 new_subDerts = []
-                for comb_Dert_, Dert_ in zip_longest(comb_subDerts, Pp.subDerts, fillvalue=([])):
-                    if Dert_ or comb_Dert_: # at least one is not empty
-                        new_Dert_ = [comb_param + param
-                                    for comb_param, param in
-                                    zip_longest(comb_Dert_, Dert_, fillvalue=0)]
-                        new_subDerts.append(new_Dert_)
+                for comb_Dert, Dert in zip_longest(comb_subDerts, Pp.subDerts, fillvalue=([])):
+                    if Dert or comb_Dert: # at least one is not empty
+                        new_Dert = [comb_param + param
+                                   for comb_param, param in
+                                   zip_longest(comb_Dert, Dert, fillvalue=0)]
+                        new_subDerts.append(new_Dert)
                 comb_subDerts = new_subDerts
 
     return comb_sublayers, comb_subDerts
@@ -477,15 +477,16 @@ def comp_sublayers_draft(_P, P, pdert):
                 for _param, param, param_name, ave in zip(_Dert, Dert, ("L_","I_","D_","M_"), (ave_mL, ave_mI, ave_mD, ave_mM)):
                     dert = comp_param(_param, param, param_name, ave)
                     pdert.sub_M += dert.m  # high-value mL: macro-param?
-
                 if pdert.sub_M:  # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
                     _SL = SL = 0  # summed Ls
                     index = 0  # index of starting sub_P for last _sub_P
                     for _sub_P in _sub_P_:
                         sub_pdert = Cpdert()  # per _sub_P
-                        for sub_P in sub_P_[index:]:  # for ix0 > _ix0
+                        for i, sub_P in enumerate(sub_P_[index:], start=index):  # for ix0 > _ix0
                             if SL >= _SL:
+                                # rightward only, secondary leftward search?
                                 distance = sub_P.x0 - (_sub_P.x0 + _sub_P.L)  # negative distance is overlap, not sure how to treat it
+                                if distance <0: distance = 0 # temporary to prevent zero division
                                 rel_distance = distance / (distance + (_sub_P.L + sub_P.L)) / 2
                                 # distance / (distance + mean L)?
                                 if ((_sub_P.M + sub_P.M) / 2 + pdert.m) * rel_distance * dist_decay > ave_M:
@@ -503,9 +504,9 @@ def comp_sublayers_draft(_P, P, pdert):
                                 else:
                                     break  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
 
-                            else: index+=1  # try next sub_P
-                        SL += sub_P.L + 1  # next P' ix0
-                    _SL += _sub_P.L + 1  # next _P' ix0
+                            else: index=min(i+1, len(sub_P_)-1)  # next _sub_P loop's sub_P_ starting index
+                            SL += sub_P.L   # next P' ix0
+                        _SL += _sub_P.L   # next _P' ix0
 
                 if pdert.sub_M + pdert.m + P.M < ave_sub_M:  # combine match values across all P levels.
                     break  # low vertical induction, deeper sublayers are not compared
@@ -533,13 +534,13 @@ def draw_PP_(image, frame_Pp__):
         for i, (rval_Pp_, Pp_) in enumerate(zip(rval_Pp__, Pp__)): # loop each rdn_Pp or Pp
             # rval_Pp
             for j, (Rval, rval_Pps) in enumerate(rval_Pp_):
-                for k, (rval, Pp) in enumerate(rval_Pps):
-                    for m, P in enumerate(Pp.P_):
-
-                        if rval>0:
-                            img_rval_Pp_[i][y,P.x0:P.x0+P.L] = 255 # + sign
-                        else:
-                            img_rval_Pp_[i][y,P.x0:P.x0+P.L] = 128 # - sign
+                for (rval, Pp) in (rval_Pps):
+                    if hasattr(Pp, 'P_'):
+                        for P in (Pp.P_):
+                            if rval>0:
+                                img_rval_Pp_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                            else:
+                                img_rval_Pp_[i][y,P.x0:P.x0+P.L] = 128 # - sign
             # Pp
             for j, Pp in enumerate(Pp_): # each Pp
                 for k, P in enumerate(Pp.P_): # each P or pdert

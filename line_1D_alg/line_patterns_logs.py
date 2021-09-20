@@ -59,8 +59,8 @@ ave_D = 5  # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdm = .5  # obsolete: average dm / m, to project bi_m = m * 1.5
 ave_splice = 50  # to merge a kernel of 3 adjacent Ps
-init_y = 500  # starting row, the whole frame doesn't need to be processed
-halt_y = 502  # ending row
+init_y = 0  # starting row, the whole frame doesn't need to be processed
+
 '''
     Conventions:
     postfix '_' denotes array name, vs. same-name elements
@@ -81,7 +81,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         _i = pixel_[0]
     else:
     '''
-    for y in range(init_y, halt_y):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
+    for y in range(init_y, init_y+2):  # y is index of new line pixel_, init_y+2: we only need one row to process, use Y for full frame
+        if logging:
+            global logs_2D, logs_3D  # to share between functions
+            logs_2D = np.empty((0, 6), dtype=int32)  # 2D array for layer0 params
 
         # initialization:
         dert_ = []  # line-wide i_, p_, d_, m__
@@ -97,6 +100,32 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         # form m-sign patterns, rootP=None:
         Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # eval intra_Pm_ per Pm in
         frame_of_patterns_.append(Pm_)  # add line of patterns to frame of patterns, skip if cross_comp_spliced
+
+        if logging:
+            if len(logs_2D) < max_P_len:  # number of Ps per row, align arrays before stacking:
+                no_data = np.zeros((max_P_len - len(logs_2D), 6), dtype=int32)
+                logs_2D = np.append(logs_2D, no_data, axis=0)
+            if logs_3D is not None:
+                logs_3D = np.dstack((logs_3D, logs_2D))  # form 3D array of logs by stacking 2D arrays
+            else:
+                logs_3D = logs_2D  # form 3D array of logs by stacking 2D arrays
+
+    if logging:
+        logs_3D = logs_3D.T  # rotate for readability
+        data_dim1, data_dim2, data_dim3 = logs_3D.shape # define the dimensions of the array
+        # add headers to log file
+        with open("layer0_log.csv", "w") as csvFile:
+            write = csv.writer(csvFile, delimiter=",")
+            csv_header = ("row", "parameter", "values...")
+            write.writerow(csv_header)
+        # define the formatting
+        parameter_names = ["L=", "I=", "D=", "M=", "x0=", "depth="]  # hierarchical depth is the length of sublayers
+        row_numbers = list(range(data_dim1))  # P_len for every image row
+        logs_flat = logs_3D.reshape(data_dim1 * data_dim2, data_dim3)  # transform 3D array to 2D table
+        df = pd.DataFrame(  # write log to dataframe and save as csv file
+            data=logs_flat,
+            index=pd.MultiIndex.from_product([row_numbers, parameter_names]))
+        df.to_csv('layer0_log.csv', mode='a', header=True, index=True)
 
     return frame_of_patterns_  # frame of patterns is an input to level 2
 
@@ -139,6 +168,13 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
 
+    if "logging" in globals() and logging:  # fill the array with layer0 params
+        global logs_2D  # reset for each row
+        for i in range(len(P_)):  # for each P
+            logs_1D = np.array(([P_[i].L], [P_[i].I], [P_[i].D], [P_[i].M], [P_[i].x0], [len(P_[i].sublayers)] )).T  # 2D structure
+            logs_2D = np.append(logs_2D, logs_1D, axis=0)  # log for every image row
+    # print(logs_2D.shape)
+
     return P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
 
 
@@ -146,7 +182,7 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
 
     adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
     comb_sublayers = []
-    comb_subDerts = []  # may not be needed, evaluation is more accurate in comp_sublayers?
+    comb_subDerts = []
 
     for P, adj_M in zip(P_, adj_M_):
         if P.L > 2 * (rng+1):  # vs. **? rng+1 because rng is initialized at 0, as all params
@@ -261,10 +297,19 @@ if __name__ == "__main__":
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
+    logging = 0  # log dataframes
     fpickle = 2  # 0: read from the dump; 1: pickle dump; 2: no pickling
     render = 0
     fline_PPs = 0
     start_time = time()
+
+    if logging:
+        import csv
+        import numpy as np
+        import pandas as pd
+        # initialize the 3D stack to store the nested structure of layer0 parameters
+        max_P_len = 380 # defined empirically
+        logs_3D = None  # empty array to store all log data
     if fpickle == 0:
         # Read frame_of_patterns from saved file instead
         with open("frame_of_patterns_.pkl", 'rb') as file:
