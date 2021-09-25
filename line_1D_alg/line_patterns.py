@@ -81,7 +81,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         _i = pixel_[0]
     else:
     '''
-    for y in range(init_y, halt_y):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
+    for y in range(init_y, min(halt_y, Y)):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
 
         # initialization:
         dert_ = []  # line-wide i_, p_, d_, m__
@@ -261,7 +261,7 @@ if __name__ == "__main__":
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
-    fpickle = 2  # 0: read from the dump; 1: pickle dump; 2: no pickling
+    fpickle = 2  # 0: load; 1: dump; 2: no pickling
     render = 0
     fline_PPs = 0
     start_time = time()
@@ -278,6 +278,8 @@ if __name__ == "__main__":
         if fpickle == 1: # save the dump of the whole data_1D to file
             with open("frame_of_patterns_.pkl", 'wb') as file:
                 pickle.dump(frame_of_patterns_, file)
+        from imaging import save_Ps, Ps_to_layers, show_layer
+        save_Ps("frame_of_patterns.bin", frame_of_patterns_)
 
     if render:
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
