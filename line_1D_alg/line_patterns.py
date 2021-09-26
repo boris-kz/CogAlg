@@ -48,6 +48,7 @@ class CP(ClusterStructure):
     # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ dert_], 3rd: sublayers[ sub_P_[ dert_]]:
     sublayers = list  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
     subDerts = list  # conditionally summed [L,I,D,M] per sublayer, most are empty
+    derDerts = list  # for compared subDerts only
     fPd = bool  # P is Pd if true, else Pm; also defined per layer
 
 verbose = False
