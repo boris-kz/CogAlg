@@ -60,8 +60,8 @@ ave_D = 5  # min |D| for initial incremental-derivation comparison(d_)
 ave_nP = 5  # average number of sub_Ps in P, to estimate intra-costs? ave_rdn_inc = 1 + 1 / ave_nP # 1.2
 ave_rdm = .5  # obsolete: average dm / m, to project bi_m = m * 1.5
 ave_splice = 50  # to merge a kernel of 3 adjacent Ps
-init_y = 500  # starting row, the whole frame doesn't need to be processed
-halt_y = 502  # ending row
+init_y = 0  # starting row, the whole frame doesn't need to be processed
+halt_y = 999999999  # ending row
 '''
     Conventions:
     postfix '_' denotes array name, vs. same-name elements
@@ -125,7 +125,7 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
     if rootP:  # call from intra_P_
         Dert = []
         # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
-        rootP.sublayers = [[(fPd, rdn, rng, P_, [])]]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
+        rootP.sublayers = [[(fPd, rdn, rng, P_, [], [])]]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
         rootP.subDerts = [Dert]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
 
@@ -264,6 +264,7 @@ if __name__ == "__main__":
     '''
     fpickle = 2  # 0: load; 1: dump; 2: no pickling
     render = 0
+    save = 0
     fline_PPs = 0
     start_time = time()
     if fpickle == 0:
@@ -279,8 +280,6 @@ if __name__ == "__main__":
         if fpickle == 1: # save the dump of the whole data_1D to file
             with open("frame_of_patterns_.pkl", 'wb') as file:
                 pickle.dump(frame_of_patterns_, file)
-        from imaging import save_Ps, Ps_to_layers, show_layer
-        save_Ps("frame_of_patterns.bin", frame_of_patterns_)
 
     if render:
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
@@ -296,6 +295,10 @@ if __name__ == "__main__":
             frame_Pp__.append(( rval_Pp__, Pp__))
 
         draw_PP_(image, frame_Pp__)  # debugging
+
+    elif save:
+        from imaging import save_Ps, Ps_to_layers, show_layer
+        save_Ps("frame_of_patterns.bin", frame_of_patterns_)
 
     end_time = time() - start_time
     print(end_time)
