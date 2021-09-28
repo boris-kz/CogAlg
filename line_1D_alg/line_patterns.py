@@ -290,7 +290,7 @@ if __name__ == "__main__":
         frame_Pp__ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            if len(P_) > 1: rval_Pp__, Pp__ = search(P_, fPd=0)
+            if len(P_) > 1: rval_Pp__, Pp__ = norm_feedback(P_, fPd=0)  # calls search(P_, fPd=0)
             else:           rval_Pp__, Pp__ = [], []
             frame_Pp__.append(( rval_Pp__, Pp__))
 
