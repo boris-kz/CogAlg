@@ -79,14 +79,16 @@ ave_dave = 20   # mean feedback filter
 
 
 def norm_feedback(P_, fPd):
+    fbM = fbL = 0
 
     for P in P_:
-        fbM = fbL = 0
         fbM += P.M; fbL += P.L
-        if fbM > ave_Dave:
-            if fbM / fbL > ave_dave:
+        if abs(fbM) > ave_Dave:
+            if abs(fbM / fbL) > ave_dave:
+                fbM = fbL = 0
                 pass  # eventually feedback: line_patterns' cross_comp(frame_of_pixels_, ave + fbM / fbL)
-                # also terminate Fspan: same-filter frame_ with summed params
+                # also terminate Fspan: same-filter frame_ with summed params, re-init at all 0s
+
         P.I /= P.L; P.D /= P.L; P.M /= P.L  # immediate normalization to a mean
     search(P_, fPd)
 
@@ -479,20 +481,19 @@ def comp_sublayers_draft(_P, P, root_m):  # if pdert.m -> if summed params m -> 
         _derDert_.append(_derDert) # derDert per sublayer
     _P.derDerts.append(_derDert_)  # derDert_ per _P and P pair
 
-    if root_m > ave_M * 4 and _P.sublayers and P.sublayers:  # or pdert.sub_M + pdert.m + P.M?
+    if pdert_m + root_m > ave_M * 4 and _P.sublayers and P.sublayers:  # or pdert.sub_M + pdert.m + P.M?
         # comp sub_Ps between sub_P_s in 1st sublayer:
-        _fPd, _rdn, _rng, _sub_P_, _xsub_pdert_, _xsub_rval_Pp_, _sub_Pp__ = _P.sublayers[0][0]  # 2nd [0] is the 1st and only subset
-        fPd, rdn, rng, sub_P_, xsub_pdert_, xsub_rval_Pp_, sub_Pp__ = P.sublayers[0][0]
+        _fPd, _rdn, _rng, _sub_P_, _xsub_pdert_, _sub_Pp__ = _P.sublayers[0][0]  # 2nd [0] is the 1st and only subset
+        fPd, rdn, rng, sub_P_, xsub_pdert_, sub_Pp__ = P.sublayers[0][0]
         # if same intra_comp fork, else not comparable:
         if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls and root_m > 0:
+
             # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
             _SL = SL = 0  # summed Ls
             start_index = next_index = 0  # index of starting sub_P for current _sub_P
-            dir_xsub_pdert_ = []
-            _xsub_pdert_.append(dir_xsub_pdert_)  # append per sub_P_,
-            xsub_pdert_.append(dir_xsub_pdert_)  # copies for bilateral representation
-            # xsub_pdert_ is cross-sub_P pderts, each bracket is a level of nesting:
-            # _sub_P_[ sub_P_[ bi_dertt[ dir_dert_[ sub_pdertt[ sub_pdert]]]]]:
+            _xsub_pdert_+=[]; xsub_pdert_+=[]  # for bilateral append bi_dertt per _sub_P_ and sub_P_, sparse indexing?
+            # xsub_pdert_ is cross-sub_P pderts, each bracket is level of nesting:
+            # _sub_P_xsub_pdert_[ sub_P_xsub_pdert_[ bi_dertt[ dir_dert_[ sub_pdertt[ sub_pdert]]]]]
 
             for _sub_P in _sub_P_:  # doesn't form Pps: short range and long distance?
                 P_ = [] # for form Pp purpose
@@ -508,7 +509,9 @@ def comp_sublayers_draft(_P, P, root_m):  # if pdert.m -> if summed params m -> 
                     if SL < _SL:
                         next_index += 1  # if next ix overlap: ix0 of next _sub_P < ix0 of current sub_P
                     SL += sub_P.L  # ix0 of next sub_P
-                dir_xsub_pdert_.append(right_pdert_)  # preserve nesting
+
+                _xsub_pdert_[-1].append(right_pdert_)  # preserve nesting
+                # xsub_pdert_[-1].append(right_pdert_): bilateral assign?
                 # search left:
                 left_pdert_ = []
                 for sub_P in reversed( sub_P_[ len(sub_P_) - start_index:]):  # index_ix0 <= _ix0
@@ -517,16 +520,16 @@ def comp_sublayers_draft(_P, P, root_m):  # if pdert.m -> if summed params m -> 
                     left_pdert_.append(sub_pdertt)
                     if fbreak:
                         break  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
-                dir_xsub_pdert_.append(left_pdert_)  # preserve nesting
+                _xsub_pdert_[-1].append(left_pdert_)  # preserve nesting
                 # not implemented: if param_name == "I_" and not fPd: sub_pdert = search_param_(param_)
                 # for next _sub_P:
                 start_index = next_index
 
-                # draft, following Pp formation in search:
-                if dir_xsub_pdert_:  # _P.sub_P and P.sub_P form sub_pdert
-                    bi_pdert_ = dir_xsub_pdert_[0] + dir_xsub_pdert_[1]  # bilateral: index 0 is right, index 1 is left
-                    if len(bi_pdert_) > 0:
-                        # real ~ ave_L=8, very unlikely
+                # mostly following form Pp in search:
+                if _xsub_pdert_[-1]:  # _P.sub_P and P.sub_P form sub_pdert
+                    bi_pdert_ = _xsub_pdert_[-1][0+1]  # bilateral: index 0 is right, index 1 is left
+                    if len(bi_pdert_) > 1:
+                        # real ave_L ~ 8, very unlikely
                         sub_Ldert_ = [sub_pdert[0] for sub_pdert in bi_pdert_]
                         sub_Idert_ = [sub_pdert[1] for sub_pdert in bi_pdert_]
                         sub_Ddert_ = [sub_pdert[2] for sub_pdert in bi_pdert_]
@@ -534,9 +537,9 @@ def comp_sublayers_draft(_P, P, root_m):  # if pdert.m -> if summed params m -> 
                         sub_Pdertt_= [(sub_Ldert_, P_), (sub_Idert_, P_), (sub_Ddert_, P_), (sub_Mdert_, P_)]
                         # form_xsub_Pp:
                         xsub_rval_Pp__, sub_Ppm__ = form_Pp_root(sub_Pdertt_, [], [], fPd=0)
-                        _xsub_rval_Pp_.append(xsub_rval_Pp__)
+                        _xsub_pdert_[:] = xsub_rval_Pp__  # vs. _xsub_rval_Pp_.append(xsub_rval_Pp__)
 '''
-xsub_pderts (cross-sub_P): _sub_P_xpdert_[ sub_P_xpdert_[ bi_pdertt[ dir_pdert_[ sub_pdertt[ sub_pdert]]]]],   
+xsub_pderts (cross-sub_P): _sub_P_xsub_pdert_[ sub_P_xsub_pdert_[ bi_pdertt[ dir_pdert_[ sub_pdertt[ sub_pdert]]]]],   
 the above forms Pps across bi_dertt_, then also form Pps across sub_P_xpdert_ and _sub_P_xpdert_? 
 '''
 

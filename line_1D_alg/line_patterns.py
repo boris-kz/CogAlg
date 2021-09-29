@@ -264,7 +264,6 @@ if __name__ == "__main__":
     '''
     fpickle = 2  # 0: load; 1: dump; 2: no pickling
     render = 0
-    save = 0
     fline_PPs = 0
     start_time = time()
     if fpickle == 0:
@@ -295,10 +294,6 @@ if __name__ == "__main__":
             frame_Pp__.append(( rval_Pp__, Pp__))
 
         draw_PP_(image, frame_Pp__)  # debugging
-
-    elif save:
-        from imaging import save_Ps, Ps_to_layers, show_layer
-        save_Ps("frame_of_patterns.bin", frame_of_patterns_)
 
     end_time = time() - start_time
     print(end_time)
