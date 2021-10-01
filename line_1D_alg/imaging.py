@@ -14,6 +14,7 @@ from line_patterns import CP, Cdert
 
 # Constants
 window_name = "layer"
+zoom_ratio = 0.3
 
 def transform_to_global_coords(P__):
     """This change subPs' x0 and L, don't use it in main alg."""
@@ -69,51 +70,103 @@ def read_Ps(filename):
 
 
 def show_layer(layer, shape, zoom_stack,
+               selected_loc=None,
                resolution=(1024, 512),
                wname="layer"):
     """Show a single layer in an image"""
-    img = np.full(shape, 128, 'uint8')
-
+    img = np.full(shape+(3,), 128, 'uint8')
+    if selected_loc is not None:
+        subset_map = np.zeros(shape+(3,), 'uint8')
     scale = min(resolution[1]/shape[0], resolution[0]/shape[1])
     resolution = (int(scale*shape[1]), int(scale*shape[0]))
 
+    # draw layer pattern map
+    subset_id = 1
+    tmp_subset_table = [None]
     for y, subsets in enumerate(layer):
-        for fPd, rdn, rng, P_, *_ in subsets:
+        for subset in subsets:
+            tmp_subset_table.append(subset)
+            fPd, rdn, rng, P_, *_ = subset
+            if selected_loc is not None:
+                id = (subset_id >> 16, (subset_id >> 8) & 0xFF, subset_id & 0xFF)
+                subset_id += 1
             for P in P_:
                 sign = P.D > 0 if fPd else P.M > 0
                 img[y, P.x0 : P.x0+P.L] = sign * 255
+                if selected_loc is not None:
+                    subset_map[y, P.x0 : P.x0+P.L] = id
 
+    # zooming handling
+    zoomed_img = img[:]
+    xy_ratio = 1
     for x, y in zoom_stack:
-        h, w = img.shape[0]//3, img.shape[1]//3
-        y -= h//2
-        x = min(max(x-w//2, 0), img.shape[0]-w)
-        y = min(max(y-h//2, 0), img.shape[1]-h)
-        img = img[y:y+h, x:x+w]
+        x, y = x*xy_ratio, y*xy_ratio
+        h, w = zoomed_img.shape[0]*zoom_ratio, zoomed_img.shape[1]*zoom_ratio
+        # Compute top-left corner coords
+        x = min(max(x, 0), zoomed_img.shape[1]-w)
+        y = min(max(y, 0), zoomed_img.shape[0]-h)
+        indx = (slice(round(y), round(y+h)), slice(round(x), round(x+w)))
+        zoomed_img = zoomed_img[indx]
+        xy_ratio *= zoom_ratio
+        if selected_loc is not None:
+            subset_map = subset_map[indx]
 
-    cv.imshow(wname, cv.resize(img, resolution, interpolation=cv.INTER_NEAREST))
+    # if left-clicked
+    if selected_loc is not None:
+        # extract 3 numbers subset id
+        x, y = selected_loc
+        resized_subset_map = cv.resize(subset_map, resolution, interpolation=cv.INTER_NEAREST)
+        selected_id = resized_subset_map[y, x]
+        if (selected_id != (0, 0, 0)).any():     # not blank
+            # highlight selected subset (yellow)
+            selected = (subset_map == selected_id).all(axis=-1).nonzero()
+            selected_b = selected + (0,)
+            selected_gr = selected + (slice(1, None),)
+            zoomed_img[selected_b] = 0
+            zoomed_img[selected_gr] = zoomed_img[selected_gr]//2 + 128
 
+            # display subset parameters
+            subset_id = (selected_id[0] << 16) + (selected_id[1] << 8) + selected_id[2]
+            fPd, rdn, rng, P_, *_ = tmp_subset_table[subset_id]
+            print("Selected fork:", end="")
+            print(f" Type = {'Pd' if fPd else 'Pm'}; rdn = {rdn}; rng = {rng}")
+
+    cv.imshow(wname, cv.resize(zoomed_img, resolution, interpolation=cv.INTER_NEAREST))
+
+
+# draw_PP_ similar process here
+def save_Pps(filename, frame_Pp__):
+    pass
+
+def read_Pps(filename):
+    pass
+
+def ordinal(n):
+    if ilayer % 10 == 1: suffix = "st"
+    elif ilayer % 10 == 2: suffix = "nd"
+    elif ilayer % 10 == 3: suffix = "rd"
+    else: suffix = "th"
+    return str(n) + suffix
 
 if __name__ == "__main__":
     # mouse call back variables
-    shown_subset_coord = None
-    zoom_loc_stack = []
+    selected_loc = None
+    zoom_stack = []
     rerender = True
 
     def mouse_call_back(event, x, y, flags, param):
-        global rerender, shown_subset_coord, zoom_loc_stack
+        global rerender, selected_loc, zoom_stack
         if event == 0:
             return
         rerender = True
-        if event == cv.EVENT_LBUTTONDOWN:
-            shown_subset_coord = (x, y)
-        elif event == cv.EVENT_LBUTTONUP:
-            shown_subset_coord = None
+        if event == cv.EVENT_LBUTTONUP:         # display pattern
+            selected_loc = (x, y)
         elif event == cv.EVENT_LBUTTONDBLCLK:   # zoom in
-            if len(zoom_loc_stack) < 3:         # max zoom
-                zoom_loc_stack.append((x, y))
+            if len(zoom_stack) < 3:         # max zoom
+                zoom_stack.append((x, y))
         elif event == cv.EVENT_RBUTTONDBLCLK:   # zoom out
-            if zoom_loc_stack:
-                zoom_loc_stack.pop()
+            if zoom_stack:
+                zoom_stack.pop()
 
     layers, shape = read_Ps("frame_of_patterns_.pkl")
     ilayer = 0          # begin with layer0
@@ -125,23 +178,25 @@ if __name__ == "__main__":
             rerender = False
             try:
                 show_layer(layers[ilayer], shape,
-                           zoom_loc_stack, wname=window_name)
+                           zoom_stack, selected_loc,
+                           wname=window_name)
             except cv.error as e:
                 if "error: (-215:Assertion failed) !ssize.empty() in function 'cv::resize'" not in str(e):
                     raise e
-                zoom_loc_stack.pop()
+                zoom_stack.pop()
                 rerender = True
+            selected_loc = None
 
         k = cv.waitKey(1)
-        if k == 27:             # ESC key
+        if k == 27:              # ESC key
             break
         elif k == ord('w'):      # up
             ilayer = max(ilayer-1, 0)
-            print("Layer", ilayer)
+            print(ordinal(ilayer+1), "layer")
             rerender = True
         elif k == ord('s'):      # down
             ilayer = min(ilayer+1, len(layers)-1)
-            print("Layer", ilayer)
+            print(ordinal(ilayer+1), "layer")
             rerender = True
 
     cv.destroyAllWindows()
