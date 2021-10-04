@@ -130,7 +130,7 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
                     param_P_.append(_P)
                 dert1_ += [comp_param(_param, param, param_name, ave_param)]
 
-            elif not (not fPd and param_name == "I_") : # step = 1
+            elif not (not fPd and param_name == "I_"):  # step = 1
                 param_dert_ += [comp_param(_param, param, param_name, ave_param)]
                 param_P_.append(_P)
 
@@ -198,7 +198,7 @@ def search_param_(P_, ave, rave):  # variable-range search in mdert_, only if pa
             curr_M = pdert.m * rave + (_P.M + P.M) / 2  # P.M is bidirectional
 
             if curr_M > ave_sub:  # comp all sub_P_ params, for core I only?
-                comp_sublayers_draft(P_[i], P_[j], pdert.m)  # between sublayers[0], forms dert.sub_M:
+                comp_sublayers(P_[i], P_[j], pdert.m)  # between sublayers[0], forms dert.sub_M:
             if curr_M + pdert.sub_M > ave_M:  # or > ave_cM? else: pdert.sub_M is negative
                 break  # 1st match takes over connectivity search in the next loop
             else:
@@ -375,7 +375,6 @@ def form_rval_Pp_(iPp_, param_name, pdert1_, pdert2_, fPd):
         if fPd: rval = abs(Pp.D) - Pp.Rdn * ave_D * Pp.L
         else:   rval = Pp.M - Pp.Rdn * ave_M * Pp.L
         sign = rval>0
-
         if sign != _sign:  # sign change, initialize rPp and append it to rPp_
             rval_Pp_ = [(rval, Pp)]
             Rval = rval
@@ -502,7 +501,7 @@ def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_
                         # recursion via form_P_: deeper sublayers search is selective per sub_P
 
 
-def comp_sublayers_draft(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
+def comp_sublayers(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
 
     _derDert_ = []  # + derDert_ for bilateral assignment?
     pdert_m = 0
