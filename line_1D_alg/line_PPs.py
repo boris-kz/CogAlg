@@ -23,6 +23,7 @@ class Cpdert(ClusterStructure):
     p = int  # accumulated in rng
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
+    rdn = int   # P.Rdn + param rdn?
     negM = int  # in mdert only
     negL = int  # in mdert only
     negiL = int
@@ -86,59 +87,24 @@ param_names = ["L_", "I_", "D_", "M_"]
 aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 
 
-def norm_feedback(P_, fPd):
-    fbM = fbL = 0
+def line_PPs_root(root_P_t, feedback, elevation=1):  # elevation and feedback are not used in non-recursive 2nd increment
+    '''
+    input is P_t: tuple (Pm_, Pd_), with 2 layers  in line_PPs, then nested to the depth = 2*elevation (level counter)
+    output has 2 layers of nesting: 1st i = fPd: Pm_| Pd_, 2nd param_names = L | I | D | M, each P_ is FIFO
+    '''
+    for i, P_ in enumerate(root_P_t):  # fPd = i
 
-    for P in P_:
-        fbM += P.M; fbL += P.L
-        if abs(fbM) > ave_Dave:
-            if abs(fbM / fbL) > ave_dave:
-                fbM = fbL = 0
-                pass  # eventually feedback: line_patterns' cross_comp(frame_of_pixels_, ave + fbM / fbL)
-                # also terminate Fspan: same-filter frame_ with summed params, re-init at all 0s
+        norm_feedback(P_, i)  # feedback is not implemented
+        Pdert_t, dert1_, dert2_ = search(P_, i)
+        rval_Pp_t, Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
 
-        P.I /= P.L; P.D /= P.L; P.M /= P.L  # immediate normalization to a mean
-
-    return search(P_, fPd)
+    return rval_Pp_t, Pp_t  # Pp_t is for visualization
 
 
 def search(P_, fPd):  # cross-compare patterns within horizontal line
 
     Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
-    param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
-    param_Ps_ = [LP_, IP_, DP_, MP_]
 
-    for i, (_P, P, P2) in enumerate(zip(P_, P_[1:], P_[2:] + [None])):
-        for param_dert_, param_P_, param_name, ave_param in zip(param_derts_, param_Ps_, param_names, aves):
-            _param  = getattr(_P, param_name[0])
-            param   = getattr(P , param_name[0])
-
-            if param_name == "L_":  # div_comp for L because it's a higher order of scale:
-                _L = _param; L= param
-                rL = L / _L  # higher order of scale, not accumulated: no search, rL is directional
-                int_rL = int( max(rL, 1/rL))
-                frac_rL = max(rL, 1/rL) - int_rL
-                mL = int_rL * min(L, _L) - (int_rL*frac_rL) / 2 - ave_mL  # div_comp match is additive compression: +=min, not directional
-                Ldert_.append(Cdert( i=L, p=L + _L, d=rL, m=mL))
-                param_P_.append(_P)
-
-            elif (fPd and param_name == "D_") or (not fPd and param_name == "M_") : # step = 2
-                if i < len(P_)-2: # P size is -2 and dert size is -1 when step = 2, so last 2 elements are not needed
-                    param2 = getattr(P2, param_name[0])
-                    param_dert_ += [comp_param(_param, param2, param_name, ave_param)]
-                    dert2_ += [param_dert_[-1].copy()]
-                    param_P_.append(_P)
-                dert1_ += [comp_param(_param, param, param_name, ave_param)]
-
-            elif not (not fPd and param_name == "I_"):  # step = 1
-                param_dert_ += [comp_param(_param, param, param_name, ave_param)]
-                param_P_.append(_P)
-
-    # comp x variable range, depending on M of Is
-    if not fPd: Idert_, IP_ = search_param_(P_, ave_mI, rave=1)
-
-    # unpacked version:
-    '''
     for _P, P, P2 in zip(P_, P_[1:], P_[2:] + [CP()]):  # for P_ cross-comp over step=1 and step=2
         _L, _I, _D, _M, *_ = _P.unpack()  # *_: skip remaining params
         L, I, D, M, *_ = P.unpack()
@@ -164,6 +130,7 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
             dert2_ += [Mdert.copy()]
             dert1_ += [comp_param(_M, M, "M_", ave_mM)]  # to splice Pms
         _L, _I, _D, _M = L, I, D, M
+
     LP_ = P_[:-1]
     dert2_ = dert2_[:-1]  # due to filled CP() in P2 ( for loop above )
     if not fPd:
@@ -172,12 +139,13 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
         DP_, MP_ = P_[:-1], P_[:-2]
     else:
         IP_, DP_, MP_ = P_[:-1], P_[:-2], P_[:-1]
-    '''
 
-    Pdert__ = [(Ldert_, LP_), (Idert_, IP_), (Ddert_, DP_), (Mdert_, MP_)]
-    rval_Pp__, Ppm__ = form_Pp_root(Pdert__, dert1_, dert2_, fPd)
+    # comp x variable range, depending on M of Is
+    if not fPd: Idert_, IP_ = search_param_(P_, ave_mI, rave=1)
 
-    return rval_Pp__, Ppm__
+    Pdert_t = (Ldert_, LP_), (Idert_, IP_), (Ddert_, DP_), (Mdert_, MP_)
+
+    return Pdert_t, dert1_, dert2_
 
 
 def search_param_(P_, ave, rave):  # variable-range search in mdert_, only if param is core param?
@@ -216,21 +184,23 @@ def search_param_(P_, ave, rave):  # variable-range search in mdert_, only if pa
     return Idert_, _P_
 
 
-def form_Pp_root(Pdert__, dert1_, dert2_, fPd):
+def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):
 
-    rdn__ = sum_rdn_(param_names, Pdert__, fPd=fPd)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
-    rval_Pp__ = []; Ppm__ = []  # for visualization
+    rdn__ = sum_rdn_(param_names, Pdert_t, fPd=fPd)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
+    rval_Pp_t = []
+    Ppm_t = []  # for visualization only, not sure, maybe generic Pp_ here?
 
-    for param_name, (Pdert_, P_), rdn_ in zip(param_names, Pdert__, rdn__):  # segment Pdert__ into Pps
+    for param_name, (Pdert_, P_), rdn_ in zip(param_names, Pdert_t, rdn__):  # segment Pdert__ into Pps
         if param_name == "I_" and not fPd:
             Ppm_ = form_Pp_rng(None, Pdert_, rdn_, P_)
         else:
             Ppm_ = form_Pp_(None, Pdert_, param_name, rdn_, P_, fPd=0)  # Ppd_ is formed in -Ppms only, in intra_Ppm_
         # redundant-value sign-spans of Pps per param:
-        rval_Pp__ += [ form_rval_Pp_(Ppm_, param_name, dert1_, dert2_, fPd=0)]  # evaluates for compact()
-        Ppm__ += [Ppm_]
+        rval_Pp_t += [ form_rval_Pp_(Ppm_, param_name, dert1_, dert2_, fPd=0)]  # evaluates for compact()
+        Ppm_t += [Ppm_]
 
-    return rval_Pp__, Ppm__
+    return rval_Pp_t, Ppm_t
+
 
 def form_Pp_(rootPp, dert_, param_name, rdn_, P_, fPd):
     # initialization:
@@ -329,15 +299,16 @@ def sum_rdn_(param_name_, Pdert__, fPd):
     '''
     access same-index pderts of all P params, assign redundancy to lesser-magnitude m|d in param pair.
     if other-param same-P_-index pdert is missing, rdn doesn't change.
+    no ('L', alt), ('D', 'M'): already added as mrdn: if fPd: alt = 'M' else:   alt = 'D'?
     '''
-    if fPd: alt = 'M'
-    else:   alt = 'D'
-    name_pairs = (('I', 'L'), ('I', 'D'), ('I', 'M'), ('L', alt), ('D', 'M'))  # pairs of params redundant to each other
+    name_pairs = (('I', 'L'), ('I', 'D'), ('I', 'M'), )  # pairs of params redundant to each other
     pderts_Rdn = [[], [], [], []]  # L_, I_, D_, M_' Rdns, as in pdert__
 
     for Ldert, Idert, Ddert, Mdert in zip_longest(Pdert__[0][0], Pdert__[1][0], Pdert__[2][0], Pdert__[3][0], fillvalue=Cdert()):
         # pdert per _P in P_, 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
-        rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Ps: if fPd: I, M rdn+=1, else: D rdn+=1
+        # dert-level rdn is already in, but pattern-level rdn is on top of that?
+
+        rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd]]  # [0, 1], [1-fPd, fPd]]  # rdn in olp Ps: if fPd: I, M rdn+=1, else: D rdn+=1
         # names:    ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))  # I.m + P.M: value is combined across P levels?
 
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
@@ -363,6 +334,7 @@ def sum_rdn_(param_name_, Pdert__, fPd):
 
     return pderts_Rdn  # rdn__
 
+
 def form_rval_Pp_(iPp_, param_name, pdert1_, pdert2_, fPd):
 
     # cluster Pps by the sign of value adjusted for cross-param redundancy,
@@ -372,7 +344,8 @@ def form_rval_Pp_(iPp_, param_name, pdert1_, pdert2_, fPd):
     _sign = None  # to initialize 1st rdn Pp, (None != True) and (None != False) are both True
 
     for Pp in iPp_:
-        if fPd: rval = abs(Pp.D) - Pp.Rdn * ave_D * Pp.L
+        # ave_D and ave_M should be defined per dert: variable cost?
+        if fPd: rval = abs(Pp.D) - Pp.Rdn * ave_D * Pp.L  # no need to invert, already done for mrdn in line_Ps?
         else:   rval = Pp.M - Pp.Rdn * ave_M * Pp.L
         sign = rval>0
         if sign != _sign:  # sign change, initialize rPp and append it to rPp_
@@ -388,6 +361,7 @@ def form_rval_Pp_(iPp_, param_name, pdert1_, pdert2_, fPd):
         _sign = sign
 
     return rval_Pp__
+
 
 def compact(rval_Pp_, pdert1_, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
 
@@ -584,11 +558,25 @@ def comp_sub_P(_sub_P, sub_P, xsub_pdertt, P_, root_m):
             P_.append(sub_P)  # same sub_P for all xsub_Pps
 
         if comb_m + _sub_P.M > ave_M * 5:
-            comp_sublayers_draft(_sub_P, sub_P, comb_m)  # recursion for deeper layers
+            comp_sublayers(_sub_P, sub_P, comb_m)  # recursion for deeper layers
     else:
         fbreak = 1  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
 
     return fbreak
+
+
+def norm_feedback(P_, fPd):
+    fbM = fbL = 0
+
+    for P in P_:
+        fbM += P.M; fbL += P.L
+        if abs(fbM) > ave_Dave:
+            if abs(fbM / fbL) > ave_dave:
+                fbM = fbL = 0
+                pass  # eventually feedback: line_patterns' cross_comp(frame_of_pixels_, ave + fbM / fbL)
+                # also terminate Fspan: same-filter frame_ with summed params, re-init at all 0s
+
+        P.I /= P.L; P.D /= P.L; P.M /= P.L  # immediate normalization to a mean
 
 
 def draw_PP_(image, frame_Pp__):
@@ -666,3 +654,41 @@ def draw_PP_(image, frame_Pp__):
         plt.imshow(img_Pp_pdert_[i], vmin=0, vmax=255)
         plt.title("Pderts, Param = " + param)
     pass
+
+
+    '''
+    packed search:
+    Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
+    param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
+    param_Ps_ = [LP_, IP_, DP_, MP_]
+
+    Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
+    param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
+    param_Ps_ = [LP_, IP_, DP_, MP_]
+
+    for i, (_P, P, P2) in enumerate(zip(P_, P_[1:], P_[2:] + [None])):
+        for param_dert_, param_P_ in zip(param_derts_, param_Ps_):
+            _param  = getattr(_P, param_name[0])
+            param   = getattr(P , param_name[0])
+
+            if param_name == "L_":  # div_comp for L because it's a higher order of scale:
+                _L = _param; L= param
+                rL = L / _L  # higher order of scale, not accumulated: no search, rL is directional
+                int_rL = int( max(rL, 1/rL))
+                frac_rL = max(rL, 1/rL) - int_rL
+                mL = int_rL * min(L, _L) - (int_rL*frac_rL) / 2 - ave_mL  # div_comp match is additive compression: +=min, not directional
+                Ldert_.append(Cdert( i=L, p=L + _L, d=rL, m=mL))
+                param_P_.append(_P)
+
+            elif (fPd and param_name == "D_") or (not fPd and param_name == "M_") : # step = 2
+                if i < len(P_)-2: # P size is -2 and dert size is -1 when step = 2, so last 2 elements are not needed
+                    param2 = getattr(P2, param_name[0])
+                    param_dert_ += [comp_param(_param, param2, param_name, ave)]
+                    dert2_ += [param_dert_[-1].copy()]
+                    param_P_.append(_P)
+                dert1_ += [comp_param(_param, param, param_name, ave)]
+
+            elif not (not fPd and param_name == "I_"):  # step = 1
+                param_dert_ += [comp_param(_param, param, param_name, ave)]
+                param_P_.append(_P)
+    '''

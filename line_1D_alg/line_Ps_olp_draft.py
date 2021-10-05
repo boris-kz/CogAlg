@@ -66,9 +66,10 @@ init_y = 0  # starting row, the whole frame doesn't need to be processed
 halt_y = 999999999  # ending row
 '''
     Conventions:
+    postfix 't' denotes tuple
     postfix '_' denotes array name, vs. same-name elements
-    prefix '_' denotes prior of two same-name variables
-    prefix 'f' denotes flag
+    prefix '_'  denotes prior of two same-name variables
+    prefix 'f'  denotes flag
     capitalized variables are normally summed small-case variables
 '''
 
@@ -87,7 +88,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     for y in range(init_y, min(halt_y, Y)):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
 
         # initialization:
-        dert_ = []  # line-wide i_, p_, d_, m__
+        dert_ = []  # line-wide i_, p_, d_, m_, mrdn_
         pixel_ = frame_of_pixels_[y, :]
         _i = pixel_[0]
         # pixel i is compared to prior pixel _i in a row:
@@ -95,17 +96,12 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             d = i - _i  # accum in rng
             p = i + _i  # accum in rng
             m = ave - abs(d)  # for consistency with deriv_comp output, else redundant
-            mrdn = abs(m) < abs(d)  # add mRdn += m_rdn in form_P
+            mrdn = m + ave < abs(d)
             dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
             _i = i
-
-        # form m|d- sign patterns, rootP=None:
-        # need to remove calling form_P_(fPd=true) from intra_P_, it may call both form_Pm_ and form_Pd_
-
-        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # eval intra_Pm_ per Pm in
-        rval_Pm_ = form_rval_P_(Pm_, fPd=False)
-        Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPd=True)  # eval intra_Pd_ per Pm in
-        rval_Pd_ = form_rval_P_(Pd_, fPd=True)
+        # form patterns:
+        rval_Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # rootP=None, eval intra_P_, call form_rval_P_
+        rval_Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPd=True)
 
         frame_of_patterns_.append((rval_Pm_, rval_Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
 
@@ -134,8 +130,8 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
 
     if rootP:  # call from intra_P_
         Dert = []
-        # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
-        rootP.sublayers = [[(fPd, rdn, rng, P_, [], [])]]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
+        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers
+        rootP.sublayers = [[(fPd, rdn, rng, P_, [], [])]]  # 1st sublayer has one sub_P_ param set, last[] is sub_Pp__
         rootP.subDerts = [Dert]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
 
@@ -150,7 +146,8 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
 
-    return P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
+    rval_P_ = form_rval_P_(P_, fPd)
+    return rval_P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
 
 '''
 needs to change for fully overlapping Pm_ and Pd_
@@ -242,14 +239,14 @@ def range_comp(dert_):  # cross-comp of 2**rng- distant pixels: 4,8,16.., skippi
         rd = dert.d + d   # difference accumulated in rng
         rm = dert.m + ave - abs(d)  # m accumulated in rng
         # for consistency with deriv_comp, else redundant
-        rmrdn = abs(rm) < abs(rd)
+        rmrdn = rm + ave < abs(rd)  # use Ave?
         rdert_.append( Cdert( i=dert.i,p=rp,d=rd,m=rm,mrdn=rmrdn ))
         _i = dert.i
 
     return rdert_
 
 def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign match is partial d match
-    # dd and md may match across d sign, but likely in high-match area, spliced by spec in comp_P?
+    # dd and md may match across d sign, spliced in compact?
     # initialization:
     ddert_ = []
     _d = abs( dert_[0].d)  # same-sign in Pd
@@ -260,8 +257,8 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
         rd = d + _d
         dd = d - _d
         md = min(d, _d) - abs( dd/2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
-        dmrdn = abs(md) < abs(dd)
-        ddert_.append( Cdert( i=dert.d,p=rd,d=dd,m=md, dmrdn=dmrdn ))
+        dmrdn = md + ave < abs(dd)  # use Ave?
+        ddert_.append( Cdert( i=dert.d,p=rd,d=dd,m=md,dmrdn=dmrdn ))
         _d = d
 
     return ddert_
@@ -273,10 +270,11 @@ def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cros
     _sign = None  # to initialize 1st rdn P, (None != True) and (None != False) are both True
 
     for P in iP_:
-        # P.L-P.Rdn: inverted P.Rdn, max P.Rdn = P.L. Inverted because it counts mrdn, which is ~rdn for Pd:
+        # P.L-P.Rdn is inverted P.Rdn: max P.Rdn = P.L. Inverted because it counts mrdn, = (not drdn):
         if fPd: rval = abs(P.D) - (P.L-P.Rdn) * ave_D * P.L
         else:   rval = P.M - P.Rdn * ave_M * P.L
-        # P.M - 1 * ave_M * P.L
+        # ave_D, ave_M are defined per dert: variable cost to adjust for rdn,
+        # * Ave_D, Ave_M coef: fixed costs per P?
         sign = rval>0
 
         if sign != _sign:  # sign change, initialize rP and append it to rP_
@@ -323,14 +321,14 @@ if __name__ == "__main__":
 
     if fline_PPs:  # debug line_PPs
         from line_PPs import *
-        frame_Pp__ = []
+        frame_Pp_t = []
 
-        for y, P_ in enumerate(frame_of_patterns_):
-            if len(P_) > 1: rval_Pp__, Pp__ = norm_feedback(P_, fPd=0)  # calls search(P_, fPd=0)
-            else:           rval_Pp__, Pp__ = [], []
-            frame_Pp__.append(( rval_Pp__, Pp__))
+        for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
+            if len(P_) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_t, 0)
+            else:           rval_Pp_t, Pp_t = [], []
+            frame_Pp_t.append(( rval_Pp_t, Pp_t ))
 
-        draw_PP_(image, frame_Pp__)  # debugging
+        draw_PP_(image, frame_Pp_t)  # debugging
 
     end_time = time() - start_time
     print(end_time)

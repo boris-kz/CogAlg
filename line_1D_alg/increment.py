@@ -2,8 +2,8 @@
 cross-level (xlevel) increment is supposed to recursively generate next-level code from current-level code:
 next_level_code = cross_level_increment_code (current_level_code).
 .
-1st increment only converts line_Ps into line_PPs: line_PPs_code = 1st_increment_code (line_Ps_code).
-It's a test for generic xlevel increment, due to original input formatting most increments won't be recursive
+1st increment would only convert line_Ps into line_PPs: line_PPs_code = 1st_increment_code (line_Ps_code).
+It's an example of xlevel increment, but due to initial input formatting most increments won't be recursive
 (initial inputs are filter-defined, vs. mostly comparison-defined for higher levels):
 .
 cross_comp_incr(cross_comp):
@@ -25,31 +25,37 @@ form_rval_P_(P_):
 - add xlevel_rdn, compact
 .
 2nd increment converts line_PPs into line_PPs: line_PPPs_code = 2nd_increment_code (line_PPs_code).
-We will then try to convert it into fully recursive xlevel_increment:
+We will then try to convert it into fully recursive xlevel_increment
+
+Separate increment for each root function to accommodate greater input nesting and value variation:
 '''
-ave_mL = 5  # needs to be tuned
-ave_mI = 5  # needs to be tuned
-ave_mD = 1  # needs to be tuned
-ave_mM = 5  # needs to be tuned
 
-param_names = ["L_", "I_", "D_", "M_"]
-aves = [ave_mL, ave_mI, ave_mD, ave_mM]
-
-
-def search_root_incr(search_root):
-    # convert line_PPs search_root into line_PPPs search_root
+def line_root_incr(line_PPs_root):
+    # convert line_PPs_root into line_PPPs search_root by adding a layer of nesting to unpack:
+    '''
+    for i, P_t in enumerate(root_P_t):  # fPd = i
+    for P_, param_name, ave in zip(P_t, param_names, aves):
+        norm_feedback(P_, i)
+        Pdert_t, dert1_, dert2_ = search(P_, i)
+        rval_Pp_t, Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
+    '''
     pass
 
-def search_root(root_P_t, feedback, elevation=1):
-    # each P_ in P_t is FIFO
-    # input is P_ tuple, starting from Pm_, Pd_, then nested to the depth = elevation (level counter)
-    # elevation and feedback are not used in non-recursive 2nd increment
+def search_incr(search):
+    '''
+    Increase maximal comparison depth, according to greater input pattern depth
+    still specific to search_param(I): reinforced by M?
+    Also increase max search range, according to max accumulated value:
+    incr P eval depth?
+    Add same-iP xparam search?
+    '''
+    pass
 
-    for i, P_t in enumerate(root_P_t):
-        for P_, param_name, ave in zip(P_t, param_names, aves):
-            search(P_, i, param_name, ave)
-            # currently in search_pattern(), need to update
-            # in 2nd increment: 1st layer i = fPd, 2nd layer j = L | I | D | M
+def form_Pp_incr(form_Pp_):
+    '''
+    Add composition level,
+    Add redundancy according to that in the input?
+    '''
     pass
 
 

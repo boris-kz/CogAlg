@@ -289,11 +289,12 @@ if __name__ == "__main__":
         frame_Pp__ = []
 
         for y, P_ in enumerate(frame_of_patterns_):
-            if len(P_) > 1: rval_Pp__, Pp__ = norm_feedback(P_, fPd=0)  # calls search(P_, fPd=0)
-            else:           rval_Pp__, Pp__ = [], []
-            frame_Pp__.append(( rval_Pp__, Pp__))
+            if len(P_) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_, 0)
+            else:           rval_Pp_t, Pp_t = [], []
+            frame_Pp__.append(( rval_Pp_t, Pp_t))
 
         draw_PP_(image, frame_Pp__)  # debugging
 
     end_time = time() - start_time
     print(end_time)
+
