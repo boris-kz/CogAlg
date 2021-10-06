@@ -129,76 +129,59 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         _sign = sign
 
     if rootP:  # call from intra_P_
-        Dert = []
-        # sublayers brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers
-        rootP.sublayers = [[(fPd, rdn, rng, P_, [], [])]]  # 1st sublayer has one sub_P_ param set, last[] is sub_Pp__
-        rootP.subDerts = [Dert]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-
-            if rootP.M * len(P_) > ave_M * 5:  # or in line_PPs?
-                Dert[:] = [0, 0, 0, 0]  # P. L, I, D, M summed within a layer
-                for P in P_:  Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
-
-            comb_sublayers, comb_subDerts = intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, subDerts is selective
-            rootP.sublayers += comb_sublayers
-            rootP.subDerts += comb_subDerts
-    else:
-        # call from cross_comp
+            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, subDerts is selective
+    else:  # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
 
     rval_P_ = form_rval_P_(P_, fPd)
     return rval_P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
 
-'''
-needs to change for fully overlapping Pm_ and Pd_
-'''
+
 def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
     adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
     comb_sublayers = []
-    comb_subDerts = []  # may not be needed, evaluation is more accurate in comp_sublayers?
 
     for P, adj_M in zip(P_, adj_M_):
-        if P.L > 2 * (rng+1):  # vs. **? rng+1 because rng is initialized at 0, as all params
+        if P.L > 2 * (rng + 1):  # vs. **? rng+1 because rng is initialized at 0, as all params
             rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds?
 
-            if fPd:  # P is Pd, -> sub_Pdm_, in high same-sign D span
-                if min( abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn:  # level rdn, vs. param rdn in dert
+            if fPd:  # P is Pd
+                if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn:  # high-D span, level rdn, vs. param rdn in dert
+                    sub_Pm_, sub_Pd_ = [],[]
+                    rdn+=1; rng+=1  # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
+                    P.sublayers += [[(fPd, rdn, rng, sub_Pm_, [], sub_Pd_, [])]]
                     ddert_ = deriv_comp(P.dert_)  # i is d
-                    form_P_(P, ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
-            else:  # P is Pm,
-                # +Pm -> sub_Pm_ in low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8..:
-                if P.M > ave_M * rdn:  # no -adj_M: lend to contrast is not adj only, reflected in ave?
+                    sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
+                    sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
+            else:  # P is Pm
+                   # eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8..:
+                if P.M > ave_M * rdn:  # high-M span, no -adj_M: lend to contrast is not adj only, reflected in ave?
                     ''' if local ave:
                     loc_ave = (ave + (P.M - adj_M) / P.L) / 2  # mean ave + P_ave, possibly negative?
                     loc_ave_min = (ave_min + (P.M - adj_M) / P.L) / 2  # if P.M is min?
                     rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
                     '''
+                    sub_Pm_, sub_Pd_ = [],[]
+                    rdn+=1; rng+=1  # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
+                    P.sublayers += [[(fPd, rdn, rng, sub_Pm_, [], sub_Pd_, [])]]
                     rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
-                    form_P_(P, rdert_, rdn+1, rng+1, fPd=False)  # cluster by m sign, eval intra_Pm_
-                # -Pm -> sub_Pd_
-                elif -P.M > ave_D * rdn:  # high-variation span, neg M is contrast, implicit borrow from adjacent +Pms, M=min
-                    # or if min(-P.M, adj_M),  rel_adj_M = adj_M / -P.M  # allocate -Pm adj_M to each sub_Pd?
-                    form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
+                    sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
+                    sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
 
-            if P.sublayers:
+                else:  # to preserve index of sub_Pms and sub_Pds in P.sublayers
+                    P.sublayers += [[]]
+
+            # index 0 is sub_Pms, index 1 is sub_Pds, due to we form_P_ with fPd = false first
+            if P.sublayers and P.sublayers[fPd]:
                 new_sublayers = []
-                for comb_subset_, subset_ in zip_longest(comb_sublayers, P.sublayers, fillvalue=([])):
+                for comb_subset_, subset_ in zip_longest(comb_sublayers, P.sublayers[fPd], fillvalue=([])):
                     # append combined subset_ (array of sub_P_ param sets):
                     new_sublayers.append(comb_subset_ + subset_)
                 comb_sublayers = new_sublayers
 
-                new_subDerts = []
-                for comb_Dert, Dert in zip_longest(comb_subDerts, P.subDerts, fillvalue=([])):
-                    new_Dert = []
-                    if Dert or comb_Dert:  # at least one is not empty, from form_P_
-                        new_Dert = [comb_param + param
-                                   for comb_param, param in
-                                   zip_longest(comb_Dert, Dert, fillvalue=0)]
-                    new_subDerts.append(new_Dert)
-                comb_subDerts = new_subDerts
-
-    return comb_sublayers, comb_subDerts
+    return comb_sublayers
 
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation

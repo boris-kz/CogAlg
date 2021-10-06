@@ -5,10 +5,9 @@ It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for ea
 Subsequent cross-comp between Pps of different params is exclusive of x overlap, where the relationship is already known.
 Thus it should be on 3rd level: no Pp overlap means comp between Pps: higher composition, same-type ) cross-type?
 -
-line_PPs should ultimately be reduced to a cross-level increment: the difference between line_patterns and line_PPs,
-so that line_PPs = increment (line_patterns).
+Next, line_PPPs should be formed as a cross-level increment: line_PPPs = increment (line_PPs).
 This increment will be made recursive: we should be able to automatically generate 3rd and any n+1- level alg:
-line_PPPs = increment (line_PPs), etc. That will be the hardest and most important part of this project
+line_PPPPs = increment (line_PPPs), etc. That will be the hardest and most important part of this project
 '''
 
 import sys  # add CogAlg folder to system path
@@ -89,16 +88,29 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 
 def line_PPs_root(root_P_t, feedback, elevation=1):  # elevation and feedback are not used in non-recursive 2nd increment
     '''
-    input is P_t: tuple (Pm_, Pd_), with 2 layers  in line_PPs, then nested to the depth = 2*elevation (level counter)
+    input is P_t: tuple (Pm_, Pd_) in line_PPs, then nested to the depth = 2*elevation (level counter), or 2^elevation?
     output has 2 layers of nesting: 1st i = fPd: Pm_| Pd_, 2nd param_names = L | I | D | M, each P_ is FIFO
     '''
-    for i, P_ in enumerate(root_P_t):  # fPd = i
 
-        norm_feedback(P_, i)  # feedback is not implemented
-        Pdert_t, dert1_, dert2_ = search(P_, i)
-        rval_Pp_t, Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
+    rval_Pp_t__, Pp_t__ = [[],[]], [[],[]]  # 2 brackets, for each rval_Pm and rval_Pd
 
-    return rval_Pp_t, Pp_t  # Pp_t is for visualization
+    for i, rval_P_ in enumerate(root_P_t):  # fPd = i: rval_Pm_| rval_Pd_
+        for rval_P in rval_P_:  # per rval_P
+
+            rval_Pp_t_, Pp_t_ = [], []
+            P_ = [P for (rval, P) in rval_P[1]]  # rval_P[0] is Rval
+
+            norm_feedback(P_, i)  # feedback is not implemented
+            if len(P_) > 1:
+                Pdert_t, dert1_, dert2_ = search(P_, i)
+                rval_Pp_t, Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
+                rval_Pp_t_.append(rval_Pp_t)
+                Pp_t_.append(Pp_t)
+
+                rval_Pp_t__[i].append(rval_Pp_t_)
+                Pp_t__[i].append(Pp_t_)
+
+    return rval_Pp_t__, Pp_t__  # Pp_t is for visualization
 
 
 def search(P_, fPd):  # cross-compare patterns within horizontal line
@@ -114,7 +126,7 @@ def search(P_, fPd):  # cross-compare patterns within horizontal line
         int_rL = int( max(rL, 1/rL))
         frac_rL = max(rL, 1/rL) - int_rL
         mL = int_rL * min(L, _L) - (int_rL*frac_rL) / 2 - ave_mL  # div_comp match is additive compression: +=min, not directional
-        Ldert_.append(Cdert( i=L, p=L + _L, d=rL, m=mL))
+        Ldert_.append(Cdert( i=L, p=L + _L, d=rL, m=mL))  # add mrdn if default form Pd?
         # summed params comp:
         if fPd:
             Idert_ += [comp_param(_I, I, "I_", ave_mI)]
@@ -453,7 +465,7 @@ def intra_Pp_(Pp_, param_name, fPd):  # evaluate for sub-recursion in line Pm_, 
 
     return comb_sublayers, comb_subDerts
 
-
+# need further update after implementing parallel sub_Ps
 def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_ search: top-down induction,
     # called from intra_Pp_, especially MPp: init select by P.M, then combined Pp match?
 
@@ -478,18 +490,25 @@ def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_
 def comp_sublayers(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
 
     _derDert_ = []  # + derDert_ for bilateral assignment?
+    _subDert_, subDert_ = [], []  # moved here from form_P_ for more accurate evaluation
     pdert_m = 0
 
-    for _subDert, subDert in zip(_P.subDerts, P.subDerts):
-        _derDert = []
-        # comp Derts, no cross-layer sum?:
-        for _param, param, param_name, ave in zip(_subDert, subDert, param_names, aves):
-            dert = comp_param(_param, param, param_name, ave)
-            if dert.m > 0:
-                pdert_m += dert.m  # pdert is higher-layer, also higher-value mL? no -m sum: won't be processed
-            _derDert.append(dert)  # dert per param, derDert_ per _subDert, also a copy for subDert?
-        _derDert_.append(_derDert) # derDert per sublayer
-    _P.derDerts.append(_derDert_)  # derDert_ per _P and P pair
+    for _sublayer, sublayer in zip(_P.sublayers, P.sublayers):
+        # unfinished draft:
+        if root_m * len(P_) > ave_M * 5:  # or in line_PPs?
+            Dert = [0, 0, 0, 0]  # P. L, I, D, M summed within a layer
+            for P in P_:  Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
+
+            for _subDert, subDert in zip(_P.subDerts, P.subDerts):
+                _derDert = []
+                # comp Derts, no cross-layer sum?:
+                for _param, param, param_name, ave in zip(_subDert, subDert, param_names, aves):
+                    dert = comp_param(_param, param, param_name, ave)
+                    if dert.m > 0:
+                        pdert_m += dert.m  # pdert is higher-layer, also higher-value mL? no -m sum: won't be processed
+                    _derDert.append(dert)  # dert per param, derDert_ per _subDert, also a copy for subDert?
+                _derDert_.append(_derDert) # derDert per sublayer
+            _P.derDerts.append(_derDert_)  # derDert_ per _P and P pair
 
     if pdert_m + root_m > ave_M * 4 and _P.sublayers and P.sublayers:  # or pdert.sub_M + pdert.m + P.M?
         # comp sub_Ps between sub_P_s in 1st sublayer:
@@ -661,16 +680,13 @@ def draw_PP_(image, frame_Pp__):
     Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
     param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
     param_Ps_ = [LP_, IP_, DP_, MP_]
-
     Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
     param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
     param_Ps_ = [LP_, IP_, DP_, MP_]
-
     for i, (_P, P, P2) in enumerate(zip(P_, P_[1:], P_[2:] + [None])):
         for param_dert_, param_P_ in zip(param_derts_, param_Ps_):
             _param  = getattr(_P, param_name[0])
             param   = getattr(P , param_name[0])
-
             if param_name == "L_":  # div_comp for L because it's a higher order of scale:
                 _L = _param; L= param
                 rL = L / _L  # higher order of scale, not accumulated: no search, rL is directional
@@ -679,7 +695,6 @@ def draw_PP_(image, frame_Pp__):
                 mL = int_rL * min(L, _L) - (int_rL*frac_rL) / 2 - ave_mL  # div_comp match is additive compression: +=min, not directional
                 Ldert_.append(Cdert( i=L, p=L + _L, d=rL, m=mL))
                 param_P_.append(_P)
-
             elif (fPd and param_name == "D_") or (not fPd and param_name == "M_") : # step = 2
                 if i < len(P_)-2: # P size is -2 and dert size is -1 when step = 2, so last 2 elements are not needed
                     param2 = getattr(P2, param_name[0])
@@ -687,7 +702,6 @@ def draw_PP_(image, frame_Pp__):
                     dert2_ += [param_dert_[-1].copy()]
                     param_P_.append(_P)
                 dert1_ += [comp_param(_param, param, param_name, ave)]
-
             elif not (not fPd and param_name == "I_"):  # step = 1
                 param_dert_ += [comp_param(_param, param, param_name, ave)]
                 param_P_.append(_P)
