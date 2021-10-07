@@ -91,26 +91,29 @@ def line_PPs_root(root_P_t, feedback, elevation=1):  # elevation and feedback ar
     input is P_t: tuple (Pm_, Pd_) in line_PPs, then nested to the depth = 2*elevation (level counter), or 2^elevation?
     output has 2 layers of nesting: 1st i = fPd: Pm_| Pd_, 2nd param_names = L | I | D | M, each P_ is FIFO
     '''
-
-    rval_Pp_t__, Pp_t__ = [[],[]], [[],[]]  # 2 brackets, for each rval_Pm and rval_Pd
+    sub_rval_Pp_t_t, sub_Pp_t_t = [],[]  # replace root_P_t?
 
     for i, rval_P_ in enumerate(root_P_t):  # fPd = i: rval_Pm_| rval_Pd_
-        for rval_P in rval_P_:  # per rval_P
+        splice(rval_P_)  # for discontinuous search
+        sub_rval_Pp_t_, sub_Pp_t_ = [], []  # for search results
 
-            rval_Pp_t_, Pp_t_ = [], []
+        for rval_P in rval_P_:
             P_ = [P for (rval, P) in rval_P[1]]  # rval_P[0] is Rval
-
             norm_feedback(P_, i)  # feedback is not implemented
-            if len(P_) > 1:
+
+            if len(P_) > 1 and rval_P[0] > ave_M * 4:  # * search_coef: Rval evaluation vs. fixed search cost
                 Pdert_t, dert1_, dert2_ = search(P_, i)
-                rval_Pp_t, Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
-                rval_Pp_t_.append(rval_Pp_t)
-                Pp_t_.append(Pp_t)
+                sub_rval_Pp_t, sub_Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
+                sub_rval_Pp_t_.append(sub_rval_Pp_t)
+                sub_Pp_t_.append(sub_Pp_t)
+            else:
+                sub_rval_Pp_t_.append(rval_P)
+                sub_Pp_t_.append(rval_P)  # redundant?
 
-                rval_Pp_t__[i].append(rval_Pp_t_)
-                Pp_t__[i].append(Pp_t_)
+        sub_rval_Pp_t_t.append(sub_rval_Pp_t_)
+        sub_Pp_t_t.append(sub_Pp_t_)
 
-    return rval_Pp_t__, Pp_t__  # Pp_t is for visualization
+    return sub_rval_Pp_t_t, sub_Pp_t_t  # sub_Pp_t_t is for visualization
 
 
 def search(P_, fPd):  # cross-compare patterns within horizontal line
@@ -406,7 +409,7 @@ def compact(rval_Pp_, pdert1_, pdert2_, param_name, fPd):  # re-eval Pps, Pp.pde
         if pdert_val <= 0:
             Pp.pdert_ = []  # remove pdert_
 
-
+# need further update after implementing parallel sub_Ps
 def intra_Pp_(Pp_, param_name, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
 
     comb_sublayers = []  # combine into root P sublayers[1:]
@@ -486,8 +489,86 @@ def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_
                         subset[5].append(sub_rdn_Pp__)
                         # recursion via form_P_: deeper sublayers search is selective per sub_P
 
-
+''' Not reviewed yet:
+'''
 def comp_sublayers(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
+
+    # below should be not needed now
+    # _derDert_ = []  # + derDert_ for bilateral assignment?
+    # _subDert_, subDert_ = [], []  # moved here from form_P_ for more accurate evaluation
+
+    _derDert_ = [[], []]
+    if not _P.derDerts: _P.derDerts = [[],[]] # initialize if it is empty, index 0= m derDert, index 1 = d derDert
+    for _sublayer, sublayer in zip(_P.sublayers, P.sublayers):
+
+        _fPd, _rdn, _rng, _sub_Pm_,  _xsub_pmdertt_ , _sub_Pd_, _xsub_pddertt_= _sublayer[0]
+        fPd,   rdn,  rng,  sub_Pm_,   xsub_pmdertt_ ,  sub_Pd_,  xsub_pddertt_=  sublayer[0]
+        pdert_m = [0,0]
+
+        # index 0 = Pm, index1 = Pd
+        for i, (_sub_P_, sub_P_, _xsub_pdertt_, xsub_pdertt_ ) in \
+                enumerate(zip([_sub_Pm_, _sub_Pd_], [sub_Pm_, sub_Pd_], [_xsub_pmdertt_, _xsub_pddertt_], [xsub_pmdertt_, xsub_pddertt_])):
+
+            if root_m * len(_sub_P_) > ave_M * 5:  # or in line_PPs?
+                _Dert = [0, 0, 0, 0] # P. L, I, D, M summed within a layer
+                Dert = [0, 0, 0, 0]
+
+                for _sub_P in _sub_P_:  _Dert[0] += _sub_P.L; _Dert[1] += _sub_P.I; _Dert[2] += _sub_P.D; _Dert[3] += _sub_P.M
+                for sub_P in sub_P_:  Dert[0] += sub_P.L; Dert[1] += sub_P.I; Dert[2] += sub_P.D; Dert[3] += sub_P.M
+
+                for _subDert, subDert in zip(_Dert, Dert):
+                    _derDert = []
+                    # comp Derts, no cross-layer sum?:
+                    for _param, param, param_name, ave in zip(_subDert, subDert, param_names, aves):
+                        dert = comp_param(_param, param, param_name, ave)
+                        if dert.m > 0:
+                            pdert_m[i] += dert.m  # pdert is higher-layer, also higher-value mL? no -m sum: won't be processed
+                        _derDert.append(dert)  # dert per param, derDert_ per _subDert, also a copy for subDert?
+                    _derDert_[i].append(_derDert) # derDert per sublayer
+                _P.derDerts[i].append(_derDert_)  # derDert_ per _P and P pair
+                P.derDerts[i].append(_derDert_) # bilateral assignment?
+
+
+            if pdert_m[i] + root_m > ave_M * 4:  # or pdert.sub_M + pdert.m + P.M?
+                # comp sub_Ps between sub_P_s in 1st sublayer:
+
+                # if same intra_comp fork, else not comparable:
+                if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls and root_m > 0:
+                    # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
+                    _SL = SL = 0  # summed Ls
+                    start_index = next_index = 0  # index of starting sub_P for current _sub_P
+                    _xsub_pdertt_ += [[]]  # array of cross-sub_P pdert tuples: inner brackets, per sub_P_
+                    xsub_pdertt_ += [[]]  # append xsub_dertt per _sub_P_ and sub_P_, sparse?
+
+                    for _sub_P in _sub_P_:  # form xsub_pdertt_[ xsub_dertt [ xsub_pdert_[ sub_pdert]]]: each bracket is level of nesting
+                        P_ = []  # to form xsub_Pps
+                        _xsub_pdertt = [[], [], [], []]  # tuple of L, I, D, M xsub_pderts
+                        _SL += _sub_P.L  # ix0 of next _sub_P
+                        # search right:
+                        for sub_P in sub_P_[start_index:]:  # index_ix0 > _ix0, only sub_Ps at proximate relative positions in sub_P_ are compared
+                            if comp_sub_P(_sub_P, sub_P, _xsub_pdertt, P_, root_m):
+                                break
+                            # if next ix overlap: ix0 of next _sub_P < ix0 of current sub_P
+                            if SL < _SL: next_index += 1
+                            SL += sub_P.L  # ix0 of next sub_P
+                        # search left:
+                        for sub_P in reversed( sub_P_[ len(sub_P_) - start_index:]):  # index_ix0 <= _ix0, invert positions of sub_P and _sub_P:
+                            if comp_sub_P(sub_P, _sub_P, _xsub_pdertt, P_, root_m):
+                                break
+                        # not implemented: if param_name == "I_" and not fPd: sub_pdert = search_param_(param_)
+                        # for next _sub_P:
+                        start_index = next_index
+
+                        if _xsub_pdertt[0]:  # at least 1 sub_pdert, real min length ~ 8, very unlikely
+                            sub_Pdertt_= [(_xsub_pdertt[0], P_), (_xsub_pdertt[1], P_), (_xsub_pdertt[2], P_), (_xsub_pdertt[3], P_)]
+                            # form 4-tuple of xsub_Pp_s:
+                            xsub_rval_Pp_t, sub_Ppm__ = form_Pp_root(sub_Pdertt_, [], [], fPd=0)
+                            _xsub_pdertt_[-1][:] = xsub_rval_Pp_t
+                            xsub_pdertt_[-1][:] = _xsub_pdertt_[-1]  # bilateral assignment
+
+                        else: _xsub_pdertt_[-1].append(_xsub_pdertt)  # preserve nesting
+
+def comp_sublayers_old(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
 
     _derDert_ = []  # + derDert_ for bilateral assignment?
     _subDert_, subDert_ = [], []  # moved here from form_P_ for more accurate evaluation
@@ -549,6 +630,7 @@ def comp_sublayers(_P, P, root_m):  # if pdert.m -> if summed params m -> if pos
                     xsub_pdertt_[-1][:] = _xsub_pdertt_[-1]  # bilateral assignment
 
                 else: _xsub_pdertt_[-1].append(_xsub_pdertt)  # preserve nesting
+
 
 '''
 xsub_pderts (cross-sub_P): xsub_pdertt_[ xsub_dertt [ xsub_pdert_[ sub_pdert]]]: each bracket is a level of nesting,   
@@ -674,8 +756,73 @@ def draw_PP_(image, frame_Pp__):
         plt.title("Pderts, Param = " + param)
     pass
 
-
+def splice(rval_P_):  # separation between contiguous positive rval_P_s may be less than discontinuous search range
     '''
+    The criterion to re-evaluate separation is similarity of P-defining param: M/L for Pm, D/L for Pd, among the three Ps
+    If relative similarity > merge_ave: all three Ps are merged into one.
+    '''
+    splice_val_ = [splice_eval(__P, _P, rval_P_)  # compute splice values
+                   for __P, _P, P in zip(rval_P_, rval_P_[1:], rval_P_[2:])]
+    sorted_splice_val_ = sorted(enumerate(splice_val_),
+                                key=lambda k: k[1],
+                                reverse=True)   # sort index by splice_val_
+    if sorted_splice_val_[0][1] <= ave_splice:  # exit recursion
+        return rval_P_
+
+    folp_ = np.zeros(len(P_), bool)  # if True: P is included in another spliced triplet
+    spliced_P_ = []
+    for i, splice_val in sorted_splice_val_:  # loop through splice vals
+        if splice_val <= ave_splice:  # stop, following splice_vals will be even smaller
+            break
+        if folp_[i : i+3].any():  # skip if overlap
+            continue
+        folp_[i : i+3] = True     # splice_val > ave_splice: overlapping Ps folp=True
+        __P, _P, P = P_[i : i+3]  # triplet to splice
+        # merge _P and P into __P:
+        __P.accum_from(_P, excluded=['x0', 'ix0'])
+        __P.accum_from(P, excluded=['x0', 'ix0'])
+
+        if hasattr(__P, 'pdert_'):  # for splice_Pp_ in line_PPs
+            __P.pdert_ += _P.pdert_ + P.pdert_
+        else:
+            __P.dert_ += _P.dert_ + P.dert_
+        spliced_P_.append(__P)
+
+    # add remaining Ps into spliced_P
+    spliced_P_ += [P_[i] for i, folp in enumerate(folp_) if not folp]
+    spliced_P_.sort(key=lambda P: P.x0)  # back to original sequence
+
+    if len(spliced_P_) > 4:
+        splice(spliced_P_)
+
+    return spliced_P_
+
+def splice_eval(__P, _P, P):  # should work for splicing Pps too
+    '''
+    For 3 Pms, same-sign P1, P3, opposite-sign P2:
+    relative continuity vs separation = abs(( M2/ ( M1+M3 )))
+    relative similarity = match (M1/L1, M3/L3) / miss (match (M1/L1, M2/L2) + match (M3/L3, M2/L2)) # both should be negative
+    or P2 is reinforced as contrast - weakened as distant -> same value, not merged?
+    splice P1, P3: by proj mean comp, ~ comp_param, ave / contrast P2
+    re-run intra_P in line_PPs Pps?
+    also distance / meanL, if 0: fractional distance = meanL / olp? reduces ave, not m?
+    '''
+    __Rval = __P[0]; _Rval = _P[0]; Rval = P[0]
+    if _Rval == 0: _Rval =.1  # prevents /0
+    rel_continuity = abs(__Rval / _Rval)
+    __mean= __Rval/len(__P[1]); _mean= _Rval/len(_P[1]); mean= Rval/len(P[1])
+
+    m13 = min(mean, __mean) - abs(mean-__mean)/2    # inverse match of P1, P3
+    m12 = min(_mean, __mean) - abs(_mean-__mean)/2  # inverse match of P1, P2, should be negative
+    m23 = min(_mean, mean) - abs(_mean- mean)/2     # inverse match of P2, P3, should be negative
+
+    miss = abs(m12 + m23) if not 0 else .1
+    rel_similarity = (m13 * rel_continuity) / miss  # * rel_continuity: relative value of m13 vs m12 and m23
+    # splice_value = rel_continuity * rel_similarity
+
+    return rel_similarity
+
+'''
     packed search:
     Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
     param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]

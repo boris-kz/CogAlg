@@ -37,14 +37,12 @@ class Cdert(ClusterStructure):
     p = int  # accumulated in rng
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
-    mrdn = int  # -> Rdn: rdn counter per P
 
 class CP(ClusterStructure):
     L = int
     I = int
     D = int
     M = int
-    Rdn = int  # mrdn counter
     x0 = int
     dert_ = list  # contains (i, p, d, m)
     # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ dert_], 3rd: sublayers[ sub_P_[ dert_]]:
@@ -66,10 +64,9 @@ init_y = 0  # starting row, the whole frame doesn't need to be processed
 halt_y = 999999999  # ending row
 '''
     Conventions:
-    postfix 't' denotes tuple
     postfix '_' denotes array name, vs. same-name elements
-    prefix '_'  denotes prior of two same-name variables
-    prefix 'f'  denotes flag
+    prefix '_' denotes prior of two same-name variables
+    prefix 'f' denotes flag
     capitalized variables are normally summed small-case variables
 '''
 
@@ -88,7 +85,7 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
     for y in range(init_y, min(halt_y, Y)):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
 
         # initialization:
-        dert_ = []  # line-wide i_, p_, d_, m_, mrdn_
+        dert_ = []  # line-wide i_, p_, d_, m__
         pixel_ = frame_of_pixels_[y, :]
         _i = pixel_[0]
         # pixel i is compared to prior pixel _i in a row:
@@ -96,16 +93,13 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             d = i - _i  # accum in rng
             p = i + _i  # accum in rng
             m = ave - abs(d)  # for consistency with deriv_comp output, else redundant
-            mrdn = m + ave < abs(d)
-            dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
+            dert_.append( Cdert( i=i, p=p, d=d, m=m) )
             _i = i
-        # form patterns:
-        rval_Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # rootP=None, eval intra_P_, call form_rval_P_
-        rval_Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPd=True)
+        # form m-sign patterns, rootP=None:
+        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # eval intra_Pm_ per Pm in
+        frame_of_patterns_.append(Pm_)  # add line of patterns to frame of patterns, skip if cross_comp_spliced
 
-        frame_of_patterns_.append((rval_Pm_, rval_Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
-
-    return frame_of_patterns_  # frame of patterns, an input to level 2
+    return frame_of_patterns_  # frame of patterns is an input to level 2
 
 
 def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through intra_P_
@@ -119,69 +113,83 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         else:   sign = dert.m > 0
         if sign != _sign:
             # sign change, initialize and append P
-            P = CP( L=1, I=dert.p, D=dert.d, M=dert.m, Rdn=dert.mrdn, x0=x, dert_=[dert], sublayers=[], fPd=fPd)
+            P = CP( L=1, I=dert.p, D=dert.d, M=dert.m, x0=x, dert_=[dert], sublayers=[], fPd=fPd)
             P_.append(P)  # updated with accumulation below
         else:
             # accumulate params:
-            P.L += 1; P.I += dert.p; P.D += dert.d; P.M += dert.m; P.Rdn += dert.mrdn
+            P.L += 1; P.I += dert.p; P.D += dert.d; P.M += dert.m
             P.dert_ += [dert]
         x += 1
         _sign = sign
 
     if rootP:  # call from intra_P_
+        Dert = []
+        # sublayers brackets: 1st: param set, 2nd: Dert, param set, 3rd: sublayer concatenated from n root_Ps, 4th: hierarchy
+        rootP.sublayers = [[(fPd, rdn, rng, P_, [], [])]]  # 1st sublayer has one subset: sub_P_ param set, last[] is sub_Ppm__
+        rootP.subDerts = [Dert]
         if len(P_) > 4:  # 2 * (rng+1) = 2*2 =4
-            rootP.sublayers += intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, subDerts is selective
-    else:  # call from cross_comp
+
+            if rootP.M * len(P_) > ave_M * 5:  # or in line_PPs?
+                Dert[:] = [0, 0, 0, 0]  # P. L, I, D, M summed within a layer
+                for P in P_:  Dert[0] += P.L; Dert[1] += P.I; Dert[2] += P.D; Dert[3] += P.M
+
+            comb_sublayers, comb_subDerts = intra_P_(P_, rdn, rng, fPd)  # deeper comb_layers feedback, subDerts is selective
+            rootP.sublayers += comb_sublayers
+            rootP.subDerts += comb_subDerts
+    else:
+        # call from cross_comp
         intra_P_(P_, rdn, rng, fPd)
 
-    rval_P_ = form_rval_P_(P_, fPd)
-    return rval_P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
+    return P_  # used only if not rootP, else packed in rootP.sublayers and rootP.subDerts
 
 
 def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
     adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential
     comb_sublayers = []
+    comb_subDerts = []  # may not be needed, evaluation is more accurate in comp_sublayers?
 
     for P, adj_M in zip(P_, adj_M_):
-        if P.L > 2 * (rng + 1):  # vs. **? rng+1 because rng is initialized at 0, as all params
+        if P.L > 2 * (rng+1):  # vs. **? rng+1 because rng is initialized at 0, as all params
             rel_adj_M = adj_M / -P.M  # for allocation of -Pm' adj_M to each of its internal Pds?
 
-            if fPd:  # P is Pd
-                if min(abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn:  # high-D span, level rdn, vs. param rdn in dert
-                    sub_Pm_, sub_Pd_ = [],[]
-                    rdn+=1; rng+=1  # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
-                    P.sublayers += [[(fPd, rdn, rng, sub_Pm_, [], sub_Pd_, [])]]
+            if fPd:  # P is Pd, -> sub_Pdm_, in high same-sign D span
+                if min( abs(P.D), abs(P.D) * rel_adj_M) > ave_D * rdn:
                     ddert_ = deriv_comp(P.dert_)  # i is d
-                    sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
-                    sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
-            else:  # P is Pm
-                   # eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8..:
-                if P.M > ave_M * rdn:  # high-M span, no -adj_M: lend to contrast is not adj only, reflected in ave?
+                    form_P_(P, ddert_, rdn+1, rng+1, fPd=True)  # cluster Pd derts by md sign, eval intra_Pm_(Pdm_), won't happen
+            else:  # P is Pm,
+                # +Pm -> sub_Pm_ in low-variation span, eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8..:
+                if P.M > ave_M * rdn:  # no -adj_M: lend to contrast is not adj only, reflected in ave?
                     ''' if local ave:
                     loc_ave = (ave + (P.M - adj_M) / P.L) / 2  # mean ave + P_ave, possibly negative?
                     loc_ave_min = (ave_min + (P.M - adj_M) / P.L) / 2  # if P.M is min?
                     rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
                     '''
-                    sub_Pm_, sub_Pd_ = [],[]
-                    rdn+=1; rng+=1  # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
-                    P.sublayers += [[(fPd, rdn, rng, sub_Pm_, [], sub_Pd_, [])]]
                     rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
-                    sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
-                    sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
+                    form_P_(P, rdert_, rdn+1, rng+1, fPd=False)  # cluster by m sign, eval intra_Pm_
+                # -Pm -> sub_Pd_
+                elif -P.M > ave_D * rdn:  # high-variation span, neg M is contrast, implicit borrow from adjacent +Pms, M=min
+                    # or if min(-P.M, adj_M),  rel_adj_M = adj_M / -P.M  # allocate -Pm adj_M to each sub_Pd?
+                    form_P_(P, P.dert_, rdn+1, rng, fPd=True)  # cluster by d sign: partial d match, eval intra_Pm_(Pdm_)
 
-                else:  # to preserve index of sub_Pms and sub_Pds in P.sublayers
-                    P.sublayers += [[]]
-
-            # index 0 is sub_Pms, index 1 is sub_Pds, due to we form_P_ with fPd = false first
-            if P.sublayers and P.sublayers[fPd]:
+            if P.sublayers:
                 new_sublayers = []
-                for comb_subset_, subset_ in zip_longest(comb_sublayers, P.sublayers[fPd], fillvalue=([])):
+                for comb_subset_, subset_ in zip_longest(comb_sublayers, P.sublayers, fillvalue=([])):
                     # append combined subset_ (array of sub_P_ param sets):
                     new_sublayers.append(comb_subset_ + subset_)
                 comb_sublayers = new_sublayers
 
-    return comb_sublayers
+                new_subDerts = []
+                for comb_Dert, Dert in zip_longest(comb_subDerts, P.subDerts, fillvalue=([])):
+                    new_Dert = []
+                    if Dert or comb_Dert:  # at least one is not empty, from form_P_
+                        new_Dert = [comb_param + param
+                                   for comb_param, param in
+                                   zip_longest(comb_Dert, Dert, fillvalue=0)]
+                    new_subDerts.append(new_Dert)
+                comb_subDerts = new_subDerts
+
+    return comb_sublayers, comb_subDerts
 
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
@@ -222,14 +230,13 @@ def range_comp(dert_):  # cross-comp of 2**rng- distant pixels: 4,8,16.., skippi
         rd = dert.d + d   # difference accumulated in rng
         rm = dert.m + ave - abs(d)  # m accumulated in rng
         # for consistency with deriv_comp, else redundant
-        rmrdn = rm + ave < abs(rd)  # use Ave?
-        rdert_.append( Cdert( i=dert.i,p=rp,d=rd,m=rm,mrdn=rmrdn ))
+        rdert_.append( Cdert( i=dert.i,p=rp,d=rd,m=rm ))
         _i = dert.i
 
     return rdert_
 
 def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign match is partial d match
-    # dd and md may match across d sign, spliced in compact?
+    # dd and md may match across d sign, but likely in high-match area, spliced by spec in comp_P?
     # initialization:
     ddert_ = []
     _d = abs( dert_[0].d)  # same-sign in Pd
@@ -240,35 +247,10 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
         rd = d + _d
         dd = d - _d
         md = min(d, _d) - abs( dd/2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
-        dmrdn = md + ave < abs(dd)  # use Ave?
-        ddert_.append( Cdert( i=dert.d,p=rd,d=dd,m=md,dmrdn=dmrdn ))
+        ddert_.append( Cdert( i=dert.d,p=rd,d=dd,m=md ))
         _d = d
 
     return ddert_
-
-
-def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cross-param redundancy,
-    Rval = 0
-    rval_P__, rval_P_ = [], []
-    _sign = None  # to initialize 1st rdn P, (None != True) and (None != False) are both True
-
-    for P in iP_:
-        # P.L-P.Rdn is inverted P.Rdn: max P.Rdn = P.L. Inverted because it counts mrdn, = (not drdn):
-        if fPd: rval = abs(P.D) - (P.L-P.Rdn) * ave_D * P.L
-        else:   rval = P.M - P.Rdn * ave_M * P.L
-        # ave_D, ave_M are defined per dert: variable cost to adjust for rdn,
-        # * Ave_D, Ave_M coef: fixed costs per P?
-        sign = rval>0
-
-        if sign != _sign:  # sign change, initialize rP and append it to rP_
-            rval_P__.append([Rval, rval_P_])  # updated by accumulation below
-        else:
-            # accumulate params:
-            Rval += rval
-            rval_P_ += [(rval, P)]
-        _sign = sign
-
-    return rval_P__
 
 
 if __name__ == "__main__":
@@ -304,14 +286,15 @@ if __name__ == "__main__":
 
     if fline_PPs:  # debug line_PPs
         from line_PPs import *
-        frame_Pp_t = []
+        frame_Pp__ = []
 
-        for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
-            if len(P_) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_t, 0)
+        for y, P_ in enumerate(frame_of_patterns_):
+            if len(P_) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_, 0)
             else:           rval_Pp_t, Pp_t = [], []
-            frame_Pp_t.append(( rval_Pp_t, Pp_t ))
+            frame_Pp__.append(( rval_Pp_t, Pp_t))
 
-        draw_PP_(image, frame_Pp_t)  # debugging
+        draw_PP_(image, frame_Pp__)  # debugging
 
     end_time = time() - start_time
     print(end_time)
+
