@@ -156,6 +156,8 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     ddert_ = deriv_comp(P.dert_)  # i is d
                     sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
                     sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
+
+                else: P.sublayers += [[]]  # empty subset to preserve index in sublayer
             else:  # P is Pm
                    # eval comp at rng=2^n: 1, 2, 3; kernel size 2, 4, 8..:
                 if P.M > ave_M * rdn:  # high-M span, no -adj_M: lend to contrast is not adj only, reflected in ave?
@@ -171,8 +173,7 @@ def intra_P_(P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside sele
                     sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
                     sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
 
-                else:  # to preserve index of sub_Pms and sub_Pds in P.sublayers
-                    P.sublayers += [[]]  # empty subset
+                else: P.sublayers += [[]]  # empty subset to preserve index in sublayer
 
             if P.sublayers:
                 comb_sublayers = [comb_subset_ + subset_ for comb_subset_, subset_ in
@@ -245,6 +246,33 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
 
 
 def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cross-param redundancy,
+
+    rval_P__ = []
+    P = iP_[0]  # initialization:
+    # P.L-P.Rdn is inverted P.Rdn: max P.Rdn = P.L. Inverted because it counts mrdn, = (not drdn):
+    if fPd: rval = abs(P.D) - (P.L - P.Rdn) * ave_D * P.L
+    else:   rval = P.M - P.Rdn * ave_M * P.L
+    # ave_D, ave_M are defined per dert: variable cost to adjust for rdn, * Ave_D, Ave_M coef: fixed costs per P?
+    Rval = rval; rval_P_ = [(rval, P)]
+    _sign = rval > 0
+
+    for P in iP_:
+        if fPd: rval = abs(P.D) - (P.L-P.Rdn) * ave_D * P.L
+        else:   rval = P.M - P.Rdn * ave_M * P.L
+        sign = rval > 0
+        if sign != _sign:  # terminate and reinitialize rval_P:
+            rval_P__.append([Rval, rval_P_])
+            Rval = rval; rval_P_ = [(rval, P)]
+        else:
+            # accumulate params:
+            Rval += rval; rval_P_ += [(rval, P)]
+        _sign = sign
+
+    rval_P__.append([Rval, rval_P_])  # last rval_P, termination always lags by 1 input
+
+    return rval_P__
+
+def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cross-param redundancy,
     Rval = 0
     rval_P__, rval_P_ = [], []
     _sign = None  # to initialize 1st rdn P, (None != True) and (None != False) are both True
@@ -255,15 +283,19 @@ def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cros
         else:   rval = P.M - P.Rdn * ave_M * P.L
         # ave_D, ave_M are defined per dert: variable cost to adjust for rdn,
         # * Ave_D, Ave_M coef: fixed costs per P?
-        sign = rval>0
-
-        if sign != _sign:  # sign change, initialize rP and append it to rP_
-            rval_P__.append([Rval, rval_P_])  # updated by accumulation below
+        sign = rval > 0
+        if sign != _sign:
+            if not rval_P_: Rval = rval; rval_P_.append((rval, P))  # 1st input
+            # terminate and initialize rval_P:
+            rval_P__.append([Rval, rval_P_])
+            Rval = 0; rval_P_ = []
         else:
             # accumulate params:
             Rval += rval
             rval_P_ += [(rval, P)]
         _sign = sign
+
+    if rval_P_: rval_P__.append([Rval, rval_P_])  # last rval_P
 
     return rval_P__
 
