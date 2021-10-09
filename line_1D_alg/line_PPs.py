@@ -481,47 +481,108 @@ def sub_search_draft(P_, fPd):  # search in top sublayer per P / sub_P, after P_
                 sub_P_ = subset[3]
                 if len(sub_P_) > 2:
                     if fPd:
-                        if abs(P.D) > ave_D:  # or if P.D + pdert.d + sublayer.Dert.D: P.sublayers[0][0][2]?
+                        if abs(P.D) > ave_D:  # or if P.D + pdert.d + sublayer.Dert.D
                             sub_rdn_Pp__ = search(sub_P_, fPd)
                             subset[5].append(sub_rdn_Pp__)
                             # recursion via form_P_
-                    elif P.M > ave_M:  # or if P.M + pdert.m + sublayer.Dert.M: P.sublayers[0][0][3]?
+                    elif P.M > ave_M:  # or if P.M + pdert.m + sublayer.Dert.M
                         sub_rdn_Pp__ = search(sub_P_, fPd)
                         subset[5].append(sub_rdn_Pp__)
                         # recursion via form_P_: deeper sublayers search is selective per sub_P
 
 def comp_sublayers(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
-    pdert_mt = []
-    subDerts = []  # should be preserved for future processing
-    _derDert_ = [[], []]
-    if not _P.derDerts: _P.derDerts = [[], []]  # initialize if empty, index 0= m derDert, index 1 = d derDert
-
+    # comp subDerts:
+    subDertt_ = []  # preserved for future processing
+    # form Derts:
     for _sublayer, sublayer in zip(_P.sublayers, P.sublayers):
-        # form 2 layer Derts:
-        for i, isublayer in enumerate(_sublayer, sublayer):
-            # list of subsets:
-            if root_m * len(isublayer) > ave_M * 5:  # this actually won't work, first len(isublayer) = 1, need to think about it
-                subDert = []  # 2-tuple
-                for (fPd, rdn, rng, sub_Pm_, xsub_pmdertt_, sub_Pd_, xsub_pddertt_) in sublayer:
+        subDertt_s = [[],[]]  # preserved for future processing
+        for i, isublayer in enumerate(_sublayer, sublayer):  # list of subsets:
+            if root_m * len(isublayer) > ave_M * 5:  # won't work, first len(isublayer) = 1, need to think about it
+                subDertt = []
+                for fPd, rdn, rng, sub_Pm_, xsub_pmdertt_, sub_Pd_, xsub_pddertt_ in sublayer:
                     for isub_P_ in sub_Pm_, sub_Pd_:
                         Dert = [0, 0, 0, 0]  # P. L, I, D, M summed within sublayer
                         for sub_P in isub_P_: Dert[0] += sub_P.L; Dert[1] += sub_P.I; Dert[2] += sub_P.D; Dert[3] += sub_P.M
-                    subDert.append(Dert)
-                subDerts.append(subDert)
+                    subDertt.append(Dert)
+                subDertt_.append(subDertt)  # 2tuple
             else:
                 break  # deeper Derts are not formed
-        # compare 2 layer Derts, no cross-layer sum?:
-        derDert = []
-        for _param, param, param_name, ave in zip( subDerts[i][0], subDerts[i][1], param_names, aves):
-            dert = comp_param(_param, param, param_name, ave)
-            if dert.m > 0:
-                pdert_mt[i] += dert.m  # pdert is higher-layer, also higher-value mL? no -m sum: won't be processed
-            derDert.append(dert)  # dert per param, derDert_ per _subDert, also a copy for subDert?
-        _derDert_[i].append(derDert)  # derDert per sublayer
-    _P.derDerts[i].append(_derDert_)  # derDert_ per _P and P pair
-    P.derDerts[i].append(_derDert_)  # bilateral assignment?
+            subDertt_s[i] = subDertt_
 
+        _P.subDertt_= subDertt_s[0]
+        P.subDertt_= subDertt_s[1]
 
+    # comp Derts, sum cross-layer:
+    if not _P.derDertt_: _P.derDertt_ = []
+    xDert_mt = [0,0]
+    derDertt = []
+    for (_mDert, _dDert), (mDert, dDert) in zip( subDertt_, subDertt_):
+        for i, _iDert, iDert in enumerate( zip((_mDert, mDert), (_dDert, dDert))):
+            derDert = []
+            for _param, param, param_name, ave in zip(_iDert, iDert, param_names, aves):
+                dert = comp_param(_param, param, param_name, ave)
+                if dert.m > 0:
+                    xDert_mt[i] += dert.m  # pdert is higher-layer, also higher-value mL? no -m sum: won't be processed
+                derDert.append(dert)  # dert per param, derDert_ per _subDert, a copy for subDert?
+            derDertt[i].append(derDert)  # m, d derDerts per sublayer
+
+        _P.derDertt_.append(derDertt)  # derDert_ per _P and P pair
+        P.derDertt_.append(derDertt)  # bilateral assignment?
+
+    # comp sub_Ps, Chee's sequence:
+    if xDert_mt[i] + root_m > ave_M * 4 and _P.sublayers and P.sublayers:  # or pdert.sub_M + pdert.m + P.M?
+        # comp sub_Ps between sub_P_s in 1st sublayer:
+        _fPd, _rdn, _rng, _sub_Pm_, _xsub_pmdertt_, _sub_Pd_, _xsub_pddertt_ = _P.sublayers[0][0]  # 2nd [0] is the 1st and only subset
+        fPd, rdn, rng, sub_Pm_, xsub_pmdertt_, sub_Pd_, xsub_pddertt_ = P.sublayers[0][0]
+
+        _xsub_pdertt_t = (_xsub_pmdertt_, _xsub_pddertt_)
+        xsub_pdertt_t = (xsub_pmdertt_, xsub_pddertt_)
+        _sub_P_t = (_sub_Pm_, _sub_Pd_)
+        sub_P_t = (sub_Pm_, sub_Pd_)
+
+        for pdert_mt, _xsub_pdertt_,  xsub_pdertt_, _sub_P_, sub_P_ in \
+        zip(pdert_mt_, _xsub_pdertt_t, xsub_pdertt_t, _sub_P_t, sub_P_t): # shouldn't this need to be per P, | Pd too?
+            # if same intra_comp fork, else not comparable:
+            if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls and root_m > 0 and  pdert_mt + root_m > ave_M * 4 :  # or pdert.sub_M + pdert.m + P.M?
+
+                # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
+                _SL = SL = 0  # summed Ls
+                start_index = next_index = 0  # index of starting sub_P for current _sub_P
+                _xsub_pdertt_ += [[]]  # array of cross-sub_P pdert tuples: inner brackets, per sub_P_
+                xsub_pdertt_ += [[]]  # append xsub_dertt per _sub_P_ and sub_P_, sparse?
+
+                # add a layer of nesting here?
+                # since we are having rval_P now, and each rval_P is having their own P_
+                for _sub_P in _sub_P_:  # form xsub_pdertt_[ xsub_dertt [ xsub_pdert_[ sub_pdert]]]: each bracket is level of nesting
+                    P_ = []  # to form xsub_Pps
+                    _xsub_pdertt = [[], [], [], []]  # tuple of L, I, D, M xsub_pderts
+                    _SL += _sub_P.L  # ix0 of next _sub_P
+                    # search right:
+                    for sub_P in sub_P_[start_index:]:  # index_ix0 > _ix0, only sub_Ps at proximate relative positions in sub_P_ are compared
+                        if comp_sub_P(_sub_P, sub_P, _xsub_pdertt, P_, root_m):
+                            break
+                        # if next ix overlap: ix0 of next _sub_P < ix0 of current sub_P
+                        if SL < _SL: next_index += 1
+                        SL += sub_P.L  # ix0 of next sub_P
+                    # search left:
+                    for sub_P in reversed(sub_P_[len(sub_P_) - start_index:]):  # index_ix0 <= _ix0, invert positions of sub_P and _sub_P:
+                        if comp_sub_P(sub_P, _sub_P, _xsub_pdertt, P_, root_m):
+                            break
+                    # not implemented: if param_name == "I_" and not fPd: sub_pdert = search_param_(param_)
+                    # for next _sub_P:
+                    start_index = next_index
+
+                    if _xsub_pdertt[0]:  # at least 1 sub_pdert, real min length ~ 8, very unlikely
+                        sub_Pdertt_ = [(_xsub_pdertt[0], P_), (_xsub_pdertt[1], P_), (_xsub_pdertt[2], P_), (_xsub_pdertt[3], P_)]
+                        # form 4-tuple of xsub_Pp_s:
+                        xsub_rval_Pp_t, sub_Ppm__ = form_Pp_root(sub_Pdertt_, [], [], fPd=0)
+                        _xsub_pdertt_[-1][:] = xsub_rval_Pp_t
+                        xsub_pdertt_[-1][:] = _xsub_pdertt_[-1]  # bilateral assignment
+
+                    else:
+                        _xsub_pdertt_[-1].append(_xsub_pdertt)  # preserve nesting
+
+    # old sequence:
     if pdert_mt[i] + root_m > ave_M * 4 and _P.sublayers and P.sublayers:  # or pdert.sub_M + pdert.m + P.M?
         # comp sub_Ps between sub_P_s in 1st sublayer:
         _fPd, _rdn, _rng, _sub_P_, _xsub_pdertt_, _sub_Pp__ = _P.sublayers[0][0]  # 2nd [0] is the 1st and only subset

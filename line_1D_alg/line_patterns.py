@@ -46,12 +46,12 @@ class CP(ClusterStructure):
     M = int
     Rdn = int  # mrdn counter
     x0 = int
-    dert_ = list  # contains (i, p, d, m)
+    dert_ = list  # contains (i, p, d, m, mrdn)
     # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ dert_], 3rd: sublayers[ sub_P_[ dert_]]:
     sublayers = list  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
-    subDerts = list  # conditionally summed [L,I,D,M] per sublayer, most are empty
-    derDerts = list  # for compared subDerts only
-    fPd = bool  # P is Pd if true, else Pm; also defined per layer
+    subDertt_ = list  # m,d' [L,I,D,M] per sublayer, conditionally summed in line_PPs
+    derDertt_ = list  # for subDertt_s compared in line_PPs
+    fPd = bool  # P is Pd if true, else Pm
 
 verbose = False
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
@@ -272,33 +272,6 @@ def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cros
 
     return rval_P__
 
-def form_rval_P_(iP_, fPd):  # cluster Ps by the sign of value adjusted for cross-param redundancy,
-    Rval = 0
-    rval_P__, rval_P_ = [], []
-    _sign = None  # to initialize 1st rdn P, (None != True) and (None != False) are both True
-
-    for P in iP_:
-        # P.L-P.Rdn is inverted P.Rdn: max P.Rdn = P.L. Inverted because it counts mrdn, = (not drdn):
-        if fPd: rval = abs(P.D) - (P.L-P.Rdn) * ave_D * P.L
-        else:   rval = P.M - P.Rdn * ave_M * P.L
-        # ave_D, ave_M are defined per dert: variable cost to adjust for rdn,
-        # * Ave_D, Ave_M coef: fixed costs per P?
-        sign = rval > 0
-        if sign != _sign:
-            if not rval_P_: Rval = rval; rval_P_.append((rval, P))  # 1st input
-            # terminate and initialize rval_P:
-            rval_P__.append([Rval, rval_P_])
-            Rval = 0; rval_P_ = []
-        else:
-            # accumulate params:
-            Rval += rval
-            rval_P_ += [(rval, P)]
-        _sign = sign
-
-    if rval_P_: rval_P__.append([Rval, rval_P_])  # last rval_P
-
-    return rval_P__
-
 
 if __name__ == "__main__":
     ''' 
@@ -336,7 +309,7 @@ if __name__ == "__main__":
         frame_Pp_t = []
 
         for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
-            if len(P_t) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_t, 0)
+            if len(P_t) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_t)
             else:            rval_Pp_t, Pp_t = [], []
             frame_Pp_t.append(( rval_Pp_t, Pp_t ))
 
