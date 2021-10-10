@@ -298,3 +298,117 @@ if __name__ == "__main__":
     end_time = time() - start_time
     print(end_time)
 
+'''
+line_PPs no rval:
+'''
+def comp_sublayers(_P, P, root_m):  # if pdert.m -> if summed params m -> if positional m: mx0?
+    # comp subDerts:
+    subDertt_ = []  # preserved for future processing
+    # form Derts:
+    for _sublayer, sublayer in zip(_P.sublayers, P.sublayers):
+        subDertt_s = [[],[]]  # preserved for future processing
+        for i, isublayer in enumerate(_sublayer, sublayer):  # list of subsets:
+            if root_m * len(isublayer) > ave_M * 5:  # won't work, first len(isublayer) = 1, need to think about it
+                subDertt = []
+                for fPd, rdn, rng, sub_Pm_, xsub_pmdertt_, sub_Pd_, xsub_pddertt_ in sublayer:
+                    for isub_P_ in sub_Pm_, sub_Pd_:
+                        Dert = [0, 0, 0, 0]  # P. L, I, D, M summed within sublayer
+                        for sub_P in isub_P_: Dert[0] += sub_P.L; Dert[1] += sub_P.I; Dert[2] += sub_P.D; Dert[3] += sub_P.M
+                    subDertt.append(Dert)
+                subDertt_.append(subDertt)  # 2tuple
+            else:
+                break  # deeper Derts are not formed
+            subDertt_s[i] = subDertt_
+
+        _P.subDertt_= subDertt_s[0]
+        P.subDertt_= subDertt_s[1]
+
+    # comp Derts, sum cross-layer:
+    if not _P.derDertt_: _P.derDertt_ = []
+    xDert_mt = [0,0]
+    derDertt = []
+    for (_mDert, _dDert), (mDert, dDert) in zip( subDertt_, subDertt_):
+        for i, _iDert, iDert in enumerate( zip((_mDert, mDert), (_dDert, dDert))):
+            derDert = []
+            for _param, param, param_name, ave in zip(_iDert, iDert, param_names, aves):
+                dert = comp_param(_param, param, param_name, ave)
+                if dert.m > 0:
+                    xDert_mt[i] += dert.m  # pdert is higher-layer, also higher-value mL? no -m sum: won't be processed
+                derDert.append(dert)  # dert per param, derDert_ per _subDert, a copy for subDert?
+            derDertt[i].append(derDert)  # m, d derDerts per sublayer
+
+        _P.derDertt_.append(derDertt)  # derDert_ per _P and P pair
+        P.derDertt_.append(derDertt)  # bilateral assignment?
+
+    # comp sub_Ps:
+    if xDert_mt[i] + root_m > ave_M * 4 and _P.sublayers and P.sublayers:  # or pdert.sub_M + pdert.m + P.M?
+        # comp sub_Ps between sub_P_s in 1st sublayer:
+        _fPd, _rdn, _rng, _sub_P_, _xsub_pdertt_, _sub_Pp__ = _P.sublayers[0][0]  # 2nd [0] is the 1st and only subset
+        fPd, rdn, rng, sub_P_, xsub_pdertt_, sub_Pp__ = P.sublayers[0][0]
+        # if same intra_comp fork, else not comparable:
+        if fPd == _fPd and rng == _rng and min(_P.L, P.L) > ave_Ls and root_m > 0:
+            # compare sub_Ps to each _sub_P within max relative distance, comb_M- proportional:
+            _SL = SL = 0  # summed Ls
+            start_index = next_index = 0  # index of starting sub_P for current _sub_P
+            _xsub_pdertt_ += [[]]  # array of cross-sub_P pdert tuples: inner brackets, per sub_P_
+            xsub_pdertt_ += [[]]  # append xsub_dertt per _sub_P_ and sub_P_, sparse?
+
+            for _sub_P in _sub_P_:  # form xsub_pdertt_[ xsub_dertt [ xsub_pdert_[ sub_pdert]]]: each bracket is level of nesting
+                P_ = []  # to form xsub_Pps
+                _xsub_pdertt = [[], [], [], []]  # tuple of L, I, D, M xsub_pderts
+                _SL += _sub_P.L  # ix0 of next _sub_P
+                # search right:
+                for sub_P in sub_P_[start_index:]:  # index_ix0 > _ix0, only sub_Ps at proximate relative positions in sub_P_ are compared
+                    if comp_sub_P(_sub_P, sub_P, _xsub_pdertt, P_, root_m):
+                        break
+                    # if next ix overlap: ix0 of next _sub_P < ix0 of current sub_P
+                    if SL < _SL: next_index += 1
+                    SL += sub_P.L  # ix0 of next sub_P
+                # search left:
+                for sub_P in reversed(sub_P_[len(sub_P_) - start_index:]):  # index_ix0 <= _ix0, invert positions of sub_P and _sub_P:
+                    if comp_sub_P(sub_P, _sub_P, _xsub_pdertt, P_, root_m):
+                        break
+                # not implemented: if param_name == "I_" and not fPd: sub_pdert = search_param_(param_)
+                # for next _sub_P:
+                start_index = next_index
+
+                if _xsub_pdertt[0]:  # at least 1 sub_pdert, real min length ~ 8, very unlikely
+                    sub_Pdertt_ = [(_xsub_pdertt[0], P_), (_xsub_pdertt[1], P_), (_xsub_pdertt[2], P_), (_xsub_pdertt[3], P_)]
+                    # form 4-tuple of xsub_Pp_s:
+                    xsub_rval_Pp_t, sub_Ppm__ = form_Pp_root(sub_Pdertt_, [], [], fPd=0)
+                    _xsub_pdertt_[-1][:] = xsub_rval_Pp_t
+                    xsub_pdertt_[-1][:] = _xsub_pdertt_[-1]  # bilateral assignment
+
+                else:
+                    _xsub_pdertt_[-1].append(_xsub_pdertt)  # preserve nesting
+'''
+    packed search:
+    Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
+    param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
+    param_Ps_ = [LP_, IP_, DP_, MP_]
+    Ldert_, Idert_, Ddert_, Mdert_, dert1_, dert2_, LP_, IP_, DP_, MP_ = [], [], [], [], [], [], [], [], [], []
+    param_derts_ = [Ldert_, Idert_, Ddert_, Mdert_]
+    param_Ps_ = [LP_, IP_, DP_, MP_]
+    for i, (_P, P, P2) in enumerate(zip(P_, P_[1:], P_[2:] + [None])):
+        for param_dert_, param_P_ in zip(param_derts_, param_Ps_):
+            _param  = getattr(_P, param_name[0])
+            param   = getattr(P , param_name[0])
+            if param_name == "L_":  # div_comp for L because it's a higher order of scale:
+                _L = _param; L= param
+                rL = L / _L  # higher order of scale, not accumulated: no search, rL is directional
+                int_rL = int( max(rL, 1/rL))
+                frac_rL = max(rL, 1/rL) - int_rL
+                mL = int_rL * min(L, _L) - (int_rL*frac_rL) / 2 - ave_mL  # div_comp match is additive compression: +=min, not directional
+                Ldert_.append(Cdert( i=L, p=L + _L, d=rL, m=mL))
+                param_P_.append(_P)
+            elif (fPd and param_name == "D_") or (not fPd and param_name == "M_") : # step = 2
+                if i < len(P_)-2: # P size is -2 and dert size is -1 when step = 2, so last 2 elements are not needed
+                    param2 = getattr(P2, param_name[0])
+                    param_dert_ += [comp_param(_param, param2, param_name, ave)]
+                    dert2_ += [param_dert_[-1].copy()]
+                    param_P_.append(_P)
+                dert1_ += [comp_param(_param, param, param_name, ave)]
+            elif not (not fPd and param_name == "I_"):  # step = 1
+                param_dert_ += [comp_param(_param, param, param_name, ave)]
+                param_P_.append(_P)
+'''
