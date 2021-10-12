@@ -141,6 +141,84 @@ def save_Pps(filename, frame_Pp__):
 def read_Pps(filename):
     pass
 
+# to be updated
+def draw_PP_(image, frame_Pp__):
+
+    from matplotlib import pyplot as plt
+    import numpy as np
+
+    # initialization
+    img_rval_Pp_ = [np.zeros_like(image) for _ in range(4)]
+
+    img_Pp_ = [np.zeros_like(image) for _ in range(4)]
+    img_Pp_pdert_ = [np.zeros_like(image) for _ in range(4)]
+
+    img_Pp_layer_ = [np.zeros_like(image) for _ in range(4)]
+    draw_layer = 1 # draw certain layer, start from 1, the higher the number, the deeper the layer, 0 = root layer so not applicable here
+
+    for y, (rval_Pp__, Pp__) in enumerate(frame_Pp__):  # loop each line
+        for i, (rval_Pp_, Pp_) in enumerate(zip(rval_Pp__, Pp__)): # loop each rdn_Pp or Pp
+            # rval_Pp
+            for j, (Rval, rval_Pps) in enumerate(rval_Pp_):
+                for k, (rval, Pp) in enumerate(rval_Pps):
+                    for m, P in enumerate(Pp.P_):
+
+                        if rval>0:
+                            img_rval_Pp_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                        else:
+                            img_rval_Pp_[i][y,P.x0:P.x0+P.L] = 128 # - sign
+            # Pp
+            for j, Pp in enumerate(Pp_): # each Pp
+                for k, P in enumerate(Pp.P_): # each P or pdert
+
+                    if Pp.M>0:
+                        img_Pp_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                    else:
+                        img_Pp_[i][y,P.x0:P.x0+P.L] = 128 # - sign
+
+                    if P.M>0:
+                        img_Pp_pdert_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                    else:
+                        img_Pp_pdert_[i][y,P.x0:P.x0+P.L] = 128 # - sign
+
+                # sub_Pps
+                for k, sub_P_layers in enumerate(Pp.sublayers): # each layer
+                    if k+1 == draw_layer:
+                        for (_, Pp_) in enumerate(sub_P_layers[0]): # each sub_P's Pps
+                            for n, P in enumerate(Pp.P_): # each P or pdert
+                                if Pp.M>0:
+                                    img_Pp_layer_[i][y,P.x0:P.x0+P.L] = 255 # + sign
+                                else:
+                                    img_Pp_layer_[i][y,P.x0:P.x0+P.L] = 128 # - sign
+                        break # draw only selected layer
+
+    # plot diagram of params
+    plt.figure()
+    for i, param in enumerate(param_names):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img_rval_Pp_[i], vmin=0, vmax=255)
+        plt.title("Rval Pps, Param = " + param)
+
+    plt.figure()
+    for i, param in enumerate(param_names):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img_Pp_[i], vmin=0, vmax=255)
+        plt.title("Pps, Param = " + param)
+
+    plt.figure()
+    for i, param in enumerate(param_names):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img_Pp_layer_[i], vmin=0, vmax=255)
+        plt.title("Sub Pps, Layer = "+str(draw_layer)+", Param = " + param)
+
+    plt.figure()
+    for i, param in enumerate(param_names):
+        plt.subplot(2, 2, i + 1)
+        plt.imshow(img_Pp_pdert_[i], vmin=0, vmax=255)
+        plt.title("Pderts, Param = " + param)
+    pass
+
+
 def ordinal(n):
     if ilayer % 10 == 1: suffix = "st"
     elif ilayer % 10 == 2: suffix = "nd"
