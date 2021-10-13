@@ -23,7 +23,7 @@ import sys
 from os.path import dirname, join, abspath
 
 from numpy import int16, int32
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../../../AppData/Roaming/JetBrains/PyCharmCE2021.2')))
 import cv2
 # import argparse
 import pickle
@@ -99,10 +99,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
             _i = i
         # form patterns:
-        rval_Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_, call form_rval_P_
-        rval_Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
+        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_, call form_P_
+        Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
 
-        frame_of_patterns_.append((rval_Pm_, rval_Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
+        frame_of_patterns_.append((Pm_, Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
 
     return frame_of_patterns_  # frame of patterns, an input to level 2
 
@@ -127,51 +127,21 @@ def form_P_(rootP, dert_, rdn, rng, fPm):  # accumulation and termination, rdn a
         x += 1
         _sign = sign
 
-    rval_P_ = form_rval_P_(rootP, P_, rdn, rng, fPm)
-    return rval_P_  # used only if not rootP, else packed in rootP.sublayers
+    intra_P_(rootP, P_, rdn, rng, fPm)
+
+    return P_  # used only if not rootP, else packed in rootP.sublayers
 
 
-def form_rval_P_(rootP, iP_, rdn, rng, fPm):  # cluster Ps by the sign of value adjusted for cross-param redundancy,
-
-    rval_P_ = []
-    P = iP_[0]  # initialization:
-    if fPm: rval = P.M - P.Rdn * ave_M * P.L
-    else:   rval = abs(P.D) - (P.L - P.Rdn) * ave_D * P.L
-    # P.L-P.Rdn is inverted P.Rdn: max P.Rdn = P.L. Inverted because it counts mrdn, = (not drdn)
-    # ave_D, ave_M are defined per dert: variable cost to adjust for rdn, * Ave_D, Ave_M coef: fixed costs per P?
-    Rval = rval; rval_P = [(rval, P)]
-    _sign = rval > 0
-
-    for P in iP_:
-        if fPm: rval = P.M - P.Rdn * ave_M * P.L
-        else:   rval = abs(P.D) - (P.L - P.Rdn) * ave_D * P.L
-        sign = rval > 0
-        if sign != _sign:  # terminate, evaluate, and reinitialize rval_P:
-            if Rval > 0:
-                if rootP:  # call from intra_P_
-                    rootP.sublayers += intra_P_(rootP, rval_P, rdn, rng, fPm)  # deeper comb_layers feedback
-                else:  # call from cross_comp
-                    rval_P = intra_P_(rootP, rval_P, rdn, rng, fPm)  # deeper comb_layers are packed in each P
-            rval_P_.append([Rval, rval_P])
-            Rval = rval; rval_P = [(rval, P)]
-        else:
-            # accumulate params:
-            Rval += rval; rval_P += [(rval, P)]
-        _sign = sign
-
-    rval_P_.append([Rval, rval_P])  # last rval_P, termination always lags by 1 input
-    return rval_P_
-
-
-def intra_P_(rootP, rval_P, rdn, rng, fPm):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
+def intra_P_(rootP, P_, rdn, rng, fPm):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
     # adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential?
     comb_sublayers = []
 
-    for rval, P in rval_P:  # vs for P, adj_M in zip(P_, adj_M_)
+    for P in P_:  # vs for P, adj_M in zip(P_, adj_M_)
         # rel_adj_M = adj_M / -P.M  # to allocate -Pm' adj_M to internal Pds? but lend to contrast is not adj only, reflected in ave?
         if fPm:
-            if P.M > ave_M * rdn and P.L > 2:  # min skipping P.L=3, actual comp rng = 2^(n+1): 1, 2, 3 -> kernel size 4, 8, 16...
+            if P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
+                # min skipping P.L=3, actual comp rng = 2^(n+1): 1, 2, 3 -> kernel size 4, 8, 16...
                 ''' if local ave:
                 loc_ave = (ave + (P.M - adj_M) / P.L) / 2  # mean ave + P_ave, possibly negative?
                 loc_ave_min = (ave_min + (P.M - adj_M) / P.L) / 2  # if P.M is min?
@@ -186,7 +156,7 @@ def intra_P_(rootP, rval_P, rdn, rng, fPm):  # recursive cross-comp and form_P_ 
             else:
                 P.sublayers += [[]]  # empty subset to preserve index in sublayer
         else:  # P is Pd
-            if abs(P.D) > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
+            if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
                 # no min(abs(P.D), abs(P.D) * rel_adj_M): adj_M is not from single P, ave_adj_M is represented in ave_D?
                 rdn+=1; rng+=1
                 sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
@@ -204,7 +174,7 @@ def intra_P_(rootP, rval_P, rdn, rng, fPm):  # recursive cross-comp and form_P_ 
     if rootP:
         return comb_sublayers
     else:
-        return rval_P  # each P in rval_P has new sublayers, comb_sublayers is not needed
+        return P_  # each P has new sublayers, comb_sublayers is not needed
 
 
 def range_comp(dert_):  # cross-comp of 2**(rng+1) - distant pixels, skipping intermediate pixels:  rng=1,2,3 -> kernel=4,8,16...
@@ -307,9 +277,9 @@ if __name__ == "__main__":
         frame_Pp_t = []
 
         for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
-            if len(P_t) > 1: rval_Pp_t, Pp_t = line_PPs_root(P_t)
-            else:            rval_Pp_t, Pp_t = [], []
-            frame_Pp_t.append(( rval_Pp_t, Pp_t ))
+            if len(P_t) > 1: Pp_tt = line_PPs_root(P_t)  # output is a nested tuple
+            else:            Pp_tt = [], []
+            frame_Pp_t.append(( Pp_t ))
 
         # draw_PP_(image, frame_Pp_t)  # debugging
 
