@@ -278,7 +278,7 @@ if __name__ == "__main__":
         frame_Pp_ttt_ = []
 
         for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
-            Pp_ttt = line_PPs_root(None, 1, P_t)  # root_Pp = None, layer_rdn = 1
+            Pp_ttt = line_PPs_root(None, 1, P_t)  # root_Pp = None, initial rdn_ = 11111..?
             frame_Pp_ttt_.append(( Pp_ttt ))  # 3-level nested tuple per line: Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_)))
 
         # draw_PP_(image, frame_Pp_t)  # debugging
