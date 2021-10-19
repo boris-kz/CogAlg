@@ -99,10 +99,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
             _i = i
         # form patterns:
-        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
-        Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
+        Pm_, rdnm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
+        Pd_, rdnd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
 
-        frame_of_patterns_.append((Pm_, Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
+        frame_of_patterns_.append(((Pm_, rdnm_), (Pd_, rdnd_)))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
 
     return frame_of_patterns_  # frame of patterns, an input to level 2
 
@@ -118,7 +118,7 @@ def form_P_(rootP, dert_, rdn, rng, fPm):  # accumulation and termination, rdn a
         else:   sign = dert.d > 0
         if sign != _sign:
             # sign change, initialize and append P
-            P = CP( L=1, I=dert.p, D=dert.d, M=dert.m, Rdn=dert.mrdn, x0=x, dert_=[dert], sublayers=[])
+            P = CP( L=1, I=dert.p, D=dert.d, M=dert.m, Rdn=dert.mrdn+1, x0=x, dert_=[dert], sublayers=[])  # Rdn starts from 1
             P_.append(P)  # updated with accumulation below
         else:
             # accumulate params:
@@ -278,7 +278,7 @@ if __name__ == "__main__":
         frame_Pp_ttt_ = []
 
         for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
-            Pp_ttt = line_PPs_root(None, 1, P_t)  # root_Pp = None, initial rdn_ = 11111..?
+            Pp_ttt = line_PPs_root(None, P_t)  # root_Pp = None
             frame_Pp_ttt_.append(( Pp_ttt ))  # 3-level nested tuple per line: Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_)))
 
         # draw_PP_(image, frame_Pp_t)  # debugging
