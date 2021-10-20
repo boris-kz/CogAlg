@@ -99,10 +99,10 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
             dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
             _i = i
         # form patterns:
-        Pm_, rdnm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
-        Pd_, rdnd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
+        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
+        Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
 
-        frame_of_patterns_.append(((Pm_, rdnm_), (Pd_, rdnd_)))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
+        frame_of_patterns_.append((Pm_, Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
 
     return frame_of_patterns_  # frame of patterns, an input to level 2
 
