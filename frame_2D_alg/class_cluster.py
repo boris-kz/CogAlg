@@ -342,6 +342,10 @@ def comp_param(_param, param, param_name, ave):
     return dert
 
 
+def copy(self):
+    return deepcopy(self)
+
+
 if __name__ == "__main__":  # for tests
 
 
