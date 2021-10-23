@@ -51,6 +51,7 @@ class CP(ClusterStructure):
     sublayers = list  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
     subDertt_ = list  # m,d' [L,I,D,M] per sublayer, conditionally summed in line_PPs
     derDertt_ = list  # for subDertt_s compared in line_PPs
+    Pp = object  # to merge overlapping Pps in line_PPs search_param
 
 verbose = False
 # pattern filters or hyper-parameters: eventually from higher-level feedback, initialized here as constants:
