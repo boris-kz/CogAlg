@@ -345,6 +345,24 @@ def comp_param(_param, param, param_name, ave):
 def copy(self):
     return deepcopy(self)
 
+def merge(self, other, self_instance_name, self_instance, excluded = ()):
+    # accumulate numeric params
+    self.accum_from(other,excluded=excluded)
+
+    for list_param in self.list_params: # list params, such as pdert_, P_, sublayers, subDerts
+        if hasattr(other, list_param):
+
+            self_list = getattr(self,list_param)   # get self list param, such as P_, pdert_ and etc
+            other_list = getattr(other,list_param) # get other list param, such as P_, pdert_ and et
+
+            for other_param in other_list: # append each list param to self, for example other.P_ to self.P_
+                self_list.append(other_param)
+
+                # update reference, may add in more class later
+                # for example update other P.Pp to self Pp
+                if hasattr(other_param, self_instance_name) and isinstance(self, self_instance):
+                    setattr(other_param, self_instance_name, self)
+
 
 if __name__ == "__main__":  # for tests
 
