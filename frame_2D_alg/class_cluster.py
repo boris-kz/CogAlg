@@ -78,17 +78,19 @@ class MetaCluster(type):
         # only ignore param names start with double underscore
         params = tuple(attr for attr in attrs
                        if not attr.startswith('__') and
-                       isclass(attrs[attr]))
+                       isclass(attrs[attr]) or
+                       (callable(attrs[attr]) and
+                        attrs[attr].__code__.co_argcount == 0))
 
         numeric_params = tuple(param for param in params
-                               if (issubclass(attrs[param], Number)) and
-                               not (issubclass(attrs[param], bool))) # avoid accumulate bool, which is flag
+                               if (isinstance(attrs[param](), Number)) and
+                               not (isinstance(attrs[param](), bool))) # avoid accumulate bool, which is flag
 
         list_params = tuple(param for param in params
-                               if (issubclass(attrs[param], list)))
+                            if (isinstance(attrs[param](), dict)))
 
         dict_params = tuple(param for param in params
-                               if (issubclass(attrs[param], dict)))
+                            if (isinstance(attrs[param](), dict)))
 
         # Fill in the template
         methods_definitions = _methods_template.format(
