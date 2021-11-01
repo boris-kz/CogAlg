@@ -8,6 +8,7 @@ Thus it should be on 3rd level: no Pp overlap means comp between Pps: higher com
 Next, line_PPPs should be formed as a cross-level increment: line_PPPs = increment (line_PPs).
 This increment will be made recursive: we should be able to automatically generate 3rd and any n+1- level alg:
 line_PPPPs = increment (line_PPPs), etc. That will be the hardest and most important part of this project
+-
 Pp is a graph consisting of pderts: each has a node (P) + right edge (derivatives).
 pdert is P + 1st right match, diff, + intermediate negM, negL. If 1st right match: pdert is positive, else: negative.
 So, positive Pp has negative-m 1st and last pderts, and positive pderts-m in between.
@@ -20,6 +21,7 @@ sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import numpy as np
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 from line_patterns import *
+import gc
 
 class Cpdert(ClusterStructure):
     # P param dert
@@ -43,8 +45,8 @@ class CPp(CP):
     iL = int  # length of Pp in pixels
     negM = int  # in mdert only
     negL = int  # in mdert only
-    _negM = int  # for search left only
-    _negL = int  # left-most compared distance from Pp.x0, for search left only
+    _negM = int  # for search left, within adjacent neg Ppm only?
+    _negL = int  # left-most compared distance from Pp.x0
     negiL = int
     sublayers = list
     subDerts = list
@@ -109,11 +111,12 @@ def line_PPs_root(P_t):  # P_t= Pm_, Pd_; higher-level input is nested to the de
                 Ppm_t.append( form_Pp_(Pdert_, param_name, fPd=0) )
             # Ppm_t only:
             IPpm_ = Ppm_t[1]; Idert_ = Pdert_t[1]
-            rootM = sum(Pp.M for Pp in IPpm_) + sum(pdert.m for pdert in Idert_)  # both represent input match
-
-            if len(P_) > 3 and rootM > ave_M * 4:  # different coef for compact?
+            rootM = sum(Pp.M for Pp in IPpm_) + sum(pdert.m for pdert in Idert_)  # input match in two overlapping layers
+            compact(IPpm_, dert1_, dert2_, fPd)  # re-eval Pps for xlayer rdn, eval splice Pms|Pds: Ps in +IPpms may merge,
+            # but Pp.pdert_ is still in and may search:
+            if len(P_) > 3 and rootM > ave_M * 4:  # different coef,
+                # +IPms search in adj -IPms, merge if comp in next +IPm, no use for -IPms:
                 extra_Pp_(IPpm_, Idert_, ave, rave=1)  # rng+ per Pm_'IPpm_: I induction = dert.m + P.M? no sublayers
-                compact(IPpm_, dert1_, dert2_, fPd)  # re-eval Pps for layer redundancy, eval splice Pms|Pds
 
             Ppd_t = []  # LPp_, IPp_, DPp_, MPp_
             rdn_t = sum_rdn_(param_names, Pdert_t, fPd=1)
@@ -190,17 +193,17 @@ def form_Pp_(pdert_, param_name, fPd):
             # sign change, compact terminated Pp, initialize Pp and append it to Pp_
             if Pp_:  # empty at 1st sign change
                 Pp = Pp_[-1]; Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L  # immediate normalization
-                Pp.Rdn += 1  # redundancy to higher layers
+                Pp.Rdn += 1  # + redundancy to higher layers
             Pp = CPp( L=1, iL=pdert.P.L, I=pdert.p, D=pdert.d, M=pdert.m, Rdn = pdert.rdn+pdert.P.Rdn, x0=x, ix0=pdert.P.x0,
                       pdert_=[pdert], sublayers=[[]])
-            pdert.Ppt[fPd] = Pp  # Ppm|Ppd that pdert is in, replace root_Pp if any
             Pp_.append(Pp)  # updated by accumulation below
         else:
             # accumulate params:
             Pp.L += 1; Pp.iL += pdert.P.L; Pp.I += pdert.p; Pp.D += pdert.d; Pp.M += pdert.m; Pp.Rdn += pdert.rdn+pdert.P.Rdn
             Pp.pdert_ += [pdert]
-        x += 1
-        _sign = sign
+
+        pdert.Ppt[fPd] = Pp  # Ppm | Ppd that pdert is in, replace root_Pp if any
+        _sign = sign; x += 1
 
     if fPd:  # and param_name == "D" and rootPp.D > ave_M * 4: # per Pd_'DPpd_: diff induction = dert.d + Pp.D?
         intra_Pp_(rootPp, Pp_, param_name)  # recursive der+
@@ -208,7 +211,7 @@ def form_Pp_(pdert_, param_name, fPd):
     return Pp_
 
 
-def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I
+def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I for +IPms, in adj -IPms, merge if next +IPm?
 
     # higher local ave for extended rng -> lower m and term by match, higher proj_M?
     Rdn = 0; Ext_M = 0
@@ -216,14 +219,13 @@ def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I
         ext_M = 0
         if Pp.M > ave_M * Pp.Rdn * 4:  # rng_coef  # variable costs, add fixed costs? -lend to contrast?
             for Idert in Idert_:
-                if Pp.x0 > 0 and Pp.x0 - Pp._negL -1 < len(Idert_):  # search left:
-                    j = Pp.x0 - Pp._negL -1
-                    ext_M = search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=True)  # accum from left Idert
-                # should be Pp.x0 - Pp._negL: left-most compared distance from Pp.x0
-                if Pp.x0+Pp.L+Pp.pdert_[-1].negL < len(Idert_):  # search right:
-                    j = Pp.x0+Pp.L+1
-                    if j < len(Idert_):
-                        ext_M+= search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=False)
+                # search left:
+                j = Pp.x0 - Pp._negL -1
+                if j > 0:
+                    ext_M = search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=True)
+                # search right:
+                j = Pp.x0 + Pp.L + Pp.pdert_[-1].negL
+                if j < len(Idert_): ext_M+= search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=False)
                 else:
                     break  # not sure about this
         Rdn += Pp.Rdn; Ext_M += ext_M
@@ -241,7 +243,7 @@ def search_Idert_(Pp_, Pp, Idert_, iIdert, j, ave, rave, fleft):
     if fleft:
         iIdert = Idert_[j]  # use derivatives only, not P or i
         j -= 1  # Idert_[j] was already compared
-        negL, negM = Pp._negL, Pp._negM  # or pass from extra_Pp_?
+        negL, negM = Pp._negL, Pp._negM  # pass from extra_Pp_?
         _pI = iP.I + (iP.D / 2)  # back-project by _D
     else:
         negL, negM = iIdert.negL, iIdert.negM
@@ -253,15 +255,11 @@ def search_Idert_(Pp_, Pp, Idert_, iIdert, j, ave, rave, fleft):
         P = Idert.P
         if fleft:
             pI = iP.I + (iP.D / 2)  # back-project by _D, accumulate _Idert:
-            iIdert.p = pI + _pI  # summed input
-            iIdert.d = _pI - pI  # difference
-            iIdert.m = ave - abs(Idert.d)  # indirect match
+            iIdert.p = pI + _pI; iIdert.d = _pI - pI; iIdert.m = ave - abs(Idert.d)  # indirect match
             curr_M = iIdert.m * rave + (iP.M + P.M) / 2  # P.M is bilateral, no fPd in search_param
         else:
             pI = iP.I - (iP.D / 2)  # forward-project by _D
-            Idert.p = pI + _pI  # summed input
-            Idert.d = pI - _pI  # difference
-            Idert.m = ave - abs(Idert.d)  # indirect match
+            Idert.p = pI + _pI; Idert.d = pI - _pI; Idert.m = ave - abs(Idert.d)  # indirect match
             curr_M = Idert.m * rave + (iP.M + Idert.P.M) / 2  # P.M is bilateral, no fPd in search_param
 
         if curr_M > ave_sub * P.Rdn and iP.sublayers[0] and P.sublayers[0]:  # comp sub_P_s
@@ -272,17 +270,21 @@ def search_Idert_(Pp_, Pp, Idert_, iIdert, j, ave, rave, fleft):
             _Pp = Idert.Ppt[0]  # rootPp to merge
             if fleft:
                 Pp._negL, Pp._negM = 0, 0
-                if _Pp: merge(_Pp, Pp); ext_M += Pp.M  # unique Pp per dert in row Pdert_
+                if isinstance(_Pp, CPp): # _Pp could be an object empty and can be true if use if Pp
+                    merge(Pp_, _Pp, Pp); ext_M += Pp.M  # unique Pp per dert in row Pdert_
                 else:
                     iIdert.P = P; iIdert.i = P.I  # pderts represent initial P and i: the last on the left
                     Pp.I += iIdert.i; Pp.D += iIdert.d; Pp.M += iIdert.m; Pp.L+=1; ext_M += iIdert.m
                     Pp.pdert_.insert(0, iIdert)  # appendleft
+                    iIdert.Ppt[0] = Pp
                     # pdert_index.append(Idert_.index(iIdert))
             else:
-                if _Pp: merge(Pp, _Pp); ext_M += _Pp.M
+                if isinstance(_Pp, CPp):
+                    merge(Pp_, Pp, _Pp); ext_M += _Pp.M
                 else:
                     Pp.I += Idert.i; Pp.D += Idert.d; Pp.M += Idert.m; Pp.L+=1; ext_M += iIdert.m
                     Pp.pdert_.append(Idert)
+                    Idert.Ppt[0] = Pp
                     # pdert_index.append(Idert_.index(iIdert))
             break  # this dert already searched forward
         else:
@@ -300,26 +302,27 @@ def search_Idert_(Pp_, Pp, Idert_, iIdert, j, ave, rave, fleft):
     return ext_M
 
 
-def merge(Pp_, Pp, _Pp, Pp_index):
+def merge(Pp_, Pp, _Pp):
     # merge Pp with dert.Pp, if any:
-    Pp.accum_from(_Pp, excluded=['x0', 'L'])
+    Pp.accum_from(_Pp, excluded=['x0'])
     # merge pderts and update pdert.Pp reference
     for pdert in _Pp.pdert_:
-        if pdert not in Pp.pdert_:  # a bug forms overlapping derPs
-            Pp.pdert_.append(pdert)
-            Pp.L += 1
-            pdert.Ppt[0] = Pp  # Ppm
-        elif pdert.Ppt[0] is not Pp:
-            # if pdert inside Pp but their Pp reference is not Pp (very unlikely) but it did happened, need to verify on this again after the other sections are finalized
-            pdert.Ppt[0] = Pp
+        Pp.pdert_.append(pdert)  # if pdert not in Pp.pdert_:  # a bug forms overlapping derPs
+        pdert.Ppt[0] = Pp  # Ppm  # ? this will be updated in referrer section below
     # merge sublayers
     Pp.sublayers += _Pp.sublayers
-
-    # _Pp is the existing Pp_'s Pp and not save into Pp_index before this
-    if _Pp in Pp_ and Pp_.index(_Pp) not in Pp_index:
-        Pp_index.append(Pp_.index(_Pp)) # to be deleted from Pp_
-    # also need to remove _Pp from rootPp' Pp_: delete object refs?
-
+    Pp_.remove(_Pp)
+    '''
+    _Pp_reference_ = gc.get_referrers(_Pp)
+    for reference_ in _Pp_reference_:
+        if isinstance(reference_, list): # reference is Pp_ or pdert.Ppt
+            _Pp_index = reference_.index(_Pp)
+            if Pp not in reference_: # if Pp not in the list, replace it
+                reference_[_Pp_index] = Pp
+            else: # if Pp is in the list, remove _Pp instead of replace it with Pp
+                if not (len(reference_) == 3 and reference_[2] is object): # remnove only when list is not Ppt
+                    reference_.remove(_Pp)
+    '''
 
 def sum_rdn_(param_names, Pdert_t, fPd):
     '''
@@ -363,11 +366,12 @@ def sum_rdn_(param_names, Pdert_t, fPd):
     return Pdert_t
 
 
-def compact(Pp_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
+def compact(Pp_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps, not per triplet?
 
     Pp = Pp_[-1]
-    for i, (P, pdert) in enumerate(zip(Pp.P_, Pp.pdert_)):
+    for i, pdert in enumerate(Pp.pdert_):
         '''
+        or Pdert: this is splicing Ps, not Pps? but eval is per Pp value vs discontinuity?
         assign cross-level rdn (Pp vs. pdert_), re-evaluate Pp and pdert_:
         layer eval by rdn=1/L? and by non-core M|D cancel: differential sign/abs accumulation?
         '''
@@ -381,6 +385,7 @@ def compact(Pp_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundan
         else: P_val -= ave * P.Rdn  # ave scaled by rdn
         if P_val <= 0:
             Pp_[-1] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
+            # or internal Ps are merged but Pp params, pdert_ are still accurate, and pderts can search externally?
 
         elif ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # P-defining params, else no separation
             M2 = M1 = 0
@@ -668,5 +673,3 @@ def splice_eval(__P, _P, P, fPd):  # only for positive __P, P, negative _P tripl
     # splice_value = rel_continuity * rel_similarity
 
     return rel_similarity
-
-

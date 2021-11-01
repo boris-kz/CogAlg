@@ -53,9 +53,9 @@ Kok Wei Chee, $14200, team developer
 
 2021:
 
-Kok Wei Chee, $15600, lead developer, January-September
+Kok Wei Chee, $17960, lead developer, January-October
 
-Khanh Nguyen, $4600, team developer, April-September
+Khanh Nguyen, $5000, team developer, April-October
 
 Alex Pitertsev, $1000: mostly visualization via dfs, July-August
 
