@@ -21,7 +21,6 @@ sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import numpy as np
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 from line_patterns import *
-import gc
 
 class Cpdert(ClusterStructure):
     # P param dert
@@ -113,9 +112,9 @@ def line_PPs_root(P_t):  # P_t= Pm_, Pd_; higher-level input is nested to the de
             IPpm_ = Ppm_t[1]; Idert_ = Pdert_t[1]
             rootM = sum(Pp.M for Pp in IPpm_) + sum(pdert.m for pdert in Idert_)  # input match in two overlapping layers
             compact(IPpm_, dert1_, dert2_, fPd)  # re-eval Pps for xlayer rdn, eval splice Pms|Pds: Ps in +IPpms may merge,
-            # but Pp.pdert_ is still in and may search:
-            if len(P_) > 3 and rootM > ave_M * 4:  # different coef,
-                # +IPms search in adj -IPms, merge if comp in next +IPm, no use for -IPms:
+            # but Pp.pdert_ is still in and may extend:
+            if len(P_) > 3 and rootM > ave_M * 4:  # different coef
+                # +IPpms search in adj -IPpms, merge if comp in next +IPpm, no use for -IPpms:
                 extra_Pp_(IPpm_, Idert_, ave, rave=1)  # rng+ per Pm_'IPpm_: I induction = dert.m + P.M? no sublayers
 
             Ppd_t = []  # LPp_, IPp_, DPp_, MPp_
@@ -211,7 +210,7 @@ def form_Pp_(pdert_, param_name, fPd):
     return Pp_
 
 
-def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I for +IPms, in adj -IPms, merge if next +IPm?
+def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I for +IPpms, in adj -IPpms, merge if next +IPpm
 
     # higher local ave for extended rng -> lower m and term by match, higher proj_M?
     Rdn = 0; Ext_M = 0
@@ -223,9 +222,12 @@ def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I fo
                 j = Pp.x0 - Pp._negL -1
                 if j > 0:
                     ext_M = search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=True)
+                    if Pp not in Pp_: # after merging, Pp is removed from Pp_
+                        Pp = Pp.pdert_[0].Ppt[0]  # merging _Pp
                 # search right:
                 j = Pp.x0 + Pp.L + Pp.pdert_[-1].negL
-                if j < len(Idert_): ext_M+= search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=False)
+                if j < len(Idert_):
+                    ext_M+= search_Idert_(Pp_, Pp, Idert_, Idert, j, ave, rave, fleft=False)
                 else:
                     break  # not sure about this
         Rdn += Pp.Rdn; Ext_M += ext_M
@@ -268,29 +270,24 @@ def search_Idert_(Pp_, Pp, Idert_, iIdert, j, ave, rave, fleft):
         if curr_M + Idert.sub_M > ave_M * P.Rdn * 4:  # ave_cM
             # 1st match takes over connectivity search in the next extra_Pp_
             _Pp = Idert.Ppt[0]  # rootPp to merge
-            if fleft:
-                Pp._negL, Pp._negM = 0, 0
-                if isinstance(_Pp, CPp): # _Pp could be an object empty and can be true if use if Pp
-                    merge(Pp_, _Pp, Pp); ext_M += Pp.M  # unique Pp per dert in row Pdert_
-                else:
+            if _Pp.M > 0:
+                if fleft: merge(Pp_, _Pp, Pp); ext_M += Pp.M  # unique Pp per dert in row Pdert_
+                else:     merge(Pp_, Pp, _Pp); ext_M += Pp.M
+            else:
+                if fleft:
+                    Pp._negL, Pp._negM = 0, 0
                     iIdert.P = P; iIdert.i = P.I  # pderts represent initial P and i: the last on the left
                     Pp.I += iIdert.i; Pp.D += iIdert.d; Pp.M += iIdert.m; Pp.L+=1; ext_M += iIdert.m
                     Pp.pdert_.insert(0, iIdert)  # appendleft
                     iIdert.Ppt[0] = Pp
-                    # pdert_index.append(Idert_.index(iIdert))
-            else:
-                if isinstance(_Pp, CPp):
-                    merge(Pp_, Pp, _Pp); ext_M += _Pp.M
                 else:
                     Pp.I += Idert.i; Pp.D += Idert.d; Pp.M += Idert.m; Pp.L+=1; ext_M += iIdert.m
                     Pp.pdert_.append(Idert)
                     Idert.Ppt[0] = Pp
-                    # pdert_index.append(Idert_.index(iIdert))
-            break  # this dert already searched forward
-        else:
+                break  # added pdert | Pp already searched
+        else:  # _Idert miss
             if fleft:
-                Pp._negL = negL
-                Pp._negM = negM
+                Pp._negL = negL; Pp._negM = negM
                 j -= 1
             else:
                 Idert.negM += curr_M - ave_M  # known to be negative, accum per dert
@@ -375,19 +372,21 @@ def compact(Pp_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundan
         assign cross-level rdn (Pp vs. pdert_), re-evaluate Pp and pdert_:
         layer eval by rdn=1/L? and by non-core M|D cancel: differential sign/abs accumulation?
         '''
-        if fPd: P_val = P.D
-        else: P_val = P.M  # always same-sign, M|D, no splicing by secondary value?
+        P = pdert.P
+        if fPd: iP_val = P.D
+        else: iP_val = P.M  # always same-sign, M|D, no splicing by secondary value?
 
-        P_val = P.M - P.Rdn / P.L * pdert.rdn * ave  # / Pp.L: resolution reduction, but lower rdn:
-        dert_val = P.M - P.Rdn * pdert.rdn * ave  # * Pp.L: ave cost * number of representations
+        P_val = iP_val - P.Rdn / P.L * pdert.rdn * ave  # / Pp.L: resolution reduction, but lower rdn:
+        dert_val = iP_val - P.Rdn * pdert.rdn * ave  # * Pp.L: ave cost * number of representations
 
         if P_val > dert_val: dert_val -= ave * P.Rdn
         else: P_val -= ave * P.Rdn  # ave scaled by rdn
         if P_val <= 0:
             Pp_[-1] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
+            for pdert in Pp.pdert_: pdert.Ppt[0] = Pp_[-1] # update reference after Pp reset
             # or internal Ps are merged but Pp params, pdert_ are still accurate, and pderts can search externally?
 
-        elif ((param_name == "I_") and not fPd) or ((param_name == "D_") and fPd):  # P-defining params, else no separation
+        elif not fPd:  # P-defining params, else no separation
             M2 = M1 = 0
             # param match over step=2 and step=1:
             for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D)
