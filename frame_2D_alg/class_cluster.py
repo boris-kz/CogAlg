@@ -347,6 +347,16 @@ def comp_param(_param, param, param_name, ave):
 def copy(self):
     return deepcopy(self)
 
+def remove_param(self, other, excluded=()):
+    """Remove params from another structure."""
+    # remove base params
+    for param in self.numeric_params:
+        if (param not in excluded) and (param in other.numeric_params):
+            p = getattr(self,param)
+            _p = getattr(other,param)
+            setattr(self, param, p-_p)
+
+
 def merge(self, other, self_instance_name, self_instance, excluded = ()):
     # accumulate numeric params
     self.accum_from(other,excluded=excluded)
