@@ -41,6 +41,7 @@ class CPp(CP):
     dert_ = list  # if not empty: Pp is primarily a merged P, other params are optional
     pdert_ = list  # Pp elements, "p" for param
     Rdn = int  # cross-param rdn accumulated from pderts
+    flay_rdn = bool  # Pp is layer-redundant to Pp.pdert_
     iL = int  # length of Pp in pixels
     negM = int  # in mdert only
     negL = int  # in mdert only
@@ -50,6 +51,7 @@ class CPp(CP):
     sublayers = list
     subDerts = list
     rootPp = object  # to replace locals for merging
+
 
 class CderPp(ClusterStructure):  # for line_PPPs only, if PPP comb x Pps?
     mPp = int
@@ -126,7 +128,7 @@ def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):
     # Ppm_t only:
     IPpm_ = Ppm_t[1]; Idert_ = Pdert_t[1]
     rootM = sum(Pp.M for Pp in IPpm_) + sum(pdert.m for pdert in Idert_)  # input match in two overlapping layers
-    if len(Idert_) > 3 and rootM > ave_M * 4:  # same criteria for compact and extra_Pp_?
+    if len(Idert_) > 3 and rootM > ave_M * 4:  # same criteria for batch compact(Pp' Ps in Idert_) and extra_Pp_?
 
         compact(IPpm_, dert1_, dert2_, fPd)  # eval Pps for xlayer rdn, eval splice Pms|Pds: Ps in +IPpms may merge,
         # but Pp.pdert_ is still in and may extend: +IPpms search in adj -IPpms, merge if match in the next +IPpm:
@@ -205,7 +207,7 @@ def form_Pp_(pdert_, param_name, fPd):
                 Pp.Rdn += 1  # + redundancy to higher layers
             Pp = CPp( L=1, iL=pdert.P.L, I=pdert.p, D=pdert.d, M=pdert.m, Rdn = pdert.rdn+pdert.P.Rdn, x0=x, ix0=pdert.P.x0,
                       pdert_=[pdert], sublayers=[[]])
-            Pp_.append(Pp)  # updated by accumulation below
+            Pp_.append(Pp)  # Pp params will be updated by accumulation:
         else:
             # accumulate params:
             Pp.L += 1; Pp.iL += pdert.P.L; Pp.I += pdert.p; Pp.D += pdert.d; Pp.M += pdert.m; Pp.Rdn += pdert.rdn+pdert.P.Rdn
@@ -304,7 +306,6 @@ def search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft):
                 if not cPp.pdert_: Pp_.remove(cPp)  # delete emptied cPp
 
             break  # matching pdert or merged Pp takes over connectivity search in the next extra_Pp_
-
         else:  # Iderts miss
             if fleft:
                 Pp._negL = negL; Pp._negM = negM
@@ -315,6 +316,7 @@ def search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft):
                 Idert.negL += 1
                 negM = Idert.negM
                 j += 1
+
     return addM
 
 def merge(Pp_, Pp, _Pp):  # merge Pp with dert.Pp, if any:
@@ -371,36 +373,32 @@ def sum_rdn_(param_names, Pdert_t, fPd):
     return Pdert_t
 
 
-def compact(Pp_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
+def compact(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
 
-    Pp = Pp_[-1]
-    for i, pdert in enumerate(Pp.pdert_):  # why is eval per P, it should be Pp?
-        P = pdert.P
-        if fPd: iP_val = P.D - P.Rdn * pdert.rdn * ave * ave_d  # assign Pp vs pdert_ rdn, re-eval Pp and pdert_ by rdn=1/L?
-        else:   iP_val = P.M - P.Rdn * pdert.rdn * ave  # same-sign primary M|D, no cross-sign cancel and splicing by rdn M|D?
+    for i, Pp in enumerate(Ppm_):
+        if fPd: V = abs(Pp.D)  # can be DPpm if fPd and step=2
+        else: V = Pp.M - Pp.Rdn * ave_M
 
-        P_val = iP_val / P.L  # resolution reduction but lower rdn:
-        dert_val = iP_val - P.L * ave_M * (ave_D*fPd)  # ave cost * number of representations, different effect from /=L?
+        Pp_V = V / (Pp.L *.7)  # value is reduced with resolution, *.7 is ave intra-Pp similarity coef, still non-negative?
+        pdert_V = V - Pp.L * ave_M * (ave_D*fPd)  # cost incr per pdert representations
+        # same as per Pp?
+        # assign Pp | pdert_ rdn, reval Pp and pdert_ (same-sign primary M|D, no cross-sign cancel and splicing by rdn M|D?):
+        if Pp_V <= pdert_V:
+            Pp.Rdn += 1; Pp.flay_rdn = 1  # else pdert_ is layer-redundant to Pp, no deletion, include in next-level eval
 
-        if P_val > dert_val: dert_val -= ave * P.Rdn
-        else: P_val -= ave * P.Rdn  # ave scaled by rdn
-
-        if P_val <= 0:
-            Pp_[-1] = CPp(pdert_=Pp.pdert_)  # Pp remove: reset Pp vars to 0
-            for pdert in Pp.pdert_: pdert.Ppt[0] = Pp_[-1] # update reference after Pp reset
-
-        elif not fPd:  # P-defining params, else no separation
-            M2 = M1 = 0
+        if Pp.M > ave_M * Pp.Rdn * 4 and Pp.L > 4:  # min internal xP.I|D match in +Ppm
+            # P-defining M|D, step=2 and * (ave_D*fPd) if fPd, else no separation?
+            M2 = M1 = 0  # replace with V2, V1?
             # param match over step=2 and step=1:
             for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D)
             for pdert1 in pdert1_: M1 += pdert1.m  # match(I, _I or D, _D)
 
             if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.pdert_?
                 for pdert in Pp.pdert_:
-                    Pp.dert_ += pdert.P.dert_  # P params, summed in Pp, are primary, other Pp params are still accurate but low-value
-
-      # if pdert_val <= 0: Pp.pdert_ = []  # remove pdert_?
-
+                    Pp.dert_ += pdert.P.dert_  # combined P params are primary, other Pp params are still accurate but low-value
+        '''
+        if Pp.dert_: Ps are spliced, no eval per P triplet: too expensive?
+        '''
 
 def intra_Pp_(rootPp, Pp_, param_name):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
 
