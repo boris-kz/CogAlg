@@ -126,11 +126,12 @@ def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):
         Ppm_t.append( form_Pp_(Pdert_, param_name, fPd=0) )
 
     # Ppm_t only:
-    IPpm_ = Ppm_t[1]; Idert_ = Pdert_t[1]
+    IPpm_ = Ppm_t[1]; Idert_ = Pdert_t[1]; DPpm_ = Ppm_t[2]
     rootM = sum(Pp.M for Pp in IPpm_) + sum(pdert.m for pdert in Idert_)  # input match in two overlapping layers
     if len(Idert_) > 3 and rootM > ave_M * 4:  # same criteria for batch compact(Pp' Ps in Idert_) and extra_Pp_?
 
-        compact(IPpm_, dert1_, dert2_, fPd)  # eval Pps for xlayer rdn, eval splice Pms|Pds: Ps in +IPpms may merge,
+        if fPd: compact(DPpm_, dert1_, dert2_, fPd)
+        else: compact(IPpm_, dert1_, dert2_, fPd)  # eval splice Pms|Pds: Ps in +Ppms may merge,
         # but Pp.pdert_ is still in and may extend: +IPpms search in adj -IPpms, merge if match in the next +IPpm:
         extra_Pp_(IPpm_, Idert_, ave, rave=1)  # rng+ per Pm_'IPpm_: I induction = dert.m + P.M? no sublayers
 
@@ -204,7 +205,14 @@ def form_Pp_(pdert_, param_name, fPd):
             # sign change, compact terminated Pp, initialize Pp and append it to Pp_
             if Pp_:  # empty at 1st sign change
                 Pp = Pp_[-1]; Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L  # immediate normalization
-                Pp.Rdn += 1  # + redundancy to higher layers
+                Pp.Rdn += 1  # redundancy to higher root Pp layers
+                if fPd: V = abs(Pp.D)  # deriv value
+                else: V = Pp.M
+                PpV = V / (Pp.L *.7)  #.7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
+                pdert_V = V - Pp.L * ave_M * (ave_D * fPd)  # cost incr per pdert representations
+                if PpV <= pdert_V:
+                    Pp.Rdn += 1; Pp.flay_rdn = 1  # Pp or pdert_ are layer-redundant, use in next-level eval
+
             Pp = CPp( L=1, iL=pdert.P.L, I=pdert.p, D=pdert.d, M=pdert.m, Rdn = pdert.rdn+pdert.P.Rdn, x0=x, ix0=pdert.P.x0,
                       pdert_=[pdert], sublayers=[[]])
             Pp_.append(Pp)  # Pp params will be updated by accumulation:
@@ -250,13 +258,13 @@ def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I fo
 
     # no return Pp_: changed in place
 
-def search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft):
+def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
 
     iIdert = Idert_[i]; iI = iIdert.i; iD = iIdert.d  # Idert searches Idert_ left or right from j
     addM = 0  # added to Pp by search
     iM = iIdert.P.M
     if fleft:
-        negL, negM = Pp._negL, Pp._negM  # both backward
+        negL, negM = iPp._negL, iPp._negM  # both backward
         ipI = iI + (iD / 2)  # back-project by _D, if P.M? negL is compensated by decay?
     else:
         negL, negM = iIdert.negL, iIdert.negM  # both forward
@@ -276,31 +284,31 @@ def search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft):
         # comp(_Idert, Idert):
         _Idert.p = pI + _pI; _Idert.d = _pI - pI; _Idert.m = ave - abs(_Idert.d)
         curr_M = _Idert.m * rave + (iM + cM) / 2  # P.M is bilateral
-        P = Idert.P
-        _P = _Idert.P
+        P = Idert.P; _P = _Idert.P
+
         if curr_M > ave_sub * P.Rdn and _P.sublayers[0] and P.sublayers[0]:
-            sub_M, sub_D = comp_sublayers(_P, P, Idert.m)  # comp sub_P_s
-            _Idert.sub_M = sub_M; _Idert.sub_D = sub_D
+            _Idert.sub_M, _Idert.sub_D = comp_sublayers(_P, P, _Idert.m)
         # comb.match(_P, P):
         if curr_M + _Idert.sub_M > ave_M * P.Rdn * 4:
             cPp = cIdert.Ppt[0]  # Pp to merge if positive or shrink if negative:
 
-            if cPp.M > 0:  # +Pp: match to any Idert in Pp.pdert_ -> all consecutive matches
-                if fleft: addM += Pp.M; merge(Pp_, cPp, Pp)  # merge Pp in cPp
-                else: addM += cPp.M; merge(Pp_, Pp, cPp)  # merge cPp in Pp
+            if cPp.M > 0:  # +Pp: match to any Idert in Pp.pdert_-> all consecutive matches
+                if fleft: addM += iPp.M; merge(Pp_, cPp, iPp)  # merge iPp in cPp
+                else: addM += cPp.M; merge(Pp_, iPp, cPp)  # merge cPp in iPp
 
             else:  # transfer cIdert from cPp to Pp
                 if fleft:
-                    Pp._negL, Pp._negM = 0, 0
+                    iPp._negL, iPp._negM = 0, 0
                     Idert.P = P; Idert.i = P.I  # pderts represent initial P and i: the last on the left
                     addM += _Idert.m
-                    Pp.pdert_.insert(0, _Idert)  # appendleft
+                    iPp.pdert_.insert(0, _Idert)  # appendleft
+                    iPp.x0 -= 1
                 else:
                     addM += Idert.m
-                    Pp.pdert_.append(Idert)
+                    iPp.pdert_.append(Idert)
 
-                cIdert.Ppt[0] = Pp
-                Pp.I += cIdert.i; Pp.D += cIdert.d; Pp.M += cIdert.m; Pp.L+=1
+                cIdert.Ppt[0] = iPp
+                iPp.I += cIdert.i; iPp.D += cIdert.d; iPp.M += cIdert.m; iPp.L+=1
                 cPp.I -= cIdert.i; cPp.D -= cIdert.d; cPp.M -= cIdert.m; cPp.L-=1
                 cPp.pdert_.remove(cIdert)  # cIdert was transferred to Pp
                 if not cPp.pdert_: Pp_.remove(cPp)  # delete emptied cPp
@@ -308,7 +316,7 @@ def search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft):
             break  # matching pdert or merged Pp takes over connectivity search in the next extra_Pp_
         else:  # Iderts miss
             if fleft:
-                Pp._negL = negL; Pp._negM = negM
+                iPp._negL = negL; iPp._negM = negM
                 j -= 1
             else:
                 Idert.negM += curr_M - ave_M  # known to be negative, accum per dert
@@ -319,16 +327,16 @@ def search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft):
 
     return addM
 
-def merge(Pp_, Pp, _Pp):  # merge Pp with dert.Pp, if any:
+def merge(Pp_, _Pp, Pp):  # merge Pp with dert.Pp, if any:
 
-    Pp.accum_from(_Pp, excluded=['x0'])
+    Pp.accum_from(Pp, excluded=['x0'])
     # merge pderts
-    for pdert in _Pp.pdert_:
+    for pdert in Pp.pdert_:
         Pp.pdert_.append(pdert)
-        pdert.Ppt[0] = Pp  # pdert.Ppm
+        pdert.Ppt[0] = _Pp  # pdert.Ppm
     # merge sublayers
-    Pp.sublayers += _Pp.sublayers
-    Pp_.remove(_Pp)
+    _Pp.sublayers += Pp.sublayers
+    Pp_.remove(Pp)
 
 
 def sum_rdn_(param_names, Pdert_t, fPd):
@@ -376,28 +384,20 @@ def sum_rdn_(param_names, Pdert_t, fPd):
 def compact(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
 
     for i, Pp in enumerate(Ppm_):
-        if fPd: V = abs(Pp.D)  # can be DPpm if fPd and step=2
-        else: V = Pp.M - Pp.Rdn * ave_M
+        if fPd: V = abs(Pp.D)  # DPpm_ if fPd, else IPpm_
+        else: V = Pp.M
 
-        Pp_V = V / (Pp.L *.7)  # value is reduced with resolution, *.7 is ave intra-Pp similarity coef, still non-negative?
-        pdert_V = V - Pp.L * ave_M * (ave_D*fPd)  # cost incr per pdert representations
-        # same as per Pp?
-        # assign Pp | pdert_ rdn, reval Pp and pdert_ (same-sign primary M|D, no cross-sign cancel and splicing by rdn M|D?):
-        if Pp_V <= pdert_V:
-            Pp.Rdn += 1; Pp.flay_rdn = 1  # else pdert_ is layer-redundant to Pp, no deletion, include in next-level eval
-
-        if Pp.M > ave_M * Pp.Rdn * 4 and Pp.L > 4:  # min internal xP.I|D match in +Ppm
-            # P-defining M|D, step=2 and * (ave_D*fPd) if fPd, else no separation?
-            M2 = M1 = 0  # replace with V2, V1?
-            # param match over step=2 and step=1:
+        if V > ave_M * (ave_D*fPd) * Pp.Rdn * 4 and Pp.L > 4:  # min internal xP.I|D match in +Ppm
+            M2 = M1 = 0
+            # I|D match over step=2 and step=1:
             for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D)
             for pdert1 in pdert1_: M1 += pdert1.m  # match(I, _I or D, _D)
 
             if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.pdert_?
                 for pdert in Pp.pdert_:
-                    Pp.dert_ += pdert.P.dert_  # combined P params are primary, other Pp params are still accurate but low-value
+                    Pp.dert_ += pdert.P.dert_  # if Pp.dert_: spliced P, summed P params are primary, other Pp params are low-value
         '''
-        if Pp.dert_: Ps are spliced, no eval per P triplet: too expensive?
+        no eval per P triplet in splice(): too expensive?
         '''
 
 def intra_Pp_(rootPp, Pp_, param_name):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
