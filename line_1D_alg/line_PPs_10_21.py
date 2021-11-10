@@ -444,7 +444,8 @@ def intra_Pp_(rootPp, root_P_, root_pdert_, Pp_, param_name, fPd):  # evaluate f
                 else:
                     Pp.sublayers += [[]]  # empty subset to preserve index in sublayer, or increment index of subset?
 
-            else:  # Pp is Ppm
+            else:  # Pp is Ppm,
+
                 if Pp.M > ave_M * Pp.Rdn and param_name=="I_" and Pp.L > 3:  # variable costs, add fixed costs? -lend to contrast?
                     sub_search(Pp, Pp.P_, fPd)  # search in top sublayer, eval by pdert.m
                     # +Ppm -> sub_Ppm_: low-variation span, eval rng_comp, rng is represented by negL, no rng+=1

@@ -40,13 +40,10 @@ class Cpdert(ClusterStructure):
 class CPp(CP):
     dert_ = list  # if not empty: Pp is primarily a merged P, other params are optional
     pdert_ = list  # Pp elements, "p" for param
-    Rdn = int  # cross-param rdn accumulated from pderts
     flay_rdn = bool  # Pp is layer-redundant to Pp.pdert_
     # in addition to inherited summed pdert params, there are summed P params (also distinct iRdn?):
     iL = int  # length of Pp in pixels
-    iI = int
-    iD = int
-    iM = int
+    layer1 = list  # iI = int, iD = int, iM = int, iRdn = int  # cross-param rdn accumulated from pderts, or merged in Rdn?
     negM = int  # in mdert only
     negL = int  # in mdert only
     _negM = int  # for search left, within adjacent neg Ppm only?
@@ -209,7 +206,7 @@ def form_Pp_(pdert_, param_name, fPd):
             # sign change, compact terminated Pp, initialize Pp and append it to Pp_
             if Pp_:  # empty at 1st sign change
                 Pp = Pp_[-1]; Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L  # immediate normalization
-                # Pp.iI /= Pp.L; Pp.iI /= Pp.L; Pp.iD /= Pp.L; Pp.iM /= Pp.L?
+                # Pp.iI /= Pp.L; Pp.iI /= Pp.L; Pp.iD /= Pp.L; Pp.iM /= Pp.L?  or for variable costs only?
                 Pp.Rdn += 1  # redundancy to higher root Pp layers
                 # Pp vs Pdert_ redundancy:
                 if fPd: V = abs(Pp.D)  # derived values
@@ -220,12 +217,12 @@ def form_Pp_(pdert_, param_name, fPd):
                     Pp.Rdn += 1; Pp.flay_rdn = 1  # Pp or pdert_ are layer-redundant, use in next-level eval
 
             Pp = CPp( L=1, I=pdert.p, D=pdert.d, M=pdert.m, Rdn = pdert.rdn+pdert.P.Rdn, x0=x, ix0=pdert.P.x0,
-                      iL=pdert.P.L, iI=pdert.P.I, iD=pdert.P.D, iM=pdert.P.M, pdert_=[pdert], sublayers=[[]])
+                      iL=pdert.P.L, pdert_=[pdert], sublayers=[[]])  # iI=pdert.P.I, iD=pdert.P.D, iM=pdert.P.M
             Pp_.append(Pp)  # Pp params will be updated by accumulation:
         else:
             # accumulate params:
             Pp.L += 1; Pp.I += pdert.p; Pp.D += pdert.d; Pp.M += pdert.m; Pp.Rdn += pdert.rdn+pdert.P.Rdn
-            Pp.iL += pdert.P.L; Pp.iI += pdert.P.I; Pp.iD += pdert.P.D; Pp.iM += pdert.P.M; Pp.pdert_ += [pdert]
+            Pp.iL += pdert.P.L; Pp.pdert_ += [pdert]  # Pp.iI += pdert.P.I; Pp.iD += pdert.P.D; Pp.iM += pdert.P.M
 
         pdert.Ppt[fPd] = Pp  # Ppm | Ppd that pdert is in, replace root_Pp if any
         _sign = sign; x += 1
@@ -239,27 +236,27 @@ def form_Pp_(pdert_, param_name, fPd):
 def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I for +IPpms in Idert_: maps to adj IPpms
 
     # higher local ave for extended rng -> lower m and term by match, higher proj_M?
-    Rdn = 0; Ext_M = 0
+    Rdn, AddM = 0, 0
     for Pp in Pp_:
-        ext_M = 0
-        if Pp.M > ave_M * Pp.Rdn * 4:  # rng_coef  # this is variable costs, add fixed costs? -lend to contrast?
+        addM = 0
+        if Pp.M + Pp.iM > ave_M * Pp.Rdn * 4:  # rng_coef, this is variable costs, add fixed costs? -lend to contrast?
             # search left:
             i = Pp.x0  # Idert mapped to 1st pdert
             j = i - Pp._negL - 1  # 1st-left not-compared Idert
             if j > 0:
-                ext_M = search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=True)
+                addM = search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=True)
                 if Pp not in Pp_:  # if merged, Pp is removed from Pp_
                     Pp = Pp.pdert_[0].Ppt[0]  # merging Pp
             # search right:
             i = Pp.x0 + Pp.L - 1  # Idert mapped to last pdert
             j = i + Pp.pdert_[-1].negL + 1  # 1st-right not-compared Idert
             if j < len(Idert_):
-                ext_M += search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=False)
+                addM += search_Idert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=False)
             # else: next Pp can search left but not right
         Rdn += Pp.Rdn
-        Ext_M += ext_M
+        AddM += addM
     # recursion:
-    if Ext_M > ave_M * (Rdn / len(Pp_)) * 4:  # extra_Pp_ coef
+    if AddM > ave_M * (Rdn / len(Pp_)) * 4:  # extra_Pp_ coef
         extra_Pp_(Pp_, Idert_, ave, rave+10)
 
     # no return Pp_: changed in place
@@ -269,12 +266,8 @@ def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
     iIdert = Idert_[i]; iI = iIdert.i; iD = iIdert.d  # Idert searches Idert_ left or right from j
     addM = 0  # added to Pp by search
     iM = iIdert.P.M
-    if fleft:
-        negM = iPp._negM  # both backward
-        ipI = iI + (iD / 2)  # back-project by _D, if P.M? negL is compensated by decay?
-    else:
-        negM = iIdert.negM  # both forward
-        ipI = iI - (iD / 2)  # forward-project by _D, if P.M?
+    if fleft: negM = iPp._negM; ipI = iI + (iD / 2)  # back-project by _D, if P.M? negL is compensated by decay?
+    else:   negM = iIdert.negM; ipI = iI - (iD / 2)  # forward-project by _D, if P.M?
 
     while(iM + iIdert.m + negM > ave_M) and ((not fleft and j < len(Idert_)) or (fleft and j >= 0)):
 
@@ -285,7 +278,7 @@ def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
             pI = ipI; _pI = cI - (cD / 2)  # forward-project by cD
         else:
             Idert = cIdert; _Idert = iIdert  # rename by direction
-            pI = cI + (cD / 2); _pI = ipI  # back-project by cD
+            _pI = ipI; pI = cI + (cD / 2)  # back-project by cD
 
         # comp(_Idert, Idert):
         _Idert.p = pI + _pI; _Idert.d = _pI - pI; _Idert.m = ave - abs(_Idert.d)
@@ -300,7 +293,7 @@ def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
 
             if cPp.M > 0:  # +Pp: match to any Idert in Pp.pdert_-> all consecutive matches
                 if fleft: addM += iPp.M; merge(Pp_, cPp, iPp)  # merge iPp in cPp
-                else: addM += cPp.M; merge(Pp_, iPp, cPp)  # merge cPp in iPp
+                else:     addM += cPp.M; merge(Pp_, iPp, cPp)  # merge cPp in iPp
 
             else:  # transfer cIdert from cPp to Pp
                 if fleft:
@@ -310,6 +303,7 @@ def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
                     cPp.L -= 1 + cPp.pdert_[-1].negL
                     Idert.P = P; Idert.i = P.I  # pderts represent initial P and i: the last on the left
                     addM += _Idert.m
+                    _Idert.Ppt[0] = iPp
                     iPp.pdert_.insert(0, _Idert)  # appendleft
                 else:
                     cPp.x0 += 1 + Idert.negL
@@ -317,14 +311,14 @@ def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
                     cPp._negL = Idert.negL; cPp._negM = Idert.negM
                     iPp.L += 1 + iPp.pdert_[-1].negL
                     addM += Idert.m
+                    Idert.Ppt[0] = iPp
                     iPp.pdert_.append(Idert)
 
+                iPp.I += cIdert.i; iPp.D += cIdert.d; iPp.M += cIdert.m; iPp.Rdn += cIdert.rdn
+                # iPp.iL += cIdert.P.L; iPp.iI += cIdert.P.I; iPp.iD += cIdert.P.D; iPp.iM += cIdert.P.M
                 cPp.pdert_.remove(cIdert)  # cIdert was transferred to Pp
-                if cPp.pdert_:
-                    cPp.I -= cIdert.i; cPp.D -= cIdert.d; cPp.M -= cIdert.m;  cIdert.Ppt[0] = iPp
-                else:
-                    Pp_.remove(cPp)  # delete emptied cPp
-                iPp.I += cIdert.i; iPp.D += cIdert.d; iPp.M += cIdert.m
+                if cPp.pdert_: cPp.I -= cIdert.i; cPp.D -= cIdert.d; cPp.M -= cIdert.m
+                else: Pp_.remove(cPp)  # delete emptied cPp
 
             break  # matching pdert or merged Pp takes over connectivity search in the next extra_Pp_
         else:  # Iderts miss
@@ -342,7 +336,7 @@ def search_Idert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
 
 def merge(Pp_, _Pp, Pp):  # merge Pp with dert.Pp, if any:
 
-    Pp.accum_from(Pp, excluded=['x0'])
+    _Pp.accum_from(Pp, excluded=['x0'])
     # merge pderts
     for pdert in Pp.pdert_:
         Pp.pdert_.append(pdert)
