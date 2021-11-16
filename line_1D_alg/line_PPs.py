@@ -114,12 +114,13 @@ def line_PPs_root(P_t):  # P_t= Pm_, Pd_;  higher-level input is nested to the d
 
     return Pp_ttt  # 3-level nested tuple per line: Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_)))
 
-def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):
+def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):  # Ppm_t and Ppd_t forks, can be combined but it would be more opaque
 
     Ppm_t = []  # [LPpm_, IPpm_, DPpm_, MPpm_]
     rdn_t = sum_rdn_(param_names, Pdert_t, fPd=0)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
     for param_name, Pdert_, rdn_ in zip(param_names, Pdert_t, rdn_t):
         Ppm_ = form_Pp_(Pdert_, fPd=0)  # segment Pdert__ into Ppms
+        # Ppm_ only:
         if (param_name == "I_" or param_name=="D_"):
             rootM = sum(Pp.M for Pp in Ppm_) + sum(pdert.P.M for pdert in Pdert_)  # input match in two overlapping layers
             if rootM > ave_M * 4:
@@ -344,32 +345,31 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
 
         comb_M = idert.m
         j = i + Pp.x0 + 1
-        # search right from step=2, may continue outside Pp.pdert_, add merge or overlap Pp anyway?
-        while comb_M > 0 and j+1 < len(Idert_):
+        # search right:
+        while comb_M > 0 and j+1 < len(Idert_):  # from step=2, may continue outside Pp.pdert_, no merge: Pps overlap?
             j += 1
             rdert = Idert_[j]  # right_dert, extend search beyond next param
             idert.p = rdert.i + idert.i
             idert.d = rdert.i - idert.i  # difference
             idert.m = ave_d - abs(idert.d)  # indirect match
             if idert.m > 0:
-                if j > len(Pp.pdert_):  # rdert is outside Pp
+                if j >= len(Pp.pdert_):  # rdert is outside Pp
                     rng_dert_.append(rdert); flmiss_.append(0)
                 else:
-                    flmiss_[j] = 0
+                    flmiss_[j - Pp.x0] = 0  # =index of rdert in rng_dert_
                 break  # 1st matching param takes over connectivity search from _param, in the next loop
             else:
                 idert.negL += 1
                 idert.negM += idert.m
                 comb_M = idert.m - ave_M
-                '''
-                if j > len(Pp.pdert_):  # add missing searched rderts too, for form_Pp_rng??
-                    rng_dert_.append(rdert); flmiss_.append(0)
-                '''
+                if j >= len(Pp.pdert_):  # missing searched derts added for form_Pp_rng to represent discontinuity
+                    rng_dert_.append(rdert)
+                    flmiss_.append(1)
         # search left:
-        if flmiss_[i]:  # if _Idert was not matched from the left during search right, else it's already in some Pp.pdert_
+        if flmiss_[i]:  # if idert was not matched as rdert in search right, else it's replaced as idert by left-matching dert
             comb_M = idert.m
             j = i + Pp.x0 - 1
-            while comb_M > 0 and j-1 >= 0:
+            while comb_M > 0 and j-1 >= 0:  # from step=2, may continue outside Pp.pdert_, no merge: Pps overlap?
                 j -= 1
                 ldert = Idert_[j]  # left dert
                 ldert.p = idert.p + ldert.i
@@ -379,35 +379,38 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
                     if j < Pp.x0:  # ldert is outside Pp
                         rng_dert_.insert(0, ldert); flmiss_.insert(0, 0)
                     else:
-                        flmiss_[j] = 0
-                    break  # 1st matching param takes over connectivity search from _param, in the next loop
+                        flmiss_[j - Pp.x0] = 0  # =index of ldert in rng_dert_
+                    break  # 1st matching dert takes over connectivity search in the next loop
                 else:
                     ldert.negL += 1
                     ldert.negM += ldert.m
                     comb_M = ldert.m - ave_M
+                    if j < Pp.x0:  # missing searched derts added for form_Pp_rng to represent discontinuity
+                        rng_dert_.insert(0, ldert); flmiss_.insert(0, 1)
 
-    return rng_dert_  # also flmiss_?
+    return rng_dert_  # no return for flmiss_?
 
 def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
+
+    for pdert in rdert_: pdert.Ppt[0]=[]  # clear Ppms to replace with rng_Ppms
     Pp_ = []
     x = 0
+    for i, _rdert in enumerate(rdert_):  # form +Pp from +rderts
+        if not _rdert.Ppt[0]:  # _rdert is not in any rng_Pp formed in prior loops, else skip all:
 
-    for i, _rdert in enumerate(rdert_):  # form +Pp for each +rdert not included in prior Pp, else skip all:
-        if not _rdert.Ppt[1]:
             Pp = CPp(L=1, I=_rdert.p, D=_rdert.d, M=_rdert.m, Rdn=_rdert.rdn+_rdert.P.Rdn, x0=x, rdert_=[_rdert], sublayers=[[]])
-            cm = 1  # to start the loop
+            cm = 1  # initialize current m to start the loop
             j = i + 1 + _rdert.negL
-            while cm > 0:
+            while cm > 0 and j < len(rdert_):
                 rdert = rdert_[j]
-                rdert.Ppt[1] = CPp  # this is not a root_Ppd, just indicates that rdert is in some prior Pp, to skip in the next loop
                 # accumulate params:
-                Pp.L += 1; Pp.I += rdert.p; Pp.D += rdert.d; Pp.M += rdert.m; Pp.Rdn += rdert.rdn+rdert.P.Rdn+Pp.L  # rdn to higher root layers, not normalized
+                Pp.L += 1; Pp.I += rdert.p; Pp.D += rdert.d; Pp.M += rdert.m; Pp.Rdn += rdert.rdn+rdert.P.Rdn+Pp.L  # rdn to root layers, not normalized
                 Pp.pdert_ += [rdert]
-                rdert.Ppt[0] = Pp  # replace Ppm that pdert is in, if any
+                rdert.Ppt[0].append(Pp)  # Pps may overlap, skip as _rdert in the next loop
                 cm = rdert.m
                 if cm > 0:
                     Pp.negL += _rdert.negL; Pp.negM += _rdert.negM
-                # else negative: the last rdert in Pp, breaks the loop
+                j += 1 + rdert.negL
 
             Pp_.append(Pp)
     return Pp_
