@@ -19,6 +19,7 @@ import sys  # add CogAlg folder to system path
 from os.path import dirname, join, abspath
 sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import numpy as np
+from copy import deepcopy
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 from line_patterns import *
 
@@ -322,7 +323,7 @@ def intra_Pp_(rootPp, Pp_, Pdert_, fPd):  # evaluate for sub-recursion in line P
                     Pp.sublayers = [[(sub_Ppm_, sub_Ppd_)]]
                     rdert_ = search_Idert_(Pp, Pdert_, ave_mI, rave=1)  # comp x variable range, depending on I.M
                     sub_Ppm_[:] = form_Pp_rng(rdert_)  # cluster in rdert_
-                    if Pp.M > ave_M * 4:  # intensity induction per Pm_'IPpm_, add Pp.iM?
+                    if Pp.M > ave_M * 4 and not Pp.dert_:  # Pp was not spliced, induction = Pm_'IPpm_, + Pp.iM?
                         intra_Pp_(Pp, sub_Ppd_, rdert_, fPd=False)  # recursive rng+, no der+: Pds are redundant?
                 else:
                     Pp.sublayers += [[]]  # empty subset to preserve index in sublayer, or increment index of subset?
@@ -339,21 +340,20 @@ def intra_Pp_(rootPp, Pp_, Pdert_, fPd):  # evaluate for sub-recursion in line P
 
 def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search for core I at local ave: lower m and term by match
 
-    rng_dert_ = Pp.pdert_  # may be extended
+    rng_dert_ = deepcopy(Pp.pdert_)  # may be extended
     flmiss_ = [1 for _ in Pp.pdert_]  # ones the length of Pp.pdert_
-    for i, idert in enumerate(Pp.pdert_):  # overlapping pderts & +Pps, if pdert.m>0: negL is intra-Pp reference, no -Pps
-
-        comb_M = idert.m
-        j = i + Pp.x0 + 1
+    for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
         # search right:
-        while comb_M > 0 and j+1 < len(Idert_):  # from step=2, may continue outside Pp.pdert_, no merge: Pps overlap?
+        comb_M = idert.m
+        j = i + Pp.x0 + 1  # start at step=2, step=1 is in cross-comp
+        while comb_M > 0 and j+1 < len(Idert_):  # may continue outside Pp.pdert_, no merge: Pps overlap?
             j += 1
             rdert = Idert_[j]  # right_dert, extend search beyond next param
             idert.p = rdert.i + idert.i
             idert.d = rdert.i - idert.i  # difference
             idert.m = ave_d - abs(idert.d)  # indirect match
             if idert.m > 0:
-                if j >= len(Pp.pdert_):  # rdert is outside Pp
+                if j > Pp.x0 + Pp.L-1:  # rdert is outside Pp
                     rng_dert_.append(rdert); flmiss_.append(0)
                 else:
                     flmiss_[j - Pp.x0] = 0  # =index of rdert in rng_dert_
@@ -362,14 +362,14 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
                 idert.negL += 1
                 idert.negM += idert.m
                 comb_M = idert.m - ave_M
-                if j >= len(Pp.pdert_):  # missing searched derts added for form_Pp_rng to represent discontinuity
+                if j > Pp.x0 + Pp.L-1:  # missing searched derts added for form_Pp_rng to represent discontinuity
                     rng_dert_.append(rdert)
                     flmiss_.append(1)
         # search left:
         if flmiss_[i]:  # if idert was not matched as rdert in search right, else it's replaced as idert by left-matching dert
             comb_M = idert.m
-            j = i + Pp.x0 - 1
-            while comb_M > 0 and j-1 >= 0:  # from step=2, may continue outside Pp.pdert_, no merge: Pps overlap?
+            j = i + Pp.x0 - 1  # start at step=2, step=1 is in cross-comp
+            while comb_M > 0 and j-1 >= 0:  # may continue outside Pp.pdert_, no merge: Pps overlap?
                 j -= 1
                 ldert = Idert_[j]  # left dert
                 ldert.p = idert.p + ldert.i
@@ -392,7 +392,7 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
 
 def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
 
-    for pdert in rdert_: pdert.Ppt[0]=[]  # clear Ppms to replace with rng_Ppms
+    for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms, pderts only reference one layer of Pps
     Pp_ = []
     x = 0
     for i, _rdert in enumerate(rdert_):  # form +Pp from +rderts
@@ -406,7 +406,7 @@ def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
                 # accumulate params:
                 Pp.L += 1; Pp.I += rdert.p; Pp.D += rdert.d; Pp.M += rdert.m; Pp.Rdn += rdert.rdn+rdert.P.Rdn+Pp.L  # rdn to root layers, not normalized
                 Pp.pdert_ += [rdert]
-                rdert.Ppt[0].append(Pp)  # Pps may overlap, skip as _rdert in the next loop
+                rdert.Ppt[0].append(Pp)  # Pps may overlap, use len rdert.Ppt[0] as rdn count, skip as _rdert in the next loop
                 cm = rdert.m
                 if cm > 0:
                     Pp.negL += _rdert.negL; Pp.negM += _rdert.negM
@@ -415,124 +415,9 @@ def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
             Pp_.append(Pp)
     return Pp_
 
-# obsolete:
-
-def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I for +IPpms in Idert_: maps to adj IPpms
-
-    # higher local ave for extended rng -> lower m and term by match, higher proj_M?
-    Rdn, AddM = 0, 0
-    for Pp in Pp_:
-        addM = 0
-        iM = sum([pdert.P.M for pdert in Pp.pdert_])  # not precomputed because it's very selective
-        if Pp.M + iM > ave_M * Pp.Rdn * -4:  # rng_coef, this is fixed costs, add variable costs? -lend to contrast?
-            # search left:
-            i = Pp.x0  # Idert mapped to 1st pdert
-            j = i - Pp._negL - 1  # 1st-left not-compared Idert
-            if j > 0:
-                addM = search_Pdert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=True)
-                if Pp not in Pp_:  # if merged, Pp is removed from Pp_
-                    Pp = Pp.pdert_[0].Ppt[0]  # merging Pp
-            # search right:
-            i = Pp.x0 + Pp.L - 1  # Idert mapped to last pdert
-            j = i + Pp.pdert_[-1].negL + 1  # 1st-right not-compared Idert
-            if j < len(Idert_):
-                addM += search_Pdert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=False)
-            # else: next Pp can search left but not right
-        Rdn += Pp.Rdn
-        AddM += addM
-    # recursion:
-    if AddM > ave_M * (Rdn / len(Pp_)) * 4:  # extra_Pp_ coef
-        extra_Pp_(Pp_, Idert_, ave, rave+10)
-
-    # no return Pp_: changed in place
-
-def search_Pdert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
-
-    iIdert = Idert_[i]; iI = iIdert.i; iD = iIdert.d  # Idert searches Idert_ left or right from j
-    addM = 0  # added to Pp by search
-    if fleft: negM = iPp._negM; ipI = iI + (iD / 2)  # back-project by _D, if P.M? negL is compensated by decay?
-    else:   negM = iIdert.negM; ipI = iI - (iD / 2)  # forward-project by _D, if P.M?
-
-    while(iIdert.P.M + iIdert.m + negM > ave_M) and ((not fleft and j < len(Idert_)) or (fleft and j >= 0)):
-
-        cIdert = Idert_[j]  # c for current comparand, left OR right from iIdert
-        cI = cIdert.i; cD = cIdert.d
-        if fleft:
-            Idert = iIdert; _Idert = cIdert  # rename by direction
-            pI = ipI; _pI = cI - (cD / 2)  # forward-project by cD
-        else:
-            Idert = cIdert; _Idert = iIdert  # rename by direction
-            _pI = ipI; pI = cI + (cD / 2)  # back-project by cD
-
-        # comp(_Idert, Idert):
-        _Idert.p = pI + _pI; _Idert.d = _pI - pI; _Idert.m = ave - abs(_Idert.d)
-        curr_M = _Idert.m * rave + (iIdert.P.M + cIdert.P.M) / 2  # P.M is bilateral
-        P = Idert.P; _P = _Idert.P
-
-        if curr_M > ave_sub * P.Rdn and _P.sublayers[0] and P.sublayers[0]:
-            _Idert.sub_M, _Idert.sub_D = comp_sublayers(_P, P, _Idert.m)
-        # comb.match(_P, P):
-        if curr_M + _Idert.sub_M > ave_M * P.Rdn * 4:
-            cPp = cIdert.Ppt[0]  # Pp to merge if positive only:
-
-            if cPp.M > 0:  # +Pp: match to any Idert in Pp.pdert_-> all consecutive matches
-                if fleft: addM += iPp.M; merge(Pp_, cPp, iPp)  # merge iPp in cPp
-                else:     addM += cPp.M; merge(Pp_, iPp, cPp)  # merge cPp in iPp
-            else:
-                # transfer cIdert from -cPp to +Pp, Idert.Ppt[0] is updated but cPp remains as defined in form_Pp_:
-                if fleft:
-                    iPp.x0 -= 1 + iPp._negL
-                    iPp.L += 1 + iPp._negL  # or len(iPp.pdert_) += iPp.negL at termination?
-                    iPp.negL += iPp._negL; iPp.negM += iPp._negM  # summed from all pderts
-                    iPp._negL, iPp._negM = 0, 0
-                    Idert.P = P; Idert.i = P.I  # pderts represent initial P and i: the last on the left
-                    addM += _Idert.m
-                    _Idert.Ppt[0] = iPp
-                    iPp.pdert_.insert(0, _Idert)  # appendleft
-                else:
-                    iPp.L += 1 + iPp.pdert_[-1].negL  # last pdert negL, negM are not yet in Pp
-                    iPp.negL += iPp.pdert_[-1].negL; iPp.negM += iPp.pdert_[-1].negM  # summed from all pderts
-                    addM += Idert.m
-                    Idert.Ppt[0] = iPp
-                    iPp.pdert_.append(Idert)
-                iPp.iL += cIdert.P.L; iPp.I += cIdert.i; iPp.D += cIdert.d; iPp.M += cIdert.m; iPp.Rdn += cIdert.rdn
-            break  # matching pdert or merged Pp takes over connectivity search in the next extra_Pp_
-
-        else:  # Iderts miss
-            if fleft:
-                iPp._negL += 1; iPp._negM += _Idert.m
-                j -= 1
-            else:
-                last_pdert = iPp.pdert_[-1]
-                last_pdert.negM += curr_M - ave_M  # known to be negative, accum per dert
-                last_pdert.negiL += P.L
-                last_pdert.negL += 1
-                negM = last_pdert.negM
-                j += 1
-
-    return addM
-
-def merge(Pp_, _Pp, Pp):  # merge Pp with dert.Pp, if any:
-    '''
-    direction-specific:
-    '''
-    _Pp.accum_from(Pp, excluded=['x0'])
-    # merge pderts
-    for pdert in Pp.pdert_:
-        _Pp.pdert_.append(pdert)
-        pdert.Ppt[0] = _Pp  # pdert.Ppm
-    # previously summed from all pderts except for the last negative one:
-    _Pp.negL += Pp._negL  # left, right: _Pp.negL += _Pp.pdert_[-1].negL?
-    _Pp.negM += Pp._negM  # left, right: _Pp.negM += _Pp.pdert_[-1].negM?
-    _Pp.L = len(_Pp.pdert_) + _Pp.negL  #?
-
-    # merge sublayers
-    _Pp.sublayers += Pp.sublayers
-    Pp_.remove(Pp)
-
 
 def sub_search(rootPp, fPd):  # search inside top sublayer per P / sub_P, after P_ search: top-down induction,
-    # called from intra_Pp_, especially IPp: init select by P.M, combined in Pp match?
+    # called from intra_Pp_, init select by P.M|D combined in Pp?
 
     for pdert in rootPp.pdert_:
         P = pdert.P
@@ -708,6 +593,9 @@ def norm_feedback(P_t):
     for P in P_t[1]:  # Pd_
         P.I /= P.L; P.D /= P.L; P.M /= P.L
 
+'''
+currently not used:
+'''
 def splice(P_, fPd):  # currently not used, replaced by compact() in line_PPs
     '''
     The criterion to re-evaluate separation is similarity of P-defining param: M/L for Pm, D/L for Pd, among the three Ps
@@ -775,3 +663,18 @@ def splice_eval(__P, _P, P, fPd):  # only for positive __P, P, negative _P tripl
     # splice_value = rel_continuity * rel_similarity
 
     return rel_similarity
+
+def merge(Pp_, _Pp, Pp):  # merge Pp with dert.Pp, if any, direction-specific:
+
+    _Pp.accum_from(Pp, excluded=['x0'])
+    # merge pderts
+    for pdert in Pp.pdert_:
+        _Pp.pdert_.append(pdert)
+        pdert.Ppt[0] = _Pp  # pdert.Ppm
+    # previously summed from all pderts except for the last negative one:
+    _Pp.negL += Pp._negL  # left, right: _Pp.negL += _Pp.pdert_[-1].negL?
+    _Pp.negM += Pp._negM  # left, right: _Pp.negM += _Pp.pdert_[-1].negM?
+    _Pp.L = len(_Pp.pdert_) + _Pp.negL  #?
+    # merge sublayers
+    _Pp.sublayers += Pp.sublayers
+    Pp_.remove(Pp)

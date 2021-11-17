@@ -760,3 +760,100 @@ def form_Pp_root(Pdert_t, pdert1_, pdert2_, fPd):  # add rootPp for form_Pp_, if
         Pp_ = form_Pp_(Pdert_, param_name, pdert1_, pdert2_, fPd=0)
         Pp_t.append(Pp_)  # Ppm | Ppd
     return Pp_t
+
+# obsolete:
+
+def extra_Pp_(Pp_, Idert_, ave, rave):  # incremental-range search for core I for +IPpms in Idert_: maps to adj IPpms
+
+    # higher local ave for extended rng -> lower m and term by match, higher proj_M?
+    Rdn, AddM = 0, 0
+    for Pp in Pp_:
+        addM = 0
+        iM = sum([pdert.P.M for pdert in Pp.pdert_])  # not precomputed because it's very selective
+        if Pp.M + iM > ave_M * Pp.Rdn * -4:  # rng_coef, this is fixed costs, add variable costs? -lend to contrast?
+            # search left:
+            i = Pp.x0  # Idert mapped to 1st pdert
+            j = i - Pp._negL - 1  # 1st-left not-compared Idert
+            if j > 0:
+                addM = search_Pdert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=True)
+                if Pp not in Pp_:  # if merged, Pp is removed from Pp_
+                    Pp = Pp.pdert_[0].Ppt[0]  # merging Pp
+            # search right:
+            i = Pp.x0 + Pp.L - 1  # Idert mapped to last pdert
+            j = i + Pp.pdert_[-1].negL + 1  # 1st-right not-compared Idert
+            if j < len(Idert_):
+                addM += search_Pdert_(Pp_, Pp, Idert_, i, j, ave, rave, fleft=False)
+            # else: next Pp can search left but not right
+        Rdn += Pp.Rdn
+        AddM += addM
+    # recursion:
+    if AddM > ave_M * (Rdn / len(Pp_)) * 4:  # extra_Pp_ coef
+        extra_Pp_(Pp_, Idert_, ave, rave+10)
+
+    # no return Pp_: changed in place
+
+def search_Pdert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
+
+    iIdert = Idert_[i]; iI = iIdert.i; iD = iIdert.d  # Idert searches Idert_ left or right from j
+    addM = 0  # added to Pp by search
+    if fleft: negM = iPp._negM; ipI = iI + (iD / 2)  # back-project by _D, if P.M? negL is compensated by decay?
+    else:   negM = iIdert.negM; ipI = iI - (iD / 2)  # forward-project by _D, if P.M?
+
+    while(iIdert.P.M + iIdert.m + negM > ave_M) and ((not fleft and j < len(Idert_)) or (fleft and j >= 0)):
+
+        cIdert = Idert_[j]  # c for current comparand, left OR right from iIdert
+        cI = cIdert.i; cD = cIdert.d
+        if fleft:
+            Idert = iIdert; _Idert = cIdert  # rename by direction
+            pI = ipI; _pI = cI - (cD / 2)  # forward-project by cD
+        else:
+            Idert = cIdert; _Idert = iIdert  # rename by direction
+            _pI = ipI; pI = cI + (cD / 2)  # back-project by cD
+
+        # comp(_Idert, Idert):
+        _Idert.p = pI + _pI; _Idert.d = _pI - pI; _Idert.m = ave - abs(_Idert.d)
+        curr_M = _Idert.m * rave + (iIdert.P.M + cIdert.P.M) / 2  # P.M is bilateral
+        P = Idert.P; _P = _Idert.P
+
+        if curr_M > ave_sub * P.Rdn and _P.sublayers[0] and P.sublayers[0]:
+            _Idert.sub_M, _Idert.sub_D = comp_sublayers(_P, P, _Idert.m)
+        # comb.match(_P, P):
+        if curr_M + _Idert.sub_M > ave_M * P.Rdn * 4:
+            cPp = cIdert.Ppt[0]  # Pp to merge if positive only:
+
+            if cPp.M > 0:  # +Pp: match to any Idert in Pp.pdert_-> all consecutive matches
+                if fleft: addM += iPp.M; merge(Pp_, cPp, iPp)  # merge iPp in cPp
+                else:     addM += cPp.M; merge(Pp_, iPp, cPp)  # merge cPp in iPp
+            else:
+                # transfer cIdert from -cPp to +Pp, Idert.Ppt[0] is updated but cPp remains as defined in form_Pp_:
+                if fleft:
+                    iPp.x0 -= 1 + iPp._negL
+                    iPp.L += 1 + iPp._negL  # or len(iPp.pdert_) += iPp.negL at termination?
+                    iPp.negL += iPp._negL; iPp.negM += iPp._negM  # summed from all pderts
+                    iPp._negL, iPp._negM = 0, 0
+                    Idert.P = P; Idert.i = P.I  # pderts represent initial P and i: the last on the left
+                    addM += _Idert.m
+                    _Idert.Ppt[0] = iPp
+                    iPp.pdert_.insert(0, _Idert)  # appendleft
+                else:
+                    iPp.L += 1 + iPp.pdert_[-1].negL  # last pdert negL, negM are not yet in Pp
+                    iPp.negL += iPp.pdert_[-1].negL; iPp.negM += iPp.pdert_[-1].negM  # summed from all pderts
+                    addM += Idert.m
+                    Idert.Ppt[0] = iPp
+                    iPp.pdert_.append(Idert)
+                iPp.iL += cIdert.P.L; iPp.I += cIdert.i; iPp.D += cIdert.d; iPp.M += cIdert.m; iPp.Rdn += cIdert.rdn
+            break  # matching pdert or merged Pp takes over connectivity search in the next extra_Pp_
+
+        else:  # Iderts miss
+            if fleft:
+                iPp._negL += 1; iPp._negM += _Idert.m
+                j -= 1
+            else:
+                last_pdert = iPp.pdert_[-1]
+                last_pdert.negM += curr_M - ave_M  # known to be negative, accum per dert
+                last_pdert.negiL += P.L
+                last_pdert.negL += 1
+                negM = last_pdert.negM
+                j += 1
+
+    return addM
