@@ -41,8 +41,8 @@ class CPp(CP):
     dert_ = list  # if not empty: Pp is primarily a merged P, other params are optional
     pdert_ = list  # Pp elements, "p" for param
     flay_rdn = bool  # Pp is layer-redundant to Pp.pdert_
-    negM = int  # in mdert only
-    negL = int  # in mdert only  # summed in L, no need for separate sum?
+    negM = int  # in rng_Pps only
+    negL = int  # in rng_Pps only, summed in L, no need to be separate?
     _negM = int  # for search left, within adjacent neg Ppm only?
     _negL = int  # left-most compared distance from Pp.x0
     sublayers = list
@@ -128,7 +128,7 @@ def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):  # Ppm_t and Ppd_t forks, can be
                 if fPd:
                     if param_name=="D_": splice_Ps(Ppm_, dert1_, dert2_, fPd)  # eval splice Pds in each +DPpm
                 elif param_name=="I_": splice_Ps(Ppm_, dert1_, dert2_, fPd)  # eval splice Pms in each +IPpm
-        if param_name=="I_": Ppm_ = intra_Pp_(None, Ppm_, Pdert_, fPd)  # no intra_Pp_ in spliced Pps
+        if param_name=="I_": Ppm_ = intra_Pp_(None, Ppm_, Pdert_, fPd)  # skip spliced Pps
         Ppm_t.append(Ppm_)
 
     Ppd_t = []  # [LPpd_, IPpd_, DPpd_, MPpd_]
@@ -302,7 +302,8 @@ def intra_Pp_(rootPp, Pp_, Pdert_, fPd):  # evaluate for sub-recursion in line P
     for i, Pp in enumerate(Pp_):
         if Pp.L > 1:
             if fPd:
-                if abs(Pp.D) + Pp.M > ave_M * ave_D * Pp.Rdn:  # + Pp.M: borrow potential, regardless of Rdn?
+                # search vs. looping cost:
+                if abs(Pp.D) + Pp.M > ave_M * ave_D * Pp.Rdn * len(rootPp.sublayers) * 4:  # 4:search_cost, +Pp.M: borrow potential, regardless of Rdn?
                     sub_search(Pp, True)  # search in top sublayer, eval by pdert.d
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [[(sub_Ppm_, sub_Ppd_)]]
@@ -311,20 +312,21 @@ def intra_Pp_(rootPp, Pp_, Pdert_, fPd):  # evaluate for sub-recursion in line P
                         ddert_ += [comp_par(_pdert.P, _pdert.d, pdert.d, "D", ave)]  # higher derivation cross-comp of ds in dert1_, local aves?
                     sub_Ppm_[:] = form_Pp_(ddert_, fPd=True)  # cluster in ddert_
                     sub_Ppd_[:] = form_Pp_(ddert_, fPd=True)
-                    if abs(Pp.D) > ave_M * ave_D * 4:  # diff induction per Pd_'DPpd_, add Pp.iD?
+                    if abs(Pp.D) + Pp.M > ave_M * ave_D * Pp.Rdn * len(rootPp.sublayers) * 4:  # diff induction per Pd_'DPpd_, add Pp.iD?
+                        # same as in 305 but per sub_Ppd_: fixed cost of looping?
                         intra_Pp_(Pp, sub_Ppd_, None, fPd=True)  # recursive der+, no rng+: Pms are redundant?
                 else:
                     Pp.sublayers += [[]]  # empty subset to preserve index in sublayer, or increment index of subset?
             else:
                 # rng+ by more selective nearest match @ higher ave, in addition to extension by higher ave_negM in extra_Pp_
-                if Pp.M > ave_M * Pp.Rdn:  # + Pp.iM?
+                if Pp.M > ave_M * Pp.Rdn * len(rootPp.sublayers) + 4:  # + Pp.iM?
                     sub_search(Pp, True)  # search in top sublayer, eval by pdert.d
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [[(sub_Ppm_, sub_Ppd_)]]
                     rdert_ = search_Idert_(Pp, Pdert_, ave_mI, rave=1)  # comp x variable range, depending on I.M
                     sub_Ppm_[:] = form_Pp_rng(rdert_)  # cluster in rdert_
-                    if Pp.M > ave_M * 4 and not Pp.dert_:  # Pp was not spliced, induction = Pm_'IPpm_, + Pp.iM?
-                        intra_Pp_(Pp, sub_Ppd_, rdert_, fPd=False)  # recursive rng+, no der+: Pds are redundant?
+                    if Pp.M > ave_M * 4 and not Pp.dert_:  # 4:looping_cost, Pp was not spliced, induction = Pm_'IPpm_, + Pp.iM?
+                        intra_Pp_(Pp, sub_Ppm_, rdert_, fPd=False)  # recursive rng+, no der+: Pds are redundant?
                 else:
                     Pp.sublayers += [[]]  # empty subset to preserve index in sublayer, or increment index of subset?
 
@@ -353,6 +355,8 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
             idert.d = rdert.i - idert.i  # difference
             idert.m = ave_d - abs(idert.d)  # indirect match
             if idert.m > 0:
+                if idert.m > ave_M * 4 and idert.P.sublayers[0] and rdert.P.sublayers[0]:  # 4: init ave_sub coef
+                    comp_sublayers(idert.P, rdert.P, idert.m)
                 if j > Pp.x0 + Pp.L-1:  # rdert is outside Pp
                     rng_dert_.append(rdert); flmiss_.append(0)
                 else:
@@ -363,8 +367,7 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
                 idert.negM += idert.m
                 comb_M = idert.m - ave_M
                 if j > Pp.x0 + Pp.L-1:  # missing searched derts added for form_Pp_rng to represent discontinuity
-                    rng_dert_.append(rdert)
-                    flmiss_.append(1)
+                    rng_dert_.append(rdert); flmiss_.append(1)
         # search left:
         if flmiss_[i]:  # if idert was not matched as rdert in search right, else it's replaced as idert by left-matching dert
             comb_M = idert.m
@@ -376,6 +379,8 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
                 ldert.d = idert.i - ldert.i  # difference
                 ldert.m = ave_d - abs(ldert.d)  # indirect match
                 if ldert.m > 0:
+                    if idert.m > ave_M * 4 and idert.P.sublayers[0] and ldert.P.sublayers[0]:  # 4: init ave_sub coef
+                        comp_sublayers(idert.P, ldert.P, idert.m)
                     if j < Pp.x0:  # ldert is outside Pp
                         rng_dert_.insert(0, ldert); flmiss_.insert(0, 0)
                     else:
@@ -390,6 +395,10 @@ def search_Idert_(Pp, Idert_, ave_d, rave):  # extended variable-range search fo
 
     return rng_dert_  # no return for flmiss_?
 
+def search_dir(fleft):  # to replace left and right forks
+    pass
+
+
 def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
 
     for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms, pderts only reference one layer of Pps
@@ -398,7 +407,7 @@ def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
     for i, _rdert in enumerate(rdert_):  # form +Pp from +rderts
         if not _rdert.Ppt[0]:  # _rdert is not in any rng_Pp formed in prior loops, else skip all:
 
-            Pp = CPp(L=1, I=_rdert.p, D=_rdert.d, M=_rdert.m, Rdn=_rdert.rdn+_rdert.P.Rdn, x0=x, rdert_=[_rdert], sublayers=[[]])
+            Pp = CPp(L=1, I=_rdert.p, D=_rdert.d, M=_rdert.m, Rdn=_rdert.rdn+_rdert.P.Rdn, x0=x, pdert_=[_rdert], sublayers=[[]])
             cm = 1  # initialize current m to start the loop
             j = i + 1 + _rdert.negL
             while cm > 0 and j < len(rdert_):
