@@ -857,3 +857,30 @@ def search_Pdert_(Pp_, iPp, Idert_, i, j, ave, rave, fleft):
                 j += 1
 
     return addM
+
+
+def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):  # Ppm_t and Ppd_t forks, can be combined but it would be more opaque
+
+    Ppm_t = []  # [LPpm_, IPpm_, DPpm_, MPpm_]
+    rdn_t = sum_rdn_(param_names, Pdert_t, fPd=0)  # assign redundancy to lesser-magnitude m|d in param pair for same-_P Pderts
+    for param_name, Pdert_, rdn_ in zip(param_names, Pdert_t, rdn_t):
+        Ppm_ = form_Pp_(Pdert_, fPd=0)  # segment Pdert__ into Ppms
+        # Ppm_ only:
+        if (param_name == "I_" or param_name=="D_"):
+            rootM = sum(Pp.M for Pp in Ppm_) + sum(pdert.P.M for pdert in Pdert_)  # input match in two overlapping layers
+            if rootM > ave_M * 4:
+                if fPd:
+                    if param_name=="D_": splice_Ps(Ppm_, dert1_, dert2_, fPd)  # eval splice Pds in each +DPpm
+                elif param_name=="I_": splice_Ps(Ppm_, dert1_, dert2_, fPd)  # eval splice Pms in each +IPpm
+        if param_name=="I_": Ppm_ = intra_Pp_(None, Ppm_, Pdert_, 1, fPd)  # skip spliced Pps
+        Ppm_t.append(Ppm_)
+
+    Ppd_t = []  # [LPpd_, IPpd_, DPpd_, MPpd_]
+    rdn_t = sum_rdn_(param_names, Pdert_t, fPd=1)
+    for param_name, Pdert_, rdn_ in zip(param_names, Pdert_t, rdn_t):
+        Ppd_ = form_Pp_(Pdert_, fPd=0)  # segment Pdert__ into Ppds, no splice eval: rdn to more M-specific Ppm_
+        if param_name=="D_": Ppd_ = intra_Pp_(None, Ppd_, Pdert_, 1, fPd)
+        Ppm_t.append(Ppd_)
+
+    return [Ppm_t, Ppd_t]  # Pp_tt
+
