@@ -398,6 +398,7 @@ def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
     for i, _rdert in enumerate(rdert_):  # form +Pp from +rderts
         if not _rdert.Ppt[0]:
             # _rdert is not in any rng_Pp yet, else skip all:
+            # exclusive assignment of overlapping pderts: point-wise eval by m, may overlap in Pp?
             Pp = CPp(L=1, I=_rdert.p, D=_rdert.d, M=_rdert.m, Rdn=_rdert.rdn+_rdert.P.Rdn, x0=x, pdert_=[_rdert], sublayers=[[]])
             cm = 1  # initialize current m to start the loop
             j = i + 1 + _rdert.negL
@@ -495,13 +496,14 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
                         rdn_t = sum_rdn_(param_names, _xsub_pdertt, fPd)
                         for param_name, xsub_Pdert_, rdn_ in zip(param_names, _xsub_pdertt, rdn_t):
                             xsub_Pp_ = form_Pp_(xsub_Pdert_, fPd=0)
+                            # no step=2 for splice: xsub_pdertts are not consecutive, and their Ps are not aligned?
                             if param_name == "I_":
-                                splice_Ps(xsub_Pp_, [], [], fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms
+                                # splice_Ps(xsub_Pp_, [], [], fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms
                                 xsub_Pp_ = intra_Pp_(None, xsub_Pp_, xsub_Pdert_, 1, fPd=0)  # rng+ only?
                                 xsub_Pp_t.append(xsub_Pp_)
-                        # ? xsub_pdertt_[-1][:] = _xsub_pdertt_[-1]  # bilateral assignment
-                    else:
-                        _xsub_pdertt_[-1].append(_xsub_pdertt)  # preserve nesting
+
+                        _xsub_pdertt_[-1][:] = xsub_Pp_t
+                        xsub_pdertt_[-1][:] = xsub_Pp_t  # bilateral assignment?
 
     return sub_M, sub_D
 
