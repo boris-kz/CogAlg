@@ -319,7 +319,7 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     sub_search(Pp, True)  # search in top sublayer, eval by pdert.d
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [[(sub_Ppm_, sub_Ppd_)]]
-                    # higher ave -> distant match, higher ave_negM -> Pp extension
+                    # higher ave -> distant match, higher ave_negM -> extend Pp
                     rdert_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI)  # comp x variable range, while curr_M
                     sub_Ppm_[:] = form_Pp_rng(rdert_)
                     if Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
@@ -394,28 +394,29 @@ def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
 
     for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms, pderts only reference one hlayer of Pps
     Pp_ = []
-    x = 0
-    for i, _rdert in enumerate(rdert_):  # form +Pp from +rderts
-        if not _rdert.Ppt[0]:
-            # _rdert is not in any rng_Pp yet, else skip all:
-            # exclusive assignment of overlapping pderts: point-wise eval by m, may overlap in Pp?
-            Pp = CPp(L=1, I=_rdert.p, D=_rdert.d, M=_rdert.m, Rdn=_rdert.rdn+_rdert.P.Rdn, x0=x, pdert_=[_rdert], sublayers=[[]])
-            cm = 1  # initialize current m to start the loop
-            j = i + 1 + _rdert.negL
-            while cm > 0 and j < len(rdert_):
-                rdert = rdert_[j]
-                # accumulate params:
-                Pp.L += 1; Pp.I += rdert.p; Pp.D += rdert.d; Pp.M += rdert.m; Pp.Rdn += rdert.rdn + rdert.P.Rdn + Pp.L  # rdn to root layers, not normalized
-                Pp.pdert_ += [rdert]
-                # currently wrong, this should be done at Pp termination?:
-                if Pp not in rdert.Ppt[0]:
-                    rdert.Ppt[0].append(Pp); Pp.Rdn += 1  # Pps may overlap, len rdert.Ppt[0] is rdn count, skip as _rdert in the next loop
-                cm = rdert.m
-                if cm > 0:
-                    Pp.negL += _rdert.negL; Pp.negM += _rdert.negM
-                j += 1 + rdert.negL
+    x = 0; ngap = 0
+    _rdert = rdert_[0]; _sign = _rdert.m > 0
+    if _sign:  # init +ve Pp params, exclusive assignment of overlapping pderts: point-wise eval by m, negL may overlap in and between Pps
+        L=1; I=_rdert.p; D=_rdert.d; M=_rdert.m; Rdn=_rdert.rdn + _rdert.P.Rdn; x0=x; pdert_=[_rdert]; negL=_rdert.negL; negM=_rdert.negM
 
-            Pp_.append(Pp)
+    for i, rdert in enumerate(rdert_[1:]):  # form +Pp from +rderts
+        sign = rdert.m > 0
+        if sign and _sign:  # accumulate params:
+            L += 1+ngap; I += rdert.p; D += rdert.d; M += rdert.m; Rdn += rdert.rdn + rdert.P.Rdn + Pp.L  # * hlayers -> rdn to root layers, not normalized
+            negL += rdert.negL; negM += rdert.negM; pdert_ += [rdert]
+        else:
+            if _sign:  # termination:
+                Pp = CPp(L=1, I=rdert.p, D=rdert.d, M=rdert.m, negL = negL, negM = negM, Rdn = rdert.rdn+rdert.P.Rdn, x0=x0, pdert_=[rdert], sublayers=[[]])
+                for rdert in Pp.pdert_: rdert.Ppt[0] = Pp
+                Pp_.append(Pp)
+            if sign:  # reinit +ve Pp params:
+                L=1+ngap; I=rdert.p; D=rdert.d; M=rdert.m; Rdn=rdert.rdn + rdert.P.Rdn; x0=x; pdert_=[rdert]; negL=rdert.negL; negM=rdert.negM
+                ngap = 0  # n of -ve pderts after +ve pdert  # ngap_.append(ngap) to zip with Pp.pdert_: all positive?
+            else:
+                ngap += 1  # to compute x0 of next +ve pdert, from step=1?
+        x+=1
+        _sign = sign
+
     return Pp_
 
 
@@ -498,9 +499,8 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
                             xsub_Pp_ = form_Pp_(xsub_Pdert_, fPd=0)
                             # no step=2 for splice: xsub_pdertts are not consecutive, and their Ps are not aligned?
                             if param_name == "I_":
-                                # splice_Ps(xsub_Pp_, [], [], fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms
                                 xsub_Pp_ = intra_Pp_(None, xsub_Pp_, xsub_Pdert_, 1, fPd=0)  # rng+ only?
-                                xsub_Pp_t.append(xsub_Pp_)
+                            xsub_Pp_t.append(xsub_Pp_)
 
                         _xsub_pdertt_[-1][:] = xsub_Pp_t
                         xsub_pdertt_[-1][:] = xsub_Pp_t  # bilateral assignment?
@@ -575,6 +575,7 @@ def comp_sub_P(_sub_P, sub_P, xsub_pdertt, root_v, fPd):
         for i, (param_name, ave) in enumerate(zip(param_names, aves)):
             _param = getattr(_sub_P, param_name[0])  # can be simpler?
             param = getattr(sub_P, param_name[0])
+            # if same-sign only?
             sub_pdert = comp_par(sub_P, _param, param, param_name, ave)
             # no negative-value sum: -Ps won't be processed:
             if sub_pdert.m > 0: xsub_P_M += sub_pdert.m
