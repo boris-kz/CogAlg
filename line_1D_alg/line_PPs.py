@@ -358,22 +358,22 @@ def search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft): 
     comb_M = idert.m
     while comb_M > 0 and j+1 < len(Idert_) and  j-1 >= 0:  # may continue outside Pp.pdert_, no merge: Pps overlap?
 
-        dert = Idert_[j]  # dert, extend search beyond next param
+        cdert = Idert_[j]  # dert, extend search beyond next param
         if fleft:  # search left
-            j -= 1; ldert = dert; rdert = idert  # left and right derts
+            j -= 1; ldert = cdert; rdert = idert  # left and right derts
         else:  # search right
-            j += 1; ldert = idert; rdert = dert  # left and right derts
+            j += 1; ldert = idert; rdert = cdert  # left and right derts
 
         pdert = comp_par(rdert.P, rdert.i, ldert.i, "I_", loc_ave)
         ldert.p, ldert.d, ldert.m = pdert.p, pdert.d, pdert.m
         if pdert.m > 0:
 
-            if idert.m > ave_M * 4 and idert.P.sublayers[0] and dert.P.sublayers[0]:  # 4: init ave_sub coef
-                comp_sublayers(idert.P, dert.P, idert.m)
+            if idert.m > ave_M * 4 and idert.P.sublayers[0] and cdert.P.sublayers[0]:  # 4: init ave_sub coef
+                comp_sublayers(idert.P, cdert.P, idert.m)
             if fleft and j < Pp.x0:  #  left dert is outside Pp
-                rng_dert_.insert(0, dert); flmiss_.insert(0, 0)
+                rng_dert_.insert(0, cdert); flmiss_.insert(0, 0)
             elif not fleft and j > Pp.x0 + Pp.L-1:  # right dert is outside Pp
-                rng_dert_.append(dert); flmiss_.append(0)
+                rng_dert_.append(cdert); flmiss_.append(0)
             else:
                 flmiss_[j - Pp.x0] = 0  # =index of rdert in rng_dert_
             break  # 1st matching param takes over connectivity search from _param, in the next loop
@@ -390,32 +390,34 @@ def search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft): 
                 rng_dert_.append(rdert); flmiss_.append(1)
 
 
-def form_Pp_rng(rdert_):  # rng_derts -> Ppms only, still a draft
+def form_Pp_rng(rdert_):  # rng_derts -> positive Ppms only
 
-    for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms, pderts only reference one hlayer of Pps
-    Pp_ = []
-    x = 0; ngap = 0
-    _rdert = rdert_[0]; _sign = _rdert.m > 0
+    for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms, pderts only reference next hlayer of Pps
+    Pp_ = []; x = 0
+    _rdert = rdert_[0]
+    _sign = _rdert.m > 0
     if _sign:  # init +ve Pp params, exclusive assignment of overlapping pderts: point-wise eval by m, negL may overlap in and between Pps
         L=1; I=_rdert.p; D=_rdert.d; M=_rdert.m; Rdn=_rdert.rdn + _rdert.P.Rdn; x0=x; pdert_=[_rdert]; negL=_rdert.negL; negM=_rdert.negM
 
-    for i, rdert in enumerate(rdert_[1:]):  # form +Pp from +rderts
+    for rdert in rdert_[1:]:  # form +Pp from +rderts
         sign = rdert.m > 0
         if sign and _sign:  # accumulate params:
-            L += 1+ngap; I += rdert.p; D += rdert.d; M += rdert.m; Rdn += rdert.rdn + rdert.P.Rdn + Pp.L  # * hlayers -> rdn to root layers, not normalized
-            negL += rdert.negL; negM += rdert.negM; pdert_ += [rdert]
+            L += 1; I += rdert.p; D += rdert.d; M += rdert.m; Rdn += rdert.rdn + rdert.P.Rdn; negL += rdert.negL; negM += rdert.negM; pdert_ += [rdert]
         else:
             if _sign:  # termination:
-                Pp = CPp(L=1, I=rdert.p, D=rdert.d, M=rdert.m, negL = negL, negM = negM, Rdn = rdert.rdn+rdert.P.Rdn, x0=x0, pdert_=[rdert], sublayers=[[]])
+                Pp = CPp(L=1, I=rdert.p, D=rdert.d, M=rdert.m, negL = negL, negM = negM, x0=x0, pdert_=[rdert], sublayers=[[]],
+                         Rdn = rdert.rdn + rdert.P.Rdn + Pp.L)  # Pp.L: rdn to root layer per pdert, not normalized
                 for rdert in Pp.pdert_: rdert.Ppt[0] = Pp
                 Pp_.append(Pp)
-            if sign:  # reinit +ve Pp params:
-                L=1+ngap; I=rdert.p; D=rdert.d; M=rdert.m; Rdn=rdert.rdn + rdert.P.Rdn; x0=x; pdert_=[rdert]; negL=rdert.negL; negM=rdert.negM
-                ngap = 0  # n of -ve pderts after +ve pdert  # ngap_.append(ngap) to zip with Pp.pdert_: all positive?
-            else:
-                ngap += 1  # to compute x0 of next +ve pdert, from step=1?
-        x+=1
+            elif sign:  # reinitialize +ve Pp params:
+                L=1; I=rdert.p; D=rdert.d; M=rdert.m; Rdn=rdert.rdn + rdert.P.Rdn; x0=x; pdert_=[rdert]; negL=rdert.negL; negM=rdert.negM
+            x+=1
         _sign = sign
+
+    if _sign:  # terminate last Pp:
+        Pp = CPp(L=1, I=rdert.p, D=rdert.d, M=rdert.m, negL=negL, negM=negM, x0=x0, pdert_=[rdert], sublayers=[[]], Rdn=rdert.rdn + rdert.P.Rdn + Pp.L)
+        for rdert in Pp.pdert_: rdert.Ppt[0] = Pp
+        Pp_.append(Pp)
 
     return Pp_
 
@@ -613,6 +615,21 @@ def norm_feedback(P_t):
 '''
 currently not used:
 '''
+def merge(Pp_, _Pp, Pp):  # merge Pp with dert.Pp, if any, direction-specific:
+
+    _Pp.accum_from(Pp, excluded=['x0'])
+    # merge pderts
+    for pdert in Pp.pdert_:
+        _Pp.pdert_.append(pdert)
+        pdert.Ppt[0] = _Pp  # pdert.Ppm
+    # previously summed from all pderts except for the last negative one:
+    _Pp.negL += Pp._negL  # left, right: _Pp.negL += _Pp.pdert_[-1].negL?
+    _Pp.negM += Pp._negM  # left, right: _Pp.negM += _Pp.pdert_[-1].negM?
+    _Pp.L = len(_Pp.pdert_) + _Pp.negL  #?
+    # merge sublayers
+    _Pp.sublayers += Pp.sublayers
+    Pp_.remove(Pp)
+
 def splice(P_, fPd):  # currently not used, replaced by compact() in line_PPs
     '''
     The criterion to re-evaluate separation is similarity of P-defining param: M/L for Pm, D/L for Pd, among the three Ps
@@ -680,18 +697,3 @@ def splice_eval(__P, _P, P, fPd):  # only for positive __P, P, negative _P tripl
     # splice_value = rel_continuity * rel_similarity
 
     return rel_similarity
-
-def merge(Pp_, _Pp, Pp):  # merge Pp with dert.Pp, if any, direction-specific:
-
-    _Pp.accum_from(Pp, excluded=['x0'])
-    # merge pderts
-    for pdert in Pp.pdert_:
-        _Pp.pdert_.append(pdert)
-        pdert.Ppt[0] = _Pp  # pdert.Ppm
-    # previously summed from all pderts except for the last negative one:
-    _Pp.negL += Pp._negL  # left, right: _Pp.negL += _Pp.pdert_[-1].negL?
-    _Pp.negM += Pp._negM  # left, right: _Pp.negM += _Pp.pdert_[-1].negM?
-    _Pp.L = len(_Pp.pdert_) + _Pp.negL  #?
-    # merge sublayers
-    _Pp.sublayers += Pp.sublayers
-    Pp_.remove(Pp)
