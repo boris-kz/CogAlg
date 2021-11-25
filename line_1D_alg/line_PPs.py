@@ -181,38 +181,43 @@ def form_Pp_(pdert_, fPd):
     # initialization:
     Pp_ = []
     x = 0
-    _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
+    _pdert = pdert_[0]
+    if fPd: _sign = _pdert.d > 0
+    else:   _sign = _pdert.m > 0
+    # init Pp params:
+    L=1; I=_pdert.p; D=_pdert.d; M=_pdert.m; Rdn=_pdert.rdn+_pdert.P.Rdn; x0=x; ix0=_pdert.P.x0; pdert_=[_pdert]
 
-    for pdert in pdert_:  # segment by sign
+    for pdert in pdert_[1:]:  # segment by sign
+        # proj = decay, or adjust by ave projected at distance=negL and contrast=negM, if significant:
+        # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
         if fPd: sign = pdert.d > 0
         else:   sign = pdert.m > 0
-        # adjust by ave projected at distance=negL and contrast=negM, if significant:
-        # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
-        # or proj = decay?
-        if sign != _sign:
-            # sign change, compact terminated Pp, initialize Pp and append it to Pp_
-            if Pp_:  # empty at 1st sign change
-                Pp = Pp_[-1]  # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
-                Pp.Rdn += Pp.L  # redundancy to higher root Pp layers, not normalized
-                # Pp vs Pdert_ redundancy:
-                if fPd: V = abs(Pp.D)  # derived values
-                else: V = Pp.M
-                PpV = V / (Pp.L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
-                pdert_V = V - Pp.L * ave_M * (ave_D * fPd)  # cost incr per pdert representations
-                if PpV <= pdert_V:
-                    Pp.Rdn += Pp.L; Pp.flay_rdn = 1  # Pp or pdert_ are layer-redundant, use in next-level eval
 
-            Pp = CPp( L=1, I=pdert.p, D=pdert.d, M=pdert.m, Rdn = pdert.rdn+pdert.P.Rdn, x0=x, ix0=pdert.P.x0, pdert_=[pdert], sublayers=[[]])
-            Pp_.append(Pp)  # Pp params will be updated by accumulation:
+        if sign != _sign:  # sign change, pack terminated Pp, initialize new Pp
+            Pp_ = term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)
+            # re-init Pp params:
+            L=1; I=pdert.p; D=pdert.d; M=pdert.m; Rdn=pdert.rdn+pdert.P.Rdn; x0=x; ix0=pdert.P.x0; pdert_=[pdert]
         else:
             # accumulate params:
-            Pp.L += 1; Pp.I += pdert.p; Pp.D += pdert.d; Pp.M += pdert.m; Pp.Rdn += pdert.rdn+pdert.P.Rdn; Pp.pdert_ += [pdert]
-
-        pdert.Ppt[fPd] = Pp  # Ppm | Ppd that pdert is in, replace root_Pp if any
+            L += 1; I += pdert.p; D += pdert.d; M += pdert.m; Rdn += pdert.rdn+pdert.P.Rdn; pdert_ += [pdert]
         _sign = sign; x += 1
 
+    Pp_ = term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)  # pack last Pp
     return Pp_
 
+def term_Pp(Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd):
+
+    if fPd: V = abs(D)
+    else: V = M
+    PpV = V / (L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
+    pdert_V = V - L * ave_M * (ave_D * fPd)  # cost incr per pdert representations
+    flay_rdn = PpV < pdert_V
+    # Pp vs Pdert_ rdn
+    Pp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=pdert_, sublayers=[[]])
+    for pdert in Pp.pdert_: pdert.Ppt[fPd] = Pp  # root Pp refs
+    Pp_.append(Pp)  # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
+
+    return Pp_
 
 def sum_rdn_(param_names, Pdert_t, fPd):
     '''
@@ -321,7 +326,7 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     Pp.sublayers = [[(sub_Ppm_, sub_Ppd_)]]
                     # higher ave -> distant match, higher ave_negM -> extend Pp
                     rdert_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI)  # comp x variable range, while curr_M
-                    sub_Ppm_[:] = form_Pp_rng(rdert_)
+                    sub_Ppm_[:] = form_Pp_rng(rdert_.copy())
                     if Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
                         intra_Pp_(Pp, sub_Ppm_, rdert_, hlayers+1, fPd=False)  # recursive rng+, no der+ in redundant Pds
                 else:
@@ -356,13 +361,13 @@ def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for co
 def search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft):  # left or right, +rave?
 
     comb_M = idert.m
-    while comb_M > 0 and j+1 < len(Idert_) and  j-1 >= 0:  # may continue outside Pp.pdert_, no merge: Pps overlap?
+    while comb_M > 0 and j < len(Idert_)-1 and  j >= 0:  # may continue outside Pp.pdert_, no merge: Pps overlap?
 
-        cdert = Idert_[j]  # dert, extend search beyond next param
+        cdert = Idert_[j]
         if fleft:  # search left
-            j -= 1; ldert = cdert; rdert = idert  # left and right derts
+            ldert = cdert; rdert = idert  # left and right derts
         else:  # search right
-            j += 1; ldert = idert; rdert = cdert  # left and right derts
+            ldert = idert; rdert = cdert  # left and right derts
 
         pdert = comp_par(rdert.P, rdert.i, ldert.i, "I_", loc_ave)
         ldert.p, ldert.d, ldert.m = pdert.p, pdert.d, pdert.m
@@ -386,13 +391,16 @@ def search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft): 
             if fleft:
                 if j < Pp.x0:
                     rng_dert_.insert(0, ldert); flmiss_.insert(0, 1)
-            elif j > Pp.x0 + Pp.L-1:
-                rng_dert_.append(rdert); flmiss_.append(1)
+                j -= 1
+            else:
+                if j > Pp.x0 + Pp.L-1:
+                    rng_dert_.append(rdert); flmiss_.append(1)
+                j += 1  # for the next while loop, which happens only if miss
 
 
 def form_Pp_rng(rdert_):  # rng_derts -> positive Ppms only
 
-    for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms, pderts only reference next hlayer of Pps
+    for pdert in rdert_: pdert.Ppt[0] = []  # clear Ppms to replace with rng_Ppms in local copy, pderts only reference next hlayer of Pps
     Pp_ = []; x = 0
     _rdert = rdert_[0]
     _sign = _rdert.m > 0
@@ -402,20 +410,19 @@ def form_Pp_rng(rdert_):  # rng_derts -> positive Ppms only
     for rdert in rdert_[1:]:  # form +Pp from +rderts
         sign = rdert.m > 0
         if sign and _sign:  # accumulate params:
-            L += 1; I += rdert.p; D += rdert.d; M += rdert.m; Rdn += rdert.rdn + rdert.P.Rdn; negL += rdert.negL; negM += rdert.negM; pdert_ += [rdert]
+            L+=1; I+=rdert.p; D+=rdert.d; M+=rdert.m; Rdn+=rdert.rdn+rdert.P.Rdn; negL+=rdert.negL; negM+=rdert.negM; pdert_+=[rdert]
         else:
             if _sign:  # termination:
-                Pp = CPp(L=1, I=rdert.p, D=rdert.d, M=rdert.m, negL = negL, negM = negM, x0=x0, pdert_=[rdert], sublayers=[[]],
-                         Rdn = rdert.rdn + rdert.P.Rdn + Pp.L)  # Pp.L: rdn to root layer per pdert, not normalized
+                Pp = CPp(L=L, I=I, D=D, M=M, negL=negL, negM=negM, x0=x0, pdert_=pdert_, sublayers=[[]], Rdn=Rdn+L)  # L: rdn to root layer per pdert
                 for rdert in Pp.pdert_: rdert.Ppt[0] = Pp
                 Pp_.append(Pp)
             elif sign:  # reinitialize +ve Pp params:
                 L=1; I=rdert.p; D=rdert.d; M=rdert.m; Rdn=rdert.rdn + rdert.P.Rdn; x0=x; pdert_=[rdert]; negL=rdert.negL; negM=rdert.negM
-            x+=1
+        x += 1
         _sign = sign
 
     if _sign:  # terminate last Pp:
-        Pp = CPp(L=1, I=rdert.p, D=rdert.d, M=rdert.m, negL=negL, negM=negM, x0=x0, pdert_=[rdert], sublayers=[[]], Rdn=rdert.rdn + rdert.P.Rdn + Pp.L)
+        Pp = CPp(L=L, I=I, D=D, M=M, negL = negL, negM = negM, x0=x0, pdert_=pdert_, sublayers=[[]], Rdn=Rdn + L)
         for rdert in Pp.pdert_: rdert.Ppt[0] = Pp
         Pp_.append(Pp)
 
@@ -508,6 +515,7 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
                         xsub_pdertt_[-1][:] = xsub_Pp_t  # bilateral assignment?
 
     return sub_M, sub_D
+
 
 def form_comp_Derts(_P, P, root_v):
 

@@ -884,3 +884,34 @@ def form_Pp_root(Pdert_t, dert1_, dert2_, fPd):  # Ppm_t and Ppd_t forks, can be
 
     return [Ppm_t, Ppd_t]  # Pp_tt
 
+def form_Pp_(pdert_, fPd):
+    # initialization:
+    Pp_ = []
+    x = 0
+    _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
+    for pdert in pdert_:  # segment by sign
+        if fPd: sign = pdert.d > 0
+        else:   sign = pdert.m > 0
+        # adjust by ave projected at distance=negL and contrast=negM, if significant:
+        # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
+        # or proj = decay?
+        if sign != _sign:
+            # sign change, compact terminated Pp, initialize Pp and append it to Pp_
+            if Pp_:  # empty at 1st sign change
+                Pp = Pp_[-1]  # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
+                Pp.Rdn += Pp.L  # redundancy to higher root Pp layers, not normalized
+                # Pp vs Pdert_ redundancy:
+                if fPd: V = abs(Pp.D)  # derived values
+                else: V = Pp.M
+                PpV = V / (Pp.L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
+                pdert_V = V - Pp.L * ave_M * (ave_D * fPd)  # cost incr per pdert representations
+                if PpV <= pdert_V:
+                    Pp.Rdn += Pp.L; Pp.flay_rdn = 1  # Pp or pdert_ are layer-redundant, use in next-level eval
+            Pp = CPp( L=1, I=pdert.p, D=pdert.d, M=pdert.m, Rdn = pdert.rdn+pdert.P.Rdn, x0=x, ix0=pdert.P.x0, pdert_=[pdert], sublayers=[[]])
+            Pp_.append(Pp)  # Pp params will be updated by accumulation:
+        else:
+            # accumulate params:
+            Pp.L += 1; Pp.I += pdert.p; Pp.D += pdert.d; Pp.M += pdert.m; Pp.Rdn += pdert.rdn+pdert.P.Rdn; Pp.pdert_ += [pdert]
+        pdert.Ppt[fPd] = Pp  # Ppm | Ppd that pdert is in, replace root_Pp if any
+        _sign = sign; x += 1
+    return Pp_
