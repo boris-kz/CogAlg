@@ -22,6 +22,7 @@ import numpy as np
 from copy import deepcopy
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 from line_patterns import *
+from increment import *
 
 class Cpdert(ClusterStructure):
     # P param dert
@@ -112,8 +113,8 @@ def line_PPs_root(P_t):  # P_t= Pm_, Pd_;  higher-level input is nested to the d
             Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
             Pp_tt = []  # Ppm_t, Ppd_t, each: [LPp_, IPp_, DPp_, MPp_]
 
-            for fPpd in 0, 1:  # 0-> Ppm_t, 1-> Ppd_t
-                Pp_t = []  # [LPp_, IPp_, DPp_, MPp_]
+            for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_
+                Pp_t = []  # LPp_, IPp_, DPp_, MPp_
                 rdn_t = sum_rdn_(param_names, Pdert_t, fPd)
                 # Pdert_-> Pps:
                 for param_name, Pdert_, rdn_ in zip(param_names, Pdert_t, rdn_t):
@@ -122,11 +123,13 @@ def line_PPs_root(P_t):  # P_t= Pm_, Pd_;  higher-level input is nested to the d
                         if not fPpd:
                             splice_Ps(Pp_, dert1_, dert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                         Pp_ = intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+
-                    Pp_t.append(Pp_)
-                Pp_tt.append(Pp_t)
-            Pp_ttt.append(Pp_tt)
+                    Pp_t.append(Pp_)  # LPp_, IPp_, DPp_, MPp_
+                Pp_tt.append(Pp_t)  # Ppm_, Ppd_
+            Pp_ttt.append(Pp_tt)  # Pm_, Pd_
         else:
             Pp_ttt.append(P_)  # Pps are not formed
+        # test a call to 3rd-level draft:
+        line_PPPs_root(Pp_ttt)
 
     return Pp_ttt  # 3-level nested tuple per line: Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_)))
 
@@ -177,24 +180,24 @@ def comp_par(_P, _param, param, param_name, ave):
     return Cpdert(P=_P, i=_param, p=param + _param, d=d, m=m)
 
 
-def form_Pp_(pdert_, fPd):
+def form_Pp_(root_pdert_, fPd):
     # initialization:
     Pp_ = []
     x = 0
-    _pdert = pdert_[0]
+    _pdert = root_pdert_[0]
     if fPd: _sign = _pdert.d > 0
     else:   _sign = _pdert.m > 0
     # init Pp params:
     L=1; I=_pdert.p; D=_pdert.d; M=_pdert.m; Rdn=_pdert.rdn+_pdert.P.Rdn; x0=x; ix0=_pdert.P.x0; pdert_=[_pdert]
 
-    for pdert in pdert_[1:]:  # segment by sign
+    for pdert in root_pdert_[1:]:  # segment by sign
         # proj = decay, or adjust by ave projected at distance=negL and contrast=negM, if significant:
         # m + ddist_ave = ave - ave * (ave_rM * (1 + negL / ((param.L + _param.L) / 2))) / (1 + negM / ave_negM)?
         if fPd: sign = pdert.d > 0
         else:   sign = pdert.m > 0
 
         if sign != _sign:  # sign change, pack terminated Pp, initialize new Pp
-            Pp_ = term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)
+            term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)
             # re-init Pp params:
             L=1; I=pdert.p; D=pdert.d; M=pdert.m; Rdn=pdert.rdn+pdert.P.Rdn; x0=x; ix0=pdert.P.x0; pdert_=[pdert]
         else:
@@ -202,8 +205,9 @@ def form_Pp_(pdert_, fPd):
             L += 1; I += pdert.p; D += pdert.d; M += pdert.m; Rdn += pdert.rdn+pdert.P.Rdn; pdert_ += [pdert]
         _sign = sign; x += 1
 
-    Pp_ = term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)  # pack last Pp
+    term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)  # pack last Pp
     return Pp_
+
 
 def term_Pp(Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd):
 
@@ -217,7 +221,6 @@ def term_Pp(Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd):
     for pdert in Pp.pdert_: pdert.Ppt[fPd] = Pp  # root Pp refs
     Pp_.append(Pp)  # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
 
-    return Pp_
 
 def sum_rdn_(param_names, Pdert_t, fPd):
     '''
