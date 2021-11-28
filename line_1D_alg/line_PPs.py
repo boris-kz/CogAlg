@@ -22,7 +22,7 @@ import numpy as np
 from copy import deepcopy
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 from line_patterns import *
-from increment import *
+from line_PPPs import line_PPPs_root
 
 class Cpdert(ClusterStructure):
     # P param dert
@@ -111,27 +111,26 @@ def line_PPs_root(P_t):  # P_t= Pm_, Pd_;  higher-level input is nested to the d
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 1:
             Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-            Pp_tt = []  # Ppm_t, Ppd_t, each: [LPp_, IPp_, DPp_, MPp_]
-
-            for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_
-                Pp_t = []  # LPp_, IPp_, DPp_, MPp_
-                rdn_t = sum_rdn_(param_names, Pdert_t, fPd)
-                # Pdert_-> Pps:
-                for param_name, Pdert_, rdn_ in zip(param_names, Pdert_t, rdn_t):
+            Pp_tt = []
+            sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert
+            # Pdert_-> Pps:
+            for param_name, Pdert_ in zip(param_names, Pdert_t):
+                for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_: more closely related than Pp_s of different params
+                    Pp_t = []
                     Pp_ = form_Pp_(Pdert_, fPpd)
                     if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                         if not fPpd:
                             splice_Ps(Pp_, dert1_, dert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                        Pp_ = intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+
-                    Pp_t.append(Pp_)  # LPp_, IPp_, DPp_, MPp_
-                Pp_tt.append(Pp_t)  # Ppm_, Ppd_
-            Pp_ttt.append(Pp_tt)  # Pm_, Pd_
+                        intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+
+                    Pp_t.append(Pp_)   # Ppm_, Ppd_
+                Pp_tt.append(Pp_t)   # LPp_, IPp_, DPp_, MPp_
+            Pp_ttt.append(Pp_tt)   # Pm_, Pd_
         else:
             Pp_ttt.append(P_)  # Pps are not formed
         # test a call to 3rd-level draft:
         line_PPPs_root(Pp_ttt)
 
-    return Pp_ttt  # 3-level nested tuple per line: Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_)))
+    return Pp_ttt  # 3-level nested tuple per line: Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_)))
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
@@ -208,7 +207,6 @@ def form_Pp_(root_pdert_, fPd):
     term_Pp( Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd)  # pack last Pp
     return Pp_
 
-
 def term_Pp(Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd):
 
     if fPd: V = abs(D)
@@ -219,7 +217,8 @@ def term_Pp(Pp_, L, I, D, M, Rdn, x0, ix0, pdert_, fPd):
     # Pp vs Pdert_ rdn
     Pp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=pdert_, sublayers=[[]])
     for pdert in Pp.pdert_: pdert.Ppt[fPd] = Pp  # root Pp refs
-    Pp_.append(Pp)  # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
+    Pp_.append(Pp)
+    # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
 
 
 def sum_rdn_(param_names, Pdert_t, fPd):
@@ -261,8 +260,7 @@ def sum_rdn_(param_names, Pdert_t, fPd):
             if len(Pdert_t[j]) >i:  # if fPd: Ddert_ is step=2, else: Mdert_ is step=2
                 Pdert_t[j][i].rdn = Rdn  # [Ldert_, Idert_, Ddert_, Mdert_]
 
-    return Pdert_t
-
+    # no need to return since rdn is updated in each pdert
 
 def splice_Ps(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
     '''
@@ -341,8 +339,8 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                              ]
     if isinstance(rootPp, CPp):
         rootPp.sublayers += comb_sublayers
-    else:
-        return Pp_  # each Pp has new sublayers, comb_sublayers is not needed
+
+    # actually no need to return Pp_ here, Pp_ object remained the same all the time in this fucnction
 
 
 def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for core I at local ave: lower m and term by match
