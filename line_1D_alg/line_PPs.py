@@ -105,18 +105,18 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 '''
 
 def line_PPs_root(P_t):  # P_t= Pm_, Pd_;  higher-level input is nested to the depth = 2*elevation (level counter), or 2^elevation?
-    Pp_ttt = []
+
     norm_feedback(P_t)  # before processing
+    Pp_ttt = []
 
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 1:
             Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-            Pp_tt = []
             sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert
-            # Pdert_-> Pps:
-            for param_name, Pdert_ in zip(param_names, Pdert_t):
+            Pp_tt = []
+            for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
+                Pp_t = []
                 for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_: more closely related than Pp_s of different params
-                    Pp_t = []
                     Pp_ = form_Pp_(Pdert_, fPpd)
                     if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                         if not fPpd:

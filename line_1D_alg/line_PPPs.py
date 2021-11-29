@@ -29,14 +29,11 @@ We will then try to convert it into fully recursive xlevel_increment
 Separate increment for each root function to accommodate greater input nesting and value variation:
 '''
 
-
 from line_patterns import *
 from line_PPs import *
 from itertools import zip_longest
 
-
-def line_root_incr(line_PPs_root):
-    # convert line_PPs_root into line_PPPs search_root by adding a layer of nesting to unpack:
+def line_root(iP_t):  # generic for line_PPs_root, line_PPPs_root, etc, by evaluating iP_t nesting to unpack
     '''
     for i, P_t in enumerate(root_P_t):  # fPd = i
     for P_, param_name, ave in zip(P_t, param_names, aves):
@@ -64,27 +61,26 @@ def form_Pp_incr(form_Pp_):
     pass
 
 
-def line_PPPs_draft(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)?
+def line_PPPs_simplified(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)?
 
     norm_feedback(Pp_ttt)  # before processing
     Ppp_ttttt = []  # add  4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
 
     for Pp_tt, fPd in zip(Pp_ttt, [0,1]):  # fPd: Pm_ | Pd_
         Ppp_tttt = []
-        for param_name, Pp_ in zip( param_names, Pp_tt):  # LPp_ | IPp_ | DPp_ | MPp_
+        for Pp_t in Pp_tt:  # LPp_ | IPp_ | DPp_ | MPp_
             Ppp_ttt = []
-            for Pp_t, fPpd in zip(Pp_tt, [0, 1]):  # fPpd: Ppm_ | Ppd_
+            for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
                 Ppp_tt = []
                 Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp(Pp_, fPpd)
                 sum_rdn_Pp(param_names, Ppdert_t, fPpd)  # sum cross-param redundancy per Ppdert
-                # Lpdert_, Ipdert_, Dpdert_, Mpdert_:
                 for param_name, Ppdert_ in zip( param_names, Ppdert_t):
                     Ppp_t = []
                     for fPppd in 0, 1:  # 0: Pppm_, 1: Pppd_:
                         Ppp_ = form_Ppp_(Ppdert_, fPppd)
                         if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                             if not fPppd:
-                                splice_Ps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Ppp.M in Pppm_, for Ppms in +IPppms or Ppds in +DPppm
+                                splice_Ps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Ppp.M, for Ppms in +IPppms or Ppds in +DPppm
                             intra_Pp_(None, Pp_, Ppdert_, 1, fPppd)  # der+ or rng+
                         Ppp_t.append(Ppp_)  # Pppm_, Pppd_
                     Ppp_tt.append(Pp_t)   # LPpp_, IPpp_, DPpp_, MPpp_
@@ -93,52 +89,55 @@ def line_PPPs_draft(Pp_ttt):  # higher-level input is nested to the depth = 1 + 
         Ppp_ttttt.append(Ppp_tttt)  # Pm_, Pd_
 
     return Ppp_ttttt  # 5-level nested tuple of arrays per line:
-    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_ ( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
+    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_)))))
 
-# draft
+
 def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+elevation (level counter), or 2*elevation?
 
     norm_feedback(Pp_ttt)  # before processing
     Ppp_ttttt = []  # add 4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
 
-    for Pp_tt in Pp_ttt:  # root Pm_ or root Pd_
-        Ppp_tttt = []  # each element is L, I, D, M's Ppp_ of different fPpd
-
-        for Pp_t, fiPd in zip(Pp_tt, [0,1]):  # fiPd: Ppm_ or Ppd_
-            if isinstance(Pp_t, list):  # Ppt is not P
-                Ppp_ttt = []
-                for param_name, Pp_ in zip(param_names, Pp_t):  # param_name: LPp_ | IPp_ | DPp_ | MPp_
-                    # I think this should be tested in calling function:
+    for Pp_tt, fPd in zip(Pp_ttt, [0, 1]):  # fPd: Pm_ | Pd_
+        Ppp_tttt = []
+        for Pp_t in Pp_tt:  # LPp_ | IPp_ | DPp_ | MPp_
+            Ppp_ttt = []
+            if isinstance(Pp_t, list):  # Pp_t is not a spliced P: if IPp_ only?
+                Ppp_tt = []
+                for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
                     if len(Pp_)>1:
-                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp_Pp(Pp_, fiPd)
-                        Ppp_tt = []
-
-                        sum_rdn_Pp(param_names, Ppdert_t, fiPd)
-                        for fPd in 0,1: # fPd
+                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp_Pp(Pp_, fPpd)
+                        sum_rdn_Pp(param_names, Ppdert_t, fPpd)
+                        for param_name, Ppdert_ in zip(param_names, Ppdert_t):  # param_name: LPpp_ | IPpp_ | DPpp_ | MPpp_
                             Ppp_t = []
-                            for Ppdert_ in Ppdert_t:  # L, I, D, M, Ppps
+                            for fPppd in 0,1:  # fPppd 0: Pppm_, 1: Pppd_
                                 if Ppdert_:
-                                    Ppp_ = form_Ppp_(Ppdert_, fPd)
-                                    if (fPd and param_name == "D_") or (not fPd and param_name == "I_"):
-                                        if not fPd:
-                                            splice_Pps(Ppp_, Ppdert1_, Ppdert2_, fiPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                                        intra_Ppp_(None, Ppp_, Ppdert_, 1, fPd)  # der+ or rng+
-                                    Ppp_t.append(Ppp_)
-                            Ppp_tt.append(Ppp_t)
-                        Ppp_ttt.append(Ppp_tt)
-                Ppp_tttt.append(Ppp_ttt)
-        Ppp_ttttt.append(Ppp_tttt)
-
+                                    Ppp_ = form_Ppp_(Ppdert_, fPppd)
+                                    if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
+                                        if not fPppd:
+                                            splice_Pps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
+                                        intra_Ppp_(None, Ppp_, Ppdert_, 1, fPppd)  # der+ or rng+
+                                else: Ppp_ = []     # keep index
+                                Ppp_t.append(Ppp_)  # Pppm_, Pppd_
+                            Ppp_tt.append(Ppp_t)    # LPpp_, IPpp_, DPpp_, MPpp_
+                    else: Ppp_tt = []
+                Ppp_ttt.append(Ppp_tt)              # Ppm_, Ppd_
+            else: Ppp_ttt = Pp_t  # spliced P
+            Ppp_tttt.append(Ppp_ttt)                # LPp_, IPp_, DPp_, MPp_
+        Ppp_ttttt.append(Ppp_tttt)                  # Pm_, Pd_
 
     return Ppp_ttttt  # 5-level nested tuple of arrays per line:
-    # (Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_ (LPpp_, IPpp_, DPpp_, MPpp_))))
+    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_ ( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
 
-
+''' 
+Next: 
+- check if line_PPs functions work with line_PPPs,
+- start combining line_PPs_root and line_PPP_root into generic line_root, evaluating nesting in input P_t for unpacking and repacking,
+- explore possible cross_comp between iP_s of different core params, to the extent that they don't anticorrelate
+'''
 
 def norm_feedback(Pp_ttt):
     # probably recursive norm_feedback here depends on the depth
     pass
-
 
 def cross_comp_Pp(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
 
@@ -290,4 +289,3 @@ def splice_Pps(Pppm_, Ppdert1_, Ppdert2_, fPd):  # re-eval Ppps, pPp.pdert_s for
         '''
         no splice(): fine-grain eval per P triplet is too expensive?
         '''
-
