@@ -33,16 +33,6 @@ from line_patterns import *
 from line_PPs import *
 from itertools import zip_longest
 
-def line_root(iP_t):  # generic for line_PPs_root, line_PPPs_root, etc, by evaluating iP_t nesting to unpack
-    '''
-    for i, P_t in enumerate(root_P_t):  # fPd = i
-    for P_, param_name, ave in zip(P_t, param_names, aves):
-        norm_feedback(P_, i)
-        Pdert_t, dert1_, dert2_ = search(P_, i)
-        rval_Pp_t, Pp_t = form_Pp_root( Pdert_t, dert1_, dert2_, i)
-    '''
-    pass
-
 def search_incr(search):
     '''
     Increase maximal comparison depth, according to greater input pattern depth
@@ -52,7 +42,6 @@ def search_incr(search):
     Add same-iP xparam search?
     '''
     pass
-
 def form_Pp_incr(form_Pp_):
     '''
     Add composition level,
@@ -61,35 +50,64 @@ def form_Pp_incr(form_Pp_):
     pass
 
 
-def line_PPPs_simplified(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)?
+def line_recursive(iP_T):  # draft for level-recursive processing starting with line_PPPs
+
+    oP_T = line_PPPs_recursive( line_PPs_root( iP_T))  # oPp_T = line_PPs_root(iP_T); oPpp_T = line_PPPs_root(oPp_T)
+
+    return oP_T
+
+def line_PPPs_recursive(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(Pp_ttt)  # before processing
-    Ppp_ttttt = []  # add  4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
-
-    for Pp_tt, fPd in zip(Pp_ttt, [0,1]):  # fPd: Pm_ | Pd_
+    Ppp_ttttt = []  # add 4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
+    for Pp_tt, fPd in zip(Pp_ttt, [0, 1]):  # fPd: Pm_ | Pd_
         Ppp_tttt = []
-        for Pp_t in Pp_tt:  # LPp_ | IPp_ | DPp_ | MPp_
+        for param_name, Pp_t in zip(param_names, Pp_tt):  # LPp_ | IPp_ | DPp_ | MPp_
             Ppp_ttt = []
-            for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
-                Ppp_tt = []
-                Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp(Pp_, fPpd)
-                sum_rdn_Pp(param_names, Ppdert_t, fPpd)  # sum cross-param redundancy per Ppdert
-                for param_name, Ppdert_ in zip( param_names, Ppdert_t):
-                    Ppp_t = []
-                    for fPppd in 0, 1:  # 0: Pppm_, 1: Pppd_:
-                        Ppp_ = form_Ppp_(Ppdert_, fPppd)
-                        if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
-                            if not fPppd:
-                                splice_Ps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Ppp.M, for Ppms in +IPppms or Ppds in +DPppm
-                            intra_Pp_(None, Pp_, Ppdert_, 1, fPppd)  # der+ or rng+
-                        Ppp_t.append(Ppp_)  # Pppm_, Pppd_
-                    Ppp_tt.append(Pp_t)   # LPpp_, IPpp_, DPpp_, MPpp_
-                Ppp_ttt.append(Pp_tt)   # Ppm_, Ppd_
-            Ppp_tttt.append(Ppp_ttt)  # LPp_, IPp_, DPp_, MPp_
-        Ppp_ttttt.append(Ppp_tttt)  # Pm_, Pd_
+            if isinstance(Pp_t, list):  # Ppt is not P
+                for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
+                    Ppp_tt = []
+                    if len(Pp_) > 1:
+                        Ppp_tt.append( comp_P_recursive(Pp_, fPpd))
+                    else:
+                        Ppp_tt.append([])
+            else:  # Pp_t is P, pack it
+                Ppp_ttt.append(Pp_tt)
+            Ppp_tttt.append(Ppp_ttt)
+        Ppp_ttttt.append(Ppp_tttt)
 
     return Ppp_ttttt  # 5-level nested tuple of arrays per line:
-    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_)))))
+    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_ ( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
+
+
+def comp_P_recursive(iP_, fPd):  # cross_comp, sum_rdn, splice, intra, comp_P
+
+    norm_feedback(iP_)
+    Pdert_t, pdert1_, pdert2_ = cross_comp(iP_, fPd)
+    sum_rdn(param_names, Pdert_t, fPd)
+    oP_tt = []  # Pp_tt or deeper
+
+    for param_name, Pdert_ in zip(param_names, Pdert_t):  # param_name: LPp_ | IPp_ | DPp_ | MPp_
+        oP_t = []  # pack Ppm, Ppd_, and deeper
+        for fPpd in 0, 1:  # fPpd: 0: Ppm_, 1: Ppd_:
+            if Pdert_:
+                oP_ = form_Pp_(Pdert_, fPpd)  # oP starts with Pp and may get deeper
+                if (fPd and param_name == "D_") or (not fPd and param_name == "I_"):
+                    if not fPpd:
+                        splice_Ps(oP_, pdert1_, pdert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
+                    intra_Pp_(None, oP_, Pdert_, 1, fPpd)  # der+ or rng+
+                # evaluate for recursion
+                oP_M = [Pp.M for Pp in oP_]  # pack this M to evaluate cross_comp between Ppp_s later?
+                if len(oP_) > 1 and oP_M > ave_M:
+                    oPp_ = comp_P_recursive(oP_, fPpd)  # next level recursion
+                    oP_t.append(oPp_)  # the depth of nesting in Pps may increase with recursion
+                else:
+                    oP_t.append(oP_)
+            else:
+                oP_t.append([])  # preserve index
+        oP_tt.append(oP_t)
+
+    return oP_tt
 
 
 def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+elevation (level counter), or 2*elevation?
@@ -105,17 +123,17 @@ def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+ele
                 Ppp_tt = []
                 for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
                     if len(Pp_)>1:
-                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp_Pp(Pp_, fPpd)
-                        sum_rdn_Pp(param_names, Ppdert_t, fPpd)
+                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp(Pp_, fPpd)
+                        sum_rdn(param_names, Ppdert_t, fPpd)
                         for param_name, Ppdert_ in zip(param_names, Ppdert_t):  # param_name: LPpp_ | IPpp_ | DPpp_ | MPpp_
                             Ppp_t = []
                             for fPppd in 0,1:  # fPppd 0: Pppm_, 1: Pppd_
                                 if Ppdert_:
-                                    Ppp_ = form_Ppp_(Ppdert_, fPppd)
+                                    Ppp_ = form_Pp_(Ppdert_, fPppd)
                                     if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                                         if not fPppd:
-                                            splice_Pps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                                        intra_Ppp_(None, Ppp_, Ppdert_, 1, fPppd)  # der+ or rng+
+                                            splice_Ps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
+                                        intra_Pp_(None, Ppp_, Ppdert_, 1, fPppd)  # der+ or rng+
                                 else: Ppp_ = []     # keep index
                                 Ppp_t.append(Ppp_)  # Pppm_, Pppd_
                             Ppp_tt.append(Ppp_t)    # LPpp_, IPpp_, DPpp_, MPpp_
@@ -139,7 +157,7 @@ def norm_feedback(Pp_ttt):
     # probably recursive norm_feedback here depends on the depth
     pass
 
-def cross_comp_Pp(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
+def cross_comp(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
 
     LPpdert_, IPpdert_, DPpdert_, MPpdert_, Ppdert1_, Ppdert2_ = [], [], [], [], [], []
 
@@ -170,7 +188,7 @@ def cross_comp_Pp(Pp_, fPpd):  # cross-compare patterns of params within horizon
     return (LPpdert_, IPpdert_, DPpdert_, MPpdert_), Ppdert1_, Ppdert2_[:-1]  # remove CPp() filled in dert2
 
 
-def sum_rdn_Pp(param_names, Ppdert_t, fPd):
+def sum_rdn(param_names, Ppdert_t, fPd):
     '''
     access same-index pderts of all Pp params, assign redundancy to lesser-magnitude m|d in param pair.
     if other-param same-Pp_-index pdert is missing, rdn doesn't change.
@@ -225,7 +243,7 @@ def comp_par(_Pp, _param, param, param_name, ave):
     return Cpdert(P=_Pp, i=_param, p=param + _param, d=d, m=m)
 
 # draft
-def form_Ppp_(Ppdert_, fPpd):
+def form_Pp_(Ppdert_, fPpd):
 
     Ppp_ = []
     x = 0
@@ -240,29 +258,29 @@ def form_Ppp_(Ppdert_, fPpd):
         else:   sign = Ppdert.m > 0
         # sign change, pack terminated Ppp, initialize new Ppp:
         if sign != _sign:
-            term_Ppp( Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd)
+            term_Pp( Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd)
             # re-init Pp params:
             L=1; I=Ppdert.p; D=Ppdert.d; M=Ppdert.m; Rdn=Ppdert.rdn; x0=x; Ppdert_=[Ppdert]
         else:  # accumulate params:
             L += 1; I += Ppdert.p; D += Ppdert.d; M += Ppdert.m; Rdn += Ppdert.rdn; Ppdert_ += [Ppdert]
         _sign = sign; x += 1
 
-    term_Ppp( Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd)  # pack last Ppp
+    term_Pp( Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd)  # pack last Ppp
 
     return Ppp_
 
 
-def term_Ppp(Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd):
+def term_Pp(Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd):
 
     Ppp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L, x0=x0, pdert_=Ppdert_, sublayers=[[]])
     for Ppdert in Ppp.pdert_: Ppdert.Ppt[fPpd] = Ppp  # root Ppp refs
     Ppp_.append(Ppp)
 
 
-def intra_Ppp_(rootPpp, Ppp_, Ppdert_, hlayers, fPd):  # evaluate for sub-recursion
+def intra_Pp_(rootPpp, Ppp_, Ppdert_, hlayers, fPd):  # evaluate for sub-recursion
     pass
 
-def splice_Pps(Pppm_, Ppdert1_, Ppdert2_, fPd):  # re-eval Ppps, pPp.pdert_s for redundancy, eval splice Pps
+def splice_Ps(Pppm_, Ppdert1_, Ppdert2_, fPd):  # re-eval Ppps, pPp.pdert_s for redundancy, eval splice Pps
     '''
     Initial P termination is by pixel-level sign change, but resulting separation may not be significant on a pattern level.
     That is, separating opposite-sign patterns are weak relative to separated same-sign patterns, especially if similar.

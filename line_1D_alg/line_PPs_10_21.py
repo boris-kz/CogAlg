@@ -915,3 +915,35 @@ def form_Pp_(pdert_, fPd):
         pdert.Ppt[fPd] = Pp  # Ppm | Ppd that pdert is in, replace root_Pp if any
         _sign = sign; x += 1
     return Pp_
+
+
+def line_PPPs_simplified(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)?
+
+    norm_feedback(Pp_ttt)  # before processing
+    Ppp_ttttt = []  # add  4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
+
+    for Pp_tt, fPd in zip(Pp_ttt, [0,1]):  # fPd: Pm_ | Pd_
+        Ppp_tttt = []
+        for Pp_t in Pp_tt:  # LPp_ | IPp_ | DPp_ | MPp_
+            Ppp_ttt = []
+            for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
+                Ppp_tt = []
+                Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp(Pp_, fPpd)
+                sum_rdn_Pp(param_names, Ppdert_t, fPpd)  # sum cross-param redundancy per Ppdert
+                for param_name, Ppdert_ in zip( param_names, Ppdert_t):
+                    Ppp_t = []
+                    for fPppd in 0, 1:  # 0: Pppm_, 1: Pppd_:
+                        Ppp_ = form_Ppp_(Ppdert_, fPppd)
+                        if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
+                            if not fPppd:
+                                splice_Ps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Ppp.M, for Ppms in +IPppms or Ppds in +DPppm
+                            intra_Pp_(None, Pp_, Ppdert_, 1, fPppd)  # der+ or rng+
+                        Ppp_t.append(Ppp_)  # Pppm_, Pppd_
+                    Ppp_tt.append(Pp_t)   # LPpp_, IPpp_, DPpp_, MPpp_
+                Ppp_ttt.append(Pp_tt)   # Ppm_, Ppd_
+            Ppp_tttt.append(Ppp_ttt)  # LPp_, IPp_, DPp_, MPp_
+        Ppp_ttttt.append(Ppp_tttt)  # Pm_, Pd_
+
+    return Ppp_ttttt  # 5-level nested tuple of arrays per line:
+    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_)))))
+

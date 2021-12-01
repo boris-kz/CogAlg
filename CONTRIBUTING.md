@@ -53,7 +53,7 @@ Kok Wei Chee, $14200, team developer
 
 2021:
 
-Kok Wei Chee, $17960, lead developer, January-October
+Kok Wei Chee, $20,800, lead developer, January-November
 
 Khanh Nguyen, $5000, team developer, April-October
 
