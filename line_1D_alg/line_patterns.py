@@ -72,12 +72,12 @@ halt_y = 502  # ending row, set 999999999 for arbitrary image
     capitalized variables are normally summed small-case variables
 '''
 
-def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patterns, each pattern may be nested
+def line_Ps_root(frame_of_pixels_):  # Ps: patterns, converts frame_of_pixels to frame_of_patterns, each pattern may be nested
 
     Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
     frame_of_patterns_ = []
     '''
-    if cross_comp_spliced:  # process all image rows as a single line, vertically consecutive and preserving horizontal direction:
+    if line_Ps_root_spliced:  # process all image rows as a single line, vertically consecutive and preserving horizontal direction:
         pixel_=[]; dert_=[]  
         for y in range(init_y, Y):  
             pixel_.append([ frame_of_pixels_[y, :]])  # splice all rows into pixel_
@@ -90,8 +90,8 @@ def cross_comp(frame_of_pixels_):  # converts frame_of_pixels to frame_of_patter
         dert_ = []  # line-wide i_, p_, d_, m_, mrdn_
         pixel_ = frame_of_pixels_[y, :]
         _i = pixel_[0]
-        # pixel i is compared to prior pixel _i in a row:
-        for i in pixel_[1:]:
+        # cross_comparison:
+        for i in pixel_[1:]:  # pixel i is compared to prior pixel _i in a row:
             d = i - _i  # accum in rng
             p = i + _i  # accum in rng
             m = ave - abs(d)  # for consistency with deriv_comp output, else redundant
@@ -264,7 +264,7 @@ if __name__ == "__main__":
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         assert image is not None, "No image in the path"
         # Main
-        frame_of_patterns_ = cross_comp(image)  # returns Pt_: list of lines
+        frame_of_patterns_ = line_Ps_root(image)  # returns Pt_: list of lines
         if fpickle == 1: # save the dump of the whole data_1D to file
             with open("frame_of_patterns_.pkl", 'wb') as file:
                 pickle.dump(frame_of_patterns_, file)

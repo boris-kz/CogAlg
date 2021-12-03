@@ -50,16 +50,19 @@ def form_Pp_incr(form_Pp_):
     pass
 
 
-def line_recursive(iP_T):  # draft for level-recursive processing starting with line_PPPs
+def line_recursive(p_):  # draft for level-recursive processing, starting with line_patterns
 
-    oP_T = line_PPPs_recursive( line_PPs_root( iP_T))  # oPp_T = line_PPs_root(iP_T); oPpp_T = line_PPPs_root(oPp_T)
+    oP_T = line_PPPs_start( line_PPs_root( line_Ps_root( p_)))
+    # oPp_T = line_PPs_root(iP_T); oPpp_T = line_PPPs_root(oPp_T)
+    # if pipeline: concatenate p_s across frames for indefinite recursion
 
     return oP_T
 
-def line_PPPs_recursive(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)
+
+def line_PPPs_start(Pp_ttt):  # higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(Pp_ttt)  # before processing
-    Ppp_ttttt = []  # add 4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
+    Ppp_ttttt = []  # add 4-tuple of Pp vars ( 2-tuple of Pppm, Pppd ) to the input
     for Pp_tt, fPd in zip(Pp_ttt, [0, 1]):  # fPd: Pm_ | Pd_
         Ppp_tttt = []
         for param_name, Pp_t in zip(param_names, Pp_tt):  # LPp_ | IPp_ | DPp_ | MPp_
@@ -68,46 +71,47 @@ def line_PPPs_recursive(Pp_ttt):  # higher-level input is nested to the depth = 
                 for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
                     Ppp_tt = []
                     if len(Pp_) > 1:
-                        Ppp_tt.append( comp_P_recursive(Pp_, fPpd))
-                    else:
-                        Ppp_tt.append([])
-            else:  # Pp_t is P, pack it
-                Ppp_ttt.append(Pp_tt)
-            Ppp_tttt.append(Ppp_ttt)
-        Ppp_ttttt.append(Ppp_tttt)
+                        Ppp_tt.append( comp_P_recursive(Pp_ttt, Pp_, fPpd))
+                                       # LPpp( m_,d_), IPpp( m_,d_), DPpp( m_,d_), MPpp( m_,d_)
+                    else: Ppp_tt.append([])  # keep index
+                Ppp_ttt.append(Pp_tt)  # Ppm_, Ppd_
+            else: Ppp_ttt = Pp_t       # Pp_t is P, actual nesting is variable
+            Ppp_tttt.append(Ppp_ttt)   # LPp_, IPp_, DPp_, MPp_
+        Ppp_ttttt.append(Ppp_tttt)     # Pm_, Pd_
 
     return Ppp_ttttt  # 5-level nested tuple of arrays per line:
     # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_ ( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
 
 
-def comp_P_recursive(iP_, fPd):  # cross_comp, sum_rdn, splice, intra, comp_P
+def comp_P_recursive(iP_T, iP_, fPd):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
 
     norm_feedback(iP_)
-    Pdert_t, pdert1_, pdert2_ = cross_comp(iP_, fPd)
+    Pdert_t, pdert1_, pdert2_ = cross_comp_Pp_(iP_, fPd)
     sum_rdn(param_names, Pdert_t, fPd)
-    oP_tt = []  # Pp_tt or deeper
+    oP_T = []  # Pp_tt or deeper if recursion
 
     for param_name, Pdert_ in zip(param_names, Pdert_t):  # param_name: LPp_ | IPp_ | DPp_ | MPp_
         oP_t = []  # pack Ppm, Ppd_, and deeper
         for fPpd in 0, 1:  # fPpd: 0: Ppm_, 1: Ppd_:
             if Pdert_:
-                oP_ = form_Pp_(Pdert_, fPpd)  # oP starts with Pp and may get deeper
+                oP_ = form_Pp_(Pdert_, fPpd)  # oPs start as Pps and may get deeper
                 if (fPd and param_name == "D_") or (not fPd and param_name == "I_"):
                     if not fPpd:
                         splice_Ps(oP_, pdert1_, pdert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                     intra_Pp_(None, oP_, Pdert_, 1, fPpd)  # der+ or rng+
                 # evaluate for recursion
-                oP_M = [Pp.M for Pp in oP_]  # pack this M to evaluate cross_comp between Ppp_s later?
-                if len(oP_) > 1 and oP_M > ave_M:
-                    oPp_ = comp_P_recursive(oP_, fPpd)  # next level recursion
-                    oP_t.append(oPp_)  # the depth of nesting in Pps may increase with recursion
+                oP_M = [Pp.M for Pp in oP_]
+                # oP_M_ += [oP_M] to evaluate cross_core_comp later
+                if len(oP_) > 4 and oP_M > ave_M * 4:  # 4: ave_len_oP_, 4: recursion coef
+                    oPp_T = comp_P_recursive(iP_T, oP_, fPpd)
+                    oP_t.append(oPp_T)  # the depth of nesting in Pps will also increase with recursion
                 else:
                     oP_t.append(oP_)
             else:
                 oP_t.append([])  # preserve index
-        oP_tt.append(oP_t)
+        oP_T.append(oP_t)
 
-    return oP_tt
+    return oP_T
 
 
 def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+elevation (level counter), or 2*elevation?
@@ -123,7 +127,7 @@ def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+ele
                 Ppp_tt = []
                 for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
                     if len(Pp_)>1:
-                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp(Pp_, fPpd)
+                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp_Pp_(Pp_, fPpd)
                         sum_rdn(param_names, Ppdert_t, fPpd)
                         for param_name, Ppdert_ in zip(param_names, Ppdert_t):  # param_name: LPpp_ | IPpp_ | DPpp_ | MPpp_
                             Ppp_t = []
@@ -149,7 +153,6 @@ def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+ele
 ''' 
 Next: 
 - check if line_PPs functions work with line_PPPs,
-- start combining line_PPs_root and line_PPP_root into generic line_root, evaluating nesting in input iP_t for unpacking and repacking,
 - explore possible cross_comp between iP_s of different core params, to the extent that they don't anticorrelate
 '''
 
@@ -157,7 +160,7 @@ def norm_feedback(Pp_ttt):
     # probably recursive norm_feedback here depends on the depth
     pass
 
-def cross_comp(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
+def cross_comp_Pp_(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
 
     LPpdert_, IPpdert_, DPpdert_, MPpdert_, Ppdert1_, Ppdert2_ = [], [], [], [], [], []
 
