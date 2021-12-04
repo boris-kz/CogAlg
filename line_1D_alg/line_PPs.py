@@ -1,8 +1,15 @@
 '''
 line_PPs is a 2nd-level 1D algorithm, its input is P_ formed by the 1st-level line_patterns.
 It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per image row.
+Conversion of line_Ps into line_PPs is manual: initial input formatting does not apply on higher levels
+(initial inputs are filter-defined, vs. mostly comparison-defined for higher levels):
+
++ selective variable-range search_param, forming Pps
++ sum_rdn, xlevel_rdn, splice
++ intra_Pp_ rng+, der+
++ comb_sublayers, comb_subDerts, comp_sublayers
 -
-Subsequent cross-comp between Pps of different params is exclusive of x overlap, where the relationship is already known.
+Cross-comp between Pps of different params is exclusive of x overlap, where the relationship is already known.
 Thus it should be on 3rd level: no Pp overlap means comp between Pps: higher composition, same-type ) cross-type?
 -
 Next, line_PPPs should be formed as a cross-level increment: line_PPPs = increment (line_PPs).
@@ -97,7 +104,7 @@ param_names = ["L_", "I_", "D_", "M_"]
 aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 '''
     Conventions:
-    postfix 't' denotes tuple
+    postfix 't' denotes tuple, multiple ts is a nested tuple
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
