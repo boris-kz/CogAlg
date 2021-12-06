@@ -56,6 +56,7 @@ class CPp(CP):
     _negL = int  # left-most compared distance from Pp.x0
     sublayers = list
     subDerts = list
+    sublevels = list  # levels of composition per generic Pp: P ) Pp ) Ppp...
     rootPp = object  # to replace locals for merging
     # layer1: iL, iI, iD, iM, iRdn: summed P params
 

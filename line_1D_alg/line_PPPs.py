@@ -8,12 +8,20 @@ from line_patterns import *
 from line_PPs import *
 from itertools import zip_longest
 
+'''
+    Conventions:
+    postfix 't' denotes tuple, multiple ts is a nested tuple, 'T' is a nested tuple of unknown depth
+    postfix '_' denotes array name, vs. same-name elements
+    prefix '_'  denotes prior of two same-name variables
+    prefix 'f'  denotes flag
+    capitalized variables are normally summed small-case variables
+'''
 
 def line_recursive(p_):  # draft for level-recursive processing, starting with line_patterns
 
     oP_T = line_PPPs_start( line_PPs_root( line_Ps_root(p_)))
     # oPp_T = line_PPs_root(iP_T); oPpp_T = line_PPPs_root(oPp_T)
-    # if pipeline: concatenate p_s across frames for indefinite recursion
+    # if pipeline: output per P termination, append till min iP_ len, concatenate across frames
 
     return oP_T
 
@@ -21,40 +29,27 @@ def line_recursive(p_):  # draft for level-recursive processing, starting with l
 def line_PPPs_start(Pp_ttt):  # starts level-recursion, higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(Pp_ttt)  # before processing
-    Ppp_ttttt = []  # add 4-tuple of Pp vars ( 2-tuple of Pppm, Pppd ) to the input
+
     for Pp_tt, fPd in zip(Pp_ttt, [0, 1]):  # fPd: Pm_ | Pd_
-        Ppp_tttt = []
-        # cross_core_comp(Pp_tt)  # not needed on this level
         for param_name, Pp_t in zip(param_names, Pp_tt):  # LPp_ | IPp_ | DPp_ | MPp_
-            Ppp_ttt = []
             if isinstance(Pp_t, list):  # Ppt is not P
                 for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
-                    Ppp_tt = []
                     if len(Pp_) > 1:
-                        comp_P_recursive(Pp_ttt, [], Pp_, [], fPpd)  # no iM_ttt and iM_ input yet
-                        # Pp_[:] = Ppp_tt: LPpp(m_,d_), IPpp(m_,d_), DPpp(m_,d_), MPpp(m_,d_), deeper with recursion
-                        '''
-                        below is not needed, Pp_ttt nesting is extended in place?
-                        '''
-                    else: Ppp_tt.append([])  # keep index
-                Ppp_ttt.append(Pp_tt)  # Ppm_, Ppd_
-            else: Ppp_ttt = Pp_t       # Pp_t is P, actual nesting is variable
-            Ppp_tttt.append(Ppp_ttt)   # LPp_, IPp_, DPp_, MPp_
-        Ppp_ttttt.append(Ppp_tttt)     # Pm_, Pd_
+                        comp_Pp_recursive(Pp_ttt, Pp_, fPpd, depth=3)
+                        # or comp_Pp_, recursion eval breadth-first per whole Pp_ttt vs. Pp_?
+                        # forms Ppp_tt: LPpp(m_,d_), IPpp(m_,d_), DPpp(m_,d_), MPpp(m_,d_),
+                        # extends Pp_ttt to P_T: >=5-level tuple of arrays per line:
+                        # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
 
-    return Ppp_ttttt  # 5 or greater- level nested tuple of arrays per line:
-    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
-
-
-def comp_P_recursive(iP_T, iM_T, iP_, iM_, fPd):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
+def comp_Pp_recursive(iP_T, iP_, fPd, depth):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
 
     norm_feedback(iP_)
     Pdert_t, pdert1_, pdert2_ = cross_comp_Pp_(iP_, fPd)
     sum_rdn(param_names, Pdert_t, fPd)
-    oP_tt, oM_tt = [], []  # Pp_tt or deeper if recursion, added per comp_P_recursive
+    oP_tt = []  # Pp_tt or deeper if recursion, added per comp_P_recursive
 
     for param_name, Pdert_ in zip(param_names, Pdert_t):  # param_name: LPp_ | IPp_ | DPp_ | MPp_
-        oP_t, oM_t = [], []  # Ppm, Ppd_
+        oP_t = []  # Ppm, Ppd_
         for fPpd in 0, 1:  # 0: Ppm_, 1: Ppd_
             if Pdert_:
                 oP_ = form_Pp_(Pdert_, fPpd)
@@ -63,56 +58,69 @@ def comp_P_recursive(iP_T, iM_T, iP_, iM_, fPd):  # cross_comp_Pp_, sum_rdn, spl
                         splice_Ps(oP_, pdert1_, pdert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                     intra_Pp_(None, oP_, Pdert_, 1, fPpd)  # der+ | rng+
                 oP_t.append(oP_)
-                oM_t.append( [sum( [Pp.M for Pp in oP_] )] )  # to evaluate for cross_core_comp and recursion
             else:
-                oP_t.append([]); oM_t.append([])  # preserve index
-        oP_tt.append(oP_t); oM_tt.append(oM_t)
-    iP_[:] = oP_tt; iM_[0] = oM_tt  # nesting added per comp_P_recursive, reflected in iP_T, iM_T; iM_ is single-element list for mutability?
+                oP_t.append([])  # preserve index
+        oP_tt.append(oP_t)
+    iP_[:] = oP_tt  # iP_ is in iP_T, so this also increases depth of iP_T.levels?
 
-    cross_core_comp(iP_T, iM_T)  # evaluate recursion with results of cross_core_comp
+    if len(iP_T.levels) < depth:  # maximal vs. current depth in iP_T.levels:
+        iP_T.levels.append([])
+    iP_T.levels[depth].append(oP_tt)
 
-    for param_name, oP_t, oM_t in zip(param_names, oP_tt, oM_tt):  # param_name: LPpp_ | IPpp_ | DPpp_ | MPpp_
-        for fPpd in 0, 1:
-            oP_ = oP_t[fPpd]  # fPpd 0: Ppm_, 1: Ppd_
-            oM = oM_t[fPpd][0]
+    # breadth-first iP_T scan to get all root iP_s at current depth?
+    cross_core_comp(iP_T)  # evaluate recursion with results of cross_core_comp
+
+    for param_name, oP_t in zip(param_names, oP_tt):  # param_name: LPpp_ | IPpp_ | DPpp_ | MPpp_
+        for fPpd, oP_ in enumerate(oP_t):  # Ppm_, Ppd_
             if (fPd and param_name == "D_") or (not fPd and param_name == "I_"):
-                if len(oP_) > 4 and oM > ave_M * 4:  # 1st 4: ave_len_oP_, 2nd 4: recursion coef
-                    comp_P_recursive(iP_T, iM_T, oP_, [oM], fPpd)  # oP nesting increases in recursion
-
-    # return iP_T, iM_T  # for cross_core_comp only?
+                if len(oP_) > 1 and sum([oP.M for oP in oP_]) > ave_M * 4:  # 1st 4: ave_len_oP_, 2nd 4: recursion coef
+                    comp_Pp_recursive(iP_T, oP_, fPpd, depth+1)  # oP nesting increases per recursion
 
 
 # draft, need further discussion
-def cross_core_comp(oP_tt, oPM_tt):  # P_T, M_T
+def cross_core_comp(iP_T):  # oP_tt
 
-    xPp_ttt = [] # cross compare between 4 params, always = 6 elements
-    for j, (_P_t, _PM_t) in enumerate(zip(oP_tt, oPM_tt)):
-        if j+1 < 4: #
-            for P_t, PM_t in zip(oP_tt[j+1:], oPM_tt[j+1:]):
-                xPp_tt = [] # xPp between params
-                for fPd in 0, 1:
-                    _P_ = _P_t[fPd]
-                    P_ = P_t[fPd]
-                    xPp_t = []
-                    for i,(param_name, ave) in enumerate(zip(param_names, aves)):
-                        xpdert_ = []
-                        for _P in _P_:
-                            for P in P_:
-                                # probably wrong but we need this evaluation, add in PM for evaluation?
-                                if _P.M + P.M > (_P.Rdn + P.Rdn) * ave:
-                                    _param = getattr(_P,param_name[0])
-                                    param = getattr(P,param_name[0])
-                                    xpdert = comp_par(_P, _param, param, param_name, ave)
-                                    xpdert_.append(xpdert)
-                        if len(xpdert_)>1:
-                            xPp_ = form_Pp_(xpdert_, fPd)
-                        else: xPp_ = []
-                        xPp_t.append(xPp_)
-                    xPp_tt.append(xPp_tt)
-                xPp_ttt.append(xPp_tt)
-        # eval by PM_s for cross_core_comp between P_s, need to compute one-to-one rdn?
+    xPp_ttt = [] # cross compare between 4 params, always = 6 elements if call from root function
+    if len(iP_T) == 4: # each element in iP_T is from one of the param
+        for j, _P_t in enumerate(oP_T):
+            if j+1 < 4: # always < 4 due to there are 4 params
+                for P_t in zip(oP_T[j+1:]):
+                    xPp_tt = [] # xPp between params
+                    for fPd in 0, 1:
+                        _P_ = _P_t[fPd]
+                        P_ = P_t[fPd]
+                        if isinstance(_P_, list) and isinstance(_P_[0], CPp) and \
+                           isinstance(P_, list) and isinstance(P_[0], CPp):
+
+                            _M = sum([_P.M for _P in _P_])
+                            M = sum([P.M for P in P_])
+                            xPp_t = []
+                            for i,(param_name, ave) in enumerate(zip(param_names, aves)):
+                                xpdert_ = []
+                                for _P in _P_:
+                                    for P in P_:
+                                        # probably wrong but we need this evaluation, add in PM for evaluation?
+                                        if _P.M + P.M + _M + M > (_P.Rdn + P.Rdn) * ave:
+                                            _param = getattr(_P,param_name[0])
+                                            param = getattr(P,param_name[0])
+                                            xpdert = comp_par(_P, _param, param, param_name, ave)
+                                            xpdert_.append(xpdert)
+                                if len(xpdert_)>1:
+                                    xPp_ = form_Pp_(xpdert_, fPd)
+                                else: xPp_ = []
+                                xPp_t.append(xPp_)
+                            xPp_tt.append(xPp_tt)
+
+                        else: # there are deeper depth Pp, call cross_core_comp again?
+                            # not quite sure on here yet
+                            pass
+                        xPp_ttt.append(xPp_tt)
+    else:
+        for iP_t in iP_T: # 2 elements iP_T, each element with different fPd, call cross_core_comp again, next depth should be 4 elements
+            xPp_ttt.append(cross_core_comp(iP_t))
 
 
+    return xPp_ttt
 
 def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+elevation (level counter), or 2*elevation?
 

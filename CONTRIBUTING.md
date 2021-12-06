@@ -53,6 +53,8 @@ Kok Wei Chee, $14200, team developer
 
 2021:
 
+Many thanks to Chris Sun for his attempts to find collaborators!
+
 Kok Wei Chee, $20,800, lead developer, January-November
 
 Khanh Nguyen, $5000, team developer, April-October
