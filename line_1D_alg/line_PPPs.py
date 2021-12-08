@@ -26,47 +26,23 @@ def line_recursive(p_):  # draft for level-recursive processing, starting with l
     return oP_T
 
 
-def comp_Pp_recursive(M, P_T):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
+def comp_Pp_recursive(iP_T, iP_, depth, fPd):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
 
-    norm_feedback(P_T)
-    if len(P_T) > 3: cross_core_comp(P_T)  # eval cross-comp of different core param P_s in each sublevel
+    # iP_T is last sublevel in iP_T_,
+    # iP_ is a fully unpacked element in iP_T deepest 2-tuple (always Pm_, Pd_)
 
-    for Pp_t in P_T[-1]:  # comp_Pp_ only in the last sublevel
-        if len(P_T) % 2:  # odd max depth:
-            for Pp_, fPd in zip(Pp_t, [0, 1]):  # fPd: Pm_ | Pd_
-                if len(Pp_) > 1 and M[0] > ave_M:
-                    P_T.append([ comp_Pp_(Pp_, M, fPd) ])  # add oP_tt_ as two new levels of P_T
+    norm_feedback(iP_)
+    if depth > 3: cross_core_comp(iP_T)  # eval cross-comp of different core param P_s in last sublevel
+    oP_tt = comp_Pp_(iP_, fPd)  # comp_Pp_ inside selected element Pp_s of the last sublevel, add oP_tt_ as two new levels of P_T
 
-        else:  # even max depth:
-            for Pp_, param_name in zip(Pp_t, param_names):  # LPp_ | IPp_ | DPp_ | MPp_
-                if isinstance(Pp_, list) and M[0] > ave_M:  # Ppt is not P
-                    P_T.append([ comp_Pp_(Pp_, M, fPd) ])  # add oP_tt_ as two new levels of P_T
+    for oP_t, param_name in zip(oP_tt, param_names):
+        for oP_, fPd in zip(oP_t, [0, 1]):
+            if len(oP_) > 1 and sum([oP.M for oP in oP_]) > ave_M:
+                comp_Pp_recursive(iP_T, oP_, depth+2, fPd)  # with increased nesting in P_T
 
-    # probably wrong, just a draft:
-    if max([ len for len in len(P_T[-1][0]) ]) and M[0] > ave_M:
-        comp_Pp_recursive(M, P_T)  # with increased nesting in P_T
-    ''' 
-    old:
-    odd = True  # 2-tuple, else 4-tuple
-    depth = 0
-    for sublevel in P_T:  
-        for Pp_t in sublevel:
-            if odd:
-                for Pp_, fPd in zip(Pp_t, [0, 1]):  # fPd: Pm_ | Pd_
-                    if len(Pp_) > 1 and M[0] > ave_M:
-                        Pp_[:] = comp_Pp_(Pp_, M, fPd)  # replace Pp_ with oP_tt
-            else:
-                for Pp_, param_name in zip(Pp_t, param_names):  # LPp_ | IPp_ | DPp_ | MPp_
-                    if isinstance(Pp_, list) and M[0] > ave_M:  # Ppt is not P
-                        Pp_[:] = comp_Pp_(Pp_, M, fPd)
-        odd=~odd
-        depth+=1  # if needed
-    '''
 
 def comp_Pp_(iP_, M, fPd):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
     # append output to P_T
-
-    norm_feedback(iP_)
 
     Pdert_t, pdert1_, pdert2_ = cross_comp_Pp_(iP_, fPd)
     sum_rdn(param_names, Pdert_t, fPd)
