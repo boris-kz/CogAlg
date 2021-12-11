@@ -1,6 +1,6 @@
 '''
 line_PPs is a 2nd-level 1D algorithm, its input is P_ formed by the 1st-level line_patterns.
-It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per image row.
+It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per row in the image.
 Conversion of line_Ps into line_PPs is manual: initial input formatting does not apply on higher levels
 (initial inputs are filter-defined, vs. mostly comparison-defined for higher levels):
 
@@ -16,7 +16,7 @@ Next, line_PPPs should be formed as a cross-level increment: line_PPPs = increme
 This increment will be made recursive: we should be able to automatically generate 3rd and any n+1- level alg:
 line_PPPPs = increment (line_PPPs), etc. That will be the hardest and most important part of this project
 -
-Pp is a graph consisting of pderts: each has a node (P) + right edge (derivatives).
+Pp is a 1D graph consisting of pderts: each has a node (P) + right edge (derivatives).
 pdert is P + 1st right match, diff, + intermediate negM, negL. If 1st right match: pdert is positive, else: negative.
 So, positive Pp has negative-m 1st and last pderts, and positive pderts-m in between.
 In negative pderts that edge doesn't connect to another node, but we can extend the range of search for it.
@@ -28,8 +28,8 @@ sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
 import numpy as np
 from copy import deepcopy
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
-from line_patterns import *
-from line_PPPs import line_PPPs_root
+from line_Ps import *
+# from line_PPPs import line_PPPs_root
 
 class Cpdert(ClusterStructure):
     # P param dert
@@ -106,39 +106,38 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
+    (usually the nesting is implicit, actual structure is flat list)
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
     capitalized variables are normally summed small-case variables
 '''
 
-def line_PPs_root(P_t):  # P_t= Pm_, Pd_;  higher-level input is nested to the depth = 2*elevation (level counter), or 2^elevation?
+def line_PPs_root(P_t):  # P_t = Pm_, Pd_;  higher-level input is implicitly nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(P_t)  # before processing
-    Pp_ttt = []
+    Pp_ttt = []  # output: 16-tuple of Pp_s per line, nested in 3 levels: Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_)))
 
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 1:
-            Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-            sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert
+            Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_ (tuples of derivatives per P param)
+            sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert, to eval for deeper processing
             Pp_tt = []
             for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
                 Pp_t = []
-                for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_: more closely related than Pp_s of different params
+                for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_: more anti-correlated than Pp_s of different params
                     Pp_ = form_Pp_(Pdert_, fPpd)
                     if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                         if not fPpd:
                             splice_Ps(Pp_, dert1_, dert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                        intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+
+                        intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+ per Pp
                     Pp_t.append(Pp_)   # Ppm_, Ppd_
                 Pp_tt.append(Pp_t)   # LPp_, IPp_, DPp_, MPp_
             Pp_ttt.append(Pp_tt)   # Pm_, Pd_
         else:
             Pp_ttt.append(P_)  # Pps are not formed
-        # test a call to 3rd-level draft:
-        line_PPPs_root(Pp_ttt)
 
-    return Pp_ttt  # 3-level nested tuple per line: Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_)))
+    return Pp_ttt  # flat 16-tuple vs. 3-level nested tuple per line: Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_)))?
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
@@ -295,7 +294,7 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redun
                 for pdert in Pp.pdert_:
                     Pp.dert_ += pdert.P.dert_  # if Pp.dert_: spliced P, summed P params are primary, other Pp params are low-value
         '''
-        no splice(): fine-grain eval per P triplet is too expensive?
+        no splice(): fine-grained eval per P triplet is too expensive?
         '''
 
 def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
@@ -372,7 +371,7 @@ def search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft): 
     comb_M = idert.m
     while comb_M > 0 and j < len(Idert_)-1 and  j >= 0:  # may continue outside Pp.pdert_, no merge: Pps overlap?
 
-        cdert = Idert_[j]
+        cdert = Idert_[j]  # current dert
         if fleft:  # search left
             ldert = cdert; rdert = idert  # left and right derts
         else:  # search right

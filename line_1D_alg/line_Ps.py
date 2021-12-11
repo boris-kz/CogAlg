@@ -65,46 +65,31 @@ init_y = 500  # starting row, set 0 for the whole frame, mostly not needed
 halt_y = 502  # ending row, set 999999999 for arbitrary image
 '''
     Conventions:
-    postfix 't' denotes tuple
+    postfix 't' denotes tuple, multiple ts is a nested tuple
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
     capitalized variables are normally summed small-case variables
 '''
 
-def line_Ps_root(frame_of_pixels_):  # Ps: patterns, converts frame_of_pixels to frame_of_patterns, each pattern may be nested
+def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_patterns, each pattern may be nested
 
-    Y, X = frame_of_pixels_.shape  # Y: frame height, X: frame width
-    frame_of_patterns_ = []
-    '''
-    if line_Ps_root_spliced:  # process all image rows as a single line, vertically consecutive and preserving horizontal direction:
-        pixel_=[]; dert_=[]  
-        for y in range(init_y, Y):  
-            pixel_.append([ frame_of_pixels_[y, :]])  # splice all rows into pixel_
-        _i = pixel_[0]
-    else:
-    '''
-    for y in range(init_y, min(halt_y, Y)):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
+    # initialization:
+    dert_ = []  # line-wide i_, p_, d_, m_, mrdn_
+    _i = pixel_[0]
+    # cross_comparison:
+    for i in pixel_[1:]:  # pixel i is compared to prior pixel _i in a row:
+        d = i - _i  # accum in rng
+        p = i + _i  # accum in rng
+        m = ave - abs(d)  # for consistency with deriv_comp output, else redundant
+        mrdn = m + ave < abs(d)
+        dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
+        _i = i
+    # form patterns:
+    Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
+    Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
 
-        # initialization:
-        dert_ = []  # line-wide i_, p_, d_, m_, mrdn_
-        pixel_ = frame_of_pixels_[y, :]
-        _i = pixel_[0]
-        # cross_comparison:
-        for i in pixel_[1:]:  # pixel i is compared to prior pixel _i in a row:
-            d = i - _i  # accum in rng
-            p = i + _i  # accum in rng
-            m = ave - abs(d)  # for consistency with deriv_comp output, else redundant
-            mrdn = m + ave < abs(d)
-            dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
-            _i = i
-        # form patterns:
-        Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
-        Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
-
-        frame_of_patterns_.append((Pm_, Pd_))  # add line of patterns to frame of patterns, skip if cross_comp_spliced
-
-    return frame_of_patterns_  # frame of patterns, an input to level 2
+    return [Pm_, Pd_]  # P_t: input to level 2
 
 
 def form_P_(rootP, dert_, rdn, rng, fPm):  # accumulation and termination, rdn and rng are pass-through intra_P_
@@ -251,37 +236,21 @@ if __name__ == "__main__":
     # Read image
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
-    fpickle = 2  # 0: load; 1: dump; 2: no pickling
     render = 0
-    fline_PPs = 0
+    fline_PPs = 1
     start_time = time()
-    if fpickle == 0:
-        # Read frame_of_patterns from saved file instead
-        with open("frame_of_patterns_.pkl", 'rb') as file:
-            frame_of_patterns_ = pickle.load(file)
-    else:
-        # Run functions
-        image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
-        assert image is not None, "No image in the path"
-        # Main
-        frame_of_patterns_ = line_Ps_root(image)  # returns Pt_: list of lines
-        if fpickle == 1: # save the dump of the whole data_1D to file
-            with open("frame_of_patterns_.pkl", 'wb') as file:
-                pickle.dump(frame_of_patterns_, file)
+    from line_PPPs import line_recursive
 
-    if render:
-        image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
-        plt.figure(); plt.imshow(image, cmap='gray'); plt.show()  # show the image below in gray
+    # Run functions
+    image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
+    assert image is not None, "No image in the path"
 
-    if fline_PPs:  # debug line_PPs
-        from line_PPs import *
-        frame_Pp_ttt_ = []
-
-        for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
-            Pp_ttt = line_PPs_root(P_t)
-            frame_Pp_ttt_.append(( Pp_ttt ))  # 3-level nested tuple per line: Pm_, Pd_( Ppm_, Ppd_( LPp_, IPp_, DPp_, MPp_)))
-
-        # draw_PP_(image, frame_Pp_t)  # debugging
+    # Main
+    Y, X = image.shape  # Y: frame height, X: frame width
+    frame_P_ = []
+    for y in range(init_y, min(halt_y, Y)):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
+        pixel_ = image[y,:]
+        frame_P_.append( line_recursive( pixel_))
 
     end_time = time() - start_time
     print(end_time)

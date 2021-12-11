@@ -1,17 +1,18 @@
 '''
 3rd-level operations forming Ppps in Ppp_ttttt (5-level nested tuple of arrays of output patterns: 1 + 2 * 2(elevation-1)),
-and cross-level recursion in comp_P_recursive, forming Pps (param patterns) of incremental scope and depth,
+and cross-level recursion in level_recursion, forming Pps (param patterns) of incremental scope and depth,
 in output P_T of depth = 1 + 2 * elevation-1 (last T denotes nested tuple of unknown depth)
 '''
 
 from collections import deque
-from line_patterns import *
+from line_Ps import *
 from line_PPs import *
 from itertools import zip_longest
 
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple, 'T' is a nested tuple of unknown depth
+    (usually the nesting is implicit, actual structure is flat list)
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
@@ -25,11 +26,11 @@ def line_recursive(p_):
     if pipeline: output per P termination, append till min iP_ len, concatenate across frames
     '''
     P_ttt = line_PPs_root( line_Ps_root(p_))
-    P_T_ = level_recursion( [P_ttt], depth=3)
+    P_T_ = level_recursion( [P_ttt] )
 
     return P_T_
 
-def level_recursion(P_T_, depth):  # P_T is single list of new P_s, implicitly nested to the depth = 1 + 2*elevation
+def level_recursion(P_T_):  # P_T is single list of new P_s, implicitly nested to the depth = 1 + 2*elevation
 
     nextended = 0  # number of P_s with extended depth
     oP_T = []  # preserve input level
@@ -38,20 +39,22 @@ def level_recursion(P_T_, depth):  # P_T is single list of new P_s, implicitly n
     for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__, use compound flags + names for specific conditions?
         if len(iP_) > 1 and sum([P.M for P in iP_]) > ave_M:
             nextended += 1
-            oP_T.append( comp_form_P_( iP_T, iP_, depth=3, fPd = i%2) )  # add oP_tt_ as 8 P_s: two new nesting levels
+            oP_T.append( comp_form_P_( iP_T, iP_, fPd = i%2) )  # add oP_tt_ as 8 P_s: two new nesting levels
         else:
             oP_T += [[],[],[],[],[],[],[],[]]  # better to add count of missing prior P_s to each P_?
+            # nested types: fPd,param, fPd,param.: alternate in 2-P_ ) 8-P_ ) 16-P_ ) 64-P_.. cycles,
+            # compute from i for cross_core_comp?
     P_T_.append(oP_T)  # add to the hierarchy of levels
 
-    if len(iP_T) / nextended < 4:  # ave_extend_ratio
-        level_recursion(P_T_, depth+2)  # increased nesting in P_T, probably not needed
+    if len(iP_T) / max(nextended,1) < 4:  # ave_extend_ratio
+        level_recursion(P_T_)  # increased nesting in P_T
 
 
-def comp_form_P_(P_T, P_, depth, fPd):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
+def comp_form_P_(P_T, P_, fPd):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
 
     norm_feedback(P_)  # before processing
-    if depth > 3: cross_core_comp(P_T)  # eval cross-comp of Pp_s in last sublevel iP_T, implicitly nested by all lower hierarchy
-    # better if len(P_T) > 16:
+    if len(P_T) > 16:  # depth > 3
+        cross_core_comp(P_T)  # eval cross-comp of Pp_s in last sublevel iP_T, implicitly nested by all lower hierarchy
 
     Pdert_t, pdert1_, pdert2_ = cross_comp_Pp_(P_, fPd)  # iP_: fully unpacked element in iP_T deepest 2-tuple (always Pm_, Pd_)
     sum_rdn(param_names, Pdert_t, fPd)
@@ -130,7 +133,7 @@ def line_PPPs_start(P_ttt):  # starts level-recursion, higher-level input is nes
             for Pp_, fPpd in zip(Pp_t, [0, 1]):  # fPpd: Ppm_ | Ppd_
                 if len(Pp_) > 1 and sum([Pp.M for Pp in Pp_]) > ave_M:
     '''
-    P_ttt[:] = level_recursion(P_ttt, depth=3)  # add oP_tt_ as two new nesting levels in P_T
+    [P_ttt].append( level_recursion(P_ttt) )  # add oP_tt_ as two new nesting levels in P_T
 
 def compute_depth(l):
     """

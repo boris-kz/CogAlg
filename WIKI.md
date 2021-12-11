@@ -14,9 +14,10 @@ Design and exploration of this algorithm is done in the following sequence:
 **line_1D_alg:**
 
 - [line_patterns](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py) is 1st-level core algorithm for 1D input: horizontal rows of pixels within an image. It forms patterns: line segments with same-sign deviation of difference between pixels, as well as sub-patterns by divisive hierarchical clustering. Sub-patterns are formed by recursive incremental range or incremental derivation cross-comp within selected patterns.  
-- [line_PPs_draft](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_patterns.py) is a draft of 2nd-level 1D algorithm, currently work-in-progress. It cross-compares patterns and forms patterns of patterns (PPs), then performs selective deeper cross-comp within each. It will be a prototype for meta-level: recursive increment in operations per level of composition, for hierarchical cross-comp and agglomerative clustering. 
+- [line_PPs](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_PPs.py) is a 2nd-level 1D algorithm, mostly complete. It cross-compares each parameter of 1st-level patterns and forms Pps: param patterns, which in the aggregate represent patterns of patterns: PPs. It contains extended versions of 1st-level functions, as well as some new ones to handle intra-pattern hierarchy. 
+- [line_PPPs](https://github.com/boris-kz/CogAlg/blob/master/line_1D_alg/line_PPPs.py) is a draft for level-recursion from 3rd level and higher. It forms incrementally higher orders of pattern composition and syntactic complexity, also by cross-comparison and agglomerative clustering. This should be final module of 1D algorithm, indefinitely scalable in the complexity of discoverable patterns, currently our main focus.
 
-1D algorithm is a prototype, exclusively 1D patterns are not terribly informative / predictive in our 4D space-time. But it's the best to start implementing basic principles and operations.
+1D algorithm is a prototype, exclusively 1D patterns are not terribly informative / predictive in our 4D space-time. But it's best to develop basic principles and operations, which can then be converted to work in higher dimensions.
 
 
 **frame_2D_alg:**
