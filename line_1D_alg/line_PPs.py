@@ -1,25 +1,26 @@
 '''
 line_PPs is a 2nd-level 1D algorithm, its input is P_ formed by the 1st-level line_patterns.
 It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per row in the image.
+
+In Pp: P stands for pattern and p for "partial" or "param": L|I|D|M of input P the Pp is formed from.
+So Pp is a pattern of a specific input-P param type: span of same-sign match | diff between same-type params in P_ array.
+This module is line_PPs vs. line_Pps because it forms Pps of all param types, which in combination represent patterns of patterns: PPs.
+
 Conversion of line_Ps into line_PPs is manual: initial input formatting does not apply on higher levels
 (initial inputs are filter-defined, vs. mostly comparison-defined for higher levels):
-
 + selective variable-range search_param, forming Pps
 + sum_rdn, xlevel_rdn, splice
 + intra_Pp_ rng+, der+
 + comb_sublayers, comb_subDerts, comp_sublayers
 -
-Cross-comp between Pps of different params is exclusive of x overlap, where the relationship is already known.
-Thus it should be on 3rd level: no Pp overlap means comp between Pps: higher composition, same-type ) cross-type?
--
-Next, line_PPPs should be formed as a cross-level increment: line_PPPs = increment (line_PPs).
-This increment will be made recursive: we should be able to automatically generate 3rd and any n+1- level alg:
-line_PPPPs = increment (line_PPPs), etc. That will be the hardest and most important part of this project
--
 Pp is a 1D graph consisting of pderts: each has a node (P) + right edge (derivatives).
 pdert is P + 1st right match, diff, + intermediate negM, negL. If 1st right match: pdert is positive, else: negative.
 So, positive Pp has negative-m 1st and last pderts, and positive pderts-m in between.
 In negative pderts that edge doesn't connect to another node, but we can extend the range of search for it.
+-
+Cross-comp between Pps of different params is exclusive of x overlap, where the relationship is already known.
+Thus it should be on 3rd level: no Pp overlap means comp between Pps: higher composition, same-type ) cross-type
+-
 '''
 
 import sys  # add CogAlg folder to system path
@@ -121,7 +122,7 @@ def line_PPs_root(P_t):  # P_t = Pm_, Pd_;  higher-level input is implicitly nes
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 1:
             Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_ (tuples of derivatives per P param)
-            sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert, to eval for deeper processing
+            sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert, to evaluate for deeper processing
             Pp_tt = []
             for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
                 Pp_t = []

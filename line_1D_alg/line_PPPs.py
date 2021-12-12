@@ -36,14 +36,14 @@ def level_recursion(P_T_):  # P_T is single list of new P_s, implicitly nested t
     oP_T = []  # preserve input level
     iP_T = P_T_[-1]
 
-    for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__, use compound flags + names for specific conditions?
+    for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__, use compound flags + names for cross_core_comp?
         if len(iP_) > 1 and sum([P.M for P in iP_]) > ave_M:
             nextended += 1
             oP_T.append( comp_form_P_( iP_T, iP_, fPd = i%2) )  # add oP_tt_ as 8 P_s: two new nesting levels
         else:
             oP_T += [[],[],[],[],[],[],[],[]]  # better to add count of missing prior P_s to each P_?
-            # nested types: fPd,param, fPd,param.: alternate in 2-P_ ) 8-P_ ) 16-P_ ) 64-P_.. cycles,
-            # compute from i for cross_core_comp?
+            # nested types: fPd,params, fPd,params.: alternate in 2-P_) 8-P_) 16-P_) 64-P_.. cycles
+            # thus type = fPd + the number of fPd+param_name pairs = len(oP_T/2) **-8
     P_T_.append(oP_T)  # add to the hierarchy of levels
 
     if len(iP_T) / max(nextended,1) < 4:  # ave_extend_ratio
