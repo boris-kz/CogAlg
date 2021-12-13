@@ -272,7 +272,24 @@ if __name__ == "__main__":
     if render:
         image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         plt.figure(); plt.imshow(image, cmap='gray'); plt.show()  # show the image below in gray
-
+        '''
+        from matplotlib import pyplot as plt
+        import numpy as np
+        img_out_m = np.zeros_like(image, dtype='uint8')
+        img_out_d = np.zeros_like(image, dtype='uint8') 
+        
+        for y, P_t in enumerate(frame_of_patterns_):  # each line_of_patterns is (Pm_, Pd_)
+            for P in P_t[0]:
+                if P.M>0:
+                    img_out_m[y, P.x0:P.x0+P.L] = 255
+                else:
+                    img_out_m[y, P.x0:P.x0+P.L] = 128
+            for P in P_t[1]:
+                if P.M>0:
+                    img_out_d[y, P.x0:P.x0+P.L] = 255
+                else:
+                    img_out_d[y, P.x0:P.x0+P.L] = 128
+        '''
     if fline_PPs:  # debug line_PPs
         from line_PPs import *
         frame_Pp_ttt_ = []

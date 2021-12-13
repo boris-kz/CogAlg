@@ -42,8 +42,14 @@ def level_recursion(P_T_):  # P_T is single list of new P_s, implicitly nested t
             oP_T.append( comp_form_P_( iP_T, iP_, fPd = i%2) )  # add oP_tt_ as 8 P_s: two new nesting levels
         else:
             oP_T += [[],[],[],[],[],[],[],[]]  # better to add count of missing prior P_s to each P_?
-            # nested types: fPd,params, fPd,params.: alternate in 2-P_) 8-P_) 16-P_) 64-P_.. cycles
-            # thus type = fPd + the number of fPd+param_name pairs = len(oP_T/2) **-8
+            '''
+            P_T_: 2P_, 8P_, 16P_, 64P_.,
+            each P_ has unique nested type: fPd + (fPd, param_name) pairs, where n_pairs = math.log( len(P_T)/2, 8)
+            fPd|name per index:
+            2i: 2-step index, 8i: 8-step index, etc., fPd always 0|1, name always 0|1|2|3:
+            fPd = i%2) name = 2i / (8i+1)) fPd = 8i / (16i+1)) name = 16i / (64i+1)) fPd = 64i / (128i+1))...
+            Next step = previous step * 2 ) * 8 pairs?
+            '''
     P_T_.append(oP_T)  # add to the hierarchy of levels
 
     if len(iP_T) / max(nextended,1) < 4:  # ave_extend_ratio
