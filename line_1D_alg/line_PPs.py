@@ -102,7 +102,7 @@ ave_Dave = 100  # summed feedback filter
 ave_dave = 20   # mean feedback filter
 
 # used in search, form_Pp_root, comp_sublayers_, draw_PP_:
-param_names = ["L_", "I_", "D_", "M_"]
+param_names = ["L_", "I_", "D_", "M_"]  # not really needed, we can just use indices?
 aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 '''
     Conventions:
@@ -114,16 +114,16 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
     capitalized variables are normally summed small-case variables
 '''
 
-def line_PPs_root(iP_T):  # P_T is P_t = [Pm_, Pd_];  higher-level input is implicitly nested to the depth = 1 + 2*elevation (level counter)
+def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is implicitly nested to the depth = 1 + 2*elevation (level counter)
 
-    norm_feedback(iP_T)  # before processing
+    norm_feedback(P_t)  # before processing
 
-    oP_T = []  # output: 16-tuple of Pp_s per line
-    for fPd, P_ in enumerate(iP_T):  # fPd: Pm_ or Pd_
+    P_ttt = []  # output is 16-tuple of Pp_s per line, implicitly nested into 3 levels
+    for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 1:
             Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_ (tuples of derivatives per P param)
             sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert, to evaluate for deeper processing
-
+            # P_tt=[] if nested
             for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
                 for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_: more anti-correlated than Pp_s of different params
                     Pp_ = form_Pp_(Pdert_, fPpd)
@@ -131,12 +131,11 @@ def line_PPs_root(iP_T):  # P_T is P_t = [Pm_, Pd_];  higher-level input is impl
                         if not fPpd:
                             splice_Ps(Pp_, dert1_, dert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                         intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+ per Pp
-                    oP_T.append(Pp_)
+                    P_ttt.append(Pp_)  # implicit nesting
         else:
-            # each P_ should form additional 8 P_ in the next level ( * 4 * 2)
-            oP_T.append( [[] for _ in range(8)])  # Pps are not formed, pack empty list to preserve index
+            P_ttt.append( [[] for _ in range(8)])  # pack 8 empty P_s to preserve index
 
-    return [iP_T, oP_T]  # P_T_ contains 1st level and 2nd level output
+    return [P_t, P_ttt]  # P_T_, contains 1st level and 2nd level outputs
 
 
 def line_PPs_nested(P_t):  # P_t = Pm_, Pd_;  higher-level input is implicitly nested to the depth = 1 + 2*elevation (level counter)
@@ -346,10 +345,10 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     ddert_ = []
                     for _pdert, pdert in zip( Pp.pdert_[:-1], Pp.pdert_[1:]):  # or comp abs d, or step=2 for sign match?
                         ddert_ += [comp_par(_pdert.P, _pdert.d, pdert.d, "D_", loc_ave * ave_mD)]  # cross-comp of ds
-                    sub_Ppm_[:] = form_Pp_(ddert_, fPd=True)
+                    sub_Ppm_[:] = form_Pp_(ddert_, fPd=False)
                     sub_Ppd_[:] = form_Pp_(ddert_, fPd=True)
                     if abs(Pp.D) + Pp.M > loc_ave_M * 4:  # 4: looping search cost, diff induction per Pd_'DPpd_, +Pp.iD?
-                        intra_Pp_(Pp, sub_Ppd_, None, hlayers+1, fPd=True)  # recursive der+, no rng+: Pms are redundant?
+                        intra_Pp_(Pp, sub_Ppd_, None, hlayers+1, fPd)  # recursive der+, no rng+: Pms are redundant?
                 else:
                     Pp.sublayers += [[]]  # empty subset to preserve index in sublayer, or increment index of subset?
             else:
@@ -362,7 +361,7 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     rdert_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI)  # comp x variable range, while curr_M
                     sub_Ppm_[:] = form_Pp_rng(rdert_.copy())
                     if Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
-                        intra_Pp_(Pp, sub_Ppm_, rdert_, hlayers+1, fPd=False)  # recursive rng+, no der+ in redundant Pds
+                        intra_Pp_(Pp, sub_Ppm_, rdert_, hlayers+1, fPd)  # recursive rng+, no der+ in redundant Pds
                 else:
                     Pp.sublayers += [[]]  # empty subset to preserve index in sublayer, or increment index of subset?
 

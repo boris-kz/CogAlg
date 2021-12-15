@@ -29,29 +29,29 @@ def line_recursive(p_):
     return level_recursion( line_PPs_root( line_Ps_root(p_)))  # returns P_T_
 
 
-def level_recursion(P_T_):  # P_T_: 2P_, 8P_, 16P_, 64P_., each level is implicitly nested to the depth = 1 + 2*elevation
+def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly nested to the depth = 1 + 2*elevation
 
     nextended = 0  # number of P_s with extended depth
     oP_T = []  # new level: flat list of P_s, to preserve input level
     iP_T = P_T_[-1]
-    ntypes = 1 + 2 * math.log( len(iP_T)/2, 8)  # number of types per P_ in P_T, including (fPd, param_name) pairs = math.log( len(iP_T)/2, 8)
+    ntypes = 1 + 2 * math.log( len(iP_T)/2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
     types = []  # list of fPds and names of len = ntypes
-    step = 1  # n of indices per current type level
+    _step = 1  # n of indices per current level of type, or .5 * 2 to yield initial step=1?
 
     for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__
 
-        while(len(types) < ntypes):
-            # draft: compute unique nested types per P_: fPds + names for cross_core_comp:
-            if len(types) % 2: step *= 2  # add fPd: 0|1
-            else:              step *= 4  # add name index: 0|1|2|3
-            types.append( int( i%step / 2))  # int to round down
+        while( len(types) < ntypes):  # decode unique set of alternating types per P_: [fPd,name,fPd,name..], from index in iP_T:
+            if len(types) % 2:
+                step = _step*4  # add name index: 0|1|2|3
+            else:
+                step = _step*2  # add fPd: 0|1. This is the 1st increment because len(types) starts from 0
+            types.append( int( (i % step) / _step))  # int to round down: type should not change within step
+            _step = step
             '''
             types.append( i%2 )  # fPd1
-            types.append( int(i%8 / 2))  # name1 in param name index
-            types.append( i%16)  # fPd2
-            types.append( int(i%64 / 2))  # name2
-            ...
-            nested types: fPd = i%2) name = 2i / (8i+1)) fPd = 8i / (16i+1)) name = 16i / (64i+1)) fPd = 64i / (128i+1))
+            types.append( int(i%8 / 2))  # name1 in param name index, 2i / (8i+1)?
+            types.append( i%16)  # fPd2, 8i / (16i+1)?
+            types.append( int(i%64 / 2))  # name2: 16i / (64i+1), then fPd = 64i / (128i+1))...
             '''
         if len(iP_) > 1 and sum([P.M for P in iP_]) > ave_M:
             nextended += 1
