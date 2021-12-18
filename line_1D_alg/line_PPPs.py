@@ -27,7 +27,6 @@ def line_recursive(p_):
     '''
     return level_recursion( line_PPs_root( line_Ps_root(p_)))  # returns P_T_
 
-
 def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly nested to the depth = 1 + 2*elevation
 
     nextended = 0  # number of P_s with extended depth
@@ -59,30 +58,29 @@ def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly 
             types.append( int((i/8))  % 2 )     # fPd    
             types.append( int( i%8/2 ))         # param
             types.append( int((i/1))  % 2 )     # fPd
-            
+                
             bottom-up scheme:
             _step = 1  # n of indices per current level of type
             for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__
                 while( len(types) < ntypes):  # decode unique set of alternating types per P_: [fPd,name,fPd,name..], from index in iP_T:
                     if len(types) % 2:
                         step = _step*4  # add name index: 0|1|2|3
-                else:
+                    else:
                     step = _step*2  # add fPd: 0|1. This is the 1st increment because len(types) starts from 0
                 types.append( int( (i % step) / _step))  # int to round down: type should not change within step
                 _step = step
             '''
         types_.append(types)  # parallel to P_T, for zipping
 
-        if len(iP_T) > 16:  # depth > 3
-            xM = cross_core_comp(iP_T, types_, ntypes)  # eval cross-comp of Pp_s in last sublevel iP_T, implicitly nested by all lower hierarchy
-        else: xM = 0
-
-        if len(iP_) > 1 and xM + sum([P.M for P in iP_]) > ave_M:
+        if len(iP_) > 1 and sum([P.M for P in iP_]) > ave_M:
             nextended += 1
             oP_T += comp_form_P_(iP_T, iP_, types)  # add oP_tt_ as 8 P_s: two new nesting levels
         else:
             oP_T += [[] for _ in range(8)]  # add 8 empty P_s, better to add count of missing prior P_s to each P_?
-    P_T_.append(oP_T)  # add to the hierarchy of levels
+
+    cross_core_comp(oP_T, types_, ntypes)  # eval cross-comp of Pp_s in last sublevel iP_T, implicitly nested by all lower hierarchy
+    # oP_T starts at 4th level: len(iP_T)>16, form xM per iP_, append to xM_ per oP_T?
+    P_T_.append(oP_T)  # hierarchy of levels
 
     if len(iP_T) / max(nextended,1) < 4:  # ave_extend_ratio
         level_recursion(P_T_)  # increased implicit nesting in oP_T
@@ -105,7 +103,7 @@ def comp_form_P_(iP_T, P_, types):  # cross_comp_Pp_, sum_rdn, splice, intra, co
                     if not fPpd:
                         splice_Ps(oP_, pdert1_, pdert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                     intra_Pp_(None, oP_, Pdert_, 1, fPpd)  # internal der+ | rng+
-                oP_tt.append(oP_)  # nesting is only implicit
+                oP_tt.append(oP_)  # nesting is implicit
             else:
                 oP_tt.append([])  # preserve index
 
@@ -116,7 +114,6 @@ def cross_core_comp(iP_T, types_, ntypes):  # draft, need further discussion and
     '''
     comp Pp_s across >3 nesting levels in iP_T: common_root_depth - comparands_depth >3, which maps to the distance of >16 Pp_s
     '''
-
     xPp_t = []
     for elevation in range(int(ntypes)):
         if elevation % 2:  # params
