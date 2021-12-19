@@ -1,26 +1,15 @@
 '''
 line_PPs is a 2nd-level 1D algorithm, its input is P_ formed by the 1st-level line_patterns.
 It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per row in the image.
-
 In Pp: P stands for pattern and p for "partial" or "param": L|I|D|M of input P the Pp is formed from.
+-
 So Pp is a pattern of a specific input-P param type: span of same-sign match | diff between same-type params in P_ array.
 This module is line_PPs vs. line_Pps because it forms Pps of all param types, which in combination represent patterns of patterns: PPs.
-
 Conversion of line_Ps into line_PPs is manual: initial input formatting does not apply on higher levels
-(initial inputs are filter-defined, vs. mostly comparison-defined for higher levels):
-+ selective variable-range search_param, forming Pps
-+ sum_rdn, xlevel_rdn, splice
-+ intra_Pp_ rng+, der+
-+ comb_sublayers, comb_subDerts, comp_sublayers
--
-Pp is a 1D graph consisting of pderts: each has a node (P) + right edge (derivatives).
-pdert is P + 1st right match, diff, + intermediate negM, negL. If 1st right match: pdert is positive, else: negative.
-So, positive Pp has negative-m 1st and last pderts, and positive pderts-m in between.
-In negative pderts that edge doesn't connect to another node, but we can extend the range of search for it.
+(initial inputs are filter-defined, vs. mostly comparison-defined for higher levels)
 -
 Cross-comp between Pps of different params is exclusive of x overlap, where the relationship is already known.
 Thus it should be on 3rd level: no Pp overlap means comp between Pps: higher composition, same-type ) cross-type
--
 '''
 
 import sys  # add CogAlg folder to system path
@@ -72,9 +61,6 @@ class CderPp(ClusterStructure):  # for line_PPPs only, if PPP comb x Pps?
     Pp = object
     layer1 = dict  # dert per compared param
     der_sub_H = list  # sub hierarchy of derivatives, from comp sublayers
-
-class CPP(CPp, CderPp):  # obsolete, no Pp grouping in PPs?
-    layer1 = dict
 
 ave = 1  # ave dI -> mI, * coef / var type:
 # no ave_mP: deviation computed via rM  # ave_mP = ave* n_comp_params: comp cost, or n vars per P: rep cost?
@@ -291,9 +277,43 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redun
 
                 for pdert in Pp.pdert_:
                     Pp.dert_ += pdert.P.dert_  # if Pp.dert_: spliced P, summed P params are primary, other Pp params are low-value
+                # intra_P( Pp): re-eval intra_P per spliced P
         '''
         no splice(): fine-grained eval per P triplet is too expensive?
         '''
+# draft:
+def intra_P(P):
+    if P.fPm:
+        if P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
+            rdn+=1; rng+=1
+            sub_Pm_, sub_Pd_ = [], []
+            P.sublayers += [[(rdn, rng, sub_Pm_, sub_Pd_, [], [], [], [] )]]  # 4[]: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+            rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
+            sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPm=True)  # cluster by rm sign
+            sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPm=False)  # cluster by rd sign
+        else:
+            P.sublayers += [[]]  # empty subset to preserve index in sublayer
+    else:  # P is Pd
+        if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
+            rdn+=1; rng+=1
+            sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
+            # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
+            P.sublayers += [[(rdn, rng, sub_Pm_, sub_Pd_, [], [], [], [] )]]  # 4[]: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+            ddert_ = deriv_comp(P.dert_)  # i is d
+            sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPm=True)  # cluster by mm sign
+            sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPm=False)  # cluster by md sign
+        else:
+            P.sublayers += [[]]  # empty subset to preserve index in sublayer
+
+    if rootP and P.sublayers:
+        comb_sublayers = [comb_subset_ + subset_ for comb_subset_, subset_ in
+                          zip_longest(comb_sublayers, P.sublayers, fillvalue=[])
+                          ]
+    if rootP:
+        rootP.sublayers += comb_sublayers  # no return
+    else:
+        return P_  # each P has new sublayers, comb_sublayers is not needed
+
 
 def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
     '''
@@ -350,6 +370,7 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
 
 def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for core I at local ave: lower m and term by match
 
+    # or fixed-rng search_right only, per Pp.M/Pp.L, recursive extension, parallelizable, individual selection is expensive?
     rng_dert_ = deepcopy(Pp.pdert_)  # the input, may be extended
 
     for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
@@ -395,10 +416,17 @@ def search_direction(Pp, idert, rng_dert_, Idert_, j, loc_ave, fleft):  # left o
                 if j > Pp.x0 + Pp.L-1: rng_dert_.append(rdert)
                 j += 1
 
-def join_rng_Pps():  # vs. merge, also removes redundancy, no need to adjust?
+# draft, edits from form_Pp_rng
+def join_rng_Pps(Pp_):  # vs. merge, also removes redundancy, no need to adjust?
 
-    # joined clusters should be appended to Pp.cluster_, not nested?
-    pass
+    for Pp in Pp_:
+        Pp.rdert_ = [Pp.rdert_]  # convert into nested list
+        for rdert in Pp.rdert_:
+            Pp.rdert_ += rdert._Pp.rdert_  # not yet nested, make it recursive:
+            # while Pp is list (or is not CPp):
+            #    for rdert in Pp.rdert_:...
+            Pp_.remove(rdert._Pp)  # redundant to clustered representation, remove with all nesting
+
 
 def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublayer of high-M Pms | high-D Pds, called from intra_Pp_
 
