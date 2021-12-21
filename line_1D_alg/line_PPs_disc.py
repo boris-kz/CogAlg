@@ -104,7 +104,7 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is impli
     norm_feedback(P_t)  # before processing
 
     P_ttt = []  # output is 16-tuple of Pp_s per line, implicitly nested into 3 levels
-    for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
+    for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_, wrong order?
         if len(P_) > 1:
             Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_ (tuples of derivatives per P param)
             sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert, to evaluate for deeper processing
@@ -114,7 +114,7 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is impli
                     Pp_ = form_Pp_(Pdert_, fPpd)
                     if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                         if not fPpd:
-                            splice_Ps(Pp_, dert1_, dert2_, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
+                            splice_Ps(Pp_, dert1_, dert2_, fPd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                         intra_Pp_(None, Pp_, Pdert_, 1, fPpd)  # der+ or rng+ per Pp
                     P_ttt.append(Pp_)  # implicit nesting
         else:
@@ -252,16 +252,16 @@ def sum_rdn_(param_names, Pdert_t, fPd):
 
     # no need to return since rdn is updated in each pdert
 
-def splice_Ps(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
+def splice_Ps(Ppm_, pdert1_, pdert2_, fPd, fPpd):  # re-eval Pps, Pp.pdert_s for redundancy, eval splice Ps
     '''
     Initial P termination is by pixel-level sign change, but resulting separation may not be significant on a pattern level.
     That is, separating opposite-sign patterns are weak relative to separated same-sign patterns, especially if similar.
      '''
     for i, Pp in enumerate(Ppm_):
-        if fPd: V = abs(Pp.D)  # DPpm_ if fPd, else IPpm_
+        if fPpd: V = abs(Pp.D)  # DPpm_ if fPd, else IPpm_
         else: V = Pp.M  # add summed P.M|D?
 
-        if V > ave_M * (ave_D*fPd) * Pp.Rdn * 4 and Pp.L > 4:  # min internal xP.I|D match in +Ppm
+        if V > ave_M * (ave_D*fPpd) * Pp.Rdn * 4 and Pp.L > 4:  # min internal xP.I|D match in +Ppm
             M2 = M1 = 0
             for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D): step=2
             for pdert1 in pdert1_: M1 += pdert1.m  # match(I, _I or D, _D): step=1
@@ -276,7 +276,7 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd):  # re-eval Pps, Pp.pdert_s for redun
 
                 for pdert in Pp.pdert_:
                     Pp.dert_ += pdert.P.dert_  # if Pp.dert_: spliced P, summed P params are primary, other Pp params are low-value
-                intra_P(Pp, rdn=1, rng=1, fPd=fPd)  # re-eval line_Ps' intra_P per spliced P
+                intra_P(Pp, rdn=1, rng=1, fPd=fPd)  # fPd, not fPpd, re-eval line_Ps' intra_P per spliced P
         '''
         no splice(): fine-grained eval per P triplet is too expensive?
         '''
@@ -298,7 +298,6 @@ def intra_P(P, rdn, rng, fPd):  # this really a return to line_Ps
         if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
             rdn+=1; rng+=1
             sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
-            # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
             P.sublayers += [[(rdn, rng, sub_Pm_, sub_Pd_, [], [], [], [] )]]  # 4[]: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
             ddert_ = deriv_comp(P.dert_)  # i is d
             sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPm=True)  # cluster by mm sign
@@ -367,27 +366,40 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
 
     # no return, Pp_ is changed in-place
 
-def search_Idert_(Pp, Idert_, loc_ave):  # extended fixed-rng search-right for core I at local ave: lower m
+def search_Idert_(root_Pp, Idert_, loc_ave):  # extended fixed-rng search-right for core I at local ave: lower m
+    # fixed because it's parallelizable and individual extensions are not worth it
 
-    # fixed because it's parallelizable and individual extensions is more expensive
-    rng_dert_ = deepcopy(Pp.pdert_)  # input
-    rng = int( Pp.M / Pp.L / 4)  # ave_rng
+    rng = int( root_Pp.M / root_Pp.L / 4)  # ave_rng
+    Pp_ = []
+    idert_ = root_Pp.pdert_.copy
+    for idert in idert_: idert .Ppt = []  # clear higher-level ref for current level
 
-    for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
-        j = i + Pp.x0 + 1  # start at step=2, step=1 was in cross-comp
-
+    for i, idert in enumerate(root_Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
+        j = i + root_Pp.x0 + 1  # start at step=2, step=1 was in cross-comp
+        Pp = CPp
         while j-i < rng and j < len(Idert_) - 1:
-            cdert = Idert_[j]  # current dert, with compared P
-            pdert = comp_par(idert.P, idert.i, cdert.i, "I_", loc_ave)
-            # forms pdert.p, pdert.d, pdert.m
-            if pdert.m > 0:
+            # cross-comp:
+            cdert = Idert_[j]  # current dert with compared P
+            idert.p = cdert.i + idert.i  # -> ave i
+            idert.d = cdert.i - idert.i  # difference
+            idert.m = loc_ave - abs(idert.d)  # indirect match
+            if idert.m > 0:
                 if idert.m > ave_M * 4 and idert.P.sublayers[0] and cdert.P.sublayers[0]:  # 4: init ave_sub coef
                     comp_sublayers(idert.P, cdert.P, idert.m)
+                Pp.accum_from(idert, excluded=['x0'])  # Pp params += pdert params
+                Pp.pdert_ += [idert]; idert.Ppt[0] += [Pp]
+
             else:  # idert miss, represent discontinuity:
                 idert.negL += 1
                 idert.negM += idert.m
             j += 1
-    '''
+        if idert.m <= 0:  # add last idert if negative:
+            Pp.accum_from(idert, excluded=['x0'])  # Pp params += pdert params
+            Pp.pdert_ += [idert]; idert.Ppt[0] += [Pp]
+        Pp_.append(Pp)
+
+    return Pp_  # vs. rng_dert_
+'''
     for variable rng:
     for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
         # search right:
@@ -396,11 +408,11 @@ def search_Idert_(Pp, Idert_, loc_ave):  # extended fixed-rng search-right for c
         # search left:
         j = i + Pp.x0 - 1  # start at step=2, step=1 was in cross-comp
         search_direction(Pp, idert, rng_dert_, Idert_, j, loc_ave, fleft=1)
-    '''
-    return rng_dert_
+'''
 
 # draft
 def join_rng_pdert_s(Pp_):  # vs. merge, also removes redundancy, no need to adjust?
+    # if beyond rng, other-Pp' Ps may still match?
 
     for Pp in Pp_:
         Pp.pdert_ = [Pp.pdert_]  # convert into nested list

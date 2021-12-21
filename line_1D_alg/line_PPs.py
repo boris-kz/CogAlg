@@ -373,21 +373,21 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
         rootPp.sublayers += comb_sublayers
 
 
-    def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for core I at local ave: lower m and term by match
+def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for core I at local ave: lower m and term by match
 
-        rng_dert_ = deepcopy(Pp.pdert_)  # may be extended
-        flmiss_ = [1 for _ in Pp.pdert_]  # left_miss: ones the length of Pp.pdert_
+    rng_dert_ = deepcopy(Pp.pdert_)  # may be extended
+    flmiss_ = [1 for _ in Pp.pdert_]  # left_miss: ones the length of Pp.pdert_
 
-        for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
-            # search right:
-            j = i + Pp.x0 + 1  # start at step=2, step=1 was in cross-comp
-            search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft=0)
-            # search left:
-            if flmiss_[i]:  # if idert was not matched as rdert in search right, else it is replaced as idert by left-matching dert
-                j = i + Pp.x0 - 1  # start at step=2, step=1 was in cross-comp
-                search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft=1)
+    for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
+        # search right:
+        j = i + Pp.x0 + 1  # start at step=2, step=1 was in cross-comp
+        search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft=0)
+        # search left:
+        if flmiss_[i]:  # if idert was not matched as rdert in search right, else it is replaced as idert by left-matching dert
+            j = i + Pp.x0 - 1  # start at step=2, step=1 was in cross-comp
+            search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft=1)
 
-        return rng_dert_
+    return rng_dert_
 
 
 def search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft):  # left or right, +rave?
