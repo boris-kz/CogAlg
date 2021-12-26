@@ -386,7 +386,16 @@ def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for co
         if flmiss_[i]:  # if idert was not matched as rdert in search right, else it is replaced as idert by left-matching dert
             j = i + Pp.x0 - 1  # start at step=2, step=1 was in cross-comp
             search_direction(Pp, idert, rng_dert_, Idert_, j, flmiss_, loc_ave, fleft=1)
-
+        '''
+        if no replace by match:
+        for i, idert in enumerate(Pp.pdert_):  # overlapping pderts and +Pps, no -Pps
+            # search right:
+            j = i + Pp.x0 + 1  # start at step=2, step=1 was in cross-comp
+            search_direction(Pp, idert, rng_dert_, Idert_, j, loc_ave, fleft=0)
+            # search left:
+            j = i + Pp.x0 - 1  # start at step=2, step=1 was in cross-comp
+            search_direction(Pp, idert, rng_dert_, Idert_, j, loc_ave, fleft=1)
+        '''
     return rng_dert_
 
 
