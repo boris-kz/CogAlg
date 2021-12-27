@@ -10,6 +10,18 @@ from line_PPs import *
 from itertools import zip_longest
 import math
 
+class CderPp(ClusterStructure):  # if different, PPP comb x Pps?
+    mPp = int
+    dPp = int
+    rrdn = int
+    negM = int
+    negL = int
+    adj_mP = int  # not needed?
+    _Pp = object
+    Pp = object
+    layer1 = dict  # dert per compared param
+    der_sub_H = list  # sub hierarchy of derivatives, from comp sublayers
+
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple, 'T' is a nested tuple of unknown depth
@@ -48,11 +60,11 @@ def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly 
             nsteps += 1
             if nsteps % 2:
                 step /= 8
-            ''' Le 1 
+            ''' Level 1 
             types.append( int((i/8))  % 2 )     # fPd
             types.append( int( i%8 / 2 ))       # param
             types.append( int((i/1))  % 2 )     # fPd
-                Le 2
+                Level 2
             types.append( int((i/64)) % 2 )     # fPd
             types.append( int( i%64/16 ))       # param 
             types.append( int((i/8))  % 2 )     # fPd    
@@ -156,6 +168,10 @@ def cross_core_comp(iP_T, types_, ntypes):  # draft, need further discussion and
                                             else:
                                                 xPp_.append([])
             xPp_t.append(xPp_)
+
+
+def intra_Pp(Pp, fPd):  # this is a rerun of line_PPs
+    pass
 
 # not needed:
 

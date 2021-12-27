@@ -270,15 +270,49 @@ class ClusterStructure(metaclass=MetaCluster):
     def __init__(self, **kwargs):
         pass
 
-    def accum_from(self, other, excluded=()):
+    def accum_from(self, other, excluded=(), ignore_capital=False):
         """Accumulate params from another structure."""
 
         # accumulate base params
         for param in self.numeric_params:
-            if (param not in excluded) and (param in other.numeric_params):
-                p = getattr(self,param)
-                _p = getattr(other,param)
-                setattr(self, param, p+_p)
+
+            if ignore_capital:  # check in additional lower and upper case
+                # check for excluded params
+                check_exclude = 1
+                for exclude in excluded:
+                     if exclude in [param, param.lower(), param.upper()]:
+                         check_exclude = 0
+                         break
+                # check for existance of param in other object
+                check_exist = 0
+                for numeric_param in other.numeric_params:
+                     if numeric_param in [param, param.lower(), param.upper()]:
+                         check_exist = 1
+                         break
+                if check_exclude and check_exist:
+                    # get param from other
+                    if hasattr(other, param):
+                        _p = getattr(other,param)
+                    elif hasattr(other, param.lower()):
+                        _p = getattr(other,param.lower())
+                    elif hasattr(other, param.upper()):
+                        _p = getattr(other,param.upper())
+
+                    # get param from self and set to new accumulated value
+                    if hasattr(self, param):
+                        p = getattr(self,param)
+                        setattr(self, param, p+_p)
+                    elif hasattr(self, param.lower()):
+                        p = getattr(self,param.lower())
+                        setattr(self, param.lower(), p+_p)
+                    elif hasattr(self, param.upper()):
+                        p = getattr(self,param.upper())
+                        setattr(self, param.upper(), p+_p)
+            else:
+                if (param not in excluded) and (param in other.numeric_params):
+                    p = getattr(self,param)
+                    _p = getattr(other,param)
+                    setattr(self, param, p+_p)
 
         # accumulate layers 1 and above
         for layer_num in self.dict_params:
@@ -299,6 +333,36 @@ class ClusterStructure(metaclass=MetaCluster):
                 elif len(_layer)>0: # _layer is not empty but layer is empty
                     setattr(self,layer_num,_layer.copy())
 
+
+    def remove_param(self, other, excluded=()):
+        """Remove params from another structure."""
+        # remove base params
+        for param in self.numeric_params:
+            if (param not in excluded) and (param in other.numeric_params):
+                p = getattr(self,param)
+                _p = getattr(other,param)
+                setattr(self, param, p-_p)
+
+    def merge(self, other, self_instance_name, self_instance, excluded = ()):
+        # accumulate numeric params
+        self.accum_from(other,excluded=excluded)
+
+        for list_param in self.list_params: # list params, such as pdert_, P_, sublayers, subDerts
+            if hasattr(other, list_param):
+
+                self_list = getattr(self,list_param)   # get self list param, such as P_, pdert_ and etc
+                other_list = getattr(other,list_param) # get other list param, such as P_, pdert_ and et
+
+                for other_param in other_list: # append each list param to self, for example other.P_ to self.P_
+                    self_list.append(other_param)
+
+                    # update reference, may add in more class later
+                    # for example update other P.Pp to self Pp
+                    if hasattr(other_param, self_instance_name) and isinstance(self, self_instance):
+                        setattr(other_param, self_instance_name, self)
+
+    def copy(self):
+        return deepcopy(self)
 
 class Cdert(Number): # Ppd and Ppdm might not relevant now, so remove it
     __slots__ = ('i','p','d','m')
@@ -331,11 +395,11 @@ def comp_param(_param, param, param_name, ave):
         ma = ave - abs(da)  # indirect match
         dert = Cdert(i=param, p=param+_param, d=da, m=ma)  # d=None? p=param+_param will sum lists?
     else:  # numeric
-        if param_name == 'L':
+        if param_name == 'L' or param_name == 'L_':
             d = _param/param
         else:
             d = param - _param    # difference
-        if param_name == 'I':
+        if param_name == 'I' or param_name == 'I_':
             m = ave - abs(d)  # indirect match
         else:
             m = min(param,_param) - abs(d)/2 - ave  # direct match
