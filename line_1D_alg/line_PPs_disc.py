@@ -90,7 +90,6 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 '''
 
 def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is implicitly nested to the depth = 1 + 2*elevation (level counter)
-
     norm_feedback(P_t)  # before processing
 
     P_ttt = []  # output is 16-tuple of Pp_s per line, implicitly nested into 3 levels
@@ -366,7 +365,7 @@ def search_Idert_(root_Pp, Idert_, loc_ave, rng):  # extended fixed-rng search-r
     for i, idert in enumerate(idert_):  # form fixed-rng Pps per idert.P, consecutive Pps overlap within rng-1
 
         j = i + root_Pp.x0 + 1  # get compared index in root Idert_, start at step=2 or 1 + prior rng, step=1 was in cross-comp
-        idert.m = idert.d = 0  # reset from rng=1 comp, if no rng comp:
+        idert.m = idert.d = 0  # reset from rng=1 comp, if no rng comp
         Pp = CPp()
         while j - (i + root_Pp.x0 + 1) < rng and j < len(Idert_) - 1:
             # cross-comp within rng:
@@ -388,7 +387,7 @@ def search_Idert_(root_Pp, Idert_, loc_ave, rng):  # extended fixed-rng search-r
             j += 1
         if idert.m <= 0:  # add last idert if negative:
             Pp.accum_from(idert, excluded=['x0'], ignore_capital=True)  # Pp params += pdert params
-            Pp.pdert_ += [idert]; idert.Ppt[0] += [Pp]
+            Pp.pdert_ += [idert]; idert.Ppt[0] = [Pp]  # single root Pp
 
         Pp_ += [Pp]
 
@@ -396,7 +395,7 @@ def search_Idert_(root_Pp, Idert_, loc_ave, rng):  # extended fixed-rng search-r
 
 
 def join_pdert_s(Pp_, rng):  # connect Pp similarity clusters through their common elements,
-    # joined pdert_s include dissimilar elements
+    # joined pdert_s include connected but dissimilar elements
     out_Pp_ = []
 
     while Pp_:
@@ -407,14 +406,8 @@ def join_pdert_s(Pp_, rng):  # connect Pp similarity clusters through their comm
             i += 1
             fjoined = 0
             Pp = Pp_.pop(0)
-            for pdert in Pp.pdert_:
-                if _Pp in pdert.Ppt[0]:  # check for common Pp
-                    '''
-                    for pdert.Ppt[0][0] in [pdert.Ppt[0] for pdert in Pp.pdert_]  # check overlap of 2 Pp_s:
-                        pdert_Pps = []
-                        for pdert in Pp.pdert_: pdert_Pps.extend(pdert.Ppt[0])
-                        check = any(Pp in pdert.Ppt[0] for Pp in pdert_Pps)
-                    '''
+            for pdert in Pp.pdert_:  # single-level in Pp
+                if _Pp is pdert.Ppt[0][0]:  # Pp is _Pp, same for all levels of nesting in _Pp.pdert_
                     # comp Pp.I -> mI, *_Pp.M?
                     _I = getattr(_Pp, param_names[1][0])  # I only, as in comp pdert, other params anti-correlate
                     I = getattr(Pp, param_names[1][0])
