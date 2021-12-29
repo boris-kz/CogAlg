@@ -746,3 +746,40 @@ def splice_eval(__P, _P, P, fPd):  # only for positive __P, P, negative _P tripl
     # splice_value = rel_continuity * rel_similarity
 
     return rel_similarity
+
+
+def join_pdert_s(rPp_, rng):  # cluster rng-overlapping directional rPps by M sign within the overlap
+    out_Pp_ = []  # output clusters
+
+    while rPp_:
+        _Pp = rPp_.pop(0)
+        i = 1  # Pp distance from Pp
+        rng_Pp_ = []  # in rng of _Pp
+        while rPp_ and i < rng-1:  # _Pp and Pp overlap
+            i += 1
+            fjoined = 0
+            Pp = rPp_.pop(0)
+            for pdert in Pp.pdert_:  # single-level in Pp
+                if _Pp is pdert.Ppt[0][0]:  # Pp is _Pp, same for all levels of nesting in _Pp.pdert_
+                    # comp Pp.I -> mI, *_Pp.M?
+                    _I = getattr(_Pp, param_names[1][0])  # I only, as in comp pdert, other params anti-correlate
+                    I = getattr(Pp, param_names[1][0])
+                    d = I - _I  # difference
+                    m = ave - abs(d)  # indirect match
+                    if m > ave_M * 4:  # not sure: p = I + _I, PIdert.p=p, PIdert.d=d, PIdert.m=m
+                        _Pp.accum_from(Pp)
+                        if isinstance(_Pp.pdert_[0], CPp):  # convert to nested list:
+                            _Pp.pdert_ = [_Pp.pdert_]
+                        _Pp.pdert_ += Pp.pdert_  # or _Pp.pdert_[i] += Pp.pdert_ for deeper nesting?
+                        for pdert in Pp.pdert_: pdert.Ppt[0].append(_Pp)
+
+                    fjoined = 0  # may be joined at multiple points?
+                    break
+            if not fjoined:
+                rng_Pp_.append(Pp)  # append the tested but not joined Pp
+
+        Pp_ = rng_Pp_ + rPp_[:]  # rng_Pp.extendleft(Pp_)
+        out_Pp_.append(_Pp)
+    rPp_[:] = out_Pp_[:]  # keep id
+
+    return rPp_
