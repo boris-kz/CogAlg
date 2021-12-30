@@ -337,9 +337,9 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     Pp.sublayers = [[(sub_Ppm_, sub_Ppd_)]]
                     # extend search if high loc_ave, fixed-range: parallelizable, individual selection is not worth the costs:
                     rng = int(Pp.M / Pp.L / 4)  # ave_rng = 4
-                    rPp_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI, rng)  # comp x variable range, while curr_M
-                    sub_Ppm_[:] = join_pdert_s(rPp_.copy(), rng)  # rdert_ contains P+pdert_s that form rng_Pps
-
+                    pre_rPp_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI, rng)  # rng comp, rPp_ is really pre_rPp_ before form_rPp_
+                    rPp_ = form_rPp_(pre_rPp_, rng)
+                    sub_Ppm_[:] = rPp_
                     if Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
                         rdert_ = []
                         for rPp in rPp_: rdert_ += rPp.pdert_
@@ -377,9 +377,8 @@ def search_Idert_(root_Pp, Idert_, loc_ave, rng):  # extended fixed-rng search-r
                 if idert.m > ave_M * 4 and idert.P.sublayers[0] and cdert.P.sublayers[0]:  # 4: init ave_sub coef
                     comp_sublayers(idert.P, cdert.P, idert.m)
                 Pp.accum_from(idert, excluded=['x0'])  # Pp params += pdert params
-                idert.Ppt[0] = Pp; Pp.pdert_ += [idert]
-                idert = idert.copy()  # new instance for Pp.pdert_
-                idert.negL = 0; idert.negM = 0  # p,d,m are replaced by comp, i,P are constant
+                idert.Ppt[0] = [Pp]; Pp.pdert_ += [idert]
+                idert = Cpdert(P=idert.P, Ppt=[[Pp],[]])  # new idert
             else:
                 # idert miss, need to represent discontinuity:
                 idert.negL += 1  # dert scope = negL + 1 + prior rng
@@ -387,45 +386,43 @@ def search_Idert_(root_Pp, Idert_, loc_ave, rng):  # extended fixed-rng search-r
             j += 1
         if idert.m <= 0:  # add last idert if negative:
             Pp.accum_from(idert, excluded=['x0'], ignore_capital=True)  # Pp params += pdert params
-            idert.Ppt[0] = Pp; Pp.pdert_ += [idert]  # single root Pp
+            idert.Ppt[0] = [Pp]; Pp.pdert_ += [idert]  # single root Pp
 
         Pp_ += [Pp]
 
     return Pp_  # vs. rng_dert_
 
 
-def form_rPp_(rPp_, rng):  # cluster rng-overlapping directional rPps by M sign within the overlap
-    out_rPp_ = []  # output clusters
-    x = 0
-    fterm = 1
-    _rPp_ = deque(maxlen=rng)
-    _rPp_.append(rPp_[0])  # wrong, it should be out_rPp initialized with rPp_[0]
+def form_rPp_(pre_rPp_, rng):  # cluster rng-overlapping directional rPps by M sign
+    # ideally, M should be summed within overlap only
+    rPp_ = []  # output clusters
+    distance = 1
 
-    for rPp in rPp_[1:]:  # segment by sign
-        for _rPp in _rPp_:
-            if _rPp.M > 0 and rPp.M > 0:
-        # unfinished below:
-                _rPp.accum_from(rPp)  # accumulate params: L += 1; I += rPp.I; D += rPp.I; M += rPp.I; Rdn += rPp.Rdn+rPp.P.Rdn; pdert_ += [rPp]
-                fterm=0
-                break
-            if fterm and len(_rPp_)==rng:
-                term_rPp(_rPp_.popleft)  # , L, I, D, M, Rdn, x0, ix0, pdert_)
-                L=1; I=rPp.I; D=rPp.D; M=rPp.M; Rdn=rPp.Rdn+rPp.P.Rdn; x0=x; ix0=rPp.P.x0; pdert_=[rPp]  # initialize new out_rPp
-
-        _rPp_.append(rPp)  # maxlen=rng
-    for _rPp in _rPp_.popleft:
-        term_rPp( rPp_, L, I, D, M, Rdn, x0, ix0, pdert_)  # pack last Pp
-    return out_rPp_
+    for pre_rPp in pre_rPp_:
+        if pre_rPp.M > 0:
+            if rPp in locals:
+                # add additions and exclusions:
+                rPp.accum_from(pre_rPp)  # both pre_rPp and rPp.pre_rPp_[-1 |-rng:-1] are positive
+            else:
+                rPp = CPp(pdert_=[pre_rPp])  # add params initialization: rPp.accum_from(pre_rPp)?
+                distance = 1
+        else:
+            distance += 1  # from next pre_rPp
+            if rPp in locals and distance==rng:
+                term_rPp(rPp, rPp_)  # define CrPp to include pre_rPp_?
+                del rPp  # exceeded comp rng, remove from locals
+    return rPp_
 
 
-def term_rPp(Pp_, L, I, D, M, Rdn, x0, ix0, rPp_):
+def term_rPp(rPp, rPp_):  # Pp_, L, I, D, M, Rdn, x0, ix0, rPp_):
+    # add conditional cross-comp between pre_rPp_s?
 
-    Pp_M = M / (L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
-    rPp_M  = M - L * ave_M  # cost incr per pdert representations
-    flay_rdn = Pp_M < rPp_M  # Pp vs rPp_ rdn
-    Pp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=rPp_, sublayers=[[]])
-    for rPp in Pp.rPp_: rPp.Ppt[0] = Pp  # root Pp refs
-    Pp_.append(Pp)
+    Pp_M = rPp.M / (rPp.L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
+    rPp_M  = rPp.M - rPp.L * ave_M  # cost incr per pdert representations
+    rPp.flay_rdn = Pp_M < rPp_M  # Pp vs rPp_ rdn
+    # Pp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=rPp_, sublayers=[[]])
+    for pre_rPp in rPp.pre_rPp_: pre_rPp.Ppt[0] = rPp  # root Pp refs
+    rPp_.append(rPp)
     # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
 
 
