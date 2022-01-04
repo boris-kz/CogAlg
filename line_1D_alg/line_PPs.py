@@ -351,9 +351,32 @@ def intra_Pp_(rootPp, Pdert_, hlayers, fPd):  # evaluate for sub-recursion in li
                 else:
                     Pp.sublayers += []  # empty subset to preserve index in sublayer, or increment index of subset?
 
-        comb_sublayers = [comb_subset_ + subset_ for comb_subset_, subset_ in
-                          zip_longest(comb_sublayers, Pp.sublayers, fillvalue=[])
-                         ]  # splice only the top layer of nesting per sublayer, incrementally nested in deeper sublayers
+        # draft to pack new structure of Pp.sublayers (unpacked version)
+        new_comb_sublayers = []
+        for comb_subset_, subset_ in zip_longest(comb_sublayers, Pp.sublayers, fillvalue=[]):
+            # init current depth
+            sub_Ppm_ = []
+            sub_Ppd_ = []
+
+            # current layer subset is not empty, pack their sub_Ppm and sub_Ppd to layer wide sub_Ppm_ and sub_Ppd_
+            if subset_:
+                sub_Ppm_.append(subset_[0])
+                sub_Ppd_.append(subset_[1])
+            # preserve index, pack empty list
+            else:
+                sub_Ppm_.append([])
+                sub_Ppd_.append([])
+
+            # if combined subset of current layer is not empty, pack current layer sub_Ppm_ and sub_Ppd_ as new element
+            if comb_subset_:
+                comb_subset_[0] += sub_Ppm_
+                comb_subset_[1] += sub_Ppd_
+            # if combined subset of current layer is empty, set them as current layer sub_Ppm_ and sub_Ppd_ as new element
+            else:
+                comb_subset_ = [sub_Ppm_, sub_Ppd_]
+
+            new_comb_sublayers.append(comb_subset_)  # each element is each depth top layer Ppm_ and Ppd_
+        comb_sublayers = new_comb_sublayers
 
     rootPp.sublayers += comb_sublayers  # add new sublayer
     # no return, Pp_ is changed in-place
@@ -363,7 +386,7 @@ def search_Idert_(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-ri
 
     Rdert_ = []
     idert_ = Idert_[rootPp.x0: rootPp.x0 + rootPp.L].copy()  # mapped subset
-    for idert in idert_: idert.Ppt = [[],[]]  # clear higher-level ref for current level; or it's empty in Idert_ anyway?
+    for idert in idert_: idert.Ppt = [[],[]]  # clear higher-level ref for current level; or it's always empty in Idert_?
 
     for i, idert in enumerate(idert_):  # form fixed-rng Pps per idert.P, consecutive Pps overlap within rng-1
 
@@ -402,22 +425,26 @@ def form_rPp_(Rdert_, rng):  # cluster rng-overlapping directional rPps by M sig
     rPp_ = []  # output clusters
     distance = 1
     '''
-    before clustering, need to adjust Rdert.Ms for overlaps between Rderts, 
-    by rdn+=1 for same pderts in lower-M Rdert: 
-    scan overlapping pderts of all Rderts in rng of _Rdert
-    '''
-    # draft
+    adjust Rdert.Ms for overlaps between Rderts, by assigning rdn+=1 to overlapping pderts in lower-M Rdert,
+    currently irrelevant:
     for i, _Rdert in enumerate(Rdert_):
-        for Rdert in Rdert_[i:i+rng]:  # rng overlapped Rderts of _Rdert
-            if _Rdert.M > Rdert.M:  # Rdert M is lower
-                '''
-                This should only be done on overlapping pderts, and the overlap between Rdert and _ Rdert is always partial.
-                So, we need to check the index of those pderts:
-                '''
-                for pdert in Rdert.pdert_: pdert.rdn += 1  # increase rdn of lower M pderts
-            else:  # _Rdert's M is lower
-                for _pdert in _Rdert.pdert_: _pdert.rdn += 1  # increase rdn of lower M pderts
-
+        j = i + 1
+        overlap = rng
+        while overlap > 0:
+            Rdert = Rdert_[j]
+            overlap = rng - (j-i)
+            k = j  # pdert.x0
+            l = 0  # pdert_[i]
+            while k < rng:  # pderts overlap between _Rdert and Rdert
+                pdert = Rdert.pdert_[l]
+                k += pdert.negL+1
+                l += 1
+                if _Rdert.M > Rdert.M:
+                    pdert.rdn += 1  # increase rdn of lower M pderts
+                else:  # _Rdert.M is lower
+                    # find corresponding _pdert is at k-i, currently incorrect:
+                    _Rdert.pdert_[l].rdn += 1
+    '''
     for Rdert in Rdert_:
         if Rdert.M > 0:
             if "rPp" in locals():
