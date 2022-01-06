@@ -89,7 +89,7 @@ def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_
     Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
     Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
 
-    return [Pm_, Pd_]  # P_t: input to level 2
+    return dert_, [Pm_, Pd_]  # input to level 2
 
 
 def form_P_(rootP, dert_, rdn, rng, fPm):  # accumulation and termination, rdn and rng are pass-through intra_P_
