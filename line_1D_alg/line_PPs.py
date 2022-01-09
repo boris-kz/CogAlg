@@ -45,8 +45,9 @@ class CPp(CP):
     negL = int  # in rng_Pps only, summed in L, no need to be separate?
     _negM = int  # for search left, within adjacent neg Ppm only?
     _negL = int  # left-most compared distance from Pp.x0
-    sublayers = list  # lambda: [([],[])]  # nested Ppm_ and Ppd_, include lower composition levels: P ) Pp ) Ppp..
+    sublayers = list  # lambda: [([],[])]  # nested Ppm_ and Ppd_
     subDerts = list  # for comp sublayers
+    # ilevels = list  # input is lower composition levels: P ) Pp ) Ppp.., replace with sublayer[0]
     root = object  # higher Pp, to replace locals for merging
     # layer1: iL, iI, iD, iM, iRdn: summed P params
 
@@ -89,10 +90,10 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
     capitalized variables are normally summed small-case variables
 '''
 
-def line_PPs_root(Pdert_, P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
+def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(P_t)  # before processing
-    root = CPp(pdert_=Pdert_, sublayers=[P_t])  # input sublayer is sublevel
+    root = CPp
     sublayer = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deeper sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
 
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_, wrong order?
@@ -112,10 +113,10 @@ def line_PPs_root(Pdert_, P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input 
                 paramset += [param_md]  # Ppm_, Ppd_
             sublayer += paramset  # Lmd, Imd, Dmd, Mmd
         else: sublayer += []
-    if any(sublayer):
-        root.sublayers.insert(1, sublayer)  # root.sublayers may get deeper in intra_Pp
+        # sublayer is now P_ttt: 3-layer nested tuple
+        root.sublayers.insert(0, sublayer)  # insert because sublayers may get deeper in intra_Pp_
 
-    return root  # contains 1st level and 2nd level outputs
+    return P_t, root  # contains 1st level and 2nd level outputs
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
@@ -316,8 +317,7 @@ def intra_Pp_(rootPp, md_set, hlayers, fPd):  # evaluate for sub-recursion in li
         loc_ave_M = ave_M * Pp.Rdn * hlayers
         if Pp.L > 1 and Pp.M > loc_ave_M:  # min for both forks
             loc_ave_M *= (Pp.M / ave_M) / 2
-            if isinstance(Pp.pdert_[0], Cpdert): iM = sum( [pdert.P.M for pdert in Pp.pdert_])
-            else:                                iM = sum( [rPp.M for rPp in Pp.pdert_])
+            iM = sum( [pdert.P.M for pdert in Pp.pdert_])
             loc_ave = (ave + iM) / 2 * Pp.Rdn * hlayers  # cost per comp
             if fPd:
                 loc_ave *= ave_d; loc_ave_M *= ave_D  # =ave_d?
@@ -338,11 +338,12 @@ def intra_Pp_(rootPp, md_set, hlayers, fPd):  # evaluate for sub-recursion in li
             else:
                 # rng+
                 if Pp.M / Pp.L > loc_ave_M + 4:  # 4: search cost, + Pp.iM?
-                    sub_search_Pp(Pp, fPd=False)
+                    sub_search(Pp, fPd=False)
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
                     # extend search if high loc_ave, fixed-range: parallelizable, individual selection is not worth the costs:
                     rng = int(Pp.M / Pp.L / 4)  # ave_rng = 4
+                    # rootPp.pdert_ would be Rdert when hlayers >= 3, get their Rdert.sub_dert_ as Idert_ instead? But the mapping will be wrong
                     Rdert_ = search_Idert_(Pp, rootPp.pdert_.copy(), loc_ave * ave_mI, rng)  # each Rdert contains fixed-rng pdert_
                     rPp_ = form_rPp_(Rdert_, rootPp, rng)
                     sub_Ppm_[:] = rPp_
@@ -386,7 +387,7 @@ def search_Idert_(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-ri
 
         j = i + rootPp.x0 + 1  # get compared index in root Idert_, start at step=2 or 1 + prior rng, step=1 was in cross-comp
         idert.m = idert.d = 0  # reset from rng=1 comp, if no rng comp
-        Rdert = Cpdert()
+        Rdert = Cpdert(P=idert.P)  # vs. ave sub_dert_ Ps: overlaps
         while j - (i + rootPp.x0 + 1) < rng and j < len(Idert_) - 1:
             # cross-comp within rng:
             cdert = Idert_[j]  # current dert with compared P
@@ -398,7 +399,7 @@ def search_Idert_(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-ri
                     comp_sublayers(idert.P, cdert.P, idert.m)
                 Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 idert.Ppt[0] = [Rdert]; Rdert.sub_dert_ += [idert]
-                idert = Cpdert(P=idert.P, Ppt=[[Rdert.Ppt],[]])  # new idert
+                idert = Cpdert(P=idert.P, Ppt=[[Rdert.Ppt],[]])  # new idert, not sure about Ppt=[[Rdert.Ppt]
             else:
                 # idert miss, need to represent discontinuity:
                 idert.negL += 1  # dert scope = negL + 1 + prior rng
@@ -406,7 +407,6 @@ def search_Idert_(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-ri
             j += 1
         if idert.m <= 0:  # add last idert if negative:
             Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
-            Rdert.L += 1
             idert.Ppt[0] = Rdert; Rdert.sub_dert_ += [idert]  # single root Pp
 
         Rdert_ += [Rdert]
@@ -419,10 +419,10 @@ def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by
     distance = 1
 
     for Rdert in Rdert_:
-        if Rdert.M > 0:
+        if Rdert.m > 0:
             if "rPp" in locals():
                 # additions and exclusions, exclude overlap? or individual vars accum and init is clearer?
-                rPp.accum_from(Rdert)  # both Rdert and any of Rdert_[-rng:-1] are positive
+                rPp.accum_from(Rdert, ignore_capital=True)  # both Rdert and any of Rdert_[-rng:-1] are positive
                 rPp.L += 1; rPp.pdert_ += [Rdert]
             else:
                 rPp = CPp(pdert_=[Rdert], root=root)
@@ -438,6 +438,7 @@ def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by
         term_rPp(rPp, rPp_)
     '''
     currently not used, but Rdert should be accumulated in both directions, with overlap?    
+    it should be per scope, not be per P, thus bilateral in rng, partial rng for middle inputs?
     adjust Rdert.Ms for overlaps between Rderts, by assigning rdn+=1 to overlapping pderts in lower-M Rdert:
     
     for i, _Rdert in enumerate(Rdert_):
@@ -467,19 +468,19 @@ def term_rPp(rPp, rPp_):  # Pp_, L, I, D, M, Rdn, x0, ix0, rPp_):
     Pp_M = rPp.M / (rPp.L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
     rPp_M  = rPp.M - rPp.L * ave_M  # cost incr per pdert representations
     rPp.flay_rdn = Pp_M < rPp_M  # Pp vs rPp_ rdn
-    # rPp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=rPp_)
+    # rPp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=Rdert_)
     for Rdert in rPp.pdert_:  # rPp.pdert_ is Rdert_
-        Rdert.root = rPp  # root is Ppt
+        Rdert.root = rPp
     rPp_.append(rPp)
     # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
 
 
 def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublayer of high-M Pms | high-D Pds, called from intra_Pp_
 
-    for pdert in rootPp.pdert_:  # or use Idert_?
+    for pdert in rootPp.pdert_:  # vs. Idert_
         P = pdert.P
         if P.sublayers[0]:  # not empty sublayer
-            subset = P.sublayers[0][0]  # single top sublayer subset
+            subset = P.sublayers[0]  # or 2-level subset?
             for fsubPd, sub_P_ in enumerate([subset[2], subset[3]]):  # sub_Pm_, sub_Pd_
                 if len(sub_P_) > 2 and ((fPd and abs(P.D) > ave_D * rootPp.Rdn) or (P.M > ave_M * rootPp.Rdn)):
                     # + pdert.m + sublayer.Dert.M?
@@ -491,7 +492,6 @@ def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublaye
                         param_md = []
                         for fPpd in 0, 1:
                             sub_Pp_ = form_Pp_(sub_Pdert_, fPpd)
-
                             param_md.append(sub_Pp_)
                             if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                                 if not fPpd:
@@ -502,42 +502,7 @@ def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublaye
                     subset[6 + fsubPd].append(paramset)  # sub_Ppm_tt and sub_Ppd_tt
                     # deeper comp_sublayers is selective per sub_P
 
-# draft
-def sub_search_Pp(Pp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublayer of high-M Pms | high-D Pds, called from intra_Pp_
-
-    # need further discussion
-    # all Rdert.root would be actually = Pp itself, so i think no need to loop Pp.pdert_ like we did for sub_search
-    if Pp.root.sublayers:  # not empty sublayer
-        subset = Pp.root.sublayers[0]  # single top sublayer subset
-        for fsubPd, sub_Pp_ in enumerate([subset[0], subset[1]]):  # sub_Ppm_, sub_Ppd_
-            # we need >2 to form at least 2 pderts
-            if len(sub_Pp_) > 2 and ((fPd and abs(Pp.root.D) > ave_D * Pp.Rdn) or (Pp.root.M > ave_M * Pp.Rdn)):
-
-                # cross_comp sub_Pp_ and follow the same steps?
-                # but the same workflow will not compatible to Pp now, since it was made for P previously
-                '''
-                # + pdert.m + sublayer.Dert.M?
-                sub_Pdert_t, dert1_, dert2_ = cross_comp(sub_P_, fsubPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-                sub_rdn_t = sum_rdn_(param_names, sub_Pdert_t, fsubPd)
-                paramset = []
-                # Pdert_-> Pp_:
-                for param_name, sub_Pdert_ in zip(param_names, sub_Pdert_t):
-                    param_md = []   
-                    for fPpd in 0, 1:
-                        sub_Pp_ = form_Pp_(sub_Pdert_, fPpd)
-                        param_md.append(sub_Pp_)
-                        if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
-                            if not fPpd:
-                                splice_Ps(sub_Pp_, dert1_, dert2_, fPd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                            rootPp = CPp(pdert_=rootPp.pdert_, sublayers=[param_md])
-                            intra_Pp_(rootPp, param_md, sub_Pdert_, 1, fPpd)  # der+ or rng+
-                    paramset.append(param_md)
-                subset[6 + fsubPd].append(paramset)  # sub_Ppm_tt and sub_Ppd_tt
-                # deeper comp_sublayers is selective per sub_P
-                '''
-
-
-
+# yet to be updated
 def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if positional m: mx0?
     # replace root_v with root_vt: separate evaluations?
 
