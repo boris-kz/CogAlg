@@ -47,6 +47,7 @@ class CP(ClusterStructure):
     Rdn = int  # mrdn counter
     x0 = int
     dert_ = list  # contains (i, p, d, m, mrdn)
+    subset = list  # 1st sublayer' rdn, rng, xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
     # for layer-parallel access and comp, ~ frequency domain, composition: 1st: dert_, 2nd: sub_P_[ dert_], 3rd: sublayers[ sub_P_[ dert_]]:
     sublayers = list  # multiple layers of sub_P_s from d segmentation or extended comp, nested to depth = sub_[n]
     subDertt_ = list  # m,d' [L,I,D,M] per sublayer, conditionally summed in line_PPs
@@ -134,26 +135,25 @@ def intra_P_(rootP, P_, rdn, rng, fPm):  # recursive cross-comp and form_P_ insi
                 '''
                 rdn+=1; rng+=1
                 sub_Pm_, sub_Pd_ = [], []
-                P.sublayers += [[(rdn, rng, sub_Pm_, sub_Pd_, [], [], [], [] )]]  # 4[]: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+                P.subset = rdn, rng, [],[],[],[]  # []s: future 1st sublayer' xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+                P.sublayers += [sub_Pm_, sub_Pd_]
                 rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
                 sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPm=True)  # cluster by rm sign
                 sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPm=False)  # cluster by rd sign
-            else:
-                P.sublayers += [[]]  # empty subset to preserve index in sublayer
+            # else: P.sublayers += []  # empty subset to preserve index in sublayer
         else:  # P is Pd
             if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
                 # no min(abs(P.D), abs(P.D) * rel_adj_M): adj_M is not from single P, ave_adj_M is represented in ave_D?
                 rdn+=1; rng+=1
                 sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
-                # brackets: 1st: param set, 2nd: sublayer concatenated from several root_Ps, 3rd: hierarchy of sublayers:
-                P.sublayers += [[(rdn, rng, sub_Pm_, sub_Pd_, [], [], [], [] )]]  # 4[]: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+                P.subset = rdn, rng, [],[],[],[]  # []s: future 1st sublayer' xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+                P.sublayers += [sub_Pm_, sub_Pd_]
                 ddert_ = deriv_comp(P.dert_)  # i is d
                 sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPm=True)  # cluster by mm sign
                 sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPm=False)  # cluster by md sign
-            else:
-                P.sublayers += [[]]  # empty subset to preserve index in sublayer
+            # else: P.sublayers += []  # empty subset to preserve index in sublayer
 
-        if rootP and P.sublayers:
+        if rootP and P.sublayers:  # needs a revision:
             comb_sublayers = [comb_subset_ + subset_ for comb_subset_, subset_ in
                               zip_longest(comb_sublayers, P.sublayers, fillvalue=[])
                               ]
