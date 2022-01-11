@@ -1,5 +1,5 @@
 '''
-  line_patterns is a principal version of 1st-level 1D algorithm
+  line_Ps is a principal version of 1st-level 1D algorithm
   Operations:
   -
 - Cross-compare consecutive pixels within each row of image, forming dert_: queue of derts, each a tuple of derivatives per pixel.
@@ -87,21 +87,21 @@ def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_
         dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
         _i = i
     # form patterns:
-    Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPm=True)  # rootP=None, eval intra_P_ (calls form_P_)
-    Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPm=False)
+    Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # rootP=None, eval intra_P_ (calls form_P_)
+    Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPd=True)
 
     return dert_, [Pm_, Pd_]  # input to level 2
 
 
-def form_P_(rootP, dert_, rdn, rng, fPm):  # accumulation and termination, rdn and rng are pass-through intra_P_
+def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through intra_P_
     # initialization:
     P_ = []
     x = 0
     _sign = None  # to initialize 1st P, (None != True) and (None != False) are both True
 
     for dert in dert_:  # segment by sign
-        if fPm: sign = dert.m > 0
-        else:   sign = dert.d > 0
+        if fPd: sign = dert.d > 0
+        else:   sign = dert.m > 0
         if sign != _sign:
             # sign change, initialize and append P
             P = CP( L=1, I=dert.p, D=dert.d, M=dert.m, Rdn=dert.mrdn+1, x0=x, dert_=[dert], sublayers=[])  # Rdn starts from 1
@@ -113,50 +113,50 @@ def form_P_(rootP, dert_, rdn, rng, fPm):  # accumulation and termination, rdn a
         x += 1
         _sign = sign
 
-    intra_P_(rootP, P_, rdn, rng, fPm)
+    intra_P_(rootP, P_, rdn, rng, fPd)
 
     return P_  # used only if not rootP, else packed in rootP.sublayers
 
 
-def intra_P_(rootP, P_, rdn, rng, fPm):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
+def intra_P_(rootP, P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
 
-    # adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential?
     comb_sublayers = []
-
-    for P in P_:  # vs for P, adj_M in zip(P_, adj_M_)
-        # rel_adj_M = adj_M / -P.M  # to allocate -Pm' adj_M to internal Pds? but lend to contrast is not adj only, reflected in ave?
-        if fPm:
-            if P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
-                # min skipping P.L=3, actual comp rng = 2^(n+1): 1, 2, 3 -> kernel size 4, 8, 16...
-                ''' if local ave:
-                loc_ave = (ave + (P.M - adj_M) / P.L) / 2  # mean ave + P_ave, possibly negative?
-                loc_ave_min = (ave_min + (P.M - adj_M) / P.L) / 2  # if P.M is min?
-                rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
-                '''
-                rdn+=1; rng+=1
+    # adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential; but lend is not to adj only, reflected in ave?:
+    # for P, adj_M in zip(P_, adj_M_); rel_adj_M = adj_M / -P.M  # allocate -Pm' adj_M in internal Pds; vs.:
+    for P in P_:
+        if fPd:  # P is Pd
+            if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, ave_adj_M is represented in ave_D
+                rdn += 1; rng += 1
+                P.subset = rdn, rng, [],[],[],[]  # 1st sublayer params, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
                 sub_Pm_, sub_Pd_ = [], []
-                P.subset = rdn, rng, [],[],[],[]  # []s: future 1st sublayer' xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
-                P.sublayers += [sub_Pm_, sub_Pd_]
-                rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
-                sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPm=True)  # cluster by rm sign
-                sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPm=False)  # cluster by rd sign
-            # else: P.sublayers += []  # empty subset to preserve index in sublayer
-        else:  # P is Pd
-            if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
-                # no min(abs(P.D), abs(P.D) * rel_adj_M): adj_M is not from single P, ave_adj_M is represented in ave_D?
-                rdn+=1; rng+=1
-                sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
-                P.subset = rdn, rng, [],[],[],[]  # []s: future 1st sublayer' xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
-                P.sublayers += [sub_Pm_, sub_Pd_]
+                P.sublayers = [(sub_Pm_, sub_Pd_)]
                 ddert_ = deriv_comp(P.dert_)  # i is d
-                sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPm=True)  # cluster by mm sign
-                sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPm=False)  # cluster by md sign
-            # else: P.sublayers += []  # empty subset to preserve index in sublayer
+                sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
+                sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
 
-        if rootP and P.sublayers:  # needs a revision:
-            comb_sublayers = [comb_subset_ + subset_ for comb_subset_, subset_ in
-                              zip_longest(comb_sublayers, P.sublayers, fillvalue=[])
-                              ]
+        elif P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
+            ''' P is Pm   
+            min skipping P.L=3, actual comp rng = 2^(n+1): 1, 2, 3 -> kernel size 4, 8, 16...
+            if local ave:
+            loc_ave = (ave + (P.M - adj_M) / P.L) / 2  # mean ave + P_ave, possibly negative?
+            loc_ave_min = (ave_min + (P.M - adj_M) / P.L) / 2  # if P.M is min?
+            rdert_ = range_comp(P.dert_, loc_ave, loc_ave_min, fid)
+            '''
+            rdn += 1; rng += 1
+            P.subset = rdn, rng, [],[],[],[]  # 1st sublayer params, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+            sub_Pm_, sub_Pd_ = [], []  # initialize layers, concatenate by intra_P_ in form_P_
+            P.sublayers = [(sub_Pm_, sub_Pd_)]  # 1st layer
+            rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
+            sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
+            sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
+
+        if rootP and P.sublayers:
+            new_comb_sublayers = []
+            for (comb_sub_Pm_, comb_sub_Pd_), (sub_Pm_, sub_Pd_) in zip_longest(comb_sublayers, P.sublayers, fillvalue=([],[])):
+                comb_sub_Pm_ += sub_Pm_  # remove brackets, they preserve index in sub_Pp root_
+                comb_sub_Pd_ += sub_Pd_
+                new_comb_sublayers.append((comb_sub_Pm_, comb_sub_Pd_))  # add sublayer
+            comb_sublayers = new_comb_sublayers
     if rootP:
         rootP.sublayers += comb_sublayers  # no return
     else:
@@ -179,8 +179,7 @@ def range_comp(dert_):  # cross-comp of 2**(rng+1) - distant pixels, skipping in
 
     return rdert_
 
-def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign match is partial d match
-    # dd and md may match across d sign, spliced in compact?
+def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign match is partial d match, dd and md may match across d sign?
     # initialization:
     ddert_ = []
     _d = abs( dert_[0].d)  # same-sign in Pd
