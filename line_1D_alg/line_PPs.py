@@ -116,7 +116,8 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is neste
             sublayer0 += [paramset]  # -> [Pm_, Pd_]
         else: sublayer0 += []
 
-    return P_t, root  # contains 1st level and 2nd level outputs
+    # actually we no need to return P_t? It is already in the input
+    return root  # contains 1st level and 2nd level outputs
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
@@ -398,6 +399,7 @@ def search_Idert_(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-ri
             if idert.m > 0:
                 if idert.m > ave_M * 4 and idert.P.sublayers and cdert.P.sublayers:  # 4: init ave_sub coef
                     comp_sublayers(idert.P, cdert.P, idert.m)
+                    # deeper cross-comp between high-m Ps
                 Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 idert.Ppt[0] = [Rdert]; Rdert.sub_dert_ += [idert]
                 idert = Cpdert(P=idert.P, Ppt=[[Rdert.Ppt],[]])  # new idert, not sure about Ppt=[[Rdert.Ppt]
@@ -440,7 +442,7 @@ def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by
         term_rPp(rPp, rPp_)
     '''
     currently not used, 
-    Rdert should be accumulated bilaterally, else asymmetry per P|dert?  
+    Rdert should be accumulated bilaterally, else asymmetry per evaluated P|dert?  
     partial rng for middle inputs?
     adjust Rdert.Ms for overlaps between Rderts, by assigning rdn+=1 to overlapping pderts in lower-M Rdert:
     
@@ -520,18 +522,17 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
         else: sub_M += xDert_v
         if xDert_v + root_v > ave_M * (fPd * ave_D) * rdn:
             _sub_P_ = _P.sublayers[0][fPd]
-            sub_P_  =  P.sublayers[0][fPd]
-            _xsub_pdertt_  =  _P.subset[2+fPd]
-            xsub_pdertt_   =   P.subset[2+fPd]
-            if rng == _rng and min(_P.L, P.L) > ave_Ls:  # if same fork: compare sub_Ps to each _sub_P within max relative distance per comb_V:
+            sub_P_ = P.sublayers[0][fPd]
+            _xsub_pdertt_ = _P.subset[2+fPd]  # array of cross-sub_P pdert tuples
+            xsub_pdertt_ = P.subset[2+fPd]
+            if rng == _rng and min(_P.L, P.L) > ave_Ls:  # if same fork: comp sub_Ps to each _sub_P in max relative distance per comb_V:
                 _SL = SL = 0  # summed Ls
                 start_index = next_index = 0  # index of starting sub_P for current _sub_P
-                _xsub_pdertt_ += [[]]  # array of cross-sub_P pdert tuples, inner brackets for subset_
-                xsub_pdertt_ += [[]]  # append xsub_dertt per _sub_P_ and sub_P_, sparse?
-
                 for _sub_P in _sub_P_:
+                    _xsub_pdertt_ += [[]]  # append xsub_dertt per _sub_P, sparse, inner brackets for subset_?
+                    xsub_pdertt_ += [[]]
                     _xsub_pdertt = [[], [], [], []]  # L, I, D, M xsub_pdert_s
-                    _SL += _sub_P.L  # ix0 of next _sub_P
+                    _SL += _sub_P.L  # ix0 of next _sub_P;  no xsub_pdertt_ per sub_P_, summed only?
                     # search right:
                     for sub_P in sub_P_[start_index:]:  # index_ix0 > _ix0, comp sub_Ps at proximate relative positions in sub_P_
                         fbreak, xsub_P_M, xsub_P_D = comp_sub_P(_sub_P, sub_P, _xsub_pdertt, root_v, fPd)
@@ -550,9 +551,9 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
                     # not implemented: if param_name == "I_" and not fPd: sub_pdert = search_param_(param_)
                     start_index = next_index  # for next _sub_P
 
-                    if _xsub_pdertt[0]:  # at least 1 sub_pdert, real min length ~ 8, very unlikely
+                    if any(_xsub_pdertt):  # at least 1 sub_pdert, real min length ~ 8, very unlikely
                         xsub_Pp_t = []  # LPpm_, IPpm_, DPpm_, MPpm_
-                        rdn_t = sum_rdn_(param_names, _xsub_pdertt, fPd)
+                        sum_rdn_(param_names, _xsub_pdertt, fPd)  # no return from sum_rdn now
                         for param_name, xsub_Pdert_ in zip(param_names, _xsub_pdertt):
                             xsub_Pp_ = form_Pp_(xsub_Pdert_, fPd=0)
                             # no step=2 for splice: xsub_pdertts are not consecutive, and their Ps are not aligned?
@@ -565,6 +566,45 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
                         xsub_pdertt_[-1][:] = xsub_Pp_t  # bilateral assignment?
 
     return sub_M, sub_D
+
+
+def comp_sub_P(_sub_P, sub_P, xsub_pdertt, root_v, fPd):
+    fbreak = 0
+    xsub_P_M, xsub_P_D = 0,0  # vm,vd combined across params
+    dist_decay = 2  # decay of projected match with relative distance between sub_Ps
+
+    distance = (sub_P.x0 + sub_P.L / 2) - (_sub_P.x0 + _sub_P.L / 2)  # distance between mean xs
+    mean_L = (_sub_P.L + sub_P.L) / 2
+    rel_distance = distance / mean_L  # not gap and overlap: edge-specific?
+    if fPd:
+        sub_V = abs((_sub_P.D + sub_P.D) / 2) - ave_d * mean_L
+    else:
+        sub_V = (_sub_P.M + sub_P.M) / 2
+    V = sub_V + root_v
+    # or comp all, then filter by distance?
+    if V * rel_distance * dist_decay > ave_M * (fPd * ave_D):
+        # 1x1 comp:
+        for i, (param_name, ave) in enumerate(zip(param_names, aves)):
+            _param = getattr(_sub_P, param_name[0])  # can be simpler?
+            param = getattr(sub_P, param_name[0])
+            # if same-sign only?
+            sub_pdert = comp_par(sub_P, _param, param, param_name, ave)
+            # no negative-value sum: -Ps won't be processed:
+            if sub_pdert.m > 0: xsub_P_M += sub_pdert.m
+            vd = abs(sub_pdert.d) - ave_d  # convert to coef
+            if vd > 0: xsub_P_D += vd
+            xsub_pdertt[i].append(sub_pdert)  # per L, I, D, M' xsub_pdert
+
+        V += xsub_P_M + xsub_P_D  # separate eval for form_Pm_ and form_Pd_?
+
+        if V > ave_M * 4 and _sub_P.sublayers and sub_P.sublayers:  # 4: ave_comp_sublayers coef
+            # update sub_M in Ipdert(xsub_pdertt[1]) only?
+            sub_M, sub_D = comp_sublayers(_sub_P, sub_P, V)  # recursion for deeper layers
+            xsub_P_M += sub_M; xsub_P_D += sub_M
+    else:
+        fbreak = 1  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
+
+    return fbreak, xsub_P_M, xsub_P_D
 
 
 def form_comp_Derts(_P, P, root_v):
@@ -611,45 +651,6 @@ def form_comp_Derts(_P, P, root_v):
 xsub_pderts (cross-sub_P): xsub_pdertt_[ xsub_pdertt [ xsub_pdert_[ sub_pdert]]]: each bracket is a level of nesting
 the above forms Pps across xsub_dertt, then also form Pps across _xsub_pdertt_ and xsub_pdertt_? 
 '''
-
-def comp_sub_P(_sub_P, sub_P, xsub_pdertt, root_v, fPd):
-    fbreak = 0
-    xsub_P_M, xsub_P_D = 0,0  # vm,vd combined across params
-    dist_decay = 2  # decay of projected match with relative distance between sub_Ps
-
-    distance = (sub_P.x0 + sub_P.L / 2) - (_sub_P.x0 + _sub_P.L / 2)  # distance between mean xs
-    mean_L = (_sub_P.L + sub_P.L) / 2
-    rel_distance = distance / mean_L  # not gap and overlap: edge-specific?
-    if fPd:
-        sub_V = abs((_sub_P.D + sub_P.D) / 2) - ave_d * mean_L
-    else:
-        sub_V = (_sub_P.M + sub_P.M) / 2
-    V = sub_V + root_v
-    # or comp all, then filter by distance?
-    if V * rel_distance * dist_decay > ave_M * (fPd * ave_D):
-        # 1x1 comp:
-        for i, (param_name, ave) in enumerate(zip(param_names, aves)):
-            _param = getattr(_sub_P, param_name[0])  # can be simpler?
-            param = getattr(sub_P, param_name[0])
-            # if same-sign only?
-            sub_pdert = comp_par(sub_P, _param, param, param_name, ave)
-            # no negative-value sum: -Ps won't be processed:
-            if sub_pdert.m > 0: xsub_P_M += sub_pdert.m
-            vd = abs(sub_pdert.d) - ave_d  # convert to coef
-            if vd > 0: xsub_P_D += vd
-            xsub_pdertt[i].append(sub_pdert)  # per L, I, D, M' xsub_pdert
-
-        V += xsub_P_M + xsub_P_D  # separate eval for form_Pm_ and form_Pd_?
-
-        if V > ave_M * 4 and _sub_P.sublayers and sub_P.sublayers:  # 4: ave_comp_sublayers coef
-            # if sub_P.sublayers is not empty, then sub_P.sublayers[0] can't be empty
-            # update sub_M in Ipdert(xsub_pdertt[1]) only?
-            sub_M, sub_D = comp_sublayers(_sub_P, sub_P, V)  # recursion for deeper layers
-            xsub_P_M += sub_M; xsub_P_D += sub_M
-    else:
-        fbreak = 1  # only sub_Ps with relatively proximate position in sub_P_|_sub_P_ are compared
-
-    return fbreak, xsub_P_M, xsub_P_D
 
 
 def norm_feedback(P_t):

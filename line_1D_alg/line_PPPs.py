@@ -37,7 +37,9 @@ def line_recursive(p_):
     Specific outputs: P_t = line_Ps_root(), Pp_ttt = line_PPs_root(), Ppp_ttttt = line_PPPs_root()
     if pipeline: output per P termination, append till min iP_ len, concatenate across frames
     '''
-    return level_recursion( line_PPs_root( line_Ps_root(p_)))  # returns P_T_
+    return level_recursion( line_PPs_root( line_Ps_root(p_)))
+    # returns iLevels and root_P, with P_T_ as root_P.sublayers[0]
+
 
 def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly nested to the depth = 1 + 2*elevation
 
@@ -86,7 +88,7 @@ def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly 
 
         if len(iP_) > 1 and sum([P.M for P in iP_]) > ave_M:
             nextended += 1
-            oP_T += comp_form_P_(iP_T, iP_, types)  # add oP_tt_ as 8 P_s: two new nesting levels
+            oP_T += line_level_root(iP_T, iP_, types)  # comp Ps and form higher Ps, adds two nesting levels: oP_tt_, 8 P_s:
         else:
             oP_T += [[] for _ in range(8)]  # add 8 empty P_s, better to add count of missing prior P_s to each P_?
 
@@ -98,7 +100,7 @@ def level_recursion(P_T_):  # P_T_: 2P_, 16P_, 128P_., each level is implicitly 
         level_recursion(P_T_)  # increased implicit nesting in oP_T
 
 
-def comp_form_P_(iP_T, P_, types):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
+def line_level_root(iP_T, P_, types):  # cross_comp_Pp_, sum_rdn, splice, intra, comp_P_recursive
 
     norm_feedback(P_)  # before processing
     fPd = types[0]
