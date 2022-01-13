@@ -47,6 +47,7 @@ class CPp(CP):
     _negL = int  # left-most compared distance from Pp.x0
     sublayers = list  # lambda: [([],[])]  # nested Ppm_ and Ppd_
     subDerts = list  # for comp sublayers
+    levels = list  # levels of composition: Ps ) Pps ) Ppps..
     root = object  # higher Pp, to replace locals for merging
     # layer1: iL, iI, iD, iM, iRdn: summed P params
 
@@ -93,9 +94,8 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is neste
 
     norm_feedback(P_t)  # before processing
 
-    # complete sublayer is a 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
-    sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deeper sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
-    root = CPp(sublayers=[sublayer0])
+    sublayer0 = []  # 1st sublayer is a 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+    root = CPp(levels=[P_t], sublayers=[sublayer0])  # deep sublayers are 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
 
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 1:
@@ -114,10 +114,10 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is neste
                         intra_Pp_(root, param_md, Pdert_, 1, fPpd)  # eval der+ or rng+ per Pp
                 paramset += [param_md]  # -> [Lmd, Imd, Dmd, Mmd]
             sublayer0 += [paramset]  # -> [Pm_, Pd_]
-        else: sublayer0 += []
+        else: sublayer0 += [[]]  # empty paramset to preserve index in [Pm_, Pd_]
 
-    # actually we no need to return P_t? It is already in the input
-    return root  # contains 1st level and 2nd level outputs
+    root.levels.append(root.sublayers)  # to contain 1st and 2nd levels
+    return root
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
