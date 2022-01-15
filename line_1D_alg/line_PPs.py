@@ -92,8 +92,32 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 
 def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
-    norm_feedback(P_t)  # before processing
+    norm_feedback(P_t)
+    sublayer0 = []  # 1st sublayer is a 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+    root = CPp(levels=[P_t], sublayers=[sublayer0])  # deep sublayers are 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
 
+    for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
+        if len(P_) > 2:
+            Pdert_t, dert1_, dert2_ = cross_comp(P_, fPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_ (tuples of derivatives per P param)
+            sum_rdn_(param_names, Pdert_t, fPd)  # sum cross-param redundancy per pdert, to evaluate for deeper processing
+            for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
+                for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_: more anti-correlated than Pp_s of different params
+                    Pp_ = form_Pp_(Pdert_, fPpd)
+                    sublayer0 += [Pp_]
+                    if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
+                        if not fPpd:
+                            splice_Ps(Pp_, dert1_, dert2_, fPd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
+                        intra_Pp_(root, Pp_, Pdert_, 1, fPpd)  # eval der+ or rng+ per Pp
+        else:
+            sublayer0 += [[] for _ in range(8)]  # 8 empty [] to preserve index, 8 for each fPd
+
+    root.levels.append(root.sublayers)  # to contain 1st and 2nd levels
+    return root
+
+
+def line_PPs_nested(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
+
+    norm_feedback(P_t)
     sublayer0 = []  # 1st sublayer is a 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
     root = CPp(levels=[P_t], sublayers=[sublayer0])  # deep sublayers are 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
 
@@ -110,7 +134,6 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is neste
                     if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                         if not fPpd:
                             splice_Ps(Pp_, dert1_, dert2_, fPd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                        # can't use root.pdert_: empty and 8 Pdert_s, but 1 Pdert_ in deeper intra_Pp calls:
                         intra_Pp_(root, param_md, Pdert_, 1, fPpd)  # eval der+ or rng+ per Pp
                 paramset += [param_md]  # -> [Lmd, Imd, Dmd, Mmd]
             sublayer0 += [paramset]  # -> [Pm_, Pd_]
@@ -309,12 +332,11 @@ def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps
     P.sublayers += comb_sublayers  # no return
 
 
-def intra_Pp_(rootPp, md_set, Pdert_, hlayers, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
+def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion in line Pm_, pack results into sub_Pm_
     '''
     each Pp may be compared over incremental range or derivation, as in line_patterns but with higher local ave
     '''
     comb_sublayers = []  # combine into root P sublayers[1:], each nested to depth = sublayers[n]
-    Pp_ = md_set[fPd]  # md_set because sublayer is 3-level tuple from line_PPs_root, but 2-level tuple from intra_Pp_
 
     for i, Pp in enumerate(Pp_):
         loc_ave_M = ave_M * Pp.Rdn * hlayers
@@ -335,7 +357,7 @@ def intra_Pp_(rootPp, md_set, Pdert_, hlayers, fPd):  # evaluate for sub-recursi
                     sub_Ppm_[:] = form_Pp_(ddert_, fPd=False)
                     sub_Ppd_[:] = form_Pp_(ddert_, fPd=True)
                     if any(Pp.sublayers[0]) and abs(Pp.D) + Pp.M > loc_ave_M * 4:  # 4: looping search cost, diff induction per Pd_'DPpd_, +Pp.iD?
-                        intra_Pp_(Pp, Pp.sublayers[0], Pp.pdert_, hlayers+1, fPd)  # recursive der+, no need for Pdert_, no rng+: Pms are redundant?
+                        intra_Pp_(Pp, sub_Ppd_, Pp.pdert_, hlayers+1, fPd)  # recursive der+, no need for Pdert_, no rng+: Pms are redundant?
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
             else:
@@ -349,8 +371,8 @@ def intra_Pp_(rootPp, md_set, Pdert_, hlayers, fPd):  # evaluate for sub-recursi
                     Rdert_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI, rng)  # each Rdert contains fixed-rng pdert_
                     rPp_ = form_rPp_(Rdert_, rootPp, rng)
                     sub_Ppm_[:] = rPp_
-                    if any(Pp.sublayers[0]) and Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
-                        intra_Pp_(Pp, Pp.sublayers[0], Pp.pdert_, hlayers + 1, fPd)  # recursive rng+, no der+ in redundant Pds?
+                    if rPp_ and Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
+                        intra_Pp_(Pp, rPp_, Pp.pdert_, hlayers + 1, fPd)  # recursive rng+, no der+ in redundant Pds?
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
 
@@ -502,7 +524,7 @@ def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublaye
                                 if not fPpd:
                                     splice_Ps(sub_Pp_, dert1_, dert2_, fPd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                                 rootPp = CPp(pdert_=rootPp.pdert_, sublayers=[param_md])
-                                intra_Pp_(rootPp, param_md, sub_Pdert_, 1, fPpd)  # der+ or rng+
+                                intra_Pp_(rootPp, param_md[fPpd], sub_Pdert_, 1, fPpd)  # der+ or rng+
                         paramset.append(param_md)
                     P.subset[4 + fsubPd].append(paramset)  # sub_Ppm_tt and sub_Ppd_tt
                     # deeper comp_sublayers is selective per sub_P
@@ -559,7 +581,7 @@ def comp_sublayers(_P, P, root_v):  # if pdert.m -> if summed params m -> if pos
                             # no step=2 for splice: xsub_pdertts are not consecutive, and their Ps are not aligned?
                             if param_name == "I_":
                                 # no root: Pd_ is always empty as comp_sublayers can be called from I param only:
-                                intra_Pp_(None, [xsub_Pp_,[]], xsub_Pdert_, 1, fPd=0)  # rng+ only?
+                                intra_Pp_(None, xsub_Pp_, xsub_Pdert_, 1, fPd=0)  # rng+ only?
                             xsub_Pp_t.append(xsub_Pp_)
 
                         _xsub_pdertt_[-1][:] = xsub_Pp_t
@@ -651,7 +673,6 @@ def form_comp_Derts(_P, P, root_v):
 xsub_pderts (cross-sub_P): xsub_pdertt_[ xsub_pdertt [ xsub_pdert_[ sub_pdert]]]: each bracket is a level of nesting
 the above forms Pps across xsub_dertt, then also form Pps across _xsub_pdertt_ and xsub_pdertt_? 
 '''
-
 
 def norm_feedback(P_t):
 
