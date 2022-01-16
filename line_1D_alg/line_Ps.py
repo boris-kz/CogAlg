@@ -18,7 +18,7 @@
   These forks here are exclusive per P to avoid redundancy, but they do overlap in line_patterns_olp.
 '''
 
-# add ColAlg folder to system path
+# add CogAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
 
@@ -200,7 +200,7 @@ def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign mat
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
     '''
     Value is projected match, while variation has contrast value only: it matters to the extent that it interrupts adjacent match: adj_M.
-    In noise, there is a lot of variation. but no adjacent match to cancel, so that variation has no predictive value.
+    In noise, there is a lot of variation, but no adjacent match to cancel, so that variation has no predictive value.
     On the other hand, 2D outline or 1D contrast may have low gradient / difference, but it terminates some high-match span.
     Such contrast is salient to the extent that it can borrow predictive value from adjacent high-match area.
     adj_M is not affected by primary range_comp per Pm?
