@@ -93,8 +93,9 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(P_t)
-    sublayer0 = []  # 1st sublayer is a 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
-    root = CPp(levels=[P_t], sublayers=[sublayer0])  # deep sublayers are 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
+    sublayer0 = []  # 1st sublayer is implicit 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+    # deep sublayers are implicit 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
+    root = CPp(levels=[P_t], sublayers=[sublayer0])
 
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
         if len(P_) > 2:
@@ -368,11 +369,11 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
                     # extend search if high loc_ave, fixed-range: parallelizable, individual selection is not worth the costs:
                     rng = int(Pp.M / Pp.L / 4)  # ave_rng = 4
-                    Rdert_ = search_Idert_(Pp, Pdert_, loc_ave * ave_mI, rng)  # each Rdert contains fixed-rng pdert_
+                    Rdert_ = search_rng(Pp, rootPp.pdert_, loc_ave * ave_mI, rng)  # each Rdert contains fixed-rng rdert_
                     rPp_ = form_rPp_(Rdert_, rootPp, rng)
                     sub_Ppm_[:] = rPp_
                     if rPp_ and Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
-                        intra_Pp_(Pp, rPp_, Pp.pdert_, hlayers + 1, fPd)  # recursive rng+, no der+ in redundant Pds?
+                        intra_Pp_(Pp, rPp_, Pdert_, hlayers + 1, fPd)  # recursive rng+, no der+ in redundant Pds?
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
 
@@ -384,58 +385,58 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                 new_comb_sublayers.append((comb_sub_Ppm_, comb_sub_Ppd_))  # add sublayer
 
             comb_sublayers = new_comb_sublayers
-            '''
-            # fillvalue=[], probably worse:
-            for comb_subset, subset in zip_longest(comb_sublayers, Pp.sublayers, fillvalue=[]):
-                if subset:
-                    if not comb_subset:  # subset is deeper than comb_subset
-                        comb_sub_Ppm_, comb_sub_Ppd_ = [], []
-                    sub_Ppm_, sub_Ppd_ = subset
-                    comb_sub_Ppm_ += sub_Ppm_; comb_sub_Ppd_ += sub_Ppd_
-                    # remove brackets, they preserve index in sub_Pp root_
-                    new_comb_sublayers.append((comb_sub_Ppm_, comb_sub_Ppd_))  
-                else: # comb_subset is deeper than subset
-                    new_comb_sublayers.append(comb_subset)
-            '''
+
     if rootPp: rootPp.sublayers += comb_sublayers  # new sublayers
     # no return, Pp_ is changed in-place
 
 
-def search_Idert_(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave: lower m
+def search_rng(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave: lower m
 
     Rdert_ = []
     idert_ = rootPp.pdert_
-    for idert in idert_: idert.Ppt = [[],[]]  # clear higher-level ref for current level; or it's always empty in Idert_?
+    for idert in idert_:
+        idert.Ppt = [[],[]]  # clear higher-level ref for current level, rdn assign to non-max
+        Rdert_.append(Cpdert(P=idert.P))  # initialize Rdert for each idert
 
-    for i, idert in enumerate(idert_):  # form fixed-rng Pps per idert.P, consecutive Pps overlap within rng-1
+    for i, (idert, Rdert) in enumerate(zip( idert_,Rdert_)):  # form consecutive fixed-rng Rderts, overlapping within rng-1
 
         j = i + rootPp.x0 + 1  # get compared index in root Idert_, start at step=2 or 1 + prior rng, step=1 was in cross-comp
         idert.m = idert.d = 0  # reset from rng=1 comp, if no rng comp
-        Rdert = Cpdert(P=idert.P)  # vs. ave sub_dert_ Ps: overlaps
         while j - (i + rootPp.x0 + 1) < rng and j < len(Idert_) - 1:
             # cross-comp within rng:
             cdert = Idert_[j]  # current dert with compared P
             idert.p = cdert.i + idert.i  # -> ave i
             idert.d = cdert.i - idert.i  # difference
             idert.m = loc_ave - abs(idert.d)  # indirect match
+            right_Rdert = Rdert_[j]  # not quite sure about j
             if idert.m > 0:
                 if idert.m > ave_M * 4 and idert.P.sublayers and cdert.P.sublayers:  # 4: init ave_sub coef
-                    comp_sublayers(idert.P, cdert.P, idert.m)
-                    # deeper cross-comp between high-m Ps
+                    comp_sublayers(idert.P, cdert.P, idert.m)  # deeper cross-comp between high-m Ps
+                # left assign:
                 Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 idert.Ppt[0] = [Rdert]; Rdert.sub_dert_ += [idert]
+                # right assign:
+                right_Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
+                rdert = idert.copy(); rdert.Ppt[0] = [right_Rdert]
+                right_Rdert.sub_dert_.insert(0, rdert)  # extend left, Rdert is now bilateral
                 idert = Cpdert(P=idert.P, Ppt=[[Rdert.Ppt],[]])  # new idert, not sure about Ppt=[[Rdert.Ppt]
             else:
                 # idert miss, need to represent discontinuity:
                 idert.negL += 1  # dert scope = negL + 1 + prior rng
                 idert.negM += idert.m
+                right_Rdert.sub_dert_[0].negL += 1
+                right_Rdert.sub_dert_[0].negM += idert.m
             j += 1
         if idert.m <= 0:  # add last idert if negative:
+            # left assign:
             Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
             idert.Ppt[0] = Rdert  # single root, if needed
             Rdert.sub_dert_ += [idert]
-
-        Rdert_ += [Rdert]
+            # right assign:
+            right_Rdert = Rdert_[j]  # not quite sure about j
+            right_Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
+            rdert = idert.copy(); rdert.Ppt[0] = [right_Rdert]
+            right_Rdert.sub_dert_.insert(0, rdert)  # extend left, Rdert is now bilateral
 
     return Rdert_  # accumulated rng_dert_
 

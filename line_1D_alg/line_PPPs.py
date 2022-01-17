@@ -39,9 +39,14 @@ def line_recursive(p_):
     '''
     P_t = line_Ps_root(p_)
     root = line_PPs_root(P_t)
-    return line_level_root(root)
+    types_ = []
+    for i in range(16):  # len(root.sublayers[0]
+        types = (i%2, int(i%8 / 2), int(i/8) % 2)  # fPpd, param, fPd
+        types_.append(types)
 
-def line_level_root(root):  # recursively adds higher levels of pattern composition and derivation
+    return line_level_root(root, types_)
+
+def line_level_root(root, types_):  # recursively adds higher levels of pattern composition and derivation
 
     # i/o are tuples of P_s, implicitly nested to the depth = 1 + 2*elevation: 2 P_s, 16 P_s, 128 P_s..:
     sublayer0 = root.levels[-1][0]  # input is 1st sublayer of the last level
@@ -50,11 +55,9 @@ def line_level_root(root):  # recursively adds higher levels of pattern composit
     nextended = 0  # number of extended-depth P_s
     new_M = 0
 
-    types_, ntypes = P_type_assign(sublayer0)  # assign types to element P_s
-
     for P_, types in zip(sublayer0, types_):
         if len(P_) > 2 and sum([P.M for P_ in sublayer0 for P in P_]) > ave_M:  # 2: min aveN, will be higher
-            nextended += 1  # this P_ depth will be extended
+            nextended += 1  # the depth of this P_ will be extended
             fiPd = types[0]  # probably OR all fPds in types, not just the last one
 
             Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
@@ -72,19 +75,27 @@ def line_level_root(root):  # recursively adds higher levels of pattern composit
             new_sublayer0 += [[] for _ in range(8)]  # 8 empty list for 4 params * 2 fPd tuples
             # better to add count of missing prior P_s to each P_, or use nested tuples?
 
-    cross_core_comp(new_sublayer0, types_, ntypes)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
-    # also pass and increment new_M above?
+    new_types_ = []  # this may be included in "if" section above, then "else"
+    for types in types_:
+        for i in range(8):  # each level adds 8 types: 4 params * 2 fPds
+            new_types = types.copy()
+            new_types.insert(0, int( i%8 / 2 )) # param
+            new_types.insert(0, i%2)            # fPpd
+            new_types_.append(new_types)
+
+    if new_M > ave_M:
+        cross_core_comp(new_sublayer0, new_types_)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
         root.levels.append(root.sublayers)  # levels represent all lower hierarchy
 
         if len(sublayer0) / max(nextended,1) < 8 and new_M > ave_M * 8:  # higher thresholds for recursion:
-            line_level_root(root)  # try to add new level
+            line_level_root(root, new_types_)  # try to add new level
 
 
 def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the depth = 1 + 2*elevation
 
-    ntypes = 1 + 2 * math.log( len(iP_T)/2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
+    ntypes = 1 + 2  * math.log( len(iP_T)/2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
     types_ = []  # parallel to P_T, for zipping
 
     for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__
@@ -126,7 +137,7 @@ def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the
     return types_, ntypes
 
 
-def line_PPPs_root(root):
+def line_PPPs_root(root):  # test code
 
     sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
     root.sublayers=[sublayer0]  # reset from last-level sublayers
@@ -167,117 +178,56 @@ def line_PPPs_root(root):
     return root
 
 
-def cross_core_comp(iP_T, types_, ntypes):  # draft, need further discussion and update
+def cross_core_comp(iP_T, types_):  # draft, need further discussion and update
     '''
     comp Pp_s across >3 nesting levels in iP_T: common_root_depth - comparands_depth >3, which maps to the distance of >16 Pp_s
     '''
-    xPp_t = []
-    for elevation in range(int(ntypes)):
-        if elevation % 2:  # params
+    xPp_t_ = []  # each element is from one elevation
+    ntypes = 1 + 2 * math.log(len(iP_T) / 2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
 
+    for elevation in range(int(ntypes)):  # each loop is an elevation
+        if elevation % 2:  # params
             LP_t, IP_t, DP_t, MP_t = [], [], [], []
             # get P_ of each param for current elevation (compare at each elevation?)
             for i, types in enumerate(types_):
                 if types[elevation] == 0:
-                    LP_t.append(iP_T[i])
+                    LP_t += [iP_T[i]]
                 elif types[elevation] == 1:
-                    IP_t.append(iP_T[i])
+                    IP_t += [iP_T[i]]
                 elif types[elevation] == 2:
-                    DP_t.append(iP_T[i])
+                    DP_t += [iP_T[i]]
                 elif types[elevation] == 3:
-                    MP_t.append(iP_T[i])
-                P_tt = [LP_t, IP_t, DP_t, MP_t]
+                    MP_t += [iP_T[i]]
+            P_tt = [LP_t, IP_t, DP_t, MP_t]
 
-                xPp_ = [] # cross compare between 4 params, always = 6 elements if call from root function
-                for j, _P_t in enumerate(P_tt):
-                    if j+1 < 4: # always < 4 due to there are 4 params
-                        for P_t in P_tt[j+1:]:
-                            for _P_ in _P_t:
-                                for P_ in P_t:
-                                    if _P_ and P_:  # not empty _P_ and P_
+            xPp_t = [] # cross compare between 4 params, always = 6 elements if call from root function
+
+            for j, _P_t in enumerate(P_tt):
+                if j+1 < 4: # always < 4 due to there are 4 params
+                    for P_t in P_tt[j+1:]:
+                        xPp_ = []
+                        for _P_ in _P_t:
+                            for P_ in P_t:
+                                if _P_ and P_:  # not empty _P_ and P_
+                                    if len(P_)>2 and len(_P_)>2:
                                         _M = sum([_P.M for _P in _P_])
                                         M = sum([P.M for P in P_])
                                         for i,(param_name, ave) in enumerate(zip(param_names, aves)):
-                                            xpdert_ = []
-                                            for _P in _P_:
-                                                for P in P_:
-                                                    # probably wrong but we need this evaluation, add in PM for evaluation?
-                                                    if _P.M + P.M + _M + M > (_P.Rdn + P.Rdn) * ave:
-                                                        _param = getattr(_P,param_name[0])
-                                                        param = getattr(P,param_name[0])
-                                                        xpdert = comp_par(_P, _param, param, param_name, ave)
-                                                        xpdert_.append(xpdert)
-                                            if len(xpdert_)>1:
-                                                fPd = 1
-                                                xPp_.append(form_Pp_(xpdert_, fPd))  # add a loop to form xPp_ with fPd = 0 and fPd = 1?
-                                            else:
-                                                xPp_.append([])
-            xPp_t.append(xPp_)
+                                            for fPd in 0,1:
+                                                xpdert_ = []  # contains result from each _P_ and P_ pair
+                                                for _P in _P_:
+                                                    for P in P_:
+                                                        # probably wrong but we need this evaluation, add in PM for evaluation?
+                                                        if _P.M + P.M + _M + M > (_P.Rdn + P.Rdn) * ave:
+                                                            _param = getattr(_P,param_name[0])
+                                                            param = getattr(P,param_name[0])
+                                                            xpdert = comp_par(_P, _param, param, param_name, ave)
+                                                            xpdert_.append(xpdert)
+                                                xPp_ += form_Pp_(xpdert_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1?
+                                                # intra_Pp too?
+                        xPp_t.append(xPp_)
+            xPp_t_.append(xPp_t)
 
-
-def intra_Pp(Pp, fPd):  # this is a rerun of line_PPs
-    pass
-
-# not needed:
-
-def line_PPPs_start(P_ttt):  # starts level-recursion, higher-level input is nested to the depth = 1 + 2*elevation (level counter)
-    '''
-    # unpack for comp_Pp_recursive, not needed
-    for Pp_tt, fPd in zip(P_ttt, [0, 1]):  # fPd: Pm_ | Pd_
-        for Pp_t, param_name in zip(Pp_tt, param_names):  # LPp_ | IPp_ | DPp_ | MPp_
-            for Pp_, fPpd in zip(Pp_t, [0, 1]):  # fPpd: Ppm_ | Ppd_
-                if len(Pp_) > 1 and sum([Pp.M for Pp in Pp_]) > ave_M:
-    '''
-    [P_ttt].append( level_recursion(P_ttt) )  # add oP_tt_ as two new nesting levels in P_T
-
-def compute_depth(l):
-    """
-    Get maximum number of depth from input list:  https://stackoverflow.com/questions/6039103/counting-depth-or-the-deepest-level-a-nested-list-goes-to
-    """
-    if isinstance(l, list):
-        if l:
-            return 1 + max(compute_depth(item) for item in l)
-        else:
-            return 1
-    else:
-        return 0
-
-
-def line_PPPs_root(Pp_ttt):  # higher-level input is nested to the depth = 2+elevation (level counter), or 2*elevation?
-
-    norm_feedback(Pp_ttt)  # before processing
-    Ppp_ttttt = []  # add 4-tuple of Pp vars ( 2-tuple of Pppm, Pppd )
-
-    for Pp_tt, fPd in zip(Pp_ttt, [0, 1]):  # fPd: Pm_ | Pd_
-        Ppp_tttt = []
-        for Pp_t in Pp_tt:  # LPp_ | IPp_ | DPp_ | MPp_
-            Ppp_ttt = []
-            if isinstance(Pp_t, list):  # Pp_t is not a spliced P: if IPp_ only?
-                Ppp_tt = []
-                for Pp_, fPpd in zip(Pp_t, [0,1]):  # fPpd: Ppm_ | Ppd_
-                    if len(Pp_)>1:
-                        Ppdert_t, Ppdert1_, Ppdert2_ = cross_comp_Pp_(Pp_, fPpd)
-                        sum_rdn(param_names, Ppdert_t, fPpd)
-                        for param_name, Ppdert_ in zip(param_names, Ppdert_t):  # param_name: LPpp_ | IPpp_ | DPpp_ | MPpp_
-                            Ppp_t = []
-                            for fPppd in 0,1:  # fPppd 0: Pppm_, 1: Pppd_
-                                if Ppdert_:
-                                    Ppp_ = form_Pp_(Ppdert_, fPppd)
-                                    if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
-                                        if not fPppd:
-                                            splice_Ps(Ppp_, Ppdert1_, Ppdert2_, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                                        intra_Pp_(None, Ppp_, Ppdert_, 1, fPppd)  # der+ or rng+
-                                else: Ppp_ = []     # keep index
-                                Ppp_t.append(Ppp_)  # Pppm_, Pppd_
-                            Ppp_tt.append(Ppp_t)    # LPpp_, IPpp_, DPpp_, MPpp_
-                    else: Ppp_tt = []
-                Ppp_ttt.append(Ppp_tt)              # Ppm_, Ppd_
-            else: Ppp_ttt = Pp_t  # spliced P
-            Ppp_tttt.append(Ppp_ttt)                # LPp_, IPp_, DPp_, MPp_
-        Ppp_ttttt.append(Ppp_tttt)                  # Pm_, Pd_
-
-    return Ppp_ttttt  # 5-level nested tuple of arrays per line:
-    # (Pm_, Pd_( LPp_, IPp_, DPp_, MPp_( Ppm_, Ppd_ ( LPpp_, IPpp_, DPpp_, MPpp_( Pppm_, Pppd_ )))))
 
 
 def norm_feedback(Pp_ttt):
@@ -369,43 +319,12 @@ def comp_par(_Pp, _param, param, param_name, ave):
 
     return Cpdert(P=_Pp, i=_param, p=param + _param, d=d, m=m)
 
-# draft
-def form_Pp_(root_Ppdert_, fPpd):
-
-    Ppp_ = []
-    x = 0
-    _Ppdert = root_Ppdert_[0]
-    if fPpd: _sign = _Ppdert.d > 0
-    else:   _sign = _Ppdert.m > 0
-    # init Ppp params:
-    L=1; I=_Ppdert.p; D=_Ppdert.d; M=_Ppdert.m; Rdn=_Ppdert.rdn; x0=x; Ppdert_=[_Ppdert]
-
-    for Ppdert in root_Ppdert_[1:]:  # segment by sign
-        if fPpd: sign = Ppdert.d > 0
-        else:   sign = Ppdert.m > 0
-        # sign change, pack terminated Ppp, initialize new Ppp:
-        if sign != _sign:
-            term_Pp( Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd)
-            # re-init Pp params:
-            L=1; I=Ppdert.p; D=Ppdert.d; M=Ppdert.m; Rdn=Ppdert.rdn; x0=x; Ppdert_=[Ppdert]
-        else:  # accumulate params:
-            L += 1; I += Ppdert.p; D += Ppdert.d; M += Ppdert.m; Rdn += Ppdert.rdn; Ppdert_ += [Ppdert]
-        _sign = sign; x += 1
-
-    term_Pp( Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd)  # pack last Ppp
-
-    return Ppp_
-
-
 def term_Pp(Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd):
 
     Ppp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L, x0=x0, pdert_=Ppdert_, sublayers=[[]])
     for Ppdert in Ppp.pdert_: Ppdert.Ppt[fPpd] = Ppp  # root Ppp refs
     Ppp_.append(Ppp)
 
-
-def intra_Pp_(rootPpp, md_set, Ppdert_, hlayers, fPd):  # evaluate for sub-recursion
-    pass
 
 def splice_Ps(Pppm_, Ppdert1_, Ppdert2_, fPd, fPpd):  # re-eval Ppps, pPp.pdert_s for redundancy, eval splice Pps
     '''

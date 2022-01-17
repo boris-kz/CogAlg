@@ -372,6 +372,19 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
     if isinstance(rootPp, CPp):
         rootPp.sublayers += comb_sublayers
 
+'''
+# fillvalue=[], probably worse:
+for comb_subset, subset in zip_longest(comb_sublayers, Pp.sublayers, fillvalue=[]):
+    if subset:
+        if not comb_subset:  # subset is deeper than comb_subset
+            comb_sub_Ppm_, comb_sub_Ppd_ = [], []
+        sub_Ppm_, sub_Ppd_ = subset
+        comb_sub_Ppm_ += sub_Ppm_; comb_sub_Ppd_ += sub_Ppd_
+        # remove brackets, they preserve index in sub_Pp root_
+        new_comb_sublayers.append((comb_sub_Ppm_, comb_sub_Ppd_))  
+    else: # comb_subset is deeper than subset
+        new_comb_sublayers.append(comb_subset)
+'''
 
 def search_Idert_(Pp, Idert_, loc_ave):  # extended variable-range search for core I at local ave: lower m and term by match
 
