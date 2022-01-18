@@ -29,8 +29,8 @@ class Cpdert(ClusterStructure):
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
     rdn = int  # summed param rdn
-    negM = int  # in mdert only
-    negL = int  # in mdert only
+    negM = int  # in mdert only, reuse as mutM?
+    negL = int  # in mdert only, reuse as rPp ref?
     sub_M = int  # match from comp_sublayers, if any
     sub_D = int  # diff from comp_sublayers, if any
     sub_dert_ = list  # in Rderts only, len = rng
@@ -369,8 +369,8 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
                     # extend search if high loc_ave, fixed-range: parallelizable, individual selection is not worth the costs:
                     rng = int(Pp.M / Pp.L / 4)  # ave_rng = 4
-                    Rdert_ = search_rng(Pp, rootPp.pdert_, loc_ave * ave_mI, rng)  # each Rdert contains fixed-rng rdert_
-                    rPp_ = form_rPp_(Rdert_, rootPp, rng)
+                    rPp_ = search_rng(Pp, rootPp.pdert_, loc_ave * ave_mI, rng)  # each rPp contains fixed-rng pdert_
+                    # rPp_ = form_rPp_(Rdert_, rootPp, rng)  replace with recursive merge_rPp_?
                     sub_Ppm_[:] = rPp_
                     if rPp_ and Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
                         intra_Pp_(Pp, rPp_, Pdert_, hlayers + 1, fPd)  # recursive rng+, no der+ in redundant Pds?
@@ -392,13 +392,13 @@ def intra_Pp_(rootPp, Pp_, Pdert_, hlayers, fPd):  # evaluate for sub-recursion 
 
 def search_rng(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave: lower m
 
-    Rdert_ = []
+    rPp_ = []
     idert_ = rootPp.pdert_
     for idert in idert_:
         idert.Ppt = [[],[]]  # clear higher-level ref for current level, rdn assign to non-max
-        Rdert_.append(Cpdert(P=idert.P))  # initialize Rdert for each idert
+        rPp_.append(CPp(P=idert.P))  # initialize rPp for each idert
 
-    for i, (idert, Rdert) in enumerate(zip( idert_,Rdert_)):  # form consecutive fixed-rng Rderts, overlapping within rng-1
+    for i, (idert, _rPp) in enumerate(zip( idert_,rPp_)):  # form consecutive fixed-rng rPps, overlapping within rng-1
 
         j = i + rootPp.x0 + 1  # get compared index in root Idert_, start at step=2 or 1 + prior rng, step=1 was in cross-comp
         idert.m = idert.d = 0  # reset from rng=1 comp, if no rng comp
@@ -408,39 +408,35 @@ def search_rng(rootPp, Idert_, loc_ave, rng):  # extended fixed-rng search-right
             idert.p = cdert.i + idert.i  # -> ave i
             idert.d = cdert.i - idert.i  # difference
             idert.m = loc_ave - abs(idert.d)  # indirect match
-            right_Rdert = Rdert_[j]  # not quite sure about j
+            rPp = rPp_[j]  # not quite sure about j
             if idert.m > 0:
                 if idert.m > ave_M * 4 and idert.P.sublayers and cdert.P.sublayers:  # 4: init ave_sub coef
                     comp_sublayers(idert.P, cdert.P, idert.m)  # deeper cross-comp between high-m Ps
                 # left assign:
-                Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
-                idert.Ppt[0] = [Rdert]; Rdert.sub_dert_ += [idert]
+                _rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
+                idert.Ppt[0] += [_rPp]  # root _rPps = olp
+                _rPp.pdert_ += [idert]
                 # right assign:
-                right_Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
-                rdert = idert.copy(); rdert.Ppt[0] = [right_Rdert]
-                right_Rdert.sub_dert_.insert(0, rdert)  # extend left, Rdert is now bilateral
-                idert = Cpdert(P=idert.P, Ppt=[[Rdert.Ppt],[]])  # new idert, not sure about Ppt=[[Rdert.Ppt]
+                rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
+                rdert = idert.copy(); rdert.Ppt[0] = [rPp]
+                rPp.pdert_.insert(0, rdert)  # extend left, Rdert is now bilateral
+                idert = Cpdert(P=idert.P, Ppt=[[_rPp],[]])  # new idert, not sure about Ppt
             else:
                 # idert miss, need to represent discontinuity:
                 idert.negL += 1  # dert scope = negL + 1 + prior rng
                 idert.negM += idert.m
-                right_Rdert.sub_dert_[0].negL += 1
-                right_Rdert.sub_dert_[0].negM += idert.m
+                rPp.pdert_[0].negL += 1
+                rPp.pdert_[0].negM += idert.m
             j += 1
         if idert.m <= 0:  # add last idert if negative:
-            # left assign:
-            Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
-            idert.Ppt[0] = Rdert  # single root, if needed
-            Rdert.sub_dert_ += [idert]
-            # right assign:
-            right_Rdert = Rdert_[j]  # not quite sure about j
-            right_Rdert.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
-            rdert = idert.copy(); rdert.Ppt[0] = [right_Rdert]
-            right_Rdert.sub_dert_.insert(0, rdert)  # extend left, Rdert is now bilateral
+            # left assign only:
+            _rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
+            idert.Ppt[0] += [_rPp]
+            _rPp.sub_dert_ += [idert]
 
-    return Rdert_  # accumulated rng_dert_
+    return rPp_  # accumulated rng_dert_
 
-
+# replace with merge_rPp_:
 def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by M sign
     rPp_ = []  # output clusters
     distance = 1
