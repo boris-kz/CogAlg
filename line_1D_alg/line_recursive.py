@@ -64,16 +64,16 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
 
             Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
             sum_rdn_(param_names, Pdert_t, fiPd)  # sum cross-param redundancy per pdert
-            for param_index, (param_name, Pdert_) in enumerate(zip(param_names, Pdert_t)):  # Pdert_ -> Pps:
+            for param, Pdert_ in enumerate(Pdert_t):  # Pdert_ -> Pps:
 
                 for fPd in 0, 1:  # 0-> Ppm_, 1-> Ppd_:
                     new_types = types.copy()
-                    new_types.insert(0, param_index)  # add param index
-                    new_types.insert(0, fPd)          # add fPd
+                    new_types.insert(0, param)  # add param index
+                    new_types.insert(0, fPd)    # add fPd
                     new_types_.append(new_types)
                     Pp_ = form_Pp_(Pdert_, fPd)
                     new_sublayer0 += [Pp_]  # Ppm_| Ppd_
-                    if (fPd and param_name == "D_") or (not fPd and param_name == "I_"):
+                    if (fPd and param == 2) or (not fPd and param == 1):  # 2: "D_", 1: "I_"
                         if not fPd:
                             splice_Ps(Pp_, dert1_, dert2_, fiPd, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
                         intra_Pp_(root, Pp_, Pdert_, 1, fPd)  # eval der+ or rng+ per Pp
