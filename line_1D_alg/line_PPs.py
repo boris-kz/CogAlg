@@ -34,18 +34,19 @@ class Cpdert(ClusterStructure):
     sub_M = int  # match from comp_sublayers, if any
     sub_D = int  # diff from comp_sublayers, if any
     P = object  # P of i param
+    aPp = object  # anchor rPp
     Ppt = lambda: [[], []]  # tuple [Ppm,Ppd]: Pps that pdert is in, to join rdert_s
 
-class CPp(CP):
+class CPp(CP):  # may use separate CrPp, it's more complex?
+
     dert_ = list  # if not empty: Pp is primarily a merged P, other params are optional
     pdert_ = list  # Pp elements, "p" for param
-    neg_pdert_ = list  # negative pderts
     flay_rdn = bool  # Pp is layer-redundant to Pp.pdert_
     negM = int  # in rng_Pps only
     negL = int  # in rng_Pps only, summed in L, no need to be separate?
     _negM = int  # for search left, within adjacent neg Ppm only?
-    olp_Pp_ = dict  # overlapping rPps, key = rPp, val = mut_M
     _negL = int  # left-most compared distance from Pp.x0
+    olp_Pp_ = lambda: dict, dict  # overlapping rPps and their M to current rPp
     sublayers = list  # lambda: [([],[])]  # nested Ppm_ and Ppd_
     subDerts = list  # for comp sublayers
     levels = list  # levels of composition: Ps ) Pps ) Ppps..
@@ -94,8 +95,9 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(P_t)
-    sublayer0 = []  # 1st sublayer is implicit 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
-    # deep sublayers are implicit 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
+    # 1st sublayer: implicit 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+    # deep sublayers: implicit 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
+    sublayer0 = []
     root = CPp(levels=[P_t], sublayers=[sublayer0])
 
     for fPd, P_ in enumerate(P_t):  # fPd: Pm_ or Pd_
@@ -313,6 +315,7 @@ def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps
             rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
             sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
             sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
+        # else: Pp.sublayers = []  # reset after the above converts it to [([],[])]?
     else:  # P is Pd
         if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
             rdn+=1; rng+=1
@@ -371,7 +374,7 @@ def intra_Pp_(rootPp, Pp_, hlayers, fPd):  # evaluate for sub-recursion in line 
                     # extend search if high loc_ave, fixed-range: parallelizable, individual selection is not worth the costs:
                     rng = int(Pp.M / Pp.L / 4)  # ave_rng = 4
                     rPp_ = search_rng(Pp, loc_ave * ave_mI, rng)  # each rPp contains fixed-rng pdert_
-                    # rPp_ = form_rPp_(Rdert_, rootPp, rng)  replace with recursive merge_rPp_?
+                    rPp_ = merge_rPp_(rPp_)  # recursive merging of weaker overlapping rPps
                     sub_Ppm_[:] = rPp_
                     if rPp_ and Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, not spliced Pp, if Pm_'IPpm_.M, +Pp.iM?
                         intra_Pp_(Pp, rPp_, hlayers + 1, fPd)  # recursive rng+, no der+ in redundant Pds?
@@ -420,15 +423,18 @@ def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for cor
                 if idert.m > ave_M * 4 and idert.P.sublayers and cdert.P.sublayers:  # 4: init ave_sub coef
                     comp_sublayers(idert.P, cdert.P, idert.m)  # deeper cross-comp between high-m Ps
                 # left assign:
-                # append "rPp" key if not in _rPp.olp_Pp_, pseudo:
-                # _rPp.olp_Pp_."rPp"[mut_M] += idert.m  # _rPp match to rPp, accumulated over all mutual iderts
+                if rPp not in _rPp.olp_rPp_:
+                    _rPp.olp_Pp_.append({"key":rPp.id})
+                _rPp.olp_rPp_["value"]+=idert.m  # this seems wrong
                 _rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 idert.Ppt[0] += [_rPp]  # root _rPps = olp
-                idert.negL = _rPp  # anchor rPp, check and replace in merging?
+                idert.aPp = _rPp  # anchor rPp, check and replace in merging?
                 _rPp.pdert_ += [idert]
+
                 # right assign:
-                # append "_rPp" key if not in rPp.olp_Pp_, pseudo:
-                # rPp.olp_Pp_."_rPp"[mut_M] += idert.m  # rPp match to _rPp, accumulated over all mutual iderts
+                if _rPp not in _rPp.olp_rPp_:
+                    rPp.olp_Pp_.append({"key":_rPp.id})
+                rPp.olp_rPp_["value"]+=idert.m  # this seems wrong
                 rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 rPp.pdert_.insert(0, idert)  # extend rPp left
                 idert.Ppt[0] += [rPp]
@@ -436,63 +442,55 @@ def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for cor
                 # idert miss, need to represent discontinuity:
                 idert.negL += 1  # dert scope = negL + 1 + prior rng
                 idert.negM += idert.m
-                rPp.pdert_ += idert.copy()  # add negative dert
+                rPp.pdert_ += [idert.copy()]  # add negative dert
                 rPp.pdert_[0].negL += 1
                 rPp.pdert_[0].negM += idert.m
 
-            _m = idert.m  # to test for sign change and neg_dert termination in line 414
-            ''' 
-            this should be in olp_Pp_?
-            # or this should be at the end of function? So all M of rPp are being summed first?
-            if _rPp.M < rPp.M:  # or use mutual M?
-                _rPp.pdert_[-1].rdn += 1  # increase rdn of lower M left _rPp's last pdert
-            elif rPp.M < _rPp.M:
-                rPp.pdert_[0].rdn += 1  # increase rdn of lower M right rPp's first pdert
-            '''
+            _m = idert.m  # for sign change and neg_dert termination
             j += 1
 
-        if idert.m <= 0:  # add last idert if negative:
-            # left assign only:
+        if idert.m <= 0:  # add last idert if negative, left assign only:
             _rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
             idert.Ppt[0] += [_rPp]
             _rPp.pdert_ += [idert]
 
-    rPp_ = merge_rPp_(rPp_)
-
     return rPp_
 
-# not reviewed yet:
+# draft:
 def merge_rPp_(rPp_):
-
-    orPp_ = []
+    merged_rPp_ = []
     while rPp_:
-        _rPp = rPp_.pop(0)  # get left rPp
+        rPp = rPp_.pop(0)
+        for olp_rPp in rPp.olp_rPp_:
+            if olp_rPp.val > ave_M:  # high mutual M
+                if olp_rPp.M > rPp.M:  # can we use reference as a key, to retrieve olp_rPp?
+                    merge(olp_rPp, rPp)
+                    merged_rPp_.append(olp_rPp)
+                else:
+                    merge(rPp, olp_rPp); rPp_.remove(olp_Pp)
+                    merged_rPp_.append(rPp)
+            else:
+                merged_rPp_.append(rPp)
+                '''
+                # merge olp_rPp to _rPp
+                for idert in olp_rPp.pdert_:
+                    if idert not in _rPp.pdert_:  # to avoid mutual idert
+                        _rPp.accum_from(idert, ignore_capital=True)
+                        _rPp.pdert_.append(idert)
+                        idert.Ppt[0] += [_rPp]
+                    else:  # mutual idert, remove reference of merged rPp from idert.Ppt
+                        idert.Ppt[0].remove(olp_rPp)
 
-        checked_rPp_ = []
-        while rPp_:
-            rPp = rPp_.pop(0)  # get right rPp
-            f_merged = 0  # flag to know whether current rPp is merged
+                # check and pack overlap of overlap rPps to _rPp
+                olp_olp_Pp_ = olp_rPp.olp_Pp_["rPp"]
+                olp_mut_M_ = olp_rPp.olp_Pp_["mut_M"]
+                for olp_olp_rPp, olp_mut_M in zip(olp_olp_Pp_, olp_mut_M_):
+                    if olp_olp_rPp not in olp_Pp_ and olp_olp_rPp is not _rPp:
+                        olp_Pp_.append(olp_olp_rPp)
+                        mut_M_.append(olp_mut_M)
+            '''
+    return merged_rPp_
 
-            for i, _idert in enumerate(_rPp.pdert_, start=1):
-                # not quite sure on this
-                if _rPp.x0 + i + _idert.negL >= rPp.x0 and _rPp.M + rPp.M > ave_M:  # check for overlap and mutual M > ave
-                    f_merged = 1
-
-                    # merge rPp to _rPp
-                    for idert in rPp.pdert_:
-                        if idert not in _rPp.pdert_:  # to avoid mutual idert
-                            _rPp.accum_from(idert, ignore_capital=True)
-                            _rPp.pdert_.append(idert)
-                            idert.Ppt[0] += [_rPp]
-                        else:  # mutual idert, remove reference of merged rPp from idert.Ppt
-                            idert.Ppt[0].remove(rPp)
-                    break
-
-            if not f_merged: checked_rPp_.append(rPp)  # packing back the non-merged rPp
-        rPp_ = checked_rPp_
-        orPp_.append(_rPp)
-
-    return orPp_
 
 # replace with merge_rPp_:
 def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by M sign
