@@ -95,7 +95,7 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
 def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(P_t)
-    # 1st sublayer: implicit 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+    # 1st sublayer: implicit 3-layer nested P_tuple, P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
     # deep sublayers: implicit 2-layer nested tuples: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
     sublayer0 = []
     root = CPp(levels=[P_t], sublayers=[sublayer0])
@@ -351,7 +351,7 @@ def intra_Pp_(rootPp, Pp_, hlayers, fPd):  # evaluate for sub-recursion in line 
             loc_ave = (ave + iM) / 2 * Pp.Rdn * hlayers  # cost per comp
             if fPd:
                 loc_ave *= ave_d; loc_ave_M *= ave_D  # =ave_d?
-                # der+
+                # der+:
                 if abs(Pp.D) / Pp.L > loc_ave_M * 4:  # 4: search cost, + Pp.M: local borrow potential?
                     sub_search(Pp, fPd=True)  # search in top sublayer, eval by pdert.d
                     sub_Ppm_, sub_Ppd_ = [], []
@@ -366,7 +366,7 @@ def intra_Pp_(rootPp, Pp_, hlayers, fPd):  # evaluate for sub-recursion in line 
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
             else:
-                # rng+
+                # rng+:
                 if Pp.M / Pp.L > loc_ave_M + 4:  # 4: search cost, + Pp.iM?
                     sub_search(Pp, fPd=False)
                     sub_Ppm_, sub_Ppd_ = [], []
@@ -396,11 +396,11 @@ def intra_Pp_(rootPp, Pp_, hlayers, fPd):  # evaluate for sub-recursion in line 
 
 def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave: lower m
 
-    rPp_ = []
+    rPp_ = []  # bilateral rPps: evaluation per search, also symmetry per evaluated P|dert?
     idert_ = rootPp.pdert_
     for i, idert in enumerate(idert_):
-        idert.Ppt = [[],[]]  # clear higher-level ref for current level
-        rPp_.append(CPp(x0=i))  # initialize base rPp for each idert, rdn assign to non-max of overlapping rPps
+        idert.Ppt = [[],[]]  # clear higher-level refs for current level
+        rPp_.append(CPp(x0=i))  # initialize base rPp for each idert, merge sufficiently overlapping rPps
 
     for i, (idert, _rPp) in enumerate(zip( idert_,rPp_)):  # form consecutive fixed-rng rPps, overlapping within rng-1
         _m = 0
@@ -416,21 +416,21 @@ def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for cor
             rPp = rPp_[j]
             if idert.m > 0:
                 if i:  # not 1st idert
-                    if _m <= 0:  # terminate and append neg_pdert:
-                        _rPp.accum_from(idert, ignore_capital=True)  # or accum negL, negM only?
-                        _rPp.pdert_ += [idert]
+                    if _idert.m <= 0:  # terminate and append neg_pdert:
+                        _rPp.accum_from(_idert, ignore_capital=True)  # or accum negL, negM only?
+                        _rPp.pdert_ += [_idert]
                 if idert.m > ave_M * 4 and idert.P.sublayers and cdert.P.sublayers:  # 4: init ave_sub coef
                     comp_sublayers(idert.P, cdert.P, idert.m)  # deeper cross-comp between high-m Ps
                 # left rPp assign:
-                if rPp.id not in _rPp.olp_rPp_.keys(): _rPp.olp_rPp_[rPp] = 0  # create rPp as key, m=0 as value
-                _rPp.olp_rPp_[rPp.id] += idert.m  # add m value to current rPp key, also counter?
+                if rPp not in _rPp.olp_rPp_.keys(): _rPp.olp_rPp_[rPp] = 0  # create key = rPp object, value m = 0
+                _rPp.olp_rPp_[rPp] += idert.m  # add m value to current rPp key, also counter?
                 _rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 idert.Ppt[0] += [_rPp]  # root _rPps = olp
                 idert.aPp = _rPp  # anchor rPp per idert, if unique assign?
                 _rPp.pdert_ += [idert]
                 # right rPp assign:
-                if _rPp.id not in rPp.olp_rPp_.keys(): _rPp.olp_rPp_[rPp] = 0
-                rPp.olp_rPp_[_rPp.id] += idert.m
+                if _rPp not in rPp.olp_rPp_.keys(): rPp.olp_rPp_[_rPp] = 0
+                rPp.olp_rPp_[_rPp] += idert.m
                 rPp.accum_from(idert, ignore_capital=True)  # Pp params += pdert params
                 rPp.pdert_.insert(0, idert)  # extend rPp left
                 idert.Ppt[0] += [rPp]
@@ -442,7 +442,7 @@ def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for cor
                 rPp.pdert_[0].negL += 1
                 rPp.pdert_[0].negM += idert.m
 
-            _m = idert.m  # for sign change and neg_dert termination
+            _idert = idert  # for sign change and neg_dert termination
             j += 1
 
         if idert.m <= 0:  # add last idert if negative, left assign only:
@@ -451,77 +451,43 @@ def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for cor
 
     return rPp_
 
-# not fully updated yet, especially on the merging part
-def merge_rPp_(rPp_):
+def merge_rPp_(rPp_):  # merge sufficiently overlapping rPps into the higher-M of the two
     merged_rPp_ = []
 
     while rPp_:
         rPp = rPp_.pop(0)
-        olp_rPp_ = rPp.olp_rPp_  # old: rPp_ids = [Pp.id for Pp in rPp_]
-        for olp_rPp in olp_rPp_:  # old: in rPp_id, val in zip(rPp.olp_rPp_.keys(), rPp.olp_rPp_.values()):
+        olp_rPp_ = rPp.olp_rPp_
+        for olp_rPp in list(olp_rPp_):  # loop keys, each is olp_rPp instance
+            if olp_rPp_[olp_rPp] > ave_M:  # high mutual M, or mutual M / total M?
 
-            if olp_rPp > ave_M:  # high mutual M
-                ref_olp_rPp = rPp.olp_rPp_[olp_rPp]  # get referred olp_rPp, need to store olp_rPp instance as a key
-                if ref_olp_rPp.M > rPp.M:
+                if olp_rPp.M > rPp.M:  # merge rPp in olp_rPp
                     merge(olp_rPp, rPp)
-                    merged_rPp_.append(ref_olp_rPp)
-                else:
-                    merge(rPp, ref_olp_rPp); rPp_.remove(ref_olp_rPp)
+                    merged_rPp_.append(olp_rPp)
+                else:  # merge olp_rPp in rPp
+                    merge(rPp, olp_rPp)
+                    if olp_rPp in rPp_:          rPp_.remove(olp_rPp)
+                    elif olp_rPp in merged_rPp_: merged_rPp_.remove(olp_rPp)
                     merged_rPp_.append(rPp)
             else:
                 merged_rPp_.append(rPp)
 
     return merged_rPp_
 
-def merge(_rPp, rPp):
-    '''
-    # merge olp_rPp to _rPp
-    for idert in olp_rPp.pdert_:
-        if idert not in _rPp.pdert_:  # to avoid mutual idert
+def merge(_rPp, rPp):  # merge overlapping rPp in _rPp
+
+    for idert in rPp.pdert_:
+        if idert not in _rPp.pdert_:  # non-redundant idert, positive only?
             _rPp.accum_from(idert, ignore_capital=True)
             _rPp.pdert_.append(idert)
-            idert.Ppt[0] += [_rPp]
-        else:  # mutual idert, remove reference of merged rPp from idert.Ppt
-            idert.Ppt[0].remove(olp_rPp)
-    # check and pack overlap of overlap rPps to _rPp
-    olp_olp_Pp_ = olp_rPp.olp_Pp_["rPp"]
-    olp_mut_M_ = olp_rPp.olp_Pp_["mut_M"]
-    for olp_olp_rPp, olp_mut_M in zip(olp_olp_Pp_, olp_mut_M_):
-        if olp_olp_rPp not in olp_Pp_ and olp_olp_rPp is not _rPp:
-            olp_Pp_.append(olp_olp_rPp)
-            mut_M_.append(olp_mut_M)
-    '''
-    pass
+            idert.Ppt[0] += [_rPp]  # add merged rPp reference
+        if rPp in idert.Ppt[0]: idert.Ppt[0].remove(rPp)  # remove merging rPp reference
+    # merge olp_rPp_s:
+    for olp_rPp in rPp.olp_rPp_:
+        if olp_rPp not in _rPp.olp_rPp_.keys():
+            _rPp.olp_rPp_[olp_rPp] = rPp.olp_rPp_[olp_rPp]  # add non-redundant olp_rPp
 
-# replaced by merge_rPp_:
-def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by M sign
-    rPp_ = []  # output clusters
-    distance = 1
-
-    for Rdert in Rdert_:
-        if Rdert.m > 0:
-            if "rPp" in locals():
-                # additions and exclusions, exclude overlap? or individual vars accum and init is clearer?
-                rPp.accum_from(Rdert, ignore_capital=True)  # both Rdert and any of Rdert_[-rng:-1] are positive
-                rPp.L += 1; rPp.pdert_ += [Rdert]
-            else:
-                rPp = CPp(pdert_=[Rdert], root=root)
-                rPp.L = 1; rPp.accum_from(Rdert)
-            distance = 1
-        else:
-            distance += 1  # from next pre_rPp
-            if "rPp" in locals() and distance==rng:
-                term_rPp(rPp, rPp_)  # rPp.pdert_ is Rdert_
-                del rPp  # exceeded comp rng, remove from locals
-
-    if "rPp" in locals():  # terminate last rPp
-        term_rPp(rPp, rPp_)
-    '''
-    bilateral rPp for max/min evaluation, else asymmetry per evaluated P|dert? 
-    
-    assign rdn to overlapping pderts in lower-M rPps, vs olp and merge per rPp?
-    adjust rPp.M for overlaps between rPps? 
-    
+'''   
+    assign rdn to overlapping pderts in lower-M rPps, if eval by element.cluster, which is wrong, same cluster for all elements?:  
     for i, _Rdert in enumerate(Rdert_):
         j = i + 1
         overlap = rng
@@ -539,11 +505,38 @@ def form_rPp_(Rdert_, root, rng):  # cluster rng-overlapping directional rPps by
                 else:  # _Rdert.M is lower
                     # find corresponding _pdert at k-i, currently incorrect:
                     _Rdert.pdert_[l].rdn += 1
-    '''
+
+local proximity sub-clustering, before and after merge, 
+because merge criterion is overlap, different from rng in cross comp? 
+same level: same comparison, but not adjacent, that was at rng-? still a priority?: 
+'''
+def form_rPp_(rPp_, root, rng):  # cluster rng-overlapping directional rPps by M sign
+    re_rPp_ = []  # output clusters
+    distance = 1
+
+    for rPp in rPp_:
+        if rPp.M > 0:
+            if "re_rPp" in locals():
+                # additions and exclusions, exclude overlap? or individual vars accum and init is clearer?
+                re_rPp.accum_from(rPp, ignore_capital=True)  # both Rdert and any of Rdert_[-rng:-1] are positive
+                re_rPp.L += 1; re_rPp.pdert_ += [rPp]
+            else:
+                re_rPp = CPp(pdert_=[rPp], root=root)
+                re_rPp.L = 1; re_rPp.accum_from(re_rPp)
+            distance = 1
+        else:
+            distance += 1  # from next pre_rPp
+            if "re_rPp" in locals() and distance==rng:
+                term_re_rPp(re_rPp, re_rPp_)  # rPp.pdert_ is Rdert_
+                del re_rPp  # exceeded comp rng, remove from locals
+
+    if "re_rPp" in locals():  # terminate last rPp
+        term_re_rPp(re_rPp, re_rPp_)
+
     return rPp_
 
 
-def term_rPp(rPp, rPp_):  # Pp_, L, I, D, M, Rdn, x0, ix0, rPp_):
+def term_re_rPp(rPp, rPp_):  # Pp_, L, I, D, M, Rdn, x0, ix0, rPp_):
     # add conditional cross-comp between pre_rPp_s?
 
     Pp_M = rPp.M / (rPp.L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
