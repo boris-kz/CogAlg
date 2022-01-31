@@ -30,7 +30,7 @@ different from range_comp in that elements can be distant, but also always posit
 # add ColAlg folder to system path
 import sys
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
 
 from line_patterns import CP
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param, Cdm_

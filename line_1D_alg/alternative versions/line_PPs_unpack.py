@@ -5,7 +5,7 @@ It cross-compares P params (initially L, I, D, M) and forms param_Ps (Pps) for e
 
 import sys  # add CogAlg folder to system path
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
 from line_patterns import *
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 

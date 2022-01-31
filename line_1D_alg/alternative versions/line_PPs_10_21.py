@@ -12,7 +12,7 @@ line_PPPPs = increment (line_PPPs), etc. That will be the hardest and most impor
 
 import sys  # add CogAlg folder to system path
 from os.path import dirname, join, abspath
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
 import numpy as np
 from line_patterns import *
 from frame_2D_alg.class_cluster import ClusterStructure, comp_param

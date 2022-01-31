@@ -23,7 +23,7 @@ import sys
 from os.path import dirname, join, abspath
 
 from numpy import int16, int32
-sys.path.insert(0, abspath(join(dirname("CogAlg"), '..')))
+sys.path.insert(0, abspath(join(dirname("CogAlg"), '../..')))
 import cv2
 # import argparse
 import pickle
@@ -272,7 +272,7 @@ if __name__ == "__main__":
             frame_of_patterns_ = pickle.load(file)
     else:
         # Run functions
-        image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
+        image = cv2.imread('../raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         assert image is not None, "No image in the path"
         # Main
         frame_of_patterns_ = cross_comp(image)  # returns Pm__
@@ -281,7 +281,7 @@ if __name__ == "__main__":
                 pickle.dump(frame_of_patterns_, file)
 
     if render:
-        image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
+        image = cv2.imread('../raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
         plt.figure(); plt.imshow(image, cmap='gray'); plt.show()  # show the image below in gray
 
     if fline_PPs:  # debug line_PPs
