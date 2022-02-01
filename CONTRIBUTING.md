@@ -67,6 +67,9 @@ Yura Guruel, $1000: various, May-July
 
 Aqib Mumtaz and Ayesha Ali, $1400: audio interfacing for 1D alg, April-May
 
+2022: 
+
+Kok Wei Chee, $2240: lead developer, January
 
 
 
