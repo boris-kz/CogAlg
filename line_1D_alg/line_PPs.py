@@ -407,11 +407,8 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
 
 # needs to be revised to re-evaluate all overlapping Rderts, accumulated in comp_rng:
 
-def form_rPp_(Rdert_, rng, depth):  # evaluate direct and mediated match between adert.P and olp_dert.Ps
-    '''
-    Re-evaluates inclusion of accumulated Rderts in _rPp: if (M of overlap per rdert.Rdert) > ave_M * olp,
-    There will be fewer or no overlapping pderts per mediation?
-    '''
+def form_rPp_(Rdert_, rng, depth):  # evaluate inclusion of accumulated Rderts in _rPp
+
     rPp_ = []
     for _Rdert in Rdert_:
         if not isinstance(_Rdert.roots, CPp):  # no rPp was formed by prior merging
@@ -419,74 +416,33 @@ def form_rPp_(Rdert_, rng, depth):  # evaluate direct and mediated match between
             _rPp.accum_from(_Rdert, ignore_capital=True)
             _Rdert.roots = _rPp
             rPp_.append(_rPp)
-        else:  # rPp was formed in prior merging
-            rPp_=_Rdert.roots
+        else:  # rPp was formed by prior merging
+            _rPp_ = _Rdert.roots
 
-        if _rPp.M > ave_M * 4:  # min clustering value, else reuse Rdert_ for multiple rmg+s?
+        if _rPp.M > ave_M * 4:  # clustering costs per rPp, else reuse Rdert_ for multiple rmg+s?
             rdert_= _Rdert.rdert_
             for i, rdert in enumerate(rdert_):
-                olp_ = _Rdert.rdert_[min(0, i-rng): i]  # _Rdert overlap with rdert_[i].Rdert
-                olp_M = sum(rdert.m for rdert in olp_)
+                olp_ = _Rdert.rdert_[max(0, i-rng): i]  # _Rdert overlap with rdert_[i].Rdert
+                olp_M = sum(rdert.m for rdert in olp_)  # M(_adert, adert) in overlap
 
-                if olp_M / len(olp_) > ave_M * 4:  # mean M of overlap
+                if olp_M / len(olp_) > ave_M * 4:  # added variable cost of process in +rPp, vs mean M of overlap
                     # add to _rPp:
                     Rdert = rdert.roots; rPp = Rdert.roots
                     if isinstance(rPp, CPp):  # merge rPp
                         for cRdert in rPp.pdert_:
                             if cRdert not in _rPp.pdert_:
-                                cRdert = rdert.roots
+                                cRdert.roots = _rPp
                                 _rPp.accum_from(cRdert, ignore_capital=True)
+                                _rPp.pdert_.append(cRdert)
                                 _rPp.L += 1
-                    if rdert.m > 0:
-                        rdert.olp_M += Rdert.rdert_[0].m  # _Rdert olp added per rng+, always 2 rderts per Rdert
-                        Rdert.rdert_[0].olp_M += rdert.m  # reciprocal left olp extension
-                        rPp.L += 1
+                    elif Rdert not in _rPp.pdert_:
+                        _rPp.accum_from(Rdert, ignore_capital=True)
+                        _rPp.pdert_.append(Rdert)
+                        _rPp.L += 1
 
-        rPp_.append(_rPp)
+        rPp_.append(_rPp)  # no eval oolp Rderts: that's closer Rderts
 
-    return rPp_
-'''   
-    local proximity sub-clustering, before and after merge, 
-    merge by overlapping M, vs. cluster by rng m in cross comp: 
-    second-order cross-central vs. primary center-edge similarity?
-    same level, but not adjacent, that was at rng-? still a priority?:
- '''
-def reform_rPp_(rPp_, root, rng):  # cluster rng-overlapping directional rPps by M sign
-    re_rPp_ = []  # output clusters
-    distance = 1
-
-    for rPp in rPp_:
-        if rPp.M > 0:
-            if "re_rPp" in locals():
-                # additions and exclusions, exclude overlap? or individual vars accum and init is clearer?
-                re_rPp.accum_from(rPp, ignore_capital=True)  # both Rdert and any of Rdert_[-rng:-1] are positive
-                re_rPp.L += rPp.L ; re_rPp.pdert_ += rPp.pdert_  # extend Rderts
-            else:
-                re_rPp = CPp(pdert_=rPp.pdert_, root=root)
-                re_rPp.L = rPp.L; re_rPp.accum_from(re_rPp)
-            distance = 1
-        else:
-            if "re_rPp" in locals() and distance==rng:
-                term_re_rPp(re_rPp, re_rPp_)  # rPp.pdert_ is Rdert_
-                del re_rPp  # exceeded comp rng, remove from locals
-            distance += 1  # from next pre_rPp (add distance after checking distance == rng)
-    if "re_rPp" in locals():  # terminate last rPp
-        term_re_rPp(re_rPp, re_rPp_)
-
-    return rPp_
-
-
-def term_re_rPp(rPp, rPp_):  # Pp_, L, I, D, M, Rdn, x0, ix0, rPp_):
-    # add conditional cross-comp between pre_rPp_s?
-
-    Pp_M = rPp.M / (rPp.L *.7)  # .7: ave intra-Pp-match coef, for value reduction with resolution, still non-negative
-    rPp_M  = rPp.M - rPp.L * ave_M  # cost incr per pdert representations
-    rPp.flay_rdn = Pp_M < rPp_M  # Pp vs rPp_ rdn
-    # rPp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, pdert_=Rdert_)
-    for Rdert in rPp.pdert_:  # rPp.pdert_ is Rdert_
-        Rdert.roots = rPp  # Rdert is CPp, so we use root
-    rPp_.append(rPp)
-    # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
+    return rPp_  # no term_rPp
 
 
 def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublayer of high-M Pms | high-D Pds, called from intra_Pp_
@@ -675,8 +631,8 @@ def norm_feedback(P_t):
     for P in P_t[1]:  # Pd_
         P.I /= P.L; P.D /= P.L; P.M /= P.L
 
+# to avoid intermediate clustering costs and selection, or just skip clustering phase with comp_rng:
 # if multiple rng extension cycle:
-# to avoid intermediate clustering costs and selection? or just skip clustering phase?
 
 def search_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave: lower m
 

@@ -639,14 +639,9 @@ def merge_rPp(_rPp, rPp):  # merge overlapping rPp in _rPp
                 else:  # _Rdert.M is lower
                     # find corresponding _pdert at k-i, currently incorrect:
                     _Rdert.pdert_[l].rdn += 1
-
-local proximity sub-clustering, before and after merge, 
-merge by overlapping M, vs. cluster by rng m in cross comp: 
-second-order cross-central vs. primary center-edge similarity?
-
-same level: same comparison, but not adjacent, that was at rng-? still a priority?: 
 '''
-
+# center-edge comp and clustering by olp M, no secondary cross-central comp: includes olp.
+# no re-clustering, that would be splicing, so the following is wrong:
 
 def reform_rPp_(rPp_, root, rng):  # cluster rng-overlapping directional rPps by M sign
     re_rPp_ = []  # output clusters
@@ -657,12 +652,10 @@ def reform_rPp_(rPp_, root, rng):  # cluster rng-overlapping directional rPps by
             if "re_rPp" in locals():
                 # additions and exclusions, exclude overlap? or individual vars accum and init is clearer?
                 re_rPp.accum_from(rPp, ignore_capital=True)  # both Rdert and any of Rdert_[-rng:-1] are positive
-                re_rPp.L += rPp.L;
-                re_rPp.pdert_ += rPp.pdert_  # extend Rderts
+                re_rPp.L += rPp.L; re_rPp.pdert_ += rPp.pdert_  # extend Rderts
             else:
                 re_rPp = CPp(pdert_=rPp.pdert_, root=root)
-                re_rPp.L = rPp.L;
-                re_rPp.accum_from(re_rPp)
+                re_rPp.L = rPp.L; re_rPp.accum_from(re_rPp)
             distance = 1
         else:
             if "re_rPp" in locals() and distance == rng:
