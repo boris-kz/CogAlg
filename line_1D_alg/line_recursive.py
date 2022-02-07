@@ -71,12 +71,13 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
                     new_types.insert(0, param)  # add param index
                     new_types.insert(0, fPd)    # add fPd
                     new_types_.append(new_types)
-                    Pp_ = form_Pp_(Pdert_, fPd)
+                    Pp_ = form_Pp_(deepcopy(Pdert_), fPd)
                     new_sublayer0 += [Pp_]  # Ppm_| Ppd_
                     if (fPd and param == 2) or (not fPd and param == 1):  # 2: "D_", 1: "I_"
                         if not fPd:
                             splice_Ps(Pp_, dert1_, dert2_, fiPd, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                        intra_Pp_(root, Pp_, Pdert_, 1, fPd)  # eval der+ or rng+ per Pp
+                        rng_incr(root, Pp_, hlayers=1, rng=2)  # eval rng+ comp,form per Pp
+                        der_incr(root, Pp_, hlayers=1)  # eval der+ comp,form per Pp
                     new_M += sum([Pp.M for Pp in Pp_])
         else:
             new_sublayer0 += [[] for _ in range(8)]  # 8 empty list for 4 params * 2 fPd tuples
@@ -159,7 +160,7 @@ def line_PPPs_root(root):  # test code
                             if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                                 if not fPpd:
                                     splice_Ps(Pp_, dert1_, dert2_, fiPpd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                                intra_Pp_(root, param_md, Pdert_, 1, fPpd)  # eval der+ or rng+ per Pp
+                                intra_Pp_(root, param_md[fPpd], 1, fPpd)  # eval der+ or rng+ per Pp
                             level_M += sum([Pp.M for Pp in Pp_])
                         paramset += [param_md]  # -> [Lmd, Imd, Dmd, Mmd]
                     sublayer0 += [paramset]  # -> [Pm_, Pd_]
