@@ -22,8 +22,8 @@ from frame_2D_alg.class_cluster import ClusterStructure, comp_param
 from line_Ps import *
 # from line_PPPs import line_PPPs_root
 
-class Cpdert(ClusterStructure):
-    # P param dert
+class Cpdert(ClusterStructure):  # P param dert
+
     i = int  # input for range_comp only
     p = int  # accumulated in rng
     d = int  # accumulated in rng
@@ -39,15 +39,14 @@ class Cpdert(ClusterStructure):
 
 class CPp(CP):  # "p" stands for param
 
-    P = object  # if not empty: Pp is primarily a spliced P, other params are optional
+    P = object  # if not empty: Pp is primarily a spliced P, all params below are optional
     pdert_ = list  # Pp elements, replaced by single P if spliced?
     flay_rdn = bool  # Pp is layer-redundant to Pp.pdert_
     sublayers = list  # lambda: [([],[])]  # nested Ppm_ and Ppd_
     subDerts = list  # for comp sublayers
     levels = list  # levels of composition: Ps ) Pps ) Ppps..
     root = object  # higher Pp, to replace locals for merging
-    rng = int
-    cM = int  # current rng M, in rPps, or local? no need for cD: local?
+    rng = int  # range of P.I cross-comparison
     # layer1: iL, iI, iD, iM, iRdn: summed P params
 
 ave = 1  # ave dI -> mI, * coef / var type:
@@ -262,18 +261,17 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd, fPpd):  # re-eval Pps, Pp.pdert_s for
             for pdert2 in pdert2_: M2 += pdert2.m  # match(I, __I or D, __D): step=2
             for pdert1 in pdert1_: M1 += pdert1.m  # match(I, _I or D, _D): step=1
 
-            if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.pdert_?
-                # replace Pp params with summed P params, Pp is now primarily a spliced P:
-                P = CP
-                P.L = sum([pdert.P.L for pdert in Pp.pdert_])
+            if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.pdert_:
+                # Pp is now primarily a spliced P:
+                P = CP()
+                P.x0 = Pp.pdert_[0].P.x0
                 P.I = sum([pdert.P.I for pdert in Pp.pdert_])
                 P.D = sum([pdert.P.D for pdert in Pp.pdert_])
                 P.M = sum([pdert.P.M for pdert in Pp.pdert_])
                 P.Rdn = sum([pdert.P.Rdn for pdert in Pp.pdert_])
-
-                for pdert in Pp.pdert_:
-                    P.dert_ += pdert.P.dert_  # if Pp.dert_: spliced P, summed P params are primary, other Pp params are low-value
-                intra_P(P, rdn=1, rng=1, fPd=fPd)  # fPd, not fPpd, re-eval line_Ps' intra_P per spliced P
+                for pdert in Pp.pdert_: P.dert_ += pdert.P.dert_
+                P.L = len(P.dert_)
+                intra_P(P, rdn=1, rng=1, fPd=fPd)  # re-run line_Ps intra_P per spliced P
                 Pp.P = P
         '''
         no splice(): fine-grained eval per P triplet is too expensive?
@@ -317,7 +315,7 @@ def der_incr(rootPp, Pp_, hlayers):  # evaluate each Pp for incremental derivati
     comb_sublayers = []  # combine into root P sublayers[1:], each nested to depth = sublayers[n]
 
     for i, Pp in enumerate(Pp_):
-        if Pp.L > 1:
+        if Pp.L > 1 and not isinstance(Pp.P, CP):  # else Pp is a spliced P
             loc_ave_M = ave_M * Pp.Rdn * hlayers * ((Pp.M / ave_M) / 2) * ave_D  # ave_D=ave_d?
             iM = sum( [pdert.P.M for pdert in Pp.pdert_])
             loc_ave = (ave + iM) / 2 * ave_d * Pp.Rdn * hlayers  # cost per cross-comp
@@ -327,7 +325,7 @@ def der_incr(rootPp, Pp_, hlayers):  # evaluate each Pp for incremental derivati
                 ddert_ = []
                 for _pdert, pdert in zip( Pp.pdert_[:-1], Pp.pdert_[1:]):  # or comp abs d, or step=2 for sign match?
                     ddert_ += [comp_par(_pdert.P, _pdert.d, pdert.d, "D_", loc_ave * ave_mD)]  # cross-comp of ds
-                    cD = sum(abs(ddert.d) for ddert in ddert_)
+                    cD = sum( abs(ddert.d) for ddert in ddert_)
                 if cD > loc_ave_M * 4:  # fixed costs of clustering per Pp.pdert_
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
@@ -354,7 +352,7 @@ def rng_incr(rootPp, Pp_, hlayers, rng):  # evaluate each Pp for incremental ran
     comb_sublayers = []  # combine into root P sublayers[1:], each nested to depth = sublayers[n]
 
     for i, Pp in enumerate(Pp_):
-        if Pp.L > 1:
+        if Pp.L > rng+1 and not isinstance(Pp.P, CP):  # else Pp is a spliced P
             loc_ave_M = ((Pp.M + ave_M) / 2) * Pp.Rdn * hlayers  # cost per loop = (ave of global and local aves) * redundancy
             iM = sum( [pdert.P.M for pdert in Pp.pdert_])
             loc_ave = (ave + iM) / 2 * Pp.Rdn * hlayers  # cost per cross-comp
@@ -362,11 +360,11 @@ def rng_incr(rootPp, Pp_, hlayers, rng):  # evaluate each Pp for incremental ran
             if Pp.M / Pp.L > loc_ave_M + 4:  # 4: search cost, + Pp.iM?
                 sub_search(Pp, fPd=False)
                 Rdert_, cM = comp_rng(Pp, loc_ave * ave_mI, rng)  # accumulates Rderts from fixed-rng rdert_
-                if cM > loc_ave_M * 4:  # current-rng M vs fixed costs of clustering per Pp.pdert_
+                if cM > loc_ave_M * 4:  # current-rng M > fixed costs of clustering per Pp.pdert_, else reuse it for multiple rmg+?
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
                     sub_Ppm_[:] = form_rPp_(Rdert_, rng)
-                    if sub_Ppm_ and Pp.M > loc_ave_M * 4 and not Pp.dert_:  # 4: looping cost, if Pm_'IPpm_.M, +Pp.iM?
+                    if sub_Ppm_ and Pp.M > loc_ave_M * 4:  # 4: looping cost, if Pm_'IPpm_.M, +Pp.iM?
                         rng_incr(Pp, sub_Ppm_, hlayers+1, rng+1)  # recursive rng+, no der+ in redundant Pds?
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
@@ -429,34 +427,27 @@ def form_rPp_(Rdert_, rng):  # evaluate inclusion in _rPp of accumulated Rderts,
         else:  # rPp was formed by prior merging
             _rPp = _Rdert.roots
 
-        if _rPp.M > ave_M * 4:  # clustering costs per new rPp match, else reuse Rdert_ for multiple rmg+s?
-            # for Rdert in rdert.roots:  # all Rderts it is in? or same as overlap: all _Rdert.rderts compared to rdert?
-            rdert_= _Rdert.rdert_
-            for i, rdert in enumerate(rdert_):
-                olp_ = _Rdert.rdert_[max(0, i-rng): i+1]  # _Rdert overlap with rdert_[i].Rdert
+        rdert_ = _Rdert.rdert_
+        for i, rdert in enumerate(rdert_):  # sum olp_M to evaluate rdert.Rdert inclusion in _rPp:
 
-                olp_M = sum(rdert.roots.rdert_[i].m for i, rdert_ in enumerate(olp_))
-                # not correct, we are looking for Rdert in which rdert is in the middle, so it maps to adert
-                # or:
-                Olp_M = sum(rdert.roots.rdert_[i].olp_M for i, rdert in enumerate(olp_))
-                # accumulate overlap of each element, because match is anchor-specific?
-
-                olp_M = sum(olp_rdert.m for olp_rdert in olp_)  # M(_adert, adert) in overlap
-
-                if olp_M / len(olp_) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
-                    # add to _rPp:
-                    Rdert = rdert.roots; rPp = Rdert.roots
-                    if isinstance(rPp, CPp):  # merge rPp
-                        for cRdert in rPp.pdert_:
-                            if cRdert not in _rPp.pdert_:
-                                cRdert.roots = _rPp
-                                _rPp.accum_from(cRdert, ignore_capital=True)
-                                _rPp.pdert_.append(cRdert)
-                                _rPp.L += 1
-                    elif Rdert not in _rPp.pdert_:  # pack Rdert to _rPp
-                        _rPp.accum_from(Rdert, ignore_capital=True)
-                        _rPp.pdert_.append(Rdert)
-                        _rPp.L += 1
+            olp_ = _Rdert.rdert_[max(0, i-rng): i+1]  # _Rdert overlap with rdert_[i].Rdert
+            olp_M = sum( rdert.roots.rdert_[-i].m for i, rdert_ in enumerate(olp_))
+            # index =-i: reversed distance between _adert and rdert.Rdert.adert (compared to rdert.roots.rdert)
+            # not _Rdert.rdert_ olp_M: different aderts
+            if olp_M / len(olp_) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
+                # add to _rPp:
+                Rdert = rdert.roots; rPp = Rdert.roots
+                if isinstance(rPp, CPp):  # merge rPp
+                    for cRdert in rPp.pdert_:
+                        if cRdert not in _rPp.pdert_:
+                            cRdert.roots = _rPp
+                            _rPp.accum_from(cRdert, ignore_capital=True)
+                            _rPp.pdert_.append(cRdert)
+                            _rPp.L += 1
+                elif Rdert not in _rPp.pdert_:  # pack Rdert to _rPp
+                    _rPp.accum_from(Rdert, ignore_capital=True)
+                    _rPp.pdert_.append(Rdert)
+                    _rPp.L += 1
 
         rPp_.append(_rPp)  # no eval oolp Rderts: that's closer Rderts
 

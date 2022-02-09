@@ -80,7 +80,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
                         der_incr(root, Pp_, hlayers=1)  # eval der+ comp,form per Pp
                     new_M += sum([Pp.M for Pp in Pp_])
         else:
-            new_sublayer0 += [[] for _ in range(8)]  # 8 empty list for 4 params * 2 fPd tuples
+            new_types_ += [[] for _ in range(8)]  # align indexing with sublayer
             # better to add count of missing prior P_s to each P_, or use nested tuples?
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
@@ -136,7 +136,7 @@ def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the
     return types_, ntypes
 
 
-def line_PPPs_root(root):  # test code
+def line_PPPs_root(root):  # test code, some obsolete
 
     sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
     root.sublayers=[sublayer0]  # reset from last-level sublayers
