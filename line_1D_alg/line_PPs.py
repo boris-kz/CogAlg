@@ -277,7 +277,7 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd, fPpd):  # re-eval Pps, Pp.pdert_s for
         no splice(): fine-grained eval per P triplet is too expensive?
         '''
 
-def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps
+def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps, for visibility only, can be replaced with intra_P_
     comb_sublayers = []
     if not fPd:
         if P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
@@ -418,41 +418,31 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
 def form_rPp_(Rdert_, rng):  # evaluate inclusion in _rPp of accumulated Rderts, by mutual olp_M within comp rng
 
     rPp_ = []
-    for _Rdert in Rdert_:
-        if not isinstance(_Rdert.roots, CPp):  # no rPp was formed by prior merging
-            _rPp = CPp(pdert_=[_Rdert])
-            _rPp.accum_from(_Rdert, ignore_capital=True)
-            _Rdert.roots = _rPp
+    for _Rdert in Rdert_:  # no rPp yet, initialize to merge all included rPps
+        _rPp = CPp(pdert_=[_Rdert], L=1)
+        _rPp.accum_from(_Rdert, ignore_capital=True)
+        _Rdert.roots = _rPp
+        olp_M = 0
+        i_=[]
+        for i, rdert in enumerate(_Rdert.rdert_):  # sum in olp_M to evaluate rdert.Rdert inclusion in _rPp
+            if rdert.m > 0:
+                olp_M += rdert.m
+                i_.append(i)
+        if olp_M / len(i_) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
+            for i in i_:
+                rdert = _Rdert.rdert_[i]
+                merge(_rPp, rdert.roots.roots)  # rdert.Rdert.rPp
+                # include del.rPp in merge
             rPp_.append(_rPp)
-        else:  # rPp was formed by prior merging
-            _rPp = _Rdert.roots
-
-        rdert_ = _Rdert.rdert_
-        for i, rdert in enumerate(rdert_):  # sum olp_M to evaluate rdert.Rdert inclusion in _rPp:
-
-            olp_ = _Rdert.rdert_[max(0, i-rng): i+1]  # _Rdert overlap with rdert_[i].Rdert
-            olp_M = sum( rdert.roots.rdert_[-i].m for i, rdert_ in enumerate(olp_))
-            # index =-i: reversed distance between _adert and rdert.Rdert.adert (compared to rdert.roots.rdert)
-            # not _Rdert.rdert_ olp_M: different aderts
-            if olp_M / len(olp_) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
-                # add to _rPp:
-                Rdert = rdert.roots; rPp = Rdert.roots
-                if isinstance(rPp, CPp):  # merge rPp
-                    for cRdert in rPp.pdert_:
-                        if cRdert not in _rPp.pdert_:
-                            cRdert.roots = _rPp
-                            _rPp.accum_from(cRdert, ignore_capital=True)
-                            _rPp.pdert_.append(cRdert)
-                            _rPp.L += 1
-                elif Rdert not in _rPp.pdert_:  # pack Rdert to _rPp
-                    _rPp.accum_from(Rdert, ignore_capital=True)
-                    _rPp.pdert_.append(Rdert)
-                    _rPp.L += 1
-
-        rPp_.append(_rPp)  # no eval oolp Rderts: that's closer Rderts
-
+        # else _rPp is not in rPp_
     return rPp_  # no term_rPp
+'''
+    Old version computed overlap between two Rderts, and then between new Rdert and Rderts mediated by overlapping rderts of the old Rdert. 
+    But the new Rdert also overlaps rderts that are not contained in the old Rdert.
 
+    Here we compute olp_M over rdert_ of new Rdert, which directly represents all rdert.Rderts that overlap its adert. 
+    It's both more accurate and a lot simpler.
+    '''
 
 def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublayer of high-M Pms | high-D Pds, called from intra_Pp_
 
