@@ -272,6 +272,7 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd, fPpd):  # re-eval Pps, Pp.pdert_s for
                 for pdert in Pp.pdert_: P.dert_ += pdert.P.dert_
                 P.L = len(P.dert_)
                 intra_P(P, rdn=1, rng=1, fPd=fPd)  # re-run line_Ps intra_P per spliced P
+                # replace with rng_incr_P_([], [P], rdn=1, rng=1), der_incr_P_([], [P], rdn=1, rng=1)
                 Pp.P = P
         '''
         no splice(): fine-grained eval per P triplet is too expensive?
@@ -285,7 +286,17 @@ def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps, for visibility onl
             P.subset = rdn, rng, [],[],[],[]  # 1st sublayer, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
             sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
             P.sublayers = [(sub_Pm_, sub_Pd_)]
-            rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
+            rdert_ = []
+            _i = P.dert_[0].i
+            for dert in P.dert_[2::2]:  # all inputs are sparse, skip odd pixels compared in prior rng: 1 skip / 1 add to maintain 2x overlap
+                # skip predictable next dert, local ave? add rdn to higher | stronger layers:
+                d = dert.i - _i
+                rp = dert.p + _i  # intensity accumulated in rng
+                rd = dert.d + d  # difference accumulated in rng
+                rm = dert.m + ave - abs(d)  # m accumulated in rng
+                rmrdn = rm + ave < abs(rd)  # use Ave? for consistency with deriv_comp, else redundant
+                rdert_.append(Cdert(i=dert.i, p=rp, d=rd, m=rm, mrdn=rmrdn))
+                _i = dert.i
             sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
             sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
         # else: Pp.sublayers = []  # reset after the above converts it to [([],[])]?
@@ -295,7 +306,16 @@ def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps, for visibility onl
             P.subset = rdn, rng, [],[],[],[]  # 1st sublayer, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
             sub_Pm_, sub_Pd_ = [], []
             P.sublayers = [(sub_Pm_, sub_Pd_)]
-            ddert_ = deriv_comp(P.dert_)  # i is d
+            ddert_ = []
+            _d = abs(P.dert_[0].d)
+            for dert in P.dert_[1:]:  # all same-sign in Pd
+                d = abs(dert.d)  # compare ds
+                rd = d + _d
+                dd = d - _d
+                md = min(d, _d) - abs(dd / 2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
+                dmrdn = md + ave < abs(dd)  # use Ave?
+                ddert_.append(Cdert(i=dert.d, p=rd, d=dd, m=md, dmrdn=dmrdn))
+                _d = d
             sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
             sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
 
@@ -363,7 +383,7 @@ def rng_incr(rootPp, Pp_, hlayers, rng):  # evaluate each Pp for incremental ran
                 if cM > loc_ave_M * 4:  # current-rng M > fixed costs of clustering per Pp.pdert_, else reuse it for multiple rmg+?
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
-                    sub_Ppm_[:] = form_rPp_(Rdert_, rng)
+                    sub_Ppm_[:] = form_rPp_(Rdert_)
                     if sub_Ppm_ and Pp.M > loc_ave_M * 4:  # 4: looping cost, if Pm_'IPpm_.M, +Pp.iM?
                         rng_incr(Pp, sub_Ppm_, hlayers+1, rng+1)  # recursive rng+, no der+ in redundant Pds?
                     else:
@@ -415,31 +435,51 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
     return Rdert_, cM
 
 
-def form_rPp_(Rdert_, rng):  # evaluate inclusion in _rPp of accumulated Rderts, by mutual olp_M within comp rng
+def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by mutual olp_M within comp rng
 
     rPp_ = []
-    for _Rdert in Rdert_:  # no rPp yet, initialize to merge all included rPps
-        _rPp = CPp(pdert_=[_Rdert], L=1)
-        _rPp.accum_from(_Rdert, ignore_capital=True)
-        _Rdert.roots = _rPp
+    for _Rdert in Rdert_:
+        # initialize _rPp to merge all matching rPps in _Rdert.rdert_:
+        if isinstance(_Rdert.roots, CPp):
+            _rPp = _Rdert.roots
+        else:
+            _rPp = CPp(pdert_=[_Rdert], L=1)
+            _rPp.accum_from(_Rdert, ignore_capital=True)
+            _Rdert.roots = _rPp
+
         olp_M = 0
         i_=[]
         for i, rdert in enumerate(_Rdert.rdert_):  # sum in olp_M to evaluate rdert.Rdert inclusion in _rPp
             if rdert.m > 0:
                 olp_M += rdert.m
                 i_.append(i)
-        if olp_M / len(i_) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
+        if olp_M / max(1, len(i_)) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
             for i in i_:
                 rdert = _Rdert.rdert_[i]
-                merge(_rPp, rdert.roots.roots)  # rdert.Rdert.rPp
-                # include del.rPp in merge
+                Rdert = rdert.roots
+                rPp = Rdert.roots
+                # merge _rPp:
+                if isinstance(rPp, CPp):
+                    for oRdert in rPp.pdert_:  # oRdert for old
+                        if oRdert not in _rPp.pdert_:
+                            oRdert.roots = _rPp
+                            _rPp.accum_from(oRdert, ignore_capital=True)
+                            _rPp.pdert_.append(oRdert)
+                            _rPp.L += 1
+                    rPp_.remove(rPp)
+                else:
+                    rdert.roots.roots = _rPp
+                    _rPp.accum_from(Rdert, ignore_capital=True)
+                    _rPp.pdert_.append(Rdert)
+                    _rPp.L += 1
+
             rPp_.append(_rPp)
-        # else _rPp is not in rPp_
+        # else: _rPp is not in rPp_
+
     return rPp_  # no term_rPp
 '''
     Old version computed overlap between two Rderts, and then between new Rdert and Rderts mediated by overlapping rderts of the old Rdert. 
     But the new Rdert also overlaps rderts that are not contained in the old Rdert.
-
     Here we compute olp_M over rdert_ of new Rdert, which directly represents all rdert.Rderts that overlap its adert. 
     It's both more accurate and a lot simpler.
     '''

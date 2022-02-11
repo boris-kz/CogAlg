@@ -75,7 +75,6 @@ halt_y = 502  # ending row, set 999999999 for arbitrary image
 
 def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_patterns, each pattern may be nested
 
-    # initialization:
     dert_ = []  # line-wide i_, p_, d_, m_, mrdn_
     _i = pixel_[0]
     # cross_comparison:
@@ -90,7 +89,7 @@ def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_
     Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # rootP=None, eval intra_P_ (calls form_P_)
     Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPd=True)
 
-    return dert_, [Pm_, Pd_]  # input to level 2
+    return [Pm_, Pd_]  # input to 2nd level
 
 
 def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through intra_P_
@@ -113,28 +112,16 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         x += 1
         _sign = sign
 
-    intra_P_(rootP, P_, rdn, rng, fPd)
+    rng_incr_P_(rootP, P_, rdn, rng)
+    der_incr_P_(rootP, P_, rdn, rng)
 
     return P_  # used only if not rootP, else packed in rootP.sublayers
 
-
-def intra_P_(rootP, P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ inside selected sub_Ps in P_
+def rng_incr_P_(rootP, P_, rdn, rng):
 
     comb_sublayers = []
-    # adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential; but lend is not to adj only, reflected in ave?:
-    # for P, adj_M in zip(P_, adj_M_); rel_adj_M = adj_M / -P.M  # allocate -Pm' adj_M in internal Pds; vs.:
     for P in P_:
-        if fPd:  # P is Pd
-            if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, ave_adj_M is represented in ave_D
-                rdn += 1; rng += 1
-                P.subset = rdn, rng, [],[],[],[]  # 1st sublayer params, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
-                sub_Pm_, sub_Pd_ = [], []
-                P.sublayers = [(sub_Pm_, sub_Pd_)]
-                ddert_ = deriv_comp(P.dert_)  # i is d
-                sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
-                sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
-
-        elif P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
+        if P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
             ''' P is Pm   
             min skipping P.L=3, actual comp rng = 2^(n+1): 1, 2, 3 -> kernel size 4, 8, 16...
             if local ave:
@@ -146,7 +133,17 @@ def intra_P_(rootP, P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ insi
             P.subset = rdn, rng, [],[],[],[]  # 1st sublayer params, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
             sub_Pm_, sub_Pd_ = [], []  # initialize layers, concatenate by intra_P_ in form_P_
             P.sublayers = [(sub_Pm_, sub_Pd_)]  # 1st layer
-            rdert_ = range_comp(P.dert_)  # rng+, skip predictable next dert, local ave? rdn to higher (or stronger?) layers
+            rdert_ = []
+            _i = P.dert_[0].i
+            for dert in P.dert_[2::2]:  # all inputs are sparse, skip odd pixels compared in prior rng: 1 skip / 1 add to maintain 2x overlap
+                # skip predictable next dert, local ave? add rdn to higher | stronger layers:
+                d = dert.i - _i
+                rp = dert.p + _i  # intensity accumulated in rng
+                rd = dert.d + d  # difference accumulated in rng
+                rm = dert.m + ave - abs(d)  # m accumulated in rng
+                rmrdn = rm + ave < abs(rd)  # use Ave? for consistency with deriv_comp, else redundant
+                rdert_.append(Cdert(i=dert.i, p=rp, d=rd, m=rm, mrdn=rmrdn))
+                _i = dert.i
             sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
             sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
 
@@ -157,44 +154,44 @@ def intra_P_(rootP, P_, rdn, rng, fPd):  # recursive cross-comp and form_P_ insi
                 comb_sub_Pd_ += sub_Pd_
                 new_comb_sublayers.append((comb_sub_Pm_, comb_sub_Pd_))  # add sublayer
             comb_sublayers = new_comb_sublayers
+
     if rootP:
         rootP.sublayers += comb_sublayers  # no return
-    else:
-        return P_  # each P has new sublayers, comb_sublayers is not needed
 
+def der_incr_P_(rootP, P_, rdn, rng):
 
-def range_comp(dert_):  # cross-comp of 2**(rng+1) - distant pixels, skipping intermediate pixels:  rng=1,2,3 -> kernel=4,8,16...
-    rdert_ = []
-    _i = dert_[0].i
+    comb_sublayers = []
+    # adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential; but lend is not to adj only, reflected in ave?:
+    # for P, adj_M in zip(P_, adj_M_); rel_adj_M = adj_M / -P.M  # allocate -Pm' adj_M in internal Pds; vs.:
+    for P in P_:
+        if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, ave_adj_M is represented in ave_D
+            rdn += 1; rng += 1
+            P.subset = rdn, rng, [],[],[],[]  # 1st sublayer params, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
+            sub_Pm_, sub_Pd_ = [], []
+            P.sublayers = [(sub_Pm_, sub_Pd_)]
+            ddert_ = []
+            _d = abs(P.dert_[0].d)
+            for dert in P.dert_[1:]:  # all same-sign in Pd
+                d = abs(dert.d)  # compare ds
+                rd = d + _d
+                dd = d - _d
+                md = min(d, _d) - abs(dd / 2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
+                dmrdn = md + ave < abs(dd)  # use Ave?
+                ddert_.append(Cdert(i=dert.d, p=rd, d=dd, m=md, dmrdn=dmrdn))
+                _d = d
+            sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
+            sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
 
-    for dert in dert_[2::2]:  # all inputs are sparse, skip odd pixels compared in prior rng: 1 skip / 1 add to maintain 2x overlap
-        d = dert.i -_i
-        rp = dert.p + _i  # intensity accumulated in rng
-        rd = dert.d + d   # difference accumulated in rng
-        rm = dert.m + ave - abs(d)  # m accumulated in rng
-        # for consistency with deriv_comp, else redundant
-        rmrdn = rm + ave < abs(rd)  # use Ave?
-        rdert_.append( Cdert( i=dert.i,p=rp,d=rd,m=rm,mrdn=rmrdn ))
-        _i = dert.i
+    if rootP and P.sublayers:
+        new_comb_sublayers = []
+        for (comb_sub_Pm_, comb_sub_Pd_), (sub_Pm_, sub_Pd_) in zip_longest(comb_sublayers, P.sublayers, fillvalue=([],[])):
+            comb_sub_Pm_ += sub_Pm_  # remove brackets, they preserve index in sub_Pp root_
+            comb_sub_Pd_ += sub_Pd_
+            new_comb_sublayers.append((comb_sub_Pm_, comb_sub_Pd_))  # add sublayer
+        comb_sublayers = new_comb_sublayers
 
-    return rdert_
-
-def deriv_comp(dert_):  # cross-comp consecutive ds in same-sign dert_: sign match is partial d match, dd and md may match across d sign?
-    # initialization:
-    ddert_ = []
-    _d = abs( dert_[0].d)  # same-sign in Pd
-
-    for dert in dert_[1:]:
-        # same-sign in Pd
-        d = abs( dert.d )
-        rd = d + _d
-        dd = d - _d
-        md = min(d, _d) - abs( dd/2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
-        dmrdn = md + ave < abs(dd)  # use Ave?
-        ddert_.append( Cdert( i=dert.d,p=rd,d=dd,m=md,dmrdn=dmrdn ))
-        _d = d
-
-    return ddert_
+    if rootP:
+        rootP.sublayers += comb_sublayers  # no return
 
 
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
@@ -238,7 +235,7 @@ if __name__ == "__main__":
     render = 0
     fline_PPs = 1
     start_time = time()
-    from line_PPPs import line_recursive
+    from line_recursive import line_recursive
 
     # Run functions
     image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
