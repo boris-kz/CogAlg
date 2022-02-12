@@ -182,13 +182,13 @@ def der_incr_P_(rootP, P_, rdn, rng):
             sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
             sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
 
-    if rootP and P.sublayers:
-        new_comb_sublayers = []
-        for (comb_sub_Pm_, comb_sub_Pd_), (sub_Pm_, sub_Pd_) in zip_longest(comb_sublayers, P.sublayers, fillvalue=([],[])):
-            comb_sub_Pm_ += sub_Pm_  # remove brackets, they preserve index in sub_Pp root_
-            comb_sub_Pd_ += sub_Pd_
-            new_comb_sublayers.append((comb_sub_Pm_, comb_sub_Pd_))  # add sublayer
-        comb_sublayers = new_comb_sublayers
+        if rootP and P.sublayers:
+            new_comb_sublayers = []
+            for (comb_sub_Pm_, comb_sub_Pd_), (sub_Pm_, sub_Pd_) in zip_longest(comb_sublayers, P.sublayers, fillvalue=([],[])):
+                comb_sub_Pm_ += sub_Pm_  # remove brackets, they preserve index in sub_Pp root_
+                comb_sub_Pd_ += sub_Pd_
+                new_comb_sublayers.append((comb_sub_Pm_, comb_sub_Pd_))  # add sublayer
+            comb_sublayers = new_comb_sublayers
 
     if rootP:
         rootP.sublayers += comb_sublayers  # no return

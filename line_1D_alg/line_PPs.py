@@ -271,64 +271,13 @@ def splice_Ps(Ppm_, pdert1_, pdert2_, fPd, fPpd):  # re-eval Pps, Pp.pdert_s for
                 P.Rdn = sum([pdert.P.Rdn for pdert in Pp.pdert_])
                 for pdert in Pp.pdert_: P.dert_ += pdert.P.dert_
                 P.L = len(P.dert_)
-                intra_P(P, rdn=1, rng=1, fPd=fPd)  # re-run line_Ps intra_P per spliced P
-                # replace with rng_incr_P_([], [P], rdn=1, rng=1), der_incr_P_([], [P], rdn=1, rng=1)
+                # re-run line_P sub-recursion per spliced P:
+                rng_incr_P_([], [P], rdn=1, rng=1)
+                der_incr_P_([], [P], rdn=1, rng=1)
                 Pp.P = P
         '''
         no splice(): fine-grained eval per P triplet is too expensive?
         '''
-
-def intra_P(P, rdn, rng, fPd):  # this is a rerun of line_Ps, for visibility only, can be replaced with intra_P_
-    comb_sublayers = []
-    if not fPd:
-        if P.M - P.Rdn * ave_M * P.L > ave_M * rdn and P.L > 2:  # M value adjusted for xP and higher-layers redundancy
-            rdn+=1; rng+=1
-            P.subset = rdn, rng, [],[],[],[]  # 1st sublayer, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
-            sub_Pm_, sub_Pd_ = [], []  # initialize layers top-down, concatenate by intra_P_ in form_P_
-            P.sublayers = [(sub_Pm_, sub_Pd_)]
-            rdert_ = []
-            _i = P.dert_[0].i
-            for dert in P.dert_[2::2]:  # all inputs are sparse, skip odd pixels compared in prior rng: 1 skip / 1 add to maintain 2x overlap
-                # skip predictable next dert, local ave? add rdn to higher | stronger layers:
-                d = dert.i - _i
-                rp = dert.p + _i  # intensity accumulated in rng
-                rd = dert.d + d  # difference accumulated in rng
-                rm = dert.m + ave - abs(d)  # m accumulated in rng
-                rmrdn = rm + ave < abs(rd)  # use Ave? for consistency with deriv_comp, else redundant
-                rdert_.append(Cdert(i=dert.i, p=rp, d=rd, m=rm, mrdn=rmrdn))
-                _i = dert.i
-            sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
-            sub_Pd_[:] = form_P_(P, rdert_, rdn, rng, fPd=True)  # cluster by rd sign
-        # else: Pp.sublayers = []  # reset after the above converts it to [([],[])]?
-    else:  # P is Pd
-        if abs(P.D) - (P.L - P.Rdn) * ave_D * P.L > ave_D * rdn and P.L > 1:  # high-D span, level rdn, vs. param rdn in dert
-            rdn+=1; rng+=1
-            P.subset = rdn, rng, [],[],[],[]  # 1st sublayer, []s: xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
-            sub_Pm_, sub_Pd_ = [], []
-            P.sublayers = [(sub_Pm_, sub_Pd_)]
-            ddert_ = []
-            _d = abs(P.dert_[0].d)
-            for dert in P.dert_[1:]:  # all same-sign in Pd
-                d = abs(dert.d)  # compare ds
-                rd = d + _d
-                dd = d - _d
-                md = min(d, _d) - abs(dd / 2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
-                dmrdn = md + ave < abs(dd)  # use Ave?
-                ddert_.append(Cdert(i=dert.d, p=rd, d=dd, m=md, dmrdn=dmrdn))
-                _d = d
-            sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
-            sub_Pd_[:] = form_P_(P, ddert_, rdn, rng, fPd=True)  # cluster by md sign
-
-    if P.sublayers:
-        new_comb_sublayers = []
-        for (comb_sub_Pm_, comb_sub_Pd_), (sub_Pm_, sub_Pd_) in zip_longest(comb_sublayers, P.sublayers, fillvalue=([],[])):
-            comb_sub_Pm_ += sub_Pm_  # remove brackets, they preserve index in sub_Pp root_
-            comb_sub_Pd_ += sub_Pd_
-            new_comb_sublayers.append((comb_sub_Pm_, comb_sub_Pd_))  # add sublayer
-        comb_sublayers = new_comb_sublayers
-
-    P.sublayers += comb_sublayers  # no return
-
 
 def der_incr(rootPp, Pp_, hlayers):  # evaluate each Pp for incremental derivation, as in line_patterns der_comp but with higher local ave,
     # pack results into sub_Pm_
@@ -436,7 +385,10 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
 
 
 def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by mutual olp_M within comp rng
-
+    '''
+    primary clustering is by rdert.m: direct match between all compared Rdert.aderts,
+    secondary is by merging rPp of matching Rderts: clustered nodes don't need to directly match each other
+    '''
     rPp_ = []
     for _Rdert in Rdert_:
         # initialize _rPp to merge all matching rPps in _Rdert.rdert_:
@@ -460,7 +412,7 @@ def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
                 rPp = Rdert.roots
                 # merge _rPp:
                 if isinstance(rPp, CPp):
-                    for oRdert in rPp.pdert_:  # oRdert for old
+                    for oRdert in rPp.pdert_:  # "o"Rdert for old
                         if oRdert not in _rPp.pdert_:
                             oRdert.roots = _rPp
                             _rPp.accum_from(oRdert, ignore_capital=True)
@@ -474,15 +426,10 @@ def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
                     _rPp.L += 1
 
             rPp_.append(_rPp)
-        # else: _rPp is not in rPp_
+        # else: _rPp is single Rdert, not significant, or include in rPp_ anyway?
 
     return rPp_  # no term_rPp
-'''
-    Old version computed overlap between two Rderts, and then between new Rdert and Rderts mediated by overlapping rderts of the old Rdert. 
-    But the new Rdert also overlaps rderts that are not contained in the old Rdert.
-    Here we compute olp_M over rdert_ of new Rdert, which directly represents all rdert.Rderts that overlap its adert. 
-    It's both more accurate and a lot simpler.
-    '''
+
 
 def sub_search(rootPp, fPd):  # ~line_PPs_root: cross-comp sub_Ps in top sublayer of high-M Pms | high-D Pds, called from intra_Pp_
 

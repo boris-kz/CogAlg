@@ -46,21 +46,22 @@ def line_recursive(p_):
 
     return line_level_root(root, types_)
 
+
 def line_level_root(root, types_):  # recursively adds higher levels of pattern composition and derivation
 
-    # i/o are tuples of P_s, implicitly nested to the depth = 1 + 2*elevation: 2 P_s, 16 P_s, 128 P_s..:
+    # output is implicit tuple of P_s, nested to the depth = 1 + 2*elevation, 1Le: 2 P_s, 2Le: 16 P_s, 3Le: 128 P_s..:
     sublayer0 = root.levels[-1][0]  # input is 1st sublayer of the last level
     new_sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
-    root.sublayers = [new_sublayer0]  # will be new level, reset from last-level sublayers
-    nextended = 0  # number of extended-depth P_s
-    new_M = 0
+    root.sublayers = [new_sublayer0]  # will become new level, reset from last-level sublayers
 
+    nextended = 0  # number of extended-depth P_s
     new_types_ = []
+    new_M = 0
     for P_, types in zip(sublayer0, types_):
 
         if len(P_) > 2 and sum([P.M for P_ in sublayer0 for P in P_]) > ave_M:  # 2: min aveN, will be higher
-            nextended += 1  # the depth of this P_ will be extended
-            fiPd = types[0]  # probably OR all fPds in types, not just the last one
+            nextended += 1  # nesting depth of this P_ will be extended
+            fiPd = types[0]  # OR all fPds in types to switch to direct match, not just the last one?
 
             Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
             sum_rdn_(param_names, Pdert_t, fiPd)  # sum cross-param redundancy per pdert
@@ -84,7 +85,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
             # better to add count of missing prior P_s to each P_, or use nested tuples?
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
-        # may move to line 91, for higher threshold:
+        # may move to line 93 for higher threshold:
         cross_core_comp(new_sublayer0, new_types_)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
         root.levels.append(root.sublayers)  # levels represent all lower hierarchy
 
