@@ -31,6 +31,7 @@
 
 import sys
 import numpy as np
+
 from collections import deque
 # from frame_blobs_wrapper import wrapped_flood_fill
 from draw_frame_blobs import visualize_blobs
@@ -285,6 +286,18 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         blob2.adj_blobs[1].append(pose1)
 
 
+def print_deep_blob_forking(deep_layer):
+
+    def check_deep_blob(deep_layer,i):
+        for deep_blob_layer in deep_layer:
+            if isinstance(deep_blob_layer,list):
+                check_deep_blob(deep_blob_layer,i)
+            else:
+                print('blob num = '+str(i)+', forking = '+'->'.join(deep_blob_layer.prior_forks))
+
+    for i, deep_layer in enumerate(deep_layers):
+        if len(deep_layer)>0:
+            check_deep_blob(deep_layer,i)
 
 
 if __name__ == "__main__":
@@ -292,13 +305,12 @@ if __name__ == "__main__":
     from time import time
     from utils import imread
     from comp_blob_draft import cross_comp_blobs
-    from intra_blob_ import intra_blob_
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     args = argument_parser.parse_args()
@@ -314,7 +326,50 @@ if __name__ == "__main__":
     if intra:  # call to intra_blob, omit for testing frame_blobs only:
 
         if args.verbose: print("\rRunning intra_blob...")
-        intra_blob_(frame, args.render, args.verbose)
+        from intra_blob import intra_blob, aveB
+
+        deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
+        deep_blob_i_ = []  # index of a blob with deep layers
+        deep_layers = [[]] * len(frame.blob_)  # for visibility only
+        empty = np.zeros_like(frame.dert__[0])
+        root_dert__ = (  # update root dert__
+            frame.dert__[0],  # i
+            frame.dert__[1],  # dy
+            frame.dert__[2],  # dx
+            frame.dert__[3],  # m
+            frame.dert__[4]   # ri
+            )
+
+        for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
+            '''
+            Blob M: -|+ predictive value, positive in +M blobs and lent to contrast value of adjacent -M blobs. 
+            -M "edge" blobs are valuable as contrast: their negative value cancels positive value of adjacent "flat" +M blobs.
+            '''
+            M = blob.M
+            blob.root_dert__=root_dert__
+            blob.prior_forks=['g']
+            blob_height = blob.box[1] - blob.box[0]
+            blob_width = blob.box[3] - blob.box[2]
+
+            if blob.sign:  # +M, remove blob.sign?
+                if (M > aveB) and (blob_height > 3 and blob_width > 3):  # min blob dimensions
+                    blob.rdn = 1
+                    blob.rng = 1
+                    deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
+                    # dert__ comp_r in 4x4 kernels
+
+            elif -M > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                blob.rdn = 1
+                blob.f_comp_a = 1
+                deep_layers[i] = intra_blob(blob, render=args.render, verbose=args.verbose)
+                # dert__ comp_a in 2x2 kernels
+
+            if deep_layers[i]:  # if there are deeper layers
+                deep_blob_i_.append(i)  # indices of blobs with deep layers
+
+        if args.verbose:
+            print_deep_blob_forking(deep_layers)
+            print("\rFinished intra_blob")
 
     bblob_ = cross_comp_blobs(frame)
 

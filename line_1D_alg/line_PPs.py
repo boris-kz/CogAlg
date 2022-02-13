@@ -425,8 +425,8 @@ def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
                     _rPp.pdert_.append(Rdert)
                     _rPp.L += 1
 
-            rPp_.append(_rPp)
-        # else: _rPp is single Rdert, not significant, or include in rPp_ anyway?
+        # else: _rPp is single Rdert, include in rPp_ anyway?:
+        rPp_.append(_rPp)
 
     return rPp_  # no term_rPp
 

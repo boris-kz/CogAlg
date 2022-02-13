@@ -41,7 +41,7 @@ def line_recursive(p_):
     root = line_PPs_root(P_t)
     types_ = []
     for i in range(16):  # len(root.sublayers[0]
-        types = [i%2, int(i%8 / 2), int(i/8) % 2]  # fPpd, param, fPd
+        types = [i%2, int(i%8 / 2), int(i/8) % 2]  # 2nd level output types: fPpd, param, fPd
         types_.append(types)
 
     return line_level_root(root, types_)
@@ -49,7 +49,6 @@ def line_recursive(p_):
 
 def line_level_root(root, types_):  # recursively adds higher levels of pattern composition and derivation
 
-    # output is implicit tuple of P_s, nested to the depth = 1 + 2*elevation, 1Le: 2 P_s, 2Le: 16 P_s, 3Le: 128 P_s..:
     sublayer0 = root.levels[-1][0]  # input is 1st sublayer of the last level
     new_sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
     root.sublayers = [new_sublayer0]  # will become new level, reset from last-level sublayers
@@ -57,11 +56,16 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
     nextended = 0  # number of extended-depth P_s
     new_types_ = []
     new_M = 0
+    '''
+    - unpack and decode input: implicit tuple of P_s, nested to depth = 1 + 2*(elevation-1): 2Le: 2 P_s, 3Le: 16 P_s, 4Le: 128 P_s..
+    - cross-comp and clustering of same-type P params: core params of new Pps
+    - cross-type comp and clustering:
+    '''
     for P_, types in zip(sublayer0, types_):
 
         if len(P_) > 2 and sum([P.M for P_ in sublayer0 for P in P_]) > ave_M:  # 2: min aveN, will be higher
             nextended += 1  # nesting depth of this P_ will be extended
-            fiPd = types[0]  # OR all fPds in types to switch to direct match, not just the last one?
+            fiPd = types[0]  # or not just the last one, OR all fPds in types to switch to direct match?
 
             Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
             sum_rdn_(param_names, Pdert_t, fiPd)  # sum cross-param redundancy per pdert
@@ -70,122 +74,40 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
                 for fPd in 0, 1:  # 0-> Ppm_, 1-> Ppd_:
                     new_types = types.copy()
                     new_types.insert(0, param)  # add param index
-                    new_types.insert(0, fPd)    # add fPd
+                    new_types.insert(0, fPd)  # add fPd
                     new_types_.append(new_types)
                     Pp_ = form_Pp_(deepcopy(Pdert_), fPd)
                     new_sublayer0 += [Pp_]  # Ppm_| Ppd_
                     if (fPd and param == 2) or (not fPd and param == 1):  # 2: "D_", 1: "I_"
                         if not fPd:
                             splice_Pps(Pp_, dert1_, dert2_, fiPd, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                        rng_incr(root, Pp_, hlayers=1, rng=2)  # eval rng+ comp,form per Pp
-                        der_incr(root, Pp_, hlayers=1)  # eval der+ comp,form per Pp
-                    new_M += sum([Pp.M for Pp in Pp_])
+                        rng_incr(root, Pp_, hlayers=1, rng=2)  # evaluate greater-range cross-comp and clustering per Pp
+                        der_incr(root, Pp_, hlayers=1)  # evaluate higher-derivation cross-comp and clustering per Pp
+                    new_M += sum([Pp.M for Pp in Pp_])  # Pp.M includes rng+ and der+ Ms
         else:
-            new_types_ += [[] for _ in range(8)]  # align indexing with sublayer
-            # better to add count of missing prior P_s to each P_, or use nested tuples?
+            new_types_ += [[] for _ in range(8)]  # align indexing with sublayer, replace with count of missing prior P_s, or use nested tuples?
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
-        # may move to line 93 for higher threshold:
+
         cross_core_comp(new_sublayer0, new_types_)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
         root.levels.append(root.sublayers)  # levels represent all lower hierarchy
 
-        if len(sublayer0) / max(nextended,1) < 8 and new_M > ave_M * 8:  # higher thresholds for recursion:
+        if len(sublayer0) / max(nextended,1) < 8 and new_M > ave_M * 8:  # higher thresholds for recursion than for cross_core_comp?
             line_level_root(root, new_types_)  # try to add new level
 
-
-def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the depth = 1 + 2*elevation
-
-    ntypes = 1 + 2  * math.log( len(iP_T)/2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
-    types_ = []  # parallel to P_T, for zipping
-
-    for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__
-
-        types = []  # list of fPds and names of len = ntypes
-        step = len(iP_T) / 2  # implicit nesting, top-down
-        nsteps = 1
-        while( len(types) < ntypes):  # decode unique set of alternating types per P_: [fPd,name,fPd,name..], from index in iP_T:
-            if len(types) % 2:
-                types.insert(0, int( i%step / (step/4) ))  # add name index: 0|1|2|3
-            else:
-                types.insert(0, int( (i/step)) % 2)  # add fPd: 0|1. This is the 1st increment because len(types) starts from 0
-            nsteps += 1
-            if nsteps % 2:
-                step /= 8
-            ''' Level 1 
-            types.append( int((i/8))  % 2 )     # fPd
-            types.append( int( i%8 / 2 ))       # param
-            types.append( int((i/1))  % 2 )     # fPd
-                Level 2
-            types.append( int((i/64)) % 2 )     # fPd
-            types.append( int( i%64/16 ))       # param 
-            types.append( int((i/8))  % 2 )     # fPd    
-            types.append( int( i%8/2 ))         # param
-            types.append( int((i/1))  % 2 )     # fPd
-                
-            bottom-up scheme:
-            _step = 1  # n of indices per current level of type
-            for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__
-                while( len(types) < ntypes):  # decode unique set of alternating types per P_: [fPd,name,fPd,name..], from index in iP_T:
-                    if len(types) % 2:
-                       step = _step*4  # add name index: 0|1|2|3
-                    else:
-                    step = _step*2  # add fPd: 0|1. This is the 1st increment because len(types) starts from 0
-                types.append( int( (i % step) / _step))  # int to round down: type should not change within step
-                _step = step
-            '''
-        types_.append(types)  # parallel to P_T, for zipping
-    return types_, ntypes
+    norm_feedback(root.levels)  # +dfilters: adjust all independent filters on lower levels, for pipelined version only
 
 
-def line_PPPs_root(root):  # test code, some obsolete
-
-    sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
-    root.sublayers=[sublayer0]  # reset from last-level sublayers
-    P_ttt = root.levels[-1][0]  # input is 1st sublayer of the last level, always P_ttt? Not really, it depends on the level
-    elevation = len(root.levels)
-    level_M = 0
-
-    for fiPd, paramset in enumerate(P_ttt):
-        for param_name, param_md in zip(param_names, paramset):
-            for fiPpd, P_ in enumerate(param_md):  # fiPpd: Ppm_ or Ppd_
-
-                if len(P_) > 2:  # aveN, actually will be higher
-                    Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPpd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-                    sum_rdn_(param_names, Pdert_t, fiPpd)  # sum cross-param redundancy per pdert
-                    paramset = []
-                    for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
-                        param_md = []
-                        for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_:
-                            Pp_ = form_Pp_(Pdert_, fPpd)
-                            param_md += [Pp_]  # -> [Ppm_, Ppd_]
-                            if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
-                                if not fPpd:
-                                    splice_Pps(Pp_, dert1_, dert2_, fiPpd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                                intra_Pp_(root, param_md[fPpd], 1, fPpd)  # eval der+ or rng+ per Pp
-                            level_M += sum([Pp.M for Pp in Pp_])
-                        paramset += [param_md]  # -> [Lmd, Imd, Dmd, Mmd]
-                    sublayer0 += [paramset]  # -> [Pm_, Pd_]
-                else:
-                    # additional brackets to preserve the whole index, else the next level output will not be correct since some of them are empty
-                    sublayer0 += [[[[], []] for _ in range(4)]]  # empty paramset to preserve index in [Pm_, Pd_]
-
-    # add nesting here
-    root.levels.append(root.sublayers)
-
-    if any(sublayer0) and level_M > ave_M:  # evaluate for next level recursively
-        line_level_root(root)
-
-    return root
-
-
-def cross_core_comp(iP_T, types_):  # draft, need further discussion and update
+def cross_core_comp(iP_T, types_):  # draft
     '''
-    comp Pp_s across >3 nesting levels in iP_T: common_root_depth - comparands_depth >3, which maps to the distance of >16 Pp_s
+    compare same-type new params across different-type input Pp_s,
+    if hidden convertable dimensions | modalities, else semantic distance always increases?
+    if >3 nesting levels in iP_T: root_depth - comparand_depth >3, which maps to the distance of >16 Pp_s
     '''
-    xPp_t_ = []  # each element is from one elevation
+    xPp_t_ = []  # each element is from one elevation of nesting
     ntypes = 1 + 2 * math.log(len(iP_T) / 2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
 
-    for elevation in range(int(ntypes)):  # each loop is an elevation
+    for elevation in range(int(ntypes)):  # each loop is an elevation of nesting
         if elevation % 2:  # params
             LP_t, IP_t, DP_t, MP_t = [], [], [], []
             # get P_ of each param for current elevation (compare at each elevation?)
@@ -204,7 +126,7 @@ def cross_core_comp(iP_T, types_):  # draft, need further discussion and update
             xPp_t = [] # cross compare between 4 params, always = 6 elements if call from root function
 
             for j, _P_t in enumerate(P_tt):
-                if j+1 < 4: # always < 4 due to there are 4 params
+                if j+1 < 4:  # 4 params
                     for P_t in P_tt[j+1:]:
                         xPp_ = []
                         for _P_ in _P_t:
@@ -230,9 +152,8 @@ def cross_core_comp(iP_T, types_):  # draft, need further discussion and update
             xPp_t_.append(xPp_t)
 
 
-
-def norm_feedback(Pp_ttt):
-    # probably recursive norm_feedback here depends on the depth
+def norm_feedback(levels):
+    # adjust all independent filters on lower levels by corresponding mean deviations (Ms), for pipelined version
     pass
 
 def cross_comp_Pp_(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
@@ -359,3 +280,87 @@ def splice_Pps(Pppm_, Ppdert1_, Ppdert2_, fPd, fPpd):  # re-eval Ppps, pPp.pdert
         '''
         no splice(): fine-grain eval per P triplet is too expensive?
         '''
+# not used:
+
+def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the depth = 1 + 2*elevation
+
+    ntypes = 1 + 2 * math.log(len(iP_T) / 2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
+    types_ = []  # parallel to P_T, for zipping
+
+    for i, iP_ in enumerate(iP_T):  # last-level-wide comp_form_P__
+
+        types = []  # list of fPds and names of len = ntypes
+        step = len(iP_T) / 2  # implicit nesting, top-down
+        nsteps = 1
+        while (len(types) < ntypes):  # decode unique set of alternating types per P_: [fPd,name,fPd,name..], from index in iP_T:
+            if len(types) % 2:
+                types.insert(0, int(i % step / (step / 4)))  # add name index: 0|1|2|3
+            else:
+                types.insert(0, int((i / step)) % 2)  # add fPd: 0|1. This is the 1st increment because len(types) starts from 0
+            nsteps += 1
+            if nsteps % 2:
+                step /= 8
+            ''' Level 1 
+            types.append( int((i/8))  % 2 )     # fPd
+            types.append( int( i%8 / 2 ))       # param
+            types.append( int((i/1))  % 2 )     # fPd
+                Level 2
+            types.append( int((i/64)) % 2 )     # fPd
+            types.append( int( i%64/16 ))       # param 
+            types.append( int((i/8))  % 2 )     # fPd    
+            types.append( int( i%8/2 ))         # param
+            types.append( int((i/1))  % 2 )     # fPd
+
+            bottom-up scheme:
+            _step = 1  # n of indices per current level of type
+            for i, iP_ in enumerate( iP_T ):  # last-level-wide comp_form_P__
+                while( len(types) < ntypes):  # decode unique set of alternating types per P_: [fPd,name,fPd,name..], from index in iP_T:
+                    if len(types) % 2:
+                       step = _step*4  # add name index: 0|1|2|3
+                    else:
+                    step = _step*2  # add fPd: 0|1. This is the 1st increment because len(types) starts from 0
+                types.append( int( (i % step) / _step))  # int to round down: type should not change within step
+                _step = step
+            '''
+        types_.append(types)  # parallel to P_T, for zipping
+    return types_, ntypes
+
+
+def line_PPPs_root(root):  # test code, some obsolete
+
+    sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
+    root.sublayers = [sublayer0]  # reset from last-level sublayers
+    P_ttt = root.levels[-1][0]  # input is 1st sublayer of the last level, always P_ttt? Not really, it depends on the level
+    elevation = len(root.levels)
+    level_M = 0
+
+    for fiPd, paramset in enumerate(P_ttt):
+        for param_name, param_md in zip(param_names, paramset):
+            for fiPpd, P_ in enumerate(param_md):  # fiPpd: Ppm_ or Ppd_
+
+                if len(P_) > 2:  # aveN, actually will be higher
+                    Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPpd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
+                    sum_rdn_(param_names, Pdert_t, fiPpd)  # sum cross-param redundancy per pdert
+                    paramset = []
+                    for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
+                        param_md = []
+                        for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_:
+                            Pp_ = form_Pp_(Pdert_, fPpd)
+                            param_md += [Pp_]  # -> [Ppm_, Ppd_]
+                            if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
+                                if not fPpd:
+                                    splice_Pps(Pp_, dert1_, dert2_, fiPpd, fPpd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
+                                intra_Pp_(root, param_md[fPpd], 1, fPpd)  # eval der+ or rng+ per Pp
+                            level_M += sum([Pp.M for Pp in Pp_])
+                        paramset += [param_md]  # -> [Lmd, Imd, Dmd, Mmd]
+                    sublayer0 += [paramset]  # -> [Pm_, Pd_]
+                else:
+                    # additional brackets to preserve the whole index, else the next level output will not be correct since some of them are empty
+                    sublayer0 += [[[[], []] for _ in range(4)]]  # empty paramset to preserve index in [Pm_, Pd_]
+    # add nesting here
+    root.levels.append(root.sublayers)
+
+    if any(sublayer0) and level_M > ave_M:  # evaluate for next level recursively
+        line_level_root(root)
+
+    return root
