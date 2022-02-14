@@ -59,7 +59,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
     '''
     - unpack and decode input: implicit tuple of P_s, nested to depth = 1 + 2*(elevation-1): 2Le: 2 P_s, 3Le: 16 P_s, 4Le: 128 P_s..
     - cross-comp and clustering of same-type P params: core params of new Pps
-    - cross-type comp and clustering:
+    - cross-type comp and clustering, if any
     '''
     for P_, types in zip(sublayer0, types_):
 
@@ -89,7 +89,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
 
-        cross_core_comp(new_sublayer0, new_types_)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
+        # cross_core_comp(new_sublayer0, new_types_)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
         root.levels.append(root.sublayers)  # levels represent all lower hierarchy
 
         if len(sublayer0) / max(nextended,1) < 8 and new_M > ave_M * 8:  # higher thresholds for recursion than for cross_core_comp?
@@ -98,10 +98,11 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
     norm_feedback(root.levels)  # +dfilters: adjust all independent filters on lower levels, for pipelined version only
 
 
-def cross_core_comp(iP_T, types_):  # draft
+def cross_core_comp(iP_T, types_):  # draft, still not sure how to select compared types, if at all
     '''
-    compare same-type new params across different-type input Pp_s,
-    if hidden convertable dimensions | modalities, else semantic distance always increases?
+    compare same-type new params across different-type input Pp_s, separate from convertable dimensions|modalities: filter patterns
+    if correlation between second derivatives over pattern-summed params, similar to rng+?
+    anti-correlation may increase with derivation?
     if >3 nesting levels in iP_T: root_depth - comparand_depth >3, which maps to the distance of >16 Pp_s
     '''
     xPp_t_ = []  # each element is from one elevation of nesting

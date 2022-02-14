@@ -386,8 +386,10 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
 
 def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by mutual olp_M within comp rng
     '''
+    this is a version of agglomerative clustering, similar to https://en.wikipedia.org/wiki/Single-linkage_clustering,
+    but between cluster-level representations vs their elements (which is splice_Pp):
     primary clustering is by rdert.m: direct match between all compared Rdert.aderts,
-    secondary is by merging rPp of matching Rderts: clustered nodes don't need to directly match each other
+    secondary clustering is by merging rPp of matching Rderts: clustered nodes don't need to directly match each other
     '''
     rPp_ = []
     for _Rdert in Rdert_:
@@ -403,7 +405,7 @@ def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
         i_=[]
         for i, rdert in enumerate(_Rdert.rdert_):  # sum in olp_M to evaluate rdert.Rdert inclusion in _rPp
             if rdert.m > 0:
-                olp_M += rdert.m
+                olp_M += rdert.m  # match between anchor derts
                 i_.append(i)
         if olp_M / max(1, len(i_)) > ave_M * 4:  # clustering by variable cost of process in +rPp, vs mean M of overlap
             for i in i_:
@@ -412,11 +414,11 @@ def form_rPp_(Rdert_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
                 rPp = Rdert.roots
                 # merge _rPp:
                 if isinstance(rPp, CPp):
-                    for oRdert in rPp.pdert_:  # "o"Rdert for old
-                        if oRdert not in _rPp.pdert_:
-                            oRdert.roots = _rPp
-                            _rPp.accum_from(oRdert, ignore_capital=True)
-                            _rPp.pdert_.append(oRdert)
+                    for cRdert in rPp.pdert_:
+                        if cRdert not in _rPp.pdert_:
+                            cRdert.roots = _rPp
+                            _rPp.accum_from(cRdert, ignore_capital=True)
+                            _rPp.pdert_.append(cRdert)
                             _rPp.L += 1
                     rPp_.remove(rPp)
                 else:
