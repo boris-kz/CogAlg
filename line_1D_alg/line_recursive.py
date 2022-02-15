@@ -101,9 +101,10 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
 def cross_core_comp(iP_T, types_):  # draft, still not sure how to select compared types, if at all
     '''
     compare same-type new params across different-type input Pp_s, separate from convertable dimensions|modalities: filter patterns
-    if correlation between second derivatives over pattern-summed params, similar to rng+?
-    anti-correlation may increase with derivation?
-    if >3 nesting levels in iP_T: root_depth - comparand_depth >3, which maps to the distance of >16 Pp_s
+    if increasing correlation between higher derivatives, of pattern-summed params,
+    similar to rng+, if >3 nesting levels in iP_T: root_depth - comparand_depth >3, which maps to the distance of >16 Pp_s?
+
+    But correlation is predetermined by derivation: rdn coefs, multiplied over derivation hierarchy, no need to compare?
     '''
     xPp_t_ = []  # each element is from one elevation of nesting
     ntypes = 1 + 2 * math.log(len(iP_T) / 2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
@@ -147,8 +148,7 @@ def cross_core_comp(iP_T, types_):  # draft, still not sure how to select compar
                                                             param = getattr(P,param_name[0])
                                                             xpdert = comp_par(_P, _param, param, param_name, ave)
                                                             xpdert_.append(xpdert)
-                                                xPp_ += form_Pp_(xpdert_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1?
-                                                # intra_Pp too?
+                                                xPp_ += form_Pp_(xpdert_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1? and intra_Pp?
                         xPp_t.append(xPp_)
             xPp_t_.append(xPp_t)
 
