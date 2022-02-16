@@ -59,7 +59,6 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
     '''
     - unpack and decode input: implicit tuple of P_s, nested to depth = 1 + 2*(elevation-1): 2Le: 2 P_s, 3Le: 16 P_s, 4Le: 128 P_s..
     - cross-comp and clustering of same-type P params: core params of new Pps
-    - cross-type comp and clustering, if any
     '''
     for P_, types in zip(sublayer0, types_):
 
@@ -88,8 +87,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
             new_types_ += [[] for _ in range(8)]  # align indexing with sublayer, replace with count of missing prior P_s, or use nested tuples?
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
-
-        # cross_core_comp(new_sublayer0, new_types_)  # eval cross-comp of current-level Pp_s, implicitly nested by all lower levels
+        # cross_core_comp(new_sublayer0, new_types_)
         root.levels.append(root.sublayers)  # levels represent all lower hierarchy
 
         if len(sublayer0) / max(nextended,1) < 8 and new_M > ave_M * 8:  # higher thresholds for recursion than for cross_core_comp?
@@ -97,65 +95,6 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
 
     norm_feedback(root.levels)  # +dfilters: adjust all independent filters on lower levels, for pipelined version only
 
-
-def cross_core_comp(iP_T, types_):  # draft, still not sure how to select compared types, if at all
-    '''
-    compare same-type new params across different-type input Pp_s, separate from convertable dimensions|modalities: filter patterns
-    if increasing correlation between higher derivatives, of pattern-summed params,
-    similar to rng+, if >3 nesting levels in iP_T: root_depth - comparand_depth >3, which maps to the distance of >16 Pp_s?
-
-    But correlation is predetermined by derivation: rdn coefs, multiplied over derivation hierarchy, no need to compare?
-    '''
-    xPp_t_ = []  # each element is from one elevation of nesting
-    ntypes = 1 + 2 * math.log(len(iP_T) / 2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
-
-    for elevation in range(int(ntypes)):  # each loop is an elevation of nesting
-        if elevation % 2:  # params
-            LP_t, IP_t, DP_t, MP_t = [], [], [], []
-            # get P_ of each param for current elevation (compare at each elevation?)
-            for i, types in enumerate(types_):
-                if types:  # else empty set
-                    if types[elevation] == 0:
-                        LP_t += [iP_T[i]]
-                    elif types[elevation] == 1:
-                        IP_t += [iP_T[i]]
-                    elif types[elevation] == 2:
-                        DP_t += [iP_T[i]]
-                    elif types[elevation] == 3:
-                        MP_t += [iP_T[i]]
-            P_tt = [LP_t, IP_t, DP_t, MP_t]
-
-            xPp_t = [] # cross compare between 4 params, always = 6 elements if call from root function
-
-            for j, _P_t in enumerate(P_tt):
-                if j+1 < 4:  # 4 params
-                    for P_t in P_tt[j+1:]:
-                        xPp_ = []
-                        for _P_ in _P_t:
-                            for P_ in P_t:
-                                if _P_ and P_:  # not empty _P_ and P_
-                                    if len(P_)>2 and len(_P_)>2:
-                                        _M = sum([_P.M for _P in _P_])
-                                        M = sum([P.M for P in P_])
-                                        for i,(param_name, ave) in enumerate(zip(param_names, aves)):
-                                            for fPd in 0,1:
-                                                xpdert_ = []  # contains result from each _P_ and P_ pair
-                                                for _P in _P_:
-                                                    for P in P_:
-                                                        # probably wrong but we need this evaluation, add in PM for evaluation?
-                                                        if _P.M + P.M + _M + M > (_P.Rdn + P.Rdn) * ave:
-                                                            _param = getattr(_P,param_name[0])
-                                                            param = getattr(P,param_name[0])
-                                                            xpdert = comp_par(_P, _param, param, param_name, ave)
-                                                            xpdert_.append(xpdert)
-                                                xPp_ += form_Pp_(xpdert_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1? and intra_Pp?
-                        xPp_t.append(xPp_)
-            xPp_t_.append(xPp_t)
-
-
-def norm_feedback(levels):
-    # adjust all independent filters on lower levels by corresponding mean deviations (Ms), for pipelined version
-    pass
 
 def cross_comp_Pp_(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
 
@@ -192,6 +131,8 @@ def sum_rdn(param_names, Ppdert_t, fPd):
     '''
     access same-index pderts of all Pp params, assign redundancy to lesser-magnitude m|d in param pair.
     if other-param same-Pp_-index pdert is missing, rdn doesn't change.
+
+    This computes additional Rdn, it should be added to lower-derivation rdn per P_ type?
     '''
     if fPd: alt = 'M'
     else:   alt = 'D'
@@ -242,6 +183,7 @@ def comp_par(_Pp, _param, param, param_name, ave):
 
     return Cpdert(P=_Pp, i=_param, p=param + _param, d=d, m=m)
 
+
 def term_Pp(Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd):
 
     Ppp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L, x0=x0, pdert_=Ppdert_, sublayers=[[]])
@@ -281,7 +223,65 @@ def splice_Pps(Pppm_, Ppdert1_, Ppdert2_, fPd, fPpd):  # re-eval Ppps, pPp.pdert
         '''
         no splice(): fine-grain eval per P triplet is too expensive?
         '''
+
 # not used:
+
+def cross_core_comp(iP_T, types_):  # currently not used because:
+    # correlation is predetermined by derivation: rdn coefs, multiplied across derivation hierarchy, no need to compare?
+    '''
+    compare same-type new params across different-type input Pp_s, separate from convertable dimensions|modalities: filter patterns
+    if increasing correlation between higher derivatives, of pattern-summed params,
+    similar to rng+, if >3 nesting levels in iP_T: root_depth - comparand_depth >3, which maps to the distance of >16 Pp_s?
+    '''
+    xPp_t_ = []  # each element is from one elevation of nesting
+    ntypes = 1 + 2 * math.log(len(iP_T) / 2, 8)  # number of types per P_ in iP_T, with (fPd, param_name) n_pairs = math.log(len(iP_T)/2, 8)
+
+    for elevation in range(int(ntypes)):  # each loop is an elevation of nesting
+        if elevation % 2:  # params
+            LP_t, IP_t, DP_t, MP_t = [], [], [], []
+            # get P_ of each param for current elevation (compare at each elevation?)
+            for i, types in enumerate(types_):
+                if types:  # else empty set
+                    if types[elevation] == 0:
+                        LP_t += [iP_T[i]]
+                    elif types[elevation] == 1:
+                        IP_t += [iP_T[i]]
+                    elif types[elevation] == 2:
+                        DP_t += [iP_T[i]]
+                    elif types[elevation] == 3:
+                        MP_t += [iP_T[i]]
+            P_tt = [LP_t, IP_t, DP_t, MP_t]
+
+            xPp_t = [] # cross compare between 4 params, always = 8 elements if call from root function
+            for j, _P_t in enumerate(P_tt):
+                if j+1 < 4:  # 4 params
+                    for P_t in P_tt[j+1:]:
+                        xPp_ = []
+                        for _P_ in _P_t:
+                            for P_ in P_t:
+                                if _P_ and P_:  # not empty _P_ and P_
+                                    if len(P_)>2 and len(_P_)>2:
+                                        _M = sum([_P.M for _P in _P_])
+                                        M = sum([P.M for P in P_])
+                                        for i,(param_name, ave) in enumerate(zip(param_names, aves)):
+                                            for fPd in 0,1:
+                                                xpdert_ = []  # contains result from each _P_ and P_ pair
+                                                for _P in _P_:
+                                                    for P in P_:
+                                                        # probably wrong but we need this evaluation, add in PM for evaluation?
+                                                        if _P.M + P.M + _M + M > (_P.Rdn + P.Rdn) * ave:
+                                                            _param = getattr(_P,param_name[0])
+                                                            param = getattr(P,param_name[0])
+                                                            xpdert = comp_par(_P, _param, param, param_name, ave)
+                                                            xpdert_.append(xpdert)
+                                                xPp_ += form_Pp_(xpdert_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1? and intra_Pp?
+                        xPp_t.append(xPp_)
+            xPp_t_.append(xPp_t)
+
+
+def norm_feedback(levels):
+    # adjust all independent filters on lower levels by corresponding mean deviations (Ms), for pipelined version only
+    pass
 
 def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the depth = 1 + 2*elevation
 
@@ -327,7 +327,7 @@ def P_type_assign(iP_T):  # P_T_: 2P_, 16P_, 128P_., each level is nested to the
     return types_, ntypes
 
 
-def line_PPPs_root(root):  # test code, some obsolete
+def line_PPPs_root(root):  # test code only, some obsolete
 
     sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
     root.sublayers = [sublayer0]  # reset from last-level sublayers

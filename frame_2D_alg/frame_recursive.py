@@ -4,10 +4,10 @@ from frame_bblobs import *
 
 
 def frame_recursive(image, intra, render, verbose):
-    frame = frame_blobs(image, intra, render, verbose)
-    frame = frame_bblobs(frame, intra, render, verbose)
 
-    return frame_level_root(frame)
+    frame = frame_blobs_root(image, intra, render, verbose)
+    frame = frame_bblobs_root(frame, intra, render, verbose)
+    return  frame_level_root(frame)
 
 
 def frame_level_root(frame):
