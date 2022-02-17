@@ -31,13 +31,11 @@
 
 import sys
 import numpy as np
-from collections import deque
-# from frame_blobs_wrapper import wrapped_flood_fill
+from collections import deque, namedtuple
+# from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
 from draw_frame_blobs import visualize_blobs
-from utils import minmax
-from collections import namedtuple
+from intra_blob import *
 from class_cluster import ClusterStructure
-from time import time
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveB = 50
@@ -48,13 +46,27 @@ EXCLUDED_ID = -2
 
 FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, Dy, Dx, M, blob_, dert__')
 
-class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
-
+class CBlob(ClusterStructure):
     # comp_pixel:
     I = float
     Dy = float
     Dx = float
     M = float
+    A = float  # blob area
+    # composite params:
+    box = list  # x0, xn, y0, yn
+    mask__ = object
+    dert__ = object
+    root_dert__ = object
+    adj_blobs = list
+    fopen = bool
+    # frame_bblob:
+    root_bblob = object
+    sublevels = list  # input levels
+    # intra_blob params:
+    intra = lambda: Cintra
+
+class Cintra:  # intra_blob params:
     # comp_angle:
     Dydy = float
     Dxdy = float
@@ -64,24 +76,14 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     # comp_dx:
     Mdx = float
     Ddx = float
-    # new params:
-    A = int  # blob area
-    sign = bool
-    box = list
-    mask__ = object
-    dert__ = object
-    root_dert__ = object
-    adj_blobs = list
-    prior_forks = list
-    fopen = bool
-    # intra_blob params:
-    f_comp_a = bool  # current fork is comp angle, else comp_r
-    fflip = bool     # x-y swap
-    rdn = float      # redundancy to higher blob layers
-    rng = int        # comp range, set before intra_comp
     # derivation hierarchy:
-    Ls = int   # for visibility and next-fork rdn
-    sub_layers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks
+    prior_forks = list
+    sublayers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks
+    Ls = int  # n sublayers, for visibility and next-fork rdn
+    f_comp_a = bool  # current fork is comp angle, else comp_r
+    fflip = bool  # x-y swap
+    rdn = float  # redundancy to higher blob layers
+    rng = int  # comp range, set before intra_comp
     # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blobs
     fsliced = bool
@@ -93,10 +95,6 @@ class CBlob(ClusterStructure):  # from frame_blobs only, no sub_blobs
     PPdd_ = list  # PP_derPd_
     derPd__ = list
     Pd__ = list
-    # frame_bblob:
-    root_bblob = object
-    levels = list  # input levels
-    # derBlob_ = list, use dert_ instead?
 
 def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=False):
 
@@ -108,7 +106,6 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
 
     else:  # [flood_fill](https://en.wikipedia.org/wiki/Flood_fill)
-
         blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  verbose=verbose)
         I, Dy, Dx, M = 0, 0, 0, 0
         for blob in blob_:
@@ -116,16 +113,16 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
             Dy += blob.Dy
             Dx += blob.Dx
             M += blob.M
-        frame = CBlob(I=I, Dy=Dy, Dx=Dx, M=M, sub_layers=[blob_], dert__=[dert__])
+        frame = CBlob(I=I, Dy=Dy, Dx=Dx, M=M, sublayers=[blob_], dert__=[dert__])
 
     assign_adjacents(adj_pairs)  # f_segment_by_direction=False
 
     if verbose: print(f"{len(frame.levels[-1])} blobs formed in {time() - start_time} seconds")
-    if render: visualize_blobs(idmap, frame.sub_layers[-1])
+    if render: visualize_blobs(idmap, frame.sublayers[-1])
 
     if intra:  # call to intra_blob, omit for testing frame_blobs only:
         if verbose: print("\rRunning frame's intra_blob...")
-        intra_blob_(frame, render, verbose)
+        intra_blob_root(frame, render, verbose)
 
     return frame
 
@@ -291,7 +288,7 @@ if __name__ == "__main__":
     import argparse
     from time import time
     from utils import imread
-    from intra_blob_ import intra_blob_
+    from intra_blob import intra_blob_root
     from frame_recursive import frame_recursive
 
     # Parse arguments

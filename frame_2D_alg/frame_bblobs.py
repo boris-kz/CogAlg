@@ -1,9 +1,9 @@
 '''
-Cross-compare blobs with incrementally intermediate adjacency, within a frame
+Cross-compare blobs with incrementally mediated adjacency, forming blobs of blobs
 '''
 
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
-from frame_blobs import *
+from frame_blobs import CBlob
 from comp_slice_ import ave_min, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
 import numpy as np
 import cv2
@@ -15,88 +15,92 @@ ave_ga = .78
 ave_ma = 2
 
 ave_I = 10
-ave_A = 10
 ave_G = 10
 ave_M = 10
+ave_A = 10
 
-param_names = ["I", "A", "G", "M"]
+param_names = ["I", "G", "M", "A"]
 
-class CderBlob(ClusterStructure):
+class Cderp(ClusterStructure):  # set of derivatives per blob param
 
-    layer1 = dict      # Cdert layer params
-    mB = float
-    dB = float
-    distance = float  # common per derBlob_
-    neg_mB = float    # common per derBlob_
+    p = int  # compared blob param
+    rp = int  # mean p in rng    dy = int
+    dx = int
+    m = int
+    distance = int  # common per derp_
     blob = object
     _blob = object
     subH = object  # represents hierarchy of sub_blobs, if any
 
-class CpBlob(CBlob, CderBlob):
-
-    # base params are retrieved from CBlob and CderBlob
+class CpBlob(CBlob, Cderp):
+    # may not be needed
+    # base params are retrieved from CBlob and Cderp
     # layer1 = dict       # Cdert layer params
-    # derBlob_ = list
+    # derp_ = list
     # blob_ = list
     root = object
 
 def frame_bblobs_root(frame, intra, render, verbose):
     '''
-    root function of comp_blob: cross compare blobs with their adjacent blobs in frame.blob_, including sub_layers
+    root function of comp_blob: cross compare blobs with their adjacent blobs in frame.blob_, including sublayers
     '''
-    blob_ = frame.levels[-1]
+    blob_ = frame.sublayers[-1]
 
-    derBlob_t = cross_comp(blob_)
-    bblob_t = []
-    
-    for param_name, derBlob_ in zip(param_names, derBlob_t):
-        bblob_t += [form_bblob_(derBlob_)]  # form blobs of blobs, connected by mutual match
+    derp_t = cross_comp(blob_)
+    pBlob_t = []
+    I = A = Dy = Dx = M = 0
 
-    frame.dert__ += [derBlob_t]
-    frame.levels += [bblob_t]
+    for param_name, derp_ in zip(param_names, derp_t):
+        pBlob_ = form_bblob_(derp_)
+        I  += sum([pBlob.I  for pBlob in pBlob_])
+        Dy += sum([pBlob.Dy for pBlob in pBlob_])
+        Dx += sum([pBlob.Dx for pBlob in pBlob_])
+        M  += sum([pBlob.M  for pBlob in pBlob_])
+        A  += sum([pBlob.A for pBlob in pBlob_])
+        pBlob_t += [pBlob_]  # to form blobs of blobs, connected by mutual match
 
+    new_frame = CpBlob(I=I, Dy=Dy, Dx=Dx, M=M, A=A, sublayers=[blob_, pBlob_t], dert__=[frame.dert__, derp_t])
+
+    return new_frame
 
 def cross_comp(blob_):
-    
-    Idert_, Adert_, Gdert_, Mdert_ = [], [], [], []
-    
+
+    Idert_, Gdert_, Mdert_, Adert_ = [], [], [], []
     blob_pair = []
+
     for _blob in blob_:
-        _I, _A, _Dy, _Dx, _M = _blob.I, _blob.A, _blob.Dy, _blob.Dx, _blob.M
-        
-        for blob in _blob.adj_blobs[0]:
-            
-            if [_blob, blob] not in blob_pair and [blob, _blob] not in blob_pair:  # same pair of blob didn't compare befor
-            
+        _I, _Dy, _Dx, _M, _A = _blob.I, _blob.Dy, _blob.Dx, _blob.M, _blob.A
+
+        for blob in _blob.adj_blobs[0]:  # blob_, blob.adj_blobs[1] is pose
+            if [_blob, blob] not in blob_pair and [blob, _blob] not in blob_pair:  # this pair of blobs wasn't compared before
+
                 blob_pair.append([_blob, blob])
                 I, A, Dy, Dx, M = blob.I, blob.A, blob.Dy, blob.Dx, blob.M
-                
-                # pack derBlob
-                Idert_ += [comp_par(_blob, _I, I, "I", ave_I )] 
-                Adert_ += [comp_par(_blob, _A, A, "A", ave_A )] 
-                Gdert_ += [comp_par(_blob, [_Dy, _Dx], [Dy, Dx], "G", ave_G)] 
-                Mdert_ += [comp_par(_blob, _M, M, "M", ave_M )] 
+                # pack derp
+                Idert_ += [comp_par(_blob, _I, I, "I", ave_I )]
+                Gdert_ += [comp_par(_blob, [_Dy, _Dx], [Dy, Dx], "G", ave_G)]
+                Mdert_ += [comp_par(_blob, _M, M, "M", ave_M )]
+                Adert_ += [comp_par(_blob, _A, A, "A", ave_A)]
 
-    return Idert_, Adert_, Gdert_, Mdert_   
+    return Idert_, Gdert_, Mdert_, Adert_
 
-            
+
 def comp_par(_blob, _param, param, param_name, ave):
-  
+
     if param_name == "G":  # vector
         _sin, _cos = _param[0], _param[1]
         sin, cos = param[0], param[1]
-        
         # sum (dy,dx)
-        sin_sa = (cos * _sin) + (sin * _cos) 
-        cos_sa = (cos * _cos) - (sin * _sin)
+        sin_sa = (cos * _sin) + (sin * _cos)  # sin(α + β) = sin α cos β + cos α sin β
+        cos_sa = (cos * _cos) - (sin * _sin)  # cos(α + β) = cos α cos β - sin α sin β
         # diff (dy,dx)
         sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
         cos_da= (cos * _cos) + (sin * _sin)   # cos(α - β) = cos α cos β + sin α sin β
-        
+
         p = np.arctan2(sin_sa, cos_sa)  # sa: sum of angle
         d = np.arctan2(sin_da, cos_da)  # da: difference of angle
         m = ave - abs(d)  # ma: indirect match of angle
-    
+
     else:
         p = param+_param
         d = param - _param    # difference
@@ -105,48 +109,82 @@ def comp_par(_blob, _param, param, param_name, ave):
         else:
             m = min(param,_param) - abs(d)/2 - ave  # direct match
     # blob param dert:
-    derBlob = CderBlob(root=_blob, I=param, p=p, d=d, m=m)
+    derp = Cderp(root=_blob, I=param, p=p, d=d, m=m)
 
-    return derBlob
+    return derp
 
+# very initial draft
+def form_bblob_(derp_):
 
-def search_blob_recursive(blob, adj_blob_, _derBlob, derBlob_):
+    pBlob_ = []
+    for derp in derp_:
+        if derp.M>0:  # positve derp only?
+            if "pBlob" in locals():
+                pBlob.accum_from(derp)
+                pBlob.L += 1
+            else:
+                pBlob = CpBlob(dert__ = [derp], L=1)
+                pBlob_.append(pBlob)
+                pBlob.accum_from(derp)
+
+    return pBlob_
+'''
+    bblob is a cluster (graph) of blobs with positive mB to any other member blob, formed by comparing adj_blobs
+    two kinds of bblobs: merged_blob and blob_graph
+    bblob_ = []
+    for blob in blob_:
+        MB = sum([derp.mB for derp in blob.derp_]) # blob's mB, sum from blob's derps' mB
+        if MB > 0 and not isinstance(blob.bblob, CpBlob):  # init bblob with current blob
+            bblob = CpBlob()
+            merged_ids = [bblob.id]
+            accum_bblob(bblob_, bblob, blob, merged_ids)  # accum blob into bblob
+            form_bblob_recursive(bblob_, bblob, bblob.blob_, merged_ids)
+    # test code to see duplicated blobs in bblob, not needed in actual code
+    for bblob in bblob_:
+        bblob_blob_id_ = [ blob.id for blob in bblob.blob_]
+        if len(bblob_blob_id_) != len(np.unique(bblob_blob_id_)):
+            raise ValueError("Duplicated blobs")
+    return bblob_
     '''
-    called by cross_comp_blob to recursively compare blob to adj_blobs in incremental layers of adjacency
+
+
+def comp_rng_recursive(blob, adj_blob_, _derp, derp_):
     '''
-    derBlob_pair_ = [ [derBlob.blob, derBlob._blob]  for derBlob in derBlob_]  # blob, adj_blob pair
+    called by cross_comp_blob to recursively compare Iblob to adj_adj_blobs, then adj_adj_adj_blobs, etc.
+    '''
+    derp_pair_ = [ [derp.blob, derp._blob]  for derp in derp_]  # blob, adj_blob pair
 
     for adj_blob in adj_blob_:
-        if [adj_blob, blob] in derBlob_pair_:  # derBlob.blob=adj_blob, derBlob._blob=blob
-            derBlob = derBlob_[derBlob_pair_.index([adj_blob,blob])]
+        if [adj_blob, blob] in derp_pair_:  # derp.blob=adj_blob, derp._blob=blob
+            derp = derp_[derp_pair_.index([adj_blob,blob])]
             # also adj_blob.rdn += 1?
-        elif [blob, adj_blob] not in derBlob_pair_:  # form new derBlob if blob pair wasn't compared in prior function call
-            derBlob = comp_blob(blob, adj_blob, _derBlob)  # compare blob and adjacent blob
-            derBlob_.append(derBlob)             # also frame-wide
+        elif [blob, adj_blob] not in derp_pair_:  # form new derp if blob pair wasn't compared in prior function call
+            derp = comp_blob(blob, adj_blob, _derp)  # compare blob and adjacent blob
+            derp_.append(derp)             # also frame-wide
 
-        if "derBlob" in locals(): # derBlob exists
-            # blob accmulate base param of derBlob
-            blob.derBlob_.append(derBlob)         # from all compared blobs, regardless of mB sign
+        if "derp" in locals(): # derp exists
+            # add blob accumulates base param of derp
+            blob.derp_.append(derp)  # from all compared blobs, regardless of mB sign
 
-            if derBlob.mB > 0:  # replace blob with adj_blob for continued adjacency search:
-                search_blob_recursive(adj_blob, adj_blob.adj_blobs[0], [], derBlob_)  # search depth could be different, compare anyway
+            if derp.mB > 0:  # replace blob with adj_blob for continued adjacency search:
+                comp_rng_recursive(adj_blob, adj_blob.adj_blobs[0], [], derp_)  # search depth could be different, compare anyway
                 break
-            elif blob.M + derBlob.neg_mB + derBlob.mB > ave_mB:  # neg mB but positive comb M,
+            elif blob.M + derp.neg_mB + derp.mB > ave_mB:  # neg mB but positive comb M,
                 # extend blob comparison to adjacents of adjacent, depth-first
-                derBlob.neg_mB = derBlob.mB   # mB and distance are accumulated over comparison scope
-                derBlob.distance = np.sqrt(adj_blob.A)
-                if _derBlob:
-                     derBlob.neg_mB += _derBlob.neg_mB
-                     derBlob.distance += _derBlob.distance
+                derp.neg_mB = derp.mB   # mB and distance are accumulated over comparison scope
+                derp.distance = np.sqrt(adj_blob.A)
+                if _derp:
+                     derp.neg_mB += _derp.neg_mB
+                     derp.distance += _derp.distance
 
-                search_blob_recursive(blob, adj_blob.adj_blobs[0], derBlob, derBlob_)
+                comp_rng_recursive(blob, adj_blob.adj_blobs[0], derp, derp_)
 
 
-def comp_blob(blob, _blob, _derBlob):
+def comp_blob(blob, _blob, _derp):
     '''
     compare _blob and blob
     '''
-    derBlob = CderBlob()
+    derp = Cderp()
     layer1 = dict({'I':.0,'Da':.0, 'M':.0, 'Dady':.0,'Dadx':.0,'Ma':.0,'A':.0,'Mdx':.0, 'Ddx':.0})
 
     G = np.hypot(blob.Dy, blob.Dx) - ave * blob.A
@@ -188,19 +226,19 @@ def comp_blob(blob, _blob, _derBlob):
             else:
                 ave_mPar = ave_min  # ave_min
 
-        dist_ave = ave_mPar * (ave_rM ** ((1 + derBlob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
+        dist_ave = ave_mPar * (ave_rM ** ((1 + derp.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
         pdert = comp_param(param, _param, param_name, dist_ave)
         layer1[param_name] = pdert
-        derBlob.mB += pdert.m; derBlob.dB += pdert.d
+        derp.mB += pdert.m; derp.dB += pdert.d
 
-    derBlob.layer1 = layer1
+    derp.layer1 = layer1
 
-    if _derBlob:
-        derBlob.distance = _derBlob.distance # accumulate distance
-        derBlob.neg_mB = _derBlob.neg_mB # accumulate neg_mB
+    if _derp:
+        derp.distance = _derp.distance # accumulate distance
+        derp.neg_mB = _derp.neg_mB # accumulate neg_mB
 
-    derBlob.blob = blob
-    derBlob._blob = _blob
+    derp.blob = blob
+    derp._blob = _blob
 
     '''
     In comp_param:
@@ -218,35 +256,11 @@ def comp_blob(blob, _blob, _derBlob):
     mB = match['I'] + match['A'] + match['G'] + match['M'] + ma \
     - ave_mB * (ave_rM ** ((1+blob.distance) / np.sqrt(blob.A)))  # deviation from average blob match at current distance
     dB = difference['I'] + difference['A'] + difference['G'] + difference['M'] + da
-    derBlob  = CderBlob(blob=blob, _blob=_blob, mB=mB, dB=dB)  # blob is core node, _blob is adjacent blob
+    derp  = Cderp(blob=blob, _blob=_blob, mB=mB, dB=dB)  # blob is core node, _blob is adjacent blob
     if _blob.fsliced and blob.fsliced:
         pass
-        
     '''
-    return derBlob
-
-
-def form_bblob_(blob_):
-    pass
-    '''
-    bblob is a cluster (graph) of blobs with positive mB to any other member blob, formed by comparing adj_blobs
-    two kinds of bblobs: merged_blob and blob_graph
-    
-    bblob_ = []
-    for blob in blob_:
-        MB = sum([derBlob.mB for derBlob in blob.derBlob_]) # blob's mB, sum from blob's derBlobs' mB
-        if MB > 0 and not isinstance(blob.bblob, CpBlob):  # init bblob with current blob
-            bblob = CpBlob()
-            merged_ids = [bblob.id]
-            accum_bblob(bblob_, bblob, blob, merged_ids)  # accum blob into bblob
-            form_bblob_recursive(bblob_, bblob, bblob.blob_, merged_ids)
-    # test code to see duplicated blobs in bblob, not needed in actual code
-    for bblob in bblob_:
-        bblob_blob_id_ = [ blob.id for blob in bblob.blob_]
-        if len(bblob_blob_id_) != len(np.unique(bblob_blob_id_)):
-            raise ValueError("Duplicated blobs")
-    return bblob_
-    '''
+    return derp
 
 def form_bblob_recursive(bblob_, bblob, blob_, merged_ids):
 
@@ -254,31 +268,31 @@ def form_bblob_recursive(bblob_, bblob, blob_, merged_ids):
 
     for blob in blob_:  # search new added blobs to get potential border clustering blob
 
-        MB = sum([derBlob.mB for derBlob in blob.derBlob_]) # blob's mB, sum from blob's derBlobs' mB
-        if (MB > 0):  # positive summed mBs
+        MB = sum([derp.mB for derp in blob.derp_]) # blob's mB, sum from blob's derps' mB
+        if MB > 0:  # positive summed mBs
 
             if isinstance(blob.bblob, CpBlob) and blob.bblob.id not in merged_ids:  # merge existing bblobs
                 if blob.bblob in bblob_:
                     bblob_.remove(blob.bblob)  # remove the merging bblob from bblob_
                 merge_bblob(bblob_, bblob, blob.bblob, merged_ids)
             else:
-                for derBlob in blob.derBlob_:
-                    # blob is in bblob.blob_, but derBlob._blob is not in bblob_blob_ and (DerBlob.mB > 0 and blob.mB > 0):
+                for derp in blob.derp_:
+                    # blob is in bblob.blob_, but derp._blob is not in bblob_blob_ and (derp.mB > 0 and blob.mB > 0):
 
-                    _bblob_mB = sum([blob_derBlob.mB for blob_derBlob in derBlob._blob.derBlob_]) # blob in bblob, _blob wasn't
-                    bblob_mB = sum([blob_derBlob.mB for blob_derBlob in derBlob.blob.derBlob_])   # _blob in bbob, blob wasn't
+                    _bblob_mB = sum([blob_derp.mB for blob_derp in derp._blob.derp_]) # blob in bblob, _blob wasn't
+                    bblob_mB = sum([blob_derp.mB for blob_derp in derp.blob.derp_])   # _blob in bbob, blob wasn't
 
-                    if (derBlob._blob not in bblob.blob_) and (_bblob_mB + MB > 0):
-                        accum_bblob(bblob_, bblob, derBlob._blob, merged_ids)  # pack derBlob._blob in bblob
-                        blobs2check.append(derBlob._blob)
-                    elif (derBlob.blob not in bblob.blob_) and (bblob_mB + MB > 0):
-                        accum_bblob(bblob_, bblob, derBlob.blob, merged_ids)
-                        blobs2check.append(derBlob.blob)
+                    if (derp._blob not in bblob.blob_) and (_bblob_mB + MB > 0):
+                        accum_bblob(bblob_, bblob, derp._blob, merged_ids)  # pack derp._blob in bblob
+                        blobs2check.append(derp._blob)
+                    elif (derp.blob not in bblob.blob_) and (bblob_mB + MB > 0):
+                        accum_bblob(bblob_, bblob, derp.blob, merged_ids)
+                        blobs2check.append(derp.blob)
 
     if blobs2check:
         form_bblob_recursive(bblob_, bblob, blobs2check, merged_ids)
 
-    bblob_.append(bblob)  # pack bblob after scanning all accessible derBlobs
+    bblob_.append(bblob)  # pack bblob after scanning all accessible derps
 
 
 def merge_bblob(bblob_, _bblob, bblob, merged_ids):
@@ -290,22 +304,22 @@ def merge_bblob(bblob_, _bblob, bblob, merged_ids):
             _bblob.blob_.append(blob) # add blob to bblob
             blob.bblob = _bblob       # update bblob reference of blob
 
-            for derBlob in blob.derBlob_: # pack adjacent blobs of blob into _bblob
-                if derBlob.blob not in _bblob.blob_:     # if blob not in _bblob.blob_, _blob in _bblob.blob_
-                    merge_blob = derBlob.blob
-                elif derBlob._blob not in _bblob.blob_:  # if _blob not in _bblob.blob_, blob in _bblob.blob_
-                    merge_blob = derBlob._blob
+            for derp in blob.derp_: # pack adjacent blobs of blob into _bblob
+                if derp.blob not in _bblob.blob_:     # if blob not in _bblob.blob_, _blob in _bblob.blob_
+                    merge_blob = derp.blob
+                elif derp._blob not in _bblob.blob_:  # if _blob not in _bblob.blob_, blob in _bblob.blob_
+                    merge_blob = derp._blob
 
                 if "merge_blob" in locals():
-                    if isinstance(merge_blob.bblob, CpBlob):  # derBlob._blob is having bblob, merge them
+                    if isinstance(merge_blob.bblob, CpBlob):  # derp._blob is having bblob, merge them
                         if merge_blob.bblob.id not in merged_ids:
                             if merge_blob.bblob in bblob_:
                                 bblob_.remove(merge_blob.bblob) # remove the merging bblob from bblob_
                             merge_bblob(bblob_, _bblob, merge_blob.bblob, merged_ids)
                     else:
-                        # accumulate derBlob only if either one of _blob or blob (adjacent) not in _bblob
-                        _bblob.accum_from(derBlob)
-                        _bblob.accum_from(derBlob.blob)
+                        # accumulate derp only if either one of _blob or blob (adjacent) not in _bblob
+                        _bblob.accum_from(derp)
+                        _bblob.accum_from(derp.blob)
                         _bblob.blob_.append(merge_blob)
                         merge_blob.bblob = _bblob
 
@@ -315,22 +329,22 @@ def accum_bblob(bblob_, bblob, blob, merged_ids):
     bblob.blob_.append(blob) # add blob to bblob
     blob.bblob = bblob       # update bblob reference of blob
 
-    for derBlob in blob.derBlob_: # pack adjacent blobs of blob into bblob
-        if derBlob.blob not in bblob.blob_:     # if blob not in bblob.blob_, _blob in bblob.blob_
-            merge_blob = derBlob.blob
-        elif derBlob._blob not in bblob.blob_:  # if _blob not in bblob.blob_, blob in bblob.blob_
-            merge_blob = derBlob._blob
+    for derp in blob.derp_: # pack adjacent blobs of blob into bblob
+        if derp.blob not in bblob.blob_:     # if blob not in bblob.blob_, _blob in bblob.blob_
+            merge_blob = derp.blob
+        elif derp._blob not in bblob.blob_:  # if _blob not in bblob.blob_, blob in bblob.blob_
+            merge_blob = derp._blob
 
         if "merge_blob" in locals():
-            if isinstance(merge_blob.bblob, CpBlob): # derBlob._blob or derBlob.blob is having bblob, merge them
+            if isinstance(merge_blob.bblob, CpBlob): # derp._blob or derp.blob is having bblob, merge them
                 if merge_blob.bblob.id not in merged_ids:
                     if merge_blob.bblob in bblob_:
                         bblob_.remove(merge_blob.bblob) # remove the merging bblob from bblob_
                     merge_bblob(bblob_, bblob, merge_blob.bblob, merged_ids)
             else:
-                # accumulate derBlob only if either one of _blob or blob (adjacent) not in bblob
-                bblob.accum_from(derBlob)
-                bblob.accum_from(derBlob.blob)
+                # accumulate derp only if either one of _blob or blob (adjacent) not in bblob
+                bblob.accum_from(derp)
+                bblob.accum_from(derp.blob)
                 bblob.blob_.append(merge_blob)
                 merge_blob.bblob = bblob
 
@@ -386,22 +400,17 @@ def visualize_cluster_(bblob_, blob_, frame):
             cy0, cyn, cx0, cxn = blob.box
             blob_colour_index += 1
             cluster_mask[cy0:cyn,cx0:cxn] += (~blob.mask__ *cluster_colour_index).astype('uint8')
-
         # increase colour index
         cluster_colour_index += 1
-
         # insert colour of blobs
         for i in range(1,blob_colour_index):
             blob_img[np.where(blob_mask == i)] = colour_list[i % 20]
-
         # insert colour of clusters
         for i in range(1,cluster_colour_index):
             cluster_img[np.where(cluster_mask == i)] = colour_list[i % 20]
-
         # combine images for visualization
         img_concat = np.concatenate((blob_img, img_separator,
                                     cluster_img, img_separator), axis=1)
-
         # plot cluster of blob
         cv2.imshow('blobs & clusters',img_concat)
         cv2.resizeWindow('blobs & clusters', 1920, 720)

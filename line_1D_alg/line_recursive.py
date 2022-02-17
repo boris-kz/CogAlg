@@ -132,7 +132,8 @@ def sum_rdn(param_names, Ppdert_t, fPd):
     access same-index pderts of all Pp params, assign redundancy to lesser-magnitude m|d in param pair.
     if other-param same-Pp_-index pdert is missing, rdn doesn't change.
 
-    This computes additional Rdn, it should be added to lower-derivation rdn per P_ type?
+    This computes additional current-level Rdn, to be summed in resulting Pp,
+    then added to the sum of lower-derivation Rdn of its element P/Pps?
     '''
     if fPd: alt = 'M'
     else:   alt = 'D'
@@ -187,6 +188,7 @@ def comp_par(_Pp, _param, param, param_name, ave):
 def term_Pp(Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd):
 
     Ppp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L, x0=x0, pdert_=Ppdert_, sublayers=[[]])
+    # or Rdn += Rdn+L: summed across levels?
     for Ppdert in Ppp.pdert_: Ppdert.Ppt[fPpd] = Ppp  # root Ppp refs
     Ppp_.append(Ppp)
 
