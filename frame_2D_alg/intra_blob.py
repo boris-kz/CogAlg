@@ -23,18 +23,18 @@ pcoef = 2  # ave_comp_slice / ave: relative cost of p fork;  no ave_ga = .78, av
 # --------------------------------------------------------------------------------------------------------------
 # functions:
 
-def intra_blob_root(frame, render, verbose):  # slice_blob or recursive input rng+ | angle cross-comp within input blob
+def intra_blob_root(root_blob, render, verbose):  # slice_blob or recursive input rng+ | angle cross-comp within input blob
 
-    deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
+    deep_frame = root_blob, root_blob  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
     deep_blob_i_ = []  # index of a blob with deep layers
-    blob_ = frame.sublevels[-1]
+    blob_ = root_blob.sublevels[-1]
     deep_layers = [[]] * len(blob_)  # ?
     root_dert__ = (  # update root dert__
-        frame.dert__[0],  # i
-        frame.dert__[1],  # dy
-        frame.dert__[2],  # dx
-        frame.dert__[3],  # m
-        frame.dert__[4]   # ri
+        root_blob.dert__[0],  # i
+        root_blob.dert__[1],  # dy
+        root_blob.dert__[2],  # dx
+        root_blob.dert__[3],  # m
+        root_blob.dert__[4]   # ri
         )
     for i, blob in enumerate(blob_):  # print('Processing blob number ' + str(bcount))
         '''
