@@ -27,7 +27,8 @@ def intra_blob_root(frame, render, verbose):  # slice_blob or recursive input rn
 
     deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
     deep_blob_i_ = []  # index of a blob with deep layers
-    deep_layers = [[]] * len(frame.blob_)  # for visibility only
+    blob_ = frame.sublevels[-1]
+    deep_layers = [[]] * len(blob_)  # ?
     root_dert__ = (  # update root dert__
         frame.dert__[0],  # i
         frame.dert__[1],  # dy
@@ -35,7 +36,7 @@ def intra_blob_root(frame, render, verbose):  # slice_blob or recursive input rn
         frame.dert__[3],  # m
         frame.dert__[4]   # ri
         )
-    for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
+    for i, blob in enumerate(blob_):  # print('Processing blob number ' + str(bcount))
         '''
         Blob M: -|+ predictive value, positive in +M blobs and lent to contrast value of adjacent -M blobs. 
         -M "edge" blobs are valuable as contrast: their negative value cancels positive value of adjacent "flat" +M blobs.

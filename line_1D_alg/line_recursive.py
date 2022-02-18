@@ -10,7 +10,7 @@ from line_PPs import *
 from itertools import zip_longest
 import math
 
-class CderPp(ClusterStructure):  # if different, PPP comb x Pps?
+class CderPp(ClusterStructure):  # should not be different from derp? PPP comb x Pps?
     mPp = int
     dPp = int
     rrdn = int
@@ -66,22 +66,22 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
             nextended += 1  # nesting depth of this P_ will be extended
             fiPd = types[0]  # or not just the last one, OR all fPds in types to switch to direct match?
 
-            Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-            sum_rdn_(param_names, Pdert_t, fiPd)  # sum cross-param redundancy per pdert
-            for param, Pdert_ in enumerate(Pdert_t):  # Pdert_ -> Pps:
+            derp_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPd)  # derp_t: Lderp_, Iderp_, Dderp_, Mderp_
+            sum_rdn_(param_names, derp_t, fiPd)  # sum cross-param redundancy per derp
+            for param, derp_ in enumerate(derp_t):  # derp_ -> Pps:
 
                 for fPd in 0, 1:  # 0-> Ppm_, 1-> Ppd_:
                     new_types = types.copy()
                     new_types.insert(0, param)  # add param index
                     new_types.insert(0, fPd)  # add fPd
                     new_types_.append(new_types)
-                    Pp_ = form_Pp_(deepcopy(Pdert_), fPd)
+                    Pp_ = form_Pp_(deepcopy(derp_), fPd)
                     new_sublayer0 += [Pp_]  # Ppm_| Ppd_
                     if (fPd and param == 2) or (not fPd and param == 1):  # 2: "D_", 1: "I_"
                         if not fPd:
                             splice_Pps(Pp_, dert1_, dert2_, fiPd, fPd)  # splice eval by Pp.M in Ppm_, for Pms in +IPpms or Pds in +DPpm
-                        rng_incr(root, Pp_, hlayers=1, rng=2)  # evaluate greater-range cross-comp and clustering per Pp
-                        der_incr(root, Pp_, hlayers=1)  # evaluate higher-derivation cross-comp and clustering per Pp
+                        range_incr(root, Pp_, hlayers=1, rng=2)  # evaluate greater-range cross-comp and clustering per Pp
+                        deriv_incr(root, Pp_, hlayers=1)  # evaluate higher-derivation cross-comp and clustering per Pp
                     new_M += sum([Pp.M for Pp in Pp_])  # Pp.M includes rng+ and der+ Ms
         else:
             new_types_ += [[] for _ in range(8)]  # align indexing with sublayer, replace with count of missing prior P_s, or use nested tuples?
@@ -96,41 +96,48 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
     norm_feedback(root.levels)  # +dfilters: adjust all independent filters on lower levels, for pipelined version only
 
 
-def cross_comp_Pp_(Pp_, fPpd):  # cross-compare patterns of params within horizontal line
+def cross_comp_Pp_(Pp_, fPpd):  # same as in line_Ps? cross-compare patterns of params within horizontal line
 
-    LPpdert_, IPpdert_, DPpdert_, MPpdert_, Ppdert1_, Ppdert2_ = [], [], [], [], [], []
+    Lderp_, Iderp_, Dderp_, Mderp_, derp1_, derp2_ = [], [], [], [], [], []
 
     for _Pp, Pp, Pp2 in zip(Pp_, Pp_[1:], Pp_[2:] + [CPp()]):  # for P_ cross-comp over step=1 and step=2
         _L, _I, _D, _M = _Pp.L, _Pp.I, _Pp.D, _Pp.M
         L, I, D, M, = Pp.L, Pp.I, Pp.D, Pp.M
         D2, M2 = Pp2.D, Pp2.M
 
-        LPpdert_ += [comp_par(_Pp, _L, L, "L_", ave_mL)]  # div_comp L, sub_comp summed params:
-        IPpdert_ += [comp_par(_Pp, _I, I, "I_", ave_mI)]
+        Lderp_ += [comp_par(_Pp, _L, L, "L_", ave_mL)]  # div_comp L, sub_comp summed params:
+        Iderp_ += [comp_par(_Pp, _I, I, "I_", ave_mI)]
         if fPpd:
-            DPpdert = comp_par(_Pp, _D, D2, "D_", ave_mD)  # step=2 for same-D-sign comp?
-            DPpdert_ += [DPpdert]
-            Ppdert2_ += [DPpdert.copy()] # to splice Ppds
-            Ppdert1_ += [comp_par(_Pp, _D, D, "D_", ave_mD)]  # to splice Pds
-            MPpdert_ += [comp_par(_Pp, _M, M, "M_", ave_mM)]
+            Dderp = comp_par(_Pp, _D, D2, "D_", ave_mD)  # step=2 for same-D-sign comp?
+            Dderp_ += [Dderp]
+            derp2_ += [Dderp.copy()] # to splice Ppds
+            derp1_ += [comp_par(_Pp, _D, D, "D_", ave_mD)]  # to splice Pds
+            Mderp_ += [comp_par(_Pp, _M, M, "M_", ave_mM)]
         else:
-            DPpdert_ += [comp_par(_Pp, _D, D, "D_", ave_mD)]
-            MPpdert = comp_par(_Pp, _M, M2, "M_", ave_mM)  # step=2 for same-M-sign comp?
-            MPpdert_ += [MPpdert]
-            Ppdert2_ += [MPpdert.copy()]
-            Ppdert1_ += [comp_par(_Pp, _M, M, "M_", ave_mM)]  # to splice Ppms
+            Dderp_ += [comp_par(_Pp, _D, D, "D_", ave_mD)]
+            Mderp = comp_par(_Pp, _M, M2, "M_", ave_mM)  # step=2 for same-M-sign comp?
+            Mderp_ += [Mderp]
+            derp2_ += [Mderp.copy()]
+            derp1_ += [comp_par(_Pp, _M, M, "M_", ave_mM)]  # to splice Ppms
 
         _L, _I, _D, _M = L, I, D, M
 
-    if not fPpd: MPpdert_ = MPpdert_[:-1]  # remove CPp() filled in P2
+    if not fPpd: Mderp_ = Mderp_[:-1]  # remove CPp() filled in P2
 
-    return (LPpdert_, IPpdert_, DPpdert_, MPpdert_), Ppdert1_, Ppdert2_[:-1]  # remove CPp() filled in dert2
+    return (Lderp_, Iderp_, Dderp_, Mderp_), derp1_, derp2_[:-1]  # remove CPp() filled in dert2
+
+def term_Pp(Ppp_, L, I, D, M, Rdn, x0, derp_, fPpd):
+
+    Ppp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L, x0=x0, derp_=derp_, sublayers=[[]])
+    # or Rdn += Rdn+L: sum across all levels / param types?
+    for derp in Ppp.derp_: derp.Ppt[fPpd] = Ppp  # root Ppp refs
+    Ppp_.append(Ppp)
 
 
-def sum_rdn(param_names, Ppdert_t, fPd):
+def sum_rdn(param_names, derp_t, fPd):
     '''
-    access same-index pderts of all Pp params, assign redundancy to lesser-magnitude m|d in param pair.
-    if other-param same-Pp_-index pdert is missing, rdn doesn't change.
+    access same-index derps of all Pp params, assign redundancy to lesser-magnitude m|d in param pair.
+    if other-param same-Pp_-index derp is missing, rdn doesn't change.
 
     This computes additional current-level Rdn, to be summed in resulting Pp,
     then added to the sum of lower-derivation Rdn of its element P/Pps?
@@ -138,10 +145,10 @@ def sum_rdn(param_names, Ppdert_t, fPd):
     if fPd: alt = 'M'
     else:   alt = 'D'
     name_pairs = (('I', 'L'), ('I', 'D'), ('I', 'M'), ('L', alt), ('D', 'M'))  # pairs of params redundant to each other
-    # rdn_t = [[], [], [], []] is replaced with pdert.rdn
+    # rdn_t = [[], [], [], []] is replaced with derp.rdn
 
-    for i, (LPpdert, IPpdert, DPpdert, MPpdert) in enumerate( zip_longest(Ppdert_t[0], Ppdert_t[1], Ppdert_t[2], Ppdert_t[3], fillvalue=Cpdert())):
-        # pdert per _P in P_, 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
+    for i, (Lderp, Iderp, Dderp, Mderp) in enumerate( zip_longest(derp_t[0], derp_t[1], derp_t[2], derp_t[3], fillvalue=Cderp())):
+        # derp per _P in P_, 0: Ldert_, 1: Idert_, 2: Ddert_, 3: Mdert_
         # P M|D rdn + dert m|d rdn:
         rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Ps: if fPd: I, M rdn+=1, else: D rdn+=1
         # names:    ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))  # I.m + P.M: value is combined across P levels?
@@ -149,11 +156,11 @@ def sum_rdn(param_names, Ppdert_t, fPd):
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
             # assign rdn in each rdn_pair using partial name substitution: https://www.w3schools.com/python/ref_func_eval.asp
             if fPd:
-                if eval("abs(" + name_pair[0] + "Ppdert.d) > abs(" + name_pair[1] + "Ppdert.d)"):  # (param_name)dert.d|m
+                if eval("abs(" + name_pair[0] + "derp.d) > abs(" + name_pair[1] + "derp.d)"):  # (param_name)dert.d|m
                     rdn_pair[1] += 1
                 else: rdn_pair[0] += 1  # weaker pair rdn+1
             else:
-                if eval(name_pair[0] + "Ppdert.m > " + name_pair[1] + "Ppdert.m"):
+                if eval(name_pair[0] + "derp.m > " + name_pair[1] + "derp.m"):
                     rdn_pair[1] += 1
                 else: rdn_pair[0] += 1  # weaker pair rdn+1
 
@@ -165,8 +172,8 @@ def sum_rdn(param_names, Ppdert_t, fPd):
                 elif param_name[0] == name_in_pair[1]:
                     Rdn += rdn[1]
 
-            if len(Ppdert_t[j]) >i:  # if fPd: Ddert_ is step=2, else: Mdert_ is step=2
-                Ppdert_t[j][i].rdn = Rdn  # [Ldert_, Idert_, Ddert_, Mdert_]
+            if len(derp_t[j]) >i:  # if fPd: Ddert_ is step=2, else: Mdert_ is step=2
+                derp_t[j][i].rdn = Rdn  # [Ldert_, Idert_, Ddert_, Mdert_]
 
 
 def comp_par(_Pp, _param, param, param_name, ave):
@@ -182,18 +189,10 @@ def comp_par(_Pp, _param, param, param_name, ave):
         if param_name == 'I_': m = ave - abs(d)  # indirect match
         else: m = min(param, _param) - abs(d) / 2 - ave  # direct match
 
-    return Cpdert(P=_Pp, i=_param, p=param + _param, d=d, m=m)
+    return Cderp(P=_Pp, i=_param, p=param + _param, d=d, m=m)
 
 
-def term_Pp(Ppp_, L, I, D, M, Rdn, x0, Ppdert_, fPpd):
-
-    Ppp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L, x0=x0, pdert_=Ppdert_, sublayers=[[]])
-    # or Rdn += Rdn+L: summed across levels?
-    for Ppdert in Ppp.pdert_: Ppdert.Ppt[fPpd] = Ppp  # root Ppp refs
-    Ppp_.append(Ppp)
-
-
-def splice_Pps(Pppm_, Ppdert1_, Ppdert2_, fPd, fPpd):  # re-eval Ppps, pPp.pdert_s for redundancy, eval splice Pps
+def splice_Pps(Pppm_, Pderp1_, Pderp2_, fPd, fPpd):  # re-eval Ppps, pPp.derp_s for redundancy, eval splice Pps
     '''
     Initial P termination is by pixel-level sign change, but resulting separation may not be significant on a pattern level.
     That is, separating opposite-sign patterns are weak relative to separated same-sign patterns, especially if similar.
@@ -204,23 +203,23 @@ def splice_Pps(Pppm_, Ppdert1_, Ppdert2_, fPd, fPpd):  # re-eval Ppps, pPp.pdert
 
         if value > ave_M * (ave_D*fPd) * Ppp.Rdn * 4 and Ppp.L > 4:  # min internal xP.I|D match in +Ppm
             M2 = M1 = 0
-            for Ppdert2 in Ppdert2_: M2 += Ppdert2.m  # match(I, __I or D, __D): step=2
-            for Ppdert1 in Ppdert1_: M1 += Ppdert1.m  # match(I, _I or D, _D): step=1
+            for Pderp2 in Pderp2_: M2 += Pderp2.m  # match(I, __I or D, __D): step=2
+            for Pderp1 in Pderp1_: M1 += Pderp1.m  # match(I, _I or D, _D): step=1
 
-            if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.pdert_?
+            if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.derp_?
                 Pp = CPp()
-                Pp.x0 = Ppp.pdert_[0].P.x0
+                Pp.x0 = Ppp.derp_[0].P.x0
                 # replace Pp params with summed P params, Pp is now primarily a spliced P:
-                Pp.L = sum([Ppdert.P.L for Ppdert in Ppp.pdert_]) # In this case, Ppdert.P is Pp
-                Pp.I = sum([Ppdert.P.I for Ppdert in Ppp.pdert_])
-                Pp.D = sum([Ppdert.P.D for Ppdert in Ppp.pdert_])
-                Pp.M = sum([Ppdert.P.M for Ppdert in Ppp.pdert_])
-                Pp.Rdn = sum([Ppdert.P.Rdn for Ppdert in Ppp.pdert_])
+                Pp.L = sum([Pderp.P.L for Pderp in Ppp.derp_]) # In this case, Pderp.P is Pp
+                Pp.I = sum([Pderp.P.I for Pderp in Ppp.derp_])
+                Pp.D = sum([Pderp.P.D for Pderp in Ppp.derp_])
+                Pp.M = sum([Pderp.P.M for Pderp in Ppp.derp_])
+                Pp.Rdn = sum([Pderp.P.Rdn for Pderp in Ppp.derp_])
 
-                for Ppdert in Ppp.pdert_: Pp.pdert_ += Ppdert.P.pdert_
-                Pp.L = len(Pp.pdert_)
-                rng_incr(rootPp=[], Pp_=[Pp], hlayers=1, rng=2)  # eval rng+ comp,form per Pp
-                der_incr(rootPp=[], Pp_=[Pp], hlayers=1)  # eval der+ comp,form per Pp
+                for Pderp in Ppp.derp_: Pp.derp_ += Pderp.P.derp_
+                Pp.L = len(Pp.derp_)
+                range_incr(rootPp=[], Pp_=[Pp], hlayers=1, rng=2)  # eval rng+ comp,form per Pp
+                deriv_incr(rootPp=[], Pp_=[Pp], hlayers=1)  # eval der+ comp,form per Pp
                 Ppp.P = Pp
         '''
         no splice(): fine-grain eval per P triplet is too expensive?
@@ -267,16 +266,16 @@ def cross_core_comp(iP_T, types_):  # currently not used because:
                                         M = sum([P.M for P in P_])
                                         for i,(param_name, ave) in enumerate(zip(param_names, aves)):
                                             for fPd in 0,1:
-                                                xpdert_ = []  # contains result from each _P_ and P_ pair
+                                                xderp_ = []  # contains result from each _P_ and P_ pair
                                                 for _P in _P_:
                                                     for P in P_:
                                                         # probably wrong but we need this evaluation, add in PM for evaluation?
                                                         if _P.M + P.M + _M + M > (_P.Rdn + P.Rdn) * ave:
                                                             _param = getattr(_P,param_name[0])
                                                             param = getattr(P,param_name[0])
-                                                            xpdert = comp_par(_P, _param, param, param_name, ave)
-                                                            xpdert_.append(xpdert)
-                                                xPp_ += form_Pp_(xpdert_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1? and intra_Pp?
+                                                            xderp = comp_par(_P, _param, param, param_name, ave)
+                                                            xderp_.append(xderp)
+                                                xPp_ += form_Pp_(xderp_, fPd)  # add a loop to form xPp_ with fPd = 0 and fPd = 1? and intra_Pp?
                         xPp_t.append(xPp_)
             xPp_t_.append(xPp_t)
 
@@ -342,13 +341,13 @@ def line_PPPs_root(root):  # test code only, some obsolete
             for fiPpd, P_ in enumerate(param_md):  # fiPpd: Ppm_ or Ppd_
 
                 if len(P_) > 2:  # aveN, actually will be higher
-                    Pdert_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPpd)  # Pdert_t: Ldert_, Idert_, Ddert_, Mdert_
-                    sum_rdn_(param_names, Pdert_t, fiPpd)  # sum cross-param redundancy per pdert
+                    derp_t, dert1_, dert2_ = cross_comp_Pp_(P_, fiPpd)  # derp_t: Ldert_, Idert_, Ddert_, Mdert_
+                    sum_rdn_(param_names, derp_t, fiPpd)  # sum cross-param redundancy per derp
                     paramset = []
-                    for param_name, Pdert_ in zip(param_names, Pdert_t):  # Pdert_ -> Pps:
+                    for param_name, derp_ in zip(param_names, derp_t):  # derp_ -> Pps:
                         param_md = []
                         for fPpd in 0, 1:  # 0-> Ppm_, 1-> Ppd_:
-                            Pp_ = form_Pp_(Pdert_, fPpd)
+                            Pp_ = form_Pp_(derp_, fPpd)
                             param_md += [Pp_]  # -> [Ppm_, Ppd_]
                             if (fPpd and param_name == "D_") or (not fPpd and param_name == "I_"):
                                 if not fPpd:
