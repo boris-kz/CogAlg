@@ -112,12 +112,12 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
         x += 1
         _sign = sign
 
-    rng_incr_P_(rootP, P_, rdn, rng)
-    der_incr_P_(rootP, P_, rdn, rng)
+    range_incr_P_(rootP, P_, rdn, rng)
+    deriv_incr_P_(rootP, P_, rdn, rng)
 
     return P_  # used only if not rootP, else packed in rootP.sublayers
 
-def rng_incr_P_(rootP, P_, rdn, rng):
+def range_incr_P_(rootP, P_, rdn, rng):
 
     comb_sublayers = []
     for P in P_:
@@ -158,7 +158,7 @@ def rng_incr_P_(rootP, P_, rdn, rng):
     if rootP:
         rootP.sublayers += comb_sublayers  # no return
 
-def der_incr_P_(rootP, P_, rdn, rng):
+def deriv_incr_P_(rootP, P_, rdn, rng):
 
     comb_sublayers = []
     # adj_M_ = form_adjacent_M_(P_)  # compute adjacent Ms to evaluate contrastive borrow potential; but lend is not to adj only, reflected in ave?:

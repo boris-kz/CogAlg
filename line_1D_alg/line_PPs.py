@@ -219,18 +219,18 @@ def sum_rdn_(param_names, derp_t, fPd):
 
     for i, (Lderp, Iderp, Dderp, Mderp) in enumerate( zip_longest(derp_t[0], derp_t[1], derp_t[2], derp_t[3], fillvalue=Cderp())):
         # derp per _P in P_, 0: Lderp_, 1: Iderp_, 2: Dderp_, 3: Mderp_
-        # P M|D rdn + dert m|d rdn:
+        # P M|D rdn + derp m|d rdn:
         rdn_pairs = [[fPd, 0], [fPd, 1-fPd], [fPd, fPd], [0, 1], [1-fPd, fPd]]  # rdn in olp Ps: if fPd: I, M rdn+=1, else: D rdn+=1
         # names:    ('I','L'), ('I','D'),    ('I','M'),  ('L',alt), ('D','M'))  # I.m + P.M: value is combined across P levels?
 
         for rdn_pair, name_pair in zip(rdn_pairs, name_pairs):
             # assign rdn in each rdn_pair using partial name substitution: https://www.w3schools.com/python/ref_func_eval.asp
             if fPd:
-                if eval("abs(" + name_pair[0] + "dert.d) > abs(" + name_pair[1] + "dert.d)"):  # (param_name)dert.d|m
+                if eval("abs(" + name_pair[0] + "derp.d) > abs(" + name_pair[1] + "derp.d)"):  # (param_name)dert.d|m
                     rdn_pair[1] += 1
                 else: rdn_pair[0] += 1  # weaker pair rdn+1
             else:
-                if eval(name_pair[0] + "dert.m > " + name_pair[1] + "dert.m"):
+                if eval(name_pair[0] + "derp.m > " + name_pair[1] + "derp.m"):
                     rdn_pair[1] += 1
                 else: rdn_pair[0] += 1  # weaker pair rdn+1
 
@@ -242,10 +242,10 @@ def sum_rdn_(param_names, derp_t, fPd):
                 elif param_name[0] == name_in_pair[1]:
                     Rdn += rdn[1]
 
-            if len(derp_t[j]) >i:  # if fPd: Ddert_ is step=2, else: Mdert_ is step=2
-                derp_t[j][i].rdn = Rdn  # [Ldert_, Idert_, Ddert_, Mdert_]
+            if len(derp_t[j]) >i:  # if fPd: Dderp_ is step=2, else: Mderp_ is step=2
+                derp_t[j][i].rdn = Rdn  # [Lderp_, Iderp_, Dderp_, Mderp_]
 
-    # no need to return since rdn is updated in each derp
+    # rdn is updated in each derp, no need to return
 
 def splice_Ps(Ppm_, derp1_, derp2_, fPd, fPpd):  # re-eval Pps, Pp.derp_s for redundancy, eval splice Ps
     '''
@@ -291,15 +291,15 @@ def deriv_incr(rootPp, Pp_, hlayers):  # evaluate each Pp for incremental deriva
 
             if abs(Pp.D) / Pp.L > loc_ave_M * 4:  # 4: search cost, + Pp.M: local borrow potential?
                 sub_search(Pp, fPd=True)  # search in top sublayer, eval by derp.d
-                ddert_ = []
+                dderp_ = []
                 for _derp, derp in zip( Pp.derp_[:-1], Pp.derp_[1:]):  # or comp abs d, or step=2 for sign match?
-                    ddert_ += [comp_par(_derp.P, _derp.d, derp.d, "D_", loc_ave * ave_mD)]  # cross-comp of ds
-                    cD = sum( abs(ddert.d) for ddert in ddert_)
+                    dderp_ += [comp_par(_derp.P, _derp.d, derp.d, "D_", loc_ave * ave_mD)]  # cross-comp of ds
+                    cD = sum( abs(dderp.d) for dderp in dderp_)
                 if cD > loc_ave_M * 4:  # fixed costs of clustering per Pp.derp_
                     sub_Ppm_, sub_Ppd_ = [], []
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
-                    sub_Ppm_[:] = form_Pp_(ddert_, fPd=False)
-                    sub_Ppd_[:] = form_Pp_(ddert_, fPd=True)
+                    sub_Ppm_[:] = form_Pp_(dderp_, fPd=False)
+                    sub_Ppd_[:] = form_Pp_(dderp_, fPd=True)
                     if sub_Ppd_ and abs(Pp.D) + Pp.M > loc_ave_M * 4:  # looping search cost, diff val per Pd_'DPpd_, +Pp.iD?
                         deriv_incr(Pp, sub_Ppd_, hlayers+1)  # recursive der+, no need for derp_, no rng+: Pms are redundant?
                     else:
@@ -347,12 +347,14 @@ def range_incr(rootPp, Pp_, hlayers, rng):  # evaluate each Pp for incremental r
             comb_sublayers = new_comb_sublayers
 
     if rootPp and comb_sublayers: rootPp.sublayers += comb_sublayers  # new sublayers
-    # no return, Pp_ is changed in-place
+    # Pp_ is changed in-place
 
 def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave (lower m)
 
     if rng==2:  # 1st call, initialize Rderp_ with aderps:
-        Rderp_ = [Cderp(aderp=derp, P=CP()) for derp in rootPp.derp_]
+        Rderp_ = [Cderp( P=CP(), aderp=derp,
+                         rdn = derp.rdn * derp.P.L + derp.P.Rdn) # rdn is accumulated across levels, per pixel?
+                  for derp in rootPp.derp_]
     else:  # rderps are left and right from aderp, evaluate per rng+1:
         Rderp_ = rootPp.derp_.copy()  # copy to avoid overwriting derp.roots
     cM = 0
@@ -398,8 +400,8 @@ def form_rPp_(Rderp_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
             _rPp = _Rderp.roots
         else:
             _rPp = CPp(derp_=[_Rderp], L=1)
-            _rPp.accum_from(_Rderp, ignore_capital=True)
             _Rderp.roots = _rPp
+        _rPp.accum_from(_Rderp, ignore_capital=True)  # Rderp.rdn *= rng, because m accum in rng?
 
         olp_M = 0
         i_=[]
