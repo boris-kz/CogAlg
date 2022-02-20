@@ -351,9 +351,8 @@ def range_incr(rootPp, Pp_, hlayers, rng):  # evaluate each Pp for incremental r
 
 def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core I at local ave (lower m)
 
-    if rng==2:  # 1st call, initialize Rderp_ with aderps:
-        Rderp_ = [Cderp( P=CP(), aderp=derp,
-                         rdn = derp.rdn * derp.P.L + derp.P.Rdn) # rdn is accumulated across levels, per pixel?
+    if rng==2:  # 1st call, initialize Rderp_ with aderps
+        Rderp_ = [Cderp( P=CP(), aderp=derp, rdn = derp.P.Rdn + derp.rdn)  # rdn accum from derps ) levels
                   for derp in rootPp.derp_]
     else:  # rderps are left and right from aderp, evaluate per rng+1:
         Rderp_ = rootPp.derp_.copy()  # copy to avoid overwriting derp.roots
@@ -374,7 +373,7 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
             # deeper cross-comp between high-m sub_Ps, separate from rderp.m:
             comp_sublayers(rderp.P, aderp.P, rderp.m)
         # left Rderp assign:
-        _Rderp.accum_from(rderp)  # Pp params += derp params
+        _Rderp.accum_from(rderp)  # Pp params += derp params, including rdn: rdert-specific
         _Rderp.P.accum_from(rderp.P, excluded=["x0"])
         _Rderp.rderp_ += [rderp]  # extend _Rderp to the right
         # right Rdert assign:
@@ -389,8 +388,8 @@ def comp_rng(rootPp, loc_ave, rng):  # extended fixed-rng search-right for core 
 def form_rPp_(Rderp_):  # evaluate inclusion in _rPp of accumulated Rderts, by mutual olp_M within comp rng
     '''
     this is a version of agglomerative clustering, similar to https://en.wikipedia.org/wiki/Single-linkage_clustering,
-    but between cluster-level representations vs their elements (which is splice_Pp):
-    primary clustering is by rderp.m: direct match between all compared Rderp.aderps,
+    but between cluster-level representations vs. their elements (which is done in splice_Pp):
+    primary clustering is by rderp.m: direct match between Rderp.aderps
     secondary clustering is by merging rPp of matching Rderts: clustered nodes don't need to directly match each other
     '''
     rPp_ = []
@@ -401,7 +400,7 @@ def form_rPp_(Rderp_):  # evaluate inclusion in _rPp of accumulated Rderts, by m
         else:
             _rPp = CPp(derp_=[_Rderp], L=1)
             _Rderp.roots = _rPp
-        _rPp.accum_from(_Rderp, ignore_capital=True)  # Rderp.rdn *= rng, because m accum in rng?
+        _rPp.accum_from(_Rderp, ignore_capital=True)  # no Rderp.rdn *= rng: rderp-specific accum, along with m?
 
         olp_M = 0
         i_=[]

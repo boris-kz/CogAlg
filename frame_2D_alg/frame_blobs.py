@@ -75,9 +75,9 @@ class CBlob(ClusterStructure):
     prior_forks = list
     sublayers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks
     Ls = int  # n sublayers, for visibility and next-fork rdn
-    f_comp_a = bool  # current fork is comp angle, else comp_r
+    fBa = bool  # current fork is comp angle, else comp_r
     fflip = bool  # x-y swap
-    rdn = float  # redundancy to higher blob layers
+    rdn = float  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
     # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blobs
