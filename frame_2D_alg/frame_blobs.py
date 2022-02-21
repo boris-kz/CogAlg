@@ -138,7 +138,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
 
     return (topleft__, d_upleft__, d_upright__, M__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__ = (i__, dy__, dx__, m__, ri__) for readability in functions below
+    # renamed dert__ = (i__, dy__, dx__, m__, ri__) for readability in deeper functions
 '''
     old version:
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
@@ -147,21 +147,18 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
 
 def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=False, prior_forks=[]):
 
-    if mask__ is None: # non intra dert
-        height, width = dert__[0].shape
-    else: # intra dert
-        height, width = mask__.shape
+    if mask__ is None: height, width = dert__[0].shape  # init dert__
+    else:              height, width = mask__.shape  # intra dert__
 
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
     if mask__ is not None:
         idmap[mask__] = EXCLUDED_ID
     if verbose:
         step = 100 / height / width  # progress % percent per pixel
-        progress = 0.0
-        print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
-
+        progress = 0.0; print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
     blob_ = []
     adj_pairs = set()
+
     for y in range(height):
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
@@ -192,7 +189,6 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                         blob.accumulate(Mdx = dert__[10][y1][x1],
                                         Ddx = dert__[11][y1][x1])
                     blob.A += 1
-
                     if y1 < y0:   y0 = y1
                     elif y1 > yn: yn = y1
                     if x1 < x0:   x0 = x1
@@ -206,36 +202,32 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                     else:
                         adj_dert_coords = [(y1 - 1, x1), (y1, x1 + 1),
                                            (y1 + 1, x1), (y1, x1 - 1)]
-                    # search neighboring derts
+                    # search neighboring derts:
                     for y2, x2 in adj_dert_coords:
-                        # check if image boundary is reached
+                        # image boundary is reached:
                         if (y2 < 0 or y2 >= height or
                             x2 < 0 or x2 >= width or
                             idmap[y2, x2] == EXCLUDED_ID):
                             blob.fopen = True
-                        # check if filled
+                        # pixel is filled:
                         elif idmap[y2, x2] == UNFILLED:
-                            # check if same-signed
-                            if blob.M>0 == sign__[y2, x2]:
+                            # same-sign dert:
+                            if (blob.M>0) == sign__[y2, x2]:
                                 idmap[y2, x2] = blob.id  # add blob ID to each dert
                                 unfilled_derts.append((y2, x2))
                         # else check if same-signed
-                        elif blob.M>0 != sign__[y2, x2]:
+                        elif (blob.M>0) != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
                 # terminate blob
-                yn += 1
-                xn += 1
+                yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
 
                 if verbose:
-                    progress += blob.A * step
-                    print(f"\rClustering... {round(progress)} %", end="")
-                    sys.stdout.flush()
-    if verbose:
-        print("")
+                    progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
+    if verbose: print("")
 
     return blob_, idmap, adj_pairs
 
