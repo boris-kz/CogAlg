@@ -32,6 +32,7 @@
 import sys
 import numpy as np
 from collections import deque, namedtuple
+from itertools import zip_longest
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
 from draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure
@@ -73,9 +74,8 @@ class CBlob(ClusterStructure):
     Ddx = float
     # derivation hierarchy:
     prior_forks = list
+    fBa = bool  # in root_blob: next fork is comp angle, else comp_r
     sublayers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks
-    Ls = int  # n sublayers, for visibility and next-fork rdn
-    fBa = bool  # current fork is comp angle, else comp_r
     fflip = bool  # x-y swap
     rdn = float  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
@@ -119,9 +119,13 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     if intra:  # omit for testing frame_blobs alone:
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
-        intra_blob_root(frame, render, verbose)
 
+        spliced_layers = intra_blob_root(frame, render, verbose)  # recursive evaluation of cross-comp slice| range| angle per blob
+
+        frame.sublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
+                           zip_longest(spliced_layers, frame.sublayers, fillvalue=[])]
     return frame
+
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
 
@@ -217,14 +221,13 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                                 unfilled_derts.append((y2, x2))
                         # else check if same-signed
                         elif (blob.M>0) != sign__[y2, x2]:
-                            adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
+                            adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
                 # terminate blob
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
-
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
     if verbose: print("")
