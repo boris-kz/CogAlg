@@ -30,31 +30,32 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
 
     for blob in root_blob.sublayers[0]:  # print('Processing blob number ' + str(bcount))
 
-        blob.prior_forks = root_blob.prior_forks.copy()  # increments forking sequence: m->r, g->a, a->p
+        blob.prior_forks = root_blob.prior_forks.copy()  # increments forking sequence: g -> r|a, a -> p
         blob.root_dert__= root_blob.dert__
         blob_height = blob.box[1] - blob.box[0];  blob_width = blob.box[3] - blob.box[2]
 
-        if blob_height > 3 and blob_width > 3:  # min blob dimensions
+        if blob_height > 3 and blob_width > 3:  # min blob dimensions: Ly, Lx
             if root_blob.fBa:
                 # p fork, in angle blobs
                 if -blob.M * blob.Ma > aveB * (blob.rdn+1) * pcoef:  # updated rdn
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1  # double the costs
                     # -> comp_slice
                     segment_by_direction(blob, verbose=True)
-                    blob.prior_forks.extend('p'); if verbose: print('\nslice_blob fork\n')
+                    blob.prior_forks.extend('p')
+                    if verbose: print('\nslice_blob fork\n')
                     if render and blob.A < 100: deep_blobs.append(blob)
 
             else:  # comp_r or comp_a fork, both from frame_blobs or comp_r:
                 if blob.M > 0:
-                    if blob.M > aveB * (blob.rdn+1):  # or rdn + 1 / len(sub_blob_): average | actual redundancy?
+                    if blob.M > aveB * (blob.rdn+1):  # adjusted to rdn + 1 / len(sub_blob_): average | actual redundancy?
                         # root for sub_blobs:
                         blob.fBa = 0; blob.rng = root_blob.rng+1; blob.rdn = root_blob.rdn+1
                         ext_dert__, ext_mask__ = extend_dert(blob)  # dert__+= 1: cross-comp in larger kernels
                         # comp_r 4x4:
-                        new_dert__, new_mask__ = comp_r(ext_dert__, ave * blob.rdn, blob.rng, ext_mask__)
-                        sign__ = new_dert__[3] > 0  # m__ = ave - g,
-                        # or abs m: ave may change or be combined
-                        blob.prior_forks.extend('r'); if verbose: print('\na fork\n')
+                        new_dert__, new_mask__ = comp_r(ext_dert__, blob.rng, ext_mask__)
+                        sign__ = ave * (blob.rdn+1) - new_dert__[3] > 0  # m__ = ave - g__, no higher fBa s
+                        blob.prior_forks.extend('r')
+                        if verbose: print('\na fork\n')
                         if render and blob.A < 100: deep_blobs.append(blob)
 
                 elif -blob.M > aveB * (blob.rdn+1):  # replace with borrow_M if known
@@ -62,26 +63,27 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
                     blob.fBa = 1; blob.rdn = root_blob.rdn+1
                     ext_dert__, ext_mask__ = extend_dert(blob)  # dert__+= 1: cross-comp in larger kernels
                     # comp_a 2x2:
-                    new_dert__, new_mask__ = comp_a(ext_dert__, ext_mask__)  # compute abs ma, also abs m?
-                    sign__ = (-new_dert__[3] * new_dert__[9]) > ave * (blob.rdn+2) * pcoef  # +2 if m = mr * ma?
-                    # vma = val_comp_slice_, also m deviation for sign only, else no m = mr * ma?
-                    blob.prior_forks.extend('a'); if verbose: print('\na fork\n')
+                    new_dert__, new_mask__ = comp_a(ext_dert__, ext_mask__)  # no vgr * vga: deviations can't be combined in a product
+                    sign__ = ave * (blob.rdn+2) * pcoef - new_dert__[3] * new_dert__[9] > 0  # val_comp_slice_, rdn+2: -2 gs: gr * ga
+                    blob.prior_forks.extend('a')
+                    if verbose: print('\na fork\n')
                     if render and blob.A < 100: deep_blobs.append(blob)
 
-            if "new_dert__" in locals() and new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:  # min Ly and Lx, dert__>=1
-                # form sub_blobs:
-                sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__.fill(False), blob_cls=CBlob)
-                assign_adjacents(adj_pairs, CBlob)
+                if new_dert__ in locals and new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:  # min Ly and Lx, dert__>=1
+                    # form sub_blobs:
+                    sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__.fill(False), blob_cls=CBlob)
+                    assign_adjacents(adj_pairs, CBlob)
+                    del new_dert__
+                    if render:
+                        visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (froot_Ba = {blob.fBa}, froot_Ba = {blob.prior_forks[-1] == 'a'})")
 
-                if render: visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (froot_Ba = {blob.fBa}, froot_Ba = {blob.prior_forks[-1] == 'a'})")
+                    blob.sublayers = [sub_blobs]  # sublayers[0]
+                    blob.sublayers += intra_blob_root(blob, render, verbose)  # recursive evaluation of cross-comp slice| range| angle per blob
 
-                blob.sublayers = [sub_blobs]  # sublayers[0]
-                spliced_layers = intra_blob_root(blob, render, verbose)  # recursive evaluation of cross-comp slice| range| angle per blob
-
-                spliced_layers = [spliced_layers + sublayers for spliced_layers, sublayers in
-                                  zip_longest(spliced_layers, blob.sublayers, fillvalue=[])]
-
-    if verbose: print_deep_blob_forking(deep_blobs); print("\rFinished intra_blob")
+                    spliced_layers = [spliced_layers + sublayers for spliced_layers, sublayers in
+                                      zip_longest(spliced_layers, blob.sublayers, fillvalue=[])]
+    if verbose:
+        print_deep_blob_forking(deep_blobs); print("\rFinished intra_blob")
 
     return spliced_layers
 
@@ -90,14 +92,12 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
     rY, rX = blob.root_dert__[0].shape  # higher dert size
-
-    # determine pad size
+    # set pad size
     y0e = max(0, y0 - 1)
     yne = min(rY, yn + 1)
     x0e = max(0, x0 - 1)
     xne = min(rX, xn + 1)  # e is for extended
-
-    # take ext_dert__ from part of root_dert__
+    # take ext_dert__ from part of root_dert__:
     ext_dert__ = []
     for dert in blob.root_dert__:
         if type(dert) == list:  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
@@ -106,8 +106,7 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
         else:
             ext_dert__.append(dert[y0e:yne, x0e:xne])
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
-
-    # extended mask__
+    # extend mask__:
     ext_mask__ = np.pad(blob.mask__,
                         ((y0 - y0e, yne - yn),
                          (x0 - x0e, xne - xn)),

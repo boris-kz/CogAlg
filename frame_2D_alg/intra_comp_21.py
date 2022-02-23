@@ -7,7 +7,7 @@ import functools
 # no ave_ga = .78, ave_ma = 2  # at 22.5 degrees
 # https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
 
-def comp_r(dert__, rng, mask__=None):
+def comp_r(dert__, ave, rng, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient in shorter-range cross-comp: input intensity didn't vary much.
@@ -46,10 +46,10 @@ def comp_r(dert__, rng, mask__=None):
     d_upright__+= (i__bottomleft - i__topright) * rngSkip
     d_upleft__ += (i__bottomright - i__topleft) * rngSkip
 
-    g__ = np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
+    m__ = ave - np.hypot(d_upright__, d_upleft__)  # match = inverse of abs gradient (variation), recomputed at each comp_r
     ri__ = i__topleft + i__topright + i__bottomleft + i__bottomright
 
-    return (i__topleft, d_upleft__, d_upright__, g__, ri__), majority_mask__
+    return (i__topleft, d_upleft__, d_upright__, m__, ri__), majority_mask__
 
 
 def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
@@ -63,11 +63,11 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     else:
         majority_mask__ = None
 
-    i__, dy__, dx__, g__, ri__ = dert__[:5]  # day__,dax__,ma__ are recomputed
+    i__, dy__, dx__, m__, ri__ = dert__[:5]  # day__,dax__,ma__ are recomputed
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)
-        for angle_ in angle__: angle_[np.where(np.isnan(angle_))] = 0  # set nan to 0, to avoid error later
+        angle__ = [dy__, dx__] / np.hypot(dy__, dx__)  # or / ave + m
+        for angle_ in angle__: angle_[np.where(np.isnan(angle_))] = 0 # set nan to 0, to avoid error later
 
     # angle__ shifted in 2x2 kernels:
     angle__topleft  = angle__[:, :-1, :-1]  # a is 3 dimensional
@@ -79,7 +79,8 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     sin_da1__, cos_da1__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ga__ = (cos_da0__ + 1) + (cos_da1__ + 1)  # +1 for all positives
+        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1)  # +1 for all positives
+        # or ma__ = ave_ga - ga__?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
@@ -95,10 +96,10 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     i__ = i__[:-1, :-1]
     dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
     dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
-    g__ = g__[:-1, :-1]
+    m__ = m__[:-1, :-1]
     ri__ = ri__[:-1, :-1]  # for summation in Dert
 
-    return (i__, dy__, dx__, g__, ri__, day__[0], day__[1], dax__[0], dax__[1], ga__), majority_mask__
+    return (i__, dy__, dx__, m__, ri__, day__[0], day__[1], dax__[0], dax__[1], ma__), majority_mask__
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)
@@ -210,15 +211,15 @@ def comp_r_odd(dert__, ave, rng, root_fia, mask__=None):
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
     '''
-    m__ += ( abs(i__center - i__topleft) * 1 * rngSkip
-           + abs(i__center - i__top) * 2 * rngSkip
-           + abs(i__center - i__topright) * 1 * rngSkip
-           + abs(i__center - i__right) * 2 * rngSkip
-           + abs(i__center - i__bottomright) * 1 * rngSkip
-           + abs(i__center - i__bottom) * 2 * rngSkip
-           + abs(i__center - i__bottomleft) * 1 * rngSkip
-           + abs(i__center - i__left) * 2 * rngSkip
-           )
+    m__ += int(ave * 1.2) - ( abs(i__center - i__topleft) * 1 * rngSkip
+                            + abs(i__center - i__top) * 2 * rngSkip
+                            + abs(i__center - i__topright) * 1 * rngSkip
+                            + abs(i__center - i__right) * 2 * rngSkip
+                            + abs(i__center - i__bottomright) * 1 * rngSkip
+                            + abs(i__center - i__bottom) * 2 * rngSkip
+                            + abs(i__center - i__bottomleft) * 1 * rngSkip
+                            + abs(i__center - i__left) * 2 * rngSkip
+                            )
 
     return (i__center, dy__, dx__, g__, m__), majority_mask__
 
