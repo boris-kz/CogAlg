@@ -52,6 +52,7 @@ class CBlob(ClusterStructure):
     Dx = float
     G = float
     A = float  # blob area
+    sign = bool
     # composite params:
     box = list  # x0, xn, y0, yn
     mask__ = object
@@ -102,14 +103,14 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
 
     else:  # [flood_fill](https://en.wikipedia.org/wiki/Flood_fill)
-        blob_, idmap, adj_pairs = flood_fill(dert__, sign__=dert__[3] > 0,  verbose=verbose)  # dert__[3]: g
+        blob_, idmap, adj_pairs = flood_fill(dert__, sign__=ave-dert__[3] > 0,  verbose=verbose)  # dert__[3]: g
         I, Dy, Dx, G = 0, 0, 0, 0
         for blob in blob_:
             I += blob.I
             Dy += blob.Dy
             Dx += blob.Dx
             G += blob.G
-        frame = CBlob(I=I, Dy=Dy, Dx=Dx, G=G, M=None, sublayers=[blob_], dert__=dert__)
+        frame = CBlob(I=I, Dy=Dy, Dx=Dx, G=G, sublayers=[blob_], dert__=dert__)
 
     assign_adjacents(adj_pairs)  # f_segment_by_direction=False
 
@@ -198,7 +199,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                     if x1 < x0:   x0 = x1
                     elif x1 > xn: xn = x1
                     # neighbors coordinates, 4 for -, 8 for +
-                    if blob.M>0 or fseg:   # include diagonals
+                    if blob.sign or fseg:   # include diagonals
                         adj_dert_coords = [(y1 - 1, x1 - 1), (y1 - 1, x1),
                                            (y1 - 1, x1 + 1), (y1, x1 + 1),
                                            (y1 + 1, x1 + 1), (y1 + 1, x1),
@@ -216,11 +217,11 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
                         # pixel is filled:
                         elif idmap[y2, x2] == UNFILLED:
                             # same-sign dert:
-                            if (blob.M>0) == sign__[y2, x2]:
+                            if blob.sign == sign__[y2, x2]:
                                 idmap[y2, x2] = blob.id  # add blob ID to each dert
                                 unfilled_derts.append((y2, x2))
                         # else check if same-signed
-                        elif (blob.M>0) != sign__[y2, x2]:
+                        elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
                 # terminate blob
                 yn += 1; xn += 1
@@ -279,7 +280,7 @@ if __name__ == "__main__":
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
     argument_parser.add_argument('-e', '--extra', help='run frame_recursive after frame_blobs', type=int, default=0)
     args = argument_parser.parse_args()
     image = imread(args.image)
