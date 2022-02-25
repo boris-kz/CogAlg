@@ -40,17 +40,19 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
                 # p fork in angle blobs
                 if blob.G * blob.Ga > ave_G * (blob.rdn+1) * pcoef:  # updated rdn
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1  # double the costs
-                    # comp_slice root:
+                    # pack in comp_slice root:
                     segment_by_direction(blob, verbose=True)
                     blob.prior_forks.extend('p')
                     if verbose: print('\nslice_blob fork\n')
                     if render and blob.A < 100: deep_blobs.append(blob)
             else:
-                vG = blob.G - ave_G  # deviation of gradient, from ave per blob
+                vG = blob.G - ave_G  # deviation of gradient, from ave per blob, combined max rdn = blob.rdn+1:
                 vvG = abs(vG) - ave_vG * blob.rdn  # 2nd deviation of gradient, from fixed costs of if "new_dert__" loop below
-                '''
-                from both: combined max rdn = blob.rdn+1, adjust to actual after flood_fill: rdn -= 1 - (1 / len(sub_blob_))
+                ''' 
                 vvG = 0 maps to max G for comp_r if vG < 0, and to min G for comp_a if vG > 0
+                or no vvG, separate ave_G for comp_r and comp_a, to process the blob by both or neither of the forks:
+                if ave_G_r > ave_G_a: overlap in blob.G spectrum is processed by both forks
+                if ave_G_r < ave_G_a: gap in G is not processed
                 '''
                 if blob.sign:  # sign of pixel-level g, which corresponds to sign of blob vG, so we don't need the later
                     if vvG > 0:  # below-average G, eval for comp_r
@@ -74,14 +76,13 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
                     blob.prior_forks.extend('a')
                     if verbose: print('\na fork\n')
                     if render and blob.A < 100: deep_blobs.append(blob)
-                '''
-                Separate ave_Gs may select comp_r and comp_a without vvG, then blobs may be processed by both or neither of the forks:
-                if ave_G_r > ave_G_a: overlapped part of blob.G spectrum is processed by both forks,
-                if ave_G_r < ave_G_a: the gap part of blob.G spectrum is processed by neither fork
-                '''
+
                 if "new_dert__" in locals() and new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:  # min Ly and Lx, dert__>=1
                     # form sub_blobs:
                     sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__.fill(False), blob_cls=CBlob)
+
+                    adj_rdn = 1 - (1 / len(sub_blobs))  # adjust pre-assigned max rdn to actual rdn after flood_fill:
+                    blob.rdn -= adj_rdn; for sub_blob in sub_blobs: sub_blob.rdn -= adj_rdn
                     assign_adjacents(adj_pairs, CBlob)
                     del new_dert__
                     if render:

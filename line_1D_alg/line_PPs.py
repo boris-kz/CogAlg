@@ -211,6 +211,8 @@ def sum_rdn_(param_names, derp_t, fPd):
     '''
     access same-index derps of all P params, assign redundancy to lesser-magnitude m|d in param pair.
     if other-param same-P_-index derp is missing, rdn doesn't change.
+
+    This is current-level Rdn, summed in resulting P, added to sum of lower-derivation Rdn of element Ps?
     To include layer_rdn: initialize each rdn at 1 vs. 0, then increment here and in intra_Pp_?
     '''
     if fPd: alt = 'M'
@@ -263,8 +265,11 @@ def splice_Ps(Ppm_, derp1_, derp2_, fPd, fPpd):  # re-eval Pps, Pp.derp_s for re
             for derp1 in derp1_: M1 += derp1.m  # match(I, _I or D, _D): step=1
 
             if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.derp_:
-                # Pp is now primarily a spliced P:
-                P = CP()
+                # Pp is now primarily a spliced P, or higher Pp a spliced lower Pp:
+                if isinstance(derp1.P, CP):
+                    P = CP()
+                else:
+                    P = CPp()  # if called from line_recursive
                 P.x0 = Pp.derp_[0].P.x0
                 P.I = sum([derp.P.I for derp in Pp.derp_])
                 P.D = sum([derp.P.D for derp in Pp.derp_])
@@ -272,7 +277,7 @@ def splice_Ps(Ppm_, derp1_, derp2_, fPd, fPpd):  # re-eval Pps, Pp.derp_s for re
                 P.Rdn = sum([derp.P.Rdn for derp in Pp.derp_])
                 for derp in Pp.derp_: P.dert_ += derp.P.dert_
                 P.L = len(P.dert_)
-                # re-run line_P sub-recursion per spliced P:
+                # re-run line_P sub-recursion per spliced P, or lower spliced Pp in line_recursive:
                 range_incr_P_([], [P], rdn=1, rng=1)
                 deriv_incr_P_([], [P], rdn=1, rng=1)
                 Pp.P = P
