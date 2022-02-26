@@ -117,7 +117,8 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
 
     return P_  # used only if not rootP, else packed in rootP.sublayers
 
-def range_incr_P_(rootP, P_, rdn, rng):
+
+def range_incr_P_(rootP, P_, rdn, rng):  # we have separate aves per fork, so this is already variable overlap
 
     comb_sublayers = []
     for P in P_:

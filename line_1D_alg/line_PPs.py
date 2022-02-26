@@ -122,9 +122,12 @@ def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
 
     Lderp_, Iderp_, Dderp_, Mderp_, derp1_, derp2_ = [], [], [], [], [], []
 
-    for _P, P, P2 in zip(P_, P_[1:], P_[2:] + [CP()]):  # for P_ cross-comp over step=1 and step=2
-        _L, _I, _D, _M, *_ = _P.unpack()  # *_: skip remaining params
-        L, I, D, M, *_ = P.unpack()
+    if isinstance(P_[0].P, CPp): newP = CPp()  # call from line_recursive
+    else:                        newP = CP()  # call from line_PPs
+
+    for _P, P, P2 in zip(P_, P_[1:], P_[2:] + [newP]):  # for P_ cross-comp over step=1 and step=2
+        _L, _I, _D, _M = _P.L, _P.I, _P.D, _P.M
+        L, I, D, M = P.L, P.I, P.D, P.M  # no L, I, D, M, *_ = P.unpack(): different packing sequence in CP and CPp
         D2, M2 = P2.D, P2.M
 
         Lderp_ += [comp_par(_P, _L, L, "L_", ave_mL)]  # div_comp L, sub_comp summed params:
@@ -200,12 +203,11 @@ def term_Pp(Pp_, L, I, D, M, Rdn, x0, ix0, derp_, fPd):
     flay_rdn = Pp_value < derp_V
     # Pp vs derp_ rdn
     Pp = CPp(L=L, I=I, D=D, M=M, Rdn=Rdn+L+L*flay_rdn, x0=x0, ix0=ix0, flay_rdn=flay_rdn, rng=1, derp_=derp_)
-
+    # or Rdn += Rdn..: sum across levels and param types? +L: if Rdn is per derp?
     for derp in Pp.derp_: derp.roots[fPd] = Pp  # root Pp refs
 
     Pp_.append(Pp)
     # no immediate normalization: Pp.I /= Pp.L; Pp.D /= Pp.L; Pp.M /= Pp.L; Pp.Rdn /= Pp.L
-
 
 def sum_rdn_(param_names, derp_t, fPd):
     '''
@@ -257,7 +259,7 @@ def splice_Ps(Ppm_, derp1_, derp2_, fPd, fPpd):  # re-eval Pps, Pp.derp_s for re
      '''
     for i, Pp in enumerate(Ppm_):
         if fPpd: value = abs(Pp.D)  # DPpm_ if fPd, else IPpm_
-        else: value = Pp.M  # add summed P.M|D?
+        else:    value = Pp.M  # add summed P.M|D?
 
         if value > ave_M * (ave_D*fPpd) * Pp.Rdn * 4 and Pp.L > 4:  # min internal xP.I|D match in +Ppm
             M2 = M1 = 0
@@ -266,20 +268,34 @@ def splice_Ps(Ppm_, derp1_, derp2_, fPd, fPpd):  # re-eval Pps, Pp.derp_s for re
 
             if M2 / max( abs(M1), 1) > ave_splice:  # similarity / separation(!/0): splice Ps in Pp, also implies weak Pp.derp_:
                 # Pp is now primarily a spliced P, or higher Pp a spliced lower Pp:
-                if isinstance(derp1.P, CP):
-                    P = CP()
+
+                if isinstance(Pp.derp_[0].P, CPp):  # call from line_recursive
+                    P = CPp()
+                    for derp in Pp.derp_: P.derp_ += derp.P.derp_
+                    P.L = len(P.derp_)
+                    range_incr_func = range_incr
+                    deriv_incr_func = deriv_incr
+                    range_input_args = [], [P], 1, 2  # hlayers=1, rng=2 from line_recursive
+                    deriv_input_args = [], [P], 1     # hlayers=1 from line_recursive
                 else:
-                    P = CPp()  # if called from line_recursive
+                    P = CP()  # call from line_PPs
+                    for derp in Pp.derp_: P.dert_ += derp.P.dert_
+                    P.L = len(P.dert_)
+                    range_incr_func = range_incr_P_
+                    deriv_incr_func = deriv_incr_P_
+                    range_input_args = [], [P], 1, 1  # rdn=1, rng=1 from line_Ps
+                    deriv_input_args = [], [P], 1, 1  # rdn=1, rng=1 from line_Ps
+
                 P.x0 = Pp.derp_[0].P.x0
                 P.I = sum([derp.P.I for derp in Pp.derp_])
                 P.D = sum([derp.P.D for derp in Pp.derp_])
                 P.M = sum([derp.P.M for derp in Pp.derp_])
                 P.Rdn = sum([derp.P.Rdn for derp in Pp.derp_])
-                for derp in Pp.derp_: P.dert_ += derp.P.dert_
-                P.L = len(P.dert_)
+
                 # re-run line_P sub-recursion per spliced P, or lower spliced Pp in line_recursive:
-                range_incr_P_([], [P], rdn=1, rng=1)
-                deriv_incr_P_([], [P], rdn=1, rng=1)
+                range_incr_func(*range_input_args)
+                deriv_incr_func(*deriv_input_args)
+
                 Pp.P = P
         '''
         no splice(): fine-grained eval per P triplet is too expensive?
