@@ -323,7 +323,8 @@ def deriv_incr(rootPp, Pp_, hlayers):  # evaluate each Pp for incremental deriva
                     sub_Ppm_[:] = form_Pp_(dderp_, fPd=False)
                     sub_Ppd_[:] = form_Pp_(dderp_, fPd=True)
                     if sub_Ppd_ and abs(Pp.D) + Pp.M > loc_ave_M * 4:  # looping search cost, diff val per Pd_'DPpd_, +Pp.iD?
-                        deriv_incr(Pp, sub_Ppd_, hlayers+1)  # recursive der+, no need for derp_, no rng+: Pms are redundant?
+                        deriv_incr(Pp, sub_Ppd_, hlayers+1)  # recursive der+, no derp_
+                    # no rng+ eval: Pms are redundant?
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
 
@@ -356,7 +357,8 @@ def range_incr(rootPp, Pp_, hlayers, rng):  # evaluate each Pp for incremental r
                     Pp.sublayers = [(sub_Ppm_, sub_Ppd_)]
                     sub_Ppm_[:] = form_rPp_(Rderp_)
                     if sub_Ppm_ and Pp.M > loc_ave_M * 4:  # 4: looping cost, if Pm_'IPpm_.M, +Pp.iM?
-                        range_incr(Pp, sub_Ppm_, hlayers+1, rng+1)  # recursive rng+, no der+ in redundant Pds?
+                        range_incr(Pp, sub_Ppm_, hlayers+1, rng+1)  # recursive rng+
+                    # no der+ eval, Pds are redundant?
                     else:
                         Pp.sublayers = []  # reset after the above converts it to [([],[])]
 

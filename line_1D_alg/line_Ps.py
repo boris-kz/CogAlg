@@ -37,14 +37,14 @@ class Cdert(ClusterStructure):
     p = int  # accumulated in rng
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
-    mrdn = int  # -> Rdn: rdn counter per P
+    mrdn = lambda: 1.0  # -> Rdn: rdn counter per P
 
 class CP(ClusterStructure):
     L = int
     I = int
     D = int
     M = int
-    Rdn = int  # mrdn counter
+    Rdn = lambda: 1.0  # mrdn counter
     x0 = int
     dert_ = list  # contains (i, p, d, m, mrdn)
     subset = list  # 1st sublayer' rdn, rng, xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
@@ -111,14 +111,17 @@ def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn a
             P.dert_ += [dert]
         x += 1
         _sign = sign
-
+    '''
+    due to separate aves, P may be processed by both or neither of r fork and d fork
+    add separate rsublayers and dsublayers?
+    '''
     range_incr_P_(rootP, P_, rdn, rng)
     deriv_incr_P_(rootP, P_, rdn, rng)
 
     return P_  # used only if not rootP, else packed in rootP.sublayers
 
 
-def range_incr_P_(rootP, P_, rdn, rng):  # we have separate aves per fork, so this is already variable overlap
+def range_incr_P_(rootP, P_, rdn, rng):
 
     comb_sublayers = []
     for P in P_:

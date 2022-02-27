@@ -33,13 +33,15 @@ import sys
 import numpy as np
 from collections import deque, namedtuple
 from itertools import zip_longest
-# from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
 from draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure
+# from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
 
-ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+# hyper-parameters, set as a guess, latter adjusted by feedback:
+ave = 30  # base filter, directly used for comp_r fork
+ave_a = 1.5  # coef filter for comp_a fork
 aveB = 50
-ave_M = 100
+aveBa = 1.5
 ave_mP = 100
 UNFILLED = -1
 EXCLUDED_ID = -2
@@ -74,15 +76,16 @@ class CBlob(ClusterStructure):
     Mdx = float
     Ddx = float
     # derivation hierarchy:
+    rsublayers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks,
+    asublayers = list  # separate for range and angle forks per blob
     prior_forks = list
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
-    sublayers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks
-    fflip = bool  # x-y swap
-    rdn = float  # redundancy to higher blob layers, or combined?
+    rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
     # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blobs
     fsliced = bool
+    fflip = bool  # x-y swap in comp_slice
     PPmm_ = list  # comp_slice_ if not empty
     PPdm_ = list  # comp_slice_ if not empty
     derP__ = list
@@ -97,34 +100,37 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
 
     if verbose: start_time = time()
     dert__ = comp_pixel(image)
+    # https://en.wikipedia.org/wiki/Flood_fill:
 
-    if use_c:  # old version, no longer updated:
-        dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
-        frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
+    rblob_, idmap_r, adj_pairs_r = flood_fill(dert__, sign__= ave-dert__[3] > 0,  verbose=verbose)  # dert__[3]: g
+    assign_adjacents(adj_pairs_r)  # forms adj_blobs per blob in adj_pairs_r
 
-    else:  # [flood_fill](https://en.wikipedia.org/wiki/Flood_fill)
-        blob_, idmap, adj_pairs = flood_fill(dert__, sign__=ave-dert__[3] > 0,  verbose=verbose)  # dert__[3]: g
-        I, Dy, Dx, G = 0, 0, 0, 0
-        for blob in blob_:
-            I += blob.I
-            Dy += blob.Dy
-            Dx += blob.Dx
-            G += blob.G
-        frame = CBlob(I=I, Dy=Dy, Dx=Dx, G=G, sublayers=[blob_], dert__=dert__)
+    ablob_, idmap_a, adj_pairs_a = flood_fill(dert__, sign__= dert__[3] - ave * ave_a > 0, verbose=verbose)
+    assign_adjacents(adj_pairs_a)  # forms adj_blobs per blob in adj_pairs_a
 
-    assign_adjacents(adj_pairs)  # f_segment_by_direction=False
-
+    I, Dy, Dx, G = 0, 0, 0, 0  # same for both forks:
+    for blob in rblob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx; G += blob.G
+    frame = CBlob(I = I, Dy = Dy, Dx = Dx, G = G, dert__=dert__, rsublayers = [rblob_], asublayers = [ablob_])
+    '''
     if verbose: print(f"{len(frame.sublayers[0])} blobs formed in {time() - start_time} seconds")
     if render: visualize_blobs(idmap, frame.sublayers[0])
-
+    '''
     if intra:  # omit for testing frame_blobs alone:
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
-        spliced_layers = intra_blob_root(frame, render, verbose)  # recursive evaluation of cross-comp range| angle| slice per blob
+        rspliced_layers = intra_blob_root(frame, render, verbose, ffork=0)  # recursive eval cross-comp range| angle| slice per blob
+        frame.rsublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
+                            zip_longest(rspliced_layers, frame.rsublayers, fillvalue=[])]
 
-        frame.sublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
-                           zip_longest(spliced_layers, frame.sublayers, fillvalue=[])]
+        aspliced_layers = intra_blob_root(frame, render, verbose, ffork=1)  # recursive evaluation of cross-comp range| angle| slice per blob
+        frame.asublayers = [aspliced_layers + sublayers for spliced_layers, sublayers in
+                           zip_longest(aspliced_layers, frame.asublayers, fillvalue=[])]
+    '''
+    if use_c:  # old version, no longer updated:
+        dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
+        frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
+    '''
     return frame
 
 
