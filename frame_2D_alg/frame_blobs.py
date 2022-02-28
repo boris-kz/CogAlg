@@ -76,7 +76,7 @@ class CBlob(ClusterStructure):
     Mdx = float
     Ddx = float
     # derivation hierarchy:
-    rsublayers = list  # list of layers across sub_blob derivation tree, nested deeper layers, multiple forks,
+    rsublayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     asublayers = list  # separate for range and angle forks per blob
     prior_forks = list
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
@@ -110,7 +110,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
 
     I, Dy, Dx, G = 0, 0, 0, 0  # same for both forks:
     for blob in rblob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx; G += blob.G
-    frame = CBlob(I = I, Dy = Dy, Dx = Dx, G = G, dert__=dert__, rsublayers = [rblob_], asublayers = [ablob_])
+    frame = CBlob(I = I, Dy = Dy, Dx = Dx, G = G, dert__=dert__, prior_forks=["g"], rsublayers = [rblob_], asublayers = [ablob_])
     '''
     if verbose: print(f"{len(frame.sublayers[0])} blobs formed in {time() - start_time} seconds")
     if render: visualize_blobs(idmap, frame.sublayers[0])
@@ -119,13 +119,15 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
-        rspliced_layers = intra_blob_root(frame, render, verbose, ffork=0)  # recursive eval cross-comp range| angle| slice per blob
+        rspliced_layers = intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
+        # extend rsublayers with both of lower sub-forks:
         frame.rsublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
                             zip_longest(rspliced_layers, frame.rsublayers, fillvalue=[])]
 
-        aspliced_layers = intra_blob_root(frame, render, verbose, ffork=1)  # recursive evaluation of cross-comp range| angle| slice per blob
-        frame.asublayers = [aspliced_layers + sublayers for spliced_layers, sublayers in
-                           zip_longest(aspliced_layers, frame.asublayers, fillvalue=[])]
+        aspliced_layers = intra_blob_root(frame, render, verbose, fBa=1)  # recursive eval cross-comp range| angle| slice per blob
+        # extend asublayers with both of lower sub-forks:
+        frame.asublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
+                            zip_longest(aspliced_layers, frame.asublayers, fillvalue=[])]
     '''
     if use_c:  # old version, no longer updated:
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
@@ -156,7 +158,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
 '''
 
-def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=False, prior_forks=[]):
+def flood_fill(dert__, sign__, verbose=False, mask__=None, fseg=False, prior_forks=[]):
 
     if mask__ is None: height, width = dert__[0].shape  # init dert__
     else:              height, width = mask__.shape  # intra dert__
@@ -174,7 +176,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
 
-                blob = blob_cls(sign=sign__[y, x], root_dert__=dert__, prior_forks=['g'])
+                blob = CBlob(sign=sign__[y, x], root_dert__=dert__, prior_forks=['g'])
                 if prior_forks: # update prior forks in deep blob
                     blob.prior_forks= prior_forks.copy()
                 blob_.append(blob)
@@ -242,13 +244,13 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, blob_cls=CBlob, fseg=
     return blob_, idmap, adj_pairs
 
 
-def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected opposite-sign blobs
+def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
     '''
     Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
     '''
     for blob_id1, blob_id2 in adj_pairs:
-        blob1 = blob_cls.get_instance(blob_id1)
-        blob2 = blob_cls.get_instance(blob_id2)
+        blob1 = CBlob.get_instance(blob_id1)
+        blob2 = CBlob.get_instance(blob_id2)
 
         y01, yn1, x01, xn1 = blob1.box
         y02, yn2, x02, xn2 = blob2.box
