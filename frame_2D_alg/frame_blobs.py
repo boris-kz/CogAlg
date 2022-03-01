@@ -102,32 +102,29 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     dert__ = comp_pixel(image)
     # https://en.wikipedia.org/wiki/Flood_fill:
 
-    rblob_, idmap_r, adj_pairs_r = flood_fill(dert__, sign__= ave-dert__[3] > 0,  verbose=verbose)  # dert__[3]: g
-    assign_adjacents(adj_pairs_r)  # forms adj_blobs per blob in adj_pairs_r
-
-    ablob_, idmap_a, adj_pairs_a = flood_fill(dert__, sign__= dert__[3] - ave * ave_a > 0, verbose=verbose)
-    assign_adjacents(adj_pairs_a)  # forms adj_blobs per blob in adj_pairs_a
+    blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3] > 0,  verbose=verbose)  # dert__[3]: g
+    assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs_r
 
     I, Dy, Dx, G = 0, 0, 0, 0  # same for both forks:
-    for blob in rblob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx; G += blob.G
-    frame = CBlob(I = I, Dy = Dy, Dx = Dx, G = G, dert__=dert__, prior_forks=["g"], rsublayers = [rblob_], asublayers = [ablob_])
+    for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx; G += blob.G
+    frame = CBlob(I = I, Dy = Dy, Dx = Dx, G = G, dert__=dert__, prior_forks=["g"], rsublayers = [blob_])  # asublayers = []
     '''
+    no:
+    ablob_, idmap_a, adj_pairs_a = flood_fill(dert__, sign__= dert__[3] - ave * ave_a > 0, verbose=verbose)
+    assign_adjacents(adj_pairs_a)  # forms adj_blobs per blob in adj_pairs_a
+    frame.asublayers += intra_blob_root(frame, render, verbose, fBa=1)  # recursive eval cross-comp range| angle| slice per blob
+    ,
+    because comp_pixel is comp_r at rng=1, it doesn't compare angle
+    
     if verbose: print(f"{len(frame.sublayers[0])} blobs formed in {time() - start_time} seconds")
     if render: visualize_blobs(idmap, frame.sublayers[0])
     '''
-    if intra:  # omit for testing frame_blobs alone:
+    if intra:  # omit for testing frame_blobs without intra_blob
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
-        rspliced_layers = intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
-        # extend rsublayers with both of lower sub-forks:
-        frame.rsublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
-                            zip_longest(rspliced_layers, frame.rsublayers, fillvalue=[])]
-
-        aspliced_layers = intra_blob_root(frame, render, verbose, fBa=1)  # recursive eval cross-comp range| angle| slice per blob
-        # extend asublayers with both of lower sub-forks:
-        frame.asublayers = [spliced_layers + sublayers for spliced_layers, sublayers in
-                            zip_longest(aspliced_layers, frame.asublayers, fillvalue=[])]
+        # sublayers[0] is fork specific, deeper sublayers combine sub-blobs of both forks:
+        frame.rsublayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
     '''
     if use_c:  # old version, no longer updated:
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)

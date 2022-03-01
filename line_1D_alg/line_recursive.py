@@ -32,7 +32,7 @@ class CderPp(ClusterStructure):  # should not be different from derp? PPP comb x
     capitalized variables are normally summed small-case variables
 '''
 
-def line_recursive(p_):
+def line_recursive(p_):  # redundant to main in line_Ps
     '''
     Specific outputs: P_t = line_Ps_root(), Pp_ttt = line_PPs_root(), Ppp_ttttt = line_PPPs_root()
     if pipeline: output per P termination, append till min iP_ len, concatenate across frames

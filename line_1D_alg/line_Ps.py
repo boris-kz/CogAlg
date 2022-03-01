@@ -85,14 +85,15 @@ def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_
         mrdn = m + ave < abs(d)
         dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
         _i = i
-    # form patterns:
+
+    # form patterns, evaluate them for rng+ and der+ sub-recursion of cross_comp:
     Pm_ = form_P_(None, dert_, rdn=1, rng=1, fPd=False)  # rootP=None, eval intra_P_ (calls form_P_)
     Pd_ = form_P_(None, dert_, rdn=1, rng=1, fPd=True)
 
     return [Pm_, Pd_]  # input to 2nd level
 
 
-def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through intra_P_
+def form_P_(rootP, dert_, rdn, rng, fPd):  # accumulation and termination, rdn and rng are pass-through to rng+ and der+
     # initialization:
     P_ = []
     x = 0
@@ -197,7 +198,7 @@ def deriv_incr_P_(rootP, P_, rdn, rng):
     if rootP:
         rootP.sublayers += comb_sublayers  # no return
 
-
+# currently not used:
 def form_adjacent_M_(Pm_):  # compute array of adjacent Ms, for contrastive borrow evaluation
     '''
     Value is projected match, while variation has contrast value only: it matters to the extent that it interrupts adjacent match: adj_M.
@@ -237,20 +238,31 @@ if __name__ == "__main__":
     image = cv2.imread(arguments['image'], 0).astype(int)  # load pix-mapped image
     '''
     render = 0
-    fline_PPs = 1
-    start_time = time()
-    from line_recursive import line_recursive
+    fline_PPs = 0
+    frecursive = 0
 
-    # Run functions
+    start_time = time()
     image = cv2.imread('.//raccoon.jpg', 0).astype(int)  # manual load pix-mapped image
     assert image is not None, "No image in the path"
 
     # Main
     Y, X = image.shape  # Y: frame height, X: frame width
-    frame_P_ = []
+    frame_P_T_ = []  # array of line P_Ts, each a tuple of P_s with indefinite nesting
+
     for y in range(init_y, min(halt_y, Y)):  # y is index of new row pixel_, we only need one row, use init_y=0, halt_y=Y for full frame
-        pixel_ = image[y,:]
-        frame_P_.append( line_recursive( pixel_))
+
+        P_T = line_Ps_root( image[y,:])  # P_T = Pm_, Pd_
+        if fline_PPs:
+            from line_PPs import line_PPs_root
+            P_T = line_PPs_root([P_T])  # P_T = 3-layer Pp tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+            if frecursive:
+                from line_recursive import line_recursive_root
+                types_ = []
+                for i in range(16):  # len(root.sublayers[0]
+                    types_.append([i % 2, int(i % 8 / 2), int(i / 8) % 2])  # 2nd level output types: fPpd, param, fPd
+                P_T = line_recursive_root( P_T, types_)  # P_T = tuple of P_s with indefinite nesting
+
+        frame_P_T_.append(P_T)  # if fline_PPs: P_T is whole-line CPp
 
     end_time = time() - start_time
     print(end_time)

@@ -115,7 +115,8 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is neste
             sublayer0 += [[] for _ in range(8)]  # 8 empty [] to preserve index, 8 for each fPd
 
     root.levels.append(root.sublayers)  # to contain 1st and 2nd levels
-    return root
+
+    return root  # Pp tuple?    P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line
