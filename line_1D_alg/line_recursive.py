@@ -33,10 +33,7 @@ class CderPp(ClusterStructure):  # should not be different from derp? PPP comb x
 '''
 
 def line_recursive(p_):  # redundant to main in line_Ps
-    '''
-    Specific outputs: P_t = line_Ps_root(), Pp_ttt = line_PPs_root(), Ppp_ttttt = line_PPPs_root()
-    if pipeline: output per P termination, append till min iP_ len, concatenate across frames
-    '''
+
     P_t = line_Ps_root(p_)
     root = line_PPs_root(P_t)
     types_ = []
@@ -48,7 +45,10 @@ def line_recursive(p_):  # redundant to main in line_Ps
 
 
 def line_level_root(root, types_):  # recursively adds higher levels of pattern composition and derivation
-
+    '''
+    Specific outputs: P_t = line_Ps_root(), Pp_ttt = line_PPs_root(), Ppp_ttttt = line_PPPs_root()
+    if pipeline: output per P termination, append till min iP_ len, concatenate across frames
+    '''
     sublayer0 = root.levels[-1][0]  # input is 1st sublayer of the last level
     new_sublayer0 = []  # 1st sublayer: (Pm_, Pd_( Lmd, Imd, Dmd, Mmd ( Ppm_, Ppd_))), deep sublayers: Ppm_(Ppmm_), Ppd_(Ppdm_,Ppdd_)
     root.sublayers = [new_sublayer0]  # will become new level, reset from last-level sublayers

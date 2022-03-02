@@ -15,7 +15,7 @@ Most functions should be replaced by casting generic Search, Compare, Cluster fu
 from collections import deque
 import sys
 import numpy as np
-from class_cluster import ClusterStructure, NoneType, comp_param, Cdm
+from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
@@ -37,27 +37,32 @@ ave_rM  = .7
 # comp_param
 ave_comp = 0
 
-# comp_PPP
-ave_mPPP = 5
+ave_I = 10
+ave_G = 10
+ave_M = 10
+ave_D = 10
+
+param_names = ["I", "Dy", "Dx", "G", "M", "L"]
 
 class CP(ClusterStructure):
 
-    # comp_pixel:
+    # dert params summed in slice:
     I = int
     Dy = int
     Dx = int
-    M = int
+    G = int
+    M = int  # summed ave - abs(dx), not restorable from Dx.
+    L = int
     # comp_angle:
     Dydy = int
     Dxdy = int
     Dydx = int
     Dxdx = int
-    Ma = int
+    Ga = int
     # comp_dx:
     Mdx = int
     Ddx = int
     # new:
-    L = int
     x0 = int
     x = int  # median x
     dX = int  # shift of average x between P and _P, if any
@@ -73,11 +78,13 @@ class CP(ClusterStructure):
     # only in Pm:
     Pd_ = list
 
-class CderP(ClusterStructure):
+class Cderp(ClusterStructure):  # dert per CP param
 
-    layer1 = dict
-    mP = int
-    dP = int
+    i = int
+    p = int
+    d = int
+    m = int
+    rdn = int
     P = object   # lower comparand
     _P = object  # higher comparand
     PP = object  # FPP if flip_val, contains this derP
@@ -85,7 +92,7 @@ class CderP(ClusterStructure):
     fdx = NoneType
     distance = int  # d_ave_x
 
-class CPP(CP, CderP):
+class CPp(CP, Cderp):
 
     layer1 = dict
     # between PPs:
@@ -96,7 +103,6 @@ class CPP(CP, CderP):
     box = list   # for visualization only, original box before flipping
     dert__ = list
     mask__ = bool
-
     # PP params
     derP__ = list
     P__ = list
@@ -108,7 +114,6 @@ class CPP(CP, CderP):
     # comp_dx params
     PPmd_ = list
     PPdd_ = list
-
     # comp_PP
     derPPm_ = list
     derPPd_ = list
@@ -134,73 +139,49 @@ class CderPP(ClusterStructure):
     mdPP = int
     ddPP = int
 
-class CPPP(CPP, CderPP):
-
-    layer01 = dict
-    layer1 = dict
-    layer11 = dict
-    PPm_ = list
-    PPd_ = list
-
-    derPPm_ = list
-    derPPd_ = list
-
-    mmPP = int
-    dmPP = int
-    mdPP = int
-    ddPP = int
-
 # Functions:
-'''
-leading '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
-trailing '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
-leading 'f' denotes flag
--
-rough workflow:
--
+'''-
+workflow:
 intra_blob -> slice_blob(blob) -> derP_ -> PP,
 if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FPP) -> pack PP in FPP.PP_
 else       (PP is PP):  pack PP in blob.PP_
 '''
 
-def slice_blob(blob, verbose=False): # where should we use this Ave?
+def slice_blob(blob, verbose=False):
     '''
-    Slice_blob converts selected smooth-edge blobs (high G, low Ga or low M, high Ma) into sliced blobs,
-    adding horizontal blob slices: Ps or 1D patterns
+    Slice_blob forms horizontal blob slices: Ps (~1D patterns) in selected smooth-edge blobs: high G, low Ga
     '''
     dert__ = blob.dert__
     mask__ = blob.mask__
     height, width = dert__[0].shape
     if verbose: print("Converting to image...")
 
-    for fPPd in range(2):  # run twice, 1st loop fPPd=0: form PPs, 2nd loop fPPd=1: form PPds
+    P__tt = []
+    for param_name in param_names:
+        P__t = []
+        for fPpd in 0, 1:  # run twice, 1st loop fPpd=0: form Ppms, 2nd loop fPpd=1: form Ppds
+            P__ = []
+            derP__ = []
+            zip_dert__ = zip(*dert__)
+            _P_ = form_P_(list(zip(*next(zip_dert__))), mask__[0], param_name, 0, fPpd)  # 1st upper row
+            P__ += [_P_]  # frame of Ps
 
-        P__ , derP__, Pd__, derPd__ = [], [], [], []
-        zip_dert__ = zip(*dert__)
-        _P_ = form_P_(list(zip(*next(zip_dert__))), mask__[0], 0)  # 1st upper row
-        P__ += _P_  # frame of Ps
+            for y, dert_ in enumerate(zip_dert__, start=1):  # scan top down
+                if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
-        for y, dert_ in enumerate(zip_dert__, start=1):  # scan top down
-            if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
+                P_ = form_P_(list(zip(*dert_)), mask__[y], param_name, y, fPpd)  # horizontal clustering - lower row
+                derP_ = scan_P_(P_, _P_)  # tests for x overlap between Ps, calls comp_slice
+                derP__ += [derP_] # frame of derPs
+                P__ += [P_]
+                _P_ = P_  # set current lower row P_ as next upper row _P_
+            # not updated yet:
+            # form_PP_root(blob, derP__, P__, derPd__, Pd__, fPPd)  # form PPs in blob or in FPP
+            # comp_PP_(blob,fPPd)
+            P__t.append(P__)
+        P__tt.append(P__t)
 
-            P_ = form_P_(list(zip(*dert_)), mask__[y], y)  # horizontal clustering - lower row
-            derP_ = scan_P_(P_, _P_)  # tests for x overlap between Ps, calls comp_slice
-
-            Pd_ = form_Pd_(P_)  # form Pds within Ps
-            derPd_ = scan_Pd_(P_, _P_)  # adds upconnect_ in Pds and calls derPd_2_PP_derPd_, same as derP_2_PP_
-
-            derP__ += derP_; derPd__ += derPd_  # frame of derPs
-            P__ += P_; Pd__ += Pd_
-            _P_ = P_  # set current lower row P_ as next upper row _P_
-
-        form_PP_root(blob, derP__, P__, derPd__, Pd__, fPPd)  # form PPs in blob or in FPP
-
-        comp_PP_(blob,fPPd)
-
-        #    if not isinstance(blob, CPP):
-        #        draw_PP_(blob)
-
-def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertical order, sum dert params into P params
+# not using fPpd yet, need to add in later
+def form_P_(idert_, mask_, param_name, y, fPpd):  # segment dert__ into P__ in horizontal ) vertical order, sum dert params into P params
 
     P_ = []                # rows of derPs
     _dert = list(idert_[0]) # first dert
@@ -208,14 +189,75 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
     _mask = mask_[0]       # mask bit per dert
 
     if ~_mask:
+        if param_name == "I":
+            _sign = _dert[0] > 0  # I > 0
+        elif param_name == "G":
+            _sign = _dert[3] > 0  # G > 0
+        elif param_name == "M":
+            _sign = ave_inv - _dert[3] > 0  # ave - G > 0
+        elif param_name == "D":
+            _sign = _dert[2] > 0  # dx > 0
+
         # initialize P with first dert
-        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
-               Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8],
-               x0=0, L=1, y=y, dert_=dert_)
+        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3],
+               Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ga=_dert[8],
+               x0=0, L=1, y=y, dert_=dert_, sign= _sign)
 
     for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
         mask = mask_[x]  # pixel mask
 
+        if mask:  # masks: if 1,_0: P termination, if 0,_1: P initialization, if 0,_0: P accumulation:
+            if ~_mask:  # _dert is not masked, dert is masked, terminate P:
+                P.x = P.x0 + (P.L-1) // 2
+                P_.append(P)
+        else:  # dert is not masked
+            if param_name == "I":
+                sign = dert[0] > 0  # I > 0
+            elif param_name == "G":
+                sign = dert[3] > 0  # G > 0
+            elif param_name == "M":
+                sign = ave_inv - dert[3] > 0  # ave - G > 0
+            elif param_name == "D":
+                sign = dert[2] > 0  # dx > 0
+
+            if _mask:  # _dert is masked, initialize P params when dert is not masked:
+                # initialize P with current dert
+                P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3],
+                       Dydy=dert[4], Dxdy=dert[5], Dydx=dert[6], Dxdx=dert[7], Ga=dert[8],
+                       x0=x, L=1, y=y, dert_=dert_, sign=sign)
+            else:
+                if _sign == sign:
+                    # _dert is not masked, accumulate P params with (p, dy, dx, g, m, day, dax, ga, ma) = dert
+                    P.accumulate(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3],
+                                 Dydy=dert[4], Dxdy=dert[5], Dydx=dert[6], Dxdx=dert[7], Ga=dert[8], L=1)
+                    P.dert_.append(dert)
+
+                else:  # sign change, terminate and reinit P
+                    P_.append(P)
+                    P = CP(I=dert[0], Dy=dert[1], Dx=dert[2], G=dert[3],
+                       Dydy=dert[4], Dxdy=dert[5], Dydx=dert[6], Dxdx=dert[7], Ga=dert[8],
+                       x0=x, L=1, y=y, dert_=dert_, sign=sign)
+            _sign = sign
+        _mask = mask
+
+    if ~_mask:  # terminate last P in a row
+        P.x = P.x0 + (P.L-1) // 2
+        P_.append(P)
+
+    return P_
+'''
+def form_P_nosign(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertical order, sum dert params into P params
+    P_ = []                # rows of derPs
+    _dert = list(idert_[0]) # first dert
+    dert_ = [_dert]         # pack 1st dert
+    _mask = mask_[0]       # mask bit per dert
+    if ~_mask:
+        # initialize P with first dert
+        P = CP(I=_dert[0], Dy=_dert[1], Dx=_dert[2], G=_dert[3],
+               Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ga=_dert[8],
+               x0=0, L=1, y=y, dert_=dert_)
+    for x, dert in enumerate(idert_[1:], start=1):  # left to right in each row of derts
+        mask = mask_[x]  # pixel mask
         if mask:  # masks: if 1,_0: P termination, if 0,_1: P initialization, if 0,_0: P accumulation:
             if ~_mask:  # _dert is not masked, dert is masked, terminate P:
                 P.x = P.x0 + (P.L-1) // 2
@@ -231,24 +273,18 @@ def form_P_(idert_, mask_, y):  # segment dert__ into P__ in horizontal ) vertic
                 P.accumulate(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
                              Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8], L=1)
                 P.dert_.append(dert)
-
         _mask = mask
-
     if ~_mask:  # terminate last P in a row
         P.x = P.x0 + (P.L-1) // 2
         P_.append(P)
-
     return P_
-
 def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
-
     Pd__ = []
     for iP in P_:
         if (iP.downconnect_cnt>0) or (iP.upconnect_):  # form Pd s if at least one connect in P, else they won't be compared
             P_Ddx = 0  # sum of Ddx across Pd s
             P_Mdx = 0  # sum of Mdx across Pd s
             Pd_ = []   # Pds in P
-
             _dert = iP.dert_[0]  # 1st dert
             dert_ = [_dert]
             _sign = _dert[2] > 0
@@ -257,7 +293,6 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8],
                    x0=iP.x0, dert_=dert_, L=1, y=iP.y, sign=_sign, Pm=iP)
             x = 1  # relative x within P
-
             for dert in iP.dert_[1:]:
                 sign = dert[2] > 0
                 if sign == _sign: # same Dx sign
@@ -265,7 +300,6 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
                     P.accumulate(I=_dert[0], Dy=_dert[1], Dx=_dert[2], M=_dert[3],
                                  Dydy=_dert[4], Dxdy=_dert[5], Dydx=_dert[6], Dxdx=_dert[7], Ma=_dert[8], L=1)
                     P.dert_.append(dert)
-
                 else:  # sign change, terminate P
                     if P.Dx > ave_Dx:
                         # cross-comp of dx in P.dert_
@@ -286,32 +320,31 @@ def form_Pd_(P_):  # form Pds from Pm derts by dx sign, otherwise same as form_P
             # update Pd params in P
             iP.Pd_ = Pd_; iP.Ddx = P_Ddx; iP.Mdx = P_Mdx
             Pd__ += Pd_
-
     return Pd__
-
+'''
 
 def scan_P_(P_, _P_):  # test for x overlap between Ps, call comp_slice
 
     derP_ = []
     for P in P_:  # lower row
-        for _P in _P_:  # upper row
-            # test for x overlap between P and _P in 8 directions
-            if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):  # all Ps here are positive
+        if P.sign:  # positive P only?
+            for _P in _P_:  # upper row
+                # test for x overlap between P and _P in 8 directions
+                if _P.sign and (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):  # all Ps here are positive
 
-                fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
-                if not fcomp:
-                    derP = comp_slice(_P, P)  # form vertical and directional derivatives
-                    derP_.append(derP)
-                    P.upconnect_.append(derP)
-                    _P.downconnect_cnt += 1
+                    fcomp = [1 for derP in P.upconnect_ if P is derP.P]  # upconnect could be derP or dirP
+                    if not fcomp:
+                        derP = comp_slice(_P, P)  # form vertical and directional derivatives
+                        derP_.append(derP)
+                        P.upconnect_.append(derP)
+                        _P.downconnect_cnt += 1
 
-            elif (P.x0 + P.L) < _P.x0:  # stop scanning the rest of lower P_ if there is no overlap
-                break
+                elif not _P.sign or (P.x0 + P.L) < _P.x0:  # stop scanning the rest of lower P_ if there is no overlap
+                    break
     return derP_
 
-
+'''
 def scan_Pd_(P_, _P_):  # test for x overlap between Pds
-
     derPd_ = []
     for P in P_:  # lower row
         for _P in _P_:  # upper row
@@ -319,18 +352,16 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
                 for _Pd in _P.Pd_: # upper row Pds
                     # test for same sign & x overlap between Pd and _Pd in 8 directions
                     if (Pd.x0 - 1 < (_Pd.x0 + _Pd.L) and (Pd.x0 + Pd.L) + 1 > _Pd.x0) and (Pd.sign == _Pd.sign):
-
                         fcomp = [1 for derPd in Pd.upconnect_ if Pd is derPd.P]  # upconnect could be derP or dirP
                         if not fcomp:
                             derPd = comp_slice(_Pd, Pd)
                             derPd_.append(derPd)
                             Pd.upconnect_.append(derPd)
                             _Pd.downconnect_cnt += 1
-
                     elif (Pd.x0 + Pd.L) < _Pd.x0:  # stop scanning the rest of lower P_ if there is no overlap
                         break
     return derPd_
-
+'''
 
 def form_PP_root(blob, derP__, P__, derPd__, Pd__, fPPd):
     '''
@@ -441,9 +472,10 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
     P.Ddx = Ddx
     P.Mdx = Mdx
 
-
+# pending update
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
+    # need to replace M with G and Ma with Ga?
     layer1 = dict({'I':.0,'Da':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
     mP, dP = 0, 0
 
@@ -483,10 +515,10 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
             _param = getattr(_P, param_name)
 
 
-        dm = comp_param(param, _param, param_name, ave_min)  # add ave_min, * P.L is not needed?
-        layer1[param_name] = dm
-        mP += dm.m
-        dP += dm.d
+        pdert = comp_param(param, _param, param_name, ave_min)  # add ave_min, * P.L is not needed?
+        layer1[param_name] = pdert
+        mP += pdert.m
+        dP += pdert.d
 
     '''
     s, x0, Dx, Dy, G, M, L, Ddx, Mdx = P.sign, P.x0, P.Dx, P.Dy, P.G, P.M, P.L, P.Ddx, P.Mdx  # params per comp branch
@@ -523,7 +555,7 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
 
     return derP
 
-
+# obsolete
 def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
     x0, Dx, Dy, L, = P.x0, P.Dx, P.Dy, P.L
@@ -695,196 +727,3 @@ def comp_PP_recursive(PP, upconnect_, derPP_, fPPd):
                 PP.distance += len(_PP.P__) # approximate using number of Py, not so sure
                 PP.neg_mmPP += derPP.mmPP
                 comp_PP_recursive(PP, _PP.upconnect_, derPP_, fPPd)
-
-# draft
-def form_PPP_(PP_, fPPd):
-
-    PPP_ = []
-    for PP in PP_:
-        if fPPd:
-            mPP = PP.mdPP # match of PP's d
-            PPP = PP.PPPd
-        else:
-            mPP = PP.mmPP # match of PP's m
-            PPP = PP.PPPm
-
-        if mPP > ave_mPPP and not isinstance(PPP, CPPP):
-
-            PPP = CPPP()              # init new PPP
-            accum_PPP(PPP, PP, fPPd)  # accum PP into PPP
-            form_PPP_recursive(PPP_, PPP, PP.upconnect_, checked_ids=[PP.id], fPPd=fPPd)
-            PPP_.append(PPP) # pack PPP after scanning all upconnects
-
-    return PPP_
-
-def form_PPP_recursive(PPP_, PPP, upconnect_,  checked_ids, fPPd):
-
-    for _PP in upconnect_:
-        if _PP.id not in checked_ids:
-            checked_ids.append(_PP.id)
-
-            if fPPd: _mPP = _PP.mdPP   # match of _PPs' d
-            else:    _mPP = _PP.mmPP   # match of _PPs' m
-
-            if _mPP>0 :  # _PP.mPP >0
-
-                if fPPd: _PPP = _PP.PPPd
-                else:    _PPP = _PP.PPPm
-
-                if isinstance(_PPP, CPPP):     # _PP's PPP exists, merge with current PPP
-                    PPP_.remove(_PPP)    # remove the merging PPP from PPP_
-                    merge_PPP(PPP, _PPP, fPPd)
-                else:
-                    accum_PPP(PPP, _PP, fPPd)  # accum PP into PPP
-                    if _PP.upconnect_:         # continue with _PP upconnects
-                        form_PPP_recursive(PPP_, PPP, _PP.upconnect_,  checked_ids, fPPd)
-
-def accum_PPP(PPP, PP, fPPd):
-
-    PPP.accum_from(PP) # accumulate parameter, including layer1
-
-    if fPPd:
-        PPP.PPd_.append(PP) # add PPd to PPP's PPd_
-        PP.PPPd = PPP       # update PPP reference of PP
-        for derPPd in PP.derPPd_: # accumulate derPPd params, layer01 and layer11
-            PPP.accum_from(derPPd)
-            PPP.derPPd_.append(derPPd)
-
-    else:
-        PPP.PPm_.append(PP) # add PPm to PPP's PPm_
-        PP.PPPm = PPP       # update PPP reference of PP
-        for derPPm in PP.derPPm_: # accumulate derPPm params, layer01 and layer11
-            PPP.accum_from(derPPm)
-            PPP.derPPm_.append(derPPm)
-
-
-
-def merge_PPP(PPP, _PPP, fPPd):
-    if fPPd:
-        for _PP in _PPP.PPd_:
-            if _PP not in PPP.PPd_:
-                accum_PPP(PPP, _PP, fPPd)
-    else:
-        for _PP in _PPP.PPm_:
-            if _PP not in PPP.PPm_:
-                accum_PPP(PPP, _PP, fPPd)
-
-
-def comp_PP(PP, _PP):
-
-    # compare PP and _PP base params to get layer 01 of derPP #-----------------
-    layer01 = dict({'I':.0,'Da':.0,'M':.0,'Dady':.0,'Dadx':.0, 'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
-    mP, dP = 0, 0
-
-    G = np.hypot(PP.Dy, PP.Dx) - ave_g * PP.L
-    _G = np.hypot(_PP.Dy, _PP.Dx) - ave_g * _PP.L
-    absG = max(1,G + (ave_g*PP.L)); _absG = max(1,_G + (ave_g*_PP.L))         # use max to avoid zero division
-    Ga = np.hypot( np.arctan2(PP.Dydy, PP.Dxdy), np.arctan2(PP.Dydx, PP.Dxdx) ) - ave_ga * PP.L
-    _Ga = np.hypot( np.arctan2(_PP.Dydy, _PP.Dxdy), np.arctan2(_PP.Dydx, _PP.Dxdx) ) - ave_ga * _PP.L
-    absGa = max(1,Ga + (ave_ga *PP.L)); _absGa = max(1,_Ga + (ave_ga *_PP.L))
-
-
-    for param_name in layer01:
-        if param_name == 'Da':
-            # sin and cos components
-            sin = PP.Dy/absG; cos = PP.Dx/absG
-            _sin = _PP.Dy/_absG; _cos = _PP.Dx/_absG
-            param = [sin, cos]
-            _param = [_sin, _cos]
-        elif param_name == 'Dady':
-            # sin and cos components
-            sin = PP.Dydy/absGa; cos = PP.Dxdy/absGa
-            _sin = _PP.Dydy/_absGa; _cos = _PP.Dxdy/_absGa
-            param = [sin, cos]
-            _param = [_sin, _cos]
-        elif param_name == 'Dadx':
-            # sin and cos components
-            sin = PP.Dydx/absGa; cos = PP.Dxdx/absGa
-            _sin = _PP.Dydx/_absGa; _cos = _PP.Dxdx/_absGa
-            param = [sin, cos]
-            _param = [_sin, _cos]
-        elif param_name == "x":
-            _param = _PP.dX # _dX
-            param = PP.x    # dX
-        elif param_name == "L" or param_name == "M":
-            hyp = np.hypot(PP.x, 1)  # ratio of local segment of long (vertical) axis to dY = 1
-            _param = getattr(_PP,param_name)
-            param = getattr(PP,param_name) / hyp # orthogonal L & M are reduced by hyp
-        else:
-            param = getattr(PP, param_name)
-            _param = getattr(_PP, param_name)
-
-        dm = comp_param(param, _param, param_name, ave_mPP)
-        layer01[param_name] = dm
-        mP += dm.m
-        dP += dm.d
-
-    # compare layer1 to get layer11 #-------------------------------------------
-
-    layer11 = dict({'I':.0,'Da':.0,'M':.0,'Dady':.0,'Dadx':.0,'Ma':.0,'L':.0,'Mdx':.0, 'Ddx':.0, 'x':.0})
-    mmPP, dmPP, mdPP, ddPP = 0, 0, 0, 0
-    for i, ((param_name, dm), (_param_name, _dm)) in enumerate(zip(PP.layer1.items(), _PP.layer1.items())):
-
-        f_comp = 0
-        if param_name in ['Da', 'Dady', 'Dadx']: # angle, need convert to vector form
-            if dm.m > ave_comp and _dm.m >ave_comp: # check da.m of prior layer
-                f_comp = 1
-                sin, cos = np.sin(dm.d), np.cos(dm.d)    # da is computed from normalized dy and dx, do we still need to absGalize it again here in layer1?
-                _sin, _cos = np.sin(_dm.d), np.cos(_dm.d)
-                param_d = [sin, cos]; param_m = dm.m
-                _param_d = [_sin, _cos]; _param_m = _dm.m
-        else:
-            if dm.m > ave_comp and _dm.m >ave_comp: # check m of prior layer
-                f_comp = 1
-                param_d = dm.d; param_m = dm.m
-                _param_d = _dm.d; _param_m = _dm.m
-
-        if f_comp:
-            dmd = comp_param(param_d, _param_d, param_name, ave_mPP)  # dm of d
-            dmm = comp_param(param_m, _param_m, param_name, ave_mPP)  # dm of m
-            layer11[param_name] = [dmd, dmm]      # layer 2 in list ,storing dm of each d and m
-            mdPP += dmd.m # m from dm of d
-            ddPP += dmd.d # d from dm of d
-            mmPP += dmm.m # m from dm of m
-            dmPP += dmm.d # d from dm of m
-        else:
-            dmd = Cdm()
-            dmm = Cdm()
-
-    if PP.mP >ave_comp and PP.dP>ave_comp and _PP.mP >ave_comp and _PP.dP>ave_comp:
-        dmmP = comp_param(PP.mP, _PP.mP, [], ave_mPP) # dm of mP
-        dmdP = comp_param(PP.dP, _PP.dP, [], ave_mPP) # dm of dP
-
-        mdPP += dmdP.m # match of compared PPs' d components
-        ddPP += dmdP.d # difference of compared PPs' d components
-        mmPP += dmmP.m # match of compared PPs' m components
-        dmPP += dmmP.d # difference of compared PPs' m components
-
-
-    mmPP -= ave_mPP # match of compared PPs' m components
-    dmPP -= ave_mPP # difference of compared PPs' m components
-
-    derPP = CderPP(PP=PP, _PP=_PP, mmPP=mmPP, dmPP = dmPP, mdPP=mdPP, ddPP=ddPP,layer01=layer01, layer11=layer11)
-
-    '''
-    # match of compared PPs' m components
-    mmPP = match['mP'] + match['mx'] + match['mL'] + match['mDx'] + match['mDy'] - ave_mPP
-    # difference of compared PPs' m components
-    dmPP = difference['mP'] + difference['mx'] + difference['mL'] + difference['mDx'] + difference['mDy'] - ave_mPP
-    # match of compared PPs' d components
-    mdPP = match['dP'] + match['dx'] + match['dL'] + match['dDx'] + match['dDy']
-    # difference of compared PPs' d components
-    ddPP = difference['dP'] + difference['dx'] + difference['dL'] + difference['dDx'] + difference['dDy']
-    derPP = CderPP(PP=PP, _PP=_PP, mmPP=mmPP, dmPP = dmPP,  mdPP=mdPP, ddPP=ddPP)
-    '''
-
-    return derPP
-
-def accum_derPP(PP, derPP, fPPd):
-
-    if fPPd: # PP cluster by d
-        PP.derPPd_.append(derPP)
-    else:    # PP cluster by m
-        PP.derPPm_.append(derPP)
-
-    PP.accum_from(derPP)

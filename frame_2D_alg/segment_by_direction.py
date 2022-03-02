@@ -23,12 +23,10 @@ def segment_by_direction(iblob, **kwargs):
     render = kwargs.get('render')
 
     # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
-    dir_blob_, idmap, adj_pairs = \
-        flood_fill(dert__, abs(dy__) > abs(dx__), verbose=verbose, mask__=mask__, blob_cls=CBlob, fseg=True)
-    assign_adjacents(adj_pairs, CBlob)  # fseg=True: skip adding the pose
+    dir_blob_, idmap, adj_pairs = flood_fill(dert__, abs(dy__) > abs(dx__), verbose=verbose, mask__=mask__, fseg=True)
+    assign_adjacents(adj_pairs)  # fseg=True: skip adding the pose
 
     if render: _dir_blob_ = deepcopy(dir_blob_) # get a copy for dir blob before merging, for visualization purpose
-
     merged_ids = []  # ids of merged adjacent blobs, to skip in the rest of dir_blobs
 
     for i, blob in enumerate(dir_blob_):
