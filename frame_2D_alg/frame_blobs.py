@@ -123,7 +123,6 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     '''
     return frame
 
-
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
 
     # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:

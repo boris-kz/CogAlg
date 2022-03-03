@@ -86,10 +86,12 @@ aves = [ave_mL, ave_mI, ave_mD, ave_mM]
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
-    capitalized variables are normally summed small-case variables
+    1-3 letter names are normally scalars, except for P and similar classes, 
+    capitalized variables are normally summed small-case variables,
+    longer names are normally classes
 '''
 
-def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
+def line_PPs_root(P_t):  # P_t = [Pm_, Pd_];  higher-level input is nested to the depth = 1 + 2*elevation (level counter)
 
     norm_feedback(P_t)
     sublayer0 = []
@@ -116,7 +118,7 @@ def line_PPs_root(P_t):  # P_T is P_t = [Pm_, Pd_];  higher-level input is neste
 
     root.levels.append(root.sublayers)  # to contain 1st and 2nd levels
 
-    return root  # Pp tuple?    P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
+    return root  # Pp, sublayers[0] is P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each: ( Ppm_, Ppd_)))
 
 
 def cross_comp(P_, fPd):  # cross-compare patterns within horizontal line

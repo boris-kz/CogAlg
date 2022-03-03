@@ -43,7 +43,7 @@ class CP(ClusterStructure):
     L = int
     I = int
     D = int
-    M = int
+    M = int  # summed ave - abs(d), different from D
     Rdn = lambda: 1.0  # mrdn counter
     x0 = int
     dert_ = list  # contains (i, p, d, m, mrdn)
@@ -70,7 +70,9 @@ halt_y = 502  # ending row, set 999999999 for arbitrary image
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
-    capitalized variables are normally summed small-case variables
+    1-3 letter names are normally scalars, except for P and similar classes, 
+    capitalized variables are normally summed small-case variables,
+    longer names are normally classes
 '''
 
 def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_patterns, each pattern may be nested
@@ -253,14 +255,14 @@ if __name__ == "__main__":
         line = line_Ps_root( image[y,:])  # line = [Pm_, Pd_]
         if fline_PPs:
             from line_PPs import line_PPs_root
-            line = line_PPs_root([line])  # line = CPp, where sublayers[0] is a flat 16-tuple of P_s,
+            line = line_PPs_root([line])  # line = CPp, sublayers[0] is a flat 16-tuple of P_s,
             # but it is decoded by indices as 3-layer nested tuple P_ttt: (Pm_, Pd_, each:( Lmd, Imd, Dmd, Mmd, each:( Ppm_, Ppd_)))
             if frecursive:
                 from line_recursive import line_level_root
                 types_ = []
                 for i in range(16):  # len(line.sublayers[0]
                     types_.append([i % 2, int(i % 8 / 2), int(i / 8) % 2])  # 2nd level output types: fPpd, param, fPd
-                line = line_level_root(line, types_)  # line = CPp, sublayers[0] is a tuple of P_s, with nesting decoded by types_
+                line = line_level_root(line, types_)  # line = CPp, sublayers[0] is a tuple of P_s, with implicit nesting decoded by types_
 
         frame.append(line)  # if fline_PPs: line is root CPp, else [Pm_, Pd_]
 

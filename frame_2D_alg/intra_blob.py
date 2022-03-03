@@ -41,9 +41,8 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
             if root_blob.fBa:
                 # comp_slice fork in angle blobs
                 if blob.G * blob.Ga > aveB*aveBa * (blob.rdn+1) * pcoef:  # updated rdn, adjust per nsub_blobs?
-                    blob.fBa = 0; blob.rdn = root_blob.rdn+1  # double the costs
-                    # pack in comp_slice root:
-                    # segment_by_direction(blob, verbose=True) (pending update)
+                    blob.fBa = 0; blob.rdn = root_blob.rdn+1  # double the costs, likely higher
+                    # comp_slice root(blob, verbose=True) (pending update)
                     blob.prior_forks.extend('p')
                     if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs.append(blob)
             else:
