@@ -40,8 +40,9 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
         if blob_height > 3 and blob_width > 3:  # min blob dimensions: Ly, Lx
             if root_blob.fBa:
                 # comp_slice fork in angle blobs
-                if blob.G * blob.Ga > aveB*aveBa * (blob.rdn+1) * pcoef:  # updated rdn, adjust per nsub_blobs?
-                    blob.fBa = 0; blob.rdn = root_blob.rdn+1  # double the costs, likely higher
+                AveB = aveB * (blob.rdn+1)  # comp_slice is doubling the costs, likely higher, adjust per nsub_blobs?
+                if (AveB - blob.G) + (blob.G - AveB * pcoef) > 0:  # val_comp_slice_blob = dev_G + inv_dev_Ga
+                    blob.fBa = 0; blob.rdn = root_blob.rdn+1
                     # comp_slice root(blob, verbose=True) (pending update)
                     blob.prior_forks.extend('p')
                     if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs.append(blob)
@@ -57,7 +58,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     blob.fBa = 0; blob.rng = root_blob.rng + 1; blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn
                     # comp_r 4x4:
                     new_dert__, new_mask__ = comp_r(ext_dert__, blob.rng, ext_mask__)
-                    sign__ = ave * (blob.rdn + 1) - new_dert__[3] > 0  # m__ = ave - g__
+                    sign__ = ave * (blob.rdn+1) - new_dert__[3] > 0  # m__ = ave - g__
                     blob.prior_forks.extend('r')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
@@ -67,8 +68,9 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     # root values for sub_blobs:
                     blob.fBa = 1; blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn
                     # comp_a 2x2:
-                    new_dert__, new_mask__ = comp_a(ext_dert__, ext_mask__)  # no vgr * vga: deviations can't be combined in a product
-                    sign__ = ave * (blob.rdn+2) * pcoef - new_dert__[3] * new_dert__[9] > 0  # val_comp_slice_, rdn+2: -2 gs: gr * ga
+                    new_dert__, new_mask__ = comp_a(ext_dert__, ext_mask__)
+                    Ave = ave * (blob.rdn + 1)
+                    sign__ = (new_dert__[3] - Ave) + (Ave * pcoef - new_dert__[9]) > 0  # val_comp_slice_= dev_gr + inv_dev_ga
                     blob.prior_forks.extend('a')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
