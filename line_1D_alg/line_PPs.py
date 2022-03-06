@@ -3,7 +3,7 @@ line_PPs is a 2nd-level 1D algorithm, its input is P_ formed by the 1st-level li
 It cross-compares P params (initially L, I, D, M) and forms param_Ps: Pp_ for each param type per row in the image.
 In Pp: P stands for pattern and p for "partial" or "param": L|I|D|M of input P the Pp is formed from.
 -
-So Pp is a pattern of a specific input-P param type: span of same-sign match | diff between same-type params in P_ array.
+Pp is a pattern of a specific input-P param type: span of same-sign match | diff between Ls | Is | Ds | Ms in P_ array.
 This module is line_PPs vs. line_Pps because it forms Pps of all param types, which in combination represent patterns of patterns: PPs.
 Conversion of line_Ps into line_PPs is manual: initial input formatting does not apply on higher levels
 (initial inputs are filter-defined, vs. mostly comparison-defined for higher levels)

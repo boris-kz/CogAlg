@@ -58,6 +58,7 @@ class CP(ClusterStructure):
     Mdx = int
     Ddx = int
     # new:
+    Rdn = int
     x0 = int
     x = int  # median x
     dX = int  # shift of average x between P and _P, if any
@@ -146,10 +147,15 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
     segment_by_direction(blob, verbose=False)
     P__ = slice_blob(blob, verbose=False)  # 2D array of blob slices
-    derP__t = comp_slice_blob(P__)  # scan_P_ and comp_slice
-    form_Pp_t(blob, derP__t, P__)  # Pp: P.param P
+    derP_t = comp_slice_blob(P__)  # scan_P_, comp_slice
+    form_Pp_t(blob, derP_t)  # Pp: P.param P
+    # higher comp orders:
+    types_ = []
+    for i in range(12):  # 6 param * 2 fPpd
+        types = [i%2, int(i%12 /2)]  # 2nd level output types: fPpd, param
+        types_.append(types)
+    slice_level_root(blob, types_)
 
-    # add higher comp orders
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth-edge (high G, low Ga) blobs
 
@@ -189,11 +195,11 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
 
 def comp_slice_blob(P__):  # vertically compares y-adjacent and x-overlapping blob slices, forming derP__t
 
-    derP__t = [[] for _ in range(6)]  # 2D array of 6-params tuples per blob: (x, I, angle, G, M, L)
+    # derP_t contains 6 tuples, each tuple contain derPs for single param across whole blob
+    derP_t = [[] for _ in range(6)]  # 1D array of 6-params tuples per blob: (x, I, angle, G, M, L)
     _P_ = P__[0]  # upper row
 
     for P_ in P__[1:]:
-        derP_t = [[] for _ in range(6)]  # 1D array of 6-param tuples per blob line
         for P in P_:  # lower row
             for _P in _P_: # upper row
                 # test for x overlap between P and _P in 8 directions, all Ps here are positive
@@ -210,10 +216,8 @@ def comp_slice_blob(P__):  # vertically compares y-adjacent and x-overlapping bl
 
                 elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
                     break
-        for i, derP_ in enumerate(derP_t):
-            derP__t[i] += derP_  # pack each 1D param array in 2D param array
-
-    return derP__t
+        _P_ = P_  # update prior _P_ to current P_
+    return derP_t
 
 
 def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
@@ -271,34 +275,35 @@ def comp_slice(_P, P):  # forms vertical derivatives of derP params, and conditi
     return derPt
 
 
-def form_Pp_t(blob, derP__t, P__):  # form vertically contiguous patterns of patterns by derP sign, in blob or FPP
+def form_Pp_t(blob, derP_t):  # form vertically contiguous patterns of patterns by derP sign, in blob or FPP
 
-    blob.derP__t = derP__t
-    blob.P__ = P__
+    blob.derP_t = derP_t
 
-    for param_name, derP_ in zip(param_names, derP__t):
-        Pp_t = []  # per param
+    Pp_t = []  # flat version
+
+    for param_name, derP_ in zip(param_names, derP_t):
         for fPpd in 0,1:
             Pp_ = []  # Pp_ per fPpd
             for derP in reversed(deepcopy(derP_)):  # bottom-up to follow upconnects, derP_ is formed top-down
                 # last-row derPs downconnect_cnt == 0
                 if not derP.P.downconnect_cnt and not isinstance(derP.Pp, CPp):  # root derP was not terminated in prior call
-                    Pp = CPp()  
+                    Pp = CPp()
                     accum_Pp(Pp,derP)
                     if derP._P.upconnect_:
-                        upconnect_2_Pp_(derP, Pp_)  # form PPs across _P upconnects
+                        upconnect_2_Pp_(derP, Pp_, param_name, fPpd)  # form PPs across _P upconnects
                     else:
                         Pp_.append(derP.Pp)  # terminate Pp
-        blob.Pp_tt.append(Pp_t)
+            Pp_t.append(Pp_)
+    blob.slice_levels.append(Pp_t)
 
-
-def upconnect_2_Pp_(iderP, Pp_, fPpd):
+def upconnect_2_Pp_(iderP, Pp_, param_name, fPpd):
     '''
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
     confirmed_upconnect_ = []
 
-    for derP in iderP._P.upconnect_:  # potential upconnects from previous call
+    for derPt in iderP._P.upconnect_:  # potential upconnects from previous call
+        derP = derPt[param_names.index(param_name)]  # get current param's derP
         if derP not in iderP.Pp.derP__:  # this may occur after Pp merging
 
             if fPpd: same_sign = (iderP.d>0) == (derP.d>0)
@@ -320,7 +325,7 @@ def upconnect_2_Pp_(iderP, Pp_, fPpd):
                 derP.Pp.downconnect_cnt += 1        # add downconnect count to newly initialized Pp
 
             if derP._P.upconnect_:
-                upconnect_2_Pp_(derP, Pp_, fPpd)  # recursive compare sign of next-layer upconnects
+                upconnect_2_Pp_(derP, Pp_, param_name, fPpd)  # recursive compare sign of next-layer upconnects
 
             elif derP.Pp is not iderP.Pp and derP.P.downconnect_cnt == 0:
                 Pp_.append(derP.Pp)  # terminate Pp (not iPp) at the sign change
@@ -337,14 +342,14 @@ def merge_Pp(_Pp, Pp, Pp_):  # merge PP into _Pp
         if derP not in _Pp.derP__:
             _Pp.derP__.append(derP) # add derP to Pp
             derP.Pp = _Pp           # update reference
-            _Pp.accum_from(derP, ignore_capital=True)    # accumulate params
+            accum_Pp(_Pp, derP)     # accumulate params
     if Pp in Pp_:
         Pp_.remove(Pp)  # remove merged Pp
 
 
 def accum_Pp(Pp, derP):  # accumulate params in PP
 
-    Pp.accum_from(derP, ignore_capital=True)    # accumulate params
+    Pp.accumulate(I=derP.i, Dy=derP.d, M=derP.m, Rdn=derP.rdn, L=1)  # accumulate params, please include more if i missed out anything
     Pp.derP__.append(derP) # add derP to Pp
     derP.Pp = Pp           # update reference
 
@@ -368,7 +373,40 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
     P.Ddx = Ddx
     P.Mdx = Mdx
 
-# obsolete
+
+# not finished yet
+def slice_level_root(blob, types_):
+
+    Pp_t = blob.slice_levels[-1]
+    new_types_ = []
+    oPp_t = []
+    nextended = 0  # number of extended-depth
+
+    for Pp_, types in zip(Pp_t, types_):
+        if len(Pp_)>1:  # at least 2 comparands
+            nextended += 1
+            fiPd = types[0]
+
+            for param, param_name in enumerate(param_names):  # 6 params here
+                for fPd in 0, 1:
+                    new_types = types.copy()
+                    new_types.insert(0, param)  # add param index
+                    new_types.insert(0, fPd)  # add fPd
+                    new_types_.append(new_types)
+                    # comp_Pp using Pp.upconnect_ and form derPp
+                    # form_Ppp_ using derPp
+                    # oPp_t.append(Ppp_)
+        else:
+            new_types_ += [[] for _ in range(12)]  # align indexing, replace with count of missing
+            oPp_t += [[] for _ in range(12)]
+
+    blob.slice_levels.append(oPp_t)
+    # please correct this evaluation, not so sure yet
+    if len(oPp_t) / max(nextended,1) < 12:
+        slice_level_root(blob, new_types_)
+
+# obsolete:
+
 def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
     x0, Dx, Dy, L, = P.x0, P.Dx, P.Dy, P.L

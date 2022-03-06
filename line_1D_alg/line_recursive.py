@@ -85,6 +85,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
                     new_M += sum([Pp.M for Pp in Pp_])  # Pp.M includes rng+ and der+ Ms
         else:
             new_types_ += [[] for _ in range(8)]  # align indexing with sublayer, replace with count of missing prior P_s, or use nested tuples?
+            new_sublayer0 += [[] for _ in range(8)]
 
     if len(sublayer0) / max(nextended,1) < 4 and new_M > ave_M * 4:  # ave_extend_ratio and added M, will be default if pipelined
         # cross_core_comp(new_sublayer0, new_types_)

@@ -86,6 +86,8 @@ class CBlob(ClusterStructure):
     dir_blobs = list  # primarily vertically | laterally oriented edge blobs
     fsliced = bool
     fflip = bool  # x-y swap in comp_slice
+    derP_t = list
+    slice_levels = list
     PPmm_ = list  # comp_slice_ if not empty
     PPdm_ = list  # comp_slice_ if not empty
     derP__ = list
