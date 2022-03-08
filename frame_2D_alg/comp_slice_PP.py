@@ -51,14 +51,13 @@ class CP(ClusterStructure):
     M = int  # summed ave - abs(dx), not restorable from Dx.
     L = int
     # comp_angle:
-    Ddy = int
-    Ddx = int
+    Ddyy = int
+    Ddxy = int
     Da = int
     # comp_dx:
     Mdx = int
     Ddx = int
     # new:
-    Rdn = int
     x0 = int
     x = int  # median x
     dX = int  # shift of average x between P and _P, if any
@@ -76,17 +75,28 @@ class CP(ClusterStructure):
 
 class CderP(ClusterStructure):  # dert per CP param, please revise
 
-    i = int
-    p = int
     d = int
     m = int
-    rdn = int
+    param_layer0 = lambda:{"x":0, "I":0, "G":0, "M":0, "L":0, "DyDx":[0,0]}
+    param_layer1 = lambda:{"x":[0,0], "I":[0,0], "G":[0,0], "M":[0,0], "L":[0,0], "angle":[0,0]}
     P = object   # lower comparand
     _P = object  # higher comparand
     PP = object  # FPP if flip_val, contains this derP
     # from comp_dx
     fdx = NoneType
     distance = int  # d_ave_x
+    # for higher level:
+    dmm = int
+    mmm = int
+    ddm = int
+    mdm = int
+    param_layer01 = lambda:{"x":[0,0], "I":[0,0], "G":[0,0], "M":[0,0], "L":[0,0], "angle":[0,0], "DdyDdx":[0,0]}
+    param_layer11 = lambda:{"x":[0,0,0,0], "I":[0,0,0,0], "G":[0,0,0,0], "M":[0,0,0,0], "L":[0,0,0,0], "angle":[0,0], "DdyDdx":[0,0]}
+    '''
+    Replace with param_layers: each call to slice_level_root compares all param_layers' params: i_, and adds a new param_layer: (m,d) per i.
+    (lower params are re-compared because they are summed in recursion / composition, so their value is different)
+    This new layer is formally flat, but implicit nesting can be decoded by mapping (m,d)s to i params in lower param layers.
+    '''
 
 class CPP(CP, CderP):  # derP params are inherited from P
 
@@ -102,33 +112,14 @@ class CPP(CP, CderP):  # derP params are inherited from P
     # Pp params
     derP_ = list
     P__ = list
-    # below should be not needed
-    PPmm_ = list
-    PPdm_ = list
-    # PPd params
-    derPd__ = list
-    Pd__ = list
-    # comp_dx params
-    PPmd_ = list
-    PPdd_ = list
-    # comp_PP
-    derPPm_ = list
-    derPPd_ = list
-    distance = int
-    mmPP = int
-    dmPP = int
-    mdPP = int
-    ddPP = int
-    PPPm = object
-    PPPd = object
-    neg_mmPP = int
-    neg_mdPP = int
+    param_layer0 = lambda:{"x":0, "I":0, "G":0, "M":0, "L":0, "DyDx":[0,0]}
+    param_layer1 = lambda:{"x":[0,0], "I":[0,0], "G":[0,0], "M":[0,0], "L":[0,0], "angle":[0,0]}
 
 class CderPP(ClusterStructure):
-
-    layer01 = dict
-    layer1 = dict
-    layer11 = dict
+    # obsolete
+    param_layer01 = dict
+    param_layer1 = dict
+    param_layer11 = dict
     PP = object
     _PP = object
     mmPP = int
@@ -210,41 +201,36 @@ def comp_slice_blob(P__):  # vertically compares y-adjacent and x-overlapping bl
         _P_ = P_  # update prior _P_ to current P_
     return derP_
 
-# draft:
+
 def comp_slice(_P, P):  # forms vertical derivatives of P params, conditional ders from norm and DIV comp
 
     x, I, Dx, Dy, G, M, L, = P.x, P.I, P.Dx, P.Dy, P.G, P.M, P.L  # compared params
     _x, _I, _Dx, _Dy, _G, _M, _L, = _P.x, _P.I, _P.Dx, _P.Dy, _P.G, _P.M, _P.L
 
-    dx = _x - x  # mean x shift, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
-    mx = ave_dx - abs(dx)  # if mx+dx: rx = dx / ((L+_L)/2), overlap and offset don't matter?
-    # if abs(dx) > ave: comp_norm:
-    hyp = np.hypot(dx, 1)  # ratio of local segment of long (vertical) axis to dy = 1
+    dx = _x - x;  mx = ave_dx - abs(dx)  #  mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
     dI = _I - I;  mI = ave_dI - abs(dI)
-    dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-    dM = _M - M/hyp;  mM = min(_M, M)
-    dL = _L - L/hyp;  mL = min(_L, L)
-
-    # comp_a, not sure, please check:
+    dG = _G - G;  mG = min(_G, G)  # dG, dM are directional, re-direct by dx?
+    dM = _M - M;  mM = min(_M, M)
+    dL = _L - L*np.hypot(dx, dy=1); mL = min(_L, L)  # if abs(dx) > ave: L is local long axis, no change in G,M
+    # comp angle:
     _norm_G = np.hypot(_Dy, _Dx) - (ave_dG * _L)
     norm_G  = np.hypot(Dy, Dx) - (ave_dG * L)
     _absG = max(1, _norm_G + (ave_dG * _L))
     absG  = max(1, norm_G + (ave_dG * L))
     _sin = _Dy / _absG; _cos = _Dx / _absG
-    sin  = Dy / absG; cos = P.Dx / absG
-    # angle = [sin, cos]; _angle = [_sin, _cos]
+    sin  = Dy / absG; cos = Dx / absG
     sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
     cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    dangle = np.arctan2(sin_da, cos_da)  # da
-    mangle = ave_dangle - abs(dangle)  # indirect match, ma
+    dangle = (sin_da, cos_da)  # da
+    mangle = ave_dangle - abs(np.arctan2(sin_da, cos_da))  # ma is indirect match
 
     mP = mx + mI + mG + mM + mL + mangle
     dP = dx + dI + dG + dM + dL + dangle  # placeholder for now
     # pseudo:
-    layer0 = dict(x, mI, mG, mM, mL, (Dy,Dx))
-    layer1 = dict((mx,dx), (mI,dI), (mG,dG), (mM,dM), (mL,dL), (mangle,dangle))
+    param_layer0 = {"x":x, "I":mI, "G":mG, "M":mM, "L":mL, "DyDx":(Dy,Dx)}
+    param_layer1 = {"x":(mx,dx), "I":(mI,dI), "G":(mG,dG), "M":(mM,dM), "L":(mL,dL), "angle":(mangle,dangle)}
 
-    derP = mP, dP, layer0, layer1, P, _P
+    derP = CderP(m=mP, d=dP, param_layer0=param_layer0, param_layer1=param_layer1, P=P, _P=_P)
     return derP
 
 
@@ -308,8 +294,6 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
 
     for derP in PP.derP_:
         if derP not in _PP.derP_:
-            _PP.derP_.append(derP) # add derP to Pp
-            derP.PP = _PP           # update reference
             accum_PP(_PP, derP)     # accumulate params
     if PP in PP_:
         PP_.remove(PP)  # remove merged PP
@@ -317,8 +301,21 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
 
 def accum_PP(PP, derP):  # accumulate params in PP
 
-    PP.accumulate(I=derP.i, Dy=derP.d, M=derP.m, Rdn=derP.rdn, L=1)  # accumulate params, please include more if i missed out anything
-    PP.derP_.append(derP) # add derP to Pp
+    # extended from accum_Dert:
+    # def accum_Dert(Dert: dict, **params) -> None:
+    #     Dert.update({param: Dert[param] + value for param, value in params.items()})
+    for param, value in derP.param_layer0.items():  # param_layer0
+        if param == "DyDx":
+            PP.param_layer0[param][0] += value[0]  # Dy
+            PP.param_layer0[param][1] += value[1]  # Dx
+        else:
+            PP.param_layer0[param] += value
+    for param, value in derP.param_layer1.items():  # param_layer1
+        PP.param_layer1[param][0] += value[0]  # accumulate m
+        PP.param_layer1[param][1] += value[1]  # accumulate d
+
+    PP.L += 1
+    PP.derP_.append(derP)  # add derP to Pp
     derP.PP = PP           # update reference
 
 
@@ -345,7 +342,7 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
 def slice_level_root(blob):
 
     PP_t = blob.slice_levels[-1]
-    PPP_t = []
+    PPP_, PPP_t = [], []
     nextended = 0  # number of extended-depth
 
     for fiPd, PP_ in enumerate(PP_t):
@@ -353,31 +350,111 @@ def slice_level_root(blob):
         if len(PP_)>1:  # at least 2 comparands
             nextended += 1
             for fPd in 0, 1:
-                derPP_ = comp_PP_(PP_)
+                derPP_ = comp_PP_blob(PP_)
                 PPP_ = form_PPP_(derPP_, fPd)
                 PPP_t.append(PPP_)
         else:
             PPP_t += [[] for _ in range(2)]  # align indexing, replace with count of missing
 
     blob.slice_levels.append(PPP_t)
-    # please correct this evaluation, not so sure yet
-    if len(PPP_t) / max(nextended,1) < 4:
+    if len(PPP_) / max(nextended,1) < 4:
         slice_level_root(blob)
 
 
-def comp_PP_(PP_):
+def comp_PP_blob(PP_):
 
     derPP_ = []
     for PP in PP_:
         for _PP in PP.upconnect_PP_:
             # upconnect is derP or dirP:
             if not [1 for derPP in PP.upconnect_ if PP is derPP.P]:
-                derPP = comp_slice(_PP, PP)
+                derPP = comp_PP(_PP, PP)
                 derPP_.append(derPP)
                 PP.upconnect_.append(derPP)
                 _PP.downconnect_cnt += 1
     return derPP_
 
+# replace with operations on param_layers:
+
+def comp_PP(_PP, PP):  # forms vertical derivatives of PP params, conditional ders from norm and DIV comp
+
+    # compute param_layer01 from param_layer0
+    _x, _I, _G, _M, _L, (_Dy, _Dx) = _PP.param_layer0.values
+    x, I, G, M, L, (Dy, Dx) = PP.param_layer0.values
+
+    dx = _x - x  # mean x shift, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
+    mx = ave_dx - abs(dx)  # if mx+dx: rx = dx / ((L+_L)/2), overlap and offset don't matter?
+    # if abs(dx) > ave: comp_norm:
+    hyp = np.hypot(dx, 1)  # ratio of local segment of long (vertical) axis to dy = 1
+    dI = _I - I;  mI = ave_dI - abs(dI)
+    dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
+    dM = _M - M/hyp;  mM = min(_M, M)
+    dL = _L - L/hyp;  mL = min(_L, L)
+
+    # comp_a, not sure, please check:
+    _norm_G = np.hypot(_Dy, _Dx) - (ave_dG * _L)
+    norm_G  = np.hypot(Dy, Dx) - (ave_dG * L)
+    _absG = max(1, _norm_G + (ave_dG * _L))
+    absG  = max(1, norm_G + (ave_dG * L))
+    _sin = _Dy / _absG; _cos = _Dx / _absG
+    sin  = Dy / absG; cos = Dx / absG
+    # angle = [sin, cos]; _angle = [_sin, _cos]
+    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    dangle = np.arctan2(sin_da, cos_da)  # da
+    mangle = ave_dangle - abs(dangle)  # indirect match, ma
+
+    mP = mx + mI + mG + mM + mL + mangle
+    dP = dx + dI + dG + dM + dL + dangle  # placeholder for now
+
+    param_layer01 = {"x":(mx,dx), "I":(mI,dI), "G":(mG,dG), "M":(mM,dM), "L":(mL,dL), "angle":(mangle,dangle), "DdyDdx":[sin_da,cos_da]}
+
+    # compute param_layer11 from param_layer1
+    (_mx, _dx), (_mI, _dI), (_mG, _dG), (_mM, _dM), (_mL,_dL), (_mangle, _dangle), (_sin_da, _cos_da) = _PP.param_layer1.values
+    (mx, dx), (mI, dI), (mG, dG), (mM, dM), (mL,dL), (mangle, dangle), (sin_da, cos_da) = PP.param_layer1.values
+    # x
+    dmx = _mx - mx
+    mmx = ave_dx - abs(dmx)
+    ddx = _dx - dx
+    mdx = ave_dx - abs(ddx)
+    mhyp = np.hypot(dmx, 1)  # ratio of local segment of long (vertical) axis to dy = 1
+    dhyp = np.hypot(ddx, 1)
+    # I
+    dmI = _mI - mI; mmI = ave_dI - abs(dmI)
+    ddI = _dI - dI; mdI = ave_dI - abs(ddI)
+    # G
+    dmG = _mG - mG/mhyp
+    mmG = min(_mG, mG)
+    ddG = _dG - dG/dhyp
+    mdG = min(_dG, dG)
+    # M
+    dmM = _mM - mM/mhyp
+    mmM = min(_mM, mM)
+    ddM = _dM - dM/dhyp
+    mdM = min(_dM, dM)
+    # L
+    dmL = _mL - mL/mhyp
+    mmL = min(_mL, mL)
+    ddL = _dL - dL/dhyp
+    mdL = min(_dL, dL)
+    # angle (not sure, there's no cos_ma, sin_ma)
+    sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
+    cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
+    ddangle = np.arctan2(sin_dda, cos_dda)  # da
+    mdangle = ave_dangle - abs(ddangle)     # indirect match, ma
+
+    dmPP = dmx + dmI + dmG + dmM + dmL
+    mmPP = mmx + mmI + mmG + mmM + mmL
+    ddPP = ddx + ddI + ddG + ddM + ddL + ddangle
+    mdPP = mdx + mdI + mdG + mdM + mdL + mdangle
+
+    param_layer11 = {"x":(dmx,mmx,ddx,mdx), "I":(dmI,mmI,ddI,mdI), "G":(dmG,mmG,ddG,mdG), "M":(dmM,mmM,ddM,mdM), "L":(dmL,mmL,ddL,mdL),
+                     "angle":(mdangle,ddangle), "DdyDdx":[sin_dda,cos_dda]}
+
+    derPP = CderP(dP=dP, mP=mP, dmPP=dmPP, mmPP=mmPP, ddPP=ddPP, mdPP=mdPP, param_layer01=param_layer01, param_layer1=PP.param_layer1, param_layer11=param_layer11,
+                  P=PP, _P=_PP)
+
+    return derPP
 
 
 def form_PPP_(derPP_, fiPd):

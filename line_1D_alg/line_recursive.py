@@ -101,7 +101,7 @@ def line_level_root(root, types_):  # recursively adds higher levels of pattern 
 def cross_core_comp(iP_T, types_):
     '''
     compare same-type new params across different-type input Pp_s, separate from convertable dimensions|modalities: filter patterns
-    if increasing correlation between higher derivatives, of pattern-summed params, similar to rng+?
+    if increasing correlation between higher derivatives, of pattern-summed params, similar to rng+? But no full P overlap.
 
     currently not used because correlation is by derivation: rdn coefs, multiplied across derivation hierarchy, no need to compare?
     but comp x Ps of params summed x sign, reducing rdn?
