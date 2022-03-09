@@ -98,7 +98,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     g__ = g__[:-1, :-1]
     ri__ = ri__[:-1, :-1]  # for summation in Dert
 
-    return (i__, dy__, dx__, g__, ri__, day__[0], day__[1], dax__[0], dax__[1], ga__), majority_mask__
+    return (i__, g__, ga__, ri__, dy__, dx__, day__[0], dax__[0], day__[1], dax__[1]), majority_mask__
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)

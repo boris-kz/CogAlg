@@ -203,11 +203,11 @@ def comp_slice_blob(P__):  # vertically compares y-adjacent and x-overlapping bl
 
 
 def comp_slice(_P, P):  # forms vertical derivatives of P params, conditional ders from norm and DIV comp
+    # compared params:
+    x, L, I, G, M, Ga, Ma, Dx, Dy, Sda0, Cda0, Sda1, Cda1 = P.x, P.L, P.I, P.G, P.M, P.Ga, P.Ma, P.Dx, P.Dy, P.Sda0, P.Cda0, P.Sda1, P.Cda1
+    _x, _L, _I, _G, _M, _Ga, _Ma, _Dx, _Dy, _Sda0, _Cda0, _Sda1, _Cda1 = _P.x, _P.L, _P.I, _P.G, _P.M, _P.Ga, _P.Ma, _P.Dx, _P.Dy, _P.Sda0, _P.Cda0, _P.Sda1, _P.Cda1
 
-    x, I, Dx, Dy, G, M, L, = P.x, P.I, P.Dx, P.Dy, P.G, P.M, P.L  # compared params
-    _x, _I, _Dx, _Dy, _G, _M, _L, = _P.x, _P.I, _P.Dx, _P.Dy, _P.G, _P.M, _P.L
-
-    dx = _x - x;  mx = ave_dx - abs(dx)  #  mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
+    dx = _x - x;  mx = ave_dx - abs(dx)  # mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
     dI = _I - I;  mI = ave_dI - abs(dI)
     dG = _G - G;  mG = min(_G, G)  # dG, dM are directional, re-direct by dx?
     dM = _M - M;  mM = min(_M, M)
@@ -223,6 +223,8 @@ def comp_slice(_P, P):  # forms vertical derivatives of P params, conditional de
     cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
     dangle = (sin_da, cos_da)  # da
     mangle = ave_dangle - abs(np.arctan2(sin_da, cos_da))  # ma is indirect match
+
+    # add comp angle_diff here
 
     mP = mx + mI + mG + mM + mL + mangle
     dP = dx + dI + dG + dM + dL + dangle  # placeholder for now

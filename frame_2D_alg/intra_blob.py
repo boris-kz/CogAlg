@@ -70,7 +70,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     # comp_a 2x2:
                     new_dert__, new_mask__ = comp_a(ext_dert__, ext_mask__)
                     Ave = ave * (blob.rdn + 1)
-                    sign__ = (new_dert__[3] - Ave) + (Ave * pcoef - new_dert__[9]) > 0  # val_comp_slice_= dev_gr + inv_dev_ga
+                    sign__ = (new_dert__[1] - Ave) + (Ave * pcoef - new_dert__[2]) > 0  # val_comp_slice_= dev_gr + inv_dev_ga
                     blob.prior_forks.extend('a')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
