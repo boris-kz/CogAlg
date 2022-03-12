@@ -80,12 +80,12 @@ class CBlob(ClusterStructure):
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
     # comp_slice:
-    dir_blobs = list  # primarily vertically | laterally oriented edge blobs
+    dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in
     fsliced = bool
     fflip = bool  # x-y swap in comp_slice
     P__ = list
-    derP_ = list
-    PP_t = list
+    derP_ = list  # redundant to P__ upconnects?
+    PP_t = list  # or reuse P__?
     slice_levels = list
     # frame_bblob:
     root_bblob = object

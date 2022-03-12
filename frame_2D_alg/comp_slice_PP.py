@@ -25,12 +25,13 @@ from segment_by_direction import segment_by_direction
 ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
 ave_min = 5  # ave direct m, change to Ave_min from the root intra_blob?
 ave_g = 30  # change to Ave from the root intra_blob?
+ave_ga = 0.78  # ga at 22.5 degree
 flip_ave = .1
 flip_ave_FPP = 0  # flip large FPPs only (change to 0 for debug purpose)
 div_ave = 200
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
-ave_ga = 0.78  # ga at 22.5 degree
+aveB = 50
 # comp_param:
 ave_dI = 10  # same as ave_inv
 ave_dM = 10  # same as ave_min, replace the rest with coefs:
@@ -38,19 +39,20 @@ ave_dMa = 10
 ave_dG = 10
 ave_dGa = 10
 ave_dangle = 10  # related to dx?
-ave_ddangle = 10
+ave_daangle = 10
 ave_dL = 10
 ave_dx = 10  # difference between median x coords of consecutive Ps
 ave_mP = 10
 
 param_names = ["x", "I", "G", "Ga", "M", "Ma", "L", "angle", "dangle"]  # angle = (Dy, Dx), dangle = (sin_da0, cos_da0, sin_da1, cos_da1)
-aves = [ave_dx, ave_dI, ave_dG, ave_dGa, ave_dM, ave_dMa, ave_dL, ave_dangle, ave_ddangle]
+aves = [ave_dx, ave_dI, ave_dG, ave_dGa, ave_dM, ave_dMa, ave_dL, ave_dangle, ave_daangle]
 
 class CP(ClusterStructure):
 
     layer0 = list  # 9 compared params: x, L, I, M, Ma, G, Ga, Ds( Dy, Dx, Sin_da0), Das( Cos_da0, Sin_da1, Cos_da1)
     # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 are summed from dert[3:], M, Ma from ave- g, ga
     # G, Ga are recomputed from Ds, Das; M, Ma are not restorable from G, Ga
+    L = int  # redundant for convinience
     # if comp_dx:
     Mdx = int
     Ddx = int
@@ -59,7 +61,7 @@ class CP(ClusterStructure):
     x = float  # median x
     y = int  # for visualization only
     sign = NoneType  # g-ave + ave-ga sign
-    dert_ = list   # array of pixel-level derts, redundant to upconnect_?
+    dert_ = list  # array of pixel-level derts, redundant to upconnect_, only per blob?
     upconnect_ = list
     downconnect_cnt = int
     derP = object # derP object reference
@@ -96,25 +98,24 @@ class CPP(CP, CderP):  # derP params are inherited from P
     mask__ = bool
     # Pp params
     derP_ = list
-    P__ = list
+    P_ = list
     param_layers = list
 
 # Functions:
-'''-
-workflow:
-intra_blob -> slice_blob(blob) -> derP_ -> PP,
-if flip_val(PP is FPP): pack FPP in blob.PP_ -> flip FPP.dert__ -> slice_blob(FPP) -> pack PP in FPP.PP_
-else       (PP is PP):  pack PP in blob.PP_
-'''
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    segment_by_direction(blob, verbose=False)
-    P__ = slice_blob(blob, verbose=False)  # 2D array of blob slices
-    derP_ = comp_slice_blob(P__)  # scan_P_, comp_slice
-    form_PP_(blob, derP_)
-    # higher comp orders:
-    slice_level_root(blob)
+    segment_by_direction(blob, verbose=False)  # need to revise, it should form blob.dir_blobs, not FPPs
+    for dir_blob in blob.dir_blobs:  # dir_blob should be Cblob?
+
+        P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
+        # comp_dx_blob(P__), comp_dx?
+
+        derP_ = comp_slice_blob(P__)  # scan_P_, comp_slice
+        PP_ = form_PP_(dir_blob, derP_)  # PP: stack of Ps matched in comp_slice, splice PPs across dir_blobs?
+
+        comp_slice_recursive(PP_)  # sub-recursion: higher derivation comp P in PP -> param_layer -> form sub_PPs
+        slice_level_root(dir_blob)  # super-recursion: higher composition comp PP in blob -> derPPs -> form PPP, etc.
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth-edge (high G, low Ga) blobs
@@ -136,12 +137,11 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # initialize P params with first unmasked dert:
                     Pdert_ = []
-                    layer0 = [ave_g-abs(dert[1]), ave_ga-abs(dert[2]), *dert[3:]]  # m, ma, dert[3:]: i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
+                    layer0 = [ave_g-dert[1], ave_ga-dert[2], *dert[3:]]  # m, ma, dert[3:]: i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params from dert params:
-                    layer0[1] += ave_g-abs(dert[1])  # M
-                    layer0[2] += ave_ga-abs(dert[2])  # Ma
-                    for i, (Param, param) in enumerate(zip(layer0[2:], dert[3:]), start=2):  # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
+                    layer0[1] += ave_g-dert[1]; layer0[2] += ave_ga-dert[2]  # M, Ma
+                    for i, (Param, param) in enumerate(zip(layer0[2:], dert[3:]), start=2): # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
                         layer0[i] = Param + param
                     Pdert_.append(dert)
             elif not _mask:
@@ -157,7 +157,6 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
 
     return P__
 
-
 def comp_slice_blob(P__):  # vertically compares y-adjacent and x-overlapping blob slices, forming derP__t
 
     derP_ = []  # derPs per blob
@@ -166,22 +165,27 @@ def comp_slice_blob(P__):  # vertically compares y-adjacent and x-overlapping bl
     for P_ in P__[1:]:
         for P in P_:  # lower row
             for _P in _P_: # upper row
+                rdn = 0  # per _P, not P?
                 # test for x overlap between P and _P in 8 directions, all Ps here are positive
                 if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):
-                    # upconnect is derP or dirP:
-                    if not [1 for derP in P.upconnect_ if P is derP.P]:
-                        # P was not compared before
-                        derP = comp_slice(_P, P)  # form vertical derivatives per param
-                        derP_.append(derP)  # redundant to upconnect_?
-                        P.upconnect_.append(derP)
-                        _P.downconnect_cnt += 1
+                    for derP in P.upconnect_:
+                        # upconnect is derP or dirP if across dir_blobs?
+                        if not _P is derP.P:  # P was not compared yet
+                            rdn += 1  # forms partially overlapping PPs, needs to be proportional to overlap?
+
+                            derP = comp_slice(_P, P)  # tuple of vertical derivatives per param
+                            derP_.append(derP)  # per blob to form_PP, or from P.upconnect_s?
+                            P.upconnect_.append(derP)  # per P
+                            _P.downconnect_cnt += 1
                 elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
                     break
+                _P.Rdn += rdn  # use in form_PP eval, move eval from comp_slice because rdn was not known yet?
         _P_ = P_  # update prior _P_ to current P_
+
     return derP_
 
 
-def comp_slice(_P, P):  # forms vertical derivatives of P params, conditional ders from norm and DIV comp
+def comp_slice(_P, P):  # forms vertical derivatives of params per P in _P.upconnect, conditional ders from norm and DIV comp
 
     # compared P params:
     x, L, M, Ma, I, Dx, Dy, sin_da0, cos_da0, sin_da1, cos_da1 = P.layer0
@@ -219,105 +223,11 @@ def comp_slice(_P, P):  # forms vertical derivatives of P params, conditional de
     dlayer = dx + dI + dG + dGa + dM + dMa + dL  # placeholder for now, dangle and daangle are tuples, cant be added
     mlayer = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
 
-    param_layers = [[x, L, I, G, Ga, M, Ma, (sin_da, cos_da), (sin_da0, cos_da0, sin_da1, cos_da1)], # copy of layer0, the original remains in P
+    param_layers = [[x, L, I, G, Ga, M, Ma, (sin_da, cos_da), (sin_da0, cos_da0, sin_da1, cos_da1)], # copy of layer0, the original in P
+                    # layer0 is only for comp_slice_recursive, append if called, not here?
                     [dx, mx, dL, mL, dI, mI, dG, mG, dGa, mGa, dM, mM, dMa, mMa, dangle, mangle, daangle, maangle]]  # layer1
-    '''
-    The above is for each P in _P.upconnect
-    
-    The below is higher derivation, forming param_layers[1:].
-    It should be in separate comp_slice_recursive, for strong non-forking blob segments. 
-    So, we need to cluster consecutive vertically matching Ps in non-forking blob segments, after comp_slice,
-    then evaluate them for comp_slice_recursive: if segment G-Ma and while len segment > recursion count (we need 3 Ps compute layer2, etc.)
-    '''
-    mP = mlayer
-    if mP < ave_mP:
-        new_layer = []
-        for _layer, layer in zip(_P.derP.param_layers, P.derP.param_layers):
-            # compare next layer:
-            mlayer, new_layer = comp_layer(_layer, layer, new_layer)  # append new_layer
-            mP += mlayer
-            if mP < ave_mP:
-                break
-        if new_layer:
-            _P.derP.param_layers += [new_layer]; P.derP.param_layers += [new_layer]  # layer0 remains in P
 
-    derP = CderP(mP=mP, param_layers=param_layers[1:], P=P, _P=_P)
-
-# draft:
-def comp_layer(_layer, layer, new_layer):
-    # not revised, remove ifs, etc:
-    # will be updated once layer0 and layer1 are finalized
-
-    dm_num = int(i/ (2 ** (layer_num-1)))  # dm number per layer for each param: 1, 2, 4, 8, 16...
-
-    if dm_num == 0:  # x
-        _x = param; x = param
-        dx = _x - x; mx = ave_dx - abs(dx)
-        param_layer.append(dx); param_layer.append(mx)
-        hyps.append(np.hypot(dx, 1))
-        dP += dx; mP += mx
-
-    elif dm_num == 1:  # I
-        _I = _param; I = param
-        dI = _I - I; mI = ave_dI - abs(dI)
-        param_layer.append(dI); param_layer.append(mI)
-        dP += dI; mP += mI
-
-    elif dm_num == 2:  # G
-        hyp = hyps[i%dm_num]
-        _G = _param; G = param
-        dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-        param_layer.append(dG); param_layer.append(mG)
-        dP += dG; mP += mG
-
-    elif dm_num == 3:  # M
-        hyp = hyps[i%dm_num]
-        _M = _param; M = param
-        dM = _M - M/hyp;  mM = min(_M, M)
-        param_layer.append(dM); param_layer.append(mM)
-        dP += dM; mP += mM
-
-    elif dm_num == 4:  # L
-        hyp = hyps[i%dm_num]
-        _L = _param; L = param
-        dL = _L - L/hyp;  mL = min(_L, L)
-        param_layer.append(dL); param_layer.append(mL)
-        dP += dL; mP += mL
-
-    elif dm_num == 5:  # Dy, Dx
-        if param_layer == 1:
-            _Dy, _Dx = _param; Dy, Dx = param
-            _norm_G = np.hypot(_Dy, _Dx) - (ave_dG * _L)
-            norm_G  = np.hypot(Dy, Dx) - (ave_dG * L)
-            _absG = max(1, _norm_G + (ave_dG * _L))
-            absG  = max(1, norm_G + (ave_dG * L))
-            _sin = _Dy / _absG; _cos = _Dx / _absG
-            sin  = Dy / absG; cos = Dx / absG
-            sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-            cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-            dangle = (sin_da, cos_da)  # da
-            mangle = ave_dangle - abs(np.arctan2(sin_da, cos_da))  # ma is indirect match
-            param_layer.append(dangle); param_layer.append(mangle)
-            dP += np.arctan2(sin_da, cos_da); mP += mangle
-        else:
-            if isinstance(_param, tuple):  # d (sin_da, cos_da)
-                 _sin_da, _cos_da = _param; sin_da, cos_da = param
-                 sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
-                 cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
-                 ddangle = (sin_da, cos_da)  # da
-                 mdangle = ave_dangle - abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match
-                 param_layer.append(ddangle); param_layer.append(mdangle)
-                 dP += np.arctan2(sin_dda, cos_dda); mP += mdangle
-            else: # m or scalar
-                _mangle = _param; mangle = param
-                dmangle = _mangle - mangle;  mmangle = min(_mangle, mangle)
-                param_layer.append(dmangle); param_layer.append(mmangle)
-                dP += dmangle; mP += mmangle
-
-    new_param_layers = P.param_layers.copy() + [param_layer]
-
-    derP = CderP(d=dP, m=mP, param_layers=new_param_layers , P=P, _P=_P)
-
+    derP = CderP(mP=mlayer, param_layers=param_layers[1:], P=P, _P=_P)
     return derP
 
 
@@ -334,13 +244,14 @@ def form_PP_(blob, derP_):  # form vertically contiguous patterns of patterns by
                 PP = CPP(param_layers = derP.param_layers.copy())
                 accum_PP(PP,derP)
                 if derP._P.upconnect_:
-                    upconnect_2_Pp_(derP, PP_, fPpd)  # form PPs across _P upconnects
+                    upconnect_2_PP_(derP, PP_, fPpd)  # form PPs across _P upconnects
                 else:
-                    PP_.append(derP.Pp)  # terminate PP
+                    PP_.append(derP.PP)  # terminate PP
         PP_t.append(PP_)
+
     blob.slice_levels.append(PP_t)
 
-def upconnect_2_Pp_(iderP, PP_, fPpd):
+def upconnect_2_PP_(iderP, PP_, fPPd):
     '''
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
@@ -349,7 +260,7 @@ def upconnect_2_Pp_(iderP, PP_, fPpd):
     for derP in iderP._P.upconnect_:  # potential upconnects from previous call
         if derP not in iderP.PP.derP_:  # this may occur after Pp merging
 
-            if fPpd: same_sign = (iderP.d>0) == (derP.d>0)
+            if fPPd: same_sign = (iderP.d>0) == (derP.d>0)
             else: same_sign = (iderP.m>0) == (derP.m>0)
 
             if same_sign:  # upconnect derP has different Pp, merge them
@@ -367,7 +278,7 @@ def upconnect_2_Pp_(iderP, PP_, fPpd):
                 derP.PP.downconnect_cnt += 1  # add downconnect count to newly initialized PP
 
             if derP._P.upconnect_:
-                upconnect_2_Pp_(derP, PP_, fPpd)  # recursive compare sign of next-layer upconnects
+                upconnect_2_PP_(derP, PP_, fPPd)  # recursive compare sign of next-layer upconnects
             elif derP.PP is not iderP.PP and derP.P.downconnect_cnt == 0:
                 PP_.append(derP.PP)  # terminate PP (not iPP) at the sign change
 
@@ -387,7 +298,6 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
 
 
 def accum_PP(PP, derP):  # accumulate params in PP
-
     '''
     # extended from accum_Dert:
     # def accum_Dert(Dert: dict, **params) -> None:
@@ -408,6 +318,104 @@ def accum_PP(PP, derP):  # accumulate params in PP
 
     pass # to be updated
 
+# just started drafting:
+def comp_slice_recursive(PP_):  # compares param_layers of derPs in generic PP, forming higher param_layer
+
+    for PP in PP_:  # here, PP is generic higher composition level, P is generic lower composition level
+        if (PP.G - PP.Ma > aveB*PP.rdn) and PP.L > len(PP.param_layers):  # (need 3 Ps compute layer2, etc.)
+            # not sure:
+            for _P in PP.P_:
+                for _derP in _P.upconnect_:
+                    for derP in P.upconnect_:
+                        pass
+    # below is not revised:
+    # scan bottom up
+    _P__ = P__[:-1]  # scanned row
+    __P__ = P__[:-2]  # upper row
+
+    for __P_, _P_, P_ in zip(reversed(__P__), reversed(_P__), reversed(P__)):  # reversed to loop from last index , so that it is bottom-up
+        for P in P_:
+            for _P in _P_:
+                if [1 for derP in P.upconnect_ if _P is derP.P]:  # overlapping between P and _P
+                    for __P in __P_:
+                        if [1 for _derP in _P.upconnect_ if __P is _derP.P]:  # overlapping netween _P and __P
+
+                            # comp higher derivative layers between 2 derPs, 3 Ps
+                            for derP in P.upconnect_:
+                                if derP.P is P and derP._P is _P:  # to get derP connecting P and _P
+                                    for _derP in _P.upconnect:
+                                        if _derP.P is _P and _derP._P is __P:  # to get derP connecting _P and __P
+                                            mP = derP.m; _mP = _derP.m
+
+                                            while mP > ave_mP and _mP > ave_mP:
+                                                mlayer, new_layer = comp_layer(_derP.param_layers[-1], derP.param_layers[-1])
+                                                mP += mlayer; _mP += mlayer
+                                            derP.param_layers += [new_layer]; _derP.param_layers += [new_layer]
+    '''
+    mP = mlayer
+    if mP < ave_mP:
+        new_layer = []
+        for _layer, layer in zip(_P.derP.param_layers, P.derP.param_layers):
+            # compare next layer:
+            mlayer, new_layer = comp_layer(_layer, layer, new_layer)  # append new_layer
+            mP += mlayer
+            if mP < ave_mP:
+                break
+        if new_layer:
+            _P.derP.param_layers += [new_layer]; P.derP.param_layers += [new_layer]  # layer0 remains in P
+    '''
+
+def slice_level_root(blob):
+
+    PP_t = blob.slice_levels[-1]
+    PPP_, PPP_t = [], []
+    nextended = 0  # number of extended-depth
+
+    for fiPd, PP_ in enumerate(PP_t):
+        fiPd = fiPd % 2
+        if len(PP_)>1:  # at least 2 comparands
+            nextended += 1
+            for fPd in 0, 1:
+                derPP_ = comp_P_level(PP_)  # should be recursive
+                PPP_ = form_P_level(derPP_, fPd)  # should be recursive
+                PPP_t.append(PPP_)
+        else:
+            PPP_t += [[] for _ in range(2)]  # align indexing, replace with count of missing
+
+    blob.slice_levels.append(PPP_t)
+
+    if len(PPP_) / max(nextended,1) < 4:
+        slice_level_root(blob)
+
+
+def comp_P_level(PP_):
+
+    derPP_ = []
+    for PP in PP_:
+        for _PP in PP.upconnect_PP_:
+            # upconnect is derP or dirP:
+            if not [1 for derPP in PP.upconnect_ if PP is derPP.P]:
+                derPP = comp_slice(_PP, PP)
+                derPP_.append(derPP)
+                PP.upconnect_.append(derPP)
+                _PP.downconnect_cnt += 1
+    return derPP_
+
+def form_P_level(derPP_, fiPd):
+
+    PPP_ = []
+    for derPP in deepcopy(derPP_):
+        # last-row derPPs downconnect_cnt == 0
+        if not derPP.P.downconnect_cnt and not isinstance(derPP.PP, CPP):  # root derPP was not terminated in prior call
+            PPP = CPP()
+            accum_PP(PPP,derPP)
+            if derPP._P.upconnect_:
+                upconnect_2_PP_(derPP, PPP_, fiPd)  # form PPPs across _P upconnects
+            else:
+                PPP_.append(derPP.PP)  # terminate PPP
+    return PPP_
+
+
 def comp_dx(P):  # cross-comp of dx s in P.dert_
 
     Ddx = 0
@@ -427,141 +435,7 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
     P.Ddx = Ddx
     P.Mdx = Mdx
 
-
-def slice_level_root(blob):
-
-    PP_t = blob.slice_levels[-1]
-    PPP_, PPP_t = [], []
-    nextended = 0  # number of extended-depth
-
-    for fiPd, PP_ in enumerate(PP_t):
-        fiPd = fiPd % 2
-        if len(PP_)>1:  # at least 2 comparands
-            nextended += 1
-            for fPd in 0, 1:
-                derPP_ = comp_PP_blob(PP_)
-                PPP_ = form_PPP_(derPP_, fPd)
-                PPP_t.append(PPP_)
-        else:
-            PPP_t += [[] for _ in range(2)]  # align indexing, replace with count of missing
-
-    blob.slice_levels.append(PPP_t)
-    if len(PPP_) / max(nextended,1) < 4:
-        slice_level_root(blob)
-
-
-def comp_PP_blob(PP_):
-
-    derPP_ = []
-    for PP in PP_:
-        for _PP in PP.upconnect_PP_:
-            # upconnect is derP or dirP:
-            if not [1 for derPP in PP.upconnect_ if PP is derPP.P]:
-                derPP = comp_slice(_PP, PP)
-                derPP_.append(derPP)
-                PP.upconnect_.append(derPP)
-                _PP.downconnect_cnt += 1
-    return derPP_
-
-# replace with operations on param_layers:
-# obsolete now
-def comp_PP(_PP, PP):  # forms vertical derivatives of PP params, conditional ders from norm and DIV comp
-
-    # compute param_layer01 from param_layer0
-    _x, _I, _G, _M, _L, (_Dy, _Dx) = _PP.param_layer0.values
-    x, I, G, M, L, (Dy, Dx) = PP.param_layer0.values
-
-    dx = _x - x  # mean x shift, or from offsets: abs(x0 - _x0) + abs(xn - _xn)?
-    mx = ave_dx - abs(dx)  # if mx+dx: rx = dx / ((L+_L)/2), overlap and offset don't matter?
-    # if abs(dx) > ave: comp_norm:
-    hyp = np.hypot(dx, 1)  # ratio of local segment of long (vertical) axis to dy = 1
-    dI = _I - I;  mI = ave_dI - abs(dI)
-    dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-    dM = _M - M/hyp;  mM = min(_M, M)
-    dL = _L - L/hyp;  mL = min(_L, L)
-
-    # comp_a, not sure, please check:
-    _norm_G = np.hypot(_Dy, _Dx) - (ave_dG * _L)
-    norm_G  = np.hypot(Dy, Dx) - (ave_dG * L)
-    _absG = max(1, _norm_G + (ave_dG * _L))
-    absG  = max(1, norm_G + (ave_dG * L))
-    _sin = _Dy / _absG; _cos = _Dx / _absG
-    sin  = Dy / absG; cos = Dx / absG
-    # angle = [sin, cos]; _angle = [_sin, _cos]
-    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    dangle = np.arctan2(sin_da, cos_da)  # da
-    mangle = ave_dangle - abs(dangle)  # indirect match, ma
-
-    mP = mx + mI + mG + mM + mL + mangle
-    dP = dx + dI + dG + dM + dL + dangle  # placeholder for now
-
-    param_layer01 = {"x":(mx,dx), "I":(mI,dI), "G":(mG,dG), "M":(mM,dM), "L":(mL,dL), "angle":(mangle,dangle), "DdyDdx":[sin_da,cos_da]}
-
-    # compute param_layer11 from param_layer1
-    (_mx, _dx), (_mI, _dI), (_mG, _dG), (_mM, _dM), (_mL,_dL), (_mangle, _dangle), (_sin_da, _cos_da) = _PP.param_layer1.values
-    (mx, dx), (mI, dI), (mG, dG), (mM, dM), (mL,dL), (mangle, dangle), (sin_da, cos_da) = PP.param_layer1.values
-    # x
-    dmx = _mx - mx
-    mmx = ave_dx - abs(dmx)
-    ddx = _dx - dx
-    mdx = ave_dx - abs(ddx)
-    mhyp = np.hypot(dmx, 1)  # ratio of local segment of long (vertical) axis to dy = 1
-    dhyp = np.hypot(ddx, 1)
-    # I
-    dmI = _mI - mI; mmI = ave_dI - abs(dmI)
-    ddI = _dI - dI; mdI = ave_dI - abs(ddI)
-    # G
-    dmG = _mG - mG/mhyp
-    mmG = min(_mG, mG)
-    ddG = _dG - dG/dhyp
-    mdG = min(_dG, dG)
-    # M
-    dmM = _mM - mM/mhyp
-    mmM = min(_mM, mM)
-    ddM = _dM - dM/dhyp
-    mdM = min(_dM, dM)
-    # L
-    dmL = _mL - mL/mhyp
-    mmL = min(_mL, mL)
-    ddL = _dL - dL/dhyp
-    mdL = min(_dL, dL)
-    # angle (not sure, there's no cos_ma, sin_ma)
-    sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
-    cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
-    ddangle = np.arctan2(sin_dda, cos_dda)  # da
-    mdangle = ave_dangle - abs(ddangle)     # indirect match, ma
-
-    dmPP = dmx + dmI + dmG + dmM + dmL
-    mmPP = mmx + mmI + mmG + mmM + mmL
-    ddPP = ddx + ddI + ddG + ddM + ddL + ddangle
-    mdPP = mdx + mdI + mdG + mdM + mdL + mdangle
-
-    param_layer11 = {"x":(dmx,mmx,ddx,mdx), "I":(dmI,mmI,ddI,mdI), "G":(dmG,mmG,ddG,mdG), "M":(dmM,mmM,ddM,mdM), "L":(dmL,mmL,ddL,mdL),
-                     "angle":(mdangle,ddangle), "DdyDdx":[sin_dda,cos_dda]}
-
-    derPP = CderP(dP=dP, mP=mP, dmPP=dmPP, mmPP=mmPP, ddPP=ddPP, mdPP=mdPP, param_layer01=param_layer01, param_layer1=PP.param_layer1, param_layer11=param_layer11,
-                  P=PP, _P=_PP)
-
-    return derPP
-
-
-def form_PPP_(derPP_, fiPd):
-
-    PPP_ = []
-    for derPP in deepcopy(derPP_):
-        # last-row derPPs downconnect_cnt == 0
-        if not derPP.P.downconnect_cnt and not isinstance(derPP.PP, CPP):  # root derPP was not terminated in prior call
-            PPP = CPP()
-            accum_PP(PPP,derPP)
-            if derPP._P.upconnect_:
-                upconnect_2_Pp_(derPP, PPP_, fiPd)  # form PPPs across _P upconnects
-            else:
-                PPP_.append(derPP.PP)  # terminate PPP
-    return PPP_
-
 # old:
-
 def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and conditional ders from norm and DIV comp
 
     x0, Dx, Dy, L, = P.x0, P.Dx, P.Dy, P.L
@@ -655,4 +529,81 @@ def comp_slice_full(_P, P):  # forms vertical derivatives of derP params, and co
     mParam weighting by relative contribution to mP, /= redundancy?
     div_f, nvars: if abs dP per PPd, primary comp L, the rest is normalized?
     '''
+    return derP
+
+# draft:
+def comp_layer(_layer, layer, new_layer):
+    # not revised, remove ifs, etc:
+    # will be updated once layer0 and layer1 are finalized
+
+    dm_num = int(i/ (2 ** (layer_num-1)))  # dm number per layer for each param: 1, 2, 4, 8, 16...
+
+    if dm_num == 0:  # x
+        _x = param; x = param
+        dx = _x - x; mx = ave_dx - abs(dx)
+        param_layer.append(dx); param_layer.append(mx)
+        hyps.append(np.hypot(dx, 1))
+        dP += dx; mP += mx
+
+    elif dm_num == 1:  # I
+        _I = _param; I = param
+        dI = _I - I; mI = ave_dI - abs(dI)
+        param_layer.append(dI); param_layer.append(mI)
+        dP += dI; mP += mI
+
+    elif dm_num == 2:  # G
+        hyp = hyps[i%dm_num]
+        _G = _param; G = param
+        dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
+        param_layer.append(dG); param_layer.append(mG)
+        dP += dG; mP += mG
+
+    elif dm_num == 3:  # M
+        hyp = hyps[i%dm_num]
+        _M = _param; M = param
+        dM = _M - M/hyp;  mM = min(_M, M)
+        param_layer.append(dM); param_layer.append(mM)
+        dP += dM; mP += mM
+
+    elif dm_num == 4:  # L
+        hyp = hyps[i%dm_num]
+        _L = _param; L = param
+        dL = _L - L/hyp;  mL = min(_L, L)
+        param_layer.append(dL); param_layer.append(mL)
+        dP += dL; mP += mL
+
+    elif dm_num == 5:  # Dy, Dx
+        if param_layer == 1:
+            _Dy, _Dx = _param; Dy, Dx = param
+            _norm_G = np.hypot(_Dy, _Dx) - (ave_dG * _L)
+            norm_G  = np.hypot(Dy, Dx) - (ave_dG * L)
+            _absG = max(1, _norm_G + (ave_dG * _L))
+            absG  = max(1, norm_G + (ave_dG * L))
+            _sin = _Dy / _absG; _cos = _Dx / _absG
+            sin  = Dy / absG; cos = Dx / absG
+            sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+            cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+            dangle = (sin_da, cos_da)  # da
+            mangle = ave_dangle - abs(np.arctan2(sin_da, cos_da))  # ma is indirect match
+            param_layer.append(dangle); param_layer.append(mangle)
+            dP += np.arctan2(sin_da, cos_da); mP += mangle
+        else:
+            if isinstance(_param, tuple):  # d (sin_da, cos_da)
+                 _sin_da, _cos_da = _param; sin_da, cos_da = param
+                 sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
+                 cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
+                 ddangle = (sin_da, cos_da)  # da
+                 mdangle = ave_dangle - abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match
+                 param_layer.append(ddangle); param_layer.append(mdangle)
+                 dP += np.arctan2(sin_dda, cos_dda); mP += mdangle
+            else: # m or scalar
+                _mangle = _param; mangle = param
+                dmangle = _mangle - mangle;  mmangle = min(_mangle, mangle)
+                param_layer.append(dmangle); param_layer.append(mmangle)
+                dP += dmangle; mP += mmangle
+
+    new_param_layers = P.param_layers.copy() + [param_layer]
+
+    derP = CderP(d=dP, m=mP, param_layers=new_param_layers , P=P, _P=_P)
+
     return derP
