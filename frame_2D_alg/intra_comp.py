@@ -80,6 +80,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         ga__ = (cos_da0__ + 1) + (cos_da1__ + 1)  # +1 for all positives
+        # or ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__)?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
@@ -88,9 +89,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    deviation of abs gradient of angle: 
-    ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__) ) - ave_ga
-    in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)
+    in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)?
     '''
     i__ = i__[:-1, :-1]
     dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
