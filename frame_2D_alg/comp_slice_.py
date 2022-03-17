@@ -643,3 +643,28 @@ def scan_Pd_(P_, _P_):  # test for x overlap between Pds
                         break
     return derPd_
 '''
+
+def comp_P_blob_old(P__):  # vertically compares y-adjacent and x-overlapping blob slices, forming derP__t
+
+    derP_ = []
+    _P_ = P__[0]  # upper row, local, no need for blob.P__?
+
+    for P_ in P__[1:]:
+        for P in P_:  # lower row
+            for _P in _P_:  # upper row
+                # test for x overlap between P and _P in 8 directions, all Ps here are positive
+                if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):
+                    # if P was not compared yet:
+                    if not [1 for derP in P.upconnect_ if _P is derP._P]:
+                        # form a tuple of vertical derivatives per P param tuple:
+                        derP = comp_P(_P, P)
+                        derP_.append(derP)  # per blob, for comp_slice_recursive only?
+                        P.upconnect_.append(derP)  # per P, eval in form_PP
+                        _P.downconnect_cnt += 1
+                elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
+                    break
+        _P_ = P_  # update prior _P_ to current P_
+
+    return derP_
+
+
