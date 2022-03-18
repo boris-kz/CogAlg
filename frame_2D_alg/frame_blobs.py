@@ -80,6 +80,7 @@ class CBlob(ClusterStructure):
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
     # comp_slice:
+    M = int  # summed PP.M, for both types of recursion?
     dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
     fsliced = bool
     fflip = bool  # x-y swap in comp_slice

@@ -50,7 +50,7 @@ Final algorithm will consist of first-level operations + recursive increment in 
 Please see [system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png). 
 
 * Some notes:
-- There should be a unique set of operations added per level, hence a singular in “cognitive algorithm”.
+- I use singular in “cognitive algorithm” because there is a common design criterion: predictive value. Which is computed by cross-comp and clustering cycle on all levels. But there is a plenty of space for variation within this framework. 
 - Core design should be done theoretically: generality requires large upfront investment in process complexity, which makes it a huge overkill for any specific task. This is probably why such schemes are not explored.
 - Many readers note disconnect between abstractions in this outline, and the amount of detail in current code. That’s because we are in space-time continuum: search must follow proximity in each dimension, which requires specific processing. It’s not specific to vision, the process is mostly the same for all raw modalities. 
 - Another complaint is that I don't use mathematical notation, but it simply doesn't have the flexibility to express deeply conditional process, with recursively increasing complexity. 
