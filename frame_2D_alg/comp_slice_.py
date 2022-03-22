@@ -667,49 +667,62 @@ def comp_P_blob_old(P__):  # vertically compares y-adjacent and x-overlapping bl
 
     return derP_
 
-def comp_P_root(P__, rng, fsub):  # vertically compares y-adjacent and x-overlapping blob slices, forming derP__t
+def comp_P_root_old(P__, top_derP__, rng, fsub):  # vertically compares y-adjacent and x-overlapping blob slices, forming derP__t
 
-    derP_ = []
+    # if rng+: P__ is last P__, top_derP__ is last derP__, accumulate with new derP__
+    # if der+: P__ is last derP__, form new derP__
+    derP__ = []  # derivative tuples of P__, which is lower derivation derP__ in recursion
+
     for lower_y, P_ in enumerate(reversed(P__), start=0):  # scan bottom-up
-        for upper_y, _P_ in enumerate(reversed(P__[:-(lower_y+1)]), start=lower_y+1):
+        for upper_y, _P_ in enumerate(reversed(P__[:-(lower_y+1)]), start=lower_y+1):  # for rng+ only?
+            derP_ = []
             for P in P_:  # lower row
-                for _P in _P_: # upper row
+                for _P in _P_:  # upper row
                     # test for x overlap between P and _P in 8 directions, all Ps here are positive
                     if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):
-                        # if P was not compared yet:
-                        if not [1 for derP in P.upconnect_ if _P is derP._P]:
-                            # pseudo, we need to get existing derP and _derP here:
-                            derP = comp_P(_P, P)  # form vertical derivatives of P.layer0 params
-                            if fsub:
-                                _derP = _P.der_P
-                                # rng+ fork:
-                                if rng > 1 and _derP.m > ave_mP:
-                                    start = 0
-                                    for _layer, layer in zip(_derP.param_layers[1:-1], derP.param_layers[1:-1]):
-                                        mlayer, der_layer = comp_layer(_layer, layer)
-                                        accum_layer(derP.param_layers[-1], der_layer, start)
-                                        start += len(der_layer)
-                                        _derP.m += mlayer
-                                        if _derP.m < ave_mP:
-                                            break
-                                # der+ fork:
-                                elif _derP.d > ave_dP:
-                                    new_layer = []
-                                    for _layer, layer in zip(_derP.param_layers[1:], derP.param_layers[1:]):
-                                        mlayer, der_layer = comp_layer(_layer, layer)
-                                        new_layer += [der_layer]  # append
-                                        _derP.m += mlayer
-                                        if _derP.m < ave_mP:
-                                            break
-                                    if new_layer:
-                                        _derP.param_layers += new_layer; derP.param_layers += new_layer  # layer0 remains in P
 
-                            derP_.append(derP)  # per blob, to init form_PP?
-                            P.upconnect_.append(derP)  # per P, eval in form_PP
-                            _P.downconnect_cnt += 1
+                        if fsub: derP = comp_layer(_P.params, P.params)  # form higher-layer derivatives
+                        else:    derP = comp_P(_P, P)  # form vertical derivatives of layer0 params
+
+                        if not P.downconnect_cnt:  # initial row per root PP, then follow upconnect_
+                            derP_.append(derP)
+                        P.upconnect_.append(derP)  # per P for form_PP
+                        _P.downconnect_cnt += 1
+
                     elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
                         break
+            if derP_: derP__ += [derP_]  # per blob or PP
+
             if upper_y - lower_y >= rng:  # if range > vertical rng, break and loop next lower P
                 break
-    return derP_
+    if rng > 1:
+        derP__ = top_derP__ + derP__ # pseudocode, accumulate instead
 
+    return derP__
+'''
+                # recursive upscan:
+                        for derP in P.upconnect_:  # from previously matched _Ps, if any
+                            for _derP in derP.upconnect_:  # from previously matched derPs, if any
+                                    if rng > 1 and derP.m   > ave_mP:  # rng+
+                                        start = 0
+                                        for _layer, layer in zip(_derP.param_layers[1:-1], derP.param_layers[1:-1]):
+                                            mlayer, der_layer = comp_layer(_layer, layer)
+                                            accum_layer(derP.param_layers[-1], der_layer, start)
+                                            start += len(der_layer)
+                                            derP.m += mlayer
+                                            if derP.m < ave_mP:
+                                                break
+                                    elif derP.d > ave_dP:  # der+
+                                        new_layer = []
+                                        for _layer, layer in zip(_derP.param_layers[1:], derP.param_layers[1:]):  # skip root layer params
+                                            mlayer, der_layer = comp_layer(_layer, layer)
+                                            new_layer += [der_layer]  # append
+                                            derP.m += mlayer
+                                            if derP.m < ave_mP:
+                                                break
+                                        if new_layer:
+                                            _derP.param_layers += new_layer; derP.param_layers += new_layer  # layer0 remains in P
+                            out_derP_.append(_derP)  # per blob, to init form_PP?
+                            P.upconnect_.append(_derP)  # per P, eval in form_PP
+                            _P.downconnect_cnt += 1
+    '''

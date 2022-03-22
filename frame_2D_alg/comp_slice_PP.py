@@ -75,25 +75,29 @@ class CP(ClusterStructure):
 
 class CderP(ClusterStructure):  # dert per CP param, please revise
 
-    d = int
-    m = int
     L = int
     x0 = int
-    params = list  # param layer
-    # each call to slice_level_root compares all param_layers' params: i_, and adds a new param_layer: (m,d) per i
-    # layer is flat but decoded by mapping (m,d)s to params in all lower layers
+    y = int
+    dP = int
+    mP = int
+    params = list  # param layer, a call to comp_P_root compares last layer params and adds layer: m,d per input param
+    # layer is flat but decoded by mapping each m,d to lower-layer param
     # lower params are re-compared because they are summed in recursion / composition, so their value is different
-    P = object   # lower comparand
+    P = object  # lower comparand
     _P = object  # higher comparand
     PP = object  # FPP if flip_val, contains this derP
-    # from comp_dx
+    # higher derivatives
+    Rdn = int
+    upconnect_ = list
+    downconnect_cnt = int
+   # from comp_dx
     fdx = NoneType
     distance = int  # d_ave_x
 
 class CPP(CP, CderP):  # derP params are inherited from P
 
-    D = int  # summed derP.d
-    M = int  # summed derP.m
+    D = int  # summed derP.dP
+    M = int  # summed derP.mP
     A = int  # summed from P.L s
     sign = bool
     rng = lambda: 1  # rng starts with 1
@@ -178,12 +182,13 @@ def comp_P_root(P__, top_derP__, rng, fsub):  # vertically compares y-adjacent a
     _P_ = P__[0]  # upper row
 
     for P_ in P__[1:]:
+        derP_ = []  # per lower row
         for P in P_:  # lower row
             for _P in _P_:  # upper row, scan only one
                 # test for x overlap between P and _P in 8 directions, all Ps here are positive
                 if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):
-                    derP_ = []
-                    if fsub: derP = comp_layer(_P.params, P.params)  # form higher-layer derivatives
+
+                    if fsub: derP = comp_layer(_P, P)  # form higher-layer derivatives
                     else:    derP = comp_P(_P, P)  # form vertical derivatives of layer0 params
 
                     if not P.downconnect_cnt:  # initial row per root PP, then follow upconnect_
@@ -194,73 +199,21 @@ def comp_P_root(P__, top_derP__, rng, fsub):  # vertically compares y-adjacent a
                 elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
                     break
         if derP_: derP__ += [derP_]  # rows in blob or PP
-
-        # please check, probably mixed-up uppr and lower rows:
         _P_ = P_
 
-    if rng > 1: derP__ = top_derP__ + derP__  # pseudocode, accumulate instead
-
-    return derP__
-
-def comp_P_root_old(P__, top_derP__, rng, fsub):  # vertically compares y-adjacent and x-overlapping blob slices, forming derP__t
-
-    # if rng+: P__ is last P__, top_derP__ is last derP__, accumulate with new derP__
-    # if der+: P__ is last derP__, form new derP__
-    derP__ = []  # derivative tuples of P__, which is lower derivation derP__ in recursion
-
-    for lower_y, P_ in enumerate(reversed(P__), start=0):  # scan bottom-up
-        for upper_y, _P_ in enumerate(reversed(P__[:-(lower_y+1)]), start=lower_y+1):  # for rng+ only?
-            derP_ = []
-            for P in P_:  # lower row
-                for _P in _P_:  # upper row
-                    # test for x overlap between P and _P in 8 directions, all Ps here are positive
-                    if (P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0):
-
-                        if fsub: derP = comp_layer(_P.params, P.params)  # form higher-layer derivatives
-                        else:    derP = comp_P(_P, P)  # form vertical derivatives of layer0 params
-
-                        if not P.downconnect_cnt:  # initial row per root PP, then follow upconnect_
-                            derP_.append(derP)
-                        P.upconnect_.append(derP)  # per P for form_PP
-                        _P.downconnect_cnt += 1
-
-                    elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
-                        break
-            if derP_: derP__ += [derP_]  # per blob or PP
-
-            if upper_y - lower_y >= rng:  # if range > vertical rng, break and loop next lower P
-                break
     if rng > 1:
-        derP__ = top_derP__ + derP__ # pseudocode, accumulate instead
+        for derP_ in derP__:
+            for top_derP_ in top_derP__:
+                if derP_[0].P.P.y == top_derP_[0].P.y:  # check for same row
+                    for derP in derP_:
+                        for top_derP in top_derP_:
+                            if derP.P is top_derP:  # check for same derP
+                                accum_layer(derP.params, top_derP.params, start=0)  # accumulate derP from top_derP
+                                break
+                    break
 
     return derP__
-'''
-                # recursive upscan:
-                        for derP in P.upconnect_:  # from previously matched _Ps, if any
-                            for _derP in derP.upconnect_:  # from previously matched derPs, if any
-                                    if rng > 1 and derP.m   > ave_mP:  # rng+
-                                        start = 0
-                                        for _layer, layer in zip(_derP.param_layers[1:-1], derP.param_layers[1:-1]):
-                                            mlayer, der_layer = comp_layer(_layer, layer)
-                                            accum_layer(derP.param_layers[-1], der_layer, start)
-                                            start += len(der_layer)
-                                            derP.m += mlayer
-                                            if derP.m < ave_mP:
-                                                break
-                                    elif derP.d > ave_dP:  # der+
-                                        new_layer = []
-                                        for _layer, layer in zip(_derP.param_layers[1:], derP.param_layers[1:]):  # skip root layer params
-                                            mlayer, der_layer = comp_layer(_layer, layer)
-                                            new_layer += [der_layer]  # append
-                                            derP.m += mlayer
-                                            if derP.m < ave_mP:
-                                                break
-                                        if new_layer:
-                                            _derP.param_layers += new_layer; derP.param_layers += new_layer  # layer0 remains in P
-                            out_derP_.append(_derP)  # per blob, to init form_PP?
-                            P.upconnect_.append(_derP)  # per P, eval in form_PP
-                            _P.downconnect_cnt += 1
-    '''
+
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect, conditional ders from norm and DIV comp
 
@@ -307,7 +260,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect
 
     params = [dx, mx, dL, mL, dI, mI, dG, mG, dGa, mGa, dM, mM, dMa, mMa, dangle, mangle, daangle, maangle]
     # or summable params only, all Gs are computed at termination?
-    derP = CderP(x0=_P.x0, L = _P.L, m=mP, d=dP, params=params, P=P, _P=_P)
+    derP = CderP(x0=_P.x0, L=_P.L, y=_P.y,  m=mP, d=dP, params=params, P=P, _P=_P)
 
     return derP
 
@@ -325,69 +278,89 @@ def form_PP_(derP__):  # form vertically contiguous patterns of patterns by derP
                     if fPd: sign = derP.d > ave_dP * rdn
                     else:   sign = derP.m > ave_mP * rdn
                     PP = CPP(sign=sign)
-                    accum_PP(PP, derP)  # accumulate derP into PP
+                    ys = [derP.P.y]  # local derP.y
+                    accum_PP(PP, derP, ys)  # accumulate derP into PP
                     PP_.append(PP)  # initialized with derP.P.downconnect_cnt = 0
                     if derP._P.upconnect_:
-                        upconnect_2_PP_(derP, PP_, fPd)  # form PPs across _P upconnects
+                        upconnect_2_PP_(derP, PP_, ys, fPd)  # form PPs across _P upconnects
         PP_t.append(PP_)
 
     return PP_t  # PPm_, PPd_
 
-def upconnect_2_PP_(iderP, PP_, fPd):
+def upconnect_2_PP_(iderP, PP_, iys, fPd):
     '''
     compare sign of lower-layer iderP to the sign of its upconnects to form contiguous same-sign PPs
     '''
     confirmed_upconnect_ = []
 
     for derP in iderP._P.upconnect_:  # potential upconnects from previous call
-        if derP not in iderP.PP.derP_:  # this may occur after Pp merging
+        derP__ = [derP for derP_ in iderP.PP.derP__ for derP in derP_]
+        if derP not in derP__:  # this may occur after Pp merging
             rdn = derP.P.Rdn + len(derP.P.upconnect_)
             if fPd: sign = derP.d > ave_dP * rdn
             else: sign = derP.m > ave_mP * rdn
-
+            ys = iys
             if iderP.PP.sign == sign:  # upconnect is same-sign
                 # or if match only, no neg PPs?
                 if isinstance(derP.PP, CPP) and (derP.PP is not iderP.PP):  # upconnect has PP, merge it
-                    merge_PP(iderP.PP, derP.PP, PP_)
+                    merge_PP(iderP.PP, derP.PP, PP_, iys)
                 else:  # accumulate derP in current PP
-                    accum_PP(iderP.PP, derP)
+                    accum_PP(iderP.PP, derP, iys)
                     confirmed_upconnect_.append(derP)
             else:  # sign changed
                 if not isinstance(derP.PP, CPP):  # derP is root derP unless it already has FPP/PP
                     PP = CPP(sign=sign)  # param layer will be accumulated in accum_PP anyway
                     PP_.append(PP)  # pack every new PP initialized with derP.P with 0 downconnect count
-                    accum_PP(PP, derP)
+                    ys = [derP.P.y]
+                    accum_PP(PP, derP, ys)
                     derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
                 # add connectivity between PPs
                 iderP.PP.upconnect_PP_.append(derP.PP) # add new initialized PP as upconnect of current PP
                 derP.PP.downconnect_cnt_PP += 1  # add downconnect count to newly initialized PP
 
             if derP._P.upconnect_:
-                upconnect_2_PP_(derP, PP_, fPd)  # recursive compare sign of next-layer upconnects
+                upconnect_2_PP_(derP, PP_, ys, fPd)  # recursive compare sign of next-layer upconnects
 
     iderP._P.upconnect_ = confirmed_upconnect_
 
 
-def merge_PP(_PP, PP, PP_):  # merge PP into _PP
+def merge_PP(_PP, PP, PP_, ys):  # merge PP into _PP
 
-    for derP in PP.derP_:
-        if derP not in _PP.derP_:
-            accum_PP(_PP, derP)  # accumulate params
+    _derP__ = [derP for derP_ in _PP.derP__ for derP in derP_]
+    for derP_ in PP.derP__:
+        for derP in derP_:
+            if derP not in _derP__:
+                accum_PP(_PP, derP, ys)  # accumulate params
     _PP.Rdn += PP.Rdn
     if PP in PP_:
         PP_.remove(PP)  # remove merged PP
 
-def accum_PP(PP, derP):  # accumulate params in PP
+def accum_PP(PP, derP, ys):  # accumulate params in PP
 
-    if not PP.param_layers:  # if param layer is empty, copy over the derP's param layers
-        PP.param_layers = derP.params.copy()
+    if not PP.params:  # if param layer is empty, copy over the derP's param layers
+        PP.params = derP.params.copy()
     else:
-        for _param_layers, param_layer in zip(PP.param_layers, derP.param_layers):
-            accum_layer(_param_layers, param_layer, start=0)
+        accum_layer(PP.params, derP.params, start=0)
 
     PP.Rdn += derP.P.Rdn  # add rdn, add derP._P.Rdn too?
     PP.L += 1
-    PP.derP_.append(derP)  # add derP to Pp
+    # form derP__:
+    if not PP.derP__:
+        PP.derP__.append([derP])  # add derP to Pp
+    else:
+        existing_ys = [derP_[0].P.y for derP_ in PP.derP__]  # get a list of existing derP y locations
+        if derP.P.y in existing_ys:  # current derP
+            PP.derP__[existing_ys.index(derP.P.y)].append(derP)
+        elif derP.P.y > existing_ys[-1]:  # derP.y > largest y in ys
+            PP.derP__.append([derP])
+            ys.append(derP.P.y)
+        elif derP.P.y < existing_ys[0]:  # derP.y < smallest y in ys
+            PP.derP__.insert(0, [derP])
+            ys.insert(0, derP.P.y)
+        elif derP.P.y > existing_ys[0] and derP.P.y < existing_ys[1] :  # derP.y in between largest and smallest value
+            PP.derP__.insert(derP.P.y-existing_ys[0], [derP])
+            ys.insert(derP.P.y-existing_ys[0],derP.P.y)
+
     derP.PP = PP           # update reference
 
 def accum_layer(top_layer, der_layer, start):
@@ -418,34 +391,16 @@ def sub_recursion(root_sublayers, PP_, rng):  # compares param_layers of derPs i
                     # both P and PP may be recursively formed higher-derivation derP and derPP, etc.
 
         if rng > 1: PP_V = PP.M - ave_mPP * PP.Rdn; min_L = rng * 2
-        else:       PP_V = PP.D - ave_dPP * PP.Rdn; min_L = len(PP.param_layers)  # need 3 Ps to compute layer2, etc.
+        else:       PP_V = PP.D - ave_dPP * PP.Rdn; min_L = 3  # need 3 Ps to compute layer2, etc.
         if PP_V > 0 and PP.L > min_L:
-            # form top_derP__ and P__:
-            # This should be done in form_PP, it's not a separate process?
-            ys = []
-            P_ = []
-            for derP in PP.derP_:
-                P_ += [derP.P, derP._P]
-                ys+= [derP.P.y, derP._P.y]
-            ys = list(np.unique(ys))
-            P__ = [[] for _ in range(len(ys))]
-            top_derP__ = [[] for _ in range(len(ys))]
-            for P, derP in zip(P_, PP.derP_):
-                y = ys.index(P.y)
-                if P not in P__[y]:  # prevent same P, it is possible with multiple upconnects
-                    P.downconnect_cnt = 0  # reset downconnect count
-                    P.upconnect_ = []
-                    P__[y].append(P)  # pack P into rows
-                if derP not in top_derP__:
-                    top_derP__[y].append(derP)
 
-            sub_derP_ = comp_P_root( P__, top_derP__, rng, fsub=1)  # scan_P_, comp_P layer0;  splice PPs across dir_blobs?
+            sub_derP_ = comp_P_root(PP.derP__, PP.derP__, rng, fsub=1)  # scan_P_, comp_P layer0;  splice PPs across dir_blobs?
             (sub_PPm_, sub_PPd_) = form_PP_(sub_derP_)  # each PP is a stack of (P, derP)s from comp_P
 
             PP.sublayers = [(sub_PPm_, sub_PPm_)]
 
-            if len(sub_PPm_)>1: sub_recursion(PP.sublayers, sub_PPm_, rng+1)  # rng+ comp_P in PPms, -> param_layer, form sub_PPs
-            if len(sub_PPd_)>1: sub_recursion(PP.sublayers, sub_PPd_, rng=1)  # der+ comp_P in PPds, -> param_layer, form sub_PPs
+            if len(sub_PPm_)>1: sub_recursion(PP.sublayers, sub_PPm_, rng+1)  # rng+ comp_P in PPms, form param_layer, sub_PPs
+            if len(sub_PPd_)>1: sub_recursion(PP.sublayers, sub_PPd_, rng=1)  # der+ comp_P in PPds, form param_layer, sub_PPs
 
             if PP.sublayers:  # pack added sublayers:
                 new_comb_sublayers = []
@@ -530,11 +485,12 @@ def comp_layer(_derP, derP):
     nparams = len(_derP.params)
     der_level = []
     hyps = []
-    mP = 0
-    dP = 0  # not useful?
-    for i, (_param, param) in enumerate(zip(_derP.params, derP.params)):
+    mP = 0  # for rng+ eval
+    dP = 0  # for der+ eval
 
-        param_type = int(i/ (2 ** (nparams-1)))  # param type, range from 0 - 8 for 9 compared params
+    for i, (_param, param) in enumerate(zip(_derP.params, derP.params)):
+        # get param type:
+        param_type = int(i/ (2 ** (nparams-1)))  # for 9 compared params, but there are more in higher layers?
 
         if param_type == 0:  # x
             _x = param; x = param
@@ -621,4 +577,4 @@ def comp_layer(_derP, derP):
                 der_level.append(dmaangle); der_level.append(mmaangle)
                 dP += dmaangle; mP += mmaangle
 
-    return CderP( x0=_derP.x0, L = _derP.L, m=mP, d=dP, params=der_level, P=derP, _P=_derP)
+    return CderP( x0=_derP.x0, L=_derP.L, y=_derP.y, m=mP, d=dP, params=der_level, P=derP, _P=_derP)
