@@ -13,9 +13,9 @@
     Main functions:
     - comp_pixel:
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
-    The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
+    The output is dert__: 2D array of pixel-mapped derts.
     - frame_blobs_root:
-    Segmentation of image dert__ into blobs: contiguous areas of positive | negative deviation of gradient per kernel.
+    Flood-fill segmentation of image dert__ into blobs: contiguous areas of positive | negative deviation of gradient per kernel.
     Each blob is parameterized with summed params of constituent derts, derived by pixel cross-comparison (cross-correlation).
     These params represent predictive value per pixel, so they are also predictive on a blob level,
     thus should be cross-compared between blobs on the next level of search.
@@ -92,6 +92,16 @@ class CBlob(ClusterStructure):
     root_bblob = object
     sublevels = list  # input levels
 
+'''
+    Conventions:
+    postfix 't' denotes tuple, multiple ts is a nested tuple
+    postfix '_' denotes array name, vs. same-name elements
+    prefix '_'  denotes prior of two same-name variables
+    prefix 'f'  denotes flag
+    1-3 letter names are normally scalars, except for P and similar classes, 
+    capitalized variables are normally summed small-case variables,
+    longer names are normally classes
+'''
 
 def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=False):
 
@@ -112,7 +122,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
         from intra_blob import intra_blob_root
 
         frame.rsublayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
-        # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks:
+        # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
     '''
     if use_c:  # old version, no longer updated:
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
@@ -275,7 +285,7 @@ if __name__ == "__main__":
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-e', '--extra', help='run frame_recursive after frame_blobs', type=int, default=0)
     args = argument_parser.parse_args()
     image = imread(args.image)
@@ -284,7 +294,7 @@ if __name__ == "__main__":
     render = args.render
 
     start_time = time()
-    if args.extra:
+    if args.extra:  # not functional yet
         from frame_recursive import frame_recursive
         frame = frame_recursive(image, intra, render, verbose)
     else:
