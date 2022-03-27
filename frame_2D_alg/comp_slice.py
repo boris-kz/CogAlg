@@ -97,17 +97,12 @@ class CderP(ClusterStructure):  # tuple of derivatives in P upconnect_ or downco
 
 class CPP(CP, CderP):  # derP params are inherited from P
 
-    D = int  # summed derP.dP
-    M = int  # summed derP.mP
-    params = list  # derivation layer += derP params
-    A = int  # summed from P.Ls, also x, y?
-    # separate P params, lower-der params, or that's in lower PPs?
+    params = list  # derivation layer += derP params, param L is A
+    # PP.L is Ly, also x, y?
     sign = bool
     rng = lambda: 1  # rng starts with 1
     upconnect_ = list
-    upconnect_PP_ = list
     downconnect_cnt = int
-    downconnect_cnt_PP = int
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
     box = list  # for visualization only, original box before flipping
@@ -136,7 +131,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # agglo_recursion(dir_blob)  # higher composition comp_PP in blob -> derPPs, form PPP., appends dir_blob.levels
 
 
-def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth-edge (high G, low Ga) blobs
+def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
     mask__ = blob.mask__  # same as positive sign here
     dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
@@ -180,18 +175,17 @@ def comp_P_root(P__, rng):  # vertically compares y-adjacent and x-overlapping P
     # if der+: P__ is last-call derP__, derP__=[], form new derP__
     # if rng+: P__ is last-call P__, accumulate derP__ with new_derP__
     derP__ = []  # tuples of derivatives from P__, lower derP__ in recursion
-    _P_ = P__[0]  # upper row
-
-    for P_ in P__:  # reset connects and PP reference for all new layer inputs
+    for P_ in P__:
         for P in P_:
-            P.upconnect_ = []; P.downconnect_cnt = 0
-            while isinstance(P, CderP):
-                P.PP = None; P.P.upconnect_ = []; P._P.upconnect_ = []; P.P.downconnect_cnt = 0; P._P.downconnect_cnt = 0
-                P = P.P
+            P.upconnect_ = []; P.downconnect_cnt = 0  # reset connects and PP refs in the layer only
+            if isinstance(P, CderP):
+                P.PP = None
+    _P_ = P__[0]  # upper row, top-down
+
     for P_ in P__[1:]:
         derP_ = []
         for P in P_:  # lower row
-            if rng>1: cP = P.P  # compared P is lower-derivation
+            if rng>1: cP = P.P  # compared P is lower derivation
             else:     cP = P    # compared P is top derivation
             for _P in _P_:  # upper row
                 if rng>1: _cP = _P.P
@@ -285,18 +279,19 @@ def form_PP_(derP__):  # form vertically contiguous patterns of patterns by derP
                     if fPd: sign = derP.dP > ave_dP * rdn
                     else:   sign = derP.mP > ave_mP * rdn
                     PP = CPP(sign=sign)
-                    accum_PP(PP, derP)  # accumulate derP into PP
-                    PP_.append(PP)  # initialized with derP.P.downconnect_cnt = 0
+                    # accumulate derP into PP, derP.P.downconnect_cnt = 0:
+                    accum_PP(PP, derP)
+                    PP_.append(PP)
                     if derP._P.upconnect_:
-                        upconnect_2_PP_(derP, PP_, fPd)  # form PPs across _P upconnects
+                        upconnect_2_PP_(derP, PP_, fPd)  # form PPs over _P upconnects
         PP_t.append(PP_)
     return PP_t  # PPm_, PPd_
 
 
 def upconnect_2_PP_(iderP, PP_, fPd):  # compare lower-layer iderP sign to upconnects sign, form same-contiguous-sign PPs
-
+    # the below is not reviewed:
     matching_upconnect_ = []
-    for derP in iderP._P.upconnect_:  # potential upconnects from previous call
+    for derP in iderP._P.upconnect_:  # get lower-der upconnects?
         derP__ = [pri_derP for derP_ in iderP.PP.derP__ for pri_derP in derP_]
 
         if derP not in derP__:  # this may occur after Pp merging
@@ -314,9 +309,9 @@ def upconnect_2_PP_(iderP, PP_, fPd):  # compare lower-layer iderP sign to upcon
             else:  # sign changed
                 if not isinstance(derP.PP, CPP):  # derP is root derP unless it already has FPP/PP
                     PP = CPP(sign=sign)  # param layer will be accumulated in accum_PP anyway
-                    PP_.append(PP)  # pack every new PP initialized with derP.P with 0 downconnect count
+                    PP_.append(PP)
                     accum_PP(PP, derP)
-                    derP.P.downconnect_cnt = 0  # reset downconnect count for root derP
+                    derP.P.downconnect_cnt = 0
                 # add connectivity between PPs
                 iderP.PP.upconnect_PP_.append(derP.PP) # add new initialized PP as upconnect of current PP
                 derP.PP.downconnect_cnt_PP += 1  # add downconnect count to newly initialized PP
@@ -339,30 +334,26 @@ def merge_PP(_PP, PP, PP_):  # merge PP into _PP
         PP_.remove(PP)  # remove merged PP
 
 def accum_PP(PP, derP):  # accumulate params in PP
-    
-    ''' this is done in accum_layer anyway?:
-    if not PP.params:  # if param layer is empty, copy over the derP's param layers
-        PP.params = derP.params.copy()
-    else:
-    '''
-    accum_layer(PP.params, derP.params)
 
-    PP.Rdn += derP.P.Rdn  # add rdn, add derP._P.Rdn too?
-    PP.L += 1
-    if not PP.derP__:  # same as above, just PP.derP__.append([derP]) regardless?
+    if not PP.params: PP.params = derP.params.copy()
+    else:             accum_layer(PP.params, derP.params)
+    # no derP.Rdn += P.Rdn:
+    PP.Rdn += derP.P.Rdn
+    PP.L += 1  # Ly
+    if not PP.derP__:
         PP.derP__.append([derP])
     else:
-        existing_ys = [derP_[0].P.y for derP_ in PP.derP__]  # get a list of existing derP y locations
-        if derP.P.y in existing_ys:  # current derP
-            PP.derP__[existing_ys.index(derP.P.y)].append(derP)
-        elif derP.P.y > existing_ys[-1]:  # derP.y > largest y in ys
+        current_ys = [derP_[0].P.y for derP_ in PP.derP__]  # list of current-layer derP rows
+        if derP.P.y in current_ys:
+            PP.derP__[current_ys.index(derP.P.y)].append(derP)  # append derP row
+        elif derP.P.y > current_ys[-1]:  # derP.y > largest y in ys
             PP.derP__.append([derP])
-        elif derP.P.y < existing_ys[0]:  # derP.y < smallest y in ys
+        elif derP.P.y < current_ys[0]:  # derP.y < smallest y in ys
             PP.derP__.insert(0, [derP])
-        elif derP.P.y > existing_ys[0] and derP.P.y < existing_ys[-1] :  # derP.y in between largest and smallest value
-            PP.derP__.insert(derP.P.y-existing_ys[0], [derP])
+        elif derP.P.y > current_ys[0] and derP.P.y < current_ys[-1] :  # derP.y in between largest and smallest value
+            PP.derP__.insert(derP.P.y-current_ys[0], [derP])
 
-    derP.PP = PP           # update reference
+    derP.PP = PP
 
 def accum_layer(top_layer, der_layer):
 
@@ -399,7 +390,7 @@ def sub_recursion(root_sublayers, PP_, rng):  # compares param_layers of derPs i
             sub_PPm_, sub_PPd_ = form_PP_(sub_derP__)  # each PP is a stack of (P, derP)s from comp_P
 
             PP.sublayers = [(sub_PPm_, sub_PPm_)]
-
+            # why if len(sub_PP_)>1?
             if len(sub_PPm_)>1: sub_recursion(PP.sublayers, sub_PPm_, rng+1)  # rng+ comp_P in PPms, form param_layer, sub_PPs
             if len(sub_PPd_)>1: sub_recursion(PP.sublayers, sub_PPd_, rng=1)  # der+ comp_P in PPds, form param_layer, sub_PPs
 
@@ -432,8 +423,7 @@ def comp_Plevel(PP_):
     for PP in PP_:
         for _PP in PP.upconnect_PP_:
             # upconnect is PP
-            if not [1 for derPP in PP.upconnect_ if PP is derPP.P]:
-
+            if not [1 for derPP in PP.upconnect_ if PP is derPP.P]:  # why?
                 derPP = comp_PP(_PP, PP)
                 derPP_.append(derPP)
                 PP.upconnect_.append(derPP)
@@ -484,7 +474,7 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
 def comp_layer(_derP, derP):
 
     nparams = len(_derP.params)
-    der_level = []
+    derivatives = []
     hyps = []
     mP = 0  # for rng+ eval
     dP = 0  # for der+ eval
@@ -496,47 +486,47 @@ def comp_layer(_derP, derP):
         if param_type == 0:  # x
             _x = param; x = param
             dx = _x - x; mx = ave_dx - abs(dx)
-            der_level.append(dx); der_level.append(mx)
+            derivatives.append(dx); derivatives.append(mx)
             hyps.append(np.hypot(dx, 1))
             dP += dx; mP += mx
 
         elif param_type == 1:  # I
             _I = _param; I = param
             dI = _I - I; mI = ave_I - abs(dI)
-            der_level.append(dI); der_level.append(mI)
+            derivatives.append(dI); derivatives.append(mI)
             dP += dI; mP += mI
 
         elif param_type == 2:  # G
             hyp = hyps[i%param_type]
             _G = _param; G = param
             dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-            der_level.append(dG); der_level.append(mG)
+            derivatives.append(dG); derivatives.append(mG)
             dP += dG; mP += mG
 
         elif param_type == 3:  # Ga
             _Ga = _param; Ga = param
             dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
-            der_level.append(dGa); der_level.append(mGa)
+            derivatives.append(dGa); derivatives.append(mGa)
             dP += dGa; mP += mGa
 
         elif param_type == 4:  # M
             hyp = hyps[i%param_type]
             _M = _param; M = param
             dM = _M - M/hyp;  mM = min(_M, M)
-            der_level.append(dM); der_level.append(mM)
+            derivatives.append(dM); derivatives.append(mM)
             dP += dM; mP += mM
 
         elif param_type == 5:  # Ma
             _Ma = _param; Ma = param
             dMa = _Ma - Ma;  mMa = min(_Ma, Ma)
-            der_level.append(dMa); der_level.append(mMa)
+            derivatives.append(dMa); derivatives.append(mMa)
             dP += dMa; mP += mMa
 
         elif param_type == 6:  # L
             hyp = hyps[i%param_type]
             _L = _param; L = param
             dL = _L - L/hyp;  mL = min(_L, L)
-            der_level.append(dL); der_level.append(mL)
+            derivatives.append(dL); derivatives.append(mL)
             dP += dL; mP += mL
 
         elif param_type == 7:  # angle, (sin_da, cos_da)
@@ -546,12 +536,12 @@ def comp_layer(_derP, derP):
                  cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
                  dangle = (sin_dda, cos_dda)  # da
                  mangle = ave_dangle - abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match
-                 der_level.append(dangle); der_level.append(mangle)
+                 derivatives.append(dangle); derivatives.append(mangle)
                  dP += np.arctan2(sin_dda, cos_dda); mP += mangle
             else: # m or scalar
                 _mangle = _param; mangle = param
                 dmangle = _mangle - mangle;  mmangle = min(_mangle, mangle)
-                der_level.append(dmangle); der_level.append(mmangle)
+                derivatives.append(dmangle); derivatives.append(mmangle)
                 dP += dmangle; mP += mmangle
 
         elif param_type == 8:  # dangle   (sin_da0, cos_da0, sin_da1, cos_da1)
@@ -569,17 +559,17 @@ def comp_layer(_derP, derP):
                 gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
                 gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
                 maangle = ave_dangle - abs(np.arctan2(gay, gax))  # match between aangles, probably wrong
-                der_level.append(daangle); der_level.append(maangle)
+                derivatives.append(daangle); derivatives.append(maangle)
                 dP += daangle; mP += maangle
 
             else:  # m or scalar
                 _maangle = _param; maangle = param
                 dmaangle = _maangle - maangle;  mmaangle = min(_maangle, maangle)
-                der_level.append(dmaangle); der_level.append(mmaangle)
+                derivatives.append(dmaangle); derivatives.append(mmaangle)
                 dP += dmaangle; mP += mmaangle
 
     x0 = min(_derP.x0, derP.x0)
     xn = max(_derP.x0+_derP.L, derP.x0+derP.L)
     L = xn-x0
 
-    return CderP(x0=x0, L=L, y=_derP.y, m=mP, d=dP, params=der_level, P=derP, _P=_derP)
+    return CderP(x0=x0, L=L, y=_derP.y, m=mP, d=dP, params=derivatives, P=derP, _P=_derP)
