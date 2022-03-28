@@ -12,7 +12,7 @@ from frame_blobs import assign_adjacents, flood_fill, CBlob
 from intra_comp import comp_r, comp_a
 from draw_frame_blobs import visualize_blobs
 from itertools import zip_longest
-from comp_slice_ import *
+from comp_slice import *
 from segment_by_direction import segment_by_direction
 
 # filters, All *= rdn:
