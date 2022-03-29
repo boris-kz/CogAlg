@@ -37,14 +37,14 @@ class Cdert(ClusterStructure):
     p = int  # accumulated in rng
     d = int  # accumulated in rng
     m = int  # distinct in deriv_comp only
-    mrdn = lambda: 1.0  # -> Rdn: rdn counter per P
+    mrdn = int  # 1 if abs d is stronger than m, same as ~m_sign here
 
 class CP(ClusterStructure):
     L = int
     I = int
     D = int
     M = int  # summed ave - abs(d), different from D
-    Rdn = lambda: 1.0  # mrdn counter
+    Rdn = lambda: 1.0  # 1 + binary dert.mrdn cnt / len(dert_)
     x0 = int
     dert_ = list  # contains (i, p, d, m, mrdn)
     subset = list  # 1st sublayer' rdn, rng, xsub_pmdertt_, _xsub_pddertt_, sub_Ppm_, sub_Ppd_
@@ -84,7 +84,7 @@ def line_Ps_root(pixel_):  # Ps: patterns, converts frame_of_pixels to frame_of_
         d = i - _i  # accum in rng
         p = i + _i  # accum in rng
         m = ave - abs(d)  # for consistency with deriv_comp output, else redundant
-        mrdn = m + ave < abs(d)
+        mrdn = m < 0  # 1 if abs(d) is stronger than m, redundant here
         dert_.append( Cdert( i=i, p=p, d=d, m=m, mrdn=mrdn) )
         _i = i
 
@@ -147,8 +147,8 @@ def range_incr_P_(rootP, P_, rdn, rng):
                 d = dert.i - _i
                 rp = dert.p + _i  # intensity accumulated in rng
                 rd = dert.d + d  # difference accumulated in rng
-                rm = dert.m + ave - abs(d)  # m accumulated in rng
-                rmrdn = rm + ave < abs(rd)  # use Ave? for consistency with deriv_comp, else redundant
+                rm = ave*rng - abs(rd)  # m accumulated in rng
+                rmrdn = rm < 0
                 rdert_.append(Cdert(i=dert.i, p=rp, d=rd, m=rm, mrdn=rmrdn))
                 _i = dert.i
             sub_Pm_[:] = form_P_(P, rdert_, rdn, rng, fPd=False)  # cluster by rm sign
@@ -183,7 +183,7 @@ def deriv_incr_P_(rootP, P_, rdn, rng):
                 rd = d + _d
                 dd = d - _d
                 md = min(d, _d) - abs(dd / 2) - ave_min  # min_match because magnitude of derived vars corresponds to predictive value
-                dmrdn = md + ave < abs(dd)  # use Ave?
+                dmrdn = md < 0
                 ddert_.append(Cdert(i=dert.d, p=rd, d=dd, m=md, dmrdn=dmrdn))
                 _d = d
             sub_Pm_[:] = form_P_(P, ddert_, rdn, rng, fPd=False)  # cluster by mm sign
