@@ -69,7 +69,7 @@ Aqib Mumtaz and Ayesha Ali, $1400: audio interfacing for 1D alg, April-May
 
 2022: 
 
-Kok Wei Chee, $4160: lead developer, January-February
+Kok Wei Chee, $6080: lead developer, January-March
 
 
 
