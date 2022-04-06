@@ -28,8 +28,8 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 
     # deep_blobs = []  # for visualization
     spliced_layers = []
-    if fBa:  blob_ = root_blob.asublayers[0]
-    else:    blob_ = root_blob.rsublayers[0]
+    if fBa: blob_ = root_blob.asublayers[0]
+    else:   blob_ = root_blob.rsublayers[0]
 
     for blob in blob_:  # fork-specific blobs, print('Processing blob number ' + str(bcount))
 
@@ -40,6 +40,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
         if blob_height > 3 and blob_width > 3:  # min blob dimensions: Ly, Lx
             if root_blob.fBa:
                 # comp_slice fork in angle blobs
+                # add evaluate splice_blobs(root_blob), normally in frame_bblobs?
                 AveB = aveB * (blob.rdn+1)  # comp_slice is doubling the costs, likely higher, adjust per nsub_blobs?
                 if (AveB - blob.G) + (blob.G - AveB * pcoef) > 0:  # val_comp_slice_blob = dev_G + inv_dev_Ga
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1

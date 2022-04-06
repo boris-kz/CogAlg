@@ -45,6 +45,7 @@ ave_mP = 10
 ave_dP = 10
 ave_mPP = 10
 ave_dPP = 10
+ave_splice = 10
 
 param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]  # angle = Dy, Dx; aangle = sin_da0, cos_da0, sin_da1, cos_da1; recompute Gs for comparison?
 aves = [ave_dx, ave_I, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mP, ave_dP]
@@ -130,6 +131,44 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         dir_blob.levels = [[PPm_, PPd_]]  # 1st composition level, each PP_ may be multi-layer from sub_recursion
         agglo_recursion(dir_blob)  # higher-composition comp_PP in blob -> derPPs, form PPP., appends dir_blob.levels
+
+    splice_dir_blob_(blob.dir_blobs)
+
+# draft
+def splice_dir_blob_(dir_blobs):
+
+    for i, _dir_blob in enumerate(dir_blobs):
+        for fPd in 0, 1:
+            PP_ = _dir_blob.levels[0][fPd]
+
+            if fPd: PP_val = sum([PP.mP for PP in PP_])
+            else:   PP_val = sum([PP.dP for PP in PP_])
+
+            if PP_val - ave_splice > 0:  # high mPP pr dPP
+
+                _top_P_ = _dir_blob.P__[0]
+                _bottom_P_ = _dir_blob.P__[-1]
+
+                for j, dir_blob in enumerate(dir_blobs):
+                    if _dir_blob is not dir_blob:
+
+                        top_P_ = dir_blob.P__[0]
+                        bottom_P_ = dir_blob.P__[-1]
+
+                        # test y adjacency
+                        if (_top_P_[0].y-1 == bottom_P_[0].y) or (top_P_[0].y-1 == _bottom_P_[0].y):
+                            # tet x overlap
+                             _x0 = min([_P.x0 for _P_ in _dir_blob.P__ for _P in _P_])
+                             _xn = min([_P.x0+_P.L for _P_ in _dir_blob.P__ for _P in _P_])
+                             x0 = min([P.x0 for P_ in dir_blob.P__ for P in P_])
+                             xn = min([P.x0+_P.L for P_ in dir_blob.P__ for P in P_])
+                             if (x0 - 1 < _xn and xn + 1 > _x0) or  (_x0 - 1 < xn and _xn + 1 > x0) :
+                                 splice_dir_blobs(_dir_blob, dir_blob)  # splice dir_blob into _dir_blob
+                                 dir_blobs[j] = _dir_blob
+
+def splice_dir_blobs(_blob, blob):
+    # merge blob into _blob here
+    pass
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -460,6 +499,9 @@ def agglo_recursion(blob):  # compositional recursion per blob.Plevel. P, PP, PP
             derPP_ = comp_aggloP_root(PP_, rng=1)  # PP is generic for lower-level composition
             PPPm_, PPPd_ = form_PP_(derPP_, root_rdn=2)  # PPP is generic next-level composition
 
+            splice_PPs(PPPm_)
+            splice_PPs(PPPd_)
+
             PPP_t += [PPPm_, PPPd_]  # flat version
             if PPPm_:
                 sub_recursion([], PPPm_, rng=2)  # rng+
@@ -502,6 +544,10 @@ def comp_aggloP_root(PP_, rng):
 
     return derPP__
 
+
+def splice_PPs(PPP):
+    # merge select P pairs or triples
+    pass
 
 def comp_dx(P):  # cross-comp of dx s in P.dert_
 
@@ -625,3 +671,78 @@ def comp_layer(_derP, derP):
     L = xn-x0
 
     return CderP(x0=x0, L=L, y=_derP.y, mP=mP, dP=dP, params=derivatives, P=derP, _P=_derP)
+
+# old versions, not revised:
+
+def splice(P_, fPd):  # currently not used, replaced by compact() in line_PPs
+    '''
+    The criterion to re-evaluate separation is similarity of P-defining param: M/L for Pm, D/L for Pd, among the three Ps
+    If relative similarity > merge_ave: all three Ps are merged into one.
+    '''
+    splice_val_ = [splice_eval(__P, _P, P, fPd)  # compute splice values
+                   for __P, _P, P in zip(P_, P_[1:], P_[2:])]
+    sorted_splice_val_ = sorted(enumerate(splice_val_),
+                                key=lambda k: k[1],
+                                reverse=True)   # sort index by splice_val_
+    if sorted_splice_val_[0][1] <= ave_splice:  # exit recursion
+        return P_
+
+    folp_ = np.zeros(len(P_), bool)  # if True: P is included in another spliced triplet
+    spliced_P_ = []
+    for i, splice_val in sorted_splice_val_:  # loop through splice vals
+        if splice_val <= ave_splice:  # stop, following splice_vals will be even smaller
+            break
+        if folp_[i : i+3].any():  # skip if overlap
+            continue
+        folp_[i : i+3] = True     # splice_val > ave_splice: overlapping Ps folp=True
+        __P, _P, P = P_[i : i+3]  # triplet to splice
+        # merge _P and P into __P:
+        __P.accum_from(_P, excluded=['x0', 'ix0'])
+        __P.accum_from(P, excluded=['x0', 'ix0'])
+
+        if hasattr(__P, 'pdert_'):  # for splice_Pp_ in line_PPs
+            __P.pdert_ += _P.pdert_ + P.pdert_
+        else:
+            __P.dert_ += _P.dert_ + P.dert_
+        spliced_P_.append(__P)
+
+    # add remaining Ps into spliced_P
+    spliced_P_ += [P_[i] for i, folp in enumerate(folp_) if not folp]
+    spliced_P_.sort(key=lambda P: P.x0)  # back to original sequence
+
+    if len(spliced_P_) > 4:
+        splice(spliced_P_, fPd)
+
+    return spliced_P_
+
+def splice_eval(__P, _P, P, fPd):  # only for positive __P, P, negative _P triplets, needs a review
+    '''
+    relative continuity vs separation = abs(( M2/ ( M1+M3 )))
+    relative similarity = match (M1/L1, M3/L3) / miss (match (M1/L1, M2/L2) + match (M3/L3, M2/L2)) # both should be negative
+    or P2 is reinforced as contrast - weakened as distant -> same value, not merged?
+    splice P1, P3: by proj mean comp, ~ comp_param, ave / contrast P2
+    also distance / meanL, if 0: fractional distance = meanL / olp? reduces ave, not m?
+    '''
+    if fPd:
+        if _P.D==0: _P.D =.1  # prevents /0
+        rel_continuity = abs((__P.D + P.D) / _P.D)
+        __mean= __P.D/__P.L; _mean= _P.D/_P.L; mean= P.D/P.L
+    else:
+        if _P.M == 0: _P.M =.1  # prevents /0
+        rel_continuity = abs((__P.M + P.M) / _P.M)
+        __mean= __P.M/__P.L; _mean= _P.M/_P.L; mean= P.M/P.L
+
+    m13 = min(mean, __mean) - abs(mean-__mean)/2    # inverse match of P1, P3
+    m12 = min(_mean, __mean) - abs(_mean-__mean)/2  # inverse match of P1, P2, should be negative
+    m23 = min(_mean, mean) - abs(_mean- mean)/2     # inverse match of P2, P3, should be negative
+
+    miss = abs(m12 + m23) if not 0 else .1
+    rel_similarity = (m13 * rel_continuity) / miss  # * rel_continuity: relative value of m13 vs m12 and m23
+    # splice_value = rel_continuity * rel_similarity
+
+    return rel_similarity
+'''
+    rel_similarity is for der+ in pairs, should be mP computed by comp(P, _P),
+    rel_continuity is for rng+ in triplets: if P1.rng > P2.L or P3.rng > P2.L. We may add more complex evaluation later.
+'''
+
