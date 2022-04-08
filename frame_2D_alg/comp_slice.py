@@ -287,8 +287,9 @@ def form_PP_(iderP__, root_rdn):  # form vertically contiguous patterns of patte
                     # derP.rdn = fork rdn + rdn to stronger upconnects, forming overlapping PPs:
                     if fPd:
                         derP.rdn = (derP.mP > derP.dP) + sum([1 for upderP in derP.P.upconnect_ if upderP.dP >= derP.dP])
-                        sign = derP.dP >= ave_dP * derP.rdn
-                        # sign match within each param, between params: count, if match: dP+=dparam?
+                        sign = derP.dP >= ave_dP * derP.rdn  # or that's per PPd,
+                        # Pd is defined by Msign: sum of weighted sign matches per param,
+                        # then sum dparams in Pd across dparam sign?
                     else:
                         derP.rdn = (derP.dP >= derP.mP) + sum([1 for upderP in derP.P.upconnect_ if upderP.mP > derP.mP])
                         sign = derP.mP > ave_mP * derP.rdn
@@ -381,18 +382,23 @@ def accum_PP(PP, derP):  # accumulate params in PP
     PP.Rdn += derP.rdn
     PP.y = max(derP.y, PP.y)  # or pass local y arg instead of derP.y?
 
-    if not PP.derP__: PP.derP__.append([derP])
+    if not PP.derP__:
+        PP.derP__.append([derP])
+        PP.P__.append([derP.P])
     else:
         current_ys = [derP_[0].P.y for derP_ in PP.derP__]  # list of current-layer derP rows
         if derP.P.y in current_ys:
             PP.derP__[current_ys.index(derP.P.y)].append(derP)  # append derP row
+            PP.P__[current_ys.index(derP.P.y)].append(derP.P)  # append P row
         elif derP.P.y > current_ys[-1]:  # derP.y > largest y in ys
-            PP.derP__.append([derP])
+            PP.derP__.append([derP]); PP.P__.append([derP.P])
         elif derP.P.y < current_ys[0]:  # derP.y < smallest y in ys
-            PP.derP__.insert(0, [derP])
+            PP.derP__.insert(0, [derP]); PP.P__.insert(0, [derP.P])
         elif derP.P.y > current_ys[0] and derP.P.y < current_ys[-1] :  # derP.y in between largest and smallest value
             PP.derP__.insert(derP.P.y-current_ys[0], [derP])
+            PP.P__.insert(derP.P.y-current_ys[0], [derP.P])
 
+    PP.L = len(PP.derP__)  # PP.L is Ly
     derP.PP = PP
 
 
@@ -514,11 +520,10 @@ def comp_aggloP_root(PP_, rng):
 def splice_PPs(PPP_, frng):  # merge select PP pairs or triples
 
     for PPP in PPP_:
-        if len(PPP.P__)>2:  # at least 3 rows
-            # raise ValueError('a')
+        if frng and len(PPP.P__)>2:
+            # at least 3 rows for comp cross gap _PP
             for __PP_, _PP_, PP_ in zip(PPP.P__, PPP.P__[1:], PPP.P__[2:]):
                 __PP_tested, _PP_tested, PP_tested = [],[],[]
-
                 while __PP_:
                     __PP = __PP_.pop(0)
                     while _PP_:
@@ -527,36 +532,34 @@ def splice_PPs(PPP_, frng):  # merge select PP pairs or triples
                         while PP_:
                             if PP_tested: PP_ = PP_tested
                             PP = PP_.pop(0)
-                            if frng:
-                            # else: comp_layer(__PP.P_[-1], _PP.P_[1])
-                                  # if match: splice __PP, _PP
-                                max_rng = max(__PP.rng, PP.rng)  # both PPs should be positive
-                                if max_rng > _PP.L:
-                                    # PP.L is Ly, splice PP triplet:
-                                    add_derP_ = []
-                                    _P = __PP.P_[-max_rng]
+                            max_rng = max(__PP.rng, PP.rng)  # both PPs should be positive
+                            if max_rng > _PP.L:
+                                _P_ = __PP.P__[-max_rng] + _PP.P__ + PP.P__[:max_rng-PP.rng]  # all connected P_s in higher row
+                                # P__ = __PP.P__[-max_rng - 1:] + _PP.P__ + PP.P__[:max_rng]
+                                # use [:] to prevent the list referencing PP.P__, which is packed with new Ps in accum_PP
+                                P__ = [__P_[:] for __P_ in __PP.P__[-max_rng - 1:]] + \
+                                      [_P_[:] for _P_ in _PP.P__] + \
+                                      [P_[:] for P_ in PP.P__[:max_rng]]
+                                # add derPs:
+                                for P_ in P__:  # lower row
+                                    for _P in _P_[:]:  # higher row
+                                        for P in P_[:]:  # several lower Ps per _P
+                                            if isinstance(P, CPP): add_derP = comp_layer(_P, P)
+                                            else:                  add_derP = comp_P(_P, P)
+                                            accum_PP(__PP, add_derP)
+                                    _P_ = P_
+                                for derP_ in PP.derP__[max_rng:]:  # accumulate old derPs
+                                    for derP in derP_: accum_PP(__PP, derP)
+                            else:
+                                # repacking back to PP_ if their PPs are not merged
+                                _PP_tested.insert(0, _PP)
+                                PP_tested.insert(0, PP)
+                        __PP_tested.append(__PP)
 
-                                    for P in __PP.P_[-max_rng-1:] + _PP.P_ + PP.P_[:max_rng]:
-                                        add_derP_ += \
-                                            comp_layer(_P.params, P.params)
-                                        _P = P
-                                    # tentative, only for strictly vertical derP_s:
-                                    __PP.derP_ = __PP.derP_ + add_derP_ + PP.derP_
-
-                                    # below is not revised:
-                                    for _derP_ in _PP.derP__:  # accumulate _P into __P
-                                        for _derP in _derP_: accum_PP(__PP, _derP)
-                                    for derP_ in P.derP__:  # accumulate P into __P
-                                        for derP in derP_: accum_PP(__PP, derP)
-                                else:
-                                    # repacking back to PP_ if their PPs are not merged
-                                    _PP_tested.insert(0, _PP)
-                                    PP_tested.insert(0, PP)
-                                __PP_tested.append(__PP)
-
-                if __PP_: __PP_[:] = __PP_tested[:]
-                if _PP_: _PP_[:] = _PP_tested[:]
-                if PP_: PP_[:] = PP_tested[:]
+                # should be adding tested PP back to the array
+                if __PP_tested: __PP_[:] = __PP_tested[:]
+                if _PP_tested: _PP_[:] = _PP_tested[:]
+                if PP_tested: PP_[:] = PP_tested[:]
 
 
 def comp_dx(P):  # cross-comp of dx s in P.dert_
