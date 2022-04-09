@@ -184,8 +184,7 @@ def comp_P_root(P__, rng):  # vertically compares y-adjacent and x-overlapping P
     for P_ in P__:
         for P in P_:
             P.upconnect_, P.downconnect_ = [],[]  # reset connects and PP refs in the last layer only
-            if isinstance(P, CderP):
-                P.PP = None
+            if isinstance(P, CderP): P.PP = None
 
     for i, _P_ in enumerate(P__):  # higher compared row
         derP_ = []
@@ -194,7 +193,7 @@ def comp_P_root(P__, rng):  # vertically compares y-adjacent and x-overlapping P
             for P in P_:
                 if rng > 1: cP = P.P  # rng+, compared P is lower derivation
                 else:       cP = P  # der+, compared P is top derivation
-                for _P in _P_:  # upper row
+                for _P in _P_:  # upper compared row
                     if rng > 1: _cP = _P.P
                     else:       _cP = _P
                     # test for x overlap between P and _P in 8 directions, all Ps are from +derts, form sub_Pds for comp_dx?
@@ -204,7 +203,7 @@ def comp_P_root(P__, rng):  # vertically compares y-adjacent and x-overlapping P
                             derP = comp_layer(_cP, cP)  # form vertical derivatives of horizontal P params
                         else:
                             derP = comp_P(_cP, cP)  # form higher vertical derivatives of derP or PP params
-                        derP.y=P.y  # if rng+=n?
+                        derP.y=P.y
                         if rng > 1:  # accumulate derP through rng+ recursion:
                             accum_layer(derP.params, P.params)
                         if not P.downconnect_:  # initial row per root PP, then follow upconnect_
@@ -262,6 +261,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect
     maangle = ave_daangle - abs(daangle)  # match between aangles, not redundant as summed
 
     dP = abs(dx)-ave_dx + abs(dI)-ave_I + abs(G)-ave_G + abs(Ga)-ave_Ga + abs(dM)-ave_M + abs(dMa)-ave_Ma + abs(dL)-ave_L
+    # sum to evaluate for der+, abs diff is distinct from directly defined match
     mP = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
 
     params = [dx, mx, dL, mL, dI, mI, dG, mG, dGa, mGa, dM, mM, dMa, mMa, dangle, mangle, daangle, maangle]
@@ -287,9 +287,7 @@ def form_PP_(iderP__, root_rdn):  # form vertically contiguous patterns of patte
                     # derP.rdn = fork rdn + rdn to stronger upconnects, forming overlapping PPs:
                     if fPd:
                         derP.rdn = (derP.mP > derP.dP) + sum([1 for upderP in derP.P.upconnect_ if upderP.dP >= derP.dP])
-                        sign = derP.dP >= ave_dP * derP.rdn  # or that's per PPd,
-                        # Pd is defined by Msign: sum of weighted sign matches per param,
-                        # then sum dparams in Pd across dparam sign?
+                        sign = derP.dP >= ave_dP * derP.rdn  # PPd / v_abs_D sign, distinct from directly defined match:
                     else:
                         derP.rdn = (derP.dP >= derP.mP) + sum([1 for upderP in derP.P.upconnect_ if upderP.mP > derP.mP])
                         sign = derP.mP > ave_mP * derP.rdn
@@ -520,7 +518,57 @@ def comp_aggloP_root(PP_, rng):
 def splice_PPs(PPP_, frng):  # merge select PP pairs or triples
 
     for PPP in PPP_:
-        if frng and len(PPP.P__)>2:
+        if frng:  # rng fork
+            if len(PPP.P__) > 2:  # at least 3 rows for comp across gap _PP, or any
+                # if PPP is PP:
+                for __PP_, _PP_, PP_ in zip(PPP.P__, PPP.P__[1:], PPP.P__[2:]):
+
+                    rng_gaps = [max(__PP.rng, PP.rng) > _PP.L for __PP, _PP, PP in zip(__PP_, _PP_, PP_)]
+                    triplets = [(__PP, _PP, PP) for __PP, _PP, PP in zip(__PP_, _PP_, PP_)]
+                    _splice_val = False
+                    __PP_spliced, _PP_spliced, PP_spliced  = [], [], []
+                    for i, (splice_val, (__PP, _PP, PP)) in enumerate(zip(reversed(rng_gaps), reversed(triplets))):
+                        if splice_val and not _splice_val:
+                            # if prior triplet is merged, there should be having only 2 PPs in current loop and we need skip into next loop
+                            max_rng = max(__PP.rng, PP.rng)
+
+                            _P_ = __PP.P__[-max_rng] + _PP.P__ + PP.P__[:max_rng-PP.rng]  # all connected P_s in higher row
+                            # P__ = __PP.P__[-max_rng - 1:] + _PP.P__ + PP.P__[:max_rng]
+                            # use [:] to prevent the list referencing PP.P__, which is packed with new Ps in accum_PP
+                            P__ = [__P_[:] for __P_ in __PP.P__[-max_rng - 1:]] + \
+                                  [_P_[:] for _P_ in _PP.P__] + \
+                                  [P_[:] for P_ in PP.P__[:max_rng]]
+                            # add derPs:
+                            for P_ in P__:  # lower row
+                                for _P in _P_[:]:  # higher row
+                                    for P in P_[:]:  # several lower Ps per _P
+                                        if isinstance(P, CPP): add_derP = comp_layer(_P, P)
+                                        else:                  add_derP = comp_P(_P, P)
+                                        accum_PP(__PP, add_derP)
+                                _P_ = P_
+                            for derP_ in PP.derP__[max_rng:]:  # accumulate old derPs
+                                for derP in derP_: accum_PP(__PP, derP)
+                            if i == len(rng_gaps)-1:  # last triplets, remove the merged _PP and PP
+                                __PP_spliced += [__PP]
+                        else:
+                            if i == len(rng_gaps)-1:  # last triplets, add all not merging __PP, _PP and PP
+                                __PP_spliced += [__PP]
+                                _PP_spliced += [_PP]
+                            PP_spliced += [PP]  # __PP and _PP may be checked again for splicing in the next loop
+                    # update PPP.P__ with spliced PPs
+                    __PP_[:] = __PP_spliced[:]
+                    _PP_[:] = _PP_spliced[:]
+                    PP_[:] = PP_spliced[:]
+
+            else:  # der+ fork
+                pass
+
+            if isinstance(PPP.P__[0], CPP):  # draft:
+                for P_ in PPP.P__:  # lower row
+                    for P in P_:
+                        for _P in P.upconnect_:  # higher row
+                            pass
+            '''
             # at least 3 rows for comp cross gap _PP
             for __PP_, _PP_, PP_ in zip(PPP.P__, PPP.P__[1:], PPP.P__[2:]):
                 __PP_tested, _PP_tested, PP_tested = [],[],[]
@@ -555,12 +603,11 @@ def splice_PPs(PPP_, frng):  # merge select PP pairs or triples
                                 _PP_tested.insert(0, _PP)
                                 PP_tested.insert(0, PP)
                         __PP_tested.append(__PP)
-
                 # should be adding tested PP back to the array
                 if __PP_tested: __PP_[:] = __PP_tested[:]
                 if _PP_tested: _PP_[:] = _PP_tested[:]
                 if PP_tested: PP_[:] = PP_tested[:]
-
+                '''
 
 def comp_dx(P):  # cross-comp of dx s in P.dert_
 
