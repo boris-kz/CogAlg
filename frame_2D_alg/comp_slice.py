@@ -128,10 +128,9 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # comp_dx_blob(P__), comp_dx?
 
         derP__ = comp_P_root(P__, rng=1, frng=0)  # scan_P_, comp_P, or comp_layers if called from sub_recursion
-        (segm__, segd__) = form_PP_root(derP__, root_rdn=2, fseg=1)  # PP is a stack of (P, derP)s from comp_P, redundant to root blob
-        # 2D seg__: cross-sign (same-sign), to be converted to respectively PP_ and PP
+        (segm__, segd__) = form_PP_root(derP__, root_rdn=2, fseg=1)  # seg is a stack of (P, derP)s from comp_P, seg__s are redundant to root blob
 
-        splice_PPs(segm__, frng=1)  # actually splicing segs here
+        splice_PPs(segm__, frng=1)  # splicing segs, seg__ is 2D: cross-sign (same-sign), converted to PP_ and PP respectively
         splice_PPs(segd__, frng=0)
         sub_recursion([], segm__, frng=1)  # rng+ comp_P in PPms, -> param_layer, form sub_PPs
         sub_recursion([], segd__, frng=0)  # der+ comp_P in PPds, -> param_layer, form sub_PPs
@@ -280,14 +279,16 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect
     derP = CderP(x0=x0, L=L, y=_P.y, mP=mP, dP=dP, params=params, P=P, _P=_P)
     return derP
 
-
-def form_PP_root(iderP__, root_rdn, fseg):  # initialize segs per derP in iderP__ or PPs per  in iderP__
+# draft:
+def form_PP_root(iderP__, root_rdn, fseg):  # if fseg: form segs, initialize segs per derP in iderP__ or PPs per seg in iderP__
 
     PP_t = []
     for fPd in 0, 1:
-        PP_ = []
+        PP_segs_ = []  # PP_ if not fseg
+        upconnect_ = []
         derP__ = deepcopy(iderP__)
         for derP_ in derP__:  # scan bottom-up
+            PP_segs = []  # draft
             for derP in derP_:
                 if not isinstance(derP.segment, CPP):  # no derP.segment yet
                     # derP.rdn = (rng+|der+ rdn), ?+ sum([1 for upderP in derP.P.upconnect_ if upderP.dP >= derP.dP]):
@@ -295,84 +296,43 @@ def form_PP_root(iderP__, root_rdn, fseg):  # initialize segs per derP in iderP_
                         derP.rdn = (derP.mP > derP.dP); sign = derP.dP >= ave_dP * derP.rdn  # PPd / vD sign, distinct from directly defined match:
                     else:
                         derP.rdn = (derP.dP >= derP.mP); sign = derP.mP > ave_mP * derP.rdn
-                    if derP._P.upconnect_:
-                        form_PP_(derP, PP_, fPd, fseg)  # form PP over P upconnects, if len upconnect_>1: form segments
 
-                    accum_PP(PP, derP, fseg=1)  # accum PP with derP, including rdn, derP.P.downconnect_cnt = 0
-    '''
-                    if PP_:  # seg_derP_ if fseg, else PP_segments, for batch-mode accum_PP at termination?
-                        PP = CPP(sign=sign, x0=derP.x0)
-                        terminate_segments(segments, PP)  # terminate segments after checking through upconnects
-                        PP_.append(PP)
-        for PP in PP_:  # all PPs are terminated
-            PP.rdn += root_rdn + PP.Rdn / PP.nderP  # PP rdn is recursion rdn + average (forks + upconnects) rdn
-        PP_t.append(PP_)
-    '''
+                    PP_segs += [derP]  # accum_PP(PP_segs) at PP_segs termination
+                    upconnect_ = derP._P.upconnect_.copy()
+                    if upconnect_:
+                        form_PP_(derP, PP_segs_, upconnect_, fPd, fseg)  # form PP over P upconnects, if len upconnect_!=1: form segments
+
+        # sorry, form_PP_ should be converting PP_segs_ to PP_, not implemented yet
+            PP_segs_ += PP_segs
+        PP_t.append(PP_segs_)
+
     return PP_t  # PPm_, PPd_
 
-
-def form_PP_(iderP, iPP, PP_, fPd):  # compare lower-layer iderP sign to upconnects sign, form same-contiguous-sign PPs
+# draft, not fully revised:
+def form_PP_(iderP, PP, upconnect_, PP_, fPd, fseg):  # compare lower-layer iderP sign to upconnects sign, form same-contiguous-sign PPs
 
     # form vertically contiguous segments or patterns of patterns by derP sign, in dir_blob
     # rdn may be sub_PP.rdn, recursion is per sub_PP, rng+|der+ overlap is derP.rdn?
 
-    matching_upconnect_ = []  # always 1 element now
-    for derP in iderP._P.upconnect_:  # get lower-der upconnects?
-        iderP__ = [pri_derP for segment in segments for derP_ in segment.derP__ for pri_derP in derP_]
+    matching_upconnect_ = []
+    while upconnect_:
+        derP = upconnect_.pop(0)
+        if fPd:
+            derP.rdn = (derP.mP > derP.dP); sign = derP.dP >= ave_dP * derP.rdn
+        else:
+            derP.rdn = (derP.dP >= derP.mP); sign = derP.mP > ave_mP * derP.rdn
 
-        if derP not in iderP__:  # may be added in Pp merging
-            segment = isegment
-            if fPd:
-                derP.rdn = (derP.mP > derP.dP) #+ sum([1 for upderP in derP.P.upconnect_ if upderP.dP >= derP.dP])
-                sign = derP.dP >= ave_dP * derP.rdn
-            else:
-                derP.rdn = (derP.dP >= derP.mP) #+ sum([1 for upderP in derP.P.upconnect_ if upderP.mP > derP.mP])
-                sign = derP.mP > ave_mP * derP.rdn
-            # same sign, continue in same PP
-            if segment.sign == sign:
-                # derP is having existing segment, merge it with current PP
-                if isinstance(derP.segment, CPP):
-                    if segment not in segments: segments.append(derP.segment)  # similar with merge PP
-                # derP is not having segment or PP
-                else:
-                    # more than 1 matching upconnect in segment, terminate current segment and reinit segment
-                    if segment.upconnect_:
-                        if segment not in segments: segments.append(segment)  # we need this check because there is multiple upconnects, it may terminated in previous upconnect
-                        segment = CPP(sign=sign, x0=derP.x0)  # initialize new segment
-                        accum_PP(segment, derP, fseg=1)  # accumulate derP into segment
-                    # no upconnect in segment, pack derP as upconnect
-                    else:
-                        segment.upconnect_ += [derP]
-                        accum_PP(segment, derP, fseg=1)
+        if fseg: fterm = len(matching_upconnect_) != 1  # terminate segments
+        else:    fterm = (len(matching_upconnect_) == 0)  # terminate PPs
+        if fterm:
+            accum_PP(derPs, PP_, fseg=fseg)    # batch accum PP with derPs
+        else:
+            matching_upconnect_ += [derP]
 
-                matching_upconnect_ += [derP]  # matching upconnect per PP
-                if derP._P.upconnect_:
-                    form_PP_(derP, segment, segments, PP_, fPd)  # recursive compare sign of next-layer upconnects
+        _upconnect_ = derP._P.upconnect_.copy()
+        if _upconnect_: form_PP_(derP, _upconnect_, PP_, fPd, fseg)  # recursive compare sign of next-layer upconnects
 
-            # different sign and non matching derP, terminate segment, initialize PP and segment
-            else:
-                # terminate segments into PP
-                if segment not in segments: segments += [segment]
-                PP = CPP(sign=sign, x0=derP.x0)
-                terminate_segments(segments, PP)
-                PP_.append(PP)
-                segments = []  # reinit segments
-
-                # derP is not having segment, init segment
-                if not isinstance(derP.segment, CPP):
-                    segment = CPP(sign=sign, x0=derP.x0)
-                    accum_derP(segment, derP, fsegment=1)
-                if derP._P.upconnect_:
-                    upconnect_2_PP_(derP, derP.segment, segments, PP_, fPd)  # recursive compare sign of next-layer upconnects
-
-                # terminate segments after scanning all upconnects
-                if segments:
-                    PP = CPP(sign=sign, x0=derP.x0)
-                    terminate_segments(segments, PP)
-                    PP_.append(PP)
-
-
-    iderP._P.upconnect_ = matching_upconnect_
+    # inside accum_PP: PP.upconnect_ = matching_upconnect_  # pack only the matching upconnect_
 
 
 def merge_PP(_PP, PP, PP_, derP__):  # merge PP into _PP
@@ -404,7 +364,8 @@ def merge_PP(_PP, PP, PP_, derP__):  # merge PP into _PP
         PP_.remove(PP)  # merged PP
 
 
-def accum_PP(PP, derP, fseg):  # convert to batch mode: accumulate derPs into segment or segs into PP
+# old, convert to batch mode: accumulate derPs into segment or segs into PP:
+def accum_PP(PP, derP, fseg):
 
     if not PP.params: PP.params = derP.params.copy()
     else:             accum_layer(PP.params, derP.params)
@@ -414,7 +375,10 @@ def accum_PP(PP, derP, fseg):  # convert to batch mode: accumulate derPs into se
     PP.dP += derP.dP
     PP.Rdn += derP.rdn
     PP.y = max(derP.y, PP.y)  # or pass local y arg instead of derP.y?
-
+    '''
+    in batch mode:
+    PP.rdn += root_rdn + PP.Rdn / PP.nderP  # PP rdn is recursion rdn + average (forks + upconnects) rdn
+    '''
     if not PP.derP__:
         PP.derP__.append([derP])
         PP.P__.append([derP.P])
@@ -433,7 +397,7 @@ def accum_PP(PP, derP, fseg):  # convert to batch mode: accumulate derPs into se
 
     PP.L = len(PP.derP__)  # PP.L is Ly
 
-    if fsegment: derP.segment = PP
+    if fseg: derP.segment = PP
     else: derP.PP = PP
 
 def accum_layer(top_layer, der_layer):
@@ -490,10 +454,13 @@ def sub_recursion(root_sublayers, PP_, frng):  # compares param_layers of derPs 
     if comb_sublayers: root_sublayers += comb_sublayers
 
 
-def agglo_recursion(blob):  # compositional recursion per blob.Plevel. P, PP, PPP are relative terms, each may be of any composition order
+def agglo_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP, PPP are relative terms, each may be of any composition order
 
-    PP_t = blob.levels[-1]  # input-level composition Ps, initially PPs
-    PPP_t = []  # next-level composition Ps, initially PPPs  # for fiPd, PP_ in enumerate(PP_t): fiPd = fiPd % 2  # dir_blob.M += PP.M += derP.m
+    if fseg:
+        PP_t = blob.PP_[-1]  # segm_ and segd_
+    else:
+        PP_t = blob.levels[-1]  # input-level composition Ps, initially PPs
+        PPP_t = []  # next-level composition Ps, initially PPPs  # for fiPd, PP_ in enumerate(PP_t): fiPd = fiPd % 2  # dir_blob.M += PP.M += derP.m
 
     n_extended = 0
     for i, PP_ in enumerate(PP_t):   # fiPd = fiPd % 2
@@ -517,10 +484,13 @@ def agglo_recursion(blob):  # compositional recursion per blob.Plevel. P, PP, PP
         else:
             PPP_t += [[], []]  # replace with neg PPPs?
 
-    blob.levels.append(PPP_t)  # levels of dir_blob are Plevels
+    if fseg:
+        blob.append(PPP_t)  # append new level of segments
+    else:
+        blob.levels.append(PPP_t)  # levels of dir_blob are Plevels
 
     if n_extended/len(PP_t) > 0.5:  # mean ratio of extended PPs
-        agglo_recursion(blob)
+        agglo_recursion(blob, fseg)
 
 
 def comp_aggloP_root(PP_, rng):
