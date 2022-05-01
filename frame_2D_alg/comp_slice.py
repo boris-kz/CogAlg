@@ -66,7 +66,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     dert_ = list  # array of pixel-level derts, redundant to upconnect_, only per blob?
     upconnect_ = list
     downconnect_ = list
-    root = object  # segment
+    root = object  # segment that contains this P
     # only in Pd:
     Pm = object  # reference to root P
     dxdert_ = list
@@ -89,7 +89,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P upconnect_ or downco
     y = int  # for vertical gaps in PP.P__, replace with derP.P.y?
     P = object  # lower comparand
     _P = object  # higher comparand
-    root = object  # segment, contains this derP
+    root = object  # segment if internal or PP if external derP?
     # higher derivatives
     rdn = int  # mrdn, + uprdn if branch overlap?
     upconnect_ = list  # tuples of higher-row higher-order derivatives per derP
@@ -229,13 +229,11 @@ def form_seg_root(P__, root_rdn):  # form segs from Ps
         seg_ = []
         for P_ in reversed(P__):  # get a row of Ps, bottom-up
             for P in P_:
-                if not P.upconnect_ or isinstance(P.root, CPP):  # _P.root is seg formed by some prior P
-                    # multiple or no upconnect_, terminate seg_Ps = [P]:
-                    seg_.append(sum2seg([P], [],[]))
-                else:
-                    # <=1 matching upconnect AND <= matching downconnect, test P.upconnect_:
-                    form_seg_(seg_, [P], fPd)
-        seg_t.append(seg_)
+                if not isinstance(P.root, CPP):  # P is already in seg formed by some prior P
+                    if P.upconnect_:
+                        form_seg_(seg_, [P], fPd)  # test P.matching_upconnect_, not in form_seg_root
+                    else:
+                        seg_.append(sum2seg([P], [],[]))  # no upconnect_, terminate seg_Ps = [P]
 
     return seg_t  # segm_, segd_
 
@@ -254,9 +252,9 @@ def form_seg_(seg_, seg_Ps, fPd):  # form same-sign vertically contiguous segmen
             missing_upconnect_ += [derP]  # add to PP_missing_upconnect_ at seg termination, same for missing_downconnect_?
 
     if len(matching_upconnect_) > 1:
-        seg_.append( sum2seg(seg_Ps, matching_upconnect_, missing_upconnect_) ) # convert seg_derPs to terminated seg
+        seg_.append( sum2seg(seg_Ps, matching_upconnect_, missing_upconnect_) ) # convert seg_Ps to terminated seg
     else:
-        # if 1 upconnect AND 1 downconnect per P: add P to seg (matching_upconnect_[0] is a sole upconnected derP):
+        # if one P.upconnect AND one _P.downconnect: add _P to seg (matching_upconnect_[0] is a sole upconnected derP):
         if matching_upconnect_ and len(matching_upconnect_[0]._P.downconnect_)==1:
             seg_Ps += [matching_upconnect_[0]._P]
             if seg_Ps[-1].upconnect_:
@@ -277,7 +275,7 @@ def form_PP_root(seg_t, root_rdn):  # form segs from derPs, then PPs from segs
         PP_segs_ = []
         seg_ = seg_t[fPd]
         for seg in seg_:  # bottom-up
-            # seg.upconnect is CderP with P=seg and _P=_seg:
+            # seg.upconnect is CderP with P.root=seg and _P.root=_seg:
             if seg.upconnect_:
                 form_PP_(PP_segs_, [seg], seg.upconnect_, fPd)
             else:
@@ -316,23 +314,29 @@ def form_PP_(PP_segs_, PP_segs, upconnect_, fPd):  # form PP of same-sign connec
 
 def sum2seg(seg_Ps, matching_upconnect_, missing_upconnect_):  # sum params: merge vertically connected Ps into segment
 
-    seg = CPP(x0=seg_Ps[0].x0, derP__=seg_Ps, L = len(seg_Ps), sign=seg_Ps[0].upconnect_[0].sign)  # seg.L is Ly
+    if seg_Ps[0].upconnect_: sign=seg_Ps[0].upconnect_[0].sign
+    else: sign=0
 
+    seg = CPP(x0=seg_Ps[0].x0, derP__=seg_Ps, L = len(seg_Ps), sign=sign)  # seg.L is Ly
     seg.upconnect_ = matching_upconnect_
 
-    for derP in seg_Ps[0].P.downconnect_:  # seg_Ps[0]: bottom P of currently terminated seg
+    for derP in seg_Ps[0].downconnect_:  # seg_Ps[0]: bottom P of current terminated seg
         if derP.sign == seg.sign:
             derP._P.root = seg  # upconnected seg in upconnect derP
             seg.downconnect_ += [derP]
 
     for i, P in enumerate(seg_Ps):
 
-        if i==len(seg_Ps): derP = CderP  # exclude last upconnect, use blank CderP instead
-        else: derP = P.upconnect_[0]
-        PderP_params = P.params.copy()+derP.params.copy()
+        if i==len(seg_Ps)-1:  # also works for single-P seg
+            derP = CderP  # exclude last upconnect because it's external to seg, use blank CderP instead
+        else:
+            derP = P.upconnect_[0]
 
-        if not seg.params: seg.params = PderP_params
-        else:  accum_layer(seg.params, PderP_params)  # accumulate P
+        if not seg.params:
+            seg.params = derP.params
+        else:
+            accum_layer(seg.params, derP.params)
+        accum_layer(seg.params, P.params)
 
         seg.x0 = min(seg.x0, P.x0)
         seg.nP += 1
