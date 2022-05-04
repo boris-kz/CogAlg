@@ -343,27 +343,28 @@ def form_PP_(PP_segs_, PP_segs, matching_upconnect_, missing_upconnect_, fPd):  
         else:   seg.rdn = (seg.dP >= seg.mP); sign = seg.mP > ave_mP * seg.rdn
 
         if sign == PP_segs[0].sign:
-            if seg not in matching_upconnect_: matching_upconnect_ += [derP]
+            if derP not in matching_upconnect_: matching_upconnect_ += [derP]
         else:
-            if seg not in missing_upconnect_: missing_upconnect_ += [derP]
+            if derP not in missing_upconnect_: missing_upconnect_ += [derP]
         continued_seg_.append(seg)
     matching_upconnect_ += new_matching_upconnect_
 
     if matching_upconnect_:
         PP_segs += [derP._P.root for derP in matching_upconnect_]  # for sum2PP
-        matching_upconnect_ = []  # reset matching upconnect
+        matching_upupconnect_ = []
+        for derP in matching_upconnect_:
 
-        for derP in matching_upconnect_:  # pack next-row matching upconnects
-            for upderP in derP._P.upconnect_t[0]:
+            for upderP in derP._P.upconnect_t[0]: # pack next-row matching upconnects
                 if upderP._P.root not in continued_seg_:
-                    matching_upconnect_ += [upderP]
-
-            for upderP in derP._P.upconnect_t[1]:  # pack next-row missing upconnects
+                    matching_upupconnect_ += [upderP]
+            for upderP in derP._P.upconnect_t[1]:  # add next-row missing upconnects
                 if upderP not in missing_upconnect_:
                     missing_upconnect_ += [upderP]
 
-        if matching_upconnect_:
-            form_PP_(PP_segs_, PP_segs, matching_upconnect_, missing_upconnect_, fPd)  # recursive compare sign of next-layer upconnects
+        if matching_upupconnect_:  # recursive compare sign of next-layer upconnects
+            form_PP_(PP_segs_, PP_segs, matching_upupconnect_, missing_upconnect_, fPd)
+        else:
+            sum2PP(PP_segs_, PP_segs, missing_upconnect_)
     else:
         sum2PP(PP_segs_, PP_segs, missing_upconnect_)  # form PP
 
@@ -405,11 +406,8 @@ def accum_PP(PP, seg):
     PP.nderP += 1
     PP.mP += seg.mP
     PP.dP += seg.dP
-    PP.Rdn += seg.rdn
+    PP.Rdn += seg.rdn  # root_rdn + PP.Rdn / PP.nderP  # PP rdn is recursion rdn + average (forks + connects) rdn
     PP.y = max(seg.y, PP.y)  # or pass local y arg instead of derP.y?
-    '''
-    PP.rdn += root_rdn + PP.Rdn / PP.nderP  # PP rdn is recursion rdn + average (forks + upconnects) rdn
-    '''
     seg.root = PP
 
 
