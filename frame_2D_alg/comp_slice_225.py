@@ -695,3 +695,98 @@ def comp_layer(_derP, derP):
     L = xn-x0
 
     return CderP(x0=x0, L=L, y=_derP.y, mP=mP, dP=dP, params=derivatives, P=derP, _P=_derP)
+
+# 5.11:
+
+def comp_P_root(P__, rng, frng):  # vertically compares y-adjacent and x-overlapping Ps: blob slices, forming 2D derP__
+
+    # if der+: P__ is last-call derP__, derP__=[], form new derP__
+    # if rng+: P__ is last-call P__, accumulate derP__ with new_derP__
+    # 2D array of derivative tuples from P__[n], P__[n-rng], sub-recursive:
+    for P_ in P__:
+        for P in P_:
+            P.uplink_t, P.downlink_t = [[],[]],[[],[]]  # reset links and PP refs in the last layer only
+            P.root = object
+
+    for i, _P_ in enumerate(P__):  # higher compared row
+        if i+rng < len(P__):  # rng=1 unless rng+ fork
+            P_ = P__[i+rng]   # lower compared row
+            for P in P_:
+                if frng:
+                    scan_P_(P, _P_, frng)  # rng+, compare at input derivation, which is single P
+                else:
+                    for derP in P.uplink_t[0]:  # der+, compare at new derivation, which is derP_
+                        scan_P_(derP, _P_, frng)
+            _P_ = P_
+
+def scan_P_(P, _P_, frng):
+
+    for _P in _P_:  # higher compared row
+        if frng:
+            fbreak = comp_olp(P, _P, frng)
+        else:  # P is derP
+            for _derP in _P.uplink_t[0]:
+                fbreak = comp_olp(P, _derP, frng)  # comp derPs
+        if fbreak:
+            break
+
+def comp_olp(P, _P, frng):  # P, _P can be derP, _derP;  also form sub_Pds for comp_dx?
+
+    fbreak=0
+    if P.x0 - 1 < (_P.x0 + _P.L) and (P.x0 + P.L) + 1 > _P.x0:  # test x overlap(_P,P) in 8 directions, all Ps of +ve derts:
+
+        if isinstance(P, CPP) or isinstance(P, CderP):
+            derP = comp_layer(_P, P)  # form vertical derivatives of horizontal P params
+        else:
+            derP = comp_P(_P, P)  # form higher vertical derivatives of derP or PP params
+            derP.y = P.y
+            if frng:  # accumulate derP through rng+ recursion:
+                accum_layer(derP.params, P.params)
+                P.uplink_t[1].append(derP)  # per P for form_PP
+                _P.downlink_t[1].append(derP)
+
+    elif (P.x0 + P.L) < _P.x0:  # no P xn overlap, stop scanning lower P_
+        fbreak = 1
+
+    return fbreak
+
+
+def sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd):  # sum params: derPs into segment or segs into PP
+
+    PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,
+             L= len(PP_segs), uplink_t = miss_uplink_, downlink_t = miss_downlink_)
+    PP.seg_levels[0][fPd] = [PP_segs]  # PP_segs is seg_levels[0]
+    for seg in PP_segs:
+        accum_PP(PP, seg, fPd)
+    return PP
+
+def sum2seg(seg_Ps, match_uplink_, miss_uplink_):  # sum params: merge vertically linked Ps into segment
+
+    if seg_Ps[0].uplink_t[1]: sign=seg_Ps[0].uplink_t[1][0].sign  # sign in derP of the 1st mixed_uplink
+    else: sign=0  # blank derP sign
+    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, L = len(seg_Ps), y0 = seg_Ps[0].y, sign=sign)  # seg.L is Ly
+    seg.uplink_t = [match_uplink_, miss_uplink_]
+    for i, P in enumerate(seg_Ps):
+        if i==len(seg_Ps)-1:
+            derP = CderP()  # blank CderP instead of last uplink, which is external to seg, same for single-P seg
+        else:
+            derP = P.uplink_t[1][0]  # 1st matching_uplink, still in mixed_uplink
+        if not seg.params:
+            seg.params = derP.params
+        else:
+            accum_layer(seg.params, derP.params)
+        accum_layer(seg.params, P.params)
+        seg.x0 = min(seg.x0, P.x0)
+        seg.nderP += 1  # or not redundant, seg.nderP = seg.uplink_t[1]?
+        seg.mP += derP.mP
+        seg.dP += derP.dP
+        # rdn incr if branching only, not in seg?
+        seg.Rdn += derP.rdn  # root_rdn + PP.Rdn / PP.nderP: average uplinks rdn
+        seg.y = max(seg.y, P.y)  # or pass local y arg instead of derP.y?
+        P.root = seg
+    for derP in seg_Ps[0].downlink_t[1]:  # seg_Ps[0]: bottom P of the seg
+        if derP.sign == seg.sign:
+            derP._P.root = seg  # uplinked seg
+            seg.P__[0].downlink_t[0] += [derP]  # add to matching_downlink_, which is empty from comp_P_root
+        seg.downlink_ += [derP]
+    return seg
