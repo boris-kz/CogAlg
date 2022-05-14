@@ -11,13 +11,23 @@ Top-layer output is compared to some template, and resulting error is backpropag
 
 The alternative is [connectivity-based clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Connectivity-based_clustering_(hierarchical_clustering)), where the first step is input cross-comparison at original resolution. Most modern methods combine such lateral cross-comp with vertical training. CNN is edge-detection at the bottom, same as cross-comp within kernels, but with trained weights on compared nodes. [Transformers](https://www.quantamagazine.org/researchers-glimpse-how-ai-gets-so-good-at-language-processing-20220414/) and graph NNs encode lateral positions of context or embeddings, in respectively attention heads and edges. But in fully unsupervised scheme, these positions must be learned. I think the only learning alternative to backprop that can be used here is connectivity clustering, otherwise we end up with generic MLP. Similar positional encoding was explored in Hinton's [Capsule Networks](https://medium.com/ai%C2%B3-theory-practice-business/understanding-hintons-capsule-networks-part-i-intuition-b4b559d1159b) 
 
-Such combinations are not consistent with scalable generality, where incrementally higher levels are formed recursively. If connectivity clustering is superior to vertical training at any point, then it is superior on all levels, they should only differ in the depth of recursion that generates them. 
+I propose pattern discovery (unsupervised learning) through incrementally complex levels of input cross-comparison and clustering. The clusters are encoded with comparison-derived parameters, including match, defined as a measure of compression. Projected match (predictive value) is a fitness function of the system. Clusters of each level are incrementally generalized representations, which become higher-level inputs. 
 
-I propose pattern discovery (unsupervised learning) through hierarchically alternating input cross-comparison and connectivity clustering. The clusters are encoded with comparison-derived parameters, including match, defined as a measure of compression. Projected match (predictive value) is a fitness function of the system. Clusters of each level are incrementally generalized representations, which become higher-level inputs. 
+Initial levels:
 
-Such encoding is very complex, deeply structured and utterly decontextualized, no way it could have evolved naturally. The code is supposed to be recursive, so testing before it’s complete is next to useless. Which is probably why no one seems to work on such methods. But once the code is done, there is no need for interminable glacial and opaque training, my feedback only adjusts hyperparameters.
+| Input                          | Comparison | Positional Resolution                        | Output                         | Conventionally known as            |
+|-----------------------------------------|------------|----------------------------------------------|-----------------------------------------|------------------------------------|
+| unary intensity                         | AND        | none, same coords                            | pixels of intensity                          | digitization                       |
+| integer pixels                          | SUB        | binary: direction                            | blobs of gradient                       | edge detection, image segmentation |
+| parameterized blobs                     | DIV: compare mean params        | integer: distance between blob centers                          | graphs of blobs              | connectivity-based clustering      |
+| graphs of directly matching nodes | LOG: compare mean params to average-node params        | float: distance to average coordinates in centroid | graphs of centroid-matching nodes | centroid-based clustering, Hebbian learning   |
 
-In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following sections compare my scheme to ANN, BNN, and CapsNet. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+
+And so on, higher levels should be recursive. 
+
+This process is very complex and deeply structured, no way it could have evolved naturally. Design is utterly decontextualized, testing before it’s complete is next to useless because the code is supposed to be recursive. Which is probably why no one seems to work on such methods. But once the code is done, there is no need for interminable glacial and opaque training, my feedback only adjusts hyperparameters.
+
+In the next section, I define atomic comparison and resulting patterns, then describe a hierarchically recursive algorithm of search for incrementally complex patterns. The following section compares my scheme to ANN and BNN. This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I pay for contributions or monthly if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline
@@ -97,30 +107,6 @@ Other biological constraints are very slow neurons, and the imperative of fast r
 I see no way evolution could produce proposed algorithm, it is extremely limited in complexity that can be added before it is pruned by natural selection. And that selection is for reproduction, while intelligence is distantly instrumental. The brain evolved to guide the body, with neurons originating as instinctive stimulus-to-response converters. Hence, both SGD and Hebbian learning is fitting, driven by feedback of action-triggering weighted input sum. Pattern discovery is their instrumental upshot, not an original purpose.
 
 Uri Hasson, Samuel Nastase, Ariel Goldstein reach a similar conclusion in “[Direct fit to nature: an evolutionary perspective on biological and artificial neural networks](https://www.cell.com/neuron/fulltext/S0896-6273(19)31044-X)”: “We argue that neural computation is grounded in brute-force direct fitting, which relies on over-parameterized optimization algorithms to increase predictive power (generalization) without explicitly modeling the underlying generative structure of the world. Although ANNs are indeed highly simplified models of BNNs, they belong to the same family of over-parameterized, direct-fit models, producing solutions that are mistakenly interpreted in terms of elegant design principles but in fact reflect the interdigitation of ‘‘mindless’’ optimization processes and the structure of the world.”
-
-
-### Comparison to Capsule Networks
-
-
-The nearest experimentally successful method is recently introduced “[capsules](https://arxiv.org/pdf/1710.09829.pdf)”. Some similarities to CogAlg:
-- capsules also output multivariate vectors, “encapsulating” several parameters, similar to my patterns,
-- these parameters also include pose: coordinates and dimensions, compared to compute transformations,
-- these transformations are compared to find affine transformations or equivariance: my match of misses,
-- capsules also send direct feedback to lower layer: dynamic routing, vs. trans-hidden-layer backprop in ANN.
-
-My main problems with CapsNet and alternative treatment:
- 
-- Object is defined as a recurring configuration of different parts. But such recurrence can’t be assumed, it should be derived by cross-comparing relative position among parts of matching objects. This can only be done after their positions are cross-compared, which is after their objects are cross-compared: two levels above the level that forms initial objects. So, objects formed by positional equivariance would be secondary, though they may displace initial segmentation objects as a primary representation. Stacked Capsule Autoencoders also have exclusive segmentation on the first layer, but proximity doesn’t matter on their higher layers.
-
-- Routing by agreement is basically recursive centroid clustering, by match of input vector to the output vector. The output (centroid) represents inputs at all locations, so its comparison to inputs is effectively mixed-distance. Thus, clustering in CapsNet is fuzzy and discontinuous, forming redundant representations. Routing by agreement reduces that redundancy, but not consistently so, it doesn’t specifically account for it. 
-My default clustering is exclusive segmentation: each element (child) belongs to only one cluster (parent). Fuzzy clustering is selective to inputs valued above the cost of adjusting for overlap in representation, which increases with the range of cross-comparison. This conditional range increase is done on all levels of composition.
-
-- Instantiation parameters are application-specific, CapsNet has no general mechanism to derive them. My general mechanism is cross-comparison of input capsule parameters, which forms higher-order parameters. First level forms pixel-level gradient, similar to edge detection in CNN. But then it forms proximity-constrained clusters, defined by gradient and parameterized by summed pixel intensity, dy, dx, gradient, angle. This cross-comparison followed by clustering is done on all levels, with incremental number of parameters per input.
-
-- Number of layers is fixed, while I think it should be incremental with experience. My hierarchy is a dynamic pipeline: patterns are displaced from a level by criterion sign change and sent to existing or new higher level. So, both hierarchy of patterns per system and sub-hierarchy of derivatives per pattern expand with experience. The derivatives are summed within a pattern, then evaluated for extending intra-pattern search and feedback.
-
-- Output vector of higher capsules combines parameters of all lower layers into Euclidean distance. That is my default too, but they should also be kept separate, for potential cross-comp among layer-wide representations.
-Overall, CapsNet is a variation of ANN, with input summation first and dynamic routing second. So, it’s a type of Hebbian learning, with most of the problems that I listed in the previous section.
 
 
 
