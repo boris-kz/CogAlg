@@ -13,14 +13,14 @@ The alternative is [connectivity-based clustering](https://en.wikipedia.org/wiki
 
 I propose pattern discovery (unsupervised learning) through incrementally complex levels of input cross-comparison and clustering. The clusters are encoded with comparison-derived parameters, including match. Match is defined as a measure of compression, and projected match (predictive value) is a fitness function of the system. Clusters (patterns) of each level are incrementally generalized representations, which become higher-level inputs. 
 
-Initial levels:
+Initial levels, positional resolution (macro) lags input resolution (micro) by one order:
 
 | Input                          | Comparison | Positional Resolution                        | Output                         | Conventionally known as            |
 |-----------------------------------------|------------|----------------------------------------------|-----------------------------------------|------------------------------------|
-| unary intensity                         | AND        | none, all in same coords                            | pixels of intensity                          | digitization                       |
-| integer pixels                          | SUB        | binary: direction                            | blobs of gradient                       | edge detection, image segmentation |
-| float(average)- parameterized blobs                     | DIV: compare mean params        | integer: distance between blob centers                          | graphs of blobs              | connectivity-based clustering      |
-| graphs of directly matching nodes | LOG: compare mean params to average-node params        | float: distance to mean coordinates of matching nodes | clusters of centroid-matching nodes | centroid-based clustering, Hebbian learning   |
+| _unary_ intensity                         | AND        | _none,_ all in same coords                            | pixels of intensity                          | digitization                       |
+| _integer_ pixels                          | SUB        | _binary:_ direction of comparison                            | blobs of gradient                       | edge detection, image segmentation |
+| _float:_ averaged params of blobs                     | DIV: compare mean params        | _integer:_ distance between blob centers                          | graphs of blobs              | connectivity-based clustering      |
+| graphs of directly matching nodes | LOG: compare mean params to average-node params        | _float:_ distance to mean coordinates of matching nodes | clusters of centroid-matching nodes | centroid-based clustering, Hebbian learning   |
 
 
 And so on, higher levels should be added recursively. 

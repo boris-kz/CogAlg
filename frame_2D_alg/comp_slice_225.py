@@ -751,42 +751,49 @@ def comp_olp(P, _P, frng):  # P, _P can be derP, _derP;  also form sub_Pds for c
     return fbreak
 
 
-def sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd):  # sum params: derPs into segment or segs into PP
+def comp_P_rng(PP, rng, fPd):  # compare Ps over incremented range: P__[n], P__[n-rng], sub-recursive
 
-    PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,
-             L= len(PP_segs), uplink_t = miss_uplink_, downlink_t = miss_downlink_)
-    PP.seg_levels[0][fPd] = [PP_segs]  # PP_segs is seg_levels[0]
-    for seg in PP_segs:
-        accum_PP(PP, seg, fPd)
-    return PP
+    reversed_P__ = []  # to rescan P__ bottom-up
+    for P_ in reversed(PP.P__):
+        reversed_P__ += [P_]
+        for P in P_:
+            P.downlink_layers = [[],[]]  # reset only downlinks, uplinks will be updated below
+            P.root = object  # reset links and PP refs in the last sub_P layer
 
-def sum2seg(seg_Ps, match_uplink_, miss_uplink_):  # sum params: merge vertically linked Ps into segment
+    for i, P_ in enumerate(reversed_P__):  # scan bottom up
+        if (i+rng) <= len(reversed_P__)-1:
+            _P_ = reversed_P__[i+rng]
+            for P in P_:
+                new_mixed_uplink_ = []
+                for _P in _P_:
+                    derP = comp_P(_P, P)  # forms vertical derivatives of P params
+                    new_mixed_uplink_ += [derP]       # new uplink per P
+                    _P.downlink_layers[1] += [derP]        # add downlink per _P
+                P.uplink_layers = [[], new_mixed_uplink_]  # update with new uplinks
 
-    if seg_Ps[0].uplink_t[1]: sign=seg_Ps[0].uplink_t[1][0].sign  # sign in derP of the 1st mixed_uplink
-    else: sign=0  # blank derP sign
-    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, L = len(seg_Ps), y0 = seg_Ps[0].y, sign=sign)  # seg.L is Ly
-    seg.uplink_t = [match_uplink_, miss_uplink_]
-    for i, P in enumerate(seg_Ps):
-        if i==len(seg_Ps)-1:
-            derP = CderP()  # blank CderP instead of last uplink, which is external to seg, same for single-P seg
-        else:
-            derP = P.uplink_t[1][0]  # 1st matching_uplink, still in mixed_uplink
-        if not seg.params:
-            seg.params = derP.params
-        else:
-            accum_layer(seg.params, derP.params)
-        accum_layer(seg.params, P.params)
-        seg.x0 = min(seg.x0, P.x0)
-        seg.nderP += 1  # or not redundant, seg.nderP = seg.uplink_t[1]?
-        seg.mP += derP.mP
-        seg.dP += derP.dP
-        # rdn incr if branching only, not in seg?
-        seg.Rdn += derP.rdn  # root_rdn + PP.Rdn / PP.nderP: average uplinks rdn
-        seg.y = max(seg.y, P.y)  # or pass local y arg instead of derP.y?
-        P.root = seg
-    for derP in seg_Ps[0].downlink_t[1]:  # seg_Ps[0]: bottom P of the seg
-        if derP.sign == seg.sign:
-            derP._P.root = seg  # uplinked seg
-            seg.P__[0].downlink_t[0] += [derP]  # add to matching_downlink_, which is empty from comp_P_root
-        seg.downlink_ += [derP]
-    return seg
+
+# draft, combine with comp_P_rng?
+def comp_P_der(PP, fPd):
+
+    reversed_P__ = []
+    for P_ in reversed(PP.P__):
+        reversed_P__ += [P_]
+        for P in P_:
+            for derP in P.uplink_layers[1] + P.downlink_layers[1]:  # reset all derP:
+                derP.uplink_layers = [[], []]
+                derP.downlink_layers = [[], []]
+                derP.root = object
+
+    for i, P_ in enumerate(reversed_P__):  # scan bottom up
+        if (i+1) <= len(reversed_P__)-1:
+            _P_ = reversed_P__[i+1]  # upper row's P
+            for P in P_:
+                if P.uplink_layers[0][0]:  # non empty derP
+                    derP = P.uplink_layers[0][0]
+                    for _P in _P_:
+                        if _P.uplink_layers[0][0]:  # non empty _derP
+                           _derP = _P.uplink_layers[0][0]
+                           dderP = comp_layer(_derP, derP)  # forms vertical derivatives of P params
+                           derP.uplink_layers[1] += [dderP]
+                           _derP.downlink_layers[1] += [dderP]
+

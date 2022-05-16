@@ -64,8 +64,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     y = int  # for vertical gap in PP.P__
     # composite params:
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
-    uplink_t = lambda: [[],[]]  # tuple: (matching_uplink_, mixed_uplink_)
-    downlink_t = lambda: [[],[]]
+    uplink_layers = lambda: [[],[]]  # tuple: (matching_uplink_, mixed_uplink_)
+    downlink_layers = lambda: [[],[]]
     root = object  # segment that contains this P
     # only in Pd:
     Pm = object  # reference to root P
@@ -91,8 +91,8 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     root = object  # segment if internal or PP if external derP?
     # higher derivatives
     rdn = int  # mrdn, + uprdn if branch overlap?
-    uplink_t = list  # tuples of higher-row higher-order derivatives per derP
-    downlink_t = list
+    uplink_layers = list  # tuples of higher-row higher-order derivatives per derP
+    downlink_layers = list
    # from comp_dx
     fdx = NoneType
 
@@ -132,7 +132,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         segd_ = form_seg_root(P__, root_rdn=2, fPd=1)  # forms segments: parameterized stacks of (P,derP)s
         PPm_, PPd_ = form_PP_root((segm_, segd_), root_rdn=2)  # forms PPs: parameterized graphs of linked segs
         # temporary
-        draw_seg_(dir_blob, seg_t[0])
+        draw_seg_(dir_blob, [segm_, segd_])
         draw_PP_segs(dir_blob, PPm_)
         draw_PPs(dir_blob, PPm_, fspliced=0)
 
@@ -198,68 +198,46 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
                 # test for x overlap(_P,P) in 8 directions, all Ps' derts are positive:
                 if (P.x0 - 1 < _P.x0 + _P.L) and (P.x0 + P.L + 1 > _P.x0):
                     derP = comp_P(_P, P)
-                    P.uplink_t[1].append(derP)  # for form_PP
-                    _P.downlink_t[1].append(derP)
+                    P.uplink_layers[1].append(derP)  # for form_PP
+                    _P.downlink_layers[1].append(derP)
                 elif (P.x0 + P.L) < _P.x0:
                     break  # no P xn overlap, stop scanning lower P_
         _P_ = P_
 
-# draft:
-def comp_P_rng(PP, rng, fPd):  # compare Ps over incremented range: P__[n], P__[n-rng], sub-recursive
 
-    reversed_P__ = []  # to rescan P__ bottom-up
-    for P_ in reversed(PP.P__):
-        reversed_P__ += [P_]
-        for P in P_:
-            P.downlink_t = [[],[]]  # reset only downlinks, uplinks will be updated below
-            P.root = object  # reset links and PP refs in the last sub_P layer
+def comp_P_sub(PP, rng, fPd):  # if rng>1: rng+ fork, else der+ fork
 
-    for i, P_ in enumerate(reversed_P__):  # scan bottom up
-        if (i+rng) <= len(reversed_P__)-1:
-            _P_ = reversed_P__[i+rng]
+    # update to add link_layer:
+
+    for i, P_ in enumerate(PP.P__):  # scan bottom up
+        if (i+rng) <= len(PP.P__)-1:
+            _P_ = PP.P__[i+rng]  # upper row's P
             for P in P_:
-                new_mixed_uplink_ = []
+                if rng==1:
+                    if P.uplink_layers[0]: P = P.uplink_layers[0][0]  # 1st match uplink derP
+                    else: break  # no uplinks
+                else:
+                    new_mixed_uplink_ = []  # to update P
                 for _P in _P_:
-                    derP = comp_P(_P, P)  # forms vertical derivatives of P params
-                    new_mixed_uplink_ += [derP]       # new uplink per P
-                    _P.downlink_t[1] += [derP]        # add downlink per _P
-                P.uplink_t = [[], new_mixed_uplink_]  # update with new uplinks
-
-
-# draft, combine with comp_P_rng?
-def comp_P_der(PP, fPd):
-
-    reversed_P__ = []
-    for P_ in reversed(PP.P__):
-        reversed_P__ += [P_]
-        for P in P_:
-            for derP in P.uplink_t[1] + P.downlink_t[1]:  # reset all derP:
-                derP.uplink_t = [[], []]
-                derP.downlink_t = [[], []]
-                derP.root = object
-
-    for i, P_ in enumerate(reversed_P__):  # scan bottom up
-        if (i+1) <= len(reversed_P__)-1:
-            _P_ = reversed_P__[i+1]  # upper row's P
-            for P in P_:
-                if P.uplink_t[0][0]:  # non empty derP
-                    derP = P.uplink_t[0][0]
-                    for _P in _P_:
-                        if _P.uplink_t[0][0]:  # non empty _derP
-                           _derP = _P.uplink_t[0][0]
-                           dderP = comp_layer(_derP, derP)  # forms vertical derivatives of P params
-                           derP.uplink_t[1] += [dderP]
-                           _derP.downlink_t[1] += [dderP]
+                    if rng==1:
+                        if _P.uplink_layers[0]: _P = _P.uplink_layers[0][0]  # _P's 1st uplink's derP
+                        else: break  # no uplinks
+                    derP = comp_layer(_P, P)  # forms vertical derivatives of P params
+                    _P.downlink_layers[1] += [derP]
+                    if rng == 1: P.uplink_layers[1] += [derP]  # uplink for derP
+                    else: new_mixed_uplink_ += [derP]
+                if rng > 1:  P.uplink_layers = [[], new_mixed_uplink_]  # update with new uplinks
+        else:
+            break
 
 
 def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
-
 
     seg_ = []
     for P_ in reversed(deepcopy(P__)):  # get a row of Ps, bottom-up, different copies per fPd
         for P in P_:
             if not isinstance(P.root, CPP):  # P is already in seg formed by some prior P
-                if P.uplink_t[1]:
+                if P.uplink_layers[1]:
                     form_seg_(seg_, [P], fPd)  # test P.matching_uplink_, not known in form_seg_root
                 else:
                     seg_.append(sum2seg([P], [], [], fPd))  # no uplink_, terminate seg_Ps = [P]
@@ -270,14 +248,14 @@ def form_seg_(seg_, seg_Ps, fPd):  # form same-sign vertically contiguous segmen
 
     match_uplink_, miss_uplink_ = [], []
 
-    for derP in seg_Ps[-1].uplink_t[1]:  # mixed_uplink_ of top P in seg_Ps, not converted to CPP seg yet
+    for derP in seg_Ps[-1].uplink_layers[1]:  # mixed_uplink_ of top P in seg_Ps, not converted to CPP seg yet
 
         if fPd: derP.rdn = (derP.mP > derP.dP); derP.sign = derP.dP >= ave_dP * derP.rdn
         else:   derP.rdn = (derP.dP >= derP.mP); derP.sign = derP.mP > ave_mP * derP.rdn
 
-        if derP.sign == seg_Ps[0].uplink_t[1][0].sign:  # seg.sign = sign from 1st uplink of 1st P
+        if derP.sign == seg_Ps[0].uplink_layers[1][0].sign:  # seg.sign = sign from 1st uplink of 1st P
             match_uplink_ += [derP]
-            seg_Ps[-1].uplink_t[0] += [derP]
+            seg_Ps[-1].uplink_layers[0] += [derP]
         else:
             miss_uplink_ += [derP]  # add to PP_missing_uplink_ at seg termination, same for missing_downlink_?
 
@@ -285,10 +263,10 @@ def form_seg_(seg_, seg_Ps, fPd):  # form same-sign vertically contiguous segmen
         seg_.append( sum2seg(seg_Ps, match_uplink_, miss_uplink_, fPd) ) # convert seg_Ps to terminated seg
     else:
         # if one P.uplink AND one _P.downlink: add _P to seg, matching_uplink_[0] is a sole uplinked derP:
-        if match_uplink_ and len(match_uplink_[0]._P.downlink_t[1])==1:
+        if match_uplink_ and len(match_uplink_[0]._P.downlink_layers[1])==1:
 
             seg_Ps += [match_uplink_[0]._P]
-            if seg_Ps[-1].uplink_t[1]:
+            if seg_Ps[-1].uplink_layers[1]:
                 form_seg_(seg_, seg_Ps, fPd)  # recursive compare sign of next-layer uplinks
             else:
                 seg_.append( sum2seg(seg_Ps, [], miss_uplink_, fPd))
@@ -301,19 +279,19 @@ def form_seg_(seg_, seg_Ps, fPd):  # form same-sign vertically contiguous segmen
         # if branch rdn: inp.rdn += sum([1 for upderP in derP.P.uplink_ if upderP.dP >= derP.dP])
 '''
 
-
 def sum2seg(seg_Ps, matching_uplink_, missing_uplink_, fPd):  # sum params: merge vertically connected Ps into segment
 
-    if seg_Ps[0].uplink_t[1]: sign=seg_Ps[0].uplink_t[1][0].sign  # sign in derP of the 1st mixed_uplink
+    if seg_Ps[0].uplink_layers[1]: sign=seg_Ps[0].uplink_layers[1][0].sign  # sign in derP of the 1st mixed_uplink
     else: sign=0  # blank derP sign
 
-    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, L = len(seg_Ps), y0 = seg_Ps[0].y, sign=sign, upconnect_t = [matching_uplink_, missing_uplink_])  # seg.L is Ly,  all links are misses
+    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, L = len(seg_Ps), y0 = seg_Ps[0].y, sign=sign, upconnect_t = [matching_uplink_, missing_uplink_])
+    # seg.L is Ly,  all links are misses
 
     for i, P in enumerate(seg_Ps):
         if i==len(seg_Ps)-1:
             derP = CderP()  # blank CderP instead of last upconnect, which is external to seg, same for single-P seg
         else:
-            derP = P.uplink_t[1][0]  # 1st matching_upconnect, still in mixed_upconnect
+            derP = P.uplink_layers[1][0]  # 1st matching_upconnect, still in mixed_upconnect
         accum_CPP(seg, derP, fPd)
 
     return seg
@@ -345,27 +323,28 @@ def accum_CPP(PP, inp, fPd):  # inp is derP or seg
     inp.root = PP
 
     if isinstance(inp, CPP):
-        PP.nderP += len(inp.P__[-1].uplink_t[0])  # redundant derivatives of the same P
+        PP.nderP += len(inp.P__[-1].uplink_layers[0])  # redundant derivatives of the same P
         # add Ps into PP following their y location
         for P in inp.P__:
+            P.root = PP
             if not PP.P__:
                 PP.P__.append([P])
             else:
                 current_ys = [P_[0].y for P_ in PP.P__]  # list of current-layer seg rows
                 if P.y in current_ys:
                     PP.P__[current_ys.index(P.y)].append(P)  # append P row
-                elif P.y > current_ys[-1]:  # P.y > largest y in ys
-                    PP.P__.append([P])
-                elif P.y < current_ys[0]:  # P.y < smallest y in ys
+                elif P.y > current_ys[0]:  # P.y > largest y in ys
                     PP.P__.insert(0, [P])
-                elif P.y > current_ys[0] and P.y < current_ys[-1]:  # P.y in between largest and smallest value
-                    PP.P__.insert(P.y - current_ys[0], [P])
+                elif P.y < current_ys[-1]:  # P.y < smallest y in ys
+                    PP.P__.append([P])
+                elif P.y < current_ys[0] and P.y > current_ys[-1]:  # P.y in between largest and smallest value
+                    PP.P__.insert(P.y - current_ys[-1], [P])
 
         # add seg links:
-        for derP in inp.P__[0].downlink_t[1]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
+        for derP in inp.P__[0].downlink_layers[1]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
             if derP not in PP.downlink_ and derP.P.root not in PP.seg_levels[0][fPd]:
                 PP.downlink_ += [derP]
-        for derP in inp.P__[-1].uplink_t[1]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
+        for derP in inp.P__[-1].uplink_layers[1]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
             if derP not in PP.downlink_ and derP.P.root not in PP.seg_levels[0][fPd]:
                 PP.uplink_ += [derP]
 
@@ -383,11 +362,11 @@ def form_PP_root(seg_t, root_rdn):  # form PPs from linked segs
         for seg in seg_:  # bottom-up
             if not isinstance(seg.root, CPP):  # seg is not already in PP initiated by some prior seg
 
-                if seg.P__[-1].uplink_t[0] or seg.P__[0].downlink_t[0]: # seg.uplinks are CderPs with P.root=seg and _P.root=_seg
-                    form_PP_( PP_, PP_segs_, None, [seg], seg.P__[-1].uplink_t[0].copy(), seg.P__[0].downlink_t[0].copy(),
-                              seg.P__[-1].uplink_t[1].copy(), seg.P__[0].downlink_t[1].copy(), fPd)
+                if seg.P__[-1].uplink_layers[0] or seg.P__[0].downlink_layers[0]: # seg.uplinks are CderPs with P.root=seg and _P.root=_seg
+                    form_PP_( PP_, PP_segs_, None, [seg], seg.P__[-1].uplink_layers[0].copy(), seg.P__[0].downlink_layers[0].copy(),
+                              seg.P__[-1].uplink_layers[1].copy(), seg.P__[0].downlink_layers[1].copy(), fPd)
                 else:
-                    PP_ += [sum2PP([seg], seg.P__[-1].uplink_t[1], seg.P__[0].downlink_t[1], fPd)]  # single-seg PP
+                    PP_ += [sum2PP([seg], seg.P__[-1].uplink_layers[1], seg.P__[0].downlink_layers[1], fPd)]  # single-seg PP
 
         PP_t.append(PP_)  # PP_segs are converted to PPs in sum2PP and form_PP_
 
@@ -404,20 +383,20 @@ def form_PP_(PP_, PP_segs_, _PP, PP_segs, match_uplink_, miss_uplink_, match_dow
     for upderP in match_uplink_:
         if isinstance(upderP._P.root, CPP):  # highest row doesn't have _P's root
             PP_segs += [upderP._P.root]  # add next row of segs in matching uplinks:
-            for uupderP in upderP._P.uplink_t[0]:
+            for uupderP in upderP._P.uplink_layers[0]:
                 if uupderP not in match_uuplink_ and uupderP._P.root not in PP_segs:
                     match_uuplink_ += [uupderP]
-            for uupderP in upderP._P.uplink_t[1]:  # add next-row missing uplinks
+            for uupderP in upderP._P.uplink_layers[1]:  # add next-row missing uplinks
                 if uupderP not in miss_uplink_:
                     miss_uplink_ += [uupderP]
 
     for downderP in match_downlink_:
         if isinstance(downderP.P.root, CPP):  # lowest row doesn't have P's root
             PP_segs += [downderP.P.root]  # add next row of segs in matching downlinks:
-            for ddownderP in downderP.P.downlink_t[0]:
+            for ddownderP in downderP.P.downlink_layers[0]:
                 if ddownderP not in match_ddownlink_ and ddownderP.P.root not in PP_segs:
                     match_ddownlink_ += [ddownderP]
-            for ddownderP in downderP.P.downlink_t[1]:  # add next-row missing downlinks
+            for ddownderP in downderP.P.downlink_layers[1]:  # add next-row missing downlinks
                 if ddownderP not in miss_downlink_:
                     miss_downlink_ += [ddownderP]
 
@@ -439,12 +418,12 @@ def merge_PP(_PP, PP, fPd):  # only for PP splicing
         _PP.seg_levels[0][fPd] += [seg]
 
     # merge uplinks and downlinks
-    for uplink in PP.uplink_t:
-        if uplink not in _PP.uplink_t:
-            _PP.uplink_t += [uplink]
-    for downlink in PP.downlink_t:
-        if downlink not in _PP.downlink_t:
-            _PP.downlink_t += [downlink]
+    for uplink in PP.uplink_layers:
+        if uplink not in _PP.uplink_layers:
+            _PP.uplink_layers += [uplink]
+    for downlink in PP.downlink_layers:
+        if downlink not in _PP.downlink_layers:
+            _PP.downlink_layers += [downlink]
 
 
 def accum_layer(top_layer, der_layer):
@@ -651,7 +630,7 @@ def splice_PPs(PP_, frng):  # splice select PP pairs if der+ or triplets if rng+
             _seg = _segs.pop(0)
             _avg_y = sum([P.y for P in _seg.P__])/len(_seg.P__)  # y centroid for _seg
 
-            for link in _seg.uplink_t[1] + _seg.downlink_t[1]:
+            for link in _seg.uplink_layers[1] + _seg.downlink_layers[1]:
                 seg = link.P.root  # missing link of current seg
 
                 if seg.root is not _PP:  # this may occur after the merging where multiple links are having same PP
