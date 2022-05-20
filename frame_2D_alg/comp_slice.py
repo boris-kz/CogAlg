@@ -127,7 +127,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
         # comp_dx_blob(P__), comp_dx?
 
-        Pm__ = comp_P_root(deepcopy(P__))  # scan_P_, comp_P | comp_layers, adds mixed uplink_, downlink_ per P,
+        Pm__ = comp_P_root(deepcopy(P__))  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P,
         Pd__ = comp_P_root(deepcopy(P__))  # deepcopy before assigning link derPs to Ps
 
         segm_ = form_seg_root(Pm__, root_rdn=2, fPd=0)  # forms segments: parameterized stacks of (P,derP)s
@@ -191,6 +191,7 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
     blob.P__ = P__
     return P__
 
+
 def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: blob slices, forming 2D derP__
 
     _P_ = P__[0]  # upper row, top-down
@@ -200,64 +201,50 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
             for _P in _P_:
                 # test for x overlap(_P,P) in 8 directions, all Ps' derts are positive:
                 if (P.x0 - 1 < _P.x0 + _P.L) and (P.x0 + P.L + 1 > _P.x0):
-                    derP = comp_P(_P, P)
-                    P.uplink_layers[0].append(derP)  # input to form_PP
-                    _P.downlink_layers[0].append(derP)
+                    comp_P(_P, P)
                 elif (P.x0 + P.L) < _P.x0:
                     break  # no P xn overlap, stop scanning lower P_
         _P_ = P_
     return P__
 
 
-def comp_P_sub(iP__, rng, frng):  # if frng: rng+ fork, else der+ fork
+def comp_P_sub(iP__, rng, frng):  # sub_recursion in PP, if frng: rng+ fork, else der+ fork
 
     if frng:  # add new rng uplink_layer
         for P_ in iP__:
             for P in P_:
                 P.uplink_layers.append([])
-    # else derP: 1st uplink_layer is initialized in definition
+    # else comp derP: 1st uplink_layer is initialized in definition
     P__ = []  # iP__ if frng, else derP__
 
     for i, iP_ in enumerate(iP__):  # lower compared row
-        if (i+rng) <= len(iP__)-1:  # rng=1 unless rng+ fork
-            _P_ = iP__[i+rng]   # upper compared row
-            P_ = []  # iP_ if frng, else derP_
-            for P in iP_:
+        P_ = []  # iP_ if frng, else derP_
+        for P in iP_:
+            if frng:
+                copy_P = copy(P)
+                copy_P.uplink_layers = [uplink_layer for uplink_layer in P.uplink_layers]
+                copy_P.downlink_layers = [downlink_layer for downlink_layer in P.downlink_layers]
+                P_ += [copy_P]
+            else:
+                for derP in P.uplink_layers[-1]:
+                    P_ += [derP]  # this is adding another dimension to unpack?
+
+            if (i+rng) <= len(iP__)-1:  # rng=1 for der+ fork
                 if frng:
-                    scan_branches(P, _P_, frng)  # rng+, compare at input derivation, which is single P
-                    P_ += [copy(P)]
-                    P_[-1].uplink_layers = [uplink_layer for uplink_layer in P.uplink_layers]
-                    P_[-1].downlink_layers = [downlink_layer for downlink_layer in P.downlink_layers]
+                    for _derP in P.uplink_[-2]:  # rng+, compare at input derivation, which is Ps
+                        if isinstance(_derP._P, CPP) or isinstance(_derP._P, CderP):  # rng+ fork for derPs, very unlikely
+                            comp_derP(_derP._P, P)  # form higher vertical derivatives of derP or PP params
+                        else:
+                            comp_P(_derP._P, P)  # form vertical derivatives of horizontal P params
                 else:
-                    for derP in P.uplink_layers[-1]:  # der+, compare at new derivation, which is derP_
-                        scan_branches(derP, _P_, frng)
-                        P_ += [derP]
-            _P_ = iP_
-            P__ += [P_]
-        else:
-            break  # rng > P__: y dimension
+                    for derP in P.uplink_layers[-1]:  # der+, compare at current derivation, which is derPs
+                        for _derP in derP._P.uplink_[-1]:
+                            comp_derP(_derP, P)  # P is actually derP, form higher vertical derivatives of derP or PP params
+            else:
+                break  # rng > P__: y dimension
+        P__ += [P_]
 
     return P__
-
-def scan_branches(P, _P_, frng):
-
-    for _P in _P_:  # higher compared row
-        if frng:
-            comp_branch(P, _P, frng)
-        else:  # P is derP
-            for _derP in _P.uplink_layers[-1]:
-                comp_branch(P, _derP, frng)  # comp derPs
-
-def comp_branch(P, _P, frng): # P, _P can be derP, _derP; also form sub_Pds for comp_dx?
-
-    if isinstance(P, CPP) or isinstance(P, CderP):
-        derP = comp_layer(_P, P)  # form vertical derivatives of horizontal P params
-    else:
-        derP = comp_P(_P, P)  # form higher vertical derivatives of derP or PP params
-        derP.y = P.y
-        if frng:  # accumulate derP through rng+ recursion:
-            P.uplink_layers[-1].append(derP)  # I guess we need index instead of -1?
-            _P.downlink_layers[-1].append(derP)
 
 
 def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
@@ -266,7 +253,7 @@ def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
     for P_ in reversed(P__):  # get a row of Ps, bottom-up, different copies per fPd
         for P in P_:
             if not isinstance(P.root, CPP):  # P is already in seg formed by some prior P
-                if P.uplink_layers[-1]:  # last link layer is not empty
+                if P.uplink_layers[-1]:  # last link_layer is not empty
                     form_seg_(seg_, [P], fPd)  # test P.matching_uplink_, not known in form_seg_root
                 else:
                     seg_.append(sum2seg([P], [], [], fPd))  # no uplink_, terminate seg_Ps = [P]
@@ -279,14 +266,13 @@ def form_seg_(seg_, seg_Ps, fPd):  # form same-sign vertically contiguous segmen
 
     for derP in seg_Ps[-1].uplink_layers[-1]:  # mixed_uplink_ of top P in seg_Ps, not converted to CPP seg yet
 
-        if olp_sign(derP._P, derP.P, fPd) \
-                == seg_Ps[0].uplink_layers[-1][0].sign:  # seg sign = sign of any member derP
+        if olp_sign(derP, fPd) == seg_Ps[0].uplink_layers[-1][0].sign:  # seg sign = sign of any member derP
             match_uplink_ += [derP]
         else:
             miss_uplink_ += [derP]  # add to PP_missing_uplink_ at seg termination, same for missing_downlink_?
 
     if len(match_uplink_) > 1:
-        seg_.append( sum2seg( seg_Ps, match_uplink_, miss_uplink_, fPd) ) # convert seg_Ps to terminated seg
+        seg_.append( sum2seg( seg_Ps, fPd) ) # convert seg_Ps to terminated seg
     else:
         # if one P.uplink AND one _P.downlink: add _P to seg, matching_uplink_[0] is a sole uplinked derP:
         if match_uplink_ and len(match_uplink_[0]._P.downlink_layers[-1])==1:
@@ -295,17 +281,19 @@ def form_seg_(seg_, seg_Ps, fPd):  # form same-sign vertically contiguous segmen
             if seg_Ps[-1].uplink_layers[-1]:
                 form_seg_(seg_, seg_Ps, fPd)  # recursive compare sign of next-layer uplinks
             else:
-                seg_.append( sum2seg(seg_Ps, [], miss_uplink_, fPd))
+                seg_.append( sum2seg(seg_Ps, fPd))
         else:
-            seg_.append( sum2seg(seg_Ps, [], miss_uplink_, fPd))  # terminate at 0 matching uplink
+            seg_.append( sum2seg(seg_Ps, fPd))  # terminate at 0 matching uplink
 '''
         seg|PP. rng+|der+ rdn:
         if fPd: inp.rdn += (inp.mP > inp.dP)  # PPd / vD sign, distinct from directly defined match:
         else:   inp.rdn += (inp.dP >= inp.mP)
         # if branch rdn: inp.rdn += sum([1 for upderP in derP.P.uplink_ if upderP.dP >= derP.dP])
 '''
-def olp_sign(_P, P, fPd):  # sign of combined mutual derPs: overlap between P uplinks and _P downlinks
 
+def olp_sign(derP, fPd):  # sign of combined mutual derPs: overlap between P uplinks and _P downlinks
+
+    _P, P = derP._P, derP.P
     common_derP_ = []
     for _downlink_layer, uplink_layer in zip(_P.downlink_layers, P.uplink_layers):  # overlap in P uplinks and _P downlinks
         common_derP_ += list( set(_downlink_layer).intersection(uplink_layer))  # get common derP in mixed uplinks
@@ -327,31 +315,29 @@ def olp_sign(_P, P, fPd):  # sign of combined mutual derPs: overlap between P up
     return sign
 
 
-def sum2seg(seg_Ps, match_uplink_, miss_uplink_, fPd):  # sum params: merge vertically connected Ps into segment
+def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
 
     if seg_Ps[0].uplink_layers[-1]:
         sign=seg_Ps[0].uplink_layers[-1][0].sign  # sign in derP of the 1st mixed_uplink
-    else: sign=0  # blank derP sign
-
-    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, L = len(seg_Ps), y0 = seg_Ps[0].y, sign=sign, upconnect_t = [match_uplink_, miss_uplink_])
-    # seg.L is Ly, all links are misses
+    else:
+        sign=0  # blank derP sign
+    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, L = len(seg_Ps), y0 = seg_Ps[0].y, sign=sign)  # seg.L is Ly
 
     for i, P in enumerate(seg_Ps):
         if i==len(seg_Ps)-1:
-            derP = CderP()  # blank CderP instead of last upconnect, which is external to seg, same for single-P seg
+            derP = CderP()  # blank CderP instead of last uplink, which is external to seg, same for single-P seg
         else:
-            derP = P.uplink_layers[-1][0]  # 1st matching_upconnect, still in mixed_upconnect
-        accum_CPP(seg, derP, fPd)
+            derP = P.uplink_layers[-1][0]  # 1st match_uplink, still in mixed_uplink
+
+        accum_CPP(seg, derP, fPd)  # use P instead, add sum P.params?
 
     return seg
 
 def sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd):  # sum params: derPs into segment or segs into PP
 
-    PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,L= len(PP_segs),
-             uplink_ = miss_uplink_.copy(), downlink_ = miss_downlink_.copy())
+    PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,L= len(PP_segs), uplink_ = miss_uplink_.copy(), downlink_ = miss_downlink_.copy())
 
     PP.seg_levels[fPd] += [PP_segs]  # PP_segs is seg_levels[0]
-
     for seg in PP_segs:
         accum_CPP(PP, seg, fPd)
 
@@ -405,14 +391,13 @@ def form_PP_root(seg_t, root_rdn):  # form PPs from linked segs
 
     PP_t = []
     for fPd in 0, 1:
-        PP_segs_ = []
         PP_ = []
         seg_ = seg_t[fPd]
         for seg in seg_:  # bottom-up
             if not isinstance(seg.root, CPP):  # seg is not already in PP initiated by some prior seg
                 # links are CderPs, P.root=seg, _P.root=_seg
                 if seg.P__[-1].uplink_layers[-1] or seg.P__[0].downlink_layers[-1]:
-                    form_PP_(PP_, PP_segs_, None, [seg], seg.P__[-1].uplink_layers[-1].copy(), seg.P__[0].downlink_layers[-1].copy(), [], [], fPd)
+                    form_PP_(PP_, [seg], seg.P__[-1].uplink_layers[-1].copy(), seg.P__[0].downlink_layers[-1].copy(), [], [], fPd)
                 else:
                     PP_ += [sum2PP([seg], seg.P__[-1].uplink_layers[-1], seg.P__[0].downlink_layers[-1], fPd)]  # single-seg PP
 
@@ -421,7 +406,7 @@ def form_PP_root(seg_t, root_rdn):  # form PPs from linked segs
     return PP_t  # PPm_, PPd_
 
 
-def form_PP_(PP_, PP_segs_, _PP, PP_segs, uplink_, downlink_, miss_uplink_, miss_downlink_, fPd):
+def form_PP_(PP_, PP_segs, uplink_, downlink_, miss_uplink_, miss_downlink_, fPd):
     '''
     this function is flood-filling PP_segs with vertically linked same-sign segments
     '''
@@ -448,7 +433,7 @@ def form_PP_(PP_, PP_segs_, _PP, PP_segs, uplink_, downlink_, miss_uplink_, miss
                         miss_downlink_ += [ddownderP]
 
     if match_uuplink_ or match_ddownlink_:  # recursive compare sign of next-layer uplinks
-        form_PP_(PP_, PP_segs_, _PP, PP_segs, match_uuplink_, match_ddownlink_, miss_uplink_, miss_downlink_, fPd)
+        form_PP_(PP_, PP_segs, match_uuplink_, match_ddownlink_, miss_uplink_, miss_downlink_, fPd)
     else:
         PP_ += [sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd)]  # PP_segs is converted to PP
         '''
@@ -493,61 +478,6 @@ def accum_layer(top_layer, der_layer):
                 top_layer[i] = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
         else:  # scalar
             top_layer[i] += param
-
-
-def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
-
-    # compared P params:
-    x, L, M, Ma, I, Dx, Dy, sin_da0, cos_da0, sin_da1, cos_da1 = P.params
-    _x, _L, _M, _Ma, _I, _Dx, _Dy, _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _P.params
-
-    dx = _x - x;  mx = ave_dx - abs(dx)  # mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
-    dI = _I - I;  mI = ave_I - abs(dI)
-    dM = _M - M;  mM = min(_M, M)
-    dMa = _Ma - Ma;  mMa = min(_Ma, Ma)  # dG, dM are directional, re-direct by dx?
-    dL = _L - L * np.hypot(dx, 1); mL = min(_L, L)  # if abs(dx) > ave: adjust L as local long axis, no change in G,M
-    # G, Ga:
-    G = np.hypot(Dy, Dx); _G = np.hypot(_Dy, _Dx)  # compared as scalars
-    dG = _G - G;  mG = min(_G, G)
-    Ga = (cos_da0 + 1) + (cos_da1 + 1); _Ga = (_cos_da0 + 1) + (_cos_da1 + 1)  # gradient of angle, +1 for all positives?
-    # or Ga = np.hypot( np.arctan2(*Day), np.arctan2(*Dax)?
-    dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
-
-    # comp angle:
-    _sin = _Dy / (1 if _G==0 else _G); _cos = _Dx / (1 if _G==0 else _G)
-    sin  = Dy / (1 if G==0 else G); cos = Dx / (1 if G==0 else G)
-    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
-    mangle = ave_dangle - abs(dangle)  # indirect match of angles, not redundant as summed
-
-    # comp angle of angle: forms daa, not gaa?
-    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-
-    daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
-    gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
-    gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-    daangle = np.arctan2( gay, gax)  # probably wrong
-    maangle = ave_daangle - abs(daangle)  # match between aangles, not redundant as summed
-
-    dP = abs(dx)-ave_dx + abs(dI)-ave_I + abs(G)-ave_G + abs(Ga)-ave_Ga + abs(dM)-ave_M + abs(dMa)-ave_Ma + abs(dL)-ave_L
-    # sum to evaluate for der+, abs diffs are distinct from directly defined matches:
-    mP = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
-
-    params = [dx, mx, dL, mL, dI, mI, dG, mG, dGa, mGa, dM, mM, dMa, mMa, dangle, mangle, daangle, maangle]
-    # or summable params only, all Gs are computed at termination?
-
-    x0 = min(_P.x0, P.x0)
-    xn = max(_P.x0+_P.L, P.x0+P.L)
-    L = xn-x0
-
-    derP = CderP(x0=x0, L=L, y=_P.y, mP=mP, dP=dP, params=params, P=P, _P=_P)
-    return derP
 
 
 def sub_recursion(root_layers, PP_, frng):  # compares param_layers of derPs in generic PP, form or accum top derivatives
@@ -640,7 +570,7 @@ def comp_aggP_root(PP_, rng):
         for i, _PP in enumerate(PP.uplink_):
             if isinstance(_PP, CPP):  # _PP could be replaced by derPP
 
-                derPP = comp_layer(_PP, PP)  # cross-sign if PPd?
+                derPP = comp_derP(_PP, PP)  # cross-sign if PPd?
                 PP.uplink_[i] = derPP  # replace PP with derPP
                 _PP.downlink_ += [derPP]
 
@@ -715,7 +645,66 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
     P.Mdx = Mdx
 
 
-def comp_layer(_derP, derP):
+def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
+
+    # compared P params:
+    x, L, M, Ma, I, Dx, Dy, sin_da0, cos_da0, sin_da1, cos_da1 = P.params
+    _x, _L, _M, _Ma, _I, _Dx, _Dy, _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _P.params
+
+    dx = _x - x;  mx = ave_dx - abs(dx)  # mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
+    dI = _I - I;  mI = ave_I - abs(dI)
+    dM = _M - M;  mM = min(_M, M)
+    dMa = _Ma - Ma;  mMa = min(_Ma, Ma)  # dG, dM are directional, re-direct by dx?
+    dL = _L - L * np.hypot(dx, 1); mL = min(_L, L)  # if abs(dx) > ave: adjust L as local long axis, no change in G,M
+    # G, Ga:
+    G = np.hypot(Dy, Dx); _G = np.hypot(_Dy, _Dx)  # compared as scalars
+    dG = _G - G;  mG = min(_G, G)
+    Ga = (cos_da0 + 1) + (cos_da1 + 1); _Ga = (_cos_da0 + 1) + (_cos_da1 + 1)  # gradient of angle, +1 for all positives?
+    # or Ga = np.hypot( np.arctan2(*Day), np.arctan2(*Dax)?
+    dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
+
+    # comp angle:
+    _sin = _Dy / (1 if _G==0 else _G); _cos = _Dx / (1 if _G==0 else _G)
+    sin  = Dy / (1 if G==0 else G); cos = Dx / (1 if G==0 else G)
+    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
+    mangle = ave_dangle - abs(dangle)  # indirect match of angles, not redundant as summed
+
+    # comp angle of angle: forms daa, not gaa?
+    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
+    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
+    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
+    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+
+    daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
+    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+    gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
+    gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
+    daangle = np.arctan2( gay, gax)  # probably wrong
+    maangle = ave_daangle - abs(daangle)  # match between aangles, not redundant as summed
+
+    dP = abs(dx)-ave_dx + abs(dI)-ave_I + abs(G)-ave_G + abs(Ga)-ave_Ga + abs(dM)-ave_M + abs(dMa)-ave_Ma + abs(dL)-ave_L
+    # sum to evaluate for der+, abs diffs are distinct from directly defined matches:
+    mP = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
+
+    params = [dx, mx, dL, mL, dI, mI, dG, mG, dGa, mGa, dM, mM, dMa, mMa, dangle, mangle, daangle, maangle]
+    # or summable params only, all Gs are computed at termination?
+
+    x0 = min(_P.x0, P.x0)
+    xn = max(_P.x0+_P.L, P.x0+P.L)
+    L = xn-x0
+
+    derP = CderP(x0=x0, L=L, y=_P.y, mP=mP, dP=dP, params=params, P=P, _P=_P)
+
+    P.uplink_layers[0].append(derP)  # input to form_PP
+    _P.downlink_layers[0].append(derP)
+
+    return derP
+
+
+def comp_derP(_derP, derP):
 
     nparams = len(_derP.params)
     derivatives = []
@@ -816,7 +805,13 @@ def comp_layer(_derP, derP):
     xn = max(_derP.x0+_derP.L, derP.x0+derP.L)
     L = xn-x0
 
-    return CderP(x0=x0, L=L, y=_derP.y, mP=mP, dP=dP, params=derivatives, P=derP, _P=_derP)
+    dderP = CderP(x0=x0, L=L, y=_derP.y, mP=mP, dP=dP, params=derivatives, P=derP, _P=_derP)
+
+    _derP.P.uplink_layers[-1].append(dderP)
+    derP._P.downlink_layers[-1].append(dderP)
+
+    return
+
 
 # old draft
 def splice_dir_blob_(dir_blobs):

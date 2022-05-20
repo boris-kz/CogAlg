@@ -797,3 +797,15 @@ def comp_P_der(PP, fPd):
                            derP.uplink_layers[1] += [dderP]
                            _derP.downlink_layers[1] += [dderP]
 
+def comp_branches(P, _P_, frng):
+
+    for _P in _P_:  # higher compared row
+        if frng:
+            if isinstance(P, CPP) or isinstance(P, CderP):  # rng+ fork for derPs, very unlikely
+                comp_derP(_P, P)  # form higher vertical derivatives of derP or PP params
+            else:
+                comp_P(_P, P)  # form vertical derivatives of horizontal P params
+        else:
+            for _derP in _P.uplink_layers[-1]:
+                comp_derP(_derP, P)  # P is actually derP, form higher vertical derivatives of derP or PP params
+
