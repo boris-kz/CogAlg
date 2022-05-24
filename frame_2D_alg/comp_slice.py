@@ -105,7 +105,7 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
     Rdn = int  # for accumulation only
     nP = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
     nderP = int
-    uplink_ = list  # miss links only
+    uplink_ = list  # miss links only, convert to link_layers?
     downlink_ = list
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
@@ -200,57 +200,50 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
         for P in P_:
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, all Ps' derts are positive:
                 if (P.x0 - 1 < _P.x0 + _P.L) and (P.x0 + P.L + 1 > _P.x0):
-                    comp_P(_P, P)
+                    derP = comp_P(_P, P)
+                    P.uplink_layers[-1] += [derP]
+                    _P.downlink_layers[-1] += [derP]
                 elif (P.x0 + P.L) < _P.x0:
                     break  # no P xn overlap, stop scanning lower P_
         _P_ = P_
     return P__
 
 
-def comp_P_sub(P__, rng, frng):  # sub_recursion in PP, if frng: rng+ fork, else der+ fork
-    '''
-        # add new rng uplink_layer, or ?
-        for P_ in iP__:
-            for P in P_:
-                P.uplink_layers.append([])
-    # else comp derP: 1st uplink_layer is initialized in definition
+def comp_P_sub(P__, frng):  # sub_recursion in PP, if frng: rng+ fork, else der+ fork
 
-            P_ = []  # iP_ if frng, else derP_
-        for P in iP_:
-            if frng:
-                copy_P = copy(P)  # to not modify iP__, not at all sure
-                copy_P.uplink_layers = [uplink_layer for uplink_layer in P.uplink_layers]
-                copy_P.downlink_layers = [downlink_layer for downlink_layer in P.downlink_layers]
-                P_ += [copy_P]
-            else:
-                for derP in P.uplink_layers[-1]:
-                    P_ += [derP]  # this is adding another dimension to unpack?
-    P__ = []  # iP__ if frng, else derP__
-    '''
     if frng:
-        link_t__ = []  # local [[uplink_, downlink_]] to append to multiple rng link_layers
+        uplinks__ = [[ [] for P in P_] for P_ in P__ ]  # init links per P
+        downlinks__ = uplinks__.deepcopy  # same format, all empty
 
-    for P_ in P__:  # lower compared row
-        if frng:
-            link_t_ = []
-        for P in P_:
+    for y, P_ in enumerate(P__):  # lower compared row
+        for x, P in enumerate(P_):
             if frng:
-                for derP in P.uplink_layers[-1]:  # access next layer of linked Ps, which is at dy = rng
-                    _P = derP._P
-                    if isinstance(_P, CPP) or isinstance(_P, CderP):  # rng+ fork for derPs, very unlikely
-                        link_t_.append( comp_derP(_P, P))  # form higher vertical derivatives of derP or PP params
-                    else:
-                        link_t_.append( comp_P(_P, P))  # form vertical derivatives of horizontal P params
+                if P.uplink_layers[-1]:  # access next layer of linked Ps, which is at dy = rng
+                    for derP in P.uplink_layers[-1]:
+
+                        _P = derP._P  # higher comparand
+                        if isinstance(_P, CPP) or isinstance(_P, CderP):  # rng+ fork for derPs, very unlikely
+                            derP = comp_derP(_P, P)  # form higher vertical derivatives of derP or PP params
+                        else:
+                            derP = comp_P(_P, P)  # form vertical derivatives of horizontal P params
+
+                        uplinks__[y][x] += [derP]  # add uplinks
+                        if y+1 <= len(P__)-1 and _P in P__[y+1]:  # _P may not be in upper row if branch sign is not matched
+                            down_x = P__[y+1].index(_P)  # index of _P in _P_ at y+1: P__ is packed bottom up
+                            downlinks__[y+1][down_x] += [derP]
             else:
                 for derP in P.uplink_layers[-1]:  # der+, compare at current derivation, which is derPs
                     for _derP in derP._P.uplink_layers[-1]:
-                        comp_derP(_derP, derP)  # form higher vertical derivatives of derP or PP params
-
-        link_t__.append(link_t_)
+                        dderP = comp_derP(_derP, derP)  # form higher vertical derivatives of derP or PP params
+                        derP.uplink_layers[-1] += [dderP]  # always 1 new layer per derP
+                        _derP.downlink_layers[-1] += [dderP]
     if frng:
-        for P_, link_t_ in zip (P__, link_t_):
-            for P, link_t in zip (P_, link_t_):
-                P.uplink_layers += [link_t[0]]; P.downlink_layers += [P.downlink_t[0]]
+        for P_, uplinks_,downlinks_ in zip(P__, uplinks__, downlinks__):
+            for P, uplinks, downlinks in zip_longest(P_, uplinks_, downlinks_, fill_value=[]):
+                P.uplink_layers += [uplinks]  # add link_layers to each P
+                P.downlink_layers += [downlinks]
+
+    return P__  # only needed for frng=0, when the return is derP__, to be added
 
 
 def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
@@ -314,6 +307,7 @@ def olp_sign(derP, fPd):  # sign of combined mutual derPs: overlap between P upl
             rdn += derP.mP > derP.dP
             common_VP += derP.dP
         else:
+            derP.dP >= derP.mP
             rdn += derP.dP >= derP.mP
             common_VP += derP.mP
 
@@ -345,7 +339,6 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
 def sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd):  # sum params: derPs into segment or segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,L= len(PP_segs), uplink_ = miss_uplink_.copy(), downlink_ = miss_downlink_.copy())
-
     PP.seg_levels[fPd] += [PP_segs]  # PP_segs is seg_levels[0]
     for seg in PP_segs:
         accum_CPP(PP, seg, fPd)
@@ -364,7 +357,7 @@ def accum_CPP(PP, inp, fPd):  # inp is derP or seg
         if not PP.param_layers:
             PP.param_layers = [inp.P.params, inp.params]
         else:
-            iparam_layers = [inp.P.params, inp.params]
+            iparam_layers = [inp.P.param_layers + [inp.params]]
             for i, layer in enumerate(iparam_layers):
                 accum_layer(PP.param_layers[i], layer)
 
@@ -822,10 +815,7 @@ def comp_derP(_derP, derP):
 
     dderP = CderP(x0=x0, L=L, y=_derP.y, mP=mP, dP=dP, params=derivatives, P=derP, _P=_derP)
 
-    _derP.P.uplink_layers[-1].append(dderP)
-    derP._P.downlink_layers[-1].append(dderP)
-
-    return
+    return dderP
 
 
 # old draft
