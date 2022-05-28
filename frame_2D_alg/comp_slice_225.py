@@ -809,3 +809,43 @@ def comp_branches(P, _P_, frng):
             for _derP in _P.uplink_layers[-1]:
                 comp_derP(_derP, P)  # P is actually derP, form higher vertical derivatives of derP or PP params
 
+
+def comp_P_sub(iP__, frng):  # sub_recursion in PP, if frng: rng+ fork, else der+ fork
+
+    P__ = [P_ for P_ in reversed(iP__)]  # revert to top-down
+    if frng:
+        uplinks__ = [[ [] for P in P_] for P_ in P__ ]  # init links per P
+        downlinks__ = deepcopy(uplinks__)  # same format, all empty
+    else:
+        derP__ = [[] for P_ in P__[:-1]]  # init derP rows, exclude bottom P row
+
+    for y, _P_ in enumerate( P__):  # always top-down, higher compared row
+        for x, _P in enumerate(_P_):
+            if frng:
+                for derP in _P.downlink_layers[-1]:  # lower comparands are linked Ps at dy = rng
+                    if derP.P in P__[y-1]:  # derP.P may not be in P__, which mean it is a branch and it is in another PP
+                        P = derP.P
+                        if isinstance(P, CPP) or isinstance(P, CderP):  # rng+ fork for derPs, very unlikely
+                            derP = comp_derP(P, _P)  # form higher vertical derivatives of derP or PP params
+                        else:
+                            derP = comp_P(P, _P)  # form vertical derivatives of horizontal P params
+                        # += links:
+                        downlinks__[y][x] += [derP]
+                        up_x = P__[y-1].index(P)  # index of P in P_ at y-1
+                        uplinks__[y-1][up_x] += [derP]
+            elif y < len(P__)-1:  # exclude last bottom P's derP
+                for _derP in _P.downlink_layers[-1]:  # der+, compare at current derivation, which is derPs
+                    for derP in _derP.P.downlink_layers[-1]:
+                        dderP = comp_derP(_derP, derP)  # form higher vertical derivatives of derP or PP params
+                        derP.uplink_layers[0] += [dderP]  # pre-init layer per derP
+                        _derP.downlink_layers[0] += [dderP]
+                        derP__[y].append(derP)
+    if frng:
+        for P_, uplinks_,downlinks_ in zip( P__, uplinks__, downlinks__):  # always top-down
+            for P, uplinks, downlinks in zip_longest(P_, uplinks_, downlinks_, fillvalue=[]):
+                P.uplink_layers += [uplinks]  # add link_layers to each P
+                P.downlink_layers += [downlinks]
+        return iP__
+    else:
+        return derP__
+
