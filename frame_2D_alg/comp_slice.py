@@ -208,13 +208,13 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
     return P__
 
 
-def comp_P_rng(iP__):  # rng+ sub_recursion in PP.P__
+def comp_P_rng(iP__, rng):  # rng+ sub_recursion in PP.P__
 
     P__ = [P_ for P_ in reversed(iP__)]  # revert to top-down
     uplinks__ = [[ [] for P in P_] for P_ in P__ ]  # init links per P
     downlinks__ = deepcopy(uplinks__)  # same format, all empty
 
-    for y, _P_ in enumerate( P__):  # higher compared row
+    for y, _P_ in enumerate(P__):  # higher compared row
         for x, _P in enumerate(_P_):
             for derP in _P.downlink_layers[-1]:  # lower comparands are linked Ps at dy = rng
                 P = derP.P
@@ -224,15 +224,15 @@ def comp_P_rng(iP__):  # rng+ sub_recursion in PP.P__
                     derP = comp_P(P, _P)  # form vertical derivatives of horizontal P params
                 # += links:
                 downlinks__[y][x] += [derP]
-                up_x = P__[y-1].index(P)  # index of P in P_ at y-1
-                uplinks__[y-1][up_x] += [derP]
+                up_x = P__[y+rng].index(P)  # index of P in P_ at y+rng
+                uplinks__[y+rng][up_x] += [derP]
 
     for P_, uplinks_,downlinks_ in zip( P__, uplinks__, downlinks__):  # always top-down
         for P, uplinks, downlinks in zip_longest(P_, uplinks_, downlinks_, fillvalue=[]):
             P.uplink_layers += [uplinks]  # add link_layers to each P
             P.downlink_layers += [downlinks]
 
-    return P__
+    return iP__  # return the bottom up P__
 
 
 def comp_P_der(iP__):  # der+ sub_recursion in PP.P__
@@ -241,7 +241,7 @@ def comp_P_der(iP__):  # der+ sub_recursion in PP.P__
     dderPs__ = []  # derP__ = [[] for P_ in P__[:-1]]  # init derP rows, exclude bottom P row
 
     for P_ in P__[1:-1]:  # higher compared row, exclude 1st: no +ve uplinks, and last: no +ve downlinks
-        dderPs_ = []
+        dderPs_ = []  # row of dderPs
         for P in P_:
             dderPs = []  # multiple per P
             for _derP in P.uplink_layers[-1]:
@@ -253,12 +253,12 @@ def comp_P_der(iP__):  # der+ sub_recursion in PP.P__
                     derP.uplink_layers[0] += [dderP]  # pre-init layer per derP
                     _derP.downlink_layers[0] += [dderP]
                     dderPs += [dderP]
+                # need to test for connection between dderPs: __P to P? in form_seg_?
             dderPs_ += [dderPs]
         dderPs__ += [dderPs_]
 
     return dderPs__
 
-# below is not revised:
 
 def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
 
@@ -272,23 +272,41 @@ def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
                 seg_.append(sum2seg([P], fPd))  # no uplink_, terminate seg_Ps = [P]
     return seg_
 
-
 def form_seg_(seg_, P__, seg_Ps, fPd):  # form same-sign vertically contiguous segments
 
-    match_uplink_, miss_uplink_ = [], []
+    miss_uplink_ = []
+    match_uplink_ = seg_Ps[-1].uplink_layers[-1]
 
-    for derP in seg_Ps[-1].uplink_layers[-1]:  # mixed_uplink_ of top P in seg_Ps, not converted to CPP seg yet
+    for derP in seg_Ps[-1].uplink_layers[-1]:  # bottom-up, mixed_uplink_ of top P in seg_Ps, not CPP seg yet
+        if fPd:
+            rdn = derP.params[fPd] > derP.params[1 - fPd]  # dP > mP if fPd, else mP > dP
+            derP.sign = derP.params[fPd] > ave_dP * (1+rdn)  # val = derP.params[fPd]
+        else:  # frng
+            olp_val, nolp, rdn = olp_value(derP, fPd)
+            derP.sign = olp_val > ave_mP * rdn * nolp  # sign of mean mutual derPs
 
-        npass = len(match_uplink_) / len(seg_Ps[-1].uplink_layers[-1])  # not sure, please correct it
-        olp_sign(derP, npass, fPd)  # compute derP.sign, for rng+ only?
-        if derP.sign == seg_Ps[0].uplink_layers[-1][0].sign:  # seg sign = sign of any member derP in the last link_layer
+        if derP.sign:  # +ve only, no seg_Ps[0].uplink_layers[-1][0].sign:  # seg sign = sign of any member derP in the last link_layer
             match_uplink_ += [derP]
         else:
             miss_uplink_ += [derP]  # add to PP_missing_uplink_ at seg termination, same for missing_downlink_?
 
+        # draft, this should probably replace the above:
+
+        if fPd: vave = ave_dP
+        else:   vave = ave_mP
+        npass = 0
+        branches = match_uplink_.comp  # initial branches
+
+        while (len(match_uplink_) > 1) and (npass < len(branches)):
+            for derP in match_uplink_:
+                npass += 1  # re-evaluate for branch redundancy, increased by the append 289:
+                if derP[fPd] < vave * len(match_uplink_):
+                    match_uplink_.remove(derP)
+
+
     if len(match_uplink_) > 1:
-        # here we need to re-compute sign by - ave*len(match_uplink_)?
-        [P_.remove(seg_P) for seg_P in seg_Ps for P_ in P__ if seg_P in P_]  # remove seg_P from P__ when they are forming seg
+        # terminate seg
+        [P_.remove(seg_P) for seg_P in seg_Ps for P_ in P__ if seg_P in P_]  # remove seg_P from P__
         seg_.append( sum2seg( seg_Ps, fPd) ) # convert seg_Ps to terminated seg
     else:
         # if one P.uplink AND one _P.downlink: add _P to seg, match_uplink_[0] is a sole uplinked derP:
@@ -308,23 +326,20 @@ def form_seg_(seg_, P__, seg_Ps, fPd):  # form same-sign vertically contiguous s
         # if branch rdn: inp.rdn += sum([1 for upderP in derP.P.uplink_ if upderP.dP >= derP.dP])
 '''
 
-def olp_sign(derP, npass, fPd):  # sign of combined mutual derPs: overlap between P uplinks and _P downlinks
+def olp_value(derP, fPd):  # value of combined mutual derPs: overlap between P uplinks and _P downlinks
 
     _P, P = derP._P, derP.P
     common_derP_ = []
 
     for _downlink_layer, uplink_layer in zip(_P.downlink_layers, P.uplink_layers):  # overlap in P uplinks and _P downlinks
         common_derP_ += list( set(_downlink_layer).intersection(uplink_layer))  # get common derP in mixed uplinks
-
-    common_VP = 0
     rdn = 1
+    olp_val = 0
     for derP in common_derP_:
         rdn += derP.params[fPd] > derP.params[1-fPd]  # dP > mP if fPd, else mP > dP
-        common_VP += derP.params[fPd]
+        olp_val += derP.params[fPd]
 
-    if fPd: vave = ave_dP
-    else: vave = ave_mP
-    derP.sign = common_VP > vave * rdn * len(common_derP_)  # sign of mean mutual derPs
+    return olp_val, len(common_derP_), rdn
 
 
 def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
@@ -344,10 +359,9 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
 
     return seg
 
-
 def sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd):  # sum params: derPs into segment or segs into PP
 
-    PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,L= len(PP_segs), uplink_ = miss_uplink_.copy(), downlink_ = miss_downlink_.copy())
+    PP = CPP(x0=PP_segs[0].x0, sign=PP_segs[0].sign,L= len(PP_segs), uplink_layers = [miss_uplink_.copy()], downlink_layers = [miss_downlink_.copy()])
     PP.seg_levels[fPd][0] = PP_segs  # PP_segs is seg_levels[0]
 
     if len(PP_segs)>1:
@@ -360,7 +374,6 @@ def sum2PP(PP_segs, miss_uplink_, miss_downlink_, fPd):  # sum params: derPs int
 
     return PP
 
-# draft, may not be needed:
 def accum_CP(seg, P, fPd):
 
     if not seg.params:
@@ -369,7 +382,6 @@ def accum_CP(seg, P, fPd):
         accum_layer(seg.params[-1], P.params)  # P.params is top layer
     P.root = seg
     seg.x0 = min(seg.x0, P.x0)
-
 
 def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
 
@@ -517,8 +529,8 @@ def sub_recursion(root_layers, PP_, frng):  # compares param_layers of derPs in 
 
             PP.rdn += 1  # rdn to prior derivation layers
             PP.rng = rng
-            Pm__ = comp_P_sub(PP.P__, frng=frng)
-            Pd__ = comp_P_sub(PP.P__, frng=frng)
+            Pm__ = comp_P_rng(PP.P__, rng)
+            Pd__ = comp_P_der(PP.P__)
             sub_segm_ = form_seg_root(Pm__, root_rdn=PP.rdn, fPd=0)
             sub_segd_ = form_seg_root(Pd__, root_rdn=PP.rdn, fPd=1)
             sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), root_rdn=PP.rdn)  # forms PPs: parameterized graphs of linked segs
