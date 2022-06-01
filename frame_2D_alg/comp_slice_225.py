@@ -849,3 +849,26 @@ def comp_P_sub(iP__, frng):  # sub_recursion in PP, if frng: rng+ fork, else der
     else:
         return derP__
 
+def prune_branches(link_layers, fPd):  # links from prior comp_P, initially in x0 sequence
+
+    match_link_, miss_link_ = [],[]
+    link_layer = sorted(link_layers[-1], key=lambda derP:derP.params[fPd], reverse=False)
+
+    for i, derP in enumerate(link_layer):  # derPs are links between compared Ps
+
+        if fPd: derP.rdn += derP.params[0] > derP.params[1]  # mP > dP
+        else:   rng_eval(derP, fPd)  # resets derP val, rdn
+
+        if derP.params[fPd] > vaves[fPd] * (derP.rdn + len(match_link_)):  # val > ave * branch redundancy,
+            # the weaker links are redundant to the stronger, added to match_link_ in prior loops
+            match_link_.append(derP)  # derP._P.downlink_layers[-1].append(derP)
+            derP.P.uplink_layers[-1].append(derP)
+        else:
+            miss_link_ = link_layer[i:]
+            link_layers.append( match_link_)
+            break  # the rest of links is even weaker
+
+        if derP == link_layer[-1]:  # no prior break
+            link_layers.append(match_link_)
+
+    return miss_link_
