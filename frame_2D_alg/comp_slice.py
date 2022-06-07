@@ -66,8 +66,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     y = int  # for vertical gap in PP.P__
     # composite params:
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
-    uplink_layers = lambda: [[],[]]  # init 1st 2 layers: derPs and match_derPs
-    downlink_layers = lambda: [[],[]]
+    uplink_layers = lambda: [[]]  # init 1st layer of derPs
+    downlink_layers = lambda: [[]]
     root = lambda:None  # segment that contains this P
     # only in Pd:
     Pm = object  # reference to root P
@@ -92,8 +92,8 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     root = lambda:None  # segment in sub_recursion
     # higher derivatives
     rdn = int  # mrdn, + uprdn if branch overlap?
-    uplink_layers = lambda: [[],[]]  # init 1st 2 layers: dderPs and match_dderPs
-    downlink_layers = lambda: [[],[]]
+    uplink_layers = lambda: [[]]  # init 1st layer of dderPs
+    downlink_layers = lambda: [[]]
    # from comp_dx
     fdx = NoneType
 
@@ -106,8 +106,8 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
     Rdn = int  # for accumulation only
     nP = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
     nderP = int
-    uplink_layers = lambda: [[], []]
-    downlink_layers = lambda: [[], []]
+    uplink_layers = lambda: [[]]
+    downlink_layers = lambda: [[]]
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
     box = list  # for visualization only, original box before flipping
@@ -199,11 +199,12 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 if (P.x0 - 1 < _P.x0 + _P.L) and (P.x0 + P.L + 1 > _P.x0):
                     derP = comp_P(_P, P)
-                    P.uplink_layers[-2] += [derP]  # append derPs, uplink_layers[-1] is match_derPs
-                    _P.downlink_layers[-2] += [derP]
+                    P.uplink_layers[-1] += [derP]  # append derPs, uplink_layers[-1] is match_derPs
+                    _P.downlink_layers[-1] += [derP]
                 elif (P.x0 + P.L) < _P.x0:
                     break  # no P xn overlap, stop scanning lower P_
         _P_ = P_
+
     return P__
 
 
@@ -228,11 +229,11 @@ def comp_P_rng(iP__, rng):  # rng+ sub_recursion in PP.P__, adding two link_laye
 
     for P_, uplinks_ in zip( P__[rng:], uplinks__):  # skip 1st rmg rows, no uplinks
         for P, uplinks in zip(P_, uplinks_):
-            P.uplink_layers += [uplinks, []]  # add two P.link_layers: rng_derP_ and empty match_rng_derP_
+            P.uplink_layers += [uplinks]  # add rng_derP_ to P.link_layers
 
     for P_, downlinks_ in zip(P__[:-rng], downlinks__):  # skip last rng rows, no downlinks
         for P, downlinks in zip(P_, downlinks_):
-            P.downlink_layers += [downlinks, []]
+            P.downlink_layers += [downlinks]
 
     return iP__  # return bottom-up P__
 
@@ -264,6 +265,11 @@ def comp_P_der(iP__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.do
 
 def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
 
+    for P_ in P__:  # scan bottom-up to define match links between compared Ps
+        for P in P_:
+            link_eval(P.uplink_layers[-1], fPd)
+            link_eval(P.downlink_layers[-1], fPd)  # add new link_layer, no separate miss_links
+
     seg_ = []
     for P_ in reversed(P__):  # get a row of Ps bottom-up, different copies per fPd
         while P_:
@@ -271,30 +277,31 @@ def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
             if P.uplink_layers[-2]:  # last derPs layer is not empty
                 form_seg_(seg_, P__, [P], fPd)  # test P.matching_uplink_, not known in form_seg_root
             else:
-                seg_.append( sum2seg([P], [], fPd))  # no link_s, terminate seg_Ps = [P]
+                seg_.append( sum2seg([P], fPd))  # no link_s, terminate seg_Ps = [P]
     return seg_
+
+
+def link_eval(link_, fPd):
+
+    for derP in sorted(link_, key=lambda derP: derP.params[fPd], reverse=False):
+
+        if fPd: derP.rdn += derP.params[0] > derP.params[1]  # mP > dP
+        else:   rng_eval(derP, fPd)  # reset derP.val, derP.rdn
+
+        ave = vaves[fPd] * derP.rdn  # val > ave * branch rdn,
+        # the weaker links are redundant to the stronger, added to derP.P.link_layers[-1]) in prior loops:
+
+        if derP.params[fPd] > ave * len(derP.P.uplink_layers[-1]):
+            derP.P.uplink_layers[-1].append(derP)
+        if derP.params[fPd] > ave * len(derP.P.downlink_layers[-1]):
+            derP._P.downlink_layers[-1].append(derP)
+        # miss_link_ = link_layers[-2] not in link_layers[-1]
 
 
 def form_seg_(seg_, P__, seg_Ps, fPd):  # form contiguous segments of vertically matching derPs
 
-    uplink_layer = sorted(seg_Ps[-1].uplink_layers[-2], key=lambda derP:derP.params[fPd], reverse=False)
-    miss_uplink_ = []
-
-    for i, derP in enumerate(uplink_layer):  # scan bottom-up to find match | miss links between compared Ps
-        if fPd: derP.rdn += derP.params[0] > derP.params[1]  # mP > dP
-        else:   rng_eval(derP, fPd)  # reset derP.val, derP.rdn
-
-        if derP.params[fPd] > vaves[fPd] * (derP.rdn + len(derP.P.uplink_layers[-1])):  # val > ave * branch rdn,
-            # the weaker links are redundant to the stronger, added to derP.P.uplink_layers[-1]) in prior loops
-            derP.P.uplink_layers[-1].append(derP)
-            derP._P.downlink_layers[-1].append(derP)
-        else:
-            miss_uplink_ = uplink_layer[i:]  # = seg.uplink_ if term, also add to higher-seg.downlink_ in sum2seg
-            break  # the rest of uplinks is even weaker
-
-    # seg definition:
     if len(seg_Ps[-1].uplink_layers[-1]) > 1:  # terminate seg
-        seg_.append( sum2seg( seg_Ps, miss_uplink_, fPd)) # convert seg_Ps to CPP seg
+        seg_.append( sum2seg( seg_Ps, fPd)) # convert seg_Ps to CPP seg
     else:
         match_uplink_ = seg_Ps[-1].uplink_layers[-1]
         if match_uplink_ and len(match_uplink_[0]._P.downlink_layers[-1])==1:
@@ -306,9 +313,9 @@ def form_seg_(seg_, P__, seg_Ps, fPd):  # form contiguous segments of vertically
             if seg_Ps[-1].uplink_layers[-2]:
                 form_seg_(seg_, P__, seg_Ps, fPd)  # recursive compare sign of next-layer uplinks
             else:
-                seg_.append( sum2seg(seg_Ps, miss_uplink_, fPd))
+                seg_.append( sum2seg(seg_Ps, fPd))
         else:
-            seg_.append( sum2seg(seg_Ps, miss_uplink_, fPd))  # terminate seg at 0 matching uplink
+            seg_.append( sum2seg(seg_Ps, fPd))  # terminate seg at 0 matching uplink
 
 
 def rng_eval(derP, fPd):  # compute value of combined mutual derPs: overlap between P uplinks and _P downlinks
@@ -364,12 +371,14 @@ def form_PP_(PP_segs, link_, fPd): # flood-fill PP_segs with vertically linked s
                 form_PP_(PP_segs, downlink_, fPd)
 
 
-def sum2seg(seg_Ps, miss_uplink_, fPd):  # sum params of vertically connected Ps into segment
+def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
 
-    downlinks = seg_Ps[0].downlink_layers[-2]  # downlinks of bottom P, downlink.P.seg.uplinks: lower seg.uplinks,
+    # draft:
+    uplinks, uuplinks = seg_Ps[-1].uplink_layers[-2,-1]  # uplinks of top P
+    miss_uplink_ = [uuplink for uuplink in uuplinks if uuplink in uuplinks not in uplinks]  # in layer-1 but not in layer-2
 
-    # miss is computed for lower seg.uplinks to terminate and form new seg, but they overlap higher seg.downlinks:
-    miss_downlink_ = [downlink for downlink in downlinks if downlink in downlink.P.root.uplink_layers[-1]]
+    downlinks, ddownlinks = seg_Ps[0].downlink_layers[-2,-1]  # downlinks of bottom P, downlink.P.seg.uplinks: lower seg.uplinks
+    miss_downlink_ = [ddownlink for ddownlink in ddownlinks if ddownlink in ddownlinks not in downlinks]
 
     # seg rdn: up cost to init, up+down cost for comp_seg eval, in 1st agg_recursion?
     # P rdn is up+down M/n, but P is already formed and compared?
