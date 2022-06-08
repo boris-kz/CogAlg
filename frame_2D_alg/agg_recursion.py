@@ -1,5 +1,46 @@
 from comp_slice import *
 
+class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlink_, PP can also be PPP, etc.
+
+    # draft
+    params = list  # PP derivation layer, flat, decoded by mapping each m,d to lower-layer param
+    x0 = int  # redundant to params:
+    x = float  # median x
+    L = int  # pack in params?
+    sign = NoneType  # g-ave + ave-ga sign
+    y = int  # for vertical gaps in PP.P__, replace with derP.P.y?
+    PP = object  # lower comparand
+    _PP = object  # higher comparand
+    root = lambda:None  # segment in sub_recursion
+    # higher derivatives
+    rdn = int  # mrdn, + uprdn if branch overlap?
+    uplink_layers = lambda: [[],[]]  # init a layer of dderPs and a layer of match_dderPs
+    downlink_layers = lambda: [[],[]]
+   # from comp_dx
+    fdx = NoneType
+
+class CPPP(CPP, CderPP):
+
+    # draft
+    params = list  # derivation layers += derP params per der+, param L is actually Area
+    sign = bool
+    rng = lambda: 1  # rng starts with 1
+    rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
+    Rdn = int  # for accumulation only
+    nP = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
+    uplink_layers = lambda: [[],[]]
+    downlink_layers = lambda: [[],[]]
+    fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
+    fdiv = NoneType
+    box = list  # for visualization only, original box before flipping
+    mask__ = bool
+    P__ = list  # input  # derP__ = list  # redundant to P__
+    seg_levels = lambda: [[[]],[[]]]  # from 1st agg_recursion, seg_levels[0] is seg_t, higher seg_levels are segP_t s
+    PPP_levels = list  # from 2nd agg_recursion, PP_t = levels[0], from form_PP, before recursion
+    layers = list  # from sub_recursion, each is derP_t
+    root = lambda:None  # higher-order segP or PPP
+
+
 def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP, PPP are relative terms, each may be of any composition order
 
     if fseg: PP_t = [blob.seg_levels[0][-1], blob.seg_levels[1][-1]]   # blob is actually PP, recursion forms segP_t, seg_PP_t, etc.
@@ -43,28 +84,43 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
         agg_recursion(blob, fseg)
 
 # draft:
-def comp_PP_root(PP__):  # PP can also be PPP, etc.
+def comp_PP_root(PP__):  # PP__ is 2D, PP can also be PPP, etc.
 
-    #not sure these are needed:
+    for PP_ in PP__:
+        for PP in PP_:
+            for _PP in PP.uplink_layers[-1]:
+                comp_PP(_PP, PP)  # variable rng, comp cross-sign if PPd?
+    '''
+    # not sure these are needed:
     uplink_layers = [[] for PP_ in PP__]
     downlink_layers = deepcopy(uplink_layers)
+    
+        uplink_layers[i] += [derPP]  # add derPP
+        if _PP in PP_: downlink_layers[PP_.index(_PP)] += [derPP]
 
-    # it seems that input PP__ must be 2D?
-    for i, PP in enumerate(PP__):
-        for _PP in PP.uplink_layers[-1]:
-
-            derPP = comp_derP(_PP, PP)  # cross-sign if PPd?
-            uplink_layers[i] += [derPP]  # add derPP
-            if _PP in PP_: downlink_layers[PP_.index(_PP)] += [derPP]
-
-    # update links
     for PP, uplink_layer, downlink_layer in zip_longest(PP_, uplink_layers, downlink_layers, fillvalue=[]):
         PP.uplink_layers += [uplink_layer]
         PP.downlink_layers += [downlink_layer]
+    '''
 
-    return PP_
+def comp_PP(_PP, PP):  # draft
+
+    derPP = CderPP
+
+    for _param_layer, param_layer in zip(_PP.params, PP.params):
+        derPP += [comp_derP(_param_layer, param_layer)]
+
+    PP.uplink_layers[-1] += [derPP]  # each layer has Mlayer, Dlayer
+    _PP.downlink_layers[-1] += [derPP]
+
+def form_segPPP_root():  # not sure about form_seg_root
+    pass
 
 def form_PPP_root(seg_t, root_rdn=2):
+    '''
+    if match params[-1]: form PPP
+    elif match params[:-1]: splice PPs and their segs?
+    '''
     pass
 
 # pending update
