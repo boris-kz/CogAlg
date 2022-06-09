@@ -194,3 +194,46 @@ def comp_dx(P):  # cross-comp of dx s in P.dert_
     P.Ddx = Ddx
     P.Mdx = Mdx
 
+# june 22
+def sub_recursion(root_layers, PP_, frng):  # compares param_layers of derPs in generic PP, form or accum top derivatives
+
+    comb_layers = []
+    for PP in PP_:  # PP is generic higher-composition pattern, P is generic lower-composition pattern
+                    # both P and PP may be recursively formed higher-derivation derP and derPP, etc.
+        if frng: PP_V = PP.params[-1][0] - ave_mPP * PP.rdn; rng = PP.rng+1; min_L = rng * 2  # V: value of sub_recursion per PP
+        else:    PP_V = PP.params[-1][1] - ave_dPP * PP.rdn; rng = PP.rng; min_L = 3  # need 3 Ps to compute layer2, etc.
+        if PP_V > 0 and PP.nderP > min_L:
+
+            PP.rdn += 1  # rdn to prior derivation layers
+            PP.rng = rng
+            '''
+            not sure, may not be needed:
+            if PP.y0 < _PP.y0_ + len(PP.P__) + rng: # vertical gap < rng, comp(1st rng Ps, last rng Ps)?
+                if fseg:  # seg__ is 2D: cross-sign (same-sign), converted to PP_ and PP respectively
+                    splice_segs(PP_)
+                else:
+                    splice_PPs(PP_, frng=1-i)
+            '''
+            Pm__ = comp_P_rng(PP.P__, rng)
+            Pd__ = comp_P_der(PP.P__)
+            # reversed P__: form_seg_root will reverse back
+            sub_segm_ = form_seg_root([Pm_ for Pm_ in reversed(Pm__)], root_rdn=PP.rdn, fPd=0)
+            sub_segd_ = form_seg_root([Pd_ for Pd_ in reversed(Pd__)], root_rdn=PP.rdn, fPd=1)
+            sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), root_rdn=PP.rdn)  # forms PPs: parameterized graphs of linked segs
+
+            PP.layers = [(sub_PPm_, sub_PPd_)]
+            if sub_PPm_:
+                # rng+=1, |+=n to reduce clustering costs?
+                sub_recursion(PP.layers, sub_PPm_, frng=1)  # rng+ comp_P in PPms, form param_layer, sub_PPs
+            if sub_PPd_:
+                sub_recursion(PP.layers, sub_PPd_, frng=0)  # der+ comp_P in PPds, form param_layer, sub_PPs
+
+            if PP.layers:  # pack added sublayers:
+                new_comb_layers = []
+                for (comb_sub_PPm_, comb_sub_PPd_), (sub_PPm_, sub_PPd_) in zip_longest(comb_layers, PP.layers, fillvalue=([], [])):
+                    comb_sub_PPm_ += sub_PPm_
+                    comb_sub_PPd_ += sub_PPd_
+                    new_comb_layers.append((comb_sub_PPm_, comb_sub_PPd_))  # add sublayer
+                comb_layers = new_comb_layers
+
+    if comb_layers: root_layers += comb_layers
