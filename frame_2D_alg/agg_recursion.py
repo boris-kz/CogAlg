@@ -237,3 +237,36 @@ def sub_recursion(root_layers, PP_, frng):  # compares param_layers of derPs in 
                 comb_layers = new_comb_layers
 
     if comb_layers: root_layers += comb_layers
+
+
+def comp_P_rng(iP__, rng):  # rng+ sub_recursion in PP.P__, adding two link_layers per P
+
+    P__ = [P_ for P_ in reversed(iP__)]  # revert to top-down
+    uplinks__ = [[ [] for P in P_] for P_ in P__[rng:]]  # rng derP_s per P, exclude 1st rng rows
+    downlinks__ = [[ [] for P in P_] for P_ in P__[:-rng]]  # exclude last rng rows
+
+    for y, _P_ in enumerate(P__[:-rng]):  # higher compared row, skip last rng: no lower comparand rows
+        for x, _P in enumerate(_P_):
+
+            for pri_rng_derP in _P.downlink_layers[-1]:  # get linked Ps at dy = rng-1
+                pri_P = pri_rng_derP.P
+                for ini_derP in pri_P.downlink_layers[0]:  # lower comparands are linked Ps at dy = rng
+                    P = ini_derP.P
+                    if isinstance(P, CPP) or isinstance(P, CderP):  # rng+ fork for derPs, very unlikely
+                        derP = comp_derP(_P, P)  # form higher vertical derivatives of derP or PP params
+                    else:
+                        derP = comp_P(_P, P)  # form vertical derivatives of horizontal P params
+                    # += links:
+                    downlinks__[y][x] += [derP]
+                    up_x = P__[y+rng].index(P)  # index of P in P_ at y+rng
+                    uplinks__[y][up_x] += [derP]  # uplinks__[y] = P__[y+rng]: uplinks__= P__[rng:]
+
+    for P_, uplinks_ in zip( P__[rng:], uplinks__):  # skip 1st rmg rows, no uplinks
+        for P, uplinks in zip(P_, uplinks_):
+            P.uplink_layers += [uplinks, []]  # add rng_derP_ to P.link_layers
+
+    for P_, downlinks_ in zip(P__[:-rng], downlinks__):  # skip last rng rows, no downlinks
+        for P, downlinks in zip(P_, downlinks_):
+            P.downlink_layers += [downlinks, []]
+
+    return iP__  # return bottom-up P__
