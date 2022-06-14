@@ -132,10 +132,11 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         segm_ = form_seg_root(Pm__, root_rdn=2, fPd=0)  # forms segments: parameterized stacks of (P,derP)s
         segd_ = form_seg_root(Pd__, root_rdn=2, fPd=1)  # seg is a stack of (P,derP)s
-        PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)  # forms PPs: parameterized graphs of linked segs
 
+        PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)  # forms PPs: parameterized graphs of linked segs
+        # rng+, der+ fork eval per PP, forms param_layer and sub_PPs:
         sub_recursion_eval(PPm_)
-        sub_recursion_eval(PPd_)  # rng+, der+ eval per PP, forms param_layer and sub_PPs
+        sub_recursion_eval(PPd_)
 
         for PP_ in (PPm_, PPd_):  # 1st agglomerative recursion is per PP, appending PP.seg_levels, not blob.levels:
             for PP in PP_:
@@ -213,7 +214,7 @@ def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to sk
                 # compare linked Ps at dy = rng:
                 for ini_derP in pri_P.downlink_layers[0]:
                     P = ini_derP.P
-                    # add new link layers and reset root?:
+                    # add new Ps, their link layers and reset their roots:
                     if P not in [P for P_ in P__ for P in P_]:
                         append_P(P__, P)
                         P.uplink_layers += [[],[]]; P.downlink_layers += [[],[]]; P.root = object
@@ -225,7 +226,9 @@ def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to sk
                     P.uplink_layers[-2] += [derP]
                     _P.downlink_layers[-2] += [derP]
 
-    return reversed(P__)  # return bottom-up P__ for form_seg_
+    new_P__ = [P_ for P_ in reversed(P__)]  # return bottom-up P__ for form_seg_
+
+    return new_P__, new_P__.copy  # new_mP__, new_dP__
 
 
 def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.downlinks
@@ -249,7 +252,9 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
             dderPs_ += dderPs  # row of dderPs
         dderPs__ += [dderPs_]
 
-    return dderPs__
+    dderP__ = [dderP_ for dderP_ in reversed(dderPs__)]  # return bottom up
+
+    return dderP__, dderP__.copy  # dder_mP__, dder_dP__
 
 
 def form_seg_root(P__, root_rdn, fPd):  # form segs from Ps
@@ -440,20 +445,6 @@ def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
                     PP.uplink_layers[-1] += [derP]
 
 
-def append_P(P__, P):
-
-    current_ys = [P_[0].y for P_ in P__]  # list of current-layer seg rows
-    if P.y in current_ys:
-        P__[current_ys.index(P.y)].append(P)  # append P row
-    elif P.y > current_ys[0]:  # P.y > largest y in ys
-        P__.insert(0, [P])
-    elif P.y < current_ys[-1]:  # P.y < smallest y in ys
-        P__.append([P])
-    elif P.y < current_ys[0] and P.y > current_ys[-1]:  # P.y in between largest and smallest value
-        for i, y in enumerate(current_ys):  # insert y if > next y
-            if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
-
-
 def accum_layer(top_layer, der_layer):
 
     for i, (_param, param) in enumerate(zip(top_layer, der_layer)):  # include all summable derP variables into params?
@@ -474,6 +465,20 @@ def accum_layer(top_layer, der_layer):
                 top_layer[i] = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
         else:  # scalar
             top_layer[i] += param
+
+
+def append_P(P__, P):
+
+    current_ys = [P_[0].y for P_ in P__]  # list of current-layer seg rows
+    if P.y in current_ys:
+        P__[current_ys.index(P.y)].append(P)  # append P row
+    elif P.y > current_ys[0]:  # P.y > largest y in ys
+        P__.insert(0, [P])
+    elif P.y < current_ys[-1]:  # P.y < smallest y in ys
+        P__.append([P])
+    elif P.y < current_ys[0] and P.y > current_ys[-1]:  # P.y in between largest and smallest value
+        for i, y in enumerate(current_ys):  # insert y if > next y
+            if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
 
 
 def sub_recursion_eval(PP_):  # evaluate each PP for rng+ and der+
@@ -516,24 +521,32 @@ def sub_recursion_eval(PP_):  # evaluate each PP for rng+ and der+
 
 def sub_recursion(PP, base_rdn, fPd):  # compares param_layers of derPs in generic PP, form or accum top derivatives
 
-    P__ = []  # revert to top-down, add 2 link_layers per P:
+    Pm__, Pd__ = [], []
+    # revert to top-down, add 2 link_layers per P:
     for iP_ in reversed(PP.P__):
-        P_=[]
+        Pm_, Pd_ = [], []
         for P in iP_:
-            P.uplink_layers += [[],[]]; P.downlink_layers += [[],[]]
-            P.root = object
-            P = deepcopy(P)
-            P_ += [P]
-        P__ += [P_]
+            uplink_layers, downlink_layers = P.uplink_layers, P.downlink_layers  # local copy of link layers
+            P.uplink_layers, P.downlink_layers = [], []  # temporary reset link layers
+            P.root = None  # reset root
+            new_Pm, new_Pd = P.copy, P.copy  # copy new P, with empty root and link layers
+            # reassign link layers to old Ps after copying, or simply use shallow copy?
+            new_Pm.uplink_layers += uplink_layers + [[], []]
+            new_Pm.downlink_layers +=  downlink_layers + [[], []]
+            new_Pd.uplink_layers += uplink_layers + [[], []]
+            new_Pd.downlink_layers +=  downlink_layers + [[], []]
+            P.uplink_layers, P.downlink_layers = uplink_layers, downlink_layers  # reassign back link layers into
+            Pm_ += [new_Pm]
+            Pd_ += [new_Pd]
+        Pm__ += [Pm_]
+        Pd__ += [Pd_]
 
-    if fPd: P__ = comp_P_rng(P__, PP.rng+1)
-    else:   P__ = comp_P_der(P__)
+    # return bottom-up Pm__, Pd__
+    if fPd: Pm__, Pd__ = comp_P_rng(Pm__, PP.rng+1)
+    else:   Pm__, Pd__ = comp_P_der(Pm__)
 
-    rev_Pm__ = [P_ for P_ in reversed(P__)]  # reversed P__: form_seg_root will reverse back
-    rev_Pd__ = [P_ for P_ in reversed(P__)]  # reversed P__: form_seg_root will reverse back
-
-    sub_segm_ = form_seg_root(rev_Pm__, base_rdn, fPd=0)
-    sub_segd_ = form_seg_root(rev_Pd__, base_rdn, fPd=1)
+    sub_segm_ = form_seg_root(Pm__, base_rdn, fPd=0)
+    sub_segd_ = form_seg_root(Pd__, base_rdn, fPd=1)
 
     sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), base_rdn)  # forms PPs: parameterized graphs of linked segs
     PPm_comb_layers, PPd_comb_layers = [[],[]], [[],[]]
@@ -542,7 +555,7 @@ def sub_recursion(PP, base_rdn, fPd):  # compares param_layers of derPs in gener
     if sub_PPd_:
         PPd_comb_layers = sub_recursion_eval(sub_PPd_)  # der+ comp_P in PPds -> param_layer, sub_PPs
 
-    # combine each sub_PPms and sub_PPds from each layer
+    # combine sub_PPm_s and sub_PPd_s from each layer
     comb_layers = [[], []]
     for m_sub_PPm_, d_sub_PPm_ in zip_longest(PPm_comb_layers[0], PPd_comb_layers[0], fillvalue=[]):
         comb_layers[0] += [m_sub_PPm_ + d_sub_PPm_]
