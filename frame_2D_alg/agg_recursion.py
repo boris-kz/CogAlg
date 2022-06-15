@@ -1,5 +1,11 @@
-from comp_slice import *
+from comp_slice import *  # exclude agg_recursion?
+'''
+Blob edges may be represented by higher-composition PPPs, etc., if top param-layer match,
+in combination with spliced lower-composition PPs, etc, if only lower param-layers match.
+This may form closed edge patterns around flat blobs, which defines stable objects.   
+'''
 
+# agg-recursive versions should be more complex?
 class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlink_, PP can also be PPP, etc.
 
     # draft
@@ -65,7 +71,7 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
             segm_ = form_seg_root(PPm__, root_rdn=2, fPd=0)  # forms segments: parameterized stacks of (P,derP)s
             segd_ = form_seg_root(PPd__, root_rdn=2, fPd=1)  # seg is a stack of (P,derP)s
 
-            PPPm_, PPPd_ = form_PPP_root([segm_, segd_], root_rdn=2)  # PPP is generic next-level composition
+            PPPm_, PPPd_ = form_PPP_root([segm_, segd_], base_rdn=2)  # PPP is generic next-level composition
             splice_PPs(PPPm_, frng=1)
             splice_PPs(PPPd_, frng=0)
             PPP_t += [PPPm_, PPPd_]  # flat version
@@ -116,7 +122,7 @@ def comp_PP(_PP, PP):  # draft
 def form_segPPP_root():  # not sure about form_seg_root
     pass
 
-def form_PPP_root(seg_t, root_rdn=2):
+def form_PPP_root(seg_t, base_rdn=2):
     '''
     if match params[-1]: form PPP
     elif match params[:-1]: splice PPs and their segs?
@@ -206,20 +212,12 @@ def sub_recursion(root_layers, PP_, frng):  # compares param_layers of derPs in 
 
             PP.rdn += 1  # rdn to prior derivation layers
             PP.rng = rng
-            '''
-            not sure, may not be needed:
-            if PP.y0 < _PP.y0_ + len(PP.P__) + rng: # vertical gap < rng, comp(1st rng Ps, last rng Ps)?
-                if fseg:  # seg__ is 2D: cross-sign (same-sign), converted to PP_ and PP respectively
-                    splice_segs(PP_)
-                else:
-                    splice_PPs(PP_, frng=1-i)
-            '''
             Pm__ = comp_P_rng(PP.P__, rng)
             Pd__ = comp_P_der(PP.P__)
-            # reversed P__: form_seg_root will reverse back
+
             sub_segm_ = form_seg_root([Pm_ for Pm_ in reversed(Pm__)], root_rdn=PP.rdn, fPd=0)
             sub_segd_ = form_seg_root([Pd_ for Pd_ in reversed(Pd__)], root_rdn=PP.rdn, fPd=1)
-            sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), root_rdn=PP.rdn)  # forms PPs: parameterized graphs of linked segs
+            sub_PPm_, sub_PPd_ = form_PP_root(( sub_segm_, sub_segd_), base_rdn=PP.rdn)  # forms PPs: parameterized graphs of linked segs
 
             PP.layers = [(sub_PPm_, sub_PPd_)]
             if sub_PPm_:
