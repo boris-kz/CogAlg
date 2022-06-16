@@ -1,4 +1,8 @@
-from comp_slice import *  # exclude agg_recursion?
+import sys
+import numpy as np
+from itertools import zip_longest
+from copy import deepcopy, copy
+from class_cluster import ClusterStructure, NoneType, comp_param, Cder
 '''
 Blob edges may be represented by higher-composition PPPs, etc., if top param-layer match,
 in combination with spliced lower-composition PPs, etc, if only lower param-layers match.
@@ -62,18 +66,22 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
 
         if fseg: M = ave- np.hypot(blob.params[0][5], blob.params[0][6])  # hypot(dy, dx)
         else: M = ave-abs(blob.G)
-        if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
-            n_extended += 1
+#        if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
+        if len(PP_)>1:
+            n_extended += 1 
+            
+            PPm_, PPd_ = [comp_PP_(PP_t)]  # compare all PPs to the average (centroid) of all other PPs
+            # PP is generic for lower-level composition
+            ''' to be updated:
+            segm_ = form_segPPP_root(PPm_, root_rdn=2, fPd=0)  # forms segments: parameterized stacks of (P,derP)s
+            segd_ = form_segPPP_root(PPd_, root_rdn=2, fPd=1)  # seg is a stack of (P,derP)s
+            '''
 
-            PPm__ = [comp_PP_root(deepcopy(PP_))]  # PP is generic for lower-level composition
-            PPd__ = [comp_PP_root(deepcopy(PP_))]
-            # to be updated:
-            segm_ = form_seg_root(PPm__, root_rdn=2, fPd=0)  # forms segments: parameterized stacks of (P,derP)s
-            segd_ = form_seg_root(PPd__, root_rdn=2, fPd=1)  # seg is a stack of (P,derP)s
-
-            PPPm_, PPPd_ = form_PPP_root([segm_, segd_], base_rdn=2)  # PPP is generic next-level composition
+            PPPm_, PPPd_ = form_PPP_([PPm_, PPd_], base_rdn=2)  # PPP is generic next-level composition
+            
             splice_PPs(PPPm_, frng=1)
             splice_PPs(PPPd_, frng=0)
+            
             PPP_t += [PPPm_, PPPd_]  # flat version
 
             if PPPm_: sub_recursion([], PPPm_, frng=1)  # rng+
@@ -89,44 +97,79 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
     if n_extended/len(PP_t) > 0.5:  # mean ratio of extended PPs
         agg_recursion(blob, fseg)
 
-# draft:
-def comp_PP_root(PP__):  # PP__ is 2D, PP can also be PPP, etc.
+# draft,
+'''
+old comment:
+1st compare each node to the average (centroid) of all surrounding nodes within a maximal cartesian distance. 
+This determines if the node is part of proximity cluster, else it starts its own cluster. 
+2nd, that proximity cluster is mapped out through all connected nodes, still via some form of connectivity clustering or flood-fill.
 
-    for PP_ in PP__:
-        for PP in PP_:
-            for _PP in PP.uplink_layers[-1]:
-                comp_PP(_PP, PP)  # variable rng, comp cross-sign if PPd?
-    '''
-    # not sure these are needed:
-    uplink_layers = [[] for PP_ in PP__]
-    downlink_layers = deepcopy(uplink_layers)
+But then that proximity cluster forms its own centroid: mean constituent node params, and may be refined through centroid-based sub-clustering, 
+a global-range version of current sub_recursion().
+That's different from conventional centroid clustering in that initial cluster is defined through connectivity, 
+there is no randomization of any sort.
+'''
+def comp_PP_(PP_):  # PP can also be PPP, etc.
+
+    for PP in PP_:
+        ave_params = []
+        other_PPs = PP_.remove(PP)
+        n = len(other_PPs)
+        avePP = CPP
+        for PP in other_PPs:
+            sum_param = 0
+            for param in PP.params:
+                sum_param += param
+        ave_params += [sum_param / n]
+        derPP = CderPP
+        # comp to centroid:
+        for _param_layer, param_layer in zip(PP.params, ave_params):
+            derPP.params += [comp_derP(_param_layer, param_layer)]
+
+    PPm_ = [copy_P(PP, ftype=2) for PP in PP_]
+    PPd_ = [copy_P(PP, ftype=2) for PP in PP_] 
+
+    return PPm_, PPd_
     
-        uplink_layers[i] += [derPP]  # add derPP
-        if _PP in PP_: downlink_layers[PP_.index(_PP)] += [derPP]
 
-    for PP, uplink_layer, downlink_layer in zip_longest(PP_, uplink_layers, downlink_layers, fillvalue=[]):
-        PP.uplink_layers += [uplink_layer]
-        PP.downlink_layers += [downlink_layer]
+def comp_PP(PP, avePP):  # draft
     '''
-
-def comp_PP(_PP, PP):  # draft
-
-    derPP = CderPP
-
-    for _param_layer, param_layer in zip(_PP.params, PP.params):
-        derPP += [comp_derP(_param_layer, param_layer)]
-
+    probably not relevant:
     PP.uplink_layers[-1] += [derPP]  # each layer has Mlayer, Dlayer
     _PP.downlink_layers[-1] += [derPP]
-
-def form_segPPP_root():  # not sure about form_seg_root
-    pass
-
-def form_PPP_root(seg_t, base_rdn=2):
     '''
-    if match params[-1]: form PPP
-    elif match params[:-1]: splice PPs and their segs?
+
+# draft
+def form_PPP_t(derPP_t, base_rdn):  # form PPs from match-connected segs
+    for fPd, derPP_ in enumerate(derPP_t):
+        # sort derPP_ by value param:
+        for i, derPP in enumerate( sorted(derPP_, key=lambda derPP: derPP.params[fPd], reverse=True)):
+
+            derPP.rdn += derPP.params[fPd] > derPP.params[fPd+1]  # ?
+            ave = vaves[fPd] * derPP.rdn
+            # the weaker links are redundant to the stronger, added to derP.P.link_layers[-1]) in prior loops:
+
+            if derPP.params[fPd] > ave * len(derPP_[i:]):  # ave * cross-PPP rdn, derPPs are proto-PPPs
+                PPP_ = derPP_[i:]  # PPP here is syntactically identical to derPP?
+                break
     '''
+    if derPP.match params[-1]: form PPP
+    elif derPP.match params[:-1]: splice PPs and their segs?
+    '''
+
+# old:
+
+def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
+    
+    for PP in PP_:
+        link_eval(P.uplink_layers, fPd)
+        link_eval(P.downlink_layers, fPd)
+    
+    for PP in PP_:
+        form_segPPP_(PP)
+        
+        
+def form_segPPP_(PP):
     pass
 
 # pending update
