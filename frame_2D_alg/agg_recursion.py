@@ -2,7 +2,8 @@ import sys
 import numpy as np
 from itertools import zip_longest
 from copy import deepcopy, copy
-from class_cluster import ClusterStructure, NoneType, comp_param, Cder
+from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
+from comp_slice import *
 '''
 Blob edges may be represented by higher-composition PPPs, etc., if top param-layer match,
 in combination with spliced lower-composition PPs, etc, if only lower param-layers match.
@@ -65,105 +66,178 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
         else:    ave_PP = ave_mPP
 
         if fseg: M = ave- np.hypot(blob.params[0][5], blob.params[0][6])  # hypot(dy, dx)
-        else: M = ave-abs(blob.G)
-#        if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
+        else: M = ave-abs(blob.G)  # if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
+
         if len(PP_)>1:
-            n_extended += 1 
-            
-            PPm_, PPd_ = [comp_PP_(PP_t)]  # compare all PPs to the average (centroid) of all other PPs
-            # PP is generic for lower-level composition
-            ''' to be updated:
-            segm_ = form_segPPP_root(PPm_, root_rdn=2, fPd=0)  # forms segments: parameterized stacks of (P,derP)s
-            segd_ = form_segPPP_root(PPd_, root_rdn=2, fPd=1)  # seg is a stack of (P,derP)s
-            '''
+            n_extended += 1
 
-            PPPm_, PPPd_ = form_PPP_([PPm_, PPd_], base_rdn=2)  # PPP is generic next-level composition
-            
-            splice_PPs(PPPm_, frng=1)
-            splice_PPs(PPPd_, frng=0)
-            
-            PPP_t += [PPPm_, PPPd_]  # flat version
+            derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
+            PPP_t = form_PPP_t(derPP_t, base_rdn=2)
 
-            if PPPm_: sub_recursion([], PPPm_, frng=1)  # rng+
-            if PPPd_: sub_recursion([], PPPd_, frng=0)  # der+
+            splice_PPs(PPP_t)  # for initial PPs only?
+            sub_recursion_eval(PPP_t)  # rng+ or der+
         else:
             PPP_t += [[], []]  # replace with neg PPPs?
 
-    if fseg:
-        blob.seg_levels += [PPP_t]  # new level of segPs
-    else:
-        blob.levels.append(PPP_t)  # levels of dir_blob are Plevels
+    if fseg: blob.seg_levels += [PPP_t]  # new level of segPs
+    else:    blob.levels += [PPP_t]  # levels of dir_blob are Plevels
 
     if n_extended/len(PP_t) > 0.5:  # mean ratio of extended PPs
         agg_recursion(blob, fseg)
 
-# draft,
 '''
-old comment:
-1st compare each node to the average (centroid) of all surrounding nodes within a maximal cartesian distance. 
-This determines if the node is part of proximity cluster, else it starts its own cluster. 
-2nd, that proximity cluster is mapped out through all connected nodes, still via some form of connectivity clustering or flood-fill.
-
-But then that proximity cluster forms its own centroid: mean constituent node params, and may be refined through centroid-based sub-clustering, 
-a global-range version of current sub_recursion().
-That's different from conventional centroid clustering in that initial cluster is defined through connectivity, 
-there is no randomization of any sort.
+- Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
+- Select above-average derPPs as PPPs, which overlap representing summed derivatives over comp range.
 '''
 def comp_PP_(PP_):  # PP can also be PPP, etc.
 
+    derPPm_, derPPd_ = [],[]
+
     for PP in PP_:
         ave_params = []
-        other_PPs = PP_.remove(PP)
-        n = len(other_PPs)
-        avePP = CPP
-        for PP in other_PPs:
-            sum_param = 0
-            for param in PP.params:
+        other_PP_ = copy(PP_)  # shadllow copy
+        other_PP_.remove(PP)
+        n = len(other_PP_)
+        # get an average per param of other_PP_:
+        sum_params = [0 for param in PP.params]
+        for PP in other_PP_:
+            for param, sum_param in zip(PP.params, sum_params):
                 sum_param += param
-        ave_params += [sum_param / n]
+        ave_params += [param / n for param in sum_params]
         derPP = CderPP
         # comp to centroid:
         for _param_layer, param_layer in zip(PP.params, ave_params):
-            derPP.params += [comp_derP(_param_layer, param_layer)]
+            ave_param_layer = []
+            for _param, param in zip(_param_layer, param_layer):
+                ave_param_layer += [comp_params(_param, param)]
+            derPP.params += [ave_param_layer]
 
-    PPm_ = [copy_P(PP, ftype=2) for PP in PP_]
-    PPd_ = [copy_P(PP, ftype=2) for PP in PP_] 
+        derPPm_.append(copy_P(derPP, Ptype=3))
+        derPPd_.append(copy_P(derPP, Ptype=3))
 
-    return PPm_, PPd_
-    
+    return derPPm_, derPPd_
 
-def comp_PP(PP, avePP):  # draft
-    '''
-    probably not relevant:
-    PP.uplink_layers[-1] += [derPP]  # each layer has Mlayer, Dlayer
-    _PP.downlink_layers[-1] += [derPP]
-    '''
 
-# draft
+def comp_params(_params, params):
+
+    nparams = len(_params)
+    derivatives = []
+    hyps = []
+
+    for i, (_param, param) in enumerate(zip(params, params)):
+        # get param type:
+        param_type = int(i/ (2 ** (nparams-1)))  # for 9 compared params, but there are more in higher layers?
+
+        if param_type == 0:  # x
+            _x = param; x = param
+            dx = _x - x; mx = ave_dx - abs(dx)
+            derivatives.append(dx); derivatives.append(mx)
+            hyps.append(np.hypot(dx, 1))
+
+        elif param_type == 1:  # I
+            _I = _param; I = param
+            dI = _I - I; mI = ave_I - abs(dI)
+            derivatives.append(dI); derivatives.append(mI)
+
+        elif param_type == 2:  # G
+            hyp = hyps[i%param_type]
+            _G = _param; G = param
+            dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
+            derivatives.append(dG); derivatives.append(mG)
+
+        elif param_type == 3:  # Ga
+            _Ga = _param; Ga = param
+            dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
+            derivatives.append(dGa); derivatives.append(mGa)
+
+        elif param_type == 4:  # M
+            hyp = hyps[i%param_type]
+            _M = _param; M = param
+            dM = _M - M/hyp;  mM = min(_M, M)
+            derivatives.append(dM); derivatives.append(mM)
+
+        elif param_type == 5:  # Ma
+            _Ma = _param; Ma = param
+            dMa = _Ma - Ma;  mMa = min(_Ma, Ma)
+            derivatives.append(dMa); derivatives.append(mMa)
+
+        elif param_type == 6:  # L
+            hyp = hyps[i%param_type]
+            _L = _param; L = param
+            dL = _L - L/hyp;  mL = min(_L, L)
+            derivatives.append(dL); derivatives.append(mL)
+
+        elif param_type == 7:  # angle, (sin_da, cos_da)
+            if isinstance(_param, tuple):  # (sin_da, cos_da)
+                 _sin_da, _cos_da = _param; sin_da, cos_da = param
+                 sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
+                 cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
+                 dangle = (sin_dda, cos_dda)  # da
+                 mangle = ave_dangle - abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match
+                 derivatives.append(dangle); derivatives.append(mangle)
+            else: # m or scalar
+                _mangle = _param; mangle = param
+                dmangle = _mangle - mangle;  mmangle = min(_mangle, mangle)
+                derivatives.append(dmangle); derivatives.append(mmangle)
+
+        elif param_type == 8:  # dangle   (sin_da0, cos_da0, sin_da1, cos_da1)
+            if isinstance(_param, tuple):  # (sin_da, cos_da)
+                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _param
+                sin_da0, cos_da0, sin_da1, cos_da1 = param
+
+                sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
+                cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
+                sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
+                cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+                daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+                # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
+                # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+                gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
+                gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
+                maangle = ave_dangle - abs(np.arctan2(gay, gax))  # match between aangles, probably wrong
+                derivatives.append(daangle); derivatives.append(maangle)
+
+            else:  # m or scalar
+                _maangle = _param; maangle = param
+                dmaangle = _maangle - maangle;  mmaangle = min(_maangle, maangle)
+                derivatives.append(dmaangle); derivatives.append(mmaangle)
+
+    return derivatives
+
+
 def form_PPP_t(derPP_t, base_rdn):  # form PPs from match-connected segs
+    PPP_t = []
+
     for fPd, derPP_ in enumerate(derPP_t):
         # sort derPP_ by value param:
-        for i, derPP in enumerate( sorted(derPP_, key=lambda derPP: derPP.params[fPd], reverse=True)):
+        derPP_ = sorted(derPP_, key=lambda derPP: derPP.params[fPd], reverse=True)
+        PPP_ = []
+        for i, derPP in enumerate(derPP_):
+            param_value = 0
+            for param_layer in derPP.params:
+                derPP.rdn += param_layer[fPd] > param_layer[1-fPd]
+                param_value += param_layer[fPd]
 
-            derPP.rdn += derPP.params[fPd] > derPP.params[fPd+1]  # ?
             ave = vaves[fPd] * derPP.rdn
             # the weaker links are redundant to the stronger, added to derP.P.link_layers[-1]) in prior loops:
 
-            if derPP.params[fPd] > ave * len(derPP_[i:]):  # ave * cross-PPP rdn, derPPs are proto-PPPs
+            if param_value > ave * len(derPP_[i:]):  # ave * cross-PPP rdn, derPPs are proto-PPPs
                 PPP_ = derPP_[i:]  # PPP here is syntactically identical to derPP?
                 break
+        PPP_t.append(PPP_)
     '''
     if derPP.match params[-1]: form PPP
     elif derPP.match params[:-1]: splice PPs and their segs?
     '''
+    return PPP_t
 
 # old:
 
 def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
     
     for PP in PP_:
-        link_eval(P.uplink_layers, fPd)
-        link_eval(P.downlink_layers, fPd)
+        link_eval(PP.uplink_layers, fPd)
+        link_eval(PP.downlink_layers, fPd)
     
     for PP in PP_:
         form_segPPP_(PP)
