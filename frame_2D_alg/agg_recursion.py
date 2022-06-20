@@ -102,13 +102,13 @@ def comp_PP_(PP_):  # PP can also be PPP, etc.
             for i, params_layer in enumerate(compared_PP.params):
                 for j, param in enumerate(params_layer):
                     sum_params_layers[i][j] += param
-        # ave params of other_PP_:
+        # ave compared PP params:
         ave_params = [[param/n for param in sum_params] for sum_params in sum_params_layers]
 
         derPP = CPP(params=deepcopy(PP.params), layers=[PP_])  # derPP inherits PP.params
         # comp to the average (centroid) of other PPs in PP_:
         for _param_layer, param_layer in zip(PP.params, ave_params):
-            derPP.params[-1] += [comp_params(_param_layer, param_layer)]  # last layer: derivatives of all lower layers
+            derPP.params += [comp_derP(_param_layer, param_layer, finP=0, foutderP=0)]  # last layer: derivatives of all lower layers
 
         derPPm_.append(copy_P(derPP, Ptype=2))
         derPPd_.append(copy_P(derPP, Ptype=2))
@@ -129,11 +129,11 @@ def form_PPP_t(derPP_t):  # form PPs from match-connected segs
                 derPP.rdn += param_layer[fPd] > param_layer[1-fPd]
                 param_value += param_layer[fPd]
 
-            ave = vaves[fPd] * derPP.rdn * len(derPP_[i+1])  # derPP is redundant to higher-value previous derPPs in derPP_
+            ave = vaves[fPd] * derPP.rdn * (i+1)  # derPP is redundant to higher-value previous derPPs in derPP_
             if param_value > ave:
                 PPP_ += [derPP]  # base derPP and PPP is CPP
                 if param_value > ave*10:
-                    ind_comp_PP_(derPP, fPd)  # derPP is converted from CPP to CPPP
+                    ind_comp_PP_(derPP, i, fPd)  # derPP is converted from CPP to CPPP
             else:
                 break
         PPP_t.append(PPP_)
@@ -143,11 +143,22 @@ def form_PPP_t(derPP_t):  # form PPs from match-connected segs
 def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-composition CPPP
 
     derPP_ = []
-    for PP in _PP.layers[0]:  # 1-to-1 comparison between _PP and all other PPs
-        derPP=CderPP  # add some _PP variables?
+    rng = _PP.params[fPd] / 3  # 3: ave per rel_rng+=1, actual rng is Euclidean distance(y,x):
 
-        for _param_layer, param_layer in zip(_PP.params, PP.params):  # or top-down, continue if match?
-            derPP.params += [comp_params(_param_layer, param_layer)]
+    for PP in _PP.layers[0]:  # 1-to-1 comparison between _PP and other PPs within rng
+        derPP = CderPP  # add some _PP variables?
+        # if Euclidean distance(y,x) < rng:
+        for i, _param_layer, param_layer in enumerate( zip(_PP.params, PP.params)):  # or top-down, continue if match?
+            nested = i  # each layer is nested as [lower_layer_ders], each with its own value.
+            ''' draft: 
+            # unpack each layer as 2nd: [[11] [11]], 3rd: [[[11] [11]], [[11], [11]], [[11], [11]]]..:
+            while nested:
+                nested-=1
+                sub_ders = []
+                for j, _sub_layer, sub_layer in enumerate( zip(_param_layer, param_layer)):
+            '''
+            # we shouldn't need comp_derP here?
+            derPP.params[-1] += [ comp_params(_param_layer, param_layer)]
         derPP_ += [derPP]
 
     # cluster derPPs into PPPs by connectivity:
@@ -164,99 +175,15 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
                         PPP.accum_from(_derPP)
                         derPP.root = PPP
 
-                    elif derPP.params[:-1][fPd]  # pseudo
-                        # splice PP and their segs
-                        pass
-        '''
+                    elif sum([derPP.params][fPd]) > ave*len(derPP.params):
+                         # all([params_layer[fPd]>0 for params_layer in derPP.params]):  # if all params_layer[fPd] >0
+                         # splice PP and their segs
+                         pass
+    '''
     if derPP.match params[-1]: form PPP
     elif derPP.match params[:-1]: splice PPs and their segs? why params[:-1]?
     '''
 
-def comp_params(_params, params):
-
-    nparams = len(_params)
-    derivatives = []
-    hyps = []
-
-    for i, (_param, param) in enumerate(zip(params, params)):
-        # get param type:
-        param_type = int(i/ (2 ** (nparams-1)))  # for 9 compared params, but there are more in higher layers?
-
-        if param_type == 0:  # x
-            _x = param; x = param
-            dx = _x - x; mx = ave_dx - abs(dx)
-            derivatives.append(dx); derivatives.append(mx)
-            hyps.append(np.hypot(dx, 1))
-
-        elif param_type == 1:  # I
-            _I = _param; I = param
-            dI = _I - I; mI = ave_I - abs(dI)
-            derivatives.append(dI); derivatives.append(mI)
-
-        elif param_type == 2:  # G
-            hyp = hyps[i%param_type]
-            _G = _param; G = param
-            dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-            derivatives.append(dG); derivatives.append(mG)
-
-        elif param_type == 3:  # Ga
-            _Ga = _param; Ga = param
-            dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
-            derivatives.append(dGa); derivatives.append(mGa)
-
-        elif param_type == 4:  # M
-            hyp = hyps[i%param_type]
-            _M = _param; M = param
-            dM = _M - M/hyp;  mM = min(_M, M)
-            derivatives.append(dM); derivatives.append(mM)
-
-        elif param_type == 5:  # Ma
-            _Ma = _param; Ma = param
-            dMa = _Ma - Ma;  mMa = min(_Ma, Ma)
-            derivatives.append(dMa); derivatives.append(mMa)
-
-        elif param_type == 6:  # L
-            hyp = hyps[i%param_type]
-            _L = _param; L = param
-            dL = _L - L/hyp;  mL = min(_L, L)
-            derivatives.append(dL); derivatives.append(mL)
-
-        elif param_type == 7:  # angle, (sin_da, cos_da)
-            if isinstance(_param, tuple):  # (sin_da, cos_da)
-                 _sin_da, _cos_da = _param; sin_da, cos_da = param
-                 sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
-                 cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
-                 dangle = (sin_dda, cos_dda)  # da
-                 mangle = ave_dangle - abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match
-                 derivatives.append(dangle); derivatives.append(mangle)
-            else: # m or scalar
-                _mangle = _param; mangle = param
-                dmangle = _mangle - mangle;  mmangle = min(_mangle, mangle)
-                derivatives.append(dmangle); derivatives.append(mmangle)
-
-        elif param_type == 8:  # dangle   (sin_da0, cos_da0, sin_da1, cos_da1)
-            if isinstance(_param, tuple):  # (sin_da, cos_da)
-                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _param
-                sin_da0, cos_da0, sin_da1, cos_da1 = param
-
-                sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-                cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-                sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-                cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-                daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-                # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-                # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
-                gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
-                gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-                maangle = ave_dangle - abs(np.arctan2(gay, gax))  # match between aangles, probably wrong
-                derivatives.append(daangle); derivatives.append(maangle)
-
-            else:  # m or scalar
-                _maangle = _param; maangle = param
-                dmaangle = _maangle - maangle;  mmaangle = min(_maangle, maangle)
-                derivatives.append(dmaangle); derivatives.append(mmaangle)
-
-    return derivatives
 
 # old:
 
