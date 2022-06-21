@@ -3,6 +3,7 @@ import numpy as np
 from itertools import zip_longest
 from copy import deepcopy, copy
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
+import math as math
 from comp_slice import *
 '''
 Blob edges may be represented by higher-composition PPPs, etc., if top param-layer match,
@@ -88,6 +89,7 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
 - Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
 - Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
 '''
+
 def comp_PP_(PP_):  # PP can also be PPP, etc.
 
     derPPm_, derPPd_ = [],[]
@@ -102,13 +104,16 @@ def comp_PP_(PP_):  # PP can also be PPP, etc.
             for i, params_layer in enumerate(compared_PP.params):
                 for j, param in enumerate(params_layer):
                     sum_params_layers[i][j] += param
+
         # ave compared PP params:
         ave_params = [[param/n for param in sum_params] for sum_params in sum_params_layers]
-
         derPP = CPP(params=deepcopy(PP.params), layers=[PP_])  # derPP inherits PP.params
+
         # comp to the average (centroid) of other PPs in PP_:
-        for _param_layer, param_layer in zip(PP.params, ave_params):
-            derPP.params += [comp_derP(_param_layer, param_layer, finP=0, foutderP=0)]  # last layer: derivatives of all lower layers
+        for i, _param_layer, param_layer in enumerate( zip(PP.params, ave_params)):
+            derPP.params += [unpack_layer(_param_layer, param_layer, nested=i)]
+            # last layer: derivatives of all lower layers,
+            # initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
 
         derPPm_.append(copy_P(derPP, Ptype=2))
         derPPd_.append(copy_P(derPP, Ptype=2))
@@ -124,45 +129,56 @@ def form_PPP_t(derPP_t):  # form PPs from match-connected segs
         derPP_ = sorted(derPP_, key=lambda derPP: derPP.params[-1][fPd], reverse=True)  # descending order
         PPP_ = []
         for i, derPP in enumerate(derPP_):
-            param_value = 0
-            for param_layer in derPP.params:
+            derPP_val = 0
+            for param_layer in derPP.params:  # may need recursive unpack here
                 derPP.rdn += param_layer[fPd] > param_layer[1-fPd]
-                param_value += param_layer[fPd]
+                derPP_val += param_layer[fPd]  # make it a param?
 
             ave = vaves[fPd] * derPP.rdn * (i+1)  # derPP is redundant to higher-value previous derPPs in derPP_
-            if param_value > ave:
+            if derPP_val > ave:
                 PPP_ += [derPP]  # base derPP and PPP is CPP
-                if param_value > ave*10:
-                    ind_comp_PP_(derPP, i, fPd)  # derPP is converted from CPP to CPPP
+                if derPP_val > ave*10:
+                    ind_comp_PP_(derPP, fPd)  # derPP is converted from CPP to CPPP  # why we need i here?
             else:
                 break
         PPP_t.append(PPP_)
     return PPP_t
 
+
+def unpack_layer(_param_layer, param_layer, nested):
+
+    while nested:  # very tentative draft
+        nested -= 1
+        sub_ders = []
+        for j, (_sub_layer, sub_layer) in enumerate( zip(_param_layer, param_layer)):
+            sub_ders += [unpack_layer(_param_layer, param_layer, nested=j)]
+        return sub_ders
+
+    else:
+        params, _, _ = comp_params(_param_layer, param_layer, nparams=len(_param_layer))
+        mparams = params[0::2]  # get even index m params
+        dparams = params[1::2]  # get odd index d params
+        return [mparams, dparams]
+
 # draft
 def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-composition CPPP
 
     derPP_ = []
-    rng = _PP.params[fPd] / 3  # 3: ave per rel_rng+=1, actual rng is Euclidean distance(y,x):
+    rng = _PP.params[-1][fPd] / 3  # 3: ave per rel_rng+=1, actual rng is Euclidean distance:
 
     for PP in _PP.layers[0]:  # 1-to-1 comparison between _PP and other PPs within rng
-        derPP = CderPP  # add some _PP variables?
-        # if Euclidean distance(y,x) < rng:
-        for i, _param_layer, param_layer in enumerate( zip(_PP.params, PP.params)):  # or top-down, continue if match?
-            nested = i  # each layer is nested as [lower_layer_ders], each with its own value.
-            ''' draft: 
-            # unpack each layer as 2nd: [[11] [11]], 3rd: [[[11] [11]], [[11], [11]], [[11], [11]]]..:
-            while nested:
-                nested-=1
-                sub_ders = []
-                for j, _sub_layer, sub_layer in enumerate( zip(_param_layer, param_layer)):
-            '''
-            # we shouldn't need comp_derP here?
-            derPP.params[-1] += [ comp_params(_param_layer, param_layer)]
-        derPP_ += [derPP]
+        derPP = CderPP()
+        # pseudo, we need L index in params:
+        _area = _PP.params.L; area = PP.params.L
+        dx = _PP.x/_area - PP.x/area
+        dy = _PP.y/_area - PP.y/area
+        distance = math.hypot(dy, dx)  # Euclidean distance between PP centroids
 
-    # cluster derPPs into PPPs by connectivity:
-    for i, _derPP in enumerate(derPP_):
+        if distance / ((_area+area)/2) < rng:  # distance relative to area, or should be relative to value?
+            derPP.params = unpack_layer(_PP.params, PP.params, nested=len(_PP.params))
+            derPP_ += [derPP]
+
+    for i, _derPP in enumerate(derPP_):  # cluster derPPs into PPPs by connectivity, overwrite derPP[i]
 
         if _derPP.params[-1][fPd]:
             PPP = CPPP(params=deepcopy(_derPP.params), layers=[_derPP.PP])
@@ -175,16 +191,13 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
                         PPP.accum_from(_derPP)
                         derPP.root = PPP
 
-                    elif sum([derPP.params][fPd]) > ave*len(derPP.params):
-                         # all([params_layer[fPd]>0 for params_layer in derPP.params]):  # if all params_layer[fPd] >0
+                    elif sum([derPP.params[:-1]][fPd]) > ave*len(derPP.params)-1:
                          # splice PP and their segs
                          pass
     '''
     if derPP.match params[-1]: form PPP
     elif derPP.match params[:-1]: splice PPs and their segs? why params[:-1]?
     '''
-
-
 # old:
 
 def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
@@ -195,8 +208,7 @@ def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
     
     for PP in PP_:
         form_segPPP_(PP)
-        
-        
+
 def form_segPPP_(PP):
     pass
 

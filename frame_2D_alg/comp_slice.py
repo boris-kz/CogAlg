@@ -59,11 +59,11 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     # G, Ga are recomputed from Ds, Das; M, Ma are not restorable from G, Ga
     x0 = int
     x = float  # median x
+    y = int  # for vertical gap in PP.P__
     L = int
     sign = NoneType  # g-ave + ave-ga sign
     # all the above are redundant to params
-    # rdn = int  # blob-level redundancy, ignore for now
-    y = int  # for vertical gap in PP.P__
+    rdn = int  # blob-level redundancy, ignore for now
     # composite params:
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
     uplink_layers = lambda: [[],[]]  # init a layer of derPs and a layer of match_derPs
@@ -422,9 +422,11 @@ def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
     else:
         PP.params = inp.params.copy()
     inp.root = PP
-    PP.x0 = min(PP.x0, inp.x0)
+    PP.x += inp.x*inp.L  # or in inp.params?
+    PP.y += inp.y*inp.L
+    PP.xn = max(PP.x0, inp.x0)
+    PP.yn = max(inp.y, PP.y)  # or arg y instead of derP.y?
     PP.Rdn += inp.rdn  # base_rdn + PP.Rdn / PP: recursion + forks + links: nderP / len(P__)?
-    PP.y = max(inp.y, PP.y)  # or arg y instead of derP.y?
     PP.nderP += len(inp.P__[-1].uplink_layers[-1])  # redundant derivatives of the same P
 
     if PP.P__ and not isinstance(PP.P__[0], list):  # PP is seg if fseg in agg_recursion
@@ -606,6 +608,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
 
 def comp_derP(_derP, derP, instance=CderP, finP=1, foutderP=1):
+    # instance, finP, foutderP are not needed anymore?
 
     derivatives = []
     mP = 0  # for rng+ eval
