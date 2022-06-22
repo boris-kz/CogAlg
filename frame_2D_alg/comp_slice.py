@@ -101,6 +101,8 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
 
     params = list  # derivation layers += derP params per der+, param L is actually Area
     sign = bool
+    xn = int
+    yn = int
     rng = lambda: 1  # rng starts with 1
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
     Rdn = int  # for accumulation only
