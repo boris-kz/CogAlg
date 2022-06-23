@@ -599,9 +599,9 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     # sum to evaluate for der+, abs diffs are distinct from directly defined matches:
     mP = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
 
-    params = [mP, dP, dx, mx, dL, mL, dI, mI, dG, mG, dGa, mGa, dM, mM, dMa, mMa, dangle, mangle, daangle, maangle]
-    # or summable params only, all Gs are computed at termination?
-
+    params = [[mP, mx, mL, mI, mG, mGa, mM, mMa, mangle, maangle],
+              [dP, dx, dL, dI, dG, dGa, dM, dMa, dangle, daangle]]
+    # or summable params only, compute Gs at termination?
     x0 = min(_P.x0, P.x0)
     xn = max(_P.x0+_P.L, P.x0+P.L)
     L = xn-x0
@@ -646,6 +646,8 @@ def comp_derP(_derP, derP, instance=CderP, finP=1, foutderP=1):
 
 
 def comp_params(_params, params, nparams):
+
+    # redefine for 10-param tuples of mders and dders, same as in comp_P?
 
     derivatives, hyps = [], []
 

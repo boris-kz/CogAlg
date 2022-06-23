@@ -70,10 +70,9 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
 
         if len(PP_)>1:
             n_extended += 1
-
             derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
-            PPP_t = form_PPP_t(derPP_t)  # call to individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP
-
+            PPP_t = form_PPP_t(derPP_t)
+            # call individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP
             splice_PPs(PPP_t)  # for initial PPs only: if PP is CPP?
             sub_recursion_eval(PPP_t)  # rng+ or der+, if PP is CPPP?
         else:
@@ -89,29 +88,6 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
 - Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
 '''
 
-# sum params layer into sum layer according to their layer depth
-def sum_nested_layer(sum_layer, params_layer):
-
-    if isinstance(sum_layer[0], list):  # if nested, continue to loop and search for deeper list
-        for j, (sub_sum_layer, sub_params_layer) in enumerate(zip(sum_layer, params_layer)):
-            sum_nested_layer(sub_sum_layer, sub_params_layer)
-    else:  # if layer is not nested, sum params
-        for j, param in enumerate(params_layer):
-            sum_layer[j] += param
-
-# get average value for each param according to n value
-def get_layers_average(sum_params, n):
-
-    average_params = deepcopy(sum_params)  # get a copy as output
-    if isinstance(average_params[0], list):  # if nested, continue to loop and search for deeper list
-        for j, sub_sum_layer in enumerate(average_params):
-            get_layers_average(sub_sum_layer, n)
-    else:  # if layer is not nested, get average of each value
-        for j, param in enumerate(average_params):
-            average_params[j] = param/n
-
-    return average_params
-
 def comp_PP_(PP_):  # PP can also be PPP, etc.
 
     derPPm_, derPPd_ = [],[]
@@ -123,14 +99,17 @@ def comp_PP_(PP_):  # PP can also be PPP, etc.
         # sum same-type params across compared PPs:
         summed_params = deepcopy(compared_PP_[0].params)  # init 1st sum params with 1st element
         for compared_PP in compared_PP_[1:]:  # sum starts with 2nd element
-            sum_nested_layer(summed_params, compared_PP.params)
+            sum_nested_layer(summed_params, compared_PP.params)  # use generic unpack function?
         # ave params of compared PP:
-        ave_params = get_layers_average(summed_params, n)
+        ave_params = get_layers_average(summed_params, n)  # use generic unpack function?
         derPP = CPP(params=deepcopy(PP.params), layers=[PP_])  # derPP inherits PP.params
-
-        # comp to ave params of compared PPs:
-        derPP.params += [comp_nested_layer(PP.params, ave_params)]  # form new layer: derivatives of all lower layers,
-        # initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
+        '''
+        comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
+        initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
+        '''
+        derPP.params += [comp_params(PP.params[0], ave_params[0])]  # reform to compare 2tuples
+        for i, _layer, layer in enumerate( zip(PP.params[1:], ave_params[1:])):
+            derPP.params += [comp_layer(_layer, layer, [], i)]  # recursive layer unpack to the depth=i
 
         derPPm_.append(copy_P(derPP, Ptype=2))
         derPPd_.append(copy_P(derPP, Ptype=2))
@@ -175,10 +154,15 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
         dx = _PP.x/_area - PP.x/area
         dy = _PP.y/_area - PP.y/area
         distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+        _val = _PP.params[-1][fPd]
+        val = PP.params[-1][fPd]
+        if distance / ((_val+val)/2) < rng:  # distance relative to value, vs. area?
 
-        if distance / ((_area+area)/2) < rng:  # distance relative to area, or should be relative to value?
-            derPP.params = comp_param_layers(_PP.params, PP.params)
+            derPP.params += [comp_params(PP.params[0], PP.params[0])]  # reform to compare 2tuples
+            for i, _layer, layer in enumerate(zip(PP.params[1:], PP.params[1:])):
+                derPP.params += [comp_layer(_layer, layer, [], i)]  # su_bders=[], recursive layer unpack to the depth=i
             derPP_ += [derPP]
+
 
     for i, _derPP in enumerate(derPP_):  # cluster derPPs into PPPs by connectivity, overwrite derPP[i]
 
@@ -192,33 +176,69 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
                         PPP.layers.append(derPP)  # multiple composition orders
                         PPP.accum_from(_derPP)
                         derPP.root = PPP
-
+                    # pseudo:
                     elif sum([derPP.params[:-1]][fPd]) > ave*len(derPP.params)-1:
                          # splice PP and their segs
                          pass
     '''
     if derPP.match params[-1]: form PPP
-    elif derPP.match params[:-1]: splice PPs and their segs? why params[:-1]?
+    elif derPP.match params[:-1]: splice PPs and their segs? 
     '''
 
 # draft:
-def comp_param_layers(_param_layers, param_layers):
+def comp_layer(_layer, layer, sub_ders, i):  # nlists = max_nesting = i-1
 
-    sub_ders = []  # 1, 2, 6, 18... sublists: sum(lower_lists) * 2
-    sub_ders += [comp_params(_param_layers[0], param_layers[0])]  # 1st layer is not nested
+    i -= 1
+    if i>0:  # keep unpacking
+        for i, (_sub_layer, sub_layer) in enumerate(zip(_layer, layer)):
+            sub_ders += [comp_layers(_sub_layer, sub_layer, sub_ders, i)]  # sub_ders part is a draft
+    else:  # nesting == 0
+        sub_ders += [comp_params(_layer, layer)]  # comp_params should compare 2-tuples
+        '''
+        this should be packed in comp_params:
+        mparams = params[0::2]  # get even index m params
+        dparams = params[1::2]  # get odd index d params
+        sub_ders += [[mparams, dparams]]
 
-    # not correct, will revise later
-    for _layer, layer in zip(_param_layers[1:], param_layers[:1]):
-        sub_ders += [comp_param_layers(_layer, layer)]
-
+        sub_ders = []  # 1, 2, 6, 18... sublists: sum(lower_lists) * 2
+        for i, (_param_layer, param_layer) in enumerate(zip(_params, params)):
+            sub_ders += [comp_param_layers(_param_layer, param_layer, nested_level=i+1)]
+            # +1 because index starts from 0, and we need -1 at the starting of comp_param_layers_recursive function
+        return sub_ders
+        '''
     return sub_ders
+
+# unpack and and accum same-type params
+# use the same unpack sequence as in comp_layer?
+def sum_nested_layer(sum_layer, params_layer):
+
+    if isinstance(sum_layer[0], list):  # if nested, continue to loop and search for deeper list
+        for j, (sub_sum_layer, sub_params_layer) in enumerate(zip(sum_layer, params_layer)):
+            sum_nested_layer(sub_sum_layer, sub_params_layer)
+    else:  # if layer is not nested, sum params
+        for j, param in enumerate(params_layer):
+            sum_layer[j] += param
+
+# get average value for each param according to n value
+def get_layers_average(sum_params, n):
+
+    average_params = deepcopy(sum_params)  # get a copy as output
+    if isinstance(average_params[0], list):  # if nested, continue to loop and search for deeper list
+        for j, sub_sum_layer in enumerate(average_params):
+            get_layers_average(sub_sum_layer, n)
+    else:  # if layer is not nested, get average of each value
+        for j, param in enumerate(average_params):
+            average_params[j] = param/n
+
+    return average_params
+
 
 def comp_nested_layer(_param_layer, param_layer):
 
     if isinstance(_param_layer[0], list):   # if nested, continue to loop and search for deeper list
         sub_ders = []
         for j, (_sub_layer, sub_layer) in enumerate( zip(_param_layer, param_layer)):
-            sub_ders += [unpack_layer(_sub_layer, sub_layer)]
+            sub_ders += [comp_nested_layer(_sub_layer, sub_layer)]
         return sub_ders
     else:  # comp params if layer is not nested
         params, _, _ = comp_params(_param_layer, param_layer, nparams=len(_param_layer))
