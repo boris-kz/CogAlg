@@ -65,7 +65,7 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
         fiPd = i % 2
         if fiPd: ave_PP = ave_dPP
         else:    ave_PP = ave_mPP
-        if fseg: M = ave- blob.params[0][fiPd][4]  # blob.params[0][fiPd][4] is mG | dG
+        if fseg: M = ave- blob.params[-1][fiPd][4]  # blob.params[0][fiPd][4] is mG | dG
         else: M = ave-abs(blob.G)  # if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
 
         if len(PP_)>1:
@@ -89,28 +89,31 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
 '''
 
 def comp_PP_(PP_):  # PP can also be PPP, etc.
-
     derPPm_, derPPd_ = [],[]
 
     for PP in PP_:
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
         n = len(compared_PP_)
+
         # sum same-type params across compared PPs:
         summed_params = deepcopy(compared_PP_[0].params)  # init 1st sum params with 1st element
-        for compared_PP in compared_PP_[1:]:  # sum starts with 2nd element
-            sum_nested_layer(summed_params, compared_PP.params)  # use generic unpack function?
-        # ave params of compared PP:
-        ave_params = get_layers_average(summed_params, n)  # use generic unpack function?
+        for compared_PP in compared_PP_[1:]:
+            for summed_layer, compared_layer in zip(summed_params, compared_PP.params):
+                summed_params += [func_layer(summed_layer, compared_layer, out_layers=summed_params, func=accum_ptuple)]
+                # replace out_layers with func_args?
+        ave_params = []
+        for summed_layer in summed_params:  # generic unpack,function:
+            ave_params += [func_layer(summed_layer, [n for _ in summed_layer], out_layers=ave_params, func=ave_ptuple)]
 
         derPP = CPP(params=deepcopy(PP.params), layers=[PP_])  # derPP inherits PP.params
+        der_layers = []
+        for layer, ave_layer in zip(PP.params, ave_params):
+            derPP.params += [func_layer(layer, ave_layer, out_layers=der_layers, func=comp_ptuple)]  # generic unpack,function
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
         '''
-        for i, (_layer, layer) in enumerate( zip(PP.params, ave_params)):
-            derPP.params += [comp_layer(_layer, layer, i, der_layer=[])]  # recursive layer unpack to the depth=i
-
         derPPm_.append(copy_P(derPP, Ptype=2))
         derPPd_.append(copy_P(derPP, Ptype=2))
 
@@ -155,13 +158,14 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
         distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
         _val = _PP.params[-1][fPd]
         val = PP.params[-1][fPd]
+
         if distance / ((_val+val)/2) < rng:  # distance relative to value, vs. area?
 
-            derPP.params += [comp_params(PP.params[0], PP.params[0])]  # reform to compare 2tuples
-            for i, _layer, layer in enumerate(zip(PP.params[1:], PP.params[1:])):
-                derPP.params += [comp_layer(_layer, layer, i, der_layer=[])]  # recursive layer unpack to the depth=i
+            # replace with func_layer:
+            der_layers = [[comp_ptuple(_PP.params[0], PP.params[0])]]  # init, 1st layer is a flat 2tuple
+            for _layer, layer in zip(_PP.params[1:], PP.params[1:]):
+                der_layers += [comp_layer(_layer, layer, der_layers)]  # each layer is sub_layers
             derPP_ += [derPP]
-
 
     for i, _derPP in enumerate(derPP_):  # cluster derPPs into PPPs by connectivity, overwrite derPP[i]
 
@@ -184,20 +188,37 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
     elif derPP.match params[:-1]: splice PPs and their segs? 
     '''
 
-# draft:
-def comp_layer(_layer, layer, i, der_layer):  # nlists = max_nesting = i-1
+# replace by func_layer?
+def comp_layer(_layers, layers, der_layers):  # max_nesting = len layers, ntuples = sum(ntuples in lower layers) * 2: 1, 2, 6, 18...
 
-    i -= 1  # nlists and max_nesting in sub_layer
-    if i > 0:
-        # keep unpacking
-        for i, (_sub_layer, sub_layer) in enumerate( zip(_layer, layer)):  # sub_layers is a shorter version of layers
-            der_layer += [comp_layer(_sub_layer, sub_layer, i, der_layer)]
-    else:
-        # nesting depth == 0; nlists in der_layer = sum(nlists in lower layers) * 2: 1, 2, 6, 18...
-        der_layer += [comp_params(_layer, layer)]  # returns 2-tuple
+    der_layers += [comp_ptuple(_layers[0], layers[0])]  # 1st layer is a flat 2tuple
+    # unpack deeper layers:
+    for _layer, layer in zip(_layers[1:], layers[1:]):
+        der_layers += [comp_layer(_layer, layer, der_layers)]  # each layer is deeper sub_layers
 
-    return der_layer
+    return der_layers
 
+def func_layer(_layers, layers, out_layers, func):  # max_nesting = len layers, ntuples = sum(ntuples in lower layers) * 2: 1, 2, 6, 18...
+
+    out_layers += [ func(_layers[0], layers[0])]  # 1st layer is flat 2-tuple
+    # unpack deeper layers:
+    for _layer, layer in zip(_layers[1:], layers[1:]):
+        # func: comp_ptuple | accum_ptuple | sum_ptuple | ave_ptuple..:
+        out_layers += [func_layer(_layer, layer, out_layers, func)]  # layer = deeper sub_layers
+
+    return out_layers
+
+def ave_ptuple(ptuple, n):
+
+    ave_tuple = []
+    for Param in ptuple:
+        ave_tuple += [Param / n]  # exceptions for angles, etc?
+
+    return ave_tuple
+
+'''
+to be updated:
+'''
 # unpack and and accum same-type params
 # use the same unpack sequence as in comp_layer?
 def sum_nested_layer(sum_layer, params_layer):
@@ -209,7 +230,6 @@ def sum_nested_layer(sum_layer, params_layer):
         for j, param in enumerate(params_layer):
             sum_layer[j] += param
 
-# pending update
 # get average value for each param according to n value
 def get_layers_average(sum_params, n):
 
@@ -237,7 +257,6 @@ def comp_nested_layer(_param_layer, param_layer):
         dparams = params[1::2]  # get odd index d params
         return [mparams, dparams]
 
-# old:
 
 def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
 
@@ -287,7 +306,7 @@ def splice_PPs(PP_, frng):  # splice select PP pairs if der+ or triplets if rng+
 
     return spliced_PP_
 
-# to be updated
+
 def merge_PP(_PP, PP, fPd):  # only for PP splicing
 
     for seg in PP.seg_levels[fPd][-1]:  # merge PP_segs into _PP:
@@ -302,91 +321,3 @@ def merge_PP(_PP, PP, fPd):  # only for PP splicing
         if downlink not in _PP.downlink_layers:
             _PP.downlink_layers += [downlink]
 
-
-def comp_dx(P):  # cross-comp of dx s in P.dert_
-
-    Ddx = 0
-    Mdx = 0
-    dxdert_ = []
-    _dx = P.dert_[0][2]  # first dx
-    for dert in P.dert_[1:]:
-        dx = dert[2]
-        ddx = dx - _dx
-        if dx > 0 == _dx > 0: mdx = min(dx, _dx)
-        else: mdx = -min(abs(dx), abs(_dx))
-        dxdert_.append((ddx, mdx))  # no dx: already in dert_
-        Ddx += ddx  # P-wide cross-sign, P.L is too short to form sub_Ps
-        Mdx += mdx
-        _dx = dx
-    P.dxdert_ = dxdert_
-    P.Ddx = Ddx
-    P.Mdx = Mdx
-
-# june 22
-def sub_recursion(root_layers, PP_, frng):  # compares param_layers of derPs in generic PP, form or accum top derivatives
-
-    comb_layers = []
-    for PP in PP_:  # PP is generic higher-composition pattern, P is generic lower-composition pattern
-                    # both P and PP may be recursively formed higher-derivation derP and derPP, etc.
-        if frng: PP_V = PP.params[-1][0] - ave_mPP * PP.rdn; rng = PP.rng+1; min_L = rng * 2  # V: value of sub_recursion per PP
-        else:    PP_V = PP.params[-1][1] - ave_dPP * PP.rdn; rng = PP.rng; min_L = 3  # need 3 Ps to compute layer2, etc.
-        if PP_V > 0 and PP.nderP > min_L:
-
-            PP.rdn += 1  # rdn to prior derivation layers
-            PP.rng = rng
-            Pm__ = comp_P_rng(PP.P__, rng)
-            Pd__ = comp_P_der(PP.P__)
-
-            sub_segm_ = form_seg_root([Pm_ for Pm_ in reversed(Pm__)], root_rdn=PP.rdn, fPd=0)
-            sub_segd_ = form_seg_root([Pd_ for Pd_ in reversed(Pd__)], root_rdn=PP.rdn, fPd=1)
-            sub_PPm_, sub_PPd_ = form_PP_root(( sub_segm_, sub_segd_), base_rdn=PP.rdn)  # forms PPs: parameterized graphs of linked segs
-
-            PP.layers = [(sub_PPm_, sub_PPd_)]
-            if sub_PPm_:
-                # rng+=1, |+=n to reduce clustering costs?
-                sub_recursion(PP.layers, sub_PPm_, frng=1)  # rng+ comp_P in PPms, form param_layer, sub_PPs
-            if sub_PPd_:
-                sub_recursion(PP.layers, sub_PPd_, frng=0)  # der+ comp_P in PPds, form param_layer, sub_PPs
-
-            if PP.layers:  # pack added sublayers:
-                new_comb_layers = []
-                for (comb_sub_PPm_, comb_sub_PPd_), (sub_PPm_, sub_PPd_) in zip_longest(comb_layers, PP.layers, fillvalue=([], [])):
-                    comb_sub_PPm_ += sub_PPm_
-                    comb_sub_PPd_ += sub_PPd_
-                    new_comb_layers.append((comb_sub_PPm_, comb_sub_PPd_))  # add sublayer
-                comb_layers = new_comb_layers
-
-    if comb_layers: root_layers += comb_layers
-
-
-def comp_P_rng(iP__, rng):  # rng+ sub_recursion in PP.P__, adding two link_layers per P
-
-    P__ = [P_ for P_ in reversed(iP__)]  # revert to top-down
-    uplinks__ = [[ [] for P in P_] for P_ in P__[rng:]]  # rng derP_s per P, exclude 1st rng rows
-    downlinks__ = [[ [] for P in P_] for P_ in P__[:-rng]]  # exclude last rng rows
-
-    for y, _P_ in enumerate(P__[:-rng]):  # higher compared row, skip last rng: no lower comparand rows
-        for x, _P in enumerate(_P_):
-
-            for pri_rng_derP in _P.downlink_layers[-1]:  # get linked Ps at dy = rng-1
-                pri_P = pri_rng_derP.P
-                for ini_derP in pri_P.downlink_layers[0]:  # lower comparands are linked Ps at dy = rng
-                    P = ini_derP.P
-                    if isinstance(P, CPP) or isinstance(P, CderP):  # rng+ fork for derPs, very unlikely
-                        derP = comp_derP(_P, P)  # form higher vertical derivatives of derP or PP params
-                    else:
-                        derP = comp_P(_P, P)  # form vertical derivatives of horizontal P params
-                    # += links:
-                    downlinks__[y][x] += [derP]
-                    up_x = P__[y+rng].index(P)  # index of P in P_ at y+rng
-                    uplinks__[y][up_x] += [derP]  # uplinks__[y] = P__[y+rng]: uplinks__= P__[rng:]
-
-    for P_, uplinks_ in zip( P__[rng:], uplinks__):  # skip 1st rmg rows, no uplinks
-        for P, uplinks in zip(P_, uplinks_):
-            P.uplink_layers += [uplinks, []]  # add rng_derP_ to P.link_layers
-
-    for P_, downlinks_ in zip(P__[:-rng], downlinks__):  # skip last rng rows, no downlinks
-        for P, downlinks in zip(P_, downlinks_):
-            P.downlink_layers += [downlinks, []]
-
-    return iP__  # return bottom-up P__
