@@ -96,20 +96,15 @@ def comp_PP_(PP_):  # PP can also be PPP, etc.
         compared_PP_.remove(PP)
         n = len(compared_PP_)
 
-        # sum same-type params across compared PPs:
-        summed_params = deepcopy(compared_PP_[0].params)  # init 1st sum params with 1st element
+        summed_params = deepcopy(compared_PP_[0].params)  # sum same-type params across compared PPs, init with 1st element
         for compared_PP in compared_PP_[1:]:
-            for summed_layer, compared_layer in zip(summed_params, compared_PP.params):
-                summed_params += [func_layer(summed_layer, compared_layer, out_layers=summed_params, func=accum_ptuple)]
-                # replace out_layers with func_args?
-        ave_params = []
-        for summed_layer in summed_params:  # generic unpack,function:
-            ave_params += [func_layer(summed_layer, [n for _ in summed_layer], out_layers=ave_params, func=ave_ptuple)]
+            # generic unpack and process, summed_params accum over compared_PP_:
+            summed_params += [func_layers(summed_params, compared_PP.params, out_layers=summed_params, func=accum_ptuple)]
+        ave_params = [ave_layers(summed_params, n, [])]
 
         derPP = CPP(params=deepcopy(PP.params), layers=[PP_])  # derPP inherits PP.params
         der_layers = []
-        for layer, ave_layer in zip(PP.params, ave_params):
-            derPP.params += [func_layer(layer, ave_layer, out_layers=der_layers, func=comp_ptuple)]  # generic unpack,function
+        derPP.params += [func_layers(PP.params, ave_params, out_layers=der_layers, func=comp_ptuple)]  # generic unpack,function
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
@@ -161,10 +156,9 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
 
         if distance / ((_val+val)/2) < rng:  # distance relative to value, vs. area?
 
-            # replace with func_layer:
-            der_layers = [[comp_ptuple(_PP.params[0], PP.params[0])]]  # init, 1st layer is a flat 2tuple
-            for _layer, layer in zip(_PP.params[1:], PP.params[1:]):
-                der_layers += [comp_layer(_layer, layer, der_layers)]  # each layer is sub_layers
+            der_layers = [func_layers(_PP.params, PP.params, out_layers=[], func=comp_ptuple)]  # each layer is sub_layers
+            _PP.downlink_layers += [der_layers]
+            PP.uplink_layers += [der_layers]
             derPP_ += [derPP]
 
     for i, _derPP in enumerate(derPP_):  # cluster derPPs into PPPs by connectivity, overwrite derPP[i]
@@ -188,27 +182,33 @@ def ind_comp_PP_(_PP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-
     elif derPP.match params[:-1]: splice PPs and their segs? 
     '''
 
-# replace by func_layer?
-def comp_layer(_layers, layers, der_layers):  # max_nesting = len layers, ntuples = sum(ntuples in lower layers) * 2: 1, 2, 6, 18...
+def func_layers(_layers, layers, out_layers, func):  # max_nesting = len layers, ntuples = sum(ntuples in lower layers) * 2: 1, 2, 6, 18...
 
-    der_layers += [comp_ptuple(_layers[0], layers[0])]  # 1st layer is a flat 2tuple
-    # unpack deeper layers:
-    for _layer, layer in zip(_layers[1:], layers[1:]):
-        der_layers += [comp_layer(_layer, layer, der_layers)]  # each layer is deeper sub_layers
-
-    return der_layers
-
-def func_layer(_layers, layers, out_layers, func):  # max_nesting = len layers, ntuples = sum(ntuples in lower layers) * 2: 1, 2, 6, 18...
-
-    out_layers += [ func(_layers[0], layers[0])]  # 1st layer is flat 2-tuple
+    if isinstance(_layers[0], list):  # 1st layer is two vertuples, decoded in func; may need recursive unpack if from der+
+        out_layers += [[func(_layers[0][0], layers[0][0])] [func(_layers[0][1], layers[0][1])]]
+    else:
+        out_layers += [ func(_layers[0], layers[0])]  # 1st layer is latuple, decoded in func
     # unpack deeper layers:
     for _layer, layer in zip(_layers[1:], layers[1:]):
         # func: comp_ptuple | accum_ptuple | sum_ptuple | ave_ptuple..:
-        out_layers += [func_layer(_layer, layer, out_layers, func)]  # layer = deeper sub_layers
+        out_layers += [func_layers(_layer, layer, out_layers, func)]  # layer = deeper sub_layers
 
     return out_layers
 
-def ave_ptuple(ptuple, n):
+
+def ave_layers(summed_params, n, ave_params):
+
+    if isinstance(summed_params[0], list):  # 1st layer is two vertuples, decoded in func
+        ave_params += [[ave_ptuple(summed_params[0], n)]]
+    else:
+        ave_params += [ ave_ptuple(summed_params[0], n)]  # 1st layer is latuple, decoded in func
+    # unpack deeper layers:
+    for summed_layer in summed_params[1:]:
+        ave_params += [ave_layers(summed_layer, n, ave_params)]  # each layer is deeper sub_layers
+
+    return ave_params
+
+def ave_ptuple(ptuple, n):  # revise to process each param
 
     ave_tuple = []
     for Param in ptuple:

@@ -385,32 +385,19 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     # P rdn is up+down M/n, but P is already formed and compared?
 
     seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
-              L = len(seg_Ps), y0 = seg_Ps[0].y, params=[[], []])  # seg.L is Ly
+              L = len(seg_Ps), y0 = seg_Ps[0].y, params=[[],[]])  # seg.L is Ly
     iP = seg_Ps[0]
     if isinstance(iP, CPP): accum_P = accum_CPP
-    elif isinstance(iP, CP): accum_P = accum_CP
-    else: # P is derP, in sub_recursion
-        accum_P = accum_ptuple  # need to convert seg, P to seg.params[0], P.params?
-
-    seg.params[0] = [0 for _ in range(11)]  # init 1st param layer: a 11-tuple
-    seg.params[1] = [[0 for _ in range(10)] for _ in range(2)]  # init 2nd param layer: two 10-tuples
+    elif isinstance(iP, CderP): accum_P = accum_CderP
+    else: accum_P = accum_CP
 
     for P in seg_Ps[:-1]:
-        accum_P(seg, P, fPd)  # accum 1st layer of seg params: one 11-tuple from P params
-        # accum 2nd layer of seg params: two 10-tuples from derP params:
-        for seg_params, P_params in zip(seg.params[1], P.uplink_layers[-1][0].params):
-            accum_ptuple(seg_params, P_params)  # sum derP params into top seg_param_layer
-    accum_CP(seg, seg_Ps[-1], fPd)  # accumulate last P
+        accum_P(seg, P, fPd)
+        accum_CderP(seg, P.uplink_layers[-1][0], fPd)
+    accum_P(seg, seg_Ps[-1], fPd)  # accumulate last P
 
     return seg
 
-def accum_CP(seg, P, fPd):
-    if seg.params[0]:  # 1st index is 11 elements params
-        accum_ptuple(seg.params[0], P.params)
-    else:
-        seg.params[0] = deepcopy(P.params)
-    P.root = seg
-    seg.x0 = min(seg.x0, P.x0)
 
 def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs into PP
 
@@ -422,17 +409,26 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs in
 
     return PP
 
+
+def accum_CP(seg, P, fPd):
+
+    accum_nested(seg.params[0], P.params)
+    P.root = seg
+    seg.x0 = min(seg.x0, P.x0)
+
+
+# i think we need accum_CderP too, some params in PP doesn't exist in der
+def accum_CderP(PP, inp, fPd):  # inp is seg or PP in recursion
+
+    accum_nested(PP.params[1], inp.params)
+    inp.root = PP
+    # may add more assignments here
+
 def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
 
-    # accumulate 1st layer, 11 params
-    if PP.params[0]:  accum_CP(PP.params[0], inp.params[0], fPd)
-    else:             PP.params[0] = inp.params[0].copy()
-    # accumulate 2nd layer - 2 tuples of 10 params each
-    if PP.params[1]:  # 2 tuples:
-        for _params, params in zip(PP.params[1], inp.params[1]):
-            accum_ptuple(_params, params)
-    else:
-        PP.params[1] = inp.params[1].copy()
+    accum_nested(PP.params[0], inp.params[0])
+    accum_nested(PP.params[1], inp.params[1])
+
     inp.root = PP
     PP.x += inp.x*inp.L  # or in inp.params?
     PP.y += inp.y*inp.L
@@ -442,7 +438,6 @@ def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
     PP.nderP += len(inp.P__[-1].uplink_layers[-1])  # redundant derivatives of the same P
 
     if PP.P__ and not isinstance(PP.P__[0], list):  # PP is seg if fseg in agg_recursion
-
         PP.uplink_layers[-1] += [inp.uplink_.copy()]  # += seg.link_s, they are all misses now
         PP.downlink_layers[-1] += [inp.downlink_.copy()]
 
@@ -465,6 +460,7 @@ def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
                     PP.uplink_layers[-1] += [derP]
 
 # change to ops per param, as in comp_ptuple
+# tuple of 2 params:  [mx, mL, mM, mMa, mI, mG, mGa, , mangle, mP, maangle], [dx, dL, dM, dMa, dI, dG, dGa, , dangle, dP, daangle]
 def accum_ptuple(Ptuple, ptuple):
 
     for i, (_param, param) in enumerate(zip(Ptuple, ptuple)):  # include all summable derP variables into params?
@@ -486,6 +482,12 @@ def accum_ptuple(Ptuple, ptuple):
         else:  # scalar
             Ptuple[i] += param
 
+
+
+# P params : x, L, m, ma, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
+def accum_p(P_params, p_params):  # can be accumulated directly
+    for i, p_param in enumerate(p_params):
+        P_params[i] += p_param
 
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
@@ -626,6 +628,60 @@ def comp_P(_P, P, instance=CderP, finP=1, foutderP=1):  # forms vertical derivat
 
     else:
         return params
+
+
+# accumulated nested params, initialize nested list in the process too
+def accum_nested(_params, params):
+
+    if len(params)>0 and isinstance(params[0], list):
+        for i, (_sub_params, sub_params) in enumerate(zip_longest(_params, params, fillvalue=[])):
+            accum_nested(_sub_params, sub_params)
+            if i>len(_params)-1:  # add new layer of params
+                _params.append(_sub_params)
+    else:
+        if not _params: _params[:] = [ 0 for param in params ]  # initialize _params if it is empty
+        if len(params) == 11:  # P params : x, L, m, ma, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
+            accum_p(_params, params)
+        elif len(params) == 10:  # tuple of 2 params:  [mx, mL, mM, mMa, mI, mG, mGa, , mangle, mP, maangle], [dx, dL, dM, dMa, dI, dG, dGa, , dangle, dP, daangle]
+            accum_ptuple(_params, params)
+
+# below is temporary
+# replace with inline derP initialization?
+def comp_derP(_derP, derP, instance=CderP, finP=1, foutderP=1):
+    # instance, finP, foutderP are not needed anymore?
+
+    derivatives_t = []
+    mP = 0  # for rng+ eval
+    dP = 0  # for der+ eval
+
+    if finP:
+        if isinstance(_derP, CderP):  # params is in tuple of 2, each with 10 elements
+            derivatives_t = comp_ptuple(_derP.params, derP.params)
+
+        else:  # params is layered
+            derivatives_t = [comp_P(_derP.params[0], derP.params[0], finP=0, foutderP=0)]
+            mP += derivatives_t[0][0][0]  # 1st index = 1st layer, 2nd index select m | d, 3rd index selecting mP | dP
+            dP += derivatives_t[0][1][0]
+            for _params_layer, params_layer in zip(_derP.params[1:], derP.params[1:]):
+                layer_derivatives = comp_ptuple(_params_layer, params_layer)
+                derivatives_t += [layer_derivatives]
+                mP += layer_derivatives[0][0]
+                dP += layer_derivatives[1][0]
+
+    else:  # _derP and derP is params layer
+        derivatives_t, dP, mP = comp_ptuple(_derP, derP)
+
+
+    if foutderP:  # return derP instance
+        x0 = min(_derP.x0, derP.x0)
+        xn = max(_derP.x0+_derP.L, derP.x0+derP.L)
+        L = xn-x0
+
+        dderP = instance(x0=x0, L=L, y=_derP.y, params=derivatives_t, P=derP, _P=_derP)
+        return dderP
+    else:  # return only the derivatives
+        return derivatives_t
+
 
 def comp_ptuple(_params_t, params_t):  # compare 2 10-tuples of params, as in comp_P, similar operations for m and d params
 
