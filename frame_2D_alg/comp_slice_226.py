@@ -632,3 +632,50 @@ def draw_PPs(dir_blob, PP_, fspliced):
         cv2.imwrite(os.getcwd() + "/images/comp_slice/img_" + str(dir_blob.id) + "_PP.png", img)
     else:
         cv2.imwrite(os.getcwd() + "/images/comp_slice/img_" + str(dir_blob.id) + "_PP_spliced.png", img)
+
+
+def func_layers_chee(_layers, layers, out_layers, func):  # max_nesting = len layers, ntuples = sum(ntuples in lower layers) * 2: 1, 2, 6, 18...
+
+    if _layers and layers:
+        if isinstance(_layers[0], list):  # 1st layer is two vertuples, decoded in func; may need recursive unpack if from der+
+            sub_out_layers = []
+            for _sub_layers, sub_layers in zip(_layers, layers):
+                func_layers(_sub_layers, sub_layers, sub_out_layers, func)
+            out_layers += [sub_out_layers]
+        else:
+            func(_layers, layers)  # 1st layer is latuple, decoded in func
+
+
+def func_layers(_layers, layers, out_layers, func):
+
+    # recursive unpack of nested ptuple pairs, if any from der+, in the bottom layer or sublayer:
+    out_layers += [func_pairs(_layers[0], layers[0], out_pairs=[], func_ptuple=func)]
+
+    # recursive unpack of deeper layers, from agg+ in 3rd and higher layers, down to nested tuple pairs
+    for _layer, layer in zip(_layers[1:], layers[1:]):
+        out_layers += [func_layers(_layer, layer, out_layers, func)]
+        # layer = deeper sub_layers
+    '''
+    1st and 2nd layers are single sublayers, the 2nd adds tuple pair nesting. Both are unpacked by func_pairs, not func_layers.  
+    Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
+    4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc.
+    '''
+    return out_layers # possibly nested param layers
+
+
+def func_pairs(_pairs, pairs, out_pairs, func_ptuple):  # recursively unpack m,d tuple pairs from der+
+
+    if isinstance(_pairs[0], list):  # pairs is a pair, possibly nested
+        out_pairs += func_pairs(_pairs[0], pairs[0], out_pairs, func_ptuple)
+    else:
+        out_pairs += func_ptuple(_pairs[0], pairs[0])  # pairs is actually a ptuple, 1st element is a param
+
+    return out_pairs  # possibly nested m,d ptuple pairs
+
+
+def sum_layers(summed_params, params):
+
+    sum_pairs(summed_params[0], params[0])  # recursive unpack of nested ptuple pairs, if any from der+, in the bottom layer or sublayer
+
+    for Layer, layer in zip(summed_params[1:], params[1:]):  # recursive unpack of deeper layers, from agg+
+        sum_layers(Layer, layer)  # layer = deeper sub_layers
