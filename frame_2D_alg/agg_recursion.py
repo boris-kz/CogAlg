@@ -65,7 +65,7 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
         fiPd = i % 2
         if fiPd: ave_PP = ave_dPP
         else:    ave_PP = ave_mPP
-        if fseg: M = ave- blob.params[-1][fiPd][4]  # blob.params[0][fiPd][4] is mG | dG
+        if fseg: M = ave- blob.params[-1][fiPd][4]  # something like M = sum_layers(blob.params[-1][fiPd][4])?
         else: M = ave-abs(blob.G)  # if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
 
         if len(PP_)>1:
@@ -118,44 +118,6 @@ def comp_PP_(PP_):  # PP can also be PPP, etc.
 Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
 4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
 '''
-
-def comp_layers(_layers, layers, der_layers):  # each layer is sub_layers
-
-    # recursive unpack of nested ptuple pairs, if any from der+, in the bottom layer or sublayer:
-    der_layers += [comp_pair_layers(_layers[0], layers[0], der_pair_layers=[])]
-
-    # recursive unpack of deeper layers, if any from agg+ in 3rd and higher layers, down to nested tuple pairs
-    for _layer, layer in zip(_layers[1:], layers[1:]):  # layer = deeper sub_layers, stop if none
-        der_layers += [comp_layers(_layer, layer, der_layers)]
-
-    return der_layers # possibly nested param layers
-
-def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers):  # recursively unpack nested m,d tuple pairs, if any from der+
-
-    if isinstance(_pair_layers[0], list):  # pair_layers is a pair, possibly including sub_pairs
-        for _pair, pair in zip(_pair_layers, pair_layers):  # ~ comp_layers 2nd sequence
-            der_pair_layers += [comp_pair_layers(_pair, pair, der_pair_layers)]
-    else:
-        der_pair_layers += [comp_ptuple(_pair_layers, pair_layers)]  # pair_layers is a ptuple, 1st element is a param
-
-    return der_pair_layers  # possibly nested m,d ptuple pairs
-
-
-def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers but no separate der_layers to return
-
-    sum_pairs(Params[0], params[0])  # recursive unpack of nested ptuple pair_layers, if any from der+
-
-    for Layer, layer in zip(Params[1:], params[1:]):  # recursive unpack of deeper layers, if any from agg+
-        sum_layers(Layer, layer)  # layer = deeper sub_layers
-
-def sum_pairs(Pairs, pairs):  # recursively unpack pair_layers: m,d tuple pairs from der+
-
-    if isinstance(Pairs[0], list):  # pairs is a pair, possibly nested in layers
-        for Pair, pair in zip(Pairs, pairs):  # pairs is short for pair_layers
-            sum_pairs(Pair, pair)
-    else:
-        accum_ptuple(Pairs, pairs)  # pairs is a ptuple, 1st element is a param
-
 
 def ave_layers(summed_params, n):  # as sum_layers but single arg
 
