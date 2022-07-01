@@ -66,8 +66,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdn = int  # blob-level redundancy, ignore for now
     # composite params:
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
-    uplink_layers = lambda: [[], []]  # init a layer of derPs and a layer of match_derPs
-    downlink_layers = lambda: [[], []]
+    uplink_layers = lambda: [[],[]]  # init a layer of derPs and a layer of match_derPs
+    downlink_layers = lambda: [[],[]]
     root = lambda:None  # segment that contains this P, PP is root.root
     # only in Pd:
     Pm = object  # reference to root P
@@ -387,9 +387,9 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
               L = len(seg_Ps), y0 = seg_Ps[0].y, params=[[]])  # seg.L is Ly
     iP = seg_Ps[0]
-    if isinstance(iP, CPP): accum_P = accum_CPP
-    elif isinstance(iP, CderP): accum_P = accum_CderP
-    else: accum_P = accum_CP
+    if isinstance(iP, CPP): accum = accum_PP
+    elif isinstance(iP, CderP): accum = accum_derP
+    else: accum = accum_P
 
     # init seg params with 1st P and 1st P's derP
     seg.params[0] = deepcopy(seg_Ps[0].params)
@@ -397,11 +397,11 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     seg.x0 = min(seg.x0, seg_Ps[0].x0)
     if len(seg_Ps)>1:
         seg.params += [deepcopy(seg_Ps[0].uplink_layers[-1][0].params)]   # add new layer in params if there;s more than 1 P
-        accum_P(seg, seg_Ps[-1], fPd)  # accumulate last P
+        accum(seg, seg_Ps[-1], fPd)  # accumulate last P
     # accumulate P and their derP's params for non 1st and last P
     for P in seg_Ps[1:-1]:
-        accum_P(seg, P, fPd)
-        accum_CderP(seg, P.uplink_layers[-1][0], fPd)
+        accum(seg, P, fPd)
+        accum_derP(seg, P.uplink_layers[-1][0], fPd)
 
     return seg
 
@@ -412,27 +412,24 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs in
     PP.seg_levels[fPd][0] = PP_segs  # PP_segs is seg_levels[0]
 
     for seg in PP_segs:
-        accum_CPP(PP, seg, fPd)
+        accum_PP(PP, seg, fPd)
 
     return PP
 
+def accum_P(seg, P, fPd):
 
-def accum_CP(seg, P, fPd):
-
-    accum_ptuple([seg.params[0]], [P.params])
+    accum_ptuple(seg.params[0], P.params)
     P.root = seg
     seg.x0 = min(seg.x0, P.x0)
 
 
-# i think we need accum_CderP too, some params in PP doesn't exist in der
-# this should be a fork in accum_PP?
-def accum_CderP(PP, inp, fPd):  # inp is seg or PP in recursion
+def accum_derP(PP, inp, fPd):  # inp is seg or PP in recursion
 
-    sum_pairs([PP.params[1]], [inp.params])
+    sum_pairs(PP.params[1], inp.params)
     inp.root = PP
     # may add more assignments here
 
-def accum_CPP(PP, inp, fPd):  # inp is seg or PP in recursion
+def accum_PP(PP, inp, fPd):  # inp is seg or PP in recursion
 
     for i, (PP_params, inp_params) in enumerate(zip_longest(PP.params, inp.params, fillvalue=[])):
         if not PP_params: PP_params = deepcopy(inp_params)    # if PP's current layer params is empty, copy from input
@@ -582,10 +579,10 @@ def sum_pairs(Pairs, pairs):  # recursively unpack pairs (short for pair_layers)
     else:
         accum_ptuple(Pairs, pairs)  # pairs is a ptuple, 1st element is a param
 
-# change to ops per param, as in comp_ptuple?
-# P params : x, L, m, ma, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
-# tuple of 2 params:  [mx, mL, mM, mMa, mI, mG, mGa, , mangle, mP, maangle], [dx, dL, dM, dMa, dI, dG, dGa, , dangle, dP, daangle]
+
 def accum_ptuple(Ptuple, ptuple):
+    # if lataple: x, L, m, ma, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
+    # if vertuples: [mx, mL, mM, mMa, mI, mG, mGa, , mangle, mP, maangle], [dx, dL, dM, dMa, dI, dG, dGa, , dangle, dP, daangle]
 
     for i, (_param, param) in enumerate(zip(Ptuple, ptuple)):  # include all summable derP variables into params?
         if isinstance(_param, tuple):
@@ -605,14 +602,14 @@ def accum_ptuple(Ptuple, ptuple):
                 Ptuple[i] = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
         else:  # scalar
             Ptuple[i] += param
-            
+
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
     if isinstance(_P.params[0], list):
         derivatives = comp_pair_layers(_P.params, P.params, [])  # comp vertuple pairs (derP)
     else:
-        derivatives = comp_ptuple([_P.params], [P.params])  # comp lataple (P)
+        derivatives = comp_ptuple(_P.params, P.params)  # comp lataple (P)
 
     x0 = min(_P.x0, P.x0)
     xn = max(_P.x0+_P.L, P.x0+P.L)
@@ -621,7 +618,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     return CderP(x0=x0, L=L, y=_P.y, params=derivatives, P=P, _P=_P)
 
 
-def comp_ptuple(_params, params):  # compare 2 lataple or vertuples, similar operations for m and d params
+def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar operations for m and d params
 
     derivatives = [[], []]
 
@@ -656,6 +653,7 @@ def comp_ptuple(_params, params):  # compare 2 lataple or vertuples, similar ope
         Ga = (cos_da0 + 1) + (cos_da1 + 1); _Ga = (_cos_da0 + 1) + (_cos_da1 + 1)  # gradient of angle, +1 for all positives?
         # or Ga = np.hypot( np.arctan2(*Day), np.arctan2(*Dax)?
         dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
+        derivatives[0].append(dG); derivatives[1].append(mG)
         derivatives[0].append(dGa); derivatives[1].append(mGa)
 
         # comp angle:
@@ -687,7 +685,7 @@ def comp_ptuple(_params, params):  # compare 2 lataple or vertuples, similar ope
         mP = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
         derivatives[0].append(dP); derivatives[1].append(mP)
 
-    else:  # 10-param mtuple or dtuple
+    else:  # 10-param mtuple or dtuple: m|d( x, L, M, Ma, I, G, Ga, angle, aangle, vP)
         _G, _Ga, _M, _Ma, _angle, _aangle, _vP = _params[5:]
         G, Ga, M, Ma, angle, aangle, vP = params[5:]
 
@@ -735,7 +733,7 @@ def comp_ptuple(_params, params):  # compare 2 lataple or vertuples, similar ope
             dmaangle = _maangle - maangle;  mmaangle = min(_maangle, maangle)
             derivatives[0].append(dmaangle); derivatives[1].append(mmaangle)
 
-        # P
+        # vP
         dP = _vP - vP; mP = ave_mP - abs(dP)
         derivatives[0].append(dP); derivatives[1].append(mP)
 
