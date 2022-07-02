@@ -52,9 +52,27 @@ param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]  # angle = Dy, Dx; a
 aves = [ave_dx, ave_I, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mP, ave_dP]
 vaves = [ave_mP, ave_dP]
 
+
+class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
+
+    x = int
+    L = int  # area in PP
+    I = int
+    M = int
+    Ma = float
+    # pack as diff_params: list, different for lataple and vertuple?
+    G = float
+    Ga = float
+    Dy = float  # pack in angle?
+    Dx = float
+    Sin_da0 = float  # pack in aangle?
+    Cos_da0 = float
+    Sin_da1 = float
+    Cos_da1 = float
+
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP
 
-    params = list  # 9 compared horizontal params: x, L, I, M, Ma, G, Ga, Ds( Dy, Dx, Sin_da0), Das( Cos_da0, Sin_da1, Cos_da1)
+    params = object  # 9 compared horizontal params: x, L, I, M, Ma, G, Ga, Ds( Dy, Dx, Sin_da0), Das( Cos_da0, Sin_da1, Cos_da1)
     # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 are summed from dert[3:], M, Ma from ave- g, ga
     # G, Ga are recomputed from Ds, Das; M, Ma are not restorable from G, Ga
     x0 = int
@@ -180,7 +198,8 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 L = len(Pdert_)
-                P_.append( CP(params= [x-(L-1)/2, L] + list(params), x0=x-(L-1), L=L, y=y, dert_=Pdert_))
+                params = Cptuple([x - (L - 1) / 2, L] + list(params))
+                P_.append( CP(params=params, x0=x-(L-1), L=L, y=y, dert_=Pdert_))
 
             _mask = mask
         if not _mask:  # pack last P:
@@ -416,12 +435,12 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs in
 
     return PP
 
+
 def accum_P(seg, P, fPd):
 
     accum_ptuple(seg.params[0], P.params)
     P.root = seg
     seg.x0 = min(seg.x0, P.x0)
-
 
 def accum_derP(PP, inp, fPd):  # inp is seg or PP in recursion
 
@@ -686,8 +705,8 @@ def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar op
         derivatives[0].append(dP); derivatives[1].append(mP)
 
     else:  # 10-param mtuple or dtuple: m|d( x, L, M, Ma, I, G, Ga, angle, aangle, vP)
-        _G, _Ga, _M, _Ma, _angle, _aangle, _vP = _params[5:]
-        G, Ga, M, Ma, angle, aangle, vP = params[5:]
+        _G, _Ga, _angle, _aangle, _vP = _params[5:]
+        G, Ga, angle, aangle, vP = params[5:]
 
         # G
         dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
