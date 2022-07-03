@@ -55,26 +55,23 @@ vaves = [ave_mP, ave_dP]
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
 
+    # add prefix v in vertuples: 8 vs 9 params:
     x = int
     L = int  # area in PP
     I = int
     M = int
     Ma = float
-    # pack as diff_params: list, different for lataple and vertuple?
+    angle = list  # in lataple, float in vertuple
+    aangle = list
+    # only in lataple, for comparison but not summation:
     G = float
     Ga = float
-    Dy = float  # pack in angle?
-    Dx = float
-    Sin_da0 = float  # pack in aangle?
-    Cos_da0 = float
-    Sin_da1 = float
-    Cos_da1 = float
+    # only in vertuple, combined tuple m|d value:
+    val = float
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP
 
-    params = object  # 9 compared horizontal params: x, L, I, M, Ma, G, Ga, Ds( Dy, Dx, Sin_da0), Das( Cos_da0, Sin_da1, Cos_da1)
-    # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 are summed from dert[3:], M, Ma from ave- g, ga
-    # G, Ga are recomputed from Ds, Das; M, Ma are not restorable from G, Ga
+    params = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
     x0 = int
     x = float  # median x
     y = int  # for vertical gap in PP.P__
@@ -98,8 +95,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
-    # dP, mP are packed in params[0,1]
-    params = list  # P derivation layer, n_params = 9 * 2**der_cnt, flat, decoded by mapping each m,d to lower-layer param
+    params = list  # P derivation pair_layers, n ptuples = 2**der_cnt
     x0 = int  # redundant to params:
     x = float  # median x
     L = int  # pack in params?
@@ -135,7 +131,7 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
     P__ = list  # input  # derP__ = list  # redundant to P__
     seg_levels = lambda: [[[]],[[]]]  # from 1st agg_recursion, seg_levels[0] is seg_t, higher seg_levels are segP_t s
     PPP_levels = list  # from 2nd agg_recursion, PP_t = levels[0], from form_PP, before recursion
-    layers = list  # from sub_recursion, each is derP_t
+    layers = list  # elements for sub_recursion, each is derP_t
     root = lambda:None  # higher-order PP, segP, or PPP
 
 # Functions:
@@ -166,7 +162,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         dir_blob.levels = [[PPm_], [PPd_]]
         agg_recursion(dir_blob, fseg=0)  # 2nd call per dir_blob.PP_s formed in 1st call, forms PPP..s and dir_blob.levels
 
-    splice_dir_blob_(blob.dir_blobs)
+    splice_dir_blob_(blob.dir_blobs)  # draft
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -186,25 +182,27 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
 
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
-                if _mask:  # initialize P params with first unmasked dert:
+                if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
                     Pdert_ = [dert]
-                    params = [ave_g-dert[1], ave_ga-dert[2], *dert[3:]]  # m, ma, dert[3:]: i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
+                    params = Cptuple(M=ave_g - dert[1], Ma=ave_ga - dert[2], I=dert[3], angle=dert[4,5], aangle=dert[6:])
                 else:
-                    # dert and _dert are not masked, accumulate P params from dert params (comp G vs. Dx, Dy->der+?):
-                    params[1] += ave_g-dert[1]; params[2] += ave_ga-dert[2]  # M, Ma
-                    for i, (Param, param) in enumerate(zip(params[2:], dert[3:]), start=2):  # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
-                        params[i] = Param + param
+                    # dert and _dert are not masked, accumulate P params:
+                    params.M+=ave_g-dert[1]; params.Ma+=ave_ga-dert[2]; params.I+=dert[3]; params.angle[0]+=dert[4]; params.angle[1]+=dert[5]
+                    params.aangle[0]+=dert[6]; params.aangle[1]+=dert[7]; params.aangle[2]+=dert[8]; params.aangle[3]+=dert[9]
                     Pdert_.append(dert)
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
-                L = len(Pdert_)
-                params = Cptuple([x - (L - 1) / 2, L] + list(params))
-                P_.append( CP(params=params, x0=x-(L-1), L=L, y=y, dert_=Pdert_))
-
+                params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
+                params.G = np.hypot(params.angle[:])  # Dy, Dx
+                params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
+                P_.append( CP(params=params, x0=x-(params.L-1), y=y, dert_=Pdert_))
             _mask = mask
+
         if not _mask:  # pack last P:
-            L = len(Pdert_)
-            P_.append( CP(params = [x-(L-1)/2, L] + list(params), x0=x-(L-1), L=L, y=y, dert_=Pdert_))
+            params.L = len(Pdert_)
+            params.G = np.hypot(params.angle[:])
+            params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
+            P_.append(CP(params=params, x0=x - (params.L - 1), y=y, dert_=Pdert_))
         P__ += [P_]
 
     blob.P__ = P__
@@ -328,12 +326,12 @@ def form_seg_(seg_, P__, seg_Ps, fPd):  # form contiguous segments of vertically
 def link_eval(link_layers, fPd):
 
     # sort derPs in link_layers[-2] by their value param:
-    for i, derP in enumerate( sorted( link_layers[-2], key=lambda derP: derP.params[fPd], reverse=True)):
+    for i, derP in enumerate( sorted( link_layers[-2], key=lambda derP: derP.params[fPd].val, reverse=True)):
 
-        if fPd: derP.rdn += derP.params[0] > derP.params[1]  # mP > dP
+        if fPd: derP.rdn += derP.params[fPd].val > derP.params[1-fPd].val  # mP > dP
         else: rng_eval(derP, fPd)  # reset derP.val, derP.rdn
 
-        if derP.params[fPd][0] > vaves[fPd] * derP.rdn * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
+        if derP.params[fPd].val > vaves[fPd] * derP.rdn * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
             link_layers[-1].append(derP)  # misses = link_layers[-2] not in link_layers[-1]
 
 
@@ -347,11 +345,11 @@ def rng_eval(derP, fPd):  # compute value of combined mutual derPs: overlap betw
     rdn = 1
     olp_val = 0
     for derP in common_derP_:
-        rdn += derP.params[fPd] > derP.params[1-fPd]  # dP > mP if fPd, else mP > dP
-        olp_val += derP.params[fPd][0]
+        rdn += derP.params[fPd].val > derP.params[1-fPd].val  # dP > mP if fPd, else mP > dP
+        olp_val += derP.params[fPd].val
 
     nolp = len(common_derP_)
-    derP.params[fPd][0] = olp_val / nolp
+    derP.params[fPd].val = olp_val / nolp
     derP.rdn += (rdn / nolp) > .5  # no fractional rdn?
 
 
@@ -625,10 +623,10 @@ def accum_ptuple(Ptuple, ptuple):
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
-    if isinstance(_P.params[0], list):
-        derivatives = comp_pair_layers(_P.params, P.params, [])  # comp vertuple pairs (derP)
-    else:
+    if isinstance(_P.params, Cptuple):
         derivatives = comp_ptuple(_P.params, P.params)  # comp lataple (P)
+    else:
+        derivatives = comp_pair_layers(_P.params, P.params, [])  # comp vertuple pairs (derP)
 
     x0 = min(_P.x0, P.x0)
     xn = max(_P.x0+_P.L, P.x0+P.L)
@@ -639,122 +637,89 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
 def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar operations for m and d params
 
-    derivatives = [[], []]
-
-    _x, _L, _M, _Ma, _I  = _params[:5]
-    x, L, M, Ma, I = params[:5]
+    derivatives = [Cptuple(), Cptuple()]
+    _x, _L, _M, _Ma, _I  = _params.x, _params.L, _params.M, _params.Ma, _params.I
+    x, L, M, Ma, I = params.x, params.L, params.M, params.Ma, params.I
+    dtuple = 0
+    mtuple = 0
     # x
     dx = _x - x; mx = ave_dx - abs(dx)
-    derivatives[0].append(dx); derivatives[1].append(mx)
+    derivatives[0].x = dx; derivatives[1].x = mx
+    dtuple += abs(dx); mtuple += mx
     hyp = np.hypot(dx, 1)
     # L
     dL = _L - L/hyp;  mL = min(_L, L)
-    derivatives[0].append(dL); derivatives[1].append(mL)
+    derivatives[0].L = dL; derivatives[1].L = mL
+    dtuple += abs(dL); mtuple += mL
     # I
     dI = _I - I; mI = ave_I - abs(dI)
-    derivatives[0].append(dI); derivatives[1].append(mI)
+    derivatives[0].I = dI; derivatives[1].I = mI
+    dtuple += abs(dI); mtuple += mI
     # M
     dM = _M - M/hyp;  mM = min(_M, M)
-    derivatives[0].append(dM); derivatives[1].append(mM)
+    derivatives[0].M = dM; derivatives[1].M = mM
+    dtuple += abs(dM); mtuple += mM
     # Ma
     dMa = _Ma - Ma;  mMa = min(_Ma, Ma)
-    derivatives[0].append(dMa); derivatives[1].append(mMa)
+    derivatives[0].Ma = dMa; derivatives[1].Ma = mMa
+    dtuple += abs(dMa); mtuple += mMa
 
-    if len(_params) == 11:  # params: _x, _L, _M, _Ma, _I, _Dx, _Dy, _sin_da0, _cos_da0, _sin_da1, _cos_da1
+    if isinstance(_params.angle, tuple):
+        # lataple:
+        _G= _params.G; G = params.G
+        dG = _params.G - params.G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
+        derivatives[0].G = dG; derivatives[1].G = mG
+        dtuple += abs(dG); mtuple += mG
 
-        _Dx, _Dy, _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params[5:]
-        Dx, Dy, sin_da0, cos_da0, sin_da1, cos_da1 = params[5:]
-        # if 10, additional params: G, Ga, M, Ma, angle, aangle, vP; or summable params only, compute Gs?
-
-        # G, Ga:
-        G = np.hypot(Dy, Dx); _G = np.hypot(_Dy, _Dx)  # compared as scalars
-        dG = _G - G;  mG = min(_G, G)
-        Ga = (cos_da0 + 1) + (cos_da1 + 1); _Ga = (_cos_da0 + 1) + (_cos_da1 + 1)  # gradient of angle, +1 for all positives?
-        # or Ga = np.hypot( np.arctan2(*Day), np.arctan2(*Dax)?
+        _Ga = _params.Ga; Ga = params.Ga
         dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
-        derivatives[0].append(dG); derivatives[1].append(mG)
-        derivatives[0].append(dGa); derivatives[1].append(mGa)
+        derivatives[0].Ga = dGa; derivatives[1].Ga = mGa
+        dtuple += abs(dGa); mtuple += mGa
 
-        # comp angle:
-        _sin = _Dy / (1 if _G==0 else _G); _cos = _Dx / (1 if _G==0 else _G)
-        sin  = Dy / (1 if G==0 else G); cos = Dx / (1 if G==0 else G)
-        sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-        cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-        dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
-        mangle = ave_dangle - abs(dangle)  # indirect match of angles, not redundant as summed
-        derivatives[0].append(dangle); derivatives[1].append(mangle)
+        # angle = (sin_da, cos_da)
+        _sin_da, _cos_da = _params.angle; sin_da, cos_da = params.angle
+        sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
+        cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
+        dangle = (sin_dda, cos_dda)  # da
+        mangle = abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match, sum aves too
+        derivatives[0].angle = dangle; derivatives[1].angle= mangle
+        dtuple += mangle  # actually dangle
+        mtuple += ave - abs(mangle)
 
-        # comp angle of angle: forms daa, not gaa?
+        # aangle
+        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
+        sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
         sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
         cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
         sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
         cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-
         daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
         # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
         # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
         gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
         gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-        daangle = np.arctan2( gay, gax)  # probably wrong
-        maangle = ave_daangle - abs(daangle)  # match between aangles, not redundant as summed
-        derivatives[0].append(daangle); derivatives[1].append(maangle)
+        maangle = abs(np.arctan2(gay, gax))  # match between aangles, probably wrong
+        derivatives[0].aangle = daangle; derivatives[1].aangle = maangle
+        dtuple += maangle  # actually daangle
+        mtuple += ave - abs(maangle)
 
-        dP = abs(dx)-ave_dx + abs(dI)-ave_I + abs(G)-ave_G + abs(Ga)-ave_Ga + abs(dM)-ave_M + abs(dMa)-ave_Ma + abs(dL)-ave_L
-        # sum to evaluate for der+, abs diffs are distinct from directly defined matches:
-        mP = mx + mI + mG + mGa + mM + mMa + mL + mangle + maangle
-        derivatives[0].append(dP); derivatives[1].append(mP)
+    else:
+        # vertuple
+        _angle = _params.angle; angle = params.angle
+        dangle = _angle - angle;  mangle = min(_angle, angle)
+        derivatives[0].aangle = dangle; derivatives[1].angle = mangle
+        dtuple += abs(dangle); mtuple += mangle
 
-    else:  # 10-param mtuple or dtuple: m|d( x, L, M, Ma, I, G, Ga, angle, aangle, vP)
-        _G, _Ga, _angle, _aangle, _vP = _params[5:]
-        G, Ga, angle, aangle, vP = params[5:]
+        _aangle = _params.aangle; aangle = params.aangle
+        daangle = _aangle - aangle; maangle = min(_aangle, aangle)
+        derivatives[0].aangle = daangle; derivatives[1].aangle = maangle
+        dtuple += abs(daangle); mtuple += maangle
 
-        # G
-        dG = _G - G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-        derivatives[0].append(dG); derivatives[1].append(mG)
+        _val=_params.val; val=params.val
+        dval = _val - val; mval = min(_val, val)
+        dtuple += abs(dval); mtuple += mval
 
-        # Ga
-        dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
-        derivatives[0].append(dGa); derivatives[1].append(mGa)
-
-        # angle
-        if isinstance(_angle, tuple):
-            # (sin_da, cos_da)
-             _sin_da, _cos_da = _angle; sin_da, cos_da = angle
-             sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
-             cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
-             dangle = (sin_dda, cos_dda)  # da
-             mangle = ave_dangle - abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match
-             derivatives[0].append(dangle); derivatives[1].append(mangle)
-        else:
-            # scalar mangle
-            _mangle = _angle; mangle = angle
-            dmangle = _mangle - mangle;  mmangle = min(_mangle, mangle)
-            derivatives[0].append(dmangle); derivatives[1].append(mmangle)
-
-        # aangle
-        if isinstance(_aangle, tuple):
-            _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
-            sin_da0, cos_da0, sin_da1, cos_da1 = aangle
-
-            sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-            cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-            sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-            cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-            daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-            # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-            # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
-            gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
-            gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-            maangle = ave_dangle - abs(np.arctan2(gay, gax))  # match between aangles, probably wrong
-            derivatives[0].append(daangle); derivatives[1].append(maangle)
-        else:  # scalar maangle
-            _maangle = _aangle; maangle = aangle
-            dmaangle = _maangle - maangle;  mmaangle = min(_maangle, maangle)
-            derivatives[0].append(dmaangle); derivatives[1].append(mmaangle)
-
-        # vP
-        dP = _vP - vP; mP = ave_mP - abs(dP)
-        derivatives[0].append(dP); derivatives[1].append(mP)
+    derivatives[0].val = mtuple; derivatives[1].val = dtuple
 
     return derivatives
 
