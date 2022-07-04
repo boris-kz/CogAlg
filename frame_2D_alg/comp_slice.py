@@ -33,24 +33,23 @@ ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form
 ave_ortho = 20
 aveB = 50
 # comp_param coefs:
-ave_I = ave_inv
+ave_dI = ave_inv
 ave_M = ave  # replace the rest with coefs:
 ave_Ma = 10
 ave_G = 10
 ave_Ga = 2  # related to dx?
 ave_L = 10
-ave_dx = 5  # difference between median x coords of consecutive Ps
+ave_dx = 5  # inv, difference between median x coords of consecutive Ps
 ave_dangle = 2  # vertical difference between angles
 ave_daangle = 2
-ave_mP = 10
-ave_dP = 10
+ave_mval = ave_dval = 10  # should be different
 ave_mPP = 10
 ave_dPP = 10
 ave_splice = 10
 
-param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]  # angle = Dy, Dx; aangle = sin_da0, cos_da0, sin_da1, cos_da1; recompute Gs for comparison?
-aves = [ave_dx, ave_I, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mP, ave_dP]
-vaves = [ave_mP, ave_dP]
+param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]
+aves = [ave_dx, ave_dI, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mval, ave_dval]
+vaves = [ave_mval, ave_dval]
 
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
@@ -178,30 +177,33 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines
         P_ = []  # line of Ps
         _mask = True
-        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # unpack derts: tuples of 10 params
-            if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
+        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
 
+            if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
+            g, ga, ri, angle, aangle = dert[1], dert[2], dert[3], list(dert[4:6]), list(dert[6:])
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
                     Pdert_ = [dert]
-                    params = Cptuple(M=ave_g - dert[1], Ma=ave_ga - dert[2], I=dert[3], angle=dert[4,5], aangle=dert[6:])
+                    params = Cptuple(M=ave_g-g,Ma=ave_ga-ga,I=ri, angle=angle, aangle=aangle)
                 else:
                     # dert and _dert are not masked, accumulate P params:
-                    params.M+=ave_g-dert[1]; params.Ma+=ave_ga-dert[2]; params.I+=dert[3]; params.angle[0]+=dert[4]; params.angle[1]+=dert[5]
-                    params.aangle[0]+=dert[6]; params.aangle[1]+=dert[7]; params.aangle[2]+=dert[8]; params.aangle[3]+=dert[9]
+                    params.M+=ave_g-g; params.Ma+=ave_ga-ga; params.I+=ri; params.angle[0]+=angle[0]; params.angle[1]+=angle[1]
+                    params.aangle = [sum(aangle_tuple) for aangle_tuple in zip(params.aangle, aangle)]
                     Pdert_.append(dert)
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
-                params.G = np.hypot(params.angle[:])  # Dy, Dx
+                params.G = np.hypot(*params.angle)  # Dy, Dx
                 params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
+                params.angle = tuple(params.angle); params.aangle = tuple(params.aangle)  # revert to tuple
                 P_.append( CP(params=params, x0=x-(params.L-1), y=y, dert_=Pdert_))
             _mask = mask
 
         if not _mask:  # pack last P:
             params.L = len(Pdert_)
-            params.G = np.hypot(params.angle[:])
+            params.G = np.hypot(*params.angle)
             params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
+            params.angle = tuple(params.angle); params.aangle = tuple(params.aangle)  # revert to tuple
             P_.append(CP(params=params, x0=x - (params.L - 1), y=y, dert_=Pdert_))
         P__ += [P_]
 
@@ -572,11 +574,12 @@ def comp_layers(_layers, layers, der_layers):  # only for agg_recursion, each pa
 
 def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers):  # recursively unpack nested m,d tuple pairs, if any from der+
 
-    if isinstance(_pair_layers[0], list):  # pair_layers is a pair, possibly including sub_pairs
+    if isinstance(_pair_layers, Cptuple):
+        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # pair_layers is a ptuple, 1st element is a param
+    else:
+        # pair_layers is a pair, possibly including sub_pairs
         for _pair, pair in zip(_pair_layers, pair_layers):  # ~ comp_layers 2nd sequence
             der_pair_layers += [comp_pair_layers(_pair, pair, der_pair_layers)]
-    else:
-        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # pair_layers is a ptuple, 1st element is a param
 
     return der_pair_layers  # possibly nested m,d ptuple pairs
 
@@ -590,35 +593,35 @@ def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers bu
 
 def sum_pairs(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
 
-    if isinstance(Pairs[0], list):  # pairs is a pair, possibly nested in layers
+    if isinstance(Pairs, Cptuple):
+        accum_ptuple(Pairs, pairs)  # pairs is a ptuple, 1st element is a param
+    else:
         for Pair, pair in zip(Pairs, pairs):
             sum_pairs(Pair, pair)
+
+def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
+
+    Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
+
+    if isinstance(Ptuple.angle, tuple):
+        # angle
+        _sin_da, _cos_da = Ptuple.angle
+        sin_da, cos_da = ptuple.angle
+        sum_sin_da = (cos_da * _sin_da) + (sin_da * _cos_da)  # sin(α + β) = sin α cos β + cos α sin β
+        sum_cos_da = (cos_da * _cos_da) - (sin_da * _sin_da)  # cos(α + β) = cos α cos β - sin α sin β
+        Ptuple.angle = (sum_sin_da, sum_cos_da)
+        # aangle
+        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Ptuple.aangle
+        sin_da0, cos_da0, sin_da1, cos_da1 = ptuple.aangle
+        sum_sin_da0 = (cos_da0 * _sin_da0) + (sin_da0 * _cos_da0)  # sin(α + β) = sin α cos β + cos α sin β
+        sum_cos_da0 = (cos_da0 * _cos_da0) - (sin_da0 * _sin_da0)  # cos(α + β) = cos α cos β - sin α sin β
+        sum_sin_da1 = (cos_da1 * _sin_da1) + (sin_da1 * _cos_da1)
+        sum_cos_da1 = (cos_da1 * _cos_da1) - (sin_da1 * _sin_da1)
+        Ptuple.aangle = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
     else:
-        accum_ptuple(Pairs, pairs)  # pairs is a ptuple, 1st element is a param
-
-
-def accum_ptuple(Ptuple, ptuple):
-    # if lataple: x, L, m, ma, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
-    # if vertuples: [mx, mL, mM, mMa, mI, mG, mGa, , mangle, mP, maangle], [dx, dL, dM, dMa, dI, dG, dGa, , dangle, dP, daangle]
-
-    for i, (_param, param) in enumerate(zip(Ptuple, ptuple)):  # include all summable derP variables into params?
-        if isinstance(_param, tuple):
-            if len(_param) == 2:  # (sin_da, cos_da)
-                _sin_da, _cos_da = _param
-                sin_da, cos_da = param
-                sum_sin_da = (cos_da * _sin_da) + (sin_da * _cos_da)  # sin(α + β) = sin α cos β + cos α sin β
-                sum_cos_da = (cos_da * _cos_da) - (sin_da * _sin_da)  # cos(α + β) = cos α cos β - sin α sin β
-                Ptuple[i] = (sum_sin_da, sum_cos_da)
-            else:  # (sin_da0, cos_da0, sin_da1, cos_da1)
-                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _param
-                sin_da0, cos_da0, sin_da1, cos_da1 = param
-                sum_sin_da0 = (cos_da0 * _sin_da0) + (sin_da0 * _cos_da0)  # sin(α + β) = sin α cos β + cos α sin β
-                sum_cos_da0 = (cos_da0 * _cos_da0) - (sin_da0 * _sin_da0)  # cos(α + β) = cos α cos β - sin α sin β
-                sum_sin_da1 = (cos_da1 * _sin_da1) + (sin_da1 * _cos_da1)
-                sum_cos_da1 = (cos_da1 * _cos_da1) - (sin_da1 * _sin_da1)
-                Ptuple[i] = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
-        else:  # scalar
-            Ptuple[i] += param
+        # scalar
+        Ptuple.angle += ptuple.angle #[sum(angle_tuple) for angle_tuple in zip(Ptuple.angle, ptuple.angle)]
+        Ptuple.aangle += ptuple.aangle  #[sum(aangle_tuple) for aangle_tuple in zip(Ptuple.aangle, ptuple.aangle)]
 
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
@@ -637,91 +640,73 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
 def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar operations for m and d params
 
-    derivatives = [Cptuple(), Cptuple()]
+    tuple_ds, tuple_ms = Cptuple(), Cptuple()
+    dtuple, mtuple = 0, 0
+
     _x, _L, _M, _Ma, _I  = _params.x, _params.L, _params.M, _params.Ma, _params.I
     x, L, M, Ma, I = params.x, params.L, params.M, params.Ma, params.I
-    dtuple = 0
-    mtuple = 0
-    # x
-    dx = _x - x; mx = ave_dx - abs(dx)
-    derivatives[0].x = dx; derivatives[1].x = mx
-    dtuple += abs(dx); mtuple += mx
-    hyp = np.hypot(dx, 1)
-    # L
-    dL = _L - L/hyp;  mL = min(_L, L)
-    derivatives[0].L = dL; derivatives[1].L = mL
-    dtuple += abs(dL); mtuple += mL
-    # I
-    dI = _I - I; mI = ave_I - abs(dI)
-    derivatives[0].I = dI; derivatives[1].I = mI
-    dtuple += abs(dI); mtuple += mI
-    # M
-    dM = _M - M/hyp;  mM = min(_M, M)
-    derivatives[0].M = dM; derivatives[1].M = mM
-    dtuple += abs(dM); mtuple += mM
-    # Ma
-    dMa = _Ma - Ma;  mMa = min(_Ma, Ma)
-    derivatives[0].Ma = dMa; derivatives[1].Ma = mMa
-    dtuple += abs(dMa); mtuple += mMa
-
+    # same set:
+    comp_scalar(_I, I, dtuple, mtuple, tuple_ds, tuple_ms, ave_dI, finv=1)  # inverse match def
+    comp_scalar(_x, x, dtuple, mtuple, tuple_ds, tuple_ms, ave_dx, finv=1)
+    hyp = np.hypot(tuple_ds.x, 1)  # dx, project param orthogonal to blob axis:
+    comp_scalar(_L, L / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_L, finv=0)
+    comp_scalar(_M, M / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_M, finv=0)
+    comp_scalar(_Ma, Ma/hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_Ma, finv=0)
+    # diff set
+    # no need to compare inverse match, redudant to diff?
     if isinstance(_params.angle, tuple):
         # lataple:
-        _G= _params.G; G = params.G
-        dG = _params.G - params.G/hyp;  mG = min(_G, G)  # if comp_norm: reduce by hypot
-        derivatives[0].G = dG; derivatives[1].G = mG
-        dtuple += abs(dG); mtuple += mG
+        comp_scalar(_params.G, params.G / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_G, finv=0)
+        comp_scalar(_params.Ga, params.Ga/hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_Ga, finv=0)
+        # angle:
+        _Dy,_Dx = _params.angle[:]; Dy,Dx = params.angle[:]
+        _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
+        sin = Dy / (.1 if G == 0 else G); cos = Dx / (.1 if G == 0 else G)
+        _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
+        sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+        cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+        dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
+        mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
+        tuple_ds.angle = dangle; tuple_ms.angle= mangle
+        dtuple += dangle; mtuple += mangle
 
-        _Ga = _params.Ga; Ga = params.Ga
-        dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
-        derivatives[0].Ga = dGa; derivatives[1].Ga = mGa
-        dtuple += abs(dGa); mtuple += mGa
-
-        # angle = (sin_da, cos_da)
-        _sin_da, _cos_da = _params.angle; sin_da, cos_da = params.angle
-        sin_dda = (cos_da * _sin_da) - (sin_da * _cos_da)  # sin(α - β) = sin α cos β - cos α sin β
-        cos_dda = (cos_da * _cos_da) + (sin_da * _sin_da)  # cos(α - β) = cos α cos β + sin α sin β
-        dangle = (sin_dda, cos_dda)  # da
-        mangle = abs(np.arctan2(sin_dda, cos_dda))  # ma is indirect match, sum aves too
-        derivatives[0].angle = dangle; derivatives[1].angle= mangle
-        dtuple += mangle  # actually dangle
-        mtuple += ave - abs(mangle)
-
-        # aangle
+        # angle of angle:
         _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
         sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
         sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
         cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
         sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
         cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
-        daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-        # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-        # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+        # for 2D, not reduction to 1D:
+        # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+        # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]; dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+
         gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
         gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-        maangle = abs(np.arctan2(gay, gax))  # match between aangles, probably wrong
-        derivatives[0].aangle = daangle; derivatives[1].aangle = maangle
-        dtuple += maangle  # actually daangle
-        mtuple += ave - abs(maangle)
-
-    else:
-        # vertuple
-        _angle = _params.angle; angle = params.angle
-        dangle = _angle - angle;  mangle = min(_angle, angle)
-        derivatives[0].aangle = dangle; derivatives[1].angle = mangle
-        dtuple += abs(dangle); mtuple += mangle
-
-        _aangle = _params.aangle; aangle = params.aangle
-        daangle = _aangle - aangle; maangle = min(_aangle, aangle)
-        derivatives[0].aangle = daangle; derivatives[1].aangle = maangle
+        daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
+        maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
+        tuple_ds.aangle = daangle; tuple_ms.aangle = maangle
         dtuple += abs(daangle); mtuple += maangle
 
-        _val=_params.val; val=params.val
-        dval = _val - val; mval = min(_val, val)
-        dtuple += abs(dval); mtuple += mval
+    else:
+        # vertuple, all ders are scalars:
+        comp_scalar(_params.angle, params.angle / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_dangle, finv=0)
+        comp_scalar(_params.aangle, params.aangle / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_daangle, finv=0)
+        comp_scalar(_params.val, params.val / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_mval, finv=0)
 
-    derivatives[0].val = mtuple; derivatives[1].val = dtuple
+    tuple_ds.val = mtuple; tuple_ms.val = dtuple
 
-    return derivatives
+    return tuple_ds, tuple_ms
+
+def comp_scalar(_param, param, dtuple, mtuple, tuple_ds, tuple_ms, ave, finv):
+
+    d = _param-param
+    if finv: m = ave - abs(d)  # inverse match for primary params, no mag/value correlation
+    else:    m = min(_param,param) - ave
+    dtuple += abs(d)
+    mtuple += m
+    setattr(tuple_ds, 'param', d)  # tuple_ds.param_name = d
+    setattr(tuple_ms, 'param', m)  # tuple_ds.param_name = d
 
 
 def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP

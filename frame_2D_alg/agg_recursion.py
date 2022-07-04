@@ -66,7 +66,7 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
         if fiPd: ave_PP = ave_dPP
         else:    ave_PP = ave_mPP
         if fseg:
-            seg_M = blob.params[0].vP
+            seg_M = blob.params[0].val
             if len(blob.params) > 1: seg_M += blob.params[1][fiPd].M
             M = ave - seg_M
         else:
@@ -133,12 +133,20 @@ def ave_layers(summed_params, n):  # as sum_layers but single arg
 
 def ave_pairs(sum_pairs, n):  # recursively unpack m,d tuple pairs from der+
 
-    if isinstance(sum_pairs[0], list):  # pairs is a pair, possibly nested
+    if isinstance(sum_pairs, Cptuple):
+        sum_pairs.x /= n; sum_pairs.L /= n; sum_pairs.M /= n; sum_pairs.Ma /= n;
+        sum_pairs.G /= n; sum_pairs.Ga /= n; sum_pairs.val /= n;
+        if isinstance(sum_pairs.angle, tuple):
+            sin_da, cos_da = sum_pairs.angle[0]/n, sum_pairs.angle[1]/n
+            sin_da0, cos_da0, sin_da1, cos_da1 = sum_pairs.aangle[0]/n, sum_pairs.aangle[1]/n, sum_pairs.aangle[2]/n, sum_pairs.aangle[3]/n
+            sum_pairs.angle = (sin_da, cos_da)
+            sum_pairs.aangle = (sin_da0, cos_da0, sin_da1, cos_da1)
+        else:
+            sum_pairs.angle /= n;
+            sum_pairs.aangle /= n;
+    else:  # pairs is a pair, possibly nested
         for sum_pair in sum_pairs:
             ave_pairs(sum_pair, n)
-    else:
-        for i, param in enumerate(sum_pairs):  # pairs is a ptuple, 1st element is a param
-            sum_pairs[i] = param / n  # 1st layer is latuple, decoded in func
 
     return sum_pairs  # sum_pairs is now ave_pairs, possibly nested m,d ptuple pairs
 
@@ -153,7 +161,7 @@ def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
         for i, pre_PPP in enumerate(pre_PPP_):
             pre_PPP_val = 0
             for param_layer in pre_PPP.params:  # may need recursive unpack here
-                pre_PPP.rdn += param_layer[fPd][-1] > param_layer[1-fPd][-1]  # last element is vP
+                pre_PPP.rdn += param_layer[fPd][-1] > param_layer[1-fPd][-1]  # last element is val
                 pre_PPP_val += param_layer[fPd][-1]  # make it a param?
 
             ave = vaves[fPd] * pre_PPP.rdn * (i+1)  # derPP is redundant to higher-value previous derPPs in derPP_
