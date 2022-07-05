@@ -106,7 +106,19 @@ def comp_PP_(PP_):  # PP can also be PPP, etc.
             sum_layers(summed_params, compared_PP.params)
         sum_params = deepcopy(summed_params)
         ave_layers(sum_params, n)
+        '''
+        not reviewed:
+        # init summed_params with max number of params layer, some PP (single seg single P's PP) might have lesser params layer
+        max_params_length = max([len(compared_PP.params) for compared_PP in compared_PP_])
+        for compared_PP in compared_PP_:
+            if len(compared_PP.params) == max_params_length:
+                summed_params = deepcopy(compared_PP.params)  # sum same-type params across compared PPs, init 1st element
+                compared_PP_.remove(compared_PP)  # remove PP after params initialization
+                break
 
+        for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
+            sum_layers(summed_params, compared_PP.params)
+        '''
         pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_])  # comp_ave- defined pre_PPP inherits PP.params
         pre_PPP.params = comp_layers(PP.params, sum_params, der_layers=[])  # sum_params is now ave_params
         '''
@@ -133,22 +145,39 @@ def ave_layers(summed_params, n):  # as sum_layers but single arg
 
 def ave_pairs(sum_pairs, n):  # recursively unpack m,d tuple pairs from der+
 
-    if isinstance(sum_pairs, Cptuple):
-        sum_pairs.x /= n; sum_pairs.L /= n; sum_pairs.M /= n; sum_pairs.Ma /= n;
-        sum_pairs.G /= n; sum_pairs.Ga /= n; sum_pairs.val /= n;
-        if isinstance(sum_pairs.angle, tuple):
-            sin_da, cos_da = sum_pairs.angle[0]/n, sum_pairs.angle[1]/n
-            sin_da0, cos_da0, sin_da1, cos_da1 = sum_pairs.aangle[0]/n, sum_pairs.aangle[1]/n, sum_pairs.aangle[2]/n, sum_pairs.aangle[3]/n
-            sum_pairs.angle = (sin_da, cos_da)
-            sum_pairs.aangle = (sin_da0, cos_da0, sin_da1, cos_da1)
-        else:
-            sum_pairs.angle /= n;
-            sum_pairs.aangle /= n;
-    else:  # pairs is a pair, possibly nested
+    if isinstance(sum_pairs, Cptuple):  # sum_pairs is latuple
+        ave_ptuple(sum_pairs, n)
+
+    elif isinstance(sum_pairs[0], Cptuple):  # sum_pairs is two vertuples
+        ave_ptuple(sum_pairs[0], n); ave_ptuple(sum_pairs[1], n)
+
+    else:  # sum_pairs is pair_layers:
         for sum_pair in sum_pairs:
             ave_pairs(sum_pair, n)
 
     return sum_pairs  # sum_pairs is now ave_pairs, possibly nested m,d ptuple pairs
+
+def ave_ptuple(ptuple, n):
+
+    for i, param in enumerate(ptuple):  # make ptuple an iterable?
+        ptuple[i] = param / n
+
+        if isinstance(param, tuple):
+            for j, sub_param in enumerate(param):
+                param[j] = sub_param / n  # angle or aangle
+        else:
+            ptuple[i] = param / n
+'''
+sum_pairs.x /= n; sum_pairs.L /= n; sum_pairs.M /= n; sum_pairs.Ma /= n; sum_pairs.G /= n; sum_pairs.Ga /= n; sum_pairs.val /= n
+if isinstance(sum_pairs.angle, tuple):
+    sin_da, cos_da = sum_pairs.angle[0]/n, sum_pairs.angle[1]/n
+    sin_da0, cos_da0, sin_da1, cos_da1 = sum_pairs.aangle[0]/n, sum_pairs.aangle[1]/n, sum_pairs.aangle[2]/n, sum_pairs.aangle[3]/n
+    sum_pairs.angle = (sin_da, cos_da)
+    sum_pairs.aangle = (sin_da0, cos_da0, sin_da1, cos_da1)
+else:
+    sum_pairs.angle /= n
+    sum_pairs.aangle /= n
+'''
 
 
 def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
