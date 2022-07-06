@@ -89,3 +89,25 @@ def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar op
     tuple_ds.val = mtuple; tuple_ms.val = dtuple
 
     return tuple_ds, tuple_ms
+
+def ave_ptuple(ptuple, n):
+
+    for i, param in enumerate(ptuple):  # make ptuple an iterable?
+        ptuple[i] = param / n
+
+        if isinstance(param, tuple):
+            for j, sub_param in enumerate(param):
+                param[j] = sub_param / n  # angle or aangle
+        else:
+            ptuple[i] = param / n
+'''
+sum_pairs.x /= n; sum_pairs.L /= n; sum_pairs.M /= n; sum_pairs.Ma /= n; sum_pairs.G /= n; sum_pairs.Ga /= n; sum_pairs.val /= n
+if isinstance(sum_pairs.angle, tuple):
+    sin_da, cos_da = sum_pairs.angle[0]/n, sum_pairs.angle[1]/n
+    sin_da0, cos_da0, sin_da1, cos_da1 = sum_pairs.aangle[0]/n, sum_pairs.aangle[1]/n, sum_pairs.aangle[2]/n, sum_pairs.aangle[3]/n
+    sum_pairs.angle = (sin_da, cos_da)
+    sum_pairs.aangle = (sin_da0, cos_da0, sin_da1, cos_da1)
+else:
+    sum_pairs.angle /= n
+    sum_pairs.aangle /= n
+'''

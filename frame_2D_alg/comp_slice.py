@@ -144,6 +144,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
         # comp_dx_blob(P__), comp_dx?
+        # form PPm_ is not revised yet, probably should be from generic P_
         Pm__ = comp_P_root(deepcopy(P__))  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P,
         Pd__ = comp_P_root(deepcopy(P__))  # deepcopy before assigning link derPs to Ps
 
@@ -575,9 +576,9 @@ def comp_layers(_layers, layers, der_layers):  # only for agg_recursion, each pa
 def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers):  # recursively unpack nested m,d tuple pairs, if any from der+
 
     if isinstance(_pair_layers, Cptuple):
-        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # pair_layers is a latuple, in 1st layer
+        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # 1st-layer pair_layers is latuple | vertuple
 
-    elif isinstance(_pair_layers[0], Cptuple):  # pairs is two vertuples, in higher layers, + 1st layer if der+:
+    elif isinstance(_pair_layers[0], Cptuple):  # pairs is two vertuples, in higher layers
         der_pair_layers += [comp_ptuple(_pair_layers[0], _pair_layers[0]), comp_ptuple(_pair_layers[1], _pair_layers[1])]
 
     else:  # keep unpacking pair_layers:
@@ -597,7 +598,7 @@ def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers bu
 def sum_pairs(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
 
     if isinstance(Pairs, Cptuple):
-        accum_ptuple(Pairs, pairs)  # pairs is a latuple
+        accum_ptuple(Pairs, pairs)  # pairs is a latuple or vertuple, in 1st layer only
 
     elif isinstance(Pairs[0], Cptuple):  # pairs is two vertuples
         accum_ptuple(Pairs[0], pairs[0]); accum_ptuple(Pairs[1], pairs[1])
@@ -610,7 +611,12 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
     Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
 
-    if isinstance(Ptuple.angle, tuple):
+    if isinstance(Ptuple.angle, tuple):  # in 1st layer only
+        '''
+        This should be simple summation:
+        for Param, param in zip(Ptuple.angle, ptuple.angle): Param += param
+        for Param, param in zip(Ptuple.aangle, ptuple.aangle): Param += param
+        ? '''
         # angle
         _sin_da, _cos_da = Ptuple.angle
         sin_da, cos_da = ptuple.angle
@@ -627,8 +633,8 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
         Ptuple.aangle = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
     else:
         # scalar
-        Ptuple.angle += ptuple.angle #[sum(angle_tuple) for angle_tuple in zip(Ptuple.angle, ptuple.angle)]
-        Ptuple.aangle += ptuple.aangle  #[sum(aangle_tuple) for aangle_tuple in zip(Ptuple.aangle, ptuple.aangle)]
+        Ptuple.angle += ptuple.angle  # [sum(angle_tuple) for angle_tuple in zip(Ptuple.angle, ptuple.angle)]
+        Ptuple.aangle += ptuple.aangle  # [sum(aangle_tuple) for aangle_tuple in zip(Ptuple.aangle, ptuple.aangle)]
 
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
@@ -645,22 +651,21 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     return CderP(x0=x0, L=L, y=_P.y, params=derivatives, P=P, _P=_P)
 
 
-def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar operations for m and d params
+def comp_ptuple(_params, params):  # compare latuples or vertuples, similar operations for m and d params
 
     tuple_ds, tuple_ms = Cptuple(), Cptuple()
     dtuple, mtuple = 0, 0
-    flataple = isinstance(_params.angle, tuple)  # else vertuple
+    flatuple = isinstance(_params.angle, tuple)  # else vertuple
 
     # same set:
-    comp("I", _params.I, params.I, dtuple, mtuple, tuple_ds, tuple_ms, ave_dI, finv=flataple)  # inverse match def
-    comp("x", _params.x, params.x, dtuple, mtuple, tuple_ds, tuple_ms, ave_dx, finv=flataple)
+    comp("I", _params.I, params.I, dtuple, mtuple, tuple_ds, tuple_ms, ave_dI, finv=flatuple)  # inverse match def
+    comp("x", _params.x, params.x, dtuple, mtuple, tuple_ds, tuple_ms, ave_dx, finv=flatuple)
     hyp = np.hypot(tuple_ds.x, 1)  # dx, project param orthogonal to blob axis:
     comp("L", _params.L, params.L / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_L, finv=0)
     comp("M", _params.M, params.M / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_M, finv=0)
     comp("Ma",_params.Ma, params.Ma / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_Ma, finv=0)
     # diff set
-    if flataple:
-        # lataple:
+    if flatuple:
         comp("G", _params.G, params.G / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_G, finv=0)
         comp("Ga", _params.Ga, params.Ga / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_Ga, finv=0)
         # angle:
@@ -747,7 +752,6 @@ def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3
         P.PP, P._PP = PP_derP, _PP_derP
 
     return new_P
-
 
 # old draft
 def splice_dir_blob_(dir_blobs):
