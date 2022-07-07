@@ -411,15 +411,14 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     elif isinstance(iP, CderP): accum = accum_derP
     else: accum = accum_P
 
-    # init seg params with 1st P and 1st P's derP
-    seg.params[0] = deepcopy(seg_Ps[0].params)
+    seg.params[0] = deepcopy(seg_Ps[0].params)  # init seg params with 1st P and derP
     seg_Ps[0].root = seg
     seg.x0 = min(seg.x0, seg_Ps[0].x0)
+
     if len(seg_Ps)>1:
-        seg.params += [deepcopy(seg_Ps[0].uplink_layers[-1][0].params)]   # add new layer in params if there;s more than 1 P
-        accum(seg, seg_Ps[-1], fPd)  # accumulate last P
-    # accumulate P and their derP's params for non 1st and last P
-    for P in seg_Ps[1:-1]:
+        seg.params += [[deepcopy(seg_Ps[0].uplink_layers[-1][0].params)]]   # add nested layer in params if P was compared
+        accum(seg, seg_Ps[-1], fPd)  # accum last P
+    for P in seg_Ps[1:-1]:  # skip 1st and last P
         accum(seg, P, fPd)
         accum_derP(seg, P.uplink_layers[-1][0], fPd)
 
@@ -564,7 +563,7 @@ def sub_recursion(PP, base_rdn, fPd):  # compares param_layers of derPs in gener
 
 def comp_layers(_layers, layers, der_layers):  # only for agg_recursion, each param layer may consist of sub_layers
 
-    # recursive unpack of nested param layers, each layer is ptuple pair_layers, if any from der+?
+    # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
     der_layers += [comp_pair_layers(_layers[0], layers[0], der_pair_layers=[])]
 
     # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
@@ -576,9 +575,9 @@ def comp_layers(_layers, layers, der_layers):  # only for agg_recursion, each pa
 def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers):  # recursively unpack nested m,d tuple pairs, if any from der+
 
     if isinstance(_pair_layers, Cptuple):
-        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # 1st-layer pair_layers is latuple | vertuple
+        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # 1st-layer pair_layers is latuple
 
-    elif isinstance(_pair_layers[0], Cptuple):  # pairs is two vertuples, in higher layers
+    elif isinstance(_pair_layers[0], Cptuple):  # pairs is two vertuples, in 1st or higher layers
         der_pair_layers += [comp_ptuple(_pair_layers[0], _pair_layers[0]), comp_ptuple(_pair_layers[1], _pair_layers[1])]
 
     else:  # keep unpacking pair_layers:
@@ -598,7 +597,7 @@ def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers bu
 def sum_pairs(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
 
     if isinstance(Pairs, Cptuple):
-        accum_ptuple(Pairs, pairs)  # pairs is a latuple or vertuple, in 1st layer only
+        accum_ptuple(Pairs, pairs)  # pairs is a latuple, in 1st layer only
 
     elif isinstance(Pairs[0], Cptuple):  # pairs is two vertuples
         accum_ptuple(Pairs[0], pairs[0]); accum_ptuple(Pairs[1], pairs[1])
@@ -611,30 +610,13 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
     Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
 
-    if isinstance(Ptuple.angle, tuple):  # in 1st layer only
-        '''
-        This should be simple summation:
-        for Param, param in zip(Ptuple.angle, ptuple.angle): Param += param
+    if isinstance(Ptuple.angle, tuple):
+        # latuple:
+        for Param, param in zip(Ptuple.angle, ptuple.angle): Param += param  # always in vector representation
         for Param, param in zip(Ptuple.aangle, ptuple.aangle): Param += param
-        ? '''
-        # angle
-        _sin_da, _cos_da = Ptuple.angle
-        sin_da, cos_da = ptuple.angle
-        sum_sin_da = (cos_da * _sin_da) + (sin_da * _cos_da)  # sin(α + β) = sin α cos β + cos α sin β
-        sum_cos_da = (cos_da * _cos_da) - (sin_da * _sin_da)  # cos(α + β) = cos α cos β - sin α sin β
-        Ptuple.angle = (sum_sin_da, sum_cos_da)
-        # aangle
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Ptuple.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = ptuple.aangle
-        sum_sin_da0 = (cos_da0 * _sin_da0) + (sin_da0 * _cos_da0)  # sin(α + β) = sin α cos β + cos α sin β
-        sum_cos_da0 = (cos_da0 * _cos_da0) - (sin_da0 * _sin_da0)  # cos(α + β) = cos α cos β - sin α sin β
-        sum_sin_da1 = (cos_da1 * _sin_da1) + (sin_da1 * _cos_da1)
-        sum_cos_da1 = (cos_da1 * _cos_da1) - (sin_da1 * _sin_da1)
-        Ptuple.aangle = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
     else:
-        # scalar
-        Ptuple.angle += ptuple.angle  # [sum(angle_tuple) for angle_tuple in zip(Ptuple.angle, ptuple.angle)]
-        Ptuple.aangle += ptuple.aangle  # [sum(aangle_tuple) for aangle_tuple in zip(Ptuple.aangle, ptuple.aangle)]
+        Ptuple.angle += ptuple.angle
+        Ptuple.aangle += ptuple.aangle
 
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
@@ -653,21 +635,21 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
 def comp_ptuple(_params, params):  # compare latuples or vertuples, similar operations for m and d params
 
-    tuple_ds, tuple_ms = Cptuple(), Cptuple()
-    dtuple, mtuple = 0, 0
-    flatuple = isinstance(_params.angle, tuple)  # else vertuple
+    dtuple, mtuple = Cptuple(), Cptuple()
+    dval, mval = 0, 0
 
+    flatuple = isinstance(_params.angle, tuple)  # else vertuple
     # same set:
-    comp("I", _params.I, params.I, dtuple, mtuple, tuple_ds, tuple_ms, ave_dI, finv=flatuple)  # inverse match def
-    comp("x", _params.x, params.x, dtuple, mtuple, tuple_ds, tuple_ms, ave_dx, finv=flatuple)
-    hyp = np.hypot(tuple_ds.x, 1)  # dx, project param orthogonal to blob axis:
-    comp("L", _params.L, params.L / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_L, finv=0)
-    comp("M", _params.M, params.M / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_M, finv=0)
-    comp("Ma",_params.Ma, params.Ma / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_Ma, finv=0)
+    comp("I", _params.I, params.I, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
+    comp("x", _params.x, params.x, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
+    hyp = np.hypot(dtuple.x, 1)  # dx, project param orthogonal to blob axis:
+    comp("L", _params.L, params.L / hyp, dval, mval, dtuple, mtuple, ave_L, finv=0)
+    comp("M", _params.M, params.M / hyp, dval, mval, dtuple, mtuple, ave_M, finv=0)
+    comp("Ma",_params.Ma, params.Ma / hyp, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
     # diff set
     if flatuple:
-        comp("G", _params.G, params.G / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_G, finv=0)
-        comp("Ga", _params.Ga, params.Ga / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_Ga, finv=0)
+        comp("G", _params.G, params.G / hyp, dval, mval, dtuple, mtuple, ave_G, finv=0)
+        comp("Ga", _params.Ga, params.Ga / hyp, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
         # angle:
         _Dy,_Dx = _params.angle[:]; Dy,Dx = params.angle[:]
         _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
@@ -677,8 +659,8 @@ def comp_ptuple(_params, params):  # compare latuples or vertuples, similar oper
         cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
         dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
         mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
-        tuple_ds.angle = dangle; tuple_ms.angle= mangle
-        dtuple += dangle; mtuple += mangle
+        dtuple.angle = dangle; mtuple.angle= mangle
+        dval += dangle; mval += mangle
 
         # angle of angle:
         _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
@@ -695,28 +677,29 @@ def comp_ptuple(_params, params):  # compare latuples or vertuples, similar oper
         gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
         daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
         maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
-        tuple_ds.aangle = daangle; tuple_ms.aangle = maangle
-        dtuple += abs(daangle); mtuple += maangle
+        dtuple.aangle = daangle; mtuple.aangle = maangle
+        dval += abs(daangle); mval += maangle
 
     else:
         # vertuple, all ders are scalars:
-        comp("val", _params.val, params.val / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_mval, finv=0)
-        comp("angle", _params.angle, params.angle / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_dangle, finv=0)
-        comp("aangle", _params.aangle, params.aangle / hyp, dtuple, mtuple, tuple_ds, tuple_ms, ave_daangle, finv=0)
+        comp("val", _params.val, params.val / hyp, dval, mval, dtuple, mtuple, ave_mval, finv=0)
+        comp("angle", _params.angle, params.angle / hyp, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
+        comp("aangle", _params.aangle, params.aangle / hyp, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
 
-    tuple_ds.val = mtuple; tuple_ms.val = dtuple
+    mtuple.val = mval; dtuple.val = dval
 
-    return tuple_ds, tuple_ms
+    return mtuple, dtuple
 
-def comp(param_name, _param, param, dtuple, mtuple, tuple_ds, tuple_ms, ave, finv):
+def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
 
     d = _param-param
     if finv: m = ave - abs(d)  # inverse match for primary params, no mag/value correlation
     else:    m = min(_param,param) - ave
-    dtuple += abs(d)
-    mtuple += m
-    setattr(tuple_ds, param_name, d)  # tuple_ds.param_name = d
-    setattr(tuple_ms, param_name, m)  # tuple_ds.param_name = d
+    dval += abs(d)
+    mval += m
+    setattr(dtuple, param_name, d)  # dtuple.param_name = d
+    setattr(mtuple, param_name, m)  # mtuple.param_name = m
+
 
 def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP
 
@@ -730,6 +713,7 @@ def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3
     elif Ptype == 2:
         seg_levels = P.seg_levels
         PPP_levels = P.PPP_levels
+        layers = P.layers
     elif Ptype == 3:
         PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
         P.PP, P._PP = None, None  # reset
@@ -747,6 +731,7 @@ def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3
     elif Ptype == 2:
         P.seg_levels = seg_levels
         P.PPP_levels = PPP_levels
+        P.layers = layers
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP

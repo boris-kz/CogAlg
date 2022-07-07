@@ -110,4 +110,20 @@ if isinstance(sum_pairs.angle, tuple):
 else:
     sum_pairs.angle /= n
     sum_pairs.aangle /= n
+    
+accum_ptuple:
+        # angle
+        _sin_da, _cos_da = Ptuple.angle
+        sin_da, cos_da = ptuple.angle
+        sum_sin_da = (cos_da * _sin_da) + (sin_da * _cos_da)  # sin(α + β) = sin α cos β + cos α sin β
+        sum_cos_da = (cos_da * _cos_da) - (sin_da * _sin_da)  # cos(α + β) = cos α cos β - sin α sin β
+        Ptuple.angle = (sum_sin_da, sum_cos_da)
+        # aangle
+        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Ptuple.aangle
+        sin_da0, cos_da0, sin_da1, cos_da1 = ptuple.aangle
+        sum_sin_da0 = (cos_da0 * _sin_da0) + (sin_da0 * _cos_da0)  # sin(α + β) = sin α cos β + cos α sin β
+        sum_cos_da0 = (cos_da0 * _cos_da0) - (sin_da0 * _sin_da0)  # cos(α + β) = cos α cos β - sin α sin β
+        sum_sin_da1 = (cos_da1 * _sin_da1) + (sin_da1 * _cos_da1)
+        sum_cos_da1 = (cos_da1 * _cos_da1) - (sin_da1 * _sin_da1)
+        Ptuple.aangle = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
 '''
