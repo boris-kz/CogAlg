@@ -196,7 +196,6 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
                 params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
                 params.G = np.hypot(*params.angle)  # Dy, Dx
                 params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
-                params.angle = tuple(params.angle); params.aangle = tuple(params.aangle)  # revert to tuple
                 P_.append( CP(params=params, x0=x-(params.L-1), y=y, dert_=Pdert_))
             _mask = mask
 
@@ -204,7 +203,6 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
             params.L = len(Pdert_)
             params.G = np.hypot(*params.angle)
             params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
-            params.angle = tuple(params.angle); params.aangle = tuple(params.aangle)  # revert to tuple
             P_.append(CP(params=params, x0=x - (params.L - 1), y=y, dert_=Pdert_))
         P__ += [P_]
 
@@ -601,10 +599,9 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
     Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
 
-    if isinstance(Ptuple.angle, tuple):
-        # latuple:
-        for Param, param in zip(Ptuple.angle, ptuple.angle): Param += param  # always in vector representation
-        for Param, param in zip(Ptuple.aangle, ptuple.aangle): Param += param
+    if isinstance(Ptuple.angle, list):  # latuple:
+        for i, param in enumerate(ptuple.angle): Ptuple.angle[i] += param  # always in vector representation
+        for i, param in enumerate(ptuple.aangle): Ptuple.aangle[i] += param
     else:
         Ptuple.angle += ptuple.angle
         Ptuple.aangle += ptuple.aangle
@@ -624,7 +621,7 @@ def comp_P(_P, P, fsubder=0):  # forms vertical derivatives of params per P in _
     return CderP(x0=x0, L=L, y=_P.y, params=derivatives, P=P, _P=_P)
 
 
-def comp_ptuple(_params, params):  # compare latuples or vertuples, similar operations for m and d params
+def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
 
     dtuple, mtuple = Cptuple(), Cptuple()
     dval, mval = 0, 0
