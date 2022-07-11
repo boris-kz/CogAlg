@@ -67,7 +67,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     Ga = float
     # only in vertuple, combined tuple m|d value:
     val = float
-    # n = int  # number PPs in accumulation, should be local n_
+    n = int  # for agg+ only?
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP
 
@@ -402,8 +402,8 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
               L = len(seg_Ps), y0 = seg_Ps[0].y, params=[[]])  # seg.L is Ly
     iP = seg_Ps[0]
-    if isinstance(iP, CPP): accum = accum_PP
-    elif isinstance(iP, CderP): accum = accum_derP
+    if isinstance(iP, CderP): accum = accum_derP
+    elif isinstance(iP, CPP): accum = accum_PP  # 2 layers only?
     else: accum = accum_P  # iP is CP
 
     seg.params[0] = deepcopy(seg_Ps[0].params)  # init seg params with 1st P and derP
@@ -445,10 +445,13 @@ def accum_derP(PP, inp, fPd):  # inp is seg or PP in recursion
     # may add more assignments here
 
 def accum_PP(PP, inp, fPd):  # inp is seg or PP in recursion
+    # or seg only, PP in agg+ only?
 
     for i, (PP_params, inp_params) in enumerate(zip_longest(PP.params, inp.params, fillvalue=[])):
         if not PP_params: PP_params = deepcopy(inp_params)    # if PP's current layer params is empty, copy from input
-        else: sum_layers([PP_params], [inp_params])           # accumulate params
+
+        # PP is only two param layers, use accum_ptuple + sum_pair_layers instead?:
+        # else: sum_layers([PP_params], [inp_params])           # accumulate params
         if i > len(PP.params)-1: PP.params.append(PP_params)  # pack new layer
 
     inp.root = PP
@@ -576,13 +579,6 @@ def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers, fsubder):  # re
 
     return der_pair_layers  # possibly nested m,d ptuple pairs
 
-# only in agg_recursion, which may use sum2seg with CPP:
-
-def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers but no separate der_layers to return
-
-    sum_pair_layers(Params[0], params[0])  # recursive unpack of nested ptuple pair_layers, if any from der+
-    for Layer, layer in zip(Params[1:], params[1:]):
-        sum_layers(Layer, layer)  #  recursive unpack of higher layers, if any from agg+ and nested with sub_layers
 
 def sum_pair_layers(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
 
@@ -590,10 +586,11 @@ def sum_pair_layers(Pairs, pairs):  # recursively unpack pairs (short for pair_l
         accum_ptuple(Pairs, pairs)  # pairs is a latuple, in 1st layer only
 
     elif isinstance(Pairs[0], Cptuple):  # pairs is two vertuples, 1st layer in der+
-        accum_ptuple(Pairs[0], pairs[0]); accum_ptuple(Pairs[1], pairs[1])
+        accum_ptuple(Pairs[0], pairs[0])
+        accum_ptuple(Pairs[1], pairs[1])
 
     else:  # pair is pair_layers, keep unpacking:
-        for Pair, pair in zip(Pairs, pairs):
+        for Pair, pair, n in zip(Pairs, pairs):
             sum_pair_layers(Pair, pair)
 
 def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
@@ -676,7 +673,7 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
 
     mtuple.val = mval; dtuple.val = dval
 
-    return mtuple, dtuple
+    return [mtuple, dtuple]
 
 def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
 
@@ -721,6 +718,7 @@ def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3
         P.seg_levels = seg_levels
         P.PPP_levels = PPP_levels
         P.layers = layers
+        new_P.layers = layers
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
