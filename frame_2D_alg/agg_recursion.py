@@ -98,7 +98,7 @@ def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
         summed_params = init_params(PP.params)  # form empty (Cptuples, n=0)s, nested as PP params
 
         for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
-            sum_layers(summed_params, compared_PP.params, n=1)  # n for local averaging only
+            sum_layers(summed_params, compared_PP.params, fn=1)  # n for local averaging only
 
         sum_params = deepcopy(summed_params)
         ave_layers(sum_params)
@@ -147,13 +147,13 @@ def comp_layers(_layers, layers, der_layers, fsubder=0):  # only for agg_recursi
     return der_layers # possibly nested param layers
 
 
-def sum_layers(Params, params, n):  # Capitalized names for sums, as comp_layers but no separate der_layers to return
+def sum_layers(Params, params, fn):  # Capitalized names for sums, as comp_layers but no separate der_layers to return
 
-    sum_pair_layers(Params[0], params[0], n)  # recursive unpack of nested ptuple pair_layers, if any from der+
+    sum_pair_layers(Params[0], params[0], fn)  # recursive unpack of nested ptuple pair_layers, if any from der+
     # different from comp_slice version: increments ptuple.n in ind_comp_PP and (ptuple, n) in comp_PP_?
 
-    for Layer, layer, n in zip(Params[1:], params[1:]):
-        sum_layers(Layer, layer, n)  # recursive unpack of higher layers, if any from agg+ and nested with sub_layers
+    for Layer, layer in zip(Params[1:], params[1:]):
+        sum_layers(Layer, layer, fn)  # recursive unpack of higher layers, if any from agg+ and nested with sub_layers
 
 
 def ave_layers(summed_params):  # as sum_layers but single arg
