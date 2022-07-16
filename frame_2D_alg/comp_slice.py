@@ -62,7 +62,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     Ma = float
     angle = lambda: [0, 0]  # in lataple only, replaced by float in vertuple
     aangle = lambda: [0, 0, 0, 0]
-    n = int  # accumulation count
+    n = lambda: 1  # accumulation count
     # only in lataple, for comparison but not summation:
     G = float
     Ga = float
@@ -425,6 +425,20 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     return seg
 
 
+def init_ptuples(params):  # empty Cptuples with nesting structure of PP params
+
+    out_ptuples = []
+    for param in params:
+        if isinstance(param, list):
+            out_ptuples += [init_ptuples(param)]
+        else:
+            ptuple =  Cptuple()
+            if not isinstance(param.angle, list):  # follow angle and aangle structure of input params
+                ptuple.angle = 0; ptuple.aangle = 0
+            out_ptuples += [ptuple]
+    return out_ptuples
+
+
 def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn, sign=PP_segs[0].sign, L= len(PP_segs))
@@ -454,13 +468,7 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, PP in agg+ only
     accum_ptuple(PP.params[0], inp.params[0])  # PP has two param layers
     if len(inp.params) > 1:
         sum_pair_layers(PP.params[1], inp.params[1])  # 2nd layer is empty if single seg|P
-    '''
-    for PPP:
-    for i, (PP_params, inp_params) in enumerate(zip_longest(PP.params, inp.params, fillvalue=[])):
-        if not PP_params: PP_params = deepcopy(inp_params)    # if PP's current layer params is empty, copy from input
-        else: sum_layers([PP_params], [inp_params], n=0)      # accumulate ptuples
-        if i > len(PP.params) - 1: PP.params.append(PP_params)  # pack new layer
-    '''
+
     inp.root = PP
     PP.x += inp.x*inp.L  # or in inp.params?
     PP.y += inp.y*inp.L
@@ -491,18 +499,6 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, PP in agg+ only
                 if derP not in PP.downlink_layers[-1] and derP.P.root not in PP.seg_levels[fPd][-1]:
                     PP.uplink_layers[-1] += [derP]
 
-def init_ptuples(params):  # empty Cptuples with nesting structure of PP params
-
-    out_ptuples = []
-    for param in params:
-        if isinstance(param, list):
-            out_ptuples += [init_ptuples(param)]
-        else:
-            ptuple =  Cptuple()
-            if not isinstance(param.angle, list):  # follow angle and aangle structure of input params
-                ptuple.angle = 0; ptuple.aangle = 0
-            out_ptuples += [ptuple]
-    return out_ptuples
 
 
 def append_P(P__, P):  # pack P into P__ in top down sequence
@@ -541,37 +537,29 @@ def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers, fsubder):  # re
 
 def sum_pair_layers(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
 
-    if isinstance(Pairs, Cptuple) or (isinstance(Pairs[0], Cptuple) and not isinstance(Pairs[0], Cptuple)):  # Pairs is (ptuple, n)
+    if isinstance(Pairs, Cptuple):
         accum_ptuple(Pairs, pairs)  # pairs is a latuple, in 1st layer only
 
     elif isinstance(Pairs[0], Cptuple):  # pairs is two vertuples, 1st layer in der+
-
         accum_ptuple(Pairs[0], pairs[0])
         accum_ptuple(Pairs[1], pairs[1])
 
     else:  # pair is pair_layers, keep unpacking:
-        loc_Pairs = []
         for Pair, pair in zip(Pairs, pairs):
-            loc_Pairs += [sum_pair_layers(Pair, pair)]
-        Pairs = loc_Pairs
+            sum_pair_layers(Pair, pair)
+
 
 
 def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
-    if isinstance(Ptuple, Cptuple):
-        loc_Ptuple = Ptuple
-    else:
-        Ptuple[1] += 1  # Ptuple is (Ptuple, n), for ave_layers
-        loc_Ptuple = Ptuple[0]
+    Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
 
-    loc_Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
-
-    if isinstance(loc_Ptuple.angle, list):  # latuple:
-        for i, param in enumerate(ptuple.angle): loc_Ptuple.angle[i] += param  # always in vector representation
-        for i, param in enumerate(ptuple.aangle): loc_Ptuple.aangle[i] += param
+    if isinstance(Ptuple.angle, list):  # latuple:
+        for i, param in enumerate(ptuple.angle): Ptuple.angle[i] += param  # always in vector representation
+        for i, param in enumerate(ptuple.aangle): Ptuple.aangle[i] += param
     else:
-        loc_Ptuple.angle += ptuple.angle
-        loc_Ptuple.aangle += ptuple.aangle
+        Ptuple.angle += ptuple.angle
+        Ptuple.aangle += ptuple.aangle
 
 
 def comp_P(_P, P, fsubder=0):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
@@ -594,21 +582,23 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
     dval, mval = 0, 0
 
     flatuple = isinstance(_params.angle, list)  # else vertuple
+    rn = _params.n / params.n  # normalize param as param*rn, for n-invariant ratio between compared params:
+    # _param / param*rn = (_param/_n) / (param/n)?
     # same set:
-    comp("I", _params.I, params.I, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
-    comp("x", _params.x, params.x, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
+    comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
+    comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
     hyp = np.hypot(dtuple.x, 1)  # dx, project param orthogonal to blob axis:
-    comp("L", _params.L, params.L / hyp, dval, mval, dtuple, mtuple, ave_L, finv=0)
-    comp("M", _params.M, params.M / hyp, dval, mval, dtuple, mtuple, ave_M, finv=0)
-    comp("Ma",_params.Ma, params.Ma / hyp, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
+    comp("L", _params.L, params.L*rn / hyp, dval, mval, dtuple, mtuple, ave_L, finv=0)
+    comp("M", _params.M, params.M*rn / hyp, dval, mval, dtuple, mtuple, ave_M, finv=0)
+    comp("Ma",_params.Ma, params.Ma*rn / hyp, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
     # diff set
     if flatuple:
-        comp("G", _params.G, params.G / hyp, dval, mval, dtuple, mtuple, ave_G, finv=0)
-        comp("Ga", _params.Ga, params.Ga / hyp, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
+        comp("G", _params.G, params.G*rn / hyp, dval, mval, dtuple, mtuple, ave_G, finv=0)
+        comp("Ga", _params.Ga, params.Ga*rn / hyp, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
         # angle:
         _Dy,_Dx = _params.angle[:]; Dy,Dx = params.angle[:]
-        _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
-        sin = Dy / (.1 if G == 0 else G); cos = Dx / (.1 if G == 0 else G)
+        _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy*rn,Dx*rn)
+        sin = Dy*rn / (.1 if G == 0 else G); cos = Dx*rn / (.1 if G == 0 else G)
         _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
         sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
         cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
@@ -620,10 +610,10 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
         # angle of angle:
         _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
         sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
-        sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-        cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-        sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-        cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+        sin_dda0 = (cos_da0*rn * _sin_da0) - (sin_da0*rn * _cos_da0)
+        cos_dda0 = (cos_da0*rn * _cos_da0) + (sin_da0*rn * _sin_da0)
+        sin_dda1 = (cos_da1*rn * _sin_da1) - (sin_da1*rn * _cos_da1)
+        cos_dda1 = (cos_da1*rn * _cos_da1) + (sin_da1*rn * _sin_da1)
         # for 2D, not reduction to 1D:
         # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
         # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
@@ -636,9 +626,9 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
         dval += abs(daangle); mval += maangle
 
     else:  # vertuple, all ders are scalars:
-        comp("val", _params.val, params.val / hyp, dval, mval, dtuple, mtuple, ave_mval, finv=0)
-        comp("angle", _params.angle, params.angle / hyp, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
-        comp("aangle", _params.aangle, params.aangle / hyp, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
+        comp("val", _params.val, params.val*rn / hyp, dval, mval, dtuple, mtuple, ave_mval, finv=0)
+        comp("angle", _params.angle, params.angle*rn / hyp, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
+        comp("aangle", _params.aangle, params.aangle*rn / hyp, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
 
     mtuple.val = mval; dtuple.val = dval
 
