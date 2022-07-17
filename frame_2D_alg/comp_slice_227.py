@@ -884,21 +884,24 @@ def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar op
     return tuple_ds, tuple_ms
 
 
-def init_params(params):  # form (blank Cptuple, 0)s with nesting structure of PP params
+def init_ptuples(params):  # empty Cptuples with nesting structure of PP params
 
-    ptuples_ = []  # initialized param layers
-    for layer in params:
+    if isinstance(params, Cptuple):  # params is ptuple
+        out_ptuples =  Cptuple()
+        if not isinstance(params.angle, list):  # follow angle and aangle structure of input params
+            out_ptuples.angle = 0; out_ptuples.aangle = 0
+    else:  # params is nested list
+        out_ptuples = []
+        for param in params:
+            if isinstance(param, list):
+                out_ptuples += [init_ptuples(param)]
+            else:
+                ptuple =  Cptuple()
+                if not isinstance(param.angle, list):  # follow angle and aangle structure of input params
+                    ptuple.angle = 0; ptuple.aangle = 0
+                out_ptuples += [ptuple]
+    return out_ptuples
 
-        if isinstance(layer, list):  # keep unpacking param layer down to ptuples
-            ptuples_ += [init_params(layer)]
-        else:
-            ptuple = Cptuple()  # "layer" is ptuple
-            if not isinstance(layer.angle, list):  # angle and aangle are lists in init Cptuple
-                ptuple.angle = 0
-                ptuple.aangle = 0
-            ptuples_ += [[ptuple, 0]]  # n = 1 unless reinitialized?
-
-    return ptuples_
 
 
 def ave_layers(summed_params):  # as sum_layers but single arg

@@ -95,13 +95,12 @@ def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
     for PP in PP_:
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
-        summed_params = init_ptuples(PP.params)  # form empty (Cptuples, n=0)s, nested as PP params
-
-        for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
-            sum_layers(summed_params, compared_PP.params)
+        summed_params = [[]]  # initialize params[0]
+        for compared_PP in compared_PP_:
+            sum_layers(summed_params, compared_PP.params)  # accum summed_params over compared_PP_
 
         pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_])  # comp_ave- defined pre_PPP inherits PP.params
-        pre_PPP.params += [comp_layers(PP.params, summed_params, der_layers=[],fsubder=fsubder)]  # sum_params is now ave_params
+        pre_PPP.params += [comp_layers(PP.params, summed_params, der_layers=[], fsubder=fsubder)]  # sum_params is now ave_params
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
@@ -115,7 +114,6 @@ def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
 Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
 4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
 '''
-
 
 def comp_layers(_layers, layers, der_layers, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
@@ -131,10 +129,16 @@ def comp_layers(_layers, layers, der_layers, fsubder=0):  # only for agg_recursi
 
 def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers but no separate der_layers to return
 
-    sum_pair_layers(Params[0], params[0])  # recursive unpack of nested ptuple pair_layers, if any from der+
+    if Params[0] and params[0]:
+        sum_pair_layers(Params[0], params[0])  # recursive unpack of nested ptuple pair_layers, if any from der+
+    elif params[0]:
+        Params[0] = deepcopy(params[0])  # no need to sum
 
-    for Layer, layer in zip(Params[1:], params[1:]):
-        sum_layers(Layer, layer)  # recursive unpack of higher layers, if any from agg+ and nested with sub_layers
+    for Layer, layer in zip_longest(Params[1:], params[1:], fillvalue=[]):
+        if Layer and layer:
+            sum_layers(Layer, layer)  # recursive unpack of higher layers, if any from agg+ and nested with sub_layers
+        elif layer:
+            Params.append( deepcopy(layer))
 
 
 def sum_named_param(p_layer, param_name, fPd):
@@ -166,14 +170,14 @@ def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
             if pre_PPP_val > ave:
                 PPP_ += [pre_PPP]  # base derPP and PPP is CPP
                 if pre_PPP_val > ave*10:
-                    ind_comp_PP_(pre_PPP, fPd)  # derPP is converted from CPP to CPPP
+                    indiv_comp_PP_(pre_PPP, fPd)  # derPP is converted from CPP to CPPP
             else:
                 break  # ignore below-ave PPs
         PPP_t.append(PPP_)
     return PPP_t
 
 
-def ind_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-composition CPPP
+def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-composition CPPP
 
     derPP_ = []
     rng = sum_named_param(pre_PPP.params[-1], 'val', fPd)/ 3  # 3: ave per rel_rng+=1, actual rng is Euclidean distance:
@@ -237,7 +241,7 @@ def splice_PPs(PP_, frng):  # splice select PP pairs if der+ or triplets if rng+
     spliced_PP_ = []
     while PP_:
         _PP = PP_.pop(0)  # pop PP, so that we can differentiate between tested and untested PPs
-        tested_segs = []  # we need this because we may add new seg during splicing process, and those new seg need to check their link for splicing too
+        tested_segs = []  # new segs may be added during splicing, their links also need to be checked for splicing
         _segs = _PP.seg_levels[0]
 
         while _segs:

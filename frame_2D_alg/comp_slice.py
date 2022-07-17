@@ -8,7 +8,7 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Vectorization is clustering of parameterized Ps + their derivatives (derPs) into PPs: patterns of Ps that describe edge blob.
 This process is a reduced-dimensionality (2D->1D) version of cross-comp and clustering cycle, common across this project.
 As we add higher dimensions (2D alg, 3D alg), this dimensionality reduction is done in salient high-aspect blobs
-(likely edges / contours in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-D patterns.
+(likely edges / contours in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
 '''
 
 from collections import deque
@@ -401,42 +401,22 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     # P rdn is up+down M/n, but P is already formed and compared?
 
     seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
-              L = len(seg_Ps), y0 = seg_Ps[0].y, params=[[]])  # seg.L is Ly
+              L = len(seg_Ps), y0 = seg_Ps[0].y)  # seg.L is Ly
     iP = seg_Ps[0]
     if isinstance(iP, CderP): accum = accum_derP
     elif isinstance(iP, CPP): accum = accum_PP  # 2 layers only
     else: accum = accum_P  # iP is CP
 
-    seg.params[0] = deepcopy(seg_Ps[0].params)  # init seg params with 1st P and derP
-    seg_Ps[0].root = seg
-    seg.x0 = min(seg.x0, seg_Ps[0].x0)
-
-    if len(seg_Ps)>1:
-        seg.params += [[deepcopy(seg_Ps[0].uplink_layers[-1][0].params)]]   # add nested layer in params if P was compared
-        accum(seg, seg_Ps[-1], fPd)  # accum last P
-    # else seg.params = seg_Ps[0].params
-
-    for P in seg_Ps[1:-1]:  # skip 1st and last P
+    for P in seg_Ps:
         accum(seg, P, fPd)
         derP = P.uplink_layers[-1][0]
-        sum_pair_layers(seg.params[1][0], derP.params)  # derP.params maybe nested
+        if len(seg.params)>1:
+            sum_pair_layers(seg.params[1], derP.params)  # derP.params maybe nested
+        else:
+            seg.params.append( deepcopy(derP.params))  # init 2nd layer
         derP.root = seg
 
     return seg
-
-
-def init_ptuples(params):  # empty Cptuples with nesting structure of PP params
-
-    out_ptuples = []
-    for param in params:
-        if isinstance(param, list):
-            out_ptuples += [init_ptuples(param)]
-        else:
-            ptuple =  Cptuple()
-            if not isinstance(param.angle, list):  # follow angle and aangle structure of input params
-                ptuple.angle = 0; ptuple.aangle = 0
-            out_ptuples += [ptuple]
-    return out_ptuples
 
 
 def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs into PP
@@ -444,8 +424,6 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs in
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn, sign=PP_segs[0].sign, L= len(PP_segs))
     PP.seg_levels[fPd][0] = PP_segs  # PP_segs is seg_levels[0]
 
-    # init PP.params with the highest length of seg.params
-    PP.params = init_ptuples(PP_segs[np.argmax([len(seg.params) for seg in PP_segs])].params)
     for seg in PP_segs:
         accum_PP(PP, seg, fPd)
 
@@ -453,7 +431,10 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs in
 
 def accum_P(seg, P, fPd):
 
-    accum_ptuple(seg.params[0], P.params)
+    if seg.params:
+        accum_ptuple(seg.params[0], P.params)
+    else:
+        seg.params.append( deepcopy(P.params))
     P.root = seg
     seg.x0 = min(seg.x0, P.x0)
 
@@ -465,9 +446,15 @@ def accum_derP(PP, inp, fPd):  # inp is seg or PP in recursion
 
 def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, PP in agg+ only
 
-    accum_ptuple(PP.params[0], inp.params[0])  # PP has two param layers
+    # 1st p_layer, PP may have two. This can be done by sum_layers:
+    if isinstance(PP.params[0], Cptuple):  # one latuple
+        accum_ptuple(PP.params[0], inp.params[0])
+    else:  # list of 2 vertuples
+        accum_ptuple(PP.params[0][0], inp.params[0][0])
+        accum_ptuple(PP.params[0][1], inp.params[0][1])
+    # 2nd p_layer, empty if 1-seg PP:
     if len(inp.params) > 1:
-        sum_pair_layers(PP.params[1], inp.params[1])  # 2nd layer is empty if single seg|P
+        sum_pair_layers(PP.params[1], inp.params[1])
 
     inp.root = PP
     PP.x += inp.x*inp.L  # or in inp.params?
@@ -500,7 +487,6 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, PP in agg+ only
                     PP.uplink_layers[-1] += [derP]
 
 
-
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
     current_ys = [P_[0].y for P_ in P__]  # list of current-layer seg rows
@@ -517,11 +503,12 @@ def append_P(P__, P):  # pack P into P__ in top down sequence
 
 def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers, fsubder):  # recursively unpack nested m,d tuple pairs, if any from der+
 
-    if isinstance(_pair_layers, Cptuple):
-        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)  # 1st-layer pair_layers is latuple
+    if isinstance(_pair_layers, Cptuple):  # 1st-layer pair_layers is latuple
+        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)
 
-    elif isinstance(_pair_layers[0], Cptuple):  # pairs is two vertuples, 1st layer in der+
+    elif isinstance(_pair_layers[0], Cptuple):  # pair_layers is two vertuples, 1st layer in der+
         dtuple = comp_ptuple(_pair_layers[1], _pair_layers[1])
+
         if fsubder:  # sub_recursion mtuples are not compared
             der_pair_layers += [dtuple]
         else:
@@ -537,17 +524,14 @@ def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers, fsubder):  # re
 
 def sum_pair_layers(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
 
-    if isinstance(Pairs, Cptuple):
+    if isinstance(pairs, Cptuple):
         accum_ptuple(Pairs, pairs)  # pairs is a latuple, in 1st layer only
-
-    elif isinstance(Pairs[0], Cptuple):  # pairs is two vertuples, 1st layer in der+
-        accum_ptuple(Pairs[0], pairs[0])
-        accum_ptuple(Pairs[1], pairs[1])
-
-    else:  # pair is pair_layers, keep unpacking:
-        for Pair, pair in zip(Pairs, pairs):
-            sum_pair_layers(Pair, pair)
-
+    else:
+        for Pair, pair in zip_longest(Pairs, pairs, fillvalue=[]):  # pair is pair_layers or two vertuples, keep unpacking
+            if Pair and pair:
+                sum_pair_layers(Pair, pair)
+            elif pair:
+                Pairs.append(deepcopy(pair))
 
 
 def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
@@ -582,7 +566,7 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
     dval, mval = 0, 0
 
     flatuple = isinstance(_params.angle, list)  # else vertuple
-    rn = _params.n / params.n  # normalize param as param*rn, for n-invariant ratio between compared params:
+    rn = _params.n / params.n  # normalize param as param*rn, for n-invariant ratio of compared params:
     # _param / param*rn = (_param/_n) / (param/n)?
     # same set:
     comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
