@@ -15,7 +15,7 @@ This may form closed edge patterns around flat blobs, which defines stable objec
 class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlink_, PP can also be PPP, etc.
 
     # draft
-    params = list  # PP derivation layer, flat, decoded by mapping each m,d to lower-layer param
+    params = list  # PP derivation level, flat, decoded by mapping each m,d to lower-level param
     x0 = int  # redundant to params:
     x = float  # median x
     L = int  # pack in params?
@@ -86,6 +86,10 @@ def agg_recursion(blob, fseg):  # compositional recursion per blob.Plevel. P, PP
 '''
 - Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
 - Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
+
+Base case is full overlap between PPPs, no selection for derPPs per PPP. 
+Selection, with variable redundancy per derPP, will require iterative centroid-based re-clustering per PPP.  
+This will probably be done in blob-level agg_recursion, it seems too complex for mostly local edge tracing.
 '''
 
 def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
@@ -95,12 +99,12 @@ def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
     for PP in PP_:
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
-        summed_params = [[]]  # initialize params[0]
+        summed_params = []  # initialize params
         for compared_PP in compared_PP_:
-            sum_layers(summed_params, compared_PP.params)  # accum summed_params over compared_PP_
+            sum_levels(summed_params, compared_PP.params)  # accum summed_params over compared_PP_
 
         pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_])  # comp_ave- defined pre_PPP inherits PP.params
-        pre_PPP.params += [comp_layers(PP.params, summed_params, der_layers=[], fsubder=fsubder)]  # sum_params is now ave_params
+        pre_PPP.params += [comp_levels(PP.params, summed_params, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
@@ -115,43 +119,29 @@ Multiple sublayers start on the 3rd layer, because it's derived from comparison 
 4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
 '''
 
-def comp_layers(_layers, layers, der_layers, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
+def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
     # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
-    der_layers += [comp_pair_layers(_layers[0], layers[0], der_pair_layers=[], fsubder=fsubder)]
+    der_levels += [comp_layers(_levels[0], levels[0], der_layers=[], fsubder=fsubder)]
 
     # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
-    for _layer, layer in zip(_layers[1:], layers[1:]):  # layer = deeper sub_layers, stop if none
-        der_layers += [comp_layers(_layer, layer, der_layers=[], fsubder=fsubder)]
+    for _level, level in zip(_levels[1:], levels[1:]):  # layer = deeper sub_layers, stop if none
+        der_levels += [comp_levels(_level, level, der_levels=[], fsubder=fsubder)]
 
-    return der_layers # possibly nested param layers
-
-
-def sum_layers(Params, params):  # Capitalized names for sums, as comp_layers but no separate der_layers to return
-
-    if Params[0] and params[0]:
-        sum_pair_layers(Params[0], params[0])  # recursive unpack of nested ptuple pair_layers, if any from der+
-    elif params[0]:
-        Params[0] = deepcopy(params[0])  # no need to sum
-
-    for Layer, layer in zip_longest(Params[1:], params[1:], fillvalue=[]):
-        if Layer and layer:
-            sum_layers(Layer, layer)  # recursive unpack of higher layers, if any from agg+ and nested with sub_layers
-        elif layer:
-            Params.append( deepcopy(layer))
+    return der_levels # possibly nested param layers
 
 
-def sum_named_param(p_layer, param_name, fPd):
+def sum_named_param(plevel, param_name, fPd):
     psum = 0  # sum of named param across param layers
 
-    if isinstance(p_layer, Cptuple):  # 1st layer is ptuple, not for angle and aangle elements, if any
-        psum += getattr(p_layer, param_name)
-    elif len(p_layer)>1:  # for multiple layer params
-        if isinstance(p_layer[0], Cptuple) and isinstance(p_layer[1], Cptuple) :  # 1st layer is 2 vertuples, from der+
-            psum += getattr(p_layer[fPd], param_name)
+    if isinstance(plevel, Cptuple):  # 1st level is ptuple, not for angle and aangle elements, if any
+        psum += getattr(plevel, param_name)
+    elif len(plevel)>1:  # for multi-level params
+        if isinstance(plevel[0], Cptuple) and isinstance(plevel[1], Cptuple) :  # 1st level is 2 vertuples, from der+
+            psum += getattr(plevel[fPd], param_name)
         else:  # keep unpacking:
-            for sub_p_layer in p_layer:
-                psum += sum_named_param(sub_p_layer, param_name, fPd)
+            for sub_plevel in plevel:
+                psum += sum_named_param(sub_plevel, param_name, fPd)
     return psum
 
 
@@ -193,7 +183,7 @@ def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to h
         val = sum_named_param(PP.params[-1], 'val', fPd)
 
         if distance / ((_val+val)/2) < rng:  # distance relative to value, vs. area?
-            params = comp_layers(pre_PPP.params, PP.params, der_layers=[])
+            params = comp_levels(pre_PPP.params, PP.params, der_levels=[])
             pre_PPP.downlink_layers += [params]
             PP.uplink_layers += [params]
             derPP.params = params

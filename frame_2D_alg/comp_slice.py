@@ -96,7 +96,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
-    params = list  # P derivation pair_layers, n ptuples = 2**der_cnt
+    params = list  # P derivation layers, n ptuples = 2**der_cnt
     x0 = int  # redundant to params:
     x = float  # median x
     L = int  # pack in params?
@@ -403,23 +403,22 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
               L = len(seg_Ps), y0 = seg_Ps[0].y)  # seg.L is Ly
     iP = seg_Ps[0]
-    if isinstance(iP, CderP): accum = accum_derP
-    elif isinstance(iP, CPP): accum = accum_PP  # 2 layers only
-    else: accum = accum_P  # iP is CP
+    if isinstance(iP, CderP): accum = accum_derP  # in der+
+    elif isinstance(iP, CPP): accum = accum_PP  # in agg+
+    else: accum = accum_P   # base-case: iP is CP
 
-    for P in seg_Ps:
+    for P in seg_Ps[:-1]:
         accum(seg, P, fPd)
         derP = P.uplink_layers[-1][0]
-        if len(seg.params)>1:
-            sum_pair_layers(seg.params[1], derP.params)  # derP.params maybe nested
-        else:
-            seg.params.append( deepcopy(derP.params))  # init 2nd layer
+        if len(seg.params)>1: sum_layers(seg.params[1][0], derP.params)  # derP.params maybe nested
+        else: seg.params.append([deepcopy(derP.params)])  # init 2nd layer
         derP.root = seg
+    accum( seg, seg_Ps[-1], fPd)  # top P uplink_layers are not part of seg
 
     return seg
 
 
-def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs into PP
+def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn, sign=PP_segs[0].sign, L= len(PP_segs))
     PP.seg_levels[fPd][0] = PP_segs  # PP_segs is seg_levels[0]
@@ -431,30 +430,20 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum params: derPs into segment or segs in
 
 def accum_P(seg, P, fPd):
 
-    if seg.params:
-        accum_ptuple(seg.params[0], P.params)
-    else:
-        seg.params.append( deepcopy(P.params))
+    if seg.params: accum_ptuple(seg.params[0], P.params)  # accumulation
+    else: seg.params.append(deepcopy(P.params))  # init 1st level of seg.params with P.params
     P.root = seg
     seg.x0 = min(seg.x0, P.x0)
 
-def accum_derP(PP, inp, fPd):  # inp is seg or PP in recursion
+def accum_derP(seg, derP, fPd):
 
-    sum_pair_layers(PP.params, inp.params)
-    inp.root = PP
-    # may add more assignments here
+    sum_layers(seg.params[1], derP.params)
+    derP.root = seg
+    # may add more
 
-def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, PP in agg+ only
+def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
 
-    # 1st p_layer, PP may have two. This can be done by sum_layers:
-    if isinstance(PP.params[0], Cptuple):  # one latuple
-        accum_ptuple(PP.params[0], inp.params[0])
-    else:  # list of 2 vertuples
-        accum_ptuple(PP.params[0][0], inp.params[0][0])
-        accum_ptuple(PP.params[0][1], inp.params[0][1])
-    # 2nd p_layer, empty if 1-seg PP:
-    if len(inp.params) > 1:
-        sum_pair_layers(PP.params[1], inp.params[1])
+    sum_levels(PP.params, inp.params)  # PP has only 2 levels
 
     inp.root = PP
     PP.x += inp.x*inp.L  # or in inp.params?
@@ -478,7 +467,7 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, PP in agg+ only
             else:  # not reviewed
                 append_P(PP.P__, P)  # add P into nested list of P__
 
-            # add seg links: we may need links of all terminated segs, for rng+
+            # add terminated seg links for rng+:
             for derP in inp.P__[0].downlink_layers[-1]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
                 if derP not in PP.downlink_layers[-1] and derP.P.root not in PP.seg_levels[fPd][-1]:
                     PP.downlink_layers[-1] += [derP]
@@ -501,37 +490,51 @@ def append_P(P__, P):  # pack P into P__ in top down sequence
             if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
 
 
-def comp_pair_layers(_pair_layers, pair_layers, der_pair_layers, fsubder):  # recursively unpack nested m,d tuple pairs, if any from der+
+def comp_layers(_layers, layers, der_layers, fsubder):  # recursively unpack layers: m,d ptuple pairs, if any from der+
 
-    if isinstance(_pair_layers, Cptuple):  # 1st-layer pair_layers is latuple
-        der_pair_layers += comp_ptuple(_pair_layers, pair_layers)
+    if isinstance(_layers, Cptuple):  # 1st-level layers is latuple
+        der_layers += comp_ptuple(_layers, layers)
 
-    elif isinstance(_pair_layers[0], Cptuple):  # pair_layers is two vertuples, 1st layer in der+
-        dtuple = comp_ptuple(_pair_layers[1], _pair_layers[1])
+    elif isinstance(_layers[0], Cptuple):  # layers is two vertuples, 1st level in der+
+        dtuple = comp_ptuple(_layers[1], _layers[1])
 
         if fsubder:  # sub_recursion mtuples are not compared
-            der_pair_layers += [dtuple]
+            der_layers += [dtuple]
         else:
-            mtuple = comp_ptuple(_pair_layers[0], _pair_layers[0])
-            der_pair_layers += [mtuple, dtuple]
+            mtuple = comp_ptuple(_layers[0], _layers[0])
+            der_layers += [mtuple, dtuple]
 
-    else:  # keep unpacking pair_layers:
-        for _pair, pair in zip(_pair_layers, pair_layers):
-            der_pair_layers += [comp_pair_layers(_pair, pair, der_pair_layers, fsubder=fsubder)]
+    else:  # keep unpacking layers:
+        for _layer, layer in zip(_layers, layers):
+            der_layers += [comp_layers(_layer, layer, der_layers, fsubder=fsubder)]
 
-    return der_pair_layers  # possibly nested m,d ptuple pairs
+    return der_layers  # m,d ptuple pair in each layer, possibly nested
 
 
-def sum_pair_layers(Pairs, pairs):  # recursively unpack pairs (short for pair_layers): m,d tuple pairs from der+
+def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
 
-    if isinstance(pairs, Cptuple):
-        accum_ptuple(Pairs, pairs)  # pairs is a latuple, in 1st layer only
+    if Params:
+        sum_layers(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
     else:
-        for Pair, pair in zip_longest(Pairs, pairs, fillvalue=[]):  # pair is pair_layers or two vertuples, keep unpacking
-            if Pair and pair:
-                sum_pair_layers(Pair, pair)
-            elif pair:
-                Pairs.append(deepcopy(pair))
+        Params.append(deepcopy(params[0]))  # no need to sum
+
+    for Level, level in zip_longest(Params[1:], params[1:], fillvalue=[]):
+        if Level and level:
+            sum_levels(Level, level)  # recursive unpack of higher levels, if any from agg+ and nested with sub_levels
+        elif level:
+            Params.append( deepcopy(level))  # no need to sum
+
+def sum_layers(Layers, layers):  # recursively unpack layers: m,d tuple pairs from der+
+
+    if isinstance(layers, Cptuple):
+        accum_ptuple(Layers, layers)  # layers is a latuple, in 1st layer only
+    else:
+        # layer is layers or two vertuples, keep unpacking
+        for Layer, layer in zip_longest(layers, layers, fillvalue=[]):
+            if Layer and layer:
+                sum_layers(Layer, layer)
+            elif layer:
+                Layers.append(deepcopy(layer))
 
 
 def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
@@ -548,10 +551,10 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
 def comp_P(_P, P, fsubder=0):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
-    if isinstance(_P.params, Cptuple):  # just to save the call, or this testing can be done in comp_pair_layers
+    if isinstance(_P.params, Cptuple):  # just to save the call, or this testing can be done in comp_layers
         derivatives = comp_ptuple(_P.params, P.params)  # comp lataple (P)
     else:
-        derivatives = comp_pair_layers(_P.params, P.params, [], fsubder=fsubder)  # comp vertuple pairs (derP)
+        derivatives = comp_layers(_P.params, P.params, [], fsubder=fsubder)  # comp vertuple pairs (derP)
 
     x0 = min(_P.x0, P.x0)
     xn = max(_P.x0+_P.L, P.x0+P.L)
