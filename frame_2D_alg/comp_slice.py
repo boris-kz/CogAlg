@@ -74,11 +74,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
     params = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
     x0 = int
-    x = float  # median x
     y = int  # for vertical gap in PP.P__
-    L = int
-    sign = NoneType  # g-ave + ave-ga sign
-    # all the above are redundant to params
+    sign = NoneType  # g-ave + ave-ga sign, redundant to params?
     rdn = int  # blob-level redundancy, ignore for now
     # composite params:
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -97,9 +94,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
     params = list  # P derivation layers, n ptuples = 2**der_cnt
-    x0 = int  # redundant to params:
-    x = float  # median x
-    L = int  # pack in params?
+    x0 = int
     sign = NoneType  # g-ave + ave-ga sign
     y = int  # for vertical gaps in PP.P__, replace with derP.P.y?
     P = object  # lower comparand
@@ -116,7 +111,9 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
 
     params = list  # P.params (ptuple), += derP params if >1 P|seg, L is Area
     sign = bool
+    x0 = int  # replace box, update by max, min
     xn = int
+    y0 = int
     yn = int
     rng = lambda: 1  # rng starts with 1
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
@@ -127,7 +124,6 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
     downlink_layers = lambda: [[],[]]
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
-    box = list  # for visualization only, original box before flipping
     mask__ = bool
     P__ = list  # input  # derP__ = list  # redundant to P__
     seg_levels = lambda: [[[]],[[]]]  # from 1st agg_recursion, seg_levels[0] is seg_t, higher seg_levels are segP_t s
@@ -400,20 +396,22 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     # seg rdn: up cost to init, up+down cost for comp_seg eval, in 1st agg_recursion?
     # P rdn is up+down M/n, but P is already formed and compared?
 
-    seg = CPP(x0=seg_Ps[0].x0, P__=seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
+    seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_],
               L = len(seg_Ps), y0 = seg_Ps[0].y)  # seg.L is Ly
     iP = seg_Ps[0]
-    if isinstance(iP, CderP): accum = accum_derP  # in der+
-    elif isinstance(iP, CPP): accum = accum_PP  # in agg+
-    else: accum = accum_P   # base-case: iP is CP
+    if isinstance(iP, CPP): accum = accum_PP  # in agg+
+    else: accum = accum_P   # iP is CP or CderP in der+
 
     for P in seg_Ps[:-1]:
-        accum(seg, P, fPd)
+        accum(seg, P)
         derP = P.uplink_layers[-1][0]
         if len(seg.params)>1: sum_layers(seg.params[1][0], derP.params)  # derP.params maybe nested
         else: seg.params.append([deepcopy(derP.params)])  # init 2nd layer
         derP.root = seg
     accum( seg, seg_Ps[-1], fPd)  # top P uplink_layers are not part of seg
+    # may not be needed:
+    seg.x = sum([P.params.x for P in seg_Ps])
+    seg.y = seg_Ps[-1].y - len(seg_Ps)/2
 
     return seg
 
@@ -428,28 +426,23 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
 
     return PP
 
-def accum_P(seg, P, fPd):
+def accum_P(seg, P):  # P is derP if from der+
 
-    if seg.params: accum_ptuple(seg.params[0], P.params)  # accumulation
+    if seg.params: accum_ptuple(seg.params[0], P.params)
     else: seg.params.append(deepcopy(P.params))  # init 1st level of seg.params with P.params
     P.root = seg
-    seg.x0 = min(seg.x0, P.x0)
+    # seg.x0 = min(seg.x0, P.x0)  # if we need it at all, it should be a box: x0,xn,y0,yn.
 
-def accum_derP(seg, derP, fPd):
-
-    sum_layers(seg.params[1], derP.params)
-    derP.root = seg
-    # may add more
 
 def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
 
-    sum_levels(PP.params, inp.params)  # PP has only 2 levels
+    sum_levels(PP.params, inp.params)  # PP has only 2 param levels, PP.params.x += inp.params.x*inp.L
 
     inp.root = PP
-    PP.x += inp.x*inp.L  # or in inp.params?
-    PP.y += inp.y*inp.L
-    PP.xn = max(PP.x0, inp.x0)
-    PP.yn = max(inp.y, PP.y)  # or arg y instead of derP.y?
+    PP.x0 = min(PP.x0, inp.x0)
+    PP.y0 = min(inp.y0, PP.y0)
+    PP.xn = max(PP.xn, inp.xn)
+    PP.yn = max(inp.yn, PP.yn)
     PP.Rdn += inp.rdn  # base_rdn + PP.Rdn / PP: recursion + forks + links: nderP / len(P__)?
     PP.nderP += len(inp.P__[-1].uplink_layers[-1])  # redundant derivatives of the same P
 
@@ -530,7 +523,7 @@ def sum_layers(Layers, layers):  # recursively unpack layers: m,d tuple pairs fr
         accum_ptuple(Layers, layers)  # layers is a latuple, in 1st layer only
     else:
         # layer is layers or two vertuples, keep unpacking
-        for Layer, layer in zip_longest(layers, layers, fillvalue=[]):
+        for Layer, layer in zip_longest(Layers, layers, fillvalue=[]):
             if Layer and layer:
                 sum_layers(Layer, layer)
             elif layer:
