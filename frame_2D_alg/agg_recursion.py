@@ -138,7 +138,8 @@ def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
         for compared_PP in compared_PP_:
             sum_levels(summed_params, compared_PP.params)  # accum summed_params over compared_PP_
 
-        pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_], y=PP.y)  # comp_ave- defined pre_PPP inherits PP.params
+        pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
+        # comp_ave- defined pre_PPP inherits PP.params
         pre_PPP.params += [comp_levels(PP.params, summed_params, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
@@ -215,7 +216,7 @@ def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to h
         derPP = CderPP(PP=PP)
         _area = sum_named_param(pre_PPP.params[0], 'L', fPd)
         area = sum_named_param(PP.params[0], 'L', fPd)
-        dx = pre_PPP.x/_area - PP.x/area
+        dx = ((pre_PPP.xn-pre_PPP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
         dy = pre_PPP.y/_area - PP.y/area
         distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
         _val = sum_named_param(pre_PPP.params[-1], 'val', fPd)
@@ -227,6 +228,8 @@ def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to h
             PP.uplink_layers += [params]
             derPP.params = params
             derPP_ += [derPP]
+
+    pre_PPP.P__ = derPP_
 
     for i, _derPP in enumerate(derPP_):  # cluster derPPs into PPPs by connectivity, overwrite derPP[i]
         if sum_named_param(_derPP.params[-1], 'val', fPd):

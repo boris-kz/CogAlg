@@ -136,9 +136,8 @@ class CPP(CP, CderP):  # P and derP params are combined into param_layers?
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     from agg_recursion import agg_recursion
-
     segment_by_direction(blob, verbose=False)  # forms blob.dir_blobs
-    for dir_blob in blob.dir_blobs:  # dir_blob should be CBlob
+    for dir_blob in blob.dir_blobs:  # same-direction blob should be CBlob
 
         P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
         # comp_dx_blob(P__), comp_dx?
@@ -156,9 +155,13 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         for PP_ in (PPm_, PPd_):  # 1st agglomerative recursion is per PP, appending PP.seg_levels, not blob.levels:
             for PP in PP_:
-                agg_recursion(PP, fseg=1)  # higher-composition comp_seg -> segPs.. per seg__[n], in PP.seg_levels
+                segm_ = PP.seg_levels[0][-1]; segd_ = PP.seg_levels[0][-1]
+                if len(segm_)>1: agg_recursion(segm_, ave_mPP, fseg=1)  # comp_seg -> segPs.. per seg__[n], in PP.seg_levels
+                if len(segd_)>1: agg_recursion(segd_, ave_dPP, fseg=1)
+
         dir_blob.levels = [[PPm_], [PPd_]]
-        agg_recursion(dir_blob, fseg=0)  # 2nd call per dir_blob.PP_s formed in 1st call, forms PPP..s and dir_blob.levels
+        if len(PPm_)>1: agg_recursion(PPm_, ave_mPP, fseg=0)  # 2nd call per dir_blob.PP_s formed in 1st call, forms PPP..s and dir_blob.levels
+        if len(PPd_)>1: agg_recursion(PPd_, ave_mPP, fseg=0)  # also test for n_extended?
 
     splice_dir_blob_(blob.dir_blobs)  # draft
 
@@ -214,11 +217,11 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
     for P_ in P__[1:]:  # lower row
         for P in P_:
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
-                if (P.x0 - 1 < _P.x0 + _P.L) and (P.x0 + P.L + 1 > _P.x0):
+                if (P.x0 - 1 < _P.x0 + _P.params.L) and (P.x0 + P.params.L + 1 > _P.x0):
                     derP = comp_P(_P, P)
                     P.uplink_layers[-2] += [derP]  # append derPs, uplink_layers[-1] is match_derPs
                     _P.downlink_layers[-2] += [derP]
-                elif (P.x0 + P.L) < _P.x0:
+                elif (P.x0 + P.params.L) < _P.x0:
                     break  # no P xn overlap, stop scanning lower P_
         _P_ = P_
 
@@ -403,15 +406,12 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     else: accum = accum_P   # iP is CP or CderP in der+
 
     for P in seg_Ps[:-1]:
-        accum(seg, P)
+        accum(seg, P, fPd)
         derP = P.uplink_layers[-1][0]
         if len(seg.params)>1: sum_layers(seg.params[1][0], derP.params)  # derP.params maybe nested
         else: seg.params.append([deepcopy(derP.params)])  # init 2nd layer
         derP.root = seg
     accum( seg, seg_Ps[-1], fPd)  # top P uplink_layers are not part of seg
-    # may not be needed:
-    seg.x = sum([P.params.x for P in seg_Ps])
-    seg.y = seg_Ps[-1].y - len(seg_Ps)/2
 
     return seg
 
@@ -428,10 +428,22 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
 
 def accum_P(seg, P):  # P is derP if from der+
 
-    if seg.params: accum_ptuple(seg.params[0], P.params)
-    else: seg.params.append(deepcopy(P.params))  # init 1st level of seg.params with P.params
+    if seg.params:
+        if isinstance(P, CderP):
+            sum_layers(seg.params[0], P.params)  # possibly multiple layers in derP.params
+        else:
+            accum_ptuple(seg.params[0], P.params)
+    else:
+        seg.params.append(deepcopy(P.params))  # init 1st level of seg.params with P.params
+        seg.x0 = P.x0  # also need to copy other params?
     P.root = seg
-    # seg.x0 = min(seg.x0, P.x0)  # if we need it at all, it should be a box: x0,xn,y0,yn.
+
+    if isinstance(P, CderP): L = P.P.params.L
+    else:                    L = P.params.L
+    seg.x0 = min(seg.x0, P.x0)
+    seg.y0 = min(seg.y0, P.y)
+    seg.xn = max(seg.xn, P.x0 + L)
+    seg.yn = max(seg.yn, P.y)
 
 
 def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
@@ -440,8 +452,8 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
 
     inp.root = PP
     PP.x0 = min(PP.x0, inp.x0)
-    PP.y0 = min(inp.y0, PP.y0)
     PP.xn = max(PP.xn, inp.xn)
+    PP.y0 = min(inp.y0, PP.y0)
     PP.yn = max(inp.yn, PP.yn)
     PP.Rdn += inp.rdn  # base_rdn + PP.Rdn / PP: recursion + forks + links: nderP / len(P__)?
     PP.nderP += len(inp.P__[-1].uplink_layers[-1])  # redundant derivatives of the same P
@@ -549,9 +561,12 @@ def comp_P(_P, P, fsubder=0):  # forms vertical derivatives of params per P in _
     else:
         derivatives = comp_layers(_P.params, P.params, [], fsubder=fsubder)  # comp vertuple pairs (derP)
 
+    if isinstance(_P, CderP):
+        _L = _P.P.params.L; L = P.P.params.L
+    else:
+        _L = _P.params.L; L = P.params.L
     x0 = min(_P.x0, P.x0)
-    xn = max(_P.x0+_P.L, P.x0+P.L)
-    L = xn-x0
+    xn = max(_P.x0+_L, P.x0+L)
 
     return CderP(x0=x0, L=L, y=_P.y, params=derivatives, P=P, _P=_P)
 
@@ -686,12 +701,9 @@ def splice_dir_blob_(dir_blobs):
                         bottom_P_ = dir_blob.P__[-1]
                         # test y adjacency
                         if (_top_P_[0].y-1 == bottom_P_[0].y) or (top_P_[0].y-1 == _bottom_P_[0].y):
-                            # tet x overlap
-                             _x0 = min([_P.x0 for _P_ in _dir_blob.P__ for _P in _P_])
-                             _xn = min([_P.x0+_P.L for _P_ in _dir_blob.P__ for _P in _P_])
-                             x0 = min([P.x0 for P_ in dir_blob.P__ for P in P_])
-                             xn = min([P.x0+_P.L for P_ in dir_blob.P__ for P in P_])
-                             if (x0 - 1 < _xn and xn + 1 > _x0) or  (_x0 - 1 < xn and _xn + 1 > x0) :
+                            # test x overlap
+                             if (dir_blob.x0 - 1 < _dir_blob.xn and dir_blob.xn + 1 > _dir_blob.x0) \
+                                or (_dir_blob.x0 - 1 < dir_blob.xn and _dir_blob.xn + 1 > dir_blob.x0):
                                  splice_2dir_blobs(_dir_blob, dir_blob)  # splice dir_blob into _dir_blob
                                  dir_blobs[j] = _dir_blob
 
@@ -738,8 +750,8 @@ def sub_recursion(PP, base_rdn, fPd):  # compares param_layers of derPs in gener
 
     P__ = [P_ for P_ in reversed(PP.P__)]  # revert to top down
 
-    if fPd: Pm__, Pd__ = comp_P_rng(P__, PP.rng+1)
-    else:   Pm__, Pd__ = comp_P_der(P__)  # returns top-down
+    if fPd: Pm__, Pd__ = comp_P_der(P__)  # returns top-down
+    else:   Pm__, Pd__ = comp_P_rng(P__, PP.rng+1)
 
     sub_segm_ = form_seg_root(Pm__, base_rdn, fPd=0)
     sub_segd_ = form_seg_root(Pd__, base_rdn, fPd=1)  # returns bottom-up
