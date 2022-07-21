@@ -52,72 +52,33 @@ class CPPP(CPP, CderPP):
     layers = list  # from sub_recursion, each is derP_t
     root = lambda:None  # higher-order segP or PPP
 
-def agg_recursion(blob, fseg, level=0):  # compositional recursion per blob.Plevel.
+# draft
+def agg_recursion(levels, level, fseg, fiPd):  # compositional recursion per blob.Plevel.
     # P, PP, PPP are relative terms, each may be of any composition order
 
-    if fseg: PP_t = [blob.seg_levels[0][-1], blob.seg_levels[1][-1]]   # blob is actually PP, recursion forms segP_t, seg_PP_t, etc.
-    else:    PP_t = [blob.levels[0][-1], blob.levels[1][-1]]  # input-level composition Ps, initially PPs
+    if len(levels[0])<level+1: levels[0].append([])
+    if len(levels[1])<level+1: levels[1].append([])
 
-    PPP_t = []  # next-level composition Ps, initially PPPs  # for fiPd, PP_ in enumerate(PP_t): fiPd = fiPd % 2  # dir_blob.M += PP.M += derP.m
-    n_extended = 0
+    if fiPd: ave_PP = ave_dPP
+    else: ave_PP = ave_mPP
+    PP_ = levels[fiPd][-2]
 
-    for fiPd, PP_ in enumerate(PP_t):   # fiPd = fiPd % 2
-        if fiPd: ave_PP = ave_dPP
-        else:    ave_PP = ave_mPP
-        if fseg: M = sum_named_param(blob.params, "val", fPd=0) - ave  # actually ave * nptuples in params
-        else:    M = ave-abs(blob.G)  # if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
+    V = sum([sum_named_param(PP.params, "val", fPd=fiPd) for PP in PP_])  # combined across plevels, as is comp_PP_ below
+    if V > ave_PP:  # params are not combined across levels?
 
-        if len(PP_)>1:
-            n_extended += 1
-            derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
-            PPP_t = form_PPP_t(derPP_t)
-            # call individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP
-            splice_PPs(PPP_t)  # for initial PPs only: if PP is CPP?
-            sub_recursion_eval(PPP_t[0])  # fPd=0, rng+  # what would be the P__ of PPP? All other PPs?
-            sub_recursion_eval(PPP_t[1])  # fPd=1, der+
-        else:
-            PPP_t += [[], []]  # replace with neg PPPs?
+        derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
+        PPPm_, PPPd_ = form_PPP_t(derPP_t)  # calls individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP,
+        # may splice PPs instead of forming PPPs
+        sub_recursion_eval(PPPm_)  # fPd=0, rng+  # for derPP_ in PPPs formed by indiv_comp_PP_
+        sub_recursion_eval(PPPd_)  # fPd=1, der+
 
-    if fseg: blob.seg_levels += [PPP_t]  # new level of segPs
-    else:    blob.levels += [PPP_t]  # levels of dir_blob are Plevels
+        levels[0] += [PPPm_]
+        levels[1] += [PPPd_]
 
-    # under review, this eval should be per PP_
-    if n_extended/max(1, (len(PP_t[0]) + len(PP_t[0]))) > 0.5 * level:  # mean ratio of extended PPs
-        agg_recursion(blob, fseg, level=level+1)
-
-
-def agg_recursion_draft(blob, fseg, level=0):  # compositional recursion per blob.Plevel. P, PP, PPP are relative terms, each may be of any composition order
-
-    if fseg: PP_t = [blob.seg_levels[0][-1], blob.seg_levels[1][-1]]   # blob is actually PP, recursion forms segP_t, seg_PP_t, etc.
-    else:    PP_t = [blob.levels[0][-1], blob.levels[1][-1]]  # input-level composition Ps, initially PPs
-
-    for fiPd, PP_ in enumerate(PP_t):   # fiPd = fiPd % 2
-
-        if len(PP_)>1:
-
-            if n_extended / len(PP_) > 0.5:  # mean ratio of extended PPs
-                agg_recursion(blob, fseg, level=level + 1)
-
-            n_extended += 1
-            derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
-            PPP_t = form_PPP_t(derPP_t)
-            # call individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP
-            sub_recursion_eval(PPP_t[0])  # fPd=0, rng+
-            sub_recursion_eval(PPP_t[1])  # fPd=1, der+
-        else:
-            PPP_t += [[], []]  # replace with neg PPPs?
-
-        if fiPd: ave_PP = ave_dPP
-        else:    ave_PP = ave_mPP
-        if fseg: M = sum_named_param(blob.params, "val", fPd=0) - ave  # actually ave * nptuples in params
-        else:    M = ave-abs(blob.G)  # if M > ave_PP * blob.rdn and len(PP_)>1:  # >=2 comparands
-
-
-    if fseg: blob.seg_levels += [PPP_t]  # new level of segPs
-    else:    blob.levels += [PPP_t]  # levels of dir_blob are Plevels
-
-    if n_extended / len(PP_t[1]) > 0.5:  # for PPd_, blob
-        agg_recursion(blob, fseg, level=level+1)
+        if len(PPPm_)>1:
+            agg_recursion(levels, level+1, fseg, fiPd=0)
+        if len(PPPd_)>1:
+            agg_recursion(levels, level+1, fseg, fiPd=1)
 
 '''
 - Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  

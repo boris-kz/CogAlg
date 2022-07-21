@@ -153,17 +153,20 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         sub_recursion_eval(PPm_)
         sub_recursion_eval(PPd_)
 
-        for PP_ in (PPm_, PPd_):  # 1st agglomerative recursion is per PP, appending PP.seg_levels, not blob.levels:
+        for PP_ in (PPm_, PPd_):  # 1st-call agglomerative recursion is per PP, appending PP.seg_levels, not blob.levels:
             for PP in PP_:
-                segm_ = PP.seg_levels[0][-1]; segd_ = PP.seg_levels[0][-1]
-                if len(segm_)>1: agg_recursion(segm_, ave_mPP, fseg=1)  # comp_seg -> segPs.. per seg__[n], in PP.seg_levels
-                if len(segd_)>1: agg_recursion(segd_, ave_dPP, fseg=1)
+                if len(PP.seg_levels[0][-1])>1:  # comp_seg -> segPs.. per seg__[n], in PP.seg_levels
+                    agg_recursion(PP.seg_levels, level=1, fseg=1, fiPd=0)
+                if len(PP.seg_levels[1][-1])>1:
+                    agg_recursion(PP.seg_levels, level=1, fseg=1, fiPd=1)
 
-        dir_blob.levels = [[PPm_], [PPd_]]
-        if len(PPm_)>1: agg_recursion(PPm_, ave_mPP, fseg=0)  # 2nd call per dir_blob.PP_s formed in 1st call, forms PPP..s and dir_blob.levels
-        if len(PPd_)>1: agg_recursion(PPd_, ave_mPP, fseg=0)  # also test for n_extended?
+        dir_blob.levels = [[PPm_], [PPd_]]  # 2nd call, dir_blob.PP_s formed in 1st call, forms PPPs and dir_blob.levels:
+        if len(PPm_)>1:
+            agg_recursion(dir_blob.levels, level=1, fseg=0, fiPd=0)  # no n_extended, unconditional?
+        if len(PPd_)>1:
+            agg_recursion(dir_blob.levels, level=1, fseg=0, fiPd=1)
 
-    splice_dir_blob_(blob.dir_blobs)  # draft
+#    splice_dir_blob_(blob.dir_blobs)  # draft
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -426,7 +429,7 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
 
     return PP
 
-def accum_P(seg, P):  # P is derP if from der+
+def accum_P(seg, P, _):  # P is derP if from der+
 
     if seg.params:
         if isinstance(P, CderP):
