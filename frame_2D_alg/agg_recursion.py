@@ -48,7 +48,7 @@ class CPPP(CPP, CderPP):
     mask__ = bool
     P__ = list  # input  # derP__ = list  # redundant to P__
     seg_levels = lambda: [[[]],[[]]]  # from 1st agg_recursion, seg_levels[0] is seg_t, higher seg_levels are segP_t s
-    PPP_levels = list  # from 2nd agg_recursion, PP_t = levels[0], from form_PP, before recursion
+    agg_levels = list  # from 2nd agg_recursion, PP_t = levels[0], from form_PP, before recursion
     layers = list  # from sub_recursion, each is derP_t
     root = lambda:None  # higher-order segP or PPP
 
@@ -62,7 +62,7 @@ def agg_recursion(PP_, fiPd):  # compositional recursion per blob.Plevel.
     else: ave_PP = ave_mPP
 
     V = sum([sum_named_param(PP.params, "val", fPd=fiPd) for PP in PP_])  # combined across plevels, as is comp_PP_ below
-    if V > ave_PP: 
+    if V > ave_PP:
 
         derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
         PPPm_, PPPd_ = form_PPP_t(derPP_t)  # calls individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP,

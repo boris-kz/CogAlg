@@ -73,8 +73,8 @@ class CBlob(ClusterStructure):
     Mdx = float
     Ddx = float
     # derivation hierarchy:
-    rsublayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
-    asublayers = list  # separate for range and angle forks per blob
+    rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
+    alayers = list  # separate for range and angle forks per blob
     prior_forks = list
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
@@ -87,10 +87,9 @@ class CBlob(ClusterStructure):
     P__ = list
     derP_ = list  # redundant to P__ upconnects?
     PP_t = list  # or reuse P__?
-    levels = list
+    agg_levels = list
     # frame_bblob:
     root_bblob = object
-    sublevels = list  # input levels
 
 '''
     Conventions:
@@ -112,16 +111,16 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-    frame = CBlob(I = I, Dy = Dy, Dx = Dx, dert__=dert__, prior_forks=["g"], rsublayers = [blob_])  # asublayers = []: no comp_a yet
+    frame = CBlob(I = I, Dy = Dy, Dx = Dx, dert__=dert__, prior_forks=["g"], rlayers = [blob_])  # alayers = []: no comp_a yet
 
-    if verbose: print(f"{len(frame.rsublayers[0])} blobs formed in {time() - start_time} seconds")
-    if render: visualize_blobs(idmap, frame.rsublayers[0])
+    if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
+    if render: visualize_blobs(idmap, frame.rlayers[0])
 
     if intra:  # omit for testing frame_blobs without intra_blob
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
-        frame.rsublayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
+        frame.rlayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
         # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
     '''
     if use_c:  # old version, no longer updated:
