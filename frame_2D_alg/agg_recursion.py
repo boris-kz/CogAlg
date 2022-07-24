@@ -107,6 +107,7 @@ def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
         pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
         # comp_ave- defined pre_PPP inherits PP.params
         pre_PPP.params += [comp_levels(PP.params, summed_params, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
+        sum_layers(pre_PPP.ptuple, pre_PPP.params)
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
