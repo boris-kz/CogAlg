@@ -74,7 +74,7 @@ class CBlob(ClusterStructure):
     Ddx = float
     # derivation hierarchy:
     rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
-    alayers = list  # separate for range and angle forks per blob
+    dlayers = list  # separate for range and angle forks per blob
     prior_forks = list
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
@@ -111,7 +111,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-    frame = CBlob(I = I, Dy = Dy, Dx = Dx, dert__=dert__, prior_forks=["g"], rlayers = [blob_])  # alayers = []: no comp_a yet
+    frame = CBlob(I = I, Dy = Dy, Dx = Dx, dert__=dert__, prior_forks=["g"], rlayers = [blob_])  # dlayers = []: no comp_a yet
 
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
     if render: visualize_blobs(idmap, frame.rlayers[0])

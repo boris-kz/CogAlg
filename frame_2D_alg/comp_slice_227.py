@@ -1016,16 +1016,13 @@ def sub_recursion(PP, base_rdn, fPd):  # compares param_layers of derPs in gener
     return comb_layers
 
 # sum all ptuples in ptuple_ into Ptuple
-def accum_ptuple_recursive(Ptuple, ptuple_):
+def accum_ptuples(Ptuple, ptuple_):
 
     if isinstance(ptuple_, Cptuple):
-        if not isinstance(ptuple_.angle, list):  # change Ptuple's angle and aangle to int, (they are initialized as list)
-            Ptuple.angle = 0
-            Ptuple.aangle = 0
         accum_ptuple(Ptuple, ptuple_)
     else:
         for ptuple in ptuple_:
-            accum_ptuple_recursive(Ptuple, ptuple)
+            accum_ptuples(Ptuple, ptuple)
 
 
 def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
