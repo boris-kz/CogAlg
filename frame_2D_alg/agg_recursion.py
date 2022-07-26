@@ -49,7 +49,8 @@ class CPPP(CPP, CderPP):
     P__ = list  # input  # derP__ = list  # redundant to P__
     seg_levels = lambda: [[[]],[[]]]  # from 1st agg_recursion, seg_levels[0] is seg_t, higher seg_levels are segP_t s
     agg_levels = list  # from 2nd agg_recursion, PP_t = levels[0], from form_PP, before recursion
-    layers = list  # from sub_recursion, each is derP_t
+    rlayers = list  # | mlayers
+    dlayers = list  # | alayers
     root = lambda:None  # higher-order segP or PPP
 
 # draft
@@ -64,8 +65,10 @@ def agg_recursion(PP_, fiPd):  # compositional recursion per blob.Plevel.
     V = sum([sum_named_param(PP.params, "val", fPd=fiPd) for PP in PP_])  # combined across plevels, as is comp_PP_ below
     if V > ave_PP:
 
-        derPP_t = comp_PP_(PP_)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
+        derPP_t = comp_PP_(PP_, fPd=fiPd)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
         PPPm_, PPPd_ = form_PPP_t(derPP_t)  # calls individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP,
+
+        # sections below need further update, sub_recursion_eval is applicable on single PPP only
         # may splice PPs instead of forming PPPs
         sub_recursion_eval(PPPm_)  # fPd=0, rng+  # for derPP_ in PPPs formed by indiv_comp_PP_
         sub_recursion_eval(PPPd_)  # fPd=1, der+
@@ -93,21 +96,23 @@ Selection and variable rdn per derPP requires iterative centroid clustering per 
 This will probably be done in blob-level agg_recursion, it seems too complex for edge tracing, mostly contiguous?
 '''
 
-def comp_PP_(PP_, fsubder=0):  # PP can also be PPP, etc.
+def comp_PP_(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
 
     pre_PPPm_, pre_PPPd_ = [],[]
 
     for PP in PP_:
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
+
+        if fPd: layers = PP.dlayers
+        else:   layers = PP.rlayers
+
+        pre_PPP = CPP(params=deepcopy(PP.params), layers= layers+[PP_], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
         summed_params = []  # initialize params
         for compared_PP in compared_PP_:
-            sum_levels(summed_params, compared_PP.params)  # accum summed_params over compared_PP_
-
-        pre_PPP = CPP(params=deepcopy(PP.params), layers= PP.layers+[PP_], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
+            sum_levels(summed_params, compared_PP.params, pre_PPP.mptuple, pre_PPP.dptuple)  # accum summed_params over compared_PP_
         # comp_ave- defined pre_PPP inherits PP.params
         pre_PPP.params += [comp_levels(PP.params, summed_params, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
-        sum_layers(pre_PPP.ptuple, pre_PPP.params)
         '''
         comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6

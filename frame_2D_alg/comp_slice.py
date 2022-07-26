@@ -105,9 +105,13 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     Ddx = int
 
 class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
-
-    params = list  # P derivation layers, n ptuples = 2**der_cnt
-    ptuple = lambda: Cptuple()
+    '''
+    Derivation forms a binary tree, the root is a latuple, the rest are incrementally nested lists of vertuples.
+    But each derP represents only one fork per layer: the sequence of forks that led to forming it.
+    '''
+    players = list  # one ptuple per constituent der fork, staring with lataple
+    mtuples = list  # nested list of ptuples in current derivation layer per fork
+    dtuples = list
     x0 = int
     sign = NoneType  # g-ave + ave-ga sign
     y = int  # for vertical gaps in PP.P__, replace with derP.P.y?
@@ -121,10 +125,12 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
    # from comp_dx
     fdx = NoneType
 
-class CPP(CP, CderP):  # P and derP params are combined into param_layers?
+class CPP(CderP):  # derP params include P.ptuple
 
-    params = list  # P.ptuple + derP.ptuple if >1 P|seg, L is Area
-    ptuple = lambda: Cptuple()
+    players = list  # lower-level ptuples
+    Ptuple = lambda: Cptuple()  # current level, L is Area
+    mtuple = lambda: Cptuple()
+    dtuple = lambda: Cptuple()
     sign = bool
     x0 = int  # box, update by max, min
     xn = int
@@ -165,23 +171,24 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)  # forms PPs: parameterized graphs of linked segs
         dir_blob.rlayers = [PPm_]; dir_blob.dlayers = [PPd_]
+        mrdn = dir_blob.G > dir_blob.M
 
-        if dir_blob.M > ave_mPP*dir_blob.rdn+1 and len(PPm_) > ave_nsub:
+        if dir_blob.M > ave_mPP * dir_blob.rdn+1+mrdn and len(PPm_) > ave_nsub:
             dir_blob.rlayers += sub_recursion(PPm_, ave_mPP, fPd=0)  # rng+ comp_P in PPms -> param_layer, sub_PPs
-        if dir_blob.G > ave_dPP*dir_blob.rdn+1 and len(PPd_) > ave_nsub:
+        if dir_blob.G > ave_dPP * dir_blob.rdn+1+(not mrdn) and len(PPd_) > ave_nsub:
             dir_blob.dlayers += sub_recursion(PPd_, ave_dPP, fPd=1)  # der+ comp_P in PPds -> param_layer, sub_PPs
 
         for PP_ in (PPm_, PPd_):  # 1st-call agglomerative recursion is per PP, appending PP.levels, not blob.levels:
             for PP in PP_:
                 agg_recursion_eval(PP, fseg=1)  # 1st call, comp_seg -> segPs.. per seg__[n], in PP.levels
-                # if fseg: use seg_levels, else agg_levels
+                # if fseg: add seg_levels, else agg_levels
         dir_blob.agg_levels = [[PPm_], [PPd_]]
         agg_recursion_eval(dir_blob, fseg=0)  # 2nd call, dir_blob.PP_s formed in 1st call, forms PPPs and dir_blob.levels
 
     splice_dir_blob_(blob.dir_blobs)  # draft
 
 
-def agg_recursion_eval(blob, fseg):
+def agg_recursion_eval(blob, fseg):  # unpack?
 
     from agg_recursion import agg_recursion
     m_comb_levels, d_comb_levels = [[], []], [[], []]
@@ -443,10 +450,11 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     for P in seg_Ps[:-1]:
         accum(seg, P, fPd)
         derP = P.uplink_layers[-1][0]
-        if len(seg.params)>1: sum_layers(seg.params[1][0], derP.params, seg.ptuple)  # derP.params maybe nested
+        if len(seg.params)>1: sum_layers(seg.params[1][0], derP.params, seg.mtuple, seg.dtuple)  # derP.params maybe nested
         else:
             seg.params.append([deepcopy(derP.params)])  # init 2nd layer
-            accum_ptuple(seg.ptuple, derP.ptuple)
+            accum_ptuple(seg.mtuple, derP.mtuple)
+            accum_ptuple(seg.dtuple, derP.dtuple)
         derP.root = seg
     accum(seg, seg_Ps[-1], fPd)   # top P uplink_layers are not part of seg
 
@@ -467,17 +475,30 @@ def accum_P(seg, P, _):  # P is derP if from der+
 
     if seg.params:
         if isinstance(P, CderP):
-            sum_layers(seg.params[0], P.ptuple)  # possibly multiple layers in derP.params
+            sum_layers(seg.params[0], P.mtuple)  # sum from both mdtuple
+            sum_layers(seg.params[0], P.dtuple)      
         else:
             accum_ptuple(seg.params[0], P.ptuple)
     else:
-        seg.params.append(deepcopy(P.ptuple))  # init 1st level of seg.params with P.ptuple
+        if isinstance(P, CderP):
+            seg.params.append(deepcopy(P.params))
+        else:
+            seg.params.append(deepcopy(P.ptuple))  # init 1st level of seg.params with P.ptuple
         seg.x0 = P.x0
 
-    accum_ptuple(seg.ptuple, P.ptuple)
+    # for seg with mtuple and dtuple, accum both with P.ptuple?
+    if isinstance(P, CderP):
+        accum_ptuple(seg.mtuple, P.mtuple)
+        accum_ptuple(seg.dtuple, P.dtuple)
+    else:
+        accum_ptuple(seg.mtuple, P.ptuple)
+        accum_ptuple(seg.dtuple, P.ptuple)
     P.root = seg
 
-    if isinstance(P, CderP): L = P.P.ptuple.L
+    if isinstance(P, CderP): 
+        new_P = P
+        while isinstance(new_P, CderP): new_P = new_P.P  # recursively get P, in higher sub_recursion, derP.P might be derP too 
+        L = new_P.ptuple.L
     else:                    L = P.ptuple.L
     seg.x0 = min(seg.x0, P.x0)
     seg.y0 = min(seg.y0, P.y)
@@ -487,7 +508,7 @@ def accum_P(seg, P, _):  # P is derP if from der+
 
 def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
 
-    sum_levels(PP.params, inp.params, PP.ptuple)  # PP has only 2 param levels, PP.params.x += inp.params.x*inp.L
+    sum_levels(PP.params, inp.params)  # PP has only 2 param levels, PP.params.x += inp.params.x*inp.L
 
     inp.root = PP
     PP.x0 = min(PP.x0, inp.x0)
@@ -519,7 +540,7 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
                 if derP not in PP.downlink_layers[-1] and derP.P.root not in PP.seg_levels[fPd][-1]:
                     PP.uplink_layers[-1] += [derP]
 
-
+# only for agg_recursion eval?
 def accum_ptuples(Ptuple, ptuples):  # sum all ptuples into Ptuple
 
     if isinstance(ptuples, Cptuple):
@@ -527,6 +548,7 @@ def accum_ptuples(Ptuple, ptuples):  # sum all ptuples into Ptuple
     else:
         for ptuple in ptuples:
             accum_ptuples(Ptuple, ptuple)
+
 
 def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
@@ -541,7 +563,7 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
     elif not fAngle and not fangle:  # both are vertuples:
         Ptuple.angle += ptuple.angle
         Ptuple.aangle += ptuple.aangle
-
+    
 
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
@@ -578,45 +600,35 @@ def comp_layers(_layers, layers, der_layers, fsubder):  # recursively unpack lay
     return der_layers  # m,d ptuple pair in each layer, possibly nested
 
 
-def sum_levels(Params, params, Ptuple):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
+# only for sum2PP
+def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
 
     if Params:
-        sum_layers(Params[0], params[0], Ptuple)  # recursive unpack of nested ptuple layers, if any from der+
+        sum_layers(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
     else:
         Params.append(deepcopy(params[0]))  # no need to sum
-        accum_ptuples(Ptuple, params[0])
 
     for Level, level in zip_longest(Params[1:], params[1:], fillvalue=[]):
         if Level and level:
-            sum_levels(Level, level, Ptuple)  # recursive unpack of higher levels, if any from agg+ and nested with sub_levels
+            sum_levels(Level, level)  # recursive unpack of higher levels, if any from agg+ and nested with sub_levels
         elif level:
             Params.append(deepcopy(level))  # no need to sum
-            accum_ptuples(Ptuple, level)
 
+def sum_layers(Layers, layers):
 
-def sum_layers(Layers, layers, Ptuple):  # recursively unpack layers: m,d tuple pairs from der+
-
-    if isinstance(layers, Cptuple):   # layers is a latuple, in 1st layer only
-        accum_ptuple(Ptuple, layers)
-        accum_ptuple(Layers, layers)
-    else:
-        # layer is layers or two vertuples, keep unpacking
-        for Layer, layer in zip_longest(Layers, layers, fillvalue=[]):
-            if Layer and layer:
-                sum_layers(Layer, layer, Ptuple)
-            elif layer:
-                Layers.append(deepcopy(layer))
-                sum_layers([], layer, Ptuple)  #?
-
-    return Ptuple
+    for Ptuple, ptuple in zip_longest(Layers, layers, fillvalue=[]):
+        if Ptuple and ptuple:
+            accum_ptuple(Ptuple, ptuple)  # always same type now
+        elif ptuple:
+            Layers.append(deepcopy(ptuple))
 
 
 def comp_P(_P, P, fsubder=0):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
-    if isinstance(_P.ptuple, Cptuple):  # just to save the call, or this testing can be done in comp_layers
+    if isinstance(_P, CP):  # just to save the call, or this testing can be done in comp_layers
         derivatives = comp_ptuple(_P.ptuple, P.ptuple)  # comp lataple (P)
     else:
-        derivatives = comp_layers(_P.ptuple, P.ptuple, [], fsubder=fsubder)  # comp vertuple pairs (derP)
+        derivatives = comp_layers(_P.params, P.params, [], fsubder=fsubder)  # comp vertuple pairs (derP)
 
     if isinstance(_P, CderP):
         _L = _P.P.ptuple.L; L = P.P.ptuple.L
@@ -626,10 +638,10 @@ def comp_P(_P, P, fsubder=0):  # forms vertical derivatives of params per P in _
     x0 = min(_P.x0, P.x0)
     xn = max(_P.x0+_L, P.x0+L)  # i guess this is not needed?
 
-    ptuple = Cptuple()
-    sum_layers([], derivatives, ptuple)
+    mtuple, dtuple = Cptuple(), Cptuple() 
+    sum_layers([], derivatives, mtuple, dtuple)
 
-    return CderP(x0=x0, L=L, y=_P.y, params=derivatives, ptuple=ptuple, P=P, _P=_P)
+    return CderP(x0=x0, L=L, y=_P.y, params=derivatives, mtuple=mtuple, dtuple=dtuple, P=P, _P=_P)
 
 
 def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
@@ -713,8 +725,9 @@ def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3
         P.P, P._P = None, None  # reset
     elif Ptype == 2:
         seg_levels = P.seg_levels
-        layers = P.layers
-        P.seg_levels, P.layers = [], []  # reset
+        rlayers = P.rlayers
+        dlayers = P.dlayers
+        P.seg_levels, P.rlayers, P.dlayers = [], [], []  # reset
     elif Ptype == 3:
         PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
         P.PP, P._PP = None, None  # reset
@@ -731,8 +744,10 @@ def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3
         P.P, P._P = P_derP, _P_derP
     elif Ptype == 2:
         P.seg_levels = seg_levels
-        P.layers = layers
-        new_P.layers = layers
+        P.rlayers = rlayers
+        P.dlayers = dlayers
+        new_P.rlayers = rlayers
+        new_P.dlayers = dlayers
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
@@ -792,19 +807,18 @@ def sub_recursion(PP_, ave, fPd):  # evaluate each PP for rng+ and der+
         if fPd: Pm__, Pd__ = comp_P_der(P__)  # returns top-down
         else:   Pm__, Pd__ = comp_P_rng(P__, PP.rng+1)
 
-        PP.rdn += 2  # 2 sub-clustering forks, unless select stronger?
+        PP.rdn += 2  # 2 sub-clustering forks?
         sub_segm_ = form_seg_root(Pm__, root_rdn=PP.rdn, fPd=0)
         sub_segd_ = form_seg_root(Pd__, root_rdn=PP.rdn, fPd=1)  # returns bottom-up
 
         sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdn+1)  # forms PPs: parameterized graphs of linked segs
         PP.rlayers = [sub_PPm_]; PP.dlayers = [sub_PPd_]
+        mrdn = PP.dtuple.val > PP.mtuple.val
 
-        if PP.ptuple.val > ave*PP.rdn:
-            # we need separate PP.mtuple and PP.dtuple for these evaluations:
-            if len(sub_PPm_) > ave_nsub:
-                PP.rlayers += sub_recursion(sub_PPm_, ave_mPP, fPd=0)  # rng+ comp_P in PPms -> param_layer, sub_PPs, rng+=n to skip clustering?
-            if len(sub_PPd_) > ave_nsub:
-                PP.dlayers += sub_recursion(sub_PPd_, ave_dPP, fPd=1)  # der+ comp_P in PPds -> param_layer, sub_PPs
+        if PP.mtuple.val > ave_dPP * PP.rdn+mrdn and len(sub_PPm_) > ave_nsub:
+            PP.rlayers += sub_recursion(sub_PPm_, ave_mPP, fPd=0)  # rng+ comp_P in PPms -> param_layer, sub_PPs, rng+=n to skip clustering?
+        if PP.dtuple.val > ave_mPP * PP.rdn+(not mrdn) and len(sub_PPd_) > ave_nsub:
+            PP.dlayers += sub_recursion(sub_PPd_, ave_dPP, fPd=1)  # der+ comp_P in PPds -> param_layer, sub_PPs
 
         for i, (comb_layer, rlayer, dlayer) in enumerate(zip_longest(comb_layers, PP.rlayers, PP.dlayers, fillvalue=[])):
             if i > len(comb_layers)-1:  # pack new comb_layer, if any
