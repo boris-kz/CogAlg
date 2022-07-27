@@ -138,6 +138,20 @@ def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursi
 
     return der_levels # possibly nested param layers
 
+# old:
+def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
+
+    if Params:
+        sum_layers(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
+    else:
+        Params.append(deepcopy(params[0]))  # no need to sum
+
+    for Level, level in zip_longest(Params[1:], params[1:], fillvalue=[]):
+        if Level and level:
+            sum_levels(Level, level)  # recursive unpack of higher levels, if any from agg+ and nested with sub_levels
+        elif level:
+            Params.append(deepcopy(level))  # no need to sum
+
 
 def sum_named_param(plevel, param_name, fPd):
     psum = 0  # sum of named param across param layers
