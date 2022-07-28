@@ -164,7 +164,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
         # comp_dx_blob(P__), comp_dx?
-        # form PPm_ is not revised yet, probably should be from generic P_
+        # form PPm_ is not revised yet, the input should probably be generic P_
         Pm__ = comp_P_root(deepcopy(P__), fPd=0)  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P,
         Pd__ = comp_P_root(deepcopy(P__), fPd=1)  # deepcopy before assigning link derPs to Ps
 
@@ -272,9 +272,20 @@ def comp_P_root(P__, fPd):  # vertically compares y-adjacent and x-overlapping P
 
 def comp_P(_P, P, fPd):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
-    der_tuples = comp_ptuple(_P.ptuple, P.ptuple)
+    if isinstance(_P, CP):
+        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple)
+        mval = mtuple.val; dval = dtuple.val
+        mplayer = [mtuple]; dplayer = [dtuple]
+        players = [_P.ptuple] + [dtuple] if fPd else [mtuple]
 
-    return CderP(x0=min(_P.x0, P.x0), L=P.ptuple.L, y=_P.y, players=[_P.ptuple, der_tuples[fPd]], P=P, _P=_P)
+    else:  # P is derP from sub_recursion
+        der_tuples = comp_layers(_P.players, P.players)
+        mval = sum([mtuple.val for mtuple in der_tuples[0]])
+        dval = sum([dtuple.val for dtuple in der_tuples[0]])
+        mplayer = der_tuples[0]; dplayer = der_tuples[1]  # no extra bracket because elements are already packed in list
+        players = [*_P.players, *der_tuples[fPd]]  # use * to unpack der_tuples[fPd] so that players is flat
+
+    return CderP(x0=min(_P.x0, P.x0), L=players[0].L, y=_P.y, players=players, mplayer=mplayer, dplayer=dplayer, mval=mval, dval=dval, P=P, _P=_P)
 
 # not reviewed:
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
@@ -406,15 +417,13 @@ def rng_eval(derP, fPd):  # compute value of combined mutual derPs: overlap betw
             olp_val += derP.dval
             derP.dval = olp_val / nolp
         else:
-            rdn += derP.mplayers.ptuple.val > derP.dplayers.ptuple.val  #  mP > dP if not fPd
+            rdn += derP.mval > derP.dval  #  mP > dP if not fPd
             olp_val += derP.mval
             derP.mval = olp_val / nolp
     '''
     for i, derP in enumerate( sorted( link_layers[-2], key=lambda derP: derP.params[fPd].val, reverse=True)):
-
     if fPd: derP.rdn += derP.params[fPd].val > derP.params[1-fPd].val  # mP > dP
     else: rng_eval(derP, fPd)  # reset derP.val, derP.rdn
-
     if derP.params[fPd].val > vaves[fPd] * derP.rdn * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
     '''
     derP.rdn += (rdn / nolp) > .5  # no fractional rdn?
@@ -475,44 +484,48 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
         derP = P.uplink_layers[-1][0]
         accum_derP(seg, derP)  # draft, no separate accum_P, not for agg_recursion
         derP.root = seg
-    accum_ptuple(seg.players[0], seg_Ps[-1])  # P only, top P uplink_layers are not part of seg
+
+    accum_derP(seg, seg_Ps[-1].P)  # accum last P only, top P uplink_layers are not part of seg
+    seg.y0 = seg_Ps[0].P.y
+    seg.yn = seg.y0 + seg.L
 
     return seg
+
+
+def accum_derP(seg, derP):  # derP might be CP, unlikely
+
+    if isinstance(derP, CP):
+        sum_layers(seg.players, [derP.ptuple])
+        seg.x0 = min(seg.x0, derP.x0)
+        seg.xn = max(seg.xn, derP.x0 + derP.ptuple.L)
+    else:
+        sum_layers(seg.players, derP.players)
+        accum_player(seg.mplayer, derP.mplayer, seg.mval, derP.mval)  # accum mplayer
+        accum_player(seg.dplayer, derP.dplayer, seg.dval, derP.dval)  # accum mplayer
+        seg.x0 = min(seg.x0, derP.x0)
+        seg.xn = max(seg.xn, derP.x0 + derP.players[0].L)
+
+    derP.root = seg
+
+
+def accum_player(Player, player, Val, val):  # accum mplayer or dplayer
+
+    for Ptuple, ptuple in zip_longest(Player, player, fillvalue=[]):
+        if ptuple:
+            if Ptuple: accum_ptuple(Ptuple, ptuple)
+            else:      Player.append(deepcopy(ptuple))
+            Val += val
 
 
 def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn, sign=PP_segs[0].sign, L= len(PP_segs))
-    PP.seg_levels[fPd][0] = PP_segs  # PP_segs is levels[0]
+    PP.seg_levels = [PP_segs]  # PP_segs is levels[0]
 
     for seg in PP_segs:
         accum_PP(PP, seg, fPd)
 
     return PP
-
-
-def accum_derP(seg, derP):  # No separate accum_P
-
-    sum_layers(seg.players, derP.players)
-    # accum mplayer:
-    for Ptuple, ptuple in zip_longest(seg.mplayer, derP.mplayer, fillvalue=[]):
-        if Ptuple and ptuple:
-            accum_ptuple(Ptuple, ptuple); seg.mval+=ptuple.val  # no derP.mval?
-        elif ptuple:
-            seg.mplayer.append(deepcopy(ptuple)); seg.mval+=ptuple.val
-    # accum dplayer:
-    for Ptuple, ptuple in zip_longest(seg.dplayer, derP.dplayer, fillvalue=[]):
-        if Ptuple and ptuple:
-            accum_ptuple(Ptuple, ptuple); seg.dval+=ptuple.val
-        elif ptuple:
-            seg.mplayer.append(deepcopy(ptuple)); seg.mval+=ptuple.val
-
-    derP.root = seg
-    seg.x0 = min(seg.x0, derP.x0)
-    seg.y0 = min(seg.y0, derP.y)
-    seg.xn = max(seg.xn, derP.x0 + derP.players[0].L)
-    seg.yn = max(seg.yn, derP.y)
-
 
 def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
 
@@ -550,28 +563,6 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
                     PP.uplink_layers[-1] += [derP]
 
 
-def append_P(P__, P):  # pack P into P__ in top down sequence
-
-    current_ys = [P_[0].y for P_ in P__]  # list of current-layer seg rows
-    if P.y in current_ys:
-        P__[current_ys.index(P.y)].append(P)  # append P row
-    elif P.y > current_ys[0]:  # P.y > largest y in ys
-        P__.insert(0, [P])
-    elif P.y < current_ys[-1]:  # P.y < smallest y in ys
-        P__.append([P])
-    elif P.y < current_ys[0] and P.y > current_ys[-1]:  # P.y in between largest and smallest value
-        for i, y in enumerate(current_ys):  # insert y if > next y
-            if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
-
-
-def comp_layers(_layers, layers, der_layer, fPd):  # unpack and compare der layers, if any from der+
-
-    for _layer, layer in zip(_layers, layers):
-        for _ptuple, ptuple in zip(_layer, layer):
-            der_layer[fPd] += comp_ptuple(_ptuple, ptuple)
-
-    return der_layer
-
 def sum_layers(Layers, layers):
 
     for Layer, layer in zip_longest(Layers, layers, fillvalue=[]):
@@ -597,6 +588,20 @@ def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
     elif not fAngle and not fangle:  # both are vertuples:
         Ptuple.angle += ptuple.angle
         Ptuple.aangle += ptuple.aangle
+
+
+def comp_layers(_layers, layers):  # unpack and compare der layers, if any from der+
+
+    mplayer, dplayer = [], []
+
+    for _layer, layer in zip(_layers, layers):
+        for _ptuple, ptuple in zip(_layer, layer):
+
+            mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+            mplayer.append(mtuple)
+            dplayer.append(dtuple)
+
+    return mplayer, dplayer
 
 
 def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
@@ -656,7 +661,7 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
 
     mtuple.val = mval; dtuple.val = dval
 
-    return [mtuple, dtuple]
+    return mtuple, dtuple
 
 def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
 
@@ -667,6 +672,20 @@ def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
     mval += m
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
+
+
+def append_P(P__, P):  # pack P into P__ in top down sequence
+
+    current_ys = [P_[0].y for P_ in P__]  # list of current-layer seg rows
+    if P.y in current_ys:
+        P__[current_ys.index(P.y)].append(P)  # append P row
+    elif P.y > current_ys[0]:  # P.y > largest y in ys
+        P__.insert(0, [P])
+    elif P.y < current_ys[-1]:  # P.y < smallest y in ys
+        P__.append([P])
+    elif P.y < current_ys[0] and P.y > current_ys[-1]:  # P.y in between largest and smallest value
+        for i, y in enumerate(current_ys):  # insert y if > next y
+            if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
 
 
 def copy_P(P, Ptype):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP
