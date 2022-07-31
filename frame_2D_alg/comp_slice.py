@@ -108,6 +108,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     '''
     Derivation forms a binary tree where the root is latuple and all forks are vertuples.
     But each derP represents only one fPd fork per layer: the one taken to form it.
+    players, mplayer, dplayer, fPds are temporary, replaced by PP
     '''
     players = list  # max n ptuples in layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
     fPds = lambda: [0]  # list of fPds per player, 1st=0
@@ -256,7 +257,7 @@ def comp_P_root(P__, fPd):  # vertically compares y-adjacent and x-overlapping P
         for P in P_:
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 if (P.x0 - 1 < _P.x0 + _P.ptuple.L) and (P.x0 + P.ptuple.L + 1 > _P.x0):
-                    derP = comp_P(_P, P, fPd)
+                    derP = comp_P(_P, P)
                     P.uplink_layers[-2] += [derP]  # append derPs, uplink_layers[-1] is match_derPs
                     _P.downlink_layers[-2] += [derP]
                 elif (P.x0 + P.ptuple.L) < _P.x0:
@@ -265,24 +266,22 @@ def comp_P_root(P__, fPd):  # vertically compares y-adjacent and x-overlapping P
 
     return P__
 
-def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
+def comp_P(_P, P, _fPds, fPds):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
     if isinstance(_P, CP):
         mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple)
         mval = mtuple.val; dval = dtuple.val
         mplayer = [mtuple]; dplayer = [dtuple]
-
+        players = [[_P.ptuple]]
     else:  # P is derP
-        mplayer, dplayer = comp_players(_P.players, P.players, _P.player_fPds, P.player_fPds)
+        mplayer, dplayer = comp_players(_P.players, P.players, _fPds, fPds)  # passed from seg.fPds
         mval = sum([mtuple.val for mtuple in mplayer])
         dval = sum([dtuple.val for dtuple in dplayer])
+        players = deepcopy(_P.players)
 
-    derP = CderP(x0=min(_P.x0, P.x0), y=_P.y, mplayer=mplayer, dplayer=dplayer, mval=mval, dval=dval, P=P, _P=_P)
-    if isinstance(_P, CP): derP.players = [_P.ptuple]
+    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=players, mplayer=mplayer, dplayer=dplayer, mval=mval, dval=dval, P=P, _P=_P)
 
-    return derP
 
-# not reviewed:
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
 
     for P_ in P__:
@@ -310,7 +309,7 @@ def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to sk
 
     return Pm__, Pd__  # new_mP__, new_dP__
 
-# not reviewed:
+
 def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.downlinks
 
     dderPs__ = []  # derP__ = [[] for P_ in P__[:-1]]  # init derP rows, exclude bottom P row
@@ -324,7 +323,7 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
                     # there maybe no x overlap between recomputed Ls of _derP and derP, compare anyway,
                     # mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)?
                     # gap: neg_olp, ave = olp-neg_olp?
-                    dderP = comp_P(_derP, derP, fPd=1)  # form higher vertical derivatives of derP or PP params
+                    dderP = comp_P(_derP, derP)  # form higher vertical derivatives of derP or PP params
                     derP.uplink_layers[0] += [dderP]  # pre-init layer per derP
                     _derP.downlink_layers[0] += [dderP]
                     dderPs += [dderP]
@@ -471,14 +470,18 @@ def sum2seg(seg_Ps, fPd):  # sum params of vertically connected Ps into segment
     miss_downlink_ = [ddownlink for ddownlink in ddownlinks if ddownlink not in downlinks]
     # seg rdn: up cost to init, up+down cost for comp_seg eval, in 1st agg_recursion?
     # P rdn is up+down M/n, but P is already formed and compared?
-    seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], L = len(seg_Ps), y0 = seg_Ps[0].y)
+    L = len(seg_Ps)
+    seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], L=L, y0 = seg_Ps[0].y)
 
     for P in seg_Ps[:-1]:
-        accum_derP(seg, P.uplink_layers[-1][0], fPd)  # P.uplink is derP
+        derP = P.uplink_layers[-1][0]
+        accum_derP(seg, derP, fPd)
 
     accum_derP(seg, seg_Ps[-1], 0)  # accum last P only, top P uplink_layers are not part of seg
+    seg.fPds = deepcopy(derP.fPds)
     seg.y0 = seg_Ps[0].y
-    seg.yn = seg.y0 + seg.L
+    seg.yn = seg.y0 + L
+
 
     return seg
 
@@ -498,7 +501,7 @@ def accum_derP(seg, derP, fPd):  # derP might be CP, though unlikely
         sum_ptuples(seg.dplayer, derP.dplayer)
         seg.mval+=derP.mval
         seg.dval+=derP.dval  # higher players only
-        seg.xn = max(seg.xn, derP.x0 + derP.players[0].L)
+        seg.xn = max(seg.xn, derP.x0 + derP.players[0][0].L)
 
 
 def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
@@ -509,6 +512,8 @@ def sum2PP(PP_segs, base_rdn, fPd):  # sum PP_segs into PP
     for seg in PP_segs:
         accum_PP(PP, seg, fPd)
 
+    PP.fPds = deepcopy(seg.fPds)
+
     return PP
 
 def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
@@ -518,9 +523,9 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
     sum_ptuples(PP.dplayer, inp.dplayer)
     PP.mval += inp.mval
     PP.dval += inp.dval
+    PP.fPds = deepcopy(inp.fPds)  # assign fPds here?
     inp.root = PP
     # 2nd player is external params:
-    PP.L += inp.L  # area
     PP.x0 = min(PP.x0, inp.x0)
     PP.xn = max(PP.xn, inp.xn)
     PP.y0 = min(inp.y0, PP.y0)
@@ -551,7 +556,7 @@ def accum_PP(PP, inp, fPd):  # comp_slice inp is seg, or segPP in agg+
                     PP.uplink_layers[-1] += [derP]
 
 
-def sum_players(Layers, layers):  # similar to accum_player? no accum across fPd, that's checked in comp_players?
+def sum_players(Layers, layers):  # no accum across fPd, that's checked in comp_players?
 
     for Layer, layer in zip_longest(Layers, layers, fillvalue=[]):
         if layer:
