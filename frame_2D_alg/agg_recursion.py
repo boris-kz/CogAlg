@@ -15,14 +15,14 @@ This may form closed edge patterns around flat blobs, which defines stable objec
 class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlink_, PP can also be PPP, etc.
 
     # draft
-    params = list  # PP derivation level, flat, decoded by mapping each m,d to lower-level param
-    x0 = int  # redundant to params:
-    x = float  # median x
-    L = int  # pack in params?
-    sign = NoneType  # g-ave + ave-ga sign
-    y = int  # for vertical gaps in PP.P__, replace with derP.P.y?
-    PP = object  # lower comparand
+    players = list  # PP derivation level, flat, decoded by mapping each m,d to lower-level param
+    mplayer = list  # list of ptuples in current derivation layer per fork
+    dplayer = list
+    mval = float  # summed player vals, both are signed, PP sign by fPds[-1]
+    dval = float
+    box = list
     _PP = object  # higher comparand
+    PP = object  # lower comparand
     root = lambda:None  # segment in sub_recursion
     # higher derivatives
     rdn = int  # mrdn, + uprdn if branch overlap?
@@ -33,9 +33,9 @@ class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlin
 
 class CPPP(CPP, CderPP):
 
-    # draft
-    params = list  # derivation layers += derP params per der+, param L is actually Area
-    sign = bool
+    players = list  # max n ptuples in layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
+    mplayer = list  # list of ptuples in current derivation layer per fork
+    dplayer = list
     rng = lambda: 1  # rng starts with 1
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
     Rdn = int  # for accumulation only
@@ -54,31 +54,26 @@ class CPPP(CPP, CderPP):
     root = lambda:None  # higher-order segP or PPP
 
 # draft
-def agg_recursion(PP_, fiPd):  # compositional recursion per blob.Plevel.
+def agg_recursion(PP_, fPd):  # compositional recursion per blob.Plevel.
     # P, PP, PPP are relative terms, each may be of any composition order
 
     comb_levels = [[], []]
-
-    if fiPd: ave_PP = ave_dPP
-    else: ave_PP = ave_mPP
-
-    V = sum([sum_named_param(PP.params, "val", fPd=fiPd) for PP in PP_])  # combined across plevels, as is comp_PP_ below
+    ave_PP = ave_dPP if fPd else ave_mPP
+    V = sum([PP.dval for PP in PP_]) if fPd else sum([PP.mval for PP in PP_])
     if V > ave_PP:
 
-        derPP_t = comp_PP_(PP_, fPd=fiPd)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
+        derPP_t = comp_PP_(PP_, fPd=fPd)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
         PPPm_, PPPd_ = form_PPP_t(derPP_t)  # calls individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP,
-
-        # sections below need further update, sub_recursion_eval is applicable on single PPP only
         # may splice PPs instead of forming PPPs
-        sub_recursion_eval(PPPm_)  # fPd=0, rng+  # for derPP_ in PPPs formed by indiv_comp_PP_
-        sub_recursion_eval(PPPd_)  # fPd=1, der+
+        # use sub_recursion_eval, agg_recursion_eval instead:
 
         comb_levels[0].append(PPPm_); comb_levels[1].append(PPPd_)  # pack current level PPP
         m_comb_levels, d_comb_levels = [[],[]], [[],[]]
-        if len(PPPm_)>1:
-            m_comb_levels = agg_recursion(PPPm_, fiPd=0)
+
+        if len(PPPm_)>1:  # add eval
+            m_comb_levels = agg_recursion(PPPm_, fPd=0)
         if len(PPPd_)>1:
-            d_comb_levels = agg_recursion(PPPd_, fiPd=1)
+            d_comb_levels = agg_recursion(PPPd_, fPd=1)
 
         # combine sub_PPm_s and sub_PPd_s from each layer:
         for m_sub_PPPm_, d_sub_PPPm_ in zip_longest(m_comb_levels[0], d_comb_levels[0], fillvalue=[]):
@@ -104,17 +99,18 @@ def comp_PP_(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
 
-        if fPd: layers = PP.dlayers
-        else:   layers = PP.rlayers
+        pre_PPP = CPP(
+            players=deepcopy(PP.players), mplayer=deepcopy(PP.mplayer), dplayer=deepcopy(PP.dplayer), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
+        Players, Mplayer, Dplayer = [],[],[]  # initialize params
 
-        pre_PPP = CPP(params=deepcopy(PP.params), layers= layers+[PP_], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
-        summed_params = []  # initialize params
-        for compared_PP in compared_PP_:
-            sum_levels(summed_params, compared_PP.params, pre_PPP.mptuple, pre_PPP.dptuple)  # accum summed_params over compared_PP_
-        # comp_ave- defined pre_PPP inherits PP.params
-        pre_PPP.params += [comp_levels(PP.params, summed_params, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
+        for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
+            sum_players(Players, compared_PP.players)
+            sum_ptuples(Mplayer, compared_PP.mplayer)
+            sum_ptuples(Dplayer, compared_PP.dplayer)
+
+        pre_PPP.players += [comp_levels(PP.players, Players, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
         '''
-        comp to ave params of compared PPs, form new layer: derivatives of all lower layers, 
+        comp to ave params of compared PPs, pre_PPP inherits PP.params, forms new player: derivatives of all lower layers, 
         initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
         '''
         pre_PPPm_.append(copy_P(pre_PPP, Ptype=2))  # Ptype 2 is now PPP, we don't need Ptype 3?
@@ -130,7 +126,7 @@ Multiple sublayers start on the 3rd layer, because it's derived from comparison 
 def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
     # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
-    der_levels += [comp_layers(_levels[0], levels[0], der_layers=[], fsubder=fsubder)]
+    der_levels += [comp_players(_levels[0], levels[0], der_layers=[], fsubder=fsubder)]
 
     # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
     for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
@@ -142,7 +138,7 @@ def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursi
 def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
 
     if Params:
-        sum_layers(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
+        sum_players(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
     else:
         Params.append(deepcopy(params[0]))  # no need to sum
 
