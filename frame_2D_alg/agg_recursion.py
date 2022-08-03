@@ -99,20 +99,16 @@ def comp_PP_(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
 
-        pre_PPP = CPP(
-            players=deepcopy(PP.players), mplayer=deepcopy(PP.mplayer), dplayer=deepcopy(PP.dplayer), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
-        Players, Mplayer, Dplayer = [],[],[]  # initialize params
+        pre_PPP = CPP( players=deepcopy(PP.players), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
+        Players = []  # initialize params
 
         for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
             sum_players(Players, compared_PP.players)
-            sum_ptuples(Mplayer, compared_PP.mplayer)
-            sum_ptuples(Dplayer, compared_PP.dplayer)
 
         pre_PPP.players += [comp_levels(PP.players, Players, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
-        '''
-        comp to ave params of compared PPs, pre_PPP inherits PP.params, forms new player: derivatives of all lower layers, 
-        initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
-        '''
+        # comp to ave params of compared PPs, pre_PPP inherits PP.params, forms new player: derivatives of all lower layers,
+        # initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
+        
         pre_PPPm_.append(copy_P(pre_PPP, Ptype=2))  # Ptype 2 is now PPP, we don't need Ptype 3?
         pre_PPPd_.append(copy_P(pre_PPP, Ptype=2))
 
@@ -126,7 +122,7 @@ Multiple sublayers start on the 3rd layer, because it's derived from comparison 
 def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
     # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
-    der_levels += [comp_players(_levels[0], levels[0], der_layers=[], fsubder=fsubder)]
+    der_levels += [comp_players(_levels[0], levels[0])]
 
     # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
     for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
