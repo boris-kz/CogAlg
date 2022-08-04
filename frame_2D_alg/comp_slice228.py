@@ -99,20 +99,18 @@ def comp_PP_(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
         compared_PP_ = copy(PP_)  # shallow copy
         compared_PP_.remove(PP)
 
+        pre_PPP = CPP( players=deepcopy(PP.players), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
         Players = []  # initialize params
 
         for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
             sum_players(Players, compared_PP.players)
 
-        mplayer, dplayer = comp_players(PP.players, Players)  # sum_params is now ave_params
+        pre_PPP.players += [comp_levels(PP.players, Players, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
         # comp to ave params of compared PPs, pre_PPP inherits PP.params, forms new player: derivatives of all lower layers,
         # initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
 
-        pre_PPP = CPP(players=deepcopy(PP.players) + [dplayer] if fPd else [mplayer],
-                      fPds=deepcopy(PP.fPds)+[fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
-
-        pre_PPPm_.append(copy_P(pre_PPP))
-        pre_PPPd_.append(copy_P(pre_PPP))
+        pre_PPPm_.append(copy_P(pre_PPP, Ptype=2))  # Ptype 2 is now PPP, we don't need Ptype 3?
+        pre_PPPd_.append(copy_P(pre_PPP, Ptype=2))
 
     return pre_PPPm_, pre_PPPd_
 '''
@@ -121,7 +119,6 @@ Multiple sublayers start on the 3rd layer, because it's derived from comparison 
 4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
 '''
 
-# looks like this may not needed now
 def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
     # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
@@ -148,27 +145,35 @@ def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels bu
             Params.append(deepcopy(level))  # no need to sum
 
 
+def sum_named_param(plevel, param_name, fPd):
+    psum = 0  # sum of named param across param layers
+
+    if isinstance(plevel, Cptuple):  # 1st level is ptuple, not for angle and aangle elements, if any
+        psum += getattr(plevel, param_name)
+
+    elif len(plevel)>1:  # for multi-level params
+        if isinstance(plevel[0], Cptuple) and isinstance(plevel[1], Cptuple) :  # 1st level is 2 vertuples, from der+
+            psum += getattr(plevel[fPd], param_name)
+        else:  # keep unpacking:
+            for sub_plevel in plevel:
+                psum += sum_named_param(sub_plevel, param_name, fPd)
+    else:
+        for sub_plevel in plevel:
+            psum += sum_named_param(sub_plevel, param_name, fPd)
+    return psum
+
+
 def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
     PPP_t = []
 
     for fPd, pre_PPP_ in enumerate(pre_PPP_t):
         # sort by value of last layer: derivatives of all lower layers:
-        if fPd: pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: pre_PPP.dval, reverse=True)  # descending order
-        else:   pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: pre_PPP.mval, reverse=True)  # descending order
-
+        pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: sum_named_param(pre_PPP.params[-1], 'val', fPd), reverse=True)  # descending order
         PPP_ = []
         for i, pre_PPP in enumerate(pre_PPP_):
-            if fPd: pre_PPP_val = pre_PPP.dval
-            else:   pre_PPP_val = pre_PPP.mval
-
-            for mptuple, dptuple in zip(pre_PPP.mplayer, pre_PPP.dplayer):
-                if fPd: pre_PPP.rdn += dptuple.val > mptuple.val
-                else:   pre_PPP.rdn += mptuple.val > dptuple.val
-            '''
+            pre_PPP_val = sum_named_param(pre_PPP.params, 'val', fPd=fPd)
             for param_layer in pre_PPP.params:  # may need recursive unpack here
                 pre_PPP.rdn += sum_named_param(param_layer, 'val', fPd=fPd)> sum_named_param(param_layer, 'val', fPd=1-fPd)
-            '''
-
             ave = vaves[fPd] * pre_PPP.rdn * (i+1)  # derPP is redundant to higher-value previous derPPs in derPP_
             if pre_PPP_val > ave:
                 PPP_ += [pre_PPP]  # base derPP and PPP is CPP
@@ -179,60 +184,50 @@ def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
         PPP_t.append(PPP_)
     return PPP_t
 
+
 def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-composition CPPP
 
     derPP_ = []
-    if fPd: rng = pre_PPP.dplayer[-1].val/ 3  # 3: ave per rel_rng+=1, actual rng is Euclidean distance:
-    else:   rng = pre_PPP.mplayer[-1].val/ 3
+    rng = sum_named_param(pre_PPP.params[-1], 'val', fPd)/ 3  # 3: ave per rel_rng+=1, actual rng is Euclidean distance:
 
     for PP in pre_PPP.layers[-1]:  # 1/1 comparison between _PP and other PPs within rng
         derPP = CderPP(PP=PP)
-        _area = pre_PPP.players[0][0].L
-        area = PP.players[0][0].L
+        _area = sum_named_param(pre_PPP.params[0], 'L', fPd)
+        area = sum_named_param(PP.params[0], 'L', fPd)
         dx = ((pre_PPP.xn-pre_PPP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
         dy = pre_PPP.y/_area - PP.y/area
         distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+        _val = sum_named_param(pre_PPP.params[-1], 'val', fPd)
+        val = sum_named_param(PP.params[-1], 'val', fPd)
 
-        if fPd: _val = pre_PPP.dplayer[-1].val; val = PP.dplayer[-1].val
-        else:   _val = pre_PPP.mplayer[-1].val; val = PP.mplayer[-1].val
         if distance / ((_val+val)/2) < rng:  # distance relative to value, vs. area?
-            mplayer, dplayer = comp_players(pre_PPP.players, PP.players)
-            if fPd: player = dplayer
-            else:   player = mplayer
-            # not sure below:
-            pre_PPP.downlink_layers += [player]
-            PP.uplink_layers += [player]
-            derPP.players = player
-
+            params = comp_levels(pre_PPP.params, PP.params, der_levels=[])
+            pre_PPP.downlink_layers += [params]
+            PP.uplink_layers += [params]
+            derPP.params = params
             derPP_ += [derPP]
 
     pre_PPP.P__ = derPP_
+
     for i, _derPP in enumerate(derPP_):  # cluster derPPs into PPPs by connectivity, overwrite derPP[i]
-        if fPd: val = _derPP.dplayer[-1].val
-        else:   val = _derPP.mplayer[-1].val
-        if val:
+        if sum_named_param(_derPP.params[-1], 'val', fPd):
             PPP = CPPP(params=deepcopy(_derPP.params), layers=[_derPP.PP])
             PPP.accum_from(_derPP)  # initialization
             _derPP.root = PPP
             for derPP in derPP_[i+1:]:
                 if not derPP.PP.root:  # not sure this is needed
-                    if fPd: Val = derPP.dplayer[-1].val
-                    else:   Val = derPP.mplayer[-1].val
+                    Val = sum_named_param(derPP.params[-1], 'val', fPd)
                     if Val:  # positive and not in PPP yet
                         PPP.layers.append(derPP)  # multiple composition orders
                         PPP.accum_from(_derPP)
                         derPP.root = PPP
-                    elif Val > ave*len(derPP.players)-1:
+                    elif Val > ave*len(derPP.params)-1:
                          # splice PP and their segs
                          pass
     '''
     if derPP.match params[-1]: form PPP
     elif derPP.match params[:-1]: splice PPs and their segs? 
     '''
-'''
-if derPP.match params[-1]: form PPP
-elif derPP.match params[:-1]: splice PPs and their segs? 
-'''
 
 def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
 
