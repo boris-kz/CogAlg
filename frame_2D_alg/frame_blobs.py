@@ -73,12 +73,14 @@ class CBlob(ClusterStructure):
     Mdx = float
     Ddx = float
     # derivation hierarchy:
-    rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
-    dlayers = list  # separate for range and angle forks per blob
     prior_forks = list
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
+    rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
+    dlayers = list  # separate for range and angle forks per blob
+    # agglomeration hierarchy:
+    agg_levels = lambda: [[]]  # 2nd agg_recursion: PPs ) PPPs PPPPs.., not sure about initialization
     # comp_slice:
     M = int  # summed PP.M, for both types of recursion?
     dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
@@ -87,7 +89,6 @@ class CBlob(ClusterStructure):
     P__ = list
     derP_ = list  # redundant to P__ upconnects?
     PP_t = list  # or reuse P__?
-    agg_levels = list
     # frame_bblob:
     root_bblob = object
 

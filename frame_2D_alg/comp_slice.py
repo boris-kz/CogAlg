@@ -145,11 +145,11 @@ class CPP(CderP):  # derP params include P.ptuple
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
     mask__ = bool
-    P__ = list  # input, includes derPs
+    # rlayers[0] = P__: input, includes derPs?
     rlayers = list  # or mlayers: sub_PPs from sub_recursion within PP
     dlayers = list  # or alayers
     seg_levels = list  # from 1st agg_recursion[fPd], seg_levels[0] is seg_, higher seg_levels are segP_..s
-    root = lambda:None  # higher-order PP, segP, or PPP
+    root = lambda:None  # higher-order PP | segP | PPP
 
 # Functions:
 
@@ -164,60 +164,47 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # form segments: parameterized stacks of (P,derP)s:
         segm_ = form_seg_root([[copy_P(P) for P in P_] for P_ in P__], fPd=0, fPds=[0])
         segd_ = form_seg_root([[copy_P(P) for P in P_] for P_ in P__], fPd=1, fPds=[0])
-
         # form PPs: parameterized graphs of connected segs:
         PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
-        dir_blob.rlayers = [PPm_]; dir_blob.dlayers = [PPd_]
 
-        sub_recursion_eval(dir_blob)  # add rlayers and dlayers
-        agg_recursion_eval(dir_blob)  # add seg_levels and agg_levels
+        mrdn = dir_blob.G > dir_blob.M
+        avem = ave_mPP * (dir_blob.rdn + 1 + mrdn); aved = ave_dPP * (dir_blob.rdn + 1 + (not mrdn))
+
+        sub_recursion_eval(PPm_, PPd_, avem, aved)  # add rlayers and dlayers to select PPs
+        agg_recursion_eval(PPm_, PPd_, avem, aved, dir_blob)  # add seg_levels to select PPs and agg_levels to dir_blob
 
     splice_dir_blob_(blob.dir_blobs)  # draft
 
 
-def sub_recursion_eval(PP):  # PP or dir_blob
+def sub_recursion_eval(PPm_, PPd_, avem, aved):  # PP or dir_blob
 
-    mval = PP.mval if isinstance(PP, CPP) else PP.M  # PP is dir_blob
-    dval = PP.dval if isinstance(PP, CPP) else PP.G
-    PPm_, PPd_ = PP.rlayers[0], PP.dlayers[0]
+    for PPm in PPm_:
+        if PPm.mval > avem and len(PPm.rlayers[-1]) > ave_nsub:
+            PPm.rlayers += sub_recursion(PPm_.rlayers[-1], fPd=0)  # rng+ comp_P in PPms -> param_layer, sub_PPs
+            # avem * 1+PPm_rdn_incr?
+    for PPd in PPd_:
+        if PPd.dval > aved and len(PPd.dlayers[-1]) > ave_nsub:
+            PPd.dlayers += sub_recursion(PPd.dlayers[-1], fPd=1)  # der+ comp_P in PPds -> param_layer, sub_PPs
+            # aved * 1+PPd_rdn_incr?
 
-    mrdn = dval > mval
-    avem = ave_mPP * (PP.rdn + 1 + mrdn)
-    aved = ave_dPP * (PP.rdn + 1 + (not mrdn))
-
-    if mval > avem and len(PPm_) > ave_nsub:
-        PP.rlayers += sub_recursion(PPm_, fPd=0)  # rng+ comp_P in PPms -> param_layer, sub_PPs
-    if dval > aved and len(PPd_) > ave_nsub:
-        PP.dlayers += sub_recursion(PPd_, fPd=1)  # der+ comp_P in PPds -> param_layer, sub_PPs
-
-
-def agg_recursion_eval(dir_blob):  # PP or dir_blob
-
-    mval = dir_blob.mval if isinstance(dir_blob, CPP) else dir_blob.M
-    dval = dir_blob.dval if isinstance(dir_blob, CPP) else dir_blob.G
-    PPm_, PPd_ = dir_blob.rlayers[0], dir_blob.dlayers[0]
-
-    mrdn = dval > mval
-    avem = ave_mPP * (dir_blob.rdn + 1 + mrdn)
-    aved = ave_dPP * (dir_blob.rdn + 1 + (not mrdn))
+def agg_recursion_eval(PPm_, PPd_, avem, aved, dir_blob):  # agg_PP or dir_blob
 
     from agg_recursion import agg_recursion
-
-    # seg_levels +:
-    for PP in PPm_:
-        segm_ = PP.seg_levels[-1]
-        if PP.mval > avem and len(segm_) > ave_nsub:
-            PP.seg_levels += agg_recursion(segm_, fPd=0)  # if fPd?
-    for PP in PPd_:
-        segd_ = PP.seg_levels[-1]
-        if PP.dval > aved and len(segd_) > ave_nsub:
-            PP.seg_levels += agg_recursion(segd_, fPd=1)
-    # agg_levels +:
-    dir_blob.agg_levels = [[PPm_], [PPd_]]
+    # add seg_levels:
+    for PPm in PPm_:
+        if PPm.mval > avem and len(PPm.seg_levels[-1]) > ave_nsub:  # should be PPm.seg_levels[-1][fork]?
+            PPm.seg_levels += agg_recursion(PPm.seg_levels[-1], fPd=0)  # should be seg_levels[-1] += agg_recursion(PPm.seg_levels[-1][fork]?
+    for PPd in PPd_:
+        if PPd.dval > aved and len(PPd.seg_levels[-1]) > ave_nsub:
+            PPd.seg_levels += agg_recursion(PPd.seg_levels[-1], fPd=1)
+    # add agg_levels:
     if sum([PP.mval for PP in PPm_]) > avem and len(PPm_) > ave_nsub:  # need to incr avem, aved?
-        dir_blob.agg_levels[0] += agg_recursion(PPm_, fPd=0)
+        dir_blob.agg_levels[-1] += agg_recursion(PPm_, fPd=0)  # multiple forks in each agg_level, not sure where to initialize a level?
+    else: dir_blob.agg_levels[-1] += [PPm_]
+
     if sum([PP.dval for PP in PPd_]) > aved and len(PPd_) > ave_nsub:
-        dir_blob.agg_levels[1] += agg_recursion(PPd_, fPd=1)
+        dir_blob.agg_levels[-1] += agg_recursion(PPd_, fPd=1)
+    else: dir_blob.agg_levels[-1] += [PPm_]
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -719,7 +706,8 @@ def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CP
         seg_levels = P.seg_levels
         rlayers = P.rlayers
         dlayers = P.dlayers
-        P.seg_levels, P.rlayers, P.dlayers = [], [], []  # reset
+        P__ = P.P__
+        P.seg_levels, P.rlayers, P.dlayers, P.P__ = [], [], [], []  # reset
     elif Ptype == 3:
         PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
         P.PP, P._PP = None, None  # reset
@@ -741,6 +729,7 @@ def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CP
         P.dlayers = dlayers
         new_P.rlayers = copy(rlayers)
         new_P.dlayers = copy(dlayers)
+        new_P.P__ = copy(P__)
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
@@ -793,18 +782,13 @@ def sub_recursion(PP_, fPd):  # evaluate each PP for rng+ and der+
         PP.rdn += 2  # 2 sub-clustering forks, priority is not known?
         sub_segm_ = form_seg_root(Pm__, fPd=0, fPds=PP.fPds)
         sub_segd_ = form_seg_root(Pd__, fPd=1, fPds=PP.fPds)  # returns bottom-up
-
         sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdn+1)  # PP is parameterized graph of linked segs
-        PP.rlayers = [sub_PPm_]; PP.dlayers = [sub_PPd_]
 
-        # replace with sub_recursion_eval:
         mrdn = PP.dval > PP.mval
+        avem = ave_mPP * (PP.rdn + 1 + mrdn); aved = ave_dPP * (PP.rdn + 1 + (not mrdn))
+        sub_recursion_eval(sub_PPm_, sub_PPd_, avem, aved)  # add rlayers and dlayers to select sub_PPs
 
-        if PP.mval > ave_dPP * (PP.rdn+1+mrdn) and len(sub_PPm_) > ave_nsub:
-            PP.rlayers += sub_recursion(sub_PPm_, fPd=0)  # rng+ comp_P in PPms -> param_layer, sub_PPs, rng+=n to skip clustering?
-        if PP.dval > ave_mPP * (PP.rdn+1+(not mrdn)) and len(sub_PPd_) > ave_nsub:
-            PP.dlayers += sub_recursion(sub_PPd_, fPd=1)  # der+ comp_P in PPds -> param_layer, sub_PPs
-
+        # this should be added to sub_recursion_eval:
         for i, (comb_layer, rlayer, dlayer) in enumerate(zip_longest(comb_layers, PP.rlayers, PP.dlayers, fillvalue=[])):
             if i > len(comb_layers)-1:  # pack new comb_layer, if any
                 comb_layers.append(rlayer+dlayer)
