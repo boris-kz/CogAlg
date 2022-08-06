@@ -77,6 +77,7 @@ class CBlob(ClusterStructure):
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
+    P__ = list  # input + derPs, common root for downward layers and upward levels:
     rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers = list  # separate for range and angle forks per blob
     # agglomeration hierarchy:
@@ -86,9 +87,6 @@ class CBlob(ClusterStructure):
     dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
     fsliced = bool
     fflip = bool  # x-y swap in comp_slice
-    P__ = list
-    derP_ = list  # redundant to P__ upconnects?
-    PP_t = list  # or reuse P__?
     # frame_bblob:
     root_bblob = object
 
