@@ -129,7 +129,25 @@ Multiple sublayers start on the 3rd layer, because it's derived from comparison 
 4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
 '''
 
-# looks like this may not needed now
+# draft, add agg_levels to agg_PP or dir_blob:
+def agg_recursion_eval(PP_, root, fPd):  # called from agg_recursion per fork, multiple forks per agg_level
+
+    if fPd: ave_PP = ave_dPP; val = root.dval, alt_val = root.mval  # or M|G?
+    else:   ave_PP = ave_mPP; val = root.mval, alt_val = root.dval
+    ave =   ave_PP * (root.rdn + 1 + (alt_val > val))  # fork rdn per PP
+
+    new_level = []  # list of forks that map to lower-level forks
+    for fork in root.agg_levels[-1]:  # fork is a list of corresponding-composition agg_Ps
+
+        if val > ave * 3 and len(PP_) > ave_nsub:  # 3: agg_coef
+            from agg_recursion import agg_recursion
+            new_level += agg_recursion(fork, fPd)
+        else:
+            new_level += [[], []]  # m,d pair
+
+    root.agg_levels += new_level
+
+# for deeper agg_recursion:
 def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
     # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
