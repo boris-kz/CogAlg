@@ -166,18 +166,17 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # form PPs: parameterized graphs of connected segs:
         PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
 
-        # add rlayers, dlayers, seg_levels to select PPs:
-        sub_recursion_eval(PPm_, fPd=0)
+        sub_recursion_eval(PPm_, fPd=0)  # add rlayers, dlayers, seg_levels to select PPs
         sub_recursion_eval(PPd_, fPd=1)
 
         from agg_recursion import agg_recursion
-        # add agg_levels to dir_blob:
-        if sum([PP.mval for PP in PPm_]) > ave_mPP * (dir_blob.rdn + 1 + dir_blob.G > dir_blob.M) and len(PPm_) > ave_nsub:
-            dir_blob.agg_levels = [[agg_recursion(PPm_, fPd=0)]]  # =, double brackets to initialize levels and level
+        # add 1st 2-fork agg_level to dir_blob:
+        if sum([PP.mval for PP in PPm_]) > ave_mPP * (3 + dir_blob.rdn + 1 + dir_blob.G > dir_blob.M) and len(PPm_) > ave_nsub:
+            dir_blob.agg_levels = [[agg_recursion(dir_blob, PPm_, fPd=0, fseg=0)]]  # double brackets initialize levels, level
         else:
             dir_blob.agg_levels = [[PPm_]]
-        if sum([PP.dval for PP in PPd_]) > ave_dPP * (dir_blob.rdn + 1 + dir_blob.M >= dir_blob.G) and len(PPd_) > ave_nsub:
-            dir_blob.agg_levels[-1] += agg_recursion(PPd_, fPd=1)  # levels and level were initialized above
+        if sum([PP.dval for PP in PPd_]) > ave_dPP * (3 + dir_blob.rdn + 1 + dir_blob.M >= dir_blob.G) and len(PPd_) > ave_nsub:
+            dir_blob.agg_levels[-1] += agg_recursion(dir_blob, PPd_, fPd=1, fseg=0)  # levels and level were initialized above
         else:
             dir_blob.agg_levels[-1] += [PPd_]
 
@@ -186,9 +185,11 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
 def sub_recursion_eval(PP_, fPd):  # for PP or dir_blob
 
+    from agg_recursion import agg_recursion
+
     for PP in PP_:
-        if fPd: ave_PP = ave_dPP; val = PP.dval, alt_val = PP.mval; layers = PP.dlayers
-        else:   ave_PP = ave_mPP; val = PP.mval, alt_val = PP.dval; layers = PP.rlayers
+        if fPd: ave_PP = ave_dPP; val = PP.dval; alt_val = PP.mval; layers = PP.dlayers
+        else:   ave_PP = ave_mPP; val = PP.mval; alt_val = PP.dval; layers = PP.rlayers
         ave =   ave_PP * (PP.rdn + 1 + (alt_val > val))  # fork rdn per PP
 
         if val > ave and len(PP.P__) > ave_nsub:
@@ -196,15 +197,13 @@ def sub_recursion_eval(PP_, fPd):  # for PP or dir_blob
             ave*=2  # 1+PP.rdn incr
 
         new_level = []  # list of forks that map to lower-level forks
-        for fork in PP.seg_levels[-1]:  # fork is a list of corresponding-composition agg_segPs
-
+        for fork in PP.seg_levels[-1]:
+            # fork is a list of corresponding-composition agg_segPs
             if val > ave*3 and len(fork) > ave_nsub:  # 3: agg_coef
-                from agg_recursion import agg_recursion
-                new_level += agg_recursion(fork, fPd)
+                new_level += agg_recursion(PP, fork, fPd, fseg=1)
             else:
                 new_level += [[],[]]  # m,d pair
-
-        PP.seg_levels += new_level
+        PP.seg_levels += [new_level]
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -283,7 +282,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
     return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=players, mplayer=mplayer, dplayer=dplayer, mval=mval, dval=dval, P=P, _P=_P)
 
-
+# pending link copy update
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
 
     for P_ in P__:
@@ -487,10 +486,10 @@ def sum2seg(seg_Ps, fPd, fPds):  # sum params of vertically connected Ps into se
 
 def accum_derP(seg, derP, fPd):  # derP might be CP, though unlikely
 
-    derP._P.root = seg  # no need for derP.root?
     seg.x0 = min(seg.x0, derP.x0)
 
     if isinstance(derP, CP):
+        derP.root = seg  # no need for derP.root
         if not seg.players: seg.players.append([deepcopy(derP.ptuple)])
         else:               sum_players(seg.players, [[derP.ptuple]])
         seg.xn = max(seg.xn, derP.x0 + derP.ptuple.L)
@@ -506,7 +505,7 @@ def accum_derP(seg, derP, fPd):  # derP might be CP, though unlikely
 def sum2PP(PP_segs, base_rdn):  # sum PP_segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn)  # L = yn-y0, redundant
-    PP.seg_levels = [PP_segs]  # PP_segs is levels[0]
+    PP.seg_levels = [[PP_segs]]  # PP_segs is levels[0]
 
     for seg in PP_segs:
         accum_PP(PP, seg)
@@ -551,6 +550,12 @@ def accum_PP(PP, inp):  # comp_slice inp is seg, or segPP in agg+
             for derP in inp.P__[-1].uplink_layers[-1]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
                 if derP not in PP.downlink_layers[-1] and derP.P.root not in PP.seg_levels[-1]:
                     PP.uplink_layers[-1] += [derP]
+
+    # add derP root, except for top row and bottom row derP
+    for P_ in PP.P__[:-1]:
+        for P in P_:
+            for derP in P.uplink_layers[-1]:
+                derP.root = PP
 
 
 def sum_players(Layers, layers):  # no accum across fPd, that's checked in comp_players?
@@ -787,10 +792,10 @@ def sub_recursion(PP, fPd):  # evaluate each PP for rng+ and der+
     for sub_PP in sub_PPm_ + sub_PPd_:  # splice deeper layers between sub_PPs
         for i, (comb_layer, rlayer, dlayer) in enumerate(zip_longest(comb_layers, sub_PP.rlayers, sub_PP.dlayers, fillvalue=[])):
             if i > len(comb_layers)-1:
-                comb_layers.append([[rlayer , dlayer]])  # add new layer as m|d pair
+                comb_layers.append( [[rlayer, dlayer]])  # add new layer as m|d pair
             else:
-                comb_layers[i].append([rlayer , dlayer])  # pack m,d pair in existing layer
-    # is this still correct with my revisions?
+                comb_layers[i].append([rlayer, dlayer])  # add m,d pair in existing layer
+    # not sure:
     comb_layers = [[[sub_PPm_, sub_PPd_]]] + comb_layers  # 1st [: layers, 2nd [: layer, 3rd [: m|d pair
 
     return comb_layers
