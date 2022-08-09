@@ -61,158 +61,50 @@ def agg_recursion(dir_blob, PP_, fPd, fseg=0):  # compositional recursion per bl
     V = sum([PP.dval for PP in PP_]) if fPd else sum([PP.mval for PP in PP_])
     if V > ave_PP:
 
-        derPP_t = comp_PP_(PP_, fPd=fPd)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
-        PPPm_, PPPd_ = form_PPP_t(derPP_t)  # eval indiv_comp_PP_ converting derPP to CPPP, may splice PPs instead of forming PPPs
+        # cross-comp -> bilateral match assign list per PP, re-clustering by rdn match to centroids: PPP'aves?
+        derPP_t = comp_PP_(PP_, fPd=fPd)  # cross-comp all PPs within rng,
+        PPPm_, PPPd_ = form_PPP_t(derPP_t)  # may splice PPs instead of forming PPPs, replace with comp_centroid?
 
-        sub_recursion_eval(PPPm_, fPd=0) # test sub_recursion within PP_ for each PPP (PP_ is PPP.P__)
+        sub_recursion_eval(PPPm_, fPd=0)  # test within PP_ for each PPP (PP_ is PPP.P__)
         sub_recursion_eval(PPPd_, fPd=1)
-
-        comb_levels += [[PPPm_, PPPd_]]  # pack current level
-        agg_recursion_eval(PPPm_, dir_blob, fPd=0, fseg=fseg)
+        agg_recursion_eval(PPPm_, dir_blob, fPd=0, fseg=fseg)  # test within PPP_
         agg_recursion_eval(PPPd_, dir_blob, fPd=1, fseg=fseg)
 
-        # draft: combine agg_PPm_s and agg_PPd_s from each level:
-        for PPPm in PPPm_:
-            for comb_level, mlevel in zip_longest(comb_levels, PPPm.agg_levels, fillvalue=[]):
-                if comb_level: comb_level += [mlevel]
-                else: comb_levels += [[mlevel]]  # add new level
-        for PPPd in PPPd_:
-            for comb_level, dlevel in zip_longest(comb_levels, PPPd.agg_levels, fillvalue=[]):
-                if comb_level: comb_level += [dlevel]
-                else: comb_levels += [[dlevel]]  # add new level
+        for PPP_ in PPPm_, PPPd_:
+            for PPP in PPP_:
+                for i, (comb_level, level) in enumerate(zip_longest(comb_levels, PPP.agg_levels, fillvalue=[])):
+                    if level:
+                        if i > len(comb_levels)-1: comb_levels += [[level]]  # add new level
+                        else: comb_levels[i] += [level]  # append existing layer
 
+        comb_levels = [PPPm_, PPPd_] + comb_levels
     return comb_levels
 
-'''
-- Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
-- Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
-Full overlap, no selection for derPPs per PPP. 
-Selection and variable rdn per derPP requires iterative centroid clustering per PPP.  
-This will probably be done in blob-level agg_recursion, it seems too complex for edge tracing, mostly contiguous?
-'''
-
-def comp_PP_(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
-
-    pre_PPPm_, pre_PPPd_ = [],[]
-
-    for PP in PP_:
-        compared_PP_ = copy(PP_)
-        compared_PP_.remove(PP)
-        Players = []  # initialize params
-
-        for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
-            sum_players(Players, compared_PP.players)
-
-        mplayer, dplayer = comp_players(PP.players, Players)  # sum_params is now ave_params
-        # comp to ave params of compared PPs, pre_PPP inherits PP.params, new player = ders of lower layers,
-        # initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
-
-        pre_PPP = CPP(players=deepcopy(PP.players) + [dplayer if fPd else mplayer],
-                      fPds=deepcopy(PP.fPds)+[fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn,
-                      P__ = compared_PP_)  # temporary, will be replaced with derPP later
-
-        pre_PPPm_.append(copy_P(pre_PPP))
-        pre_PPPd_.append(copy_P(pre_PPP))
-
-    return pre_PPPm_, pre_PPPd_
-'''
-1st and 2nd layers are single sublayers, the 2nd adds tuple pair nesting. Both are unpacked by func_pairs, not func_layers.  
-Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
-4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
-'''
 
 def agg_recursion_eval(PP_, root, fPd, fseg=0):  # from agg_recursion per fork, adds agg_level to agg_PP or dir_blob
 
-    from agg_recursion import agg_recursion
+    if isinstance(root, CPP): dval = root.dval; mval = root.mval
+    else:                     dval = root.G; mval = root.M
+    if fPd: ave_PP = ave_dPP; val = dval; alt_val = mval
+    else:   ave_PP = ave_mPP; val = mval; alt_val = dval
+    ave = ave_PP * (3 + root.rdn + 1 + (alt_val > val))  # fork rdn per PP, 3: agg_coef
 
-    if fPd: ave_PP = ave_dPP; val = root.dval; alt_val = root.mval  # or M|G?
-    else:   ave_PP = ave_mPP; val = root.mval; alt_val = root.dval
-    ave =   ave_PP * (root.rdn + 1 + (alt_val > val))  # fork rdn per PP
-
-    new_level = []  # list of forks that map to lower-level forks
     levels = root.seg_levels if fseg else root.agg_levels
-    for fork in levels[-1]:
-        # fork is a list of corresponding-composition agg_Ps
-        if val > ave * 3 and len(PP_) > ave_nsub:  # 3: agg_coef
-            new_level += agg_recursion(fork, fPd, fseg)
-        else:
-            new_level += [[], []]  # m,d pair
 
-    levels += new_level
-
-# for deeper agg_recursion:
-def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
-
-    # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
-    der_levels += [comp_players(_levels[0], levels[0])]
-
-    # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
-    for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
-        der_levels += [comp_levels(_level, level, der_levels=[], fsubder=fsubder)]
-
-    return der_levels # possibly nested param layers
-
-# old:
-def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
-
-    if Params:
-        sum_players(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
-    else:
-        Params.append(deepcopy(params[0]))  # no need to sum
-
-    for Level, level in zip_longest(Params[1:], params[1:], fillvalue=[]):
-        if Level and level:
-            sum_levels(Level, level)  # recursive unpack of higher levels, if any from agg+ and nested with sub_levels
-        elif level:
-            Params.append(deepcopy(level))  # no need to sum
+    if val > ave and len(PP_) > ave_nsub:
+        levels += [agg_recursion( root, levels[-1], fPd, fseg)]
 
 
-def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
-    PPP_t = []
+def comp_PP_(PP_, rng, fPd):  # 1/1 cross-comp, add comp_centroid
 
-    for fPd, pre_PPP_ in enumerate(pre_PPP_t):
-        # sort by value of last layer: derivatives of all lower layers:
-        if fPd: pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: pre_PPP.dval, reverse=True)  # descending order
-        else:   pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: pre_PPP.mval, reverse=True)  # descending order
+    derPP_ = []  # bilateral assigns to re-eval
 
-        PPP_ = []
-        for i, pre_PPP in enumerate(pre_PPP_):
-            if fPd: pre_PPP_val = pre_PPP.dval
-            else:   pre_PPP_val = pre_PPP.mval
-
-            for mptuple, dptuple in zip(pre_PPP.mplayer, pre_PPP.dplayer):
-                if mptuple and dptuple:  # could be None
-                    if fPd: pre_PPP.rdn += dptuple.val > mptuple.val
-                    else:   pre_PPP.rdn += mptuple.val > dptuple.val
-            '''
-            for param_layer in pre_PPP.params:  # may need recursive unpack here
-                pre_PPP.rdn += sum_named_param(param_layer, 'val', fPd=fPd)> sum_named_param(param_layer, 'val', fPd=1-fPd)
-            '''
-
-            ave = vaves[fPd] * pre_PPP.rdn * (i+1)  # derPP is redundant to higher-value previous derPPs in derPP_
-            if pre_PPP_val > ave:
-                PPP_ += [pre_PPP]  # base derPP and PPP is CPP
-                if pre_PPP_val > ave*10:
-                    indiv_comp_PP_(pre_PPP, fPd)  # derPP is converted from CPP to CPPP
-            else:
-                break  # ignore below-ave PPs
-        PPP_t.append(PPP_)
-    return PPP_t
-
-def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to higher-composition CPPP
-
-    derPP_ = []
-    rng = 1  # default value of rng, pre_PPP.dplayer[-1] could be None
-    if fPd:  # use int to get minimum value of 1
-        if pre_PPP.dplayer[-1]: rng = int(pre_PPP.dplayer[-1].val/ 3)  # 3: ave per rel_rng+=1, actual rng is Euclidean distance:
-    else:
-        if pre_PPP.mplayer[-1]: rng = int(pre_PPP.mplayer[-1].val/ 3)
-
-    for PP in pre_PPP.P__:  # 1/1 comparison between _PP and other PPs within rng
+    for PP in PP_:  # 1/1 comparison between _PP and other PPs within rng
+        # not revised:
         derPP = CderPP(PP=PP)
-        _area = pre_PPP.players[0][0].L
+        _area = PP.players[0][0].L
         area = PP.players[0][0].L
-        dx = ((pre_PPP.xn-pre_PPP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
+        dx = ((PP.xn-PP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
         dy = pre_PPP.y/_area - PP.y/area
         distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
 
@@ -263,10 +155,96 @@ def indiv_comp_PP_(pre_PPP, fPd):  # 1-to-1 comp, _PP is converted from CPP to h
     if derPP.match params[-1]: form PPP
     elif derPP.match params[:-1]: splice PPs and their segs? 
     '''
+
 '''
-if derPP.match params[-1]: form PPP
-elif derPP.match params[:-1]: splice PPs and their segs? 
+- Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
+- Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
+Full overlap, no selection for derPPs per PPP. 
+Selection and variable rdn per derPP requires iterative centroid clustering per PPP.  
+This will probably be done in blob-level agg_recursion, it seems too complex for edge tracing, mostly contiguous?
 '''
+
+# draft, will be called from comp_PP_:
+def comp_PP_centroid(PPP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
+
+    # some is not revised, should be recursive:
+    new_PPPm_, new_PPPd_ = [],[]
+
+    for PPP in PPP_:
+        for PP in PPP.PP_:
+            mplayer, dplayer = comp_players(PPP.players, PPP.players)  # normalize params in comp_ptuple
+
+            new_PPP = CPPP(players=deepcopy(PP.players) + [dplayer if fPd else mplayer],
+                           fPds=deepcopy(PP.fPds)+[fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn,
+                           )
+        new_PPPm_.append(copy_P(new_PPP))
+        new_PPPd_.append(copy_P(new_PPP))
+
+    return new_PPPm_, new_PPPd_
+
+'''
+1st and 2nd layers are single sublayers, the 2nd adds tuple pair nesting. Both are unpacked by func_pairs, not func_layers.  
+Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
+4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
+initial 3-layer nesting: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
+'''
+
+# for deeper agg_recursion:
+def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
+
+    # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
+    der_levels += [comp_players(_levels[0], levels[0])]
+
+    # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
+    for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
+        der_levels += [comp_levels(_level, level, der_levels=[], fsubder=fsubder)]
+
+    return der_levels # possibly nested param layers
+
+# old:
+def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
+
+    if Params: sum_players(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
+    else:      Params.append(deepcopy(params[0]))  # no need to sum
+
+    for Level, level in zip_longest(Params[1:], params[1:], fillvalue=[]):
+        if Level and level:
+            sum_levels(Level, level)  # recursive unpack of higher levels, if any from agg+ and nested with sub_levels
+        elif level:
+            Params.append(deepcopy(level))  # no need to sum
+
+
+def form_PPP_t(pre_PPP_t):  # form PPs from match-connected segs
+    PPP_t = []
+
+    for fPd, pre_PPP_ in enumerate(pre_PPP_t):
+        # sort by value of last layer: derivatives of all lower layers:
+        if fPd: pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: pre_PPP.dval, reverse=True)  # descending order
+        else:   pre_PPP_ = sorted(pre_PPP_, key=lambda pre_PPP: pre_PPP.mval, reverse=True)  # descending order
+
+        PPP_ = []
+        for i, pre_PPP in enumerate(pre_PPP_):
+            if fPd: pre_PPP_val = pre_PPP.dval
+            else:   pre_PPP_val = pre_PPP.mval
+
+            for mptuple, dptuple in zip(pre_PPP.mplayer, pre_PPP.dplayer):
+                if mptuple and dptuple:  # could be None
+                    if fPd: pre_PPP.rdn += dptuple.val > mptuple.val
+                    else:   pre_PPP.rdn += mptuple.val > dptuple.val
+            '''
+            for param_layer in pre_PPP.params:  # may need recursive unpack here
+                pre_PPP.rdn += sum_named_param(param_layer, 'val', fPd=fPd)> sum_named_param(param_layer, 'val', fPd=1-fPd)
+            '''
+
+            ave = vaves[fPd] * pre_PPP.rdn * (i+1)  # derPP is redundant to higher-value previous derPPs in derPP_
+            if pre_PPP_val > ave:
+                PPP_ += [pre_PPP]  # base derPP and PPP is CPP
+                if pre_PPP_val > ave*10:
+                    comp_PP_(pre_PPP, fPd)  # replace with reclustering?
+            else:
+                break  # ignore below-ave PPs
+        PPP_t.append(PPP_)
+    return PPP_t
 
 def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
 

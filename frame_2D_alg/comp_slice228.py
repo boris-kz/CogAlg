@@ -90,27 +90,26 @@ Full overlap, no selection for derPPs per PPP.
 Selection and variable rdn per derPP requires iterative centroid clustering per PPP.  
 This will probably be done in blob-level agg_recursion, it seems too complex for edge tracing, mostly contiguous?
 '''
-
-def comp_PP_(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
+def comp_PP_centroid(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
 
     pre_PPPm_, pre_PPPd_ = [],[]
 
     for PP in PP_:
-        compared_PP_ = copy(PP_)  # shallow copy
+        compared_PP_ = copy(PP_)
         compared_PP_.remove(PP)
-
-        pre_PPP = CPP( players=deepcopy(PP.players), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn )
         Players = []  # initialize params
 
         for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
             sum_players(Players, compared_PP.players)
 
-        pre_PPP.players += [comp_levels(PP.players, Players, der_levels=[], fsubder=fsubder)]  # sum_params is now ave_params
-        # comp to ave params of compared PPs, pre_PPP inherits PP.params, forms new player: derivatives of all lower layers,
-        # initial 3 layer nesting diagram: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
+        mplayer, dplayer = comp_players(PP.players, Players)  # sum_params is now ave_params
 
-        pre_PPPm_.append(copy_P(pre_PPP, Ptype=2))  # Ptype 2 is now PPP, we don't need Ptype 3?
-        pre_PPPd_.append(copy_P(pre_PPP, Ptype=2))
+        pre_PPP = CPPP(players=deepcopy(PP.players) + [dplayer if fPd else mplayer],
+                      fPds=deepcopy(PP.fPds)+[fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn,
+                      P__ = compared_PP_)  # temporary P__, will be replaced with derPP later
+
+        pre_PPPm_.append(copy_P(pre_PPP))
+        pre_PPPd_.append(copy_P(pre_PPP))
 
     return pre_PPPm_, pre_PPPd_
 '''

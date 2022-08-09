@@ -169,16 +169,21 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         sub_recursion_eval(PPm_, fPd=0)  # add rlayers, dlayers, seg_levels to select PPs
         sub_recursion_eval(PPd_, fPd=1)
 
-        from agg_recursion import agg_recursion
-        # add 1st 2-fork agg_level to dir_blob:
+        from agg_recursion import agg_recursion  # cross-comp between centroids?
+        comb_levels, mlevels, dlevels = [], [], []
+        # dir_blob agg_levels
         if sum([PP.mval for PP in PPm_]) > ave_mPP * (3 + dir_blob.rdn + 1 + dir_blob.G > dir_blob.M) and len(PPm_) > ave_nsub:
-            dir_blob.agg_levels = [[agg_recursion(dir_blob, PPm_, fPd=0, fseg=0)]]  # double brackets initialize levels, level
-        else:
-            dir_blob.agg_levels = [[PPm_]]
+            mlevels = agg_recursion(dir_blob, PPm_, fPd=0, fseg=0)  # double brackets initialize levels, level
         if sum([PP.dval for PP in PPd_]) > ave_dPP * (3 + dir_blob.rdn + 1 + dir_blob.M >= dir_blob.G) and len(PPd_) > ave_nsub:
-            dir_blob.agg_levels[-1] += agg_recursion(dir_blob, PPd_, fPd=1, fseg=0)  # levels and level were initialized above
-        else:
-            dir_blob.agg_levels[-1] += [PPd_]
+            dlevels = agg_recursion(dir_blob, PPd_, fPd=1, fseg=0)  # levels and level were initialized above
+
+        for i, (comb_level, mlevel, dlevel) in enumerate(zip_longest(comb_levels, mlevels, dlevels, fillvalue=[])):
+            if mlevel or dlevel:
+                if i > len(comb_levels)-1:
+                    comb_levels.append([[mlevel, dlevel]])  # add new level
+                else:
+                    comb_levels[i] += [mlevel, dlevel]  # append existing level
+        dir_blob.agg_levels = [PPm_ + PPd_] + comb_levels  # add 1st + deeper levels
 
     splice_dir_blob_(blob.dir_blobs)  # draft
 
@@ -190,20 +195,14 @@ def sub_recursion_eval(PP_, fPd):  # for PP or dir_blob
     for PP in PP_:
         if fPd: ave_PP = ave_dPP; val = PP.dval; alt_val = PP.mval; layers = PP.dlayers
         else:   ave_PP = ave_mPP; val = PP.mval; alt_val = PP.dval; layers = PP.rlayers
-        ave =   ave_PP * (PP.rdn + 1 + (alt_val > val))  # fork rdn per PP
+        ave =   ave_PP * (3 + PP.rdn + 1 + (alt_val > val))  # fork rdn, 3: agg_coef
 
         if val > ave and len(PP.P__) > ave_nsub:
             layers[:] = sub_recursion(PP, fPd)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
             ave*=2  # 1+PP.rdn incr
 
-        new_level = []  # list of forks that map to lower-level forks
-        for fork in PP.seg_levels[-1]:
-            # fork is a list of corresponding-composition agg_segPs
-            if val > ave*3 and len(fork) > ave_nsub:  # 3: agg_coef
-                new_level += agg_recursion(PP, fork, fPd, fseg=1)
-            else:
-                new_level += [[],[]]  # m,d pair
-        PP.seg_levels += [new_level]
+        if val > ave and len(PP.seg_levels[-1]) > ave_nsub:
+            PP.seg_levels += agg_recursion(PP, PP.seg_levels[-1], fPd, fseg=1)
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -505,7 +504,7 @@ def accum_derP(seg, derP, fPd):  # derP might be CP, though unlikely
 def sum2PP(PP_segs, base_rdn):  # sum PP_segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn)  # L = yn-y0, redundant
-    PP.seg_levels = [[PP_segs]]  # PP_segs is levels[0]
+    PP.seg_levels = [PP_segs]  # PP_segs is levels[0]
 
     for seg in PP_segs:
         accum_PP(PP, seg)
@@ -734,6 +733,7 @@ def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CP
         new_P.rlayers = copy(rlayers)
         new_P.dlayers = copy(dlayers)
         new_P.P__ = copy(P__)
+        new_P.seg_levels = copy(seg_levels)
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
@@ -760,9 +760,9 @@ def splice_dir_blob_(dir_blobs):
 
                         top_P_ = dir_blob.P__[0]
                         bottom_P_ = dir_blob.P__[-1]
-                        # test y adjacency
+                        # test y adjacency:
                         if (_top_P_[0].y-1 == bottom_P_[0].y) or (top_P_[0].y-1 == _bottom_P_[0].y):
-                            # test x overlap
+                            # test x overlap:
                              if (dir_blob.x0 - 1 < _dir_blob.xn and dir_blob.xn + 1 > _dir_blob.x0) \
                                 or (_dir_blob.x0 - 1 < dir_blob.xn and _dir_blob.xn + 1 > dir_blob.x0):
                                  splice_2dir_blobs(_dir_blob, dir_blob)  # splice dir_blob into _dir_blob
@@ -781,7 +781,7 @@ def sub_recursion(PP, fPd):  # evaluate each PP for rng+ and der+
     if fPd: Pm__, Pd__ = comp_P_der(P__)  # returns top-down
     else:   Pm__, Pd__ = comp_P_rng(P__, PP.rng + 1)
 
-    PP.rdn += 2  # two forks, priority is not known?
+    PP.rdn += 2  # two-fork rdn, priority is not known?
     sub_segm_ = form_seg_root(Pm__, fPd=0, fPds=PP.fPds)
     sub_segd_ = form_seg_root(Pd__, fPd=1, fPds=PP.fPds)  # returns bottom-up
     sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdn + 1)  # PP is parameterized graph of linked segs
@@ -789,7 +789,7 @@ def sub_recursion(PP, fPd):  # evaluate each PP for rng+ and der+
     sub_recursion_eval(sub_PPm_, fPd=0)  # add rlayers, dlayers, seg_levels to select sub_PPs
     sub_recursion_eval(sub_PPd_, fPd=1)
 
-    for sub_PP in sub_PPm_ + sub_PPd_:  # splice deeper layers between sub_PPs
+    for sub_PP in sub_PPm_ + sub_PPd_:  # splice deeper layers between sub_PPs, sub-forks are mixed-up
         for i, (comb_layer, rlayer, dlayer) in enumerate(zip_longest(comb_layers, sub_PP.rlayers, sub_PP.dlayers, fillvalue=[])):
             if i > len(comb_layers)-1:
                 comb_layers.append( [[rlayer, dlayer]])  # add new layer as m|d pair
