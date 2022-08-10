@@ -290,3 +290,46 @@ def merge_PP(_PP, PP, fPd):  # only for PP splicing
     for downlink in PP.downlink_layers:
         if downlink not in _PP.downlink_layers:
             _PP.downlink_layers += [downlink]
+
+def sub_recursion_eval(PP_, fPd):  # for PP or dir_blob
+
+    from agg_recursion import agg_recursion
+    for PP in PP_:
+
+        if fPd: ave_PP = ave_dPP; val = PP.dval; alt_val = PP.mval
+        else:   ave_PP = ave_mPP; val = PP.mval; alt_val = PP.dval
+        ave =   ave_PP * (3 + PP.rdn + 1 + (alt_val > val))  # fork rdn, 3: agg_coef
+
+        if val > ave and len(PP.P__) > ave_nsub:
+            sub_recursion(PP, fPd)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
+            ave*=2  # 1+PP.rdn incr
+
+        if val > ave and len(PP.seg_levels[-1]) > ave_nsub:
+            PP.seg_levels += agg_recursion(PP, PP.seg_levels[-1], fPd, fseg=1)
+            # rng comp, centroid clustering
+
+def sub_recursion(PP, fPd):  # evaluate each PP for rng+ and der+
+
+    P__  = [P_ for P_ in reversed(PP.P__)]  # revert to top down
+    if fPd: Pm__, Pd__ = comp_P_der(P__)  # returns top-down
+    else:   Pm__, Pd__ = comp_P_rng(P__, PP.rng + 1)
+
+    PP.rdn += 2  # two-fork rdn, priority is not known?
+    sub_segm_ = form_seg_root(Pm__, fPd=0, fPds=PP.fPds)
+    sub_segd_ = form_seg_root(Pd__, fPd=1, fPds=PP.fPds)  # returns bottom-up
+    sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdn + 1)  # PP is parameterized graph of linked segs
+
+    sub_recursion_eval(sub_PPm_, fPd=0)  # add rlayers, dlayers, seg_levels to select sub_PPs
+    sub_recursion_eval(sub_PPd_, fPd=1)
+
+    comb_rlayers, comb_dlayers = [],[]
+    for fd, (comb_layers, sub_PP_) in enumerate( zip( (comb_rlayers, comb_dlayers), (sub_PPm_, sub_PPd_))):
+
+        for sub_PP in sub_PP_:  # splice deeper layers between sub_PPs into comb_layers:
+            for i, (comb_layer, PP_layer) in enumerate(zip_longest(comb_layers, sub_PP.dlayers if fd else sub_PP.dlayers, fillvalue=[])):
+
+                if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
+                else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
+
+        if fPd: PP.dlayers = [sub_PP_] + comb_layers
+        else:   PP.rlayers = [sub_PP_] + comb_layers
