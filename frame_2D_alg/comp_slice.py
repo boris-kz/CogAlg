@@ -64,6 +64,7 @@ ave_nsub = 1
 param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]
 aves = [ave_dx, ave_dI, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mval, ave_dval]
 vaves = [ave_mval, ave_dval]
+PP_aves = [ave_mPP, ave_dPP]
 
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
@@ -769,14 +770,15 @@ def sub_recursion_eval(PP_, fPd):  # for PP or dir_blob
             sub_recursion(PP, fPd)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
             ave*=2  # 1+PP.rdn incr
             # splice deeper layers between PPs into comb_layers:
-            for i, (comb_layer, PP_layer) in enumerate(zip_longest(comb_layers, PP.dlayers if fPd else PP.dlayers, fillvalue=[])):
+            for i, (comb_layer, PP_layer) in enumerate(zip_longest(comb_layers, PP.dlayers if fPd else PP.rlayers, fillvalue=[])):
+                if PP_layer:
+                    if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
+                    else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
 
-                if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
-                else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
-
+        # segs rng_comp agg_recursion, centroid reclustering:
         if val > ave*3 and len(PP.seg_levels[-1]) > ave_nsub:   # 3: agg_coef
             PP.seg_levels += agg_recursion(PP, PP.seg_levels[-1], fPd, fseg=1)
-            # rng comp, centroid clustering
+
 
     return [PP_] + comb_layers  # also returns empty comb_layers?
 

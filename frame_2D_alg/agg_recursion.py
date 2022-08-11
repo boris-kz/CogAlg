@@ -46,6 +46,7 @@ class CPPP(CPP, CderPP):
     fdiv = NoneType
     box = list  # for visualization only, original box before flipping
     mask__ = bool
+    PP = object  # initial center PP?
     derPP_ = list  # input + derPPs, common root of layers and levels:
     rlayers = list  # | mlayers
     dlayers = list  # | alayers
@@ -100,19 +101,19 @@ def comp_PP_(PP_):  # rng cross-comp, draft
 
     PPP_t = []
     for fPd in 0,1:
-        PPP_ = []  # each with bilateral derPP assigns to re-eval
-        for i, PP in enumerate(PP_):  # convert all to CPPPs
-            PP_[i] = CPPP(players=PP.players, fPds=PP.fPds + [fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+        PPP_ = [CPPP() for PP in enumerate(PP_)]  # zip with PP_ to accumulate derPPs
 
         while PP_:  # compare _PP to all other PPs within rng
-            _PP = PP_.pop  # no same-pair re-comp
-            for PP in PP_:  # all possible comparands in dy<rng, with incremental y
+            _PP = PP_.pop
+            _PPP = PPP_.pop
+            for PPP, PP in zip(PPP_, PP_):  # all possible comparands in dy<rng, with incremental y
 
                 _area = _PP.players[0][0].L
                 area = PP.players[0][0].L
                 dx = ((_PP.xn-_PP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
                 dy = _PP.y/_area - PP.y/area
                 distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+                _val, val = 0, 0
                 if fPd:
                     if _PP.dplayer[-1]: _val = _PP.dplayer[-1].val  # dplayer[-1] is not None
                     if PP.dplayer[-1]:   val =  PP.dplayer[-1].val
@@ -120,22 +121,23 @@ def comp_PP_(PP_):  # rng cross-comp, draft
                     if _PP.mplayer[-1]: _val = _PP.mplayer[-1].val  # mplayer[-1] is not None
                     if PP.mplayer[-1]:   val =  PP.mplayer[-1].val
 
-                if distance * ((_val+val)/2 / ave_PP) <= 3: # ave_rng
-                    # comp PPs:
+                if distance * ((_val+val)/2 / ave_mPP) <= 3:  # ave_rng
+                    # comp PPs, bilateral derPP assigns to re-eval
                     mplayer, dplayer = comp_players(_PP.players, PP.players)
-                    if fPd: player = dplayer
-                    else:   player = mplayer
-                    derPP = CderPP(players = deepcopy(_PP.players) + [player], mplayer=mplayer, dplayer=dplayer, _PP=_PP, PP=PP)
+                    derPP = CderPP(
+                        players = deepcopy(_PP.players) + [dplayer if fPd else mplayer], mplayer=mplayer, dplayer=dplayer, _PP=_PP, PP=PP)
                     _PP.derPP_ += [derPP]
                     PP.derPP_ += [derPP]
-                    if derPP.mval > ave_PP:
+                    if derPP.mval > ave_mPP:
                         # only matches are included in the cluster
                         sum_players([_PP.players[-1]], [derPP.players[-1]])  # sum only dplayer or mplayer
                         sum_players([PP.players[-1]], [derPP.players[-1]])
 
-                PPP_.append(_PP)  # for comp_PP_centroid
-    return PPP_t
+                _PPP(PP=_PP)  # need to update other PPP params here and above
+                PPP_.append(_PPP)  # for comp_PP_centroid
 
+        PPP_t += [PPP_]
+    return PPP_t
 '''
     Val = 0
     if fPd:
@@ -151,7 +153,7 @@ def comp_PP_(PP_):  # rng cross-comp, draft
                    pass
     if derPP.match params[-1]: form PPP
     elif derPP.match params[:-1]: splice PPs and their segs? 
-    '''
+'''
 '''
 - Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
 - Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
@@ -160,19 +162,21 @@ Selection and variable rdn per derPP requires iterative centroid clustering per 
 This will probably be done in blob-level agg_recursion, it seems too complex for edge tracing, mostly contiguous?
 '''
 #   draft:
-def comp_PPP_centroid(PPP_):  # fsubder=0, fPd=0):  # PP can also be PPP, etc.
+def comp_PPP_centroid(PPP_):  # need add rdn
 
     for PPP in PPP_:
         for derPP in PPP.derPP_:
-            mplayer, dplayer = comp_players(PPP.players, derPP.PP.players)  # comp to centroid, normalize params in comp_ptuple
-            _mplayer, _dplayer = comp_players(derPP.PPP.players, derPP.PP.players)  # comp to alt_centroid
+            # change to comp_plevels?
+            # include PP.players into derPP.players
+            mplayer, dplayer = comp_players(PPP.players, derPP.players)  # comp to centroid, normalize params in comp_ptuple
+            _mplayer, _dplayer = comp_players(derPP.PPP.players, derPP.players)  # comp to alt_centroid
 
-            fPPP = mplayer.val > _mplayer.val
-            if fPPP:
-                # subtract_players(derPP.PPP.players, derPP.PP.players)  # exclude derPP from _PPP
+            crdn = mplayer.val > _mplayer.val
+            if _mplayer.val < ave_mPP * (1+crdn):
+                sum_players(PPP.players, derPP.players, fsub=1)  # exclude derPP from _PPP
                 pass
-            if mplayer.val < ave_PP:
-                # subtract_players(PPP.players, derPP.PP.players)  # exclude derPP from PPP
+            if mplayer.val < ave_mPP * (1+(not crdn)):
+                sum_players(derPP.PPP.players, derPP.players, fsub=1)  # exclude derPP from _PPP
                 pass
 
 '''
