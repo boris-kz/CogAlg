@@ -540,20 +540,32 @@ def accum_PP(PP, inp):  # comp_slice inp is seg, or segPP in agg+
                 derP.root = PP
 
 
-def sum_players(Layers, layers):  # no accum across fPd, that's checked in comp_players?
+def sum_players(Layers, layers, fneg=0):  # no accum across fPd, that's checked in comp_players?
 
     for Layer, layer in zip_longest(Layers, layers, fillvalue=[]):
         if layer:
-            if Layer: sum_player(Layer, layer)
+            if Layer: sum_player(Layer, layer, fneg=fneg)
             else:     Layers.append(deepcopy(layer))
 
-def sum_player(Player, player):  # accum mplayer or dplayer, same as above but simpler if unpacked?
+def sum_player(Player, player, fneg=0):  # accum mplayer or dplayer, same as above but simpler if unpacked?
 
     for Ptuple, ptuple in zip_longest(Player, player, fillvalue=[]):
         if ptuple:
-            if Ptuple: accum_ptuple(Ptuple, ptuple)
-            else:      Player.append(deepcopy(ptuple))
+            if fneg:  # subtraction
+                if Ptuple: subtract_ptuple(Ptuple, ptuple)
+            else:  # summation
+                if Ptuple: accum_ptuple(Ptuple, ptuple)
+                else:      Player.append(deepcopy(ptuple))
 
+
+def subtract_ptuple(Ptuple, ptuple):
+
+    for param_name in Ptuple.numeric_params:
+        new_value = getattr(Ptuple, param_name) - getattr(ptuple, param_name)
+        setattr(Ptuple, param_name, new_value)
+
+    Ptuple.angle -= ptuple.angle
+    Ptuple.aangle -= ptuple.aangle
 
 def accum_ptuple(Ptuple, ptuple):  # lataple or vertuple
 
