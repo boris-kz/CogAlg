@@ -333,3 +333,36 @@ def sub_recursion(PP, fPd):  # evaluate each PP for rng+ and der+
 
         if fPd: PP.dlayers = [sub_PP_] + comb_layers
         else:   PP.rlayers = [sub_PP_] + comb_layers
+
+
+def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
+
+    if fneg:  # subtraction
+        for param_name in Ptuple.numeric_params:
+            new_value = getattr(Ptuple, param_name) - getattr(ptuple, param_name)
+            setattr(Ptuple, param_name, new_value)
+    else:  # accumulation
+        Ptuple.accum_from(ptuple, excluded=["angle", "aangle"])
+
+    fAngle = isinstance(Ptuple.angle, list)
+    fangle = isinstance(ptuple.angle, list)
+
+    if fAngle and fangle:  # both are latuples:  # not be needed if ptuples are always same-type
+        for i, param in enumerate(ptuple.angle):
+            if fneg:
+                Ptuple.angle[i] -= param  # always in vector representation
+            else:
+                Ptuple.angle[i] += param
+        for i, param in enumerate(ptuple.aangle):
+            if fneg:
+                Ptuple.aangle[i] -= param
+            else:
+                Ptuple.aangle[i] += param
+
+    elif not fAngle and not fangle:  # both are vertuples:
+        if fneg:
+            Ptuple.angle -= ptuple.angle
+            Ptuple.aangle -= ptuple.aangle
+        else:
+            Ptuple.angle += ptuple.angle
+            Ptuple.aangle += ptuple.aangle
