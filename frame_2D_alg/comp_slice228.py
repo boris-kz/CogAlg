@@ -366,3 +366,17 @@ def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
         else:
             Ptuple.angle += ptuple.angle
             Ptuple.aangle += ptuple.aangle
+
+def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
+
+    for i, (Param, param) in enumerate( zip(Ptuple[:-2], ptuple[:-2])):
+        # (x, L, I, M, Ma, angle, aangle, n, val, G, Ga)
+        # n, val from all levels?
+        if isinstance(Param, list):  # angle or aangle, same-type ptuples
+            for j, (Par, par) in enumerate( zip(Param, param)):
+                if fneg: Param[j] = Par - par
+                else:    Param[j] = Par + par
+        else:
+            if fneg: Ptuple[i] = Param - param
+            else:    Ptuple[i] = Param + param
+
