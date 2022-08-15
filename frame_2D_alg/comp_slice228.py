@@ -54,35 +54,33 @@ class CPPP(CPP, CderPP):
     root = lambda:None  # higher-order segP or PPP
 
 # draft
-def agg_recursion(PP_, fPd):  # compositional recursion per blob.Plevel.
-    # P, PP, PPP are relative terms, each may be of any composition order
+def agg_recursion(dir_blob, PP_, fPd, fseg=0):  # compositional recursion per blob.Plevel; P, PP, PPP are relative to each other
 
-    comb_levels = [[], []]
+    comb_levels = []
     ave_PP = ave_dPP if fPd else ave_mPP
     V = sum([PP.dval for PP in PP_]) if fPd else sum([PP.mval for PP in PP_])
     if V > ave_PP:
+        # cross-comp -> bilateral match assign list per PP, re-clustering by rdn match to centroids: ave PPP params
+        PPPm_, PPPd_ = comp_PP_(PP_)  # cross-comp all PPs within rng,
 
-        derPP_t = comp_PP_(PP_, fPd=fPd)  # compare all PPs to the average (centroid) of all other PPs, is generic for lower level
-        PPPm_, PPPd_ = form_PPP_t(derPP_t)  # calls individual comp_PP if mPPP > ave_mPPP, converting derPP to CPPP,
-        # may splice PPs instead of forming PPPs
-        # use sub_recursion_eval, agg_recursion_eval instead:
+        comp_centroid(PPPm_)  # may splice PPs instead of forming PPPs
+        comp_centroid(PPPd_)
 
-        comb_levels[0].append(PPPm_); comb_levels[1].append(PPPd_)  # pack current level PPP
-        m_comb_levels, d_comb_levels = [[],[]], [[],[]]
+        sub_recursion_eval(PPPm_, fPd=0)  # test within PP_ for each PPP (PP_ is PPP.P__)
+        sub_recursion_eval(PPPd_, fPd=1)
+        agg_recursion_eval(PPPm_, dir_blob, fPd=0, fseg=fseg)  # test within PPP_
+        agg_recursion_eval(PPPd_, dir_blob, fPd=1, fseg=fseg)
 
-        if len(PPPm_)>1:  # add eval
-            m_comb_levels = agg_recursion(PPPm_, fPd=0)
-        if len(PPPd_)>1:
-            d_comb_levels = agg_recursion(PPPd_, fPd=1)
+        for PPP_ in PPPm_, PPPd_:
+            for PPP in PPP_:
+                for i, (comb_level, level) in enumerate(zip_longest(comb_levels, PPP.agg_levels, fillvalue=[])):
+                    if level:
+                        if i > len(comb_levels)-1: comb_levels += [[level]]  # add new level
+                        else: comb_levels[i] += [level]  # append existing layer
 
-        # combine sub_PPm_s and sub_PPd_s from each layer:
-        for m_sub_PPPm_, d_sub_PPPm_ in zip_longest(m_comb_levels[0], d_comb_levels[0], fillvalue=[]):
-            comb_levels[0] += [m_sub_PPPm_ + d_sub_PPPm_]
-        for m_sub_PPPd_, d_sub_PPPd_ in zip_longest(m_comb_levels[1], d_comb_levels[1], fillvalue=[]):
-            comb_levels[1] += [m_sub_PPPd_ + d_sub_PPPd_]
+        comb_levels = [[PPPm_, PPPd_]] + comb_levels
 
     return comb_levels
-
 '''
 - Compare each PP to the average (centroid) of all other PPs in PP_, or maximal cartesian distance, forming derPPs.  
 - Select above-average derPPs as PPPs, representing summed derivatives over comp range, overlapping between PPPs.
@@ -90,6 +88,46 @@ Full overlap, no selection for derPPs per PPP.
 Selection and variable rdn per derPP requires iterative centroid clustering per PPP.  
 This will probably be done in blob-level agg_recursion, it seems too complex for edge tracing, mostly contiguous?
 '''
+
+def comp_PP_(iPP_):  # rng cross-comp, draft
+
+    PPP_t = []
+    for fPd in 0,1:
+        PP_ = [copy_P(PP) for PP in iPP_]  # we need 2 different set of PP_ for each fPd
+        PPP_ = []
+        iPPP_ = [CPPP( PP=PP, players=deepcopy(PP.players), fPds=deepcopy(PP.fPds)+[fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn) for PP in PP_]
+
+        while PP_:  # compare _PP to all other PPs within rng
+            _PP, _PPP = PP_.pop(), iPPP_.pop()
+            _PP.root = _PPP  # actual root which is having same index with PP?
+            _PP.roots.append(_PPP)  # not sure
+            for PPP, PP in zip(iPPP_, PP_):
+                # all possible comparands in dy<rng, with incremental y, accum derPPs in PPPs
+                area = PP.players[0][0].L; _area = _PP.players[0][0].L  # not sure
+                dx = ((_PP.xn-_PP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
+                dy = _PP.y/_area - PP.y/area
+                distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+
+                if distance * ((_PP.mval+PP.mval)/2 / ave_mPP) <= 3:  # ave_rng
+                    # comp PPs:
+                    mplayer, dplayer = comp_players(_PP.players, PP.players)
+                    mval = sum([ptuple.val for ptuple in mplayer])
+                    derPP = CderPP(players = deepcopy(_PP.players), mplayer=mplayer, dplayer=dplayer, _PP=_PP, PP=PP, mval=mval)
+                    if mval > ave_mPP:
+                        _PP.roots.append(PPP)  # not sure
+                        derPP.fin = derPP._fin = 1  # PPs match, sum derPP in both PPP and _PPP, m fork only:
+                        sum_players(_PPP.players, derPP.players + [derPP.mplayer])
+                        sum_players(PPP.players, derPP.players + [derPP.mplayer])
+                    _PPP.derPP_ += [derPP]
+                    PPP.derPP_ += [derPP]  # bilateral derPP assign regardless of sign, to re-eval in centroid clustering
+                    '''
+                    if derPP.match params[-1]: form PPP
+                    elif derPP.match params[:-1]: splice PPs and their segs? 
+                    '''
+            PPP_.append(_PPP)
+        PPP_t += [PPP_]
+    return PPP_t
+
 def comp_PP_centroid(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
 
     pre_PPPm_, pre_PPPd_ = [],[]

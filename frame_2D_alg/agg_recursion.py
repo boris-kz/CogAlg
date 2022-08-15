@@ -9,12 +9,6 @@ from comp_slice import *
 Blob edges may be represented by higher-composition PPPs, etc., if top param-layer match,
 in combination with spliced lower-composition PPs, etc, if only lower param-layers match.
 This may form closed edge patterns around flat blobs, which defines stable objects.   
-
-Not needed?
-class CPPt(ClusterStructure):  # element of PPP.PP_ and co-reference in other PPPs, to pack in cPP_
-    PP = object
-    derPP = object
-    fin = bool
 '''
 
 class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlink_, PP can also be PPP, etc.
@@ -23,10 +17,10 @@ class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlin
     players = list  # PP derivation level, flat, decoded by mapping each m,d to lower-level param
     mplayer = lambda: [None]  # list of ptuples in current derivation layer per fork
     dplayer = lambda: [None]
-    box = list  # 2nd level?
     mval = float  # summed player vals, both are signed, PP sign by fPds[-1]
     dval = float
-    # not needed: ?
+    # 5 below are not needed?
+    box = list  # 2nd level, stay in PP?
     rdn = int  # mrdn, + uprdn if branch overlap?
     _PP = object  # prior comparand  or always in PP_?
     PP = object  # next comparand
@@ -46,13 +40,14 @@ class CPPP(CPP, CderPP):
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
     Rdn = int  # for accumulation only
     nP = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
-    uplink_layers = lambda: [[],[]]
+    uplink_layers = lambda: [[],[]]  # likely not needed
     downlink_layers = lambda: [[],[]]
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
-    box = list  # for visualization only, original box before flipping
+    box = list  # x0, xn, y0, yn
     mask__ = bool
-    PP_ = list  # (input,derPP)s, common root of layers and levels:
+    PP_ = list  # (input,derPP,fin)s, common root of layers and levels
+    cPP_ = list  # co-refs in other PPPs
     rlayers = list  # | mlayers
     dlayers = list  # | alayers
     seg_levels = lambda: [[]]  # 1st agg_recursion: segs ) segPs(r,d)) segPPs(r,d)..
@@ -67,24 +62,20 @@ def agg_recursion(dir_blob, PP_, fPd, fseg=0):  # compositional recursion per bl
     V = sum([PP.dval for PP in PP_]) if fPd else sum([PP.mval for PP in PP_])
     if V > ave_PP:
 
-        # cross-comp -> bilateral match assign list per PP, re-clustering by rdn match to centroids: ave PPP params
-        PPPm_, PPPd_ = comp_PP_(PP_)  # cross-comp all PPs within rng,
+        # cross-comp, bilateral match assign list per PP, re-clustering by match to PPP centroids
+        PPPm_ = comp_PP_(PP_)  # cross-comp all PPs within rng,
         comp_centroid(PPPm_)  # may splice PPs instead of forming PPPs
-        comp_centroid(PPPd_)
 
         sub_recursion_eval(PPPm_, fPd=0)  # test within PP_ for each PPP (PP_ is PPP.P__)
-        sub_recursion_eval(PPPd_, fPd=1)
         agg_recursion_eval(PPPm_, dir_blob, fPd=0, fseg=fseg)  # test within PPP_
-        agg_recursion_eval(PPPd_, dir_blob, fPd=1, fseg=fseg)
 
-        for PPP_ in PPPm_, PPPd_:
-            for PPP in PPP_:
-                for i, (comb_level, level) in enumerate(zip_longest(comb_levels, PPP.agg_levels, fillvalue=[])):
-                    if level:
-                        if i > len(comb_levels)-1: comb_levels += [[level]]  # add new level
-                        else: comb_levels[i] += [level]  # append existing layer
+        for PPP in PPPm_:
+            for i, (comb_level, level) in enumerate(zip_longest(comb_levels, PPP.agg_levels, fillvalue=[])):
+                if level:
+                    if i > len(comb_levels)-1: comb_levels += [[level]]  # add new level
+                    else: comb_levels[i] += [level]  # append existing layer
 
-        comb_levels = [[PPPm_, PPPd_]] + comb_levels
+        comb_levels = [PPPm_] + comb_levels  # no PPPd_s for now, although high variance is valuable?
 
     return comb_levels
 
@@ -112,6 +103,7 @@ def comp_PP_(PP_):  # rng cross-comp, draft
         _PP, _PPP = PP_.pop(), iPPP_.pop()
         _PP.root = _PPP
         for PPP, PP in zip(iPPP_, PP_):
+
             # all possible comparands in dy<rng, with incremental y, accum derPPs in PPPs
             area = PP.players[0][0].L; _area = _PP.players[0][0].L  # not sure
             dx = ((_PP.xn-_PP.x0)/2)/_area -((PP.xn-PP.x0)/2)/area
@@ -129,9 +121,10 @@ def comp_PP_(PP_):  # rng cross-comp, draft
                     sum_players(PPP.players, PP.players + [derPP.mplayer])
                 else: fin = 0
                 _PPP.PP_ += [PP, derPP, fin]
-                PP.cPP_ += [PP]  # ref to redundant reps, access by PP.root
+                # draft:
+                _PP.cPP_ += [PP, derPP, None]  # ref to redundant reps, access by PP.root
                 PPP.PP_ += [PP, derPP, None]  # reverse derPP, fin is not set here
-                # _PP.cPP_ += [_PPt]  # bilateral derPP assign, to re-eval in centroid clustering?
+                PP.cPP_ += [_PP, derPP, fin]  # bilateral assign to eval in centroid clustering
                 '''
                 if derPP.match params[-1]: form PPP
                 elif derPP.match params[:-1]: splice PPs and their segs? 
@@ -145,34 +138,48 @@ Selection and variable rdn per derPP requires iterative centroid clustering per 
 '''
 def comp_centroid(PPP_):
 
-    Val = 0  # update val, terminate recursion if low
+    update_val = 0  # update val, terminate recursion if low
 
     for _PPP in PPP_:
-        PPP_val = 0  # total, may delete PPP
-        for i, (PP, derPP, fin) in enumerate(_PPP.PP_):  # comp to PPP centroid, use comp_plevels?
+        PPP_val = 0  # new total, may delete PPP
+        PPP_rdn = 0  # rdn of PPs to cPPs in other PPPs
+
+        for i, (PP, derPP, fin) in enumerate(_PPP.PP_):  # comp PP to PPP centroid, use comp_plevels?
 
             mplayer, dplayer = comp_players(_PPP.players, PP.players + [derPP.mplayer])  # norm params in comp_ptuple
             mval = sum([tuple.val for tuple in mplayer])
             derPP.mplayer = mplayer; derPP.dplayer = dplayer; derPP.mval = mval
-
-            fneg = mval < ave_mPP * len(PP.cPP_)  # len: number of rdn reps, only if fin, also sort by val?
-            if not fneg: PPP_val += mval  # +ve values only
-
-            # re-clustering: exclude included or include excluded derPP:
-            if (fneg and fin) or (not fneg and not fin):
+            # draft:
+            cPP_ = PP.cPP_
+            cPP_ = sorted(cPP_, key=lambda cPP: cPP[1].mval, reverse=True)  # stays ordered during recursion call
+            rdn = 1
+            for alt_PP, alt_derPP, alt_fin in cPP_:  # cPP_ should also contain [PP, derPP, fin]:
+                if alt_derPP.mval > derPP.mval:  # cPP is instance of PP, eval derPP.mval only
+                    if alt_fin: PPP_rdn += 1  # n of cPPs redundant to PP, if included and >val
+                else:
+                    break
+            fneg = mval < ave_mPP * rdn  # rdn per PP
+            if not fneg:
+                PPP_val += mval  # +ve values only
+                PPP_rdn += rdn
+            if (fneg and fin) or (not fneg and not fin):  # re-clustering: exclude included or include excluded PP
                 _PPP.PP_[i][2] = not fin
-                Val += mval
+                update_val += abs(mval) # or 2nd eval, no abs?
                 sum_players(_PPP.players, derPP.players, fneg)
 
-        if PPP_val < ave_mPP: PPP_.remove(_PPP)  # draft
+        if PPP_val < ave_mPP * PPP_rdn:  # ave rdn-adjusted value per cost of PPP
+            update_val += abs(PPP_val)  # need abs val accum on all levels?
+            PPP_.remove(_PPP)  # PPPs are hugely redundant, need to be pruned
 
-    if Val > ave_mPP: comp_centroid(PPP_)  # recursion while min update value
-'''
-1st and 2nd layers are single sublayers, the 2nd adds tuple pair nesting. Both are unpacked by func_pairs, not func_layers.  
-Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
-4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
-initial 3-layer nesting: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
-'''
+            for (PP, derPP, fin) in _PPP.PP_:  # remove refs to local copy of PP in other PPPs
+                for cPP in PP.cPP_:
+                    alt_PPP = cPP.root  # other PPP
+                    for (alt_PP,_,_) in alt_PPP.PP_:
+                        alt_PP.cPP_.remove(PP)  # remove refs to deleted copies
+
+    if update_val > ave_mPP:
+        comp_centroid(PPP_)  # recursion while min update value
+
 
 # for deeper agg_recursion:
 def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
@@ -184,9 +191,15 @@ def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursi
     for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
         der_levels += [comp_levels(_level, level, der_levels=[], fsubder=fsubder)]
 
-    return der_levels # possibly nested param layers
+    return der_levels  # possibly nested param layers
+'''
+    1st and 2nd layers are single sublayers, the 2nd adds tuple pair nesting. Both are unpacked by func_pairs, not func_layers.  
+    Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
+    4th layer is derived from comparison between 3 lower layers, where the 3rd layer is already nested, etc:
+    initial 3-layer nesting: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
+    '''
+# the below is out of date:
 
-# old:
 def sum_levels(Params, params):  # Capitalized names for sums, as comp_levels but no separate der_layers to return
 
     if Params: sum_players(Params[0], params[0])  # recursive unpack of nested ptuple layers, if any from der+
