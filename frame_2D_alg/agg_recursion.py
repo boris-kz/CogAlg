@@ -110,20 +110,21 @@ def comp_PP_(PP_):  # rng cross-comp, draft
 
             if distance * ((_PP.mval+PP.mval)/2 / ave_mPP) <= 3:  # ave_rng
                 # comp PPs:
-                mplayer, dplayer = comp_players(_PP.players, PP.players)
+                mplayer, dplayer = comp_players(_PP.players, PP.players, _PP.fPds, PP.fPds)
                 mval = sum([mtuple.val for mtuple in mplayer])
                 derPP = CderPP(mplayer=mplayer, dplayer=dplayer, mval=mval)
-                PP_players = PP.players + [derPP.mplayer, derPP.dplayer]  # both for each clustering fork
-                # summed in PPP only, PP stays at lower composition
+
+                PP_players = PP.players + [derPP.mplayer, derPP.dplayer]  # both from each clustering fork
+                # PP stays as is, single-layer derPP for now
                 if mval > ave_mPP:
                     fin = 1  # PPs match, sum derPP in both PPP and _PPP, m fork:
                     sum_players(_PPP.players, PP_players)
                     sum_players(PPP.players, PP_players)  # same fin for both in comp_PP_
                 else: fin = 0
                 _PPP.PP_ += [[PP, derPP, fin]]
-                _PP.cPP_ += [[PP, derPP, 1]]  # rdn refs, initial fin=1, derPP is always reversed here
+                _PP.cPP_ += [[PP, derPP, 1]]  # rdn refs, initial fin=1, derPP is reversed
                 PPP.PP_ += [[_PP, derPP, fin]]
-                PP.cPP_ += [[_PP, derPP, 1]]  # bilateral assign to eval in centroid clustering, derPP is not reversed
+                PP.cPP_ += [[_PP, derPP, 1]]  # bilateral assign to eval in centroid clustering, derPP is reversed
                 '''
                 if derPP.match params[-1]: form PPP
                 elif derPP.match params[:-1]: splice PPs and their segs? 
@@ -139,13 +140,13 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
     for PPP in PPP_:
         PPP_val = 0  # new total, may delete PPP
         PPP_rdn = 0  # rdn of PPs to cPPs in other PPPs
-
+        PPP_players = []
         for i, (PP, derPP, fin) in enumerate(PPP.PP_):  # comp PP to PPP centroid, use comp_plevels?
 
-            mplayer, dplayer = comp_players(PPP.players, PP.players + derPP.player)  # norm params in comp_ptuple
+            mplayer, dplayer = comp_players(PPP.players, PP.players + derPP.player, PPP.fPds, PP.fPds)  # norm params in comp_ptuple
             mval = sum([mtuple.val for mtuple in mplayer])
             derPP.mplayer = mplayer; derPP.dplayer = dplayer; derPP.mval = mval
-            # draft:
+            # compute rdn:
             cPP_ = PP.cPP_
             cPP_ = sorted(cPP_, key=lambda cPP: cPP[1].mval, reverse=True)  # order by derPP.val per recursion call
             rdn = 1
@@ -155,13 +156,14 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
                 else:
                     break
             fneg = mval < ave_mPP * rdn  # rdn per PP
-            if not fneg:  # +ve values only
-                PPP_val += mval
-                PPP_rdn += rdn
             if (fneg and fin) or (not fneg and not fin):  # re-clustering: exclude included or include excluded PP
                 PPP.PP_[i][2] = not fin
                 update_val += abs(mval)  # or sum abs mparams?
-                sum_players(PPP.players, derPP.players, fneg)
+            if not fneg:  # include PP in PPP:
+                PPP_val += mval
+                PPP_rdn += rdn
+                if PPP_players: sum_players(PPP_players, PP.players + derPP.player, fneg)  # no fneg now?
+                else:           PPP_players = PP.players + derPP.player  # initialization
 
         if PPP_val < ave_mPP * PPP_rdn:  # ave rdn-adjusted value per cost of PPP
 
@@ -169,7 +171,7 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
             PPP_.remove(PPP)  # PPPs are hugely redundant, need to be pruned
 
             for (PP, derPP, fin) in PPP.PP_:  # remove refs to local copy of PP in other PPPs
-                for (cPP,_,_) in PP.cPP_:   
+                for (cPP,_,_) in PP.cPP_:
                     for i, (ccPP,_,_) in enumerate(cPP.cPP_):  # ref of ref
                         if ccPP is PP:
                             cPP.cPP_.pop(i)  # remove ccPP tuple

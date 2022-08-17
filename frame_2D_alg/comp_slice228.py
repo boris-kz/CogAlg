@@ -418,3 +418,5 @@ def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
             if fneg: Ptuple[i] = Param - param
             else:    Ptuple[i] = Param + param
 
+mplayer = lambda: [None]  # list of ptuples in current derivation layer per fork, [None] for single-P seg/PPs
+dplayer = lambda: [None]  # not needed: player mvals, dvals, map to implicit sub_layers in m|dplayer
