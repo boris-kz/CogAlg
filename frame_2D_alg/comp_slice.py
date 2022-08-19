@@ -259,7 +259,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         dval = sum([dtuple.val for dtuple in dplayer])
         players = deepcopy(_P.players)
 
-    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=players, mplayer=mplayer, dplayer=dplayer, mval=mval, dval=dval, P=P, _P=_P)
+    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=deepcopy(players)+[[mplayer,dplayer]], mval=mval, dval=dval, P=P, _P=_P)
 
 # pending link copy update, copying in the end won't help
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
@@ -484,7 +484,7 @@ def sum2PP(PP_segs, base_rdn):  # sum PP_segs into PP
 
     for seg in PP_segs:
         accum_PP(PP, seg)
-    PP.fPds = deepcopy(seg.fPds)
+    PP.fPds = copy(seg.fPds)
 
     return PP
 
@@ -531,15 +531,15 @@ def accum_PP(PP, inp):  # comp_slice inp is seg, or segPP in agg+
 def sum_players(Layers, layers, fneg=0):  # no accum across fPd, that's checked in comp_players?
 
     if not Layers:
-        if not fneg: Layers.append(deepcopy(layers[0]))  # not sure
-    else: accum_ptuple(Layers[0][0], layers[0][0], fneg)  # nested latuples
+        if not fneg: Layers.append(deepcopy(layers[0]))
+    else: accum_ptuple(Layers[0][0], layers[0][0], fneg)  # latuples, in purely formal nesting
 
     for Layer, layer in zip_longest(Layers[1:], layers[1:], fillvalue=[]):
         if layer:
             if Layer: sum_player(Layer, layer, fneg=fneg)
             elif not fneg: Layers.append(deepcopy(layer))
 
-def sum_player(Player, player, fneg=0):  # accum mplayer or dplayer
+def sum_player(Player, player, fneg=0):  # accum players in Players
 
     for i, (Ptuple, ptuple) in enumerate(zip_longest(Player, player, fillvalue=[])):
         if ptuple:
@@ -568,6 +568,7 @@ def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
         if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
         else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
 
+
 def comp_players(_layers, layers, _fPds=[0], fPds=[0]):  # unpack and compare der layers, if any from der+
 
     mtuple, dtuple = comp_ptuple(_layers[0][0], layers[0][0])  # initial latuples, always present and nested
@@ -582,7 +583,6 @@ def comp_players(_layers, layers, _fPds=[0], fPds=[0]):  # unpack and compare de
             mplayer+=[mtuple]; dplayer+=[dtuple]
 
     return mplayer, dplayer
-
 
 def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
 
@@ -672,14 +672,10 @@ def append_P(P__, P):  # pack P into P__ in top down sequence
 def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP
 
     if not iPtype:  # assign Ptype based on instance type if no input type is provided
-        if isinstance(P, CPP):
-            Ptype = 2
-        elif isinstance(P, CderP):
-            Ptype = 1
-        elif isinstance(P, CP):
-            Ptype = 0
-    else:
-        Ptype = iPtype
+        if isinstance(P, CPP):     Ptype = 2
+        elif isinstance(P, CderP): Ptype = 1
+        elif isinstance(P, CP):    Ptype = 0
+    else: Ptype = iPtype
 
     uplink_layers, downlink_layers = P.uplink_layers, P.downlink_layers  # local copy of link layers
     P.uplink_layers, P.downlink_layers = [], []  # reset link layers
@@ -778,7 +774,6 @@ def sub_recursion_eval(PP_, fPd):  # for PP or dir_blob
         # segs rng_comp agg_recursion, centroid reclustering:
         if val > ave*3 and len(PP.seg_levels[-1]) > ave_nsub:   # 3: agg_coef
             PP.seg_levels += agg_recursion(PP, PP.seg_levels[-1], fPd, fseg=1)
-
 
     return [PP_] + comb_layers  # also returns empty comb_layers?
 
