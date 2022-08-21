@@ -60,6 +60,7 @@ ave_mPP = 10
 ave_dPP = 10
 ave_splice = 10
 ave_nsub = 1
+ave_agg = 3
 
 param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]
 aves = [ave_dx, ave_dI, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mval, ave_dval]
@@ -161,26 +162,24 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # form segments: parameterized stacks of (P,derP)s:
         segm_ = form_seg_root([[copy_P(P) for P in P_] for P_ in P__], fPd=0, fPds=[0])
         segd_ = form_seg_root([[copy_P(P) for P in P_] for P_ in P__], fPd=1, fPds=[0])
+
         # form PPs: parameterized graphs of connected segs:
-        PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
+        PP_ = form_PP_root((segm_, segd_), base_rdn=2)  # update to mixed-fork PP_, select by PP.fPd:
+        dir_blob.rlayers, dir_blob.dlayers = sub_recursion_eval(PP_)  # add rlayers, dlayers, seg_levels to select PPs
 
-        dir_blob.rlayers = sub_recursion_eval(PPm_, fPd=0)  # add rlayers, dlayers, seg_levels to select PPs
-        dir_blob.dlayers = sub_recursion_eval(PPd_, fPd=1)
+        comb_levels, levels = [],[]  # dir_blob agg_levels
+        M = dir_blob.M; G = dir_blob.G  # weak fork rdn?
+        # combined eval for intra-PP processing:
 
-        from agg_recursion import agg_recursion  # agglomeration by centroid cross-comp
-        comb_levels, mlevels, dlevels = [], [], []  # dir_blob agg_levels
+        if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PP_) > ave_nsub):
+            from agg_recursion import agg_recursion  # agglomeration by centroid cross-comp:
+            levels = agg_recursion(dir_blob, PP_, fseg=0)
 
-        if sum([PP.mval for PP in PPm_]) > ave_mPP * (3 + dir_blob.rdn + 1 + dir_blob.G > dir_blob.M) and len(PPm_) > ave_nsub:
-            mlevels = agg_recursion(dir_blob, PPm_, fPd=0, fseg=0)
-        if sum([PP.dval for PP in PPd_]) > ave_dPP * (3 + dir_blob.rdn + 1 + dir_blob.M >= dir_blob.G) and len(PPd_) > ave_nsub:
-            dlevels = agg_recursion(dir_blob, PPd_, fPd=1, fseg=0)
-
-        for i, (comb_level, mlevel, dlevel) in enumerate(zip_longest(comb_levels, mlevels, dlevels, fillvalue=[])):
-            if mlevel:  # same for dlevel
-                if i > len(comb_levels)-1: comb_levels += [[mlevel, dlevel]]  # add new level
-                else: comb_levels[i] += [mlevel, dlevel]  # append existing level
-
-        dir_blob.agg_levels = [[PPm_, PPd_]] + comb_levels  # 1st + higher agg_levels
+        for i, (comb_level, level) in enumerate(zip_longest(comb_levels, levels, fillvalue=[])):
+            if level:
+                if i > len(comb_levels)-1: comb_levels += [level]  # add new level
+                else: comb_levels[i] += [level]  # append existing level
+        dir_blob.agg_levels = [[PP_]] + comb_levels  # 1st + higher agg_levels
 
     splice_dir_blob_(blob.dir_blobs)  # draft
 
@@ -400,7 +399,7 @@ def rng_eval(derP, fPd):  # compute value of combined mutual derPs: overlap betw
     '''
     derP.rdn += (rdn / nolp) > .5  # no fractional rdn?
 
-
+# revise to form mixed-fork PP_:
 def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
 
     PP_t = []
