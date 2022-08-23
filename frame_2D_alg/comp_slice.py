@@ -125,7 +125,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
 class CPP(CderP):  # derP params include P.ptuple
 
-    players = list  # 1st plevel, same as in derP but L is area
+    players_t = lambda: [[],[]]  # 1st plevel, same as in derP but L is area
     valt = lambda: [0,0]  # mval, dval summed across players
     fds = list  # fPd per player except 1st, to comp in agg_recursion
     x0 = int  # box, update by max, min; this is a 2nd plevel?
@@ -356,15 +356,15 @@ def form_seg_(seg_, P__, seg_Ps, fPd, fds):  # form contiguous segments of verti
 def link_eval(link_layers, fPd):
 
     # sort derPs in link_layers[-2] by their value param:
-    derP_ = sorted( link_layers[-2], key=lambda derP: derP.dval if fPd else derP.mval, reverse=True)
+    derP_ = sorted( link_layers[-2], key=lambda derP: derP.valt[fPd], reverse=True)
 
     for i, derP in enumerate(derP_):
         if not fPd:
             rng_eval(derP, fPd)  # reset derP.valt, derP.rdn
         mrdn = derP.valt[1] > derP.valt[0]
-        val = derP.valt[fPd]; derP.rdn += not mrdn if fPd else mrdn
+        derP.rdn += not mrdn if fPd else mrdn
 
-        if val > vaves[fPd] * derP.rdn * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
+        if derP.valt[fPd] > vaves[fPd] * derP.rdn * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
             link_layers[-1].append(derP)  # misses = link_layers[-2] not in link_layers[-1]
 
 # not sure:
@@ -379,14 +379,10 @@ def rng_eval(derP, fPd):  # compute value of combined mutual derPs: overlap betw
     olp_val = 0
     nolp = len(common_derP_)
     for derP in common_derP_:
-        if fPd:
-            rdn += derP.dval > derP.mval  # dP > mP if fPd;  derP.m|dval is not formed yet?
-            olp_val += derP.dval
-            derP.dval = olp_val / nolp
-        else:
-            rdn += derP.mval > derP.dval  #  mP > dP if not fPd
-            olp_val += derP.mval
-            derP.mval = olp_val / nolp
+        rdn += derP.valt[fPd] > derP.valt[1-fPd]
+        olp_val += derP.valt[fPd]  # olp_val not reset for every derP?
+        derP.valt[fPd] = olp_val / nolp
+
     '''
     for i, derP in enumerate( sorted( link_layers[-2], key=lambda derP: derP.params[fPd].val, reverse=True)):
     if fPd: derP.rdn += derP.params[fPd].val > derP.params[1-fPd].val  # mP > dP
@@ -446,7 +442,7 @@ def sum2seg(seg_Ps, fPd, fds):  # sum params of vertically connected Ps into seg
     for P in seg_Ps[:-1]:
         accum_derP(seg, P.uplink_layers[-1][0], fPd)  # derP = P.uplink_layers[-1][0]
 
-    accum_derP(seg, seg_Ps[-1], 0)  # accum last P only, top P uplink_layers are not part of seg
+    accum_derP(seg, seg_Ps[-1], fPd)  # accum last P only, top P uplink_layers are not part of seg
     seg.y0 = seg_Ps[0].y
     seg.yn = seg.y0 + len(seg_Ps)
     seg.fds = fds + [fPd]  # fds of root PP
@@ -459,12 +455,12 @@ def accum_derP(seg, derP, fPd):  # derP might be CP, though unlikely
 
     if isinstance(derP, CP):
         derP.root = seg  # no need for derP.root
-        if not seg.players: seg.players.append([deepcopy(derP.ptuple)])
-        else:               sum_players(seg.players, [[derP.ptuple]])
+        if seg.players_t[fPd]: sum_players(seg.players_t[fPd], [[derP.ptuple]])
+        else:                  seg.players_t[fPd].append([deepcopy(derP.ptuple)])
         seg.xn = max(seg.xn, derP.x0 + derP.ptuple.L)
     else:
-        sum_players(seg.players, derP.players)  # last derP player is current mplayer, dplayer
-        for i in derP.valt: seg.valt[i]+=derP.valt[i]
+        sum_players(seg.players_t[fPd], derP.players)  # last derP player is current mplayer, dplayer
+        for i, val in enumerate(derP.valt): seg.valt[i]+=val
         seg.xn = max(seg.xn, derP.x0 + derP.players[0][0].L)
 
 
@@ -481,8 +477,9 @@ def sum2PP(PP_segs, base_rdn):  # sum PP_segs into PP
 
 def accum_PP(PP, inp):  # comp_slice inp is seg, or segPP in agg+
 
-    sum_players(PP.players, inp.players)
-    for i in inp.valt: PP.valt[i] += inp.valt[i]
+    for i in range(2):
+        if inp.players_t[i]: sum_players(PP.players_t[i], inp.players_t[i])  # not empty inp's players
+        PP.valt[i] += inp.valt[i]
     inp.root = PP
     PP.x0 = min(PP.x0, inp.x0)  # external params: 2nd player?
     PP.xn = max(PP.xn, inp.xn)
@@ -560,7 +557,7 @@ def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
         if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
         else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
 
-
+# need update on fds later
 def comp_players(_layers, layers, _fds=[0], fds=[0]):  # unpack and compare der layers, if any from der+
 
     mtuple, dtuple = comp_ptuple(_layers[0][0], layers[0][0])  # initial latuples, always present and nested
