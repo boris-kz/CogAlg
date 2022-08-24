@@ -125,7 +125,8 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
 class CPP(CderP):  # derP params include P.ptuple
 
-    players_t = lambda: [[],[]]  # 1st plevel, same as in derP but L is area
+    oPP = object  # adjacent opposite-sign PP, combined from oPPs above, below, and lateral?
+    players = list  # 1st plevel, same as in derP but L is area
     valt = lambda: [0,0]  # mval, dval summed across players
     fds = list  # fPd per player except 1st, to comp in agg_recursion
     x0 = int  # box, update by max, min; this is a 2nd plevel?
@@ -171,7 +172,15 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         M = dir_blob.M; G = dir_blob.G  # weak-fork rdn, or combined value?
         # intra-PP:
         if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PP_) > ave_nsub):
-            from agg_recursion import agg_recursion  # agglomeration by centroid cross-comp:
+            from agg_recursion import agg_recursion, CaggPP  # agglomeration by centroid cross-comp:
+
+            for i, PP in enumerate(PP_):
+                players_t = [[], []]
+                fd = PP.fds[-1]
+                players_t[fd] = PP.players
+                if PP.oPP: players_t[1-fd] = PP.oPP.players
+                PP_[i] = CaggPP(PP=PP, players_t=players_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+
             levels = agg_recursion(dir_blob, PP_, rng=2, fseg=0)  # default rng = 2?
 
         for i, (comb_level, level) in enumerate(zip_longest(comb_levels, levels, fillvalue=[])):
@@ -396,6 +405,7 @@ def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
 
     PP_ = []  # PP fork = PP.fds[-1]
     for fPd in 0, 1:
+        _PP = None
         seg_ = seg_t[fPd]
         for seg in seg_:  # bottom-up
             if not isinstance(seg.root, CPP):  # seg is not already in PP initiated by some prior seg
@@ -406,7 +416,13 @@ def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
                 if seg.P__[0].downlink_layers[-1]:
                     form_PP_(PP_segs, seg.P__[0].downlink_layers[-1].copy(), fup=0)
                 # convert PP_segs to PP:
-                PP_ += [sum2PP(PP_segs, base_rdn)]
+                PP = sum2PP(PP_segs, base_rdn)
+                PP_ += [PP]
+                # add oPP, 1st PP or single PP will not having any oPP
+                PP.oPP = _PP
+                _PP = PP
+
+
     return PP_
 
 
@@ -440,26 +456,26 @@ def sum2seg(seg_Ps, fPd, fds):  # sum params of vertically connected Ps into seg
     seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], y0 = seg_Ps[0].y)
 
     for P in seg_Ps[:-1]:
-        accum_derP(seg, P.uplink_layers[-1][0], fPd)  # derP = P.uplink_layers[-1][0]
+        accum_derP(seg, P.uplink_layers[-1][0])  # derP = P.uplink_layers[-1][0]
 
-    accum_derP(seg, seg_Ps[-1], fPd)  # accum last P only, top P uplink_layers are not part of seg
+    accum_derP(seg, seg_Ps[-1])  # accum last P only, top P uplink_layers are not part of seg
     seg.y0 = seg_Ps[0].y
     seg.yn = seg.y0 + len(seg_Ps)
     seg.fds = fds + [fPd]  # fds of root PP
 
     return seg
 
-def accum_derP(seg, derP, fPd):  # derP might be CP, though unlikely
+def accum_derP(seg, derP):  # derP might be CP, though unlikely
 
     seg.x0 = min(seg.x0, derP.x0)
 
     if isinstance(derP, CP):
         derP.root = seg  # no need for derP.root
-        if seg.players_t[fPd]: sum_players(seg.players_t[fPd], [[derP.ptuple]])
-        else:                  seg.players_t[fPd].append([deepcopy(derP.ptuple)])
+        if seg.players: sum_players(seg.players, [[derP.ptuple]])
+        else:           seg.players.append([deepcopy(derP.ptuple)])
         seg.xn = max(seg.xn, derP.x0 + derP.ptuple.L)
     else:
-        sum_players(seg.players_t[fPd], derP.players)  # last derP player is current mplayer, dplayer
+        sum_players(seg.players, derP.players)  # last derP player is current mplayer, dplayer
         for i, val in enumerate(derP.valt): seg.valt[i]+=val
         seg.xn = max(seg.xn, derP.x0 + derP.players[0][0].L)
 
@@ -477,9 +493,8 @@ def sum2PP(PP_segs, base_rdn):  # sum PP_segs into PP
 
 def accum_PP(PP, inp):  # comp_slice inp is seg, or segPP in agg+
 
-    for i in range(2):
-        if inp.players_t[i]: sum_players(PP.players_t[i], inp.players_t[i])  # not empty inp's players
-        PP.valt[i] += inp.valt[i]
+    for i in range(2): PP.valt[i] += inp.valt[i]
+    sum_players(PP.players, inp.players)  # not empty inp's players
     inp.root = PP
     PP.x0 = min(PP.x0, inp.x0)  # external params: 2nd player?
     PP.xn = max(PP.xn, inp.xn)

@@ -56,6 +56,8 @@ class CBlob(ClusterStructure):
     A = float  # blob area
     sign = bool
     # composite params:
+    M = float  # summed PP.M, for both types of recursion?
+    valt = list
     box = list  # x0, xn, y0, yn
     mask__ = object
     dert__ = object
@@ -83,7 +85,6 @@ class CBlob(ClusterStructure):
     # agglomeration hierarchy:
     agg_levels = lambda: [[]]  # 2nd agg_recursion: PPs ) PPPs PPPPs.., not sure about initialization
     # comp_slice:
-    M = int  # summed PP.M, for both types of recursion?
     dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
     fsliced = bool
     fflip = bool  # x-y swap in comp_slice
