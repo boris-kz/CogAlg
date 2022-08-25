@@ -31,7 +31,7 @@ class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlin
 class CaggPP(CPP, CderPP):
 
     players_t = lambda: [[], []]  # mPlayers, dPlayers, max n ptuples / layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
-    valt = lambda: [0, 0]  # mval, dval tuple
+    valt = lambda: [0, 0]  # mval, dval
     fds = list  # prior fork sequence, map to mplayer or dplayer in lower (not parallel) player, none for players[0]
     rng = lambda: 1  # rng starts with 1
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
@@ -56,8 +56,7 @@ def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.P
     PPP_ = comp_PP_(PP_, rng)  # cross-comp all PPs within rng, same PPP_ for both forks, add fseg?
     PPP_ = comp_centroid(PPP_)  # if top level miss, lower levels match: splice PPs vs form PPPs
 
-    # when root is CBlob, add valt to CBlob?
-    sub_recursion_agg(root.valt, PPP_)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
+    sub_recursion_agg(valt, PPP_)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
     val = sum(root.valt)
     if (val > ave_agg * (root.rdn+1)) and len(PPP_) > ave_nsub:
         root.levels += [agg_recursion(root, PPP_, rng = val/ave_agg)]  # cross-comp PPP centroids
@@ -104,7 +103,7 @@ def sub_recursion_agg(PPP_):  # rng+: extend PP_ per PPP, der+: replace PP with 
 def comp_PP_(PP_, rng):  # 1st cross-comp
 
     PPP_ = []
-    iPPP_ = deepcopy(PP_)
+    iPPP_ = [copy_P(PP, iPtype=4) for PP in PP_]
 
     while PP_:  # compare _PP to all other PPs within rng
         _PP, _PPP = PP_.pop(), iPPP_.pop()
@@ -144,74 +143,105 @@ def comp_PP_(PP_, rng):  # 1st cross-comp
         PPP_.append(_PPP)
     return PPP_
 
-# not fully revised:
+# draft:
+def form_graph(PPP_):  # cluster PPPs by mutual connections: match summed across shared cPPs
+
+    for PPP in PPP_:  # each PPP is a node and a potential nucleus of a graph, which is also CaggPP?
+        PP_ = PPP.PP_
+        graph = CaggPP()  # init per PPP, graph.PP_ is connected PPPs
+        for PPt in PP_:
+            shared_M = PPt[1].valt[0]  # initialization by derPP.mval
+            for cPP in PPt[0].cPP_:
+                if cPP in PP_:  # mutual connection
+                    shared_M += cPP_instance_in_PP_.valt[0]  # pseudo, we need to find that instance
+                    
+        if shared_M > ave_agg:  # need to add rdn: graphs overlap? 
+            inPPP = PPt[0].root
+            # draft:
+            if graph.valt[0] > inPPP.valt[0]:
+                graph.PP_ += [inPPP]  # connected PPP
+                inPPP.root = graph
+                accum_PPP(graph, inPPP)
+            else:
+                alt_graph = inPPP.root
+                alt_graph.PP_ += [inPPP]  # connected PPP
+                PPP.root = alt_graph
+                accum_PPP(alt_graph, PPP)
+    pass
+
+# not fully revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
 def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new centroid, recursion while update>ave
 
     update_val = 0  # update val, terminate recursion if low
 
     for PPP in PPP_:
-        PPP_val = 0  # new total, may delete PPP
+        PPP_valt = [0 ,0]  # new total, may delete PPP
         PPP_rdn = 0  # rdn of PPs to cPPs in other PPPs
-        PPP_players = []
-        DerPP = CderPP(player=[[], []])
+        PPP_players_t = [[], []]
+        DerPP = CderPP(player=[[], []])  # summed across PP_:
+        Valt = [0, 0]  # mval, dval
 
         for i, (PP, _, fint) in enumerate(PPP.PP_):  # comp PP to PPP centroid, derPP is replaced, use comp_plevels?
             Mplayer, Dplayer = [],[]
             # both PP core and edge are compared to PPP core, results are summed or concatenated:
             for fd in 0, 1:
-                mplayer, dplayer = comp_players(PPP.players_t[0], PP.players_t[fd], PPP.fds, PP.fds)  # params norm in comp_ptuple
-                player_t = [Mplayer + mplayer, Dplayer + dplayer]
-                valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
-            if DerPP in locals():  # summed across PP_:
-                for fd in 0, 1:
+                if PP.players_t[fd]:  # PP.players_t[1] may be empty
+                    mplayer, dplayer = comp_players(PPP.players_t[0], PP.players_t[fd], PPP.fds, PP.fds)  # params norm in comp_ptuple
+                    player_t = [Mplayer + mplayer, Dplayer + dplayer]
+                    valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
+                    Valt[0] += valt[0]; Valt[1] += valt[1]  # accumulate mval and dval
+                    # accum DerPP:
                     for Ptuple, ptuple in zip_longest(DerPP.player_t[fd], player_t[fd], fillvalue=[]):
-                        if not Ptuple: DerPP.player[fd].append(ptuple)  # pack new layer
-                        else:          sum_players([[Ptuple]], [[ptuple]])
+                        if ptuple:
+                            if not Ptuple: DerPP.player_t[fd].append(ptuple)  # pack new layer
+                            else:          sum_players([[Ptuple]], [[ptuple]])
                     DerPP.valt[fd] += valt[fd]
-            else:
-                DerPP = CderPP(player=[Mplayer, Dplayer], valt=valt)  # recomputed per call
+
             # compute rdn:
             cPP_ = PP.cPP_  # sort by derPP value:
             cPP_ = sorted(cPP_, key=lambda cPP: sum(cPP[1].valt), reverse=True)
             rdn = 1
+            fint = [0, 0]
             for fd in 0, 1:  # sum players per fork
                 for (cPP, cderPP, cfint) in cPP_:
-                    if valt[fd] > PP_aves[fd]:
-                        fin = 1  # PPs match, sum derPP in both PPP and _PPP:
+#                    if valt[fd] > PP_aves[fd] and PP.players_t[fd]:
+                    if PP.players_t[fd]:
+                        fint[fd] = 1  # PPs match, sum derPP in both PPP and _PPP:
                         sum_players(PPP.players_t[fd], PP.players_t[fd])
                         sum_players(PPP.players_t[fd], PP.players_t[fd])  # all PP.players in each PPP.players
-                    else:
-                        fin = 0
-                    if cderPP.valt[fd] > valt[fd]:  # cPP is instance of PP
+
+                    if cderPP.valt[fd] > Valt[fd]:  # cPP is instance of PP
                         if cfint[fd]: PPP_rdn += 1  # n of cPPs redundant to PP, if included and >val
                     else:
                         break  # cPP_ is sorted by value
-            fnegm = valt[0] < PP_aves[0] * rdn
-            fnegd = valt[1] < PP_aves[1] * rdn  # rdn per PP
 
-            # not revised:
-            if (fneg and fin) or (not fneg and not fin):  # re-clustering: exclude included or include excluded PP
-                PPP.PP_[i][2] = not fin
-                update_val += abs(mval)  # or sum abs mparams?
-            fin = 0
-            if not fnegm:   PPP_val += mval; PPP_rdn += mrdn; PPP.fPd = 0; fneg=fnegm; fin = 1
-            elif not fnegd: PPP_val += dval; PPP_rdn += drdn; PPP.fPd = 1; fneg=fnegm; fin = 1
-            if fin:
-                # include PP in PPP:
-                if PPP_players: sum_players(PPP_players, PP.players, fneg)  # no fneg now?
-                else:           PPP_players = PP.players  # initialization is simpler
-                PPP.PP_[i][1] = derPP
-            # not revised:
-                for i, cPPt in enumerate(PP.cPP_):
-                    cPPP = cPPt[0].root
-                    for j, PPt in enumerate(cPPP.cPP_):  # get PPP and replace their derPP
-                        if PPt[0] is PP:
-                            cPPP.cPP_[j][1] = derPP
-                    if cPPt[0] is PP: # replace cPP's derPP
-                        PPP.cPP_[i][1] = derPP
-            PPP.mval = PPP_val  # m fork for now
+            fnegm = Valt[0] < PP_aves[0] * rdn;  fnegd = Valt[1] < PP_aves[1] * rdn  # rdn per PP
+            for fd, fneg, in zip([0, 1], [fnegm, fnegd]):
 
-        if PPP_players: PPP.players = PPP_players
+                if (fneg and fint[fd]) or (not fneg and not fint[fd]):  # re-clustering: exclude included or include excluded PP
+                    PPP.PP_[i][2][fd] = 1 -  PPP.PP_[i][2][fd]  # reverse 1-0 or 0-1
+                    update_val += abs(Valt[fd])  # or sum abs mparams?
+                if not fneg:
+                    PPP_valt[fd] += Valt[fd]
+                    PPP_rdn += 1  # not sure
+                if fint[fd]:
+                    # include PP in PPP:
+                    if PPP_players_t[fd]: sum_players(PPP_players_t[fd], PP.players_t[fd])
+                    else: PPP_players_t[fd] = copy(PP.players_t[fd])  # initialization is simpler
+                    # not revised:
+                    PPP.PP_[i][1] = derPP   # no derPP now?
+                    for i, cPPt in enumerate(PP.cPP_):
+                        cPPP = cPPt[0].root
+                        for j, PPt in enumerate(cPPP.cPP_):  # get PPP and replace their derPP
+                            if PPt[0] is PP:
+                                cPPP.cPP_[j][1] = derPP
+                        if cPPt[0] is PP: # replace cPP's derPP
+                            PPP.cPP_[i][1] = derPP
+                PPP.valt[fd] = PPP_valt[fd]
+
+        if PPP_players_t: PPP.players_t = PPP_players_t
+
+        # not revised:
         if PPP_val < PP_aves[fPd] * PPP_rdn:  # ave rdn-adjusted value per cost of PPP
 
             update_val += abs(PPP_val)  # or sum abs mparams?
@@ -224,7 +254,7 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
                             cPP.cPP_.pop(i)  # remove ccPP tuple
                             break
 
-    if update_val > PP_aves[fPd]:
+    if update_val > sum(PP_aves):
         comp_centroid(PPP_)  # recursion while min update value
 
     return PPP_

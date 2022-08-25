@@ -125,7 +125,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
 class CPP(CderP):  # derP params include P.ptuple
 
-    oPP = object  # adjacent opposite-sign PP, combined from oPPs above, below, and lateral?
+    oPP_ = list  # adjacent opposite-sign PPs from above, below, left and right
     players = list  # 1st plevel, same as in derP but L is area
     valt = lambda: [0,0]  # mval, dval summed across players
     fds = list  # fPd per player except 1st, to comp in agg_recursion
@@ -172,15 +172,16 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         M = dir_blob.M; G = dir_blob.G  # weak-fork rdn, or combined value?
         # intra-PP:
         if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PP_) > ave_nsub):
-            from agg_recursion import agg_recursion, CaggPP  # agglomeration by centroid cross-comp:
-
+            dir_blob.valt = [M,G]
+            from agg_recursion import agg_recursion, CaggPP
+            # convert PPs to CaggPPs:
             for i, PP in enumerate(PP_):
                 players_t = [[], []]
                 fd = PP.fds[-1]
                 players_t[fd] = PP.players
                 if PP.oPP: players_t[1-fd] = PP.oPP.players
                 PP_[i] = CaggPP(PP=PP, players_t=players_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
-
+            # agglomeration in PP graphs:
             levels = agg_recursion(dir_blob, PP_, rng=2, fseg=0)  # default rng = 2?
 
         for i, (comb_level, level) in enumerate(zip_longest(comb_levels, levels, fillvalue=[])):
@@ -391,7 +392,6 @@ def rng_eval(derP, fPd):  # compute value of combined mutual derPs: overlap betw
         rdn += derP.valt[fPd] > derP.valt[1-fPd]
         olp_val += derP.valt[fPd]  # olp_val not reset for every derP?
         derP.valt[fPd] = olp_val / nolp
-
     '''
     for i, derP in enumerate( sorted( link_layers[-2], key=lambda derP: derP.params[fPd].val, reverse=True)):
     if fPd: derP.rdn += derP.params[fPd].val > derP.params[1-fPd].val  # mP > dP
@@ -418,10 +418,9 @@ def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
                 # convert PP_segs to PP:
                 PP = sum2PP(PP_segs, base_rdn)
                 PP_ += [PP]
-                # add oPP, 1st PP or single PP will not having any oPP
-                PP.oPP = _PP
+                if _PP not in PP.oPP_:  # adjacent opposite-sign PPs from above, below, left, right
+                    PP.oPP_+=[_PP]; _PP.oPP_+=[PP]
                 _PP = PP
-
 
     return PP_
 
@@ -671,7 +670,7 @@ def append_P(P__, P):  # pack P into P__ in top down sequence
             if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
 
 
-def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP
+def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP | =4: P is CaggPP
 
     if not iPtype:  # assign Ptype based on instance type if no input type is provided
         if isinstance(P, CPP):     Ptype = 2
@@ -691,10 +690,16 @@ def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CP
         rlayers = P.rlayers
         dlayers = P.dlayers
         P__ = P.P__
-        P.seg_levels, P.rlayers, P.dlayers, P.P__ = [], [], [], []  # reset
+        oPP = P.oPP
+        P.seg_levels, P.rlayers, P.dlayers, P.P__, P.oPP = [], [], [], [], None  # reset
     elif Ptype == 3:
         PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
         P.PP, P._PP = None, None  # reset
+    elif Ptype == 4:
+        PP_, cPP_ = P.PP_, P.cPP_
+        rlayers, dlayers = P.rlayers, P.dlayers
+        levels, root = P.levels, P.root
+        P.PP_, P.cPP_, P.rlayers, P.dlayers, P.levels, P.root = [], [], [], [], [], None  # reset
 
     new_P = P.copy()  # copy P with empty root and link layers, reassign link layers:
     new_P.uplink_layers += copy(uplink_layers)
@@ -711,13 +716,28 @@ def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CP
         P.seg_levels = seg_levels
         P.rlayers = rlayers
         P.dlayers = dlayers
+        P.oPP = oPP
         new_P.rlayers = copy(rlayers)
         new_P.dlayers = copy(dlayers)
         new_P.P__ = copy(P__)
         new_P.seg_levels = copy(seg_levels)
+        new_P.oPP = oPP
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
+    elif Ptype == 4:
+        P.PP_ = PP_
+        P.cPP_ = cPP_
+        P.rlayers = rlayers
+        P.dlayers = dlayers
+        P.levels = levels
+        P.root = root
+        new_P.PP_ = copy(PP_)
+        new_P.cPP_ = copy(cPP_)
+        new_P.rlayers = copy(rlayers)
+        new_P.dlayers = copy(dlayers)
+        new_P.levels = copy(levels)
+        new_P.root = root
 
     return new_P
 
