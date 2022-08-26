@@ -54,7 +54,7 @@ class CaggPP(CPP, CderPP):
 def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.Plevel; P, PP, PPP are relative to each other
 
     PPP_ = comp_PP_(PP_, rng)  # cross-comp all PPs within rng, same PPP_ for both forks, add fseg?
-    PPP_ = comp_centroid(PPP_)  # if top level miss, lower levels match: splice PPs vs form PPPs
+    PPP_ = form_graph(PPP_)  # if top level miss, lower levels match: splice PPs vs form PPPs
 
     sub_recursion_agg(valt, PPP_)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
     val = sum(root.valt)
@@ -144,30 +144,57 @@ def comp_PP_(PP_, rng):  # 1st cross-comp
     return PPP_
 
 # draft:
-def form_graph(PPP_):  # cluster PPPs by mutual connections: match summed across shared cPPs
+def form_graph(PPP_):  # cluster PPPs by mutual connections: match summed across shared PPs and their roots
 
+    graph_ = []
     for PPP in PPP_:  # each PPP is a node and a potential nucleus of a graph, which is also CaggPP?
-        PP_ = PPP.PP_
-        graph = CaggPP()  # init per PPP, graph.PP_ is connected PPPs
-        for PPt in PP_:
-            shared_M = PPt[1].valt[0]  # initialization by derPP.mval
-            for cPP in PPt[0].cPP_:
-                if cPP in PP_:  # mutual connection
-                    shared_M += cPP_instance_in_PP_.valt[0]  # pseudo, we need to find that instance
-                    
-        if shared_M > ave_agg:  # need to add rdn: graphs overlap? 
-            inPPP = PPt[0].root
+
+        eval_ref_layer(PPP.PP_, graph_, graph=CaggPP(), shared_M=0)  # init graph per PPP, graph.PP_ is connected PPPs
+
+    return graph_
+
+# initial draft, total mess:
+def eval_ref_layer(PP_, graph_, graph, shared_M):
+
+    for (PP, derPP, fint) in PP_:
+        shared_M += derPP.valt[0]  # initialization
+
+        for (_PP, _derPP, _fint) in PP.root.PP_:
+            if _PP is PP:  # mutual connection
+                shared_M += _derPP.valt[0]
+                break  # or comp PPs?
+
+            if shared_M > ave_agg:  # need to add rdn if graphs overlap
+                eval_ref_layer(_PP.root.PP_, graph_, graph, shared_M)
+
+    # not updated:
+            for PP in graph_:
+                inPPP = PP.root
             # draft:
-            if graph.valt[0] > inPPP.valt[0]:
-                graph.PP_ += [inPPP]  # connected PPP
-                inPPP.root = graph
-                accum_PPP(graph, inPPP)
-            else:
-                alt_graph = inPPP.root
-                alt_graph.PP_ += [inPPP]  # connected PPP
-                PPP.root = alt_graph
-                accum_PPP(alt_graph, PPP)
-    pass
+            if not isinstance(inPPP.root, CaggPP):  # don't have existing graph
+                if graph.valt[0] > inPPP.valt[0]:
+                    graph.PP_ += [inPPP]  # connected PPP
+                    inPPP.root = graph
+                    accum_PPP(graph, inPPP)
+                else:
+                    # reinitialize inPPP's graph
+                    alt_graph = CaggPP(valt=copy(inPPP.valt), players_t=copy(inPPP.players_t))
+                    alt_graph.PP_ += [inPPP]  # connected PPP
+                    inPPP.root = alt_graph
+            else:  # inPPP has existing graph
+                # merge graphs here？
+                accum_PPP(graph, inPPP.root)
+                for PP in inPPP.root.PP_:
+                    if PP not in graph.PP_:
+                        graph.PP += [PP]
+
+
+def accum_PPP(_PPP, PPP):
+
+    for fd in 0,1:
+        sum_players(_PPP.players_t[fd], PPP.players_t[fd])
+        _PPP.valt[fd] += PPP.valt[fd]
+
 
 # not fully revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
 def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new centroid, recursion while update>ave
