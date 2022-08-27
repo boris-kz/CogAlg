@@ -173,15 +173,15 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # intra-PP:
         if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PP_) > ave_nsub):
             dir_blob.valt = [M,G]
-            from agg_recursion import agg_recursion, CaggPP
-            # convert PPs to CaggPPs:
+            from agg_recursion import agg_recursion, CgPP
+            # convert PPs to CgPPs:
             for i, PP in enumerate(PP_):
                 players_t = [[], []]
                 fd = PP.fds[-1]
                 players_t[fd] = PP.players
                 players_t[1-fd] = PP.oPP_[0].players
                 for oPP in PP.oPP_[1:]: sum_players(players_t[1-fd], oPP.players)  # sum all oPPs
-                PP_[i] = CaggPP(PP=PP, players_t=players_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+                PP_[i] = CgPP(PP=PP, players_t=players_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
             # cluster PPs into graphs:
             levels = agg_recursion(dir_blob, PP_, rng=2, fseg=0)
 
@@ -347,7 +347,12 @@ def form_seg_root(P__, fPd, fds):  # form segs from Ps
 def form_seg_(seg_, P__, seg_Ps, fPd, fds):  # form contiguous segments of vertically matching Ps
 
     if len(seg_Ps[-1].uplink_layers[-1]) > 1:  # terminate seg
+        # we can't do this here, PP is not formed yet?
+        if _PP and _PP not in PP.oPP_:  # vertically adjacent opposite-sign PPs, may be multiple above and below?
+            PP.oPP_ += [_PP]; _PP.oPP_ += [PP]
+
         seg_.append( sum2seg( seg_Ps, fPd, fds))  # convert seg_Ps to CPP seg
+
     else:
         uplink_ = seg_Ps[-1].uplink_layers[-1]
         if uplink_ and len(uplink_[0]._P.downlink_layers[-1])==1:
@@ -418,11 +423,11 @@ def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
                     form_PP_(PP_segs, seg.P__[0].downlink_layers[-1].copy(), fup=0)
                 # convert PP_segs to PP:
                 PP = sum2PP(PP_segs, base_rdn)
-                PP_ += [PP]
+                # still need this?:
                 if _PP and _PP not in PP.oPP_:  # vertically adjacent opposite-sign PPs, may be multiple above and below?
-                    PP.oPP_+=[_PP]; _PP.oPP_+=[PP]
+                    PP.oPP_ += [_PP]; _PP.oPP_ += [PP]
+                PP_ += [PP]
                 _PP = PP
-
     return PP_
 
 
@@ -717,12 +722,12 @@ def copy_P(P, iPtype=None):   # Ptype =0: P is CP | =1: P is CderP | =2: P is CP
         P.seg_levels = seg_levels
         P.rlayers = rlayers
         P.dlayers = dlayers
-        P.oPP = oPP
+        P.oPP_ = oPP_
         new_P.rlayers = copy(rlayers)
         new_P.dlayers = copy(dlayers)
         new_P.P__ = copy(P__)
         new_P.seg_levels = copy(seg_levels)
-        new_P.oPP_ = copy(oPP)
+        new_P.oPP_ = copy(oPP_)
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
