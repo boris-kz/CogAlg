@@ -32,6 +32,7 @@ class CgPP(CPP, CderPP):  # generic PP, of any composition
 
     players_t = lambda: [[], []]  # mPlayers, dPlayers, max n ptuples / layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
     valt = lambda: [0, 0]  # mval, dval
+    nvalt = lambda: [0, 0]  # neg links
     fds = list  # prior fork sequence, map to mplayer or dplayer in lower (not parallel) player, none for players[0]
     rng = lambda: 1  # rng starts with 1
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
@@ -48,7 +49,7 @@ class CgPP(CPP, CderPP):  # generic PP, of any composition
     rlayers = list  # | mlayers
     dlayers = list  # | alayers
     levels = lambda: [[]]  # agg_PPs ) agg_PPPs ) agg_PPPPs..
-    root = lambda: CgPP()  # higher-order segP or PPP
+    root = object  # lambda: CgPP()  # higher-order segP or PPP
 
 
 def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.Plevel; P, PP, PPP are relative to each other
@@ -117,8 +118,8 @@ def comp_PP_(PP_, rng):  # 1st cross-comp
         PPP_.append(_PPP)
     return PPP_
 
-# draft:
-def form_graph(PPP_):  # cluster PPPs by mutual connections: match summed across shared PPs and their roots
+
+def form_graph(PPP_):  # cluster PPPs by match of mutual connections, which is summed across shared nodes and their roots
 
     graph_ = []
     for PPP in PPP_:  # initialize graph for each PPP:
@@ -126,34 +127,39 @@ def form_graph(PPP_):  # cluster PPPs by mutual connections: match summed across
         PPP.root=graph
         graph_+=[graph]
     for graph in graph_:
-        eval_ref_layer(graph_=graph_, graph=graph, shared_M=0)  # graphs may grow|shrink or be removed from graph_ at each ref_layer
+        eval_ref_layer(graph_=graph_, graph=graph, PPP_=graph.gPP_, shared_M=0)
+        # graphs merge (split?) while evaluating each ref_layer: intermediate PPPs
+        # add|remove individual nodes+links: PPPs, not the links between PPs in PPP?
 
     return graph_
 
 # draft
-def eval_ref_layer(graph_, graph, shared_M):  # recursive eval of increasingly mediated nodes (graph_, graph, shared_M)?
+def eval_ref_layer(graph_, graph, PPP_, shared_M):  # recursive eval of increasingly mediated nodes (graph_, graph, shared_M)?
 
-    gPP_=graph.gPP_
+    for PPP in PPP_:
+        for (PP, derPP, fint) in PPP.gPP_:
+            shared_M += derPP.valt[0]  # accum shared_M across mediating node layers
+            for (_PP, _derPP, _fint) in PP.root.gPP_:  # _PP.PPP / PP.PPP reciprocal refs:
 
-    for (gPP, derPP, fint) in gPP_:
-        shared_M += derPP.valt[0]  # accum shared_M across mediating node layers
-        for (_gPP, _derPP, _fint) in gPP.root.gPP_:  # _PP.PPP / PP.PPP reciprocal refs:
+                if _PP is PP:  # mutual connection
+                    shared_M += _derPP.valt[0] - ave_agg  # eval graph inclusion by match to mediating gPP
+                    # * rdn: sum PP_ rdns / len PP_ + cross-PPP overlap rate + cross-graph overlap rate?
+                    if shared_M > 0:
+                        _graph = _PP.root.root  # PP.PPP.graph: two nesting layers above PP
 
-            if _gPP is gPP:  # mutual connection
-                shared_M += _derPP.valt[0] - ave_agg  # * rdn from graphs overlap, per ref_layer
-                if shared_M > 0:
-                    _graph = _gPP.root
-                    if _graph is not graph:  # merge graphs:
-                        for fd in 0, 1:
-                            sum_players(graph.players_t[fd], _graph.players_t[fd])
-                            graph.valt[fd] += _graph.valt[fd]
-                        graph.gPP_ += _graph.gPP_
-                        graph_.remove(_graph)
+                        if _graph is not graph:  # merge graphs:
+                            for fd in 0, 1:
+                                sum_players(graph.players_t[fd], _graph.players_t[fd])
+                                graph.valt[fd] += _graph.valt[fd]
+                            graph.gPP_ += _graph.gPP_
+                            graph_.remove(_graph)
 
-                    # very tentative, definitely wrong:
-                    for ref_gPP in _gPP.gPP_:
-                        for ref_root_gPP in ref_gPP.root.gPP_:
-                            eval_ref_layer(graph_, ref_root_gPP, shared_M)  # search recursively mediated refs
+                            # not sure we get incremental nesting here:
+                            # recursive search of increasingly intermediated refs for mutual connections
+                            for __PP in _PP.gPP_:  # PPP
+                                for _root_PP in __PP.root.gPP_:
+                                    _root_graph = _root_PP.root.root
+                                    eval_ref_layer(graph_, graph, _root_graph.gPP_, shared_M)
 
 
 # not revised:
