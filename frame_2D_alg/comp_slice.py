@@ -94,9 +94,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
     uplink_layers = lambda: [[],[]]  # init a layer of derPs and a layer of match_derPs
     downlink_layers = lambda: [[],[]]
-    root = lambda:None  # segment that contains this P, PP is root.root
+    roott = lambda: None, []  # seg|PPm, PPd_ that contain this P
     # only in Pd:
-    Pm = object  # reference to root P
     dxdert_ = list
     # only in Pm:
     Pd_ = list
@@ -127,7 +126,7 @@ class CPP(CderP):  # derP params include P.ptuple
 
     players = list  # 1st plevel, same as in derP but L is area
     valt = lambda: [0,0]  # mval, dval summed across players
-    nvalt = lambda: [0, 0]  # of neg derPs
+    nvalt = lambda: [[0,0],[0,0]]  # neg derPs, val.cnt per fd
     fds = list  # fPd per player except 1st, to comp in agg_recursion
     x0 = int  # box, update by max, min; this is a 2nd plevel?
     xn = int
@@ -147,7 +146,9 @@ class CPP(CderP):  # derP params include P.ptuple
     rlayers = list  # or mlayers: sub_PPs from sub_recursion within PP
     dlayers = list  # or alayers
     seg_levels = list  # from 1st agg_recursion[fPd], seg_levels[0] is seg_, higher seg_levels are segP_..s
-    root = object  # higher-order segP | PPP
+    roott = lambda: None, []  # PPPm, PPPd_ that contain this PP
+    altPP_ = list  # alt-fork PPs per PP
+    # assign from P.roott[1] in sum2PP?
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
 
 # Functions:
@@ -178,8 +179,8 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                 players_t = [[], []]
                 fd = PP.fds[-1]
                 players_t[fd] = PP.players
-                players_t[1-fd] = PP.oPP_[0].players
-                for oPP in PP.oPP_[1:]: sum_players(players_t[1-fd], oPP.players)  # sum all oPPs
+                players_t[1-fd] = PP.altPP_[0].players
+                for altPP in PP.altPP_[1:]: sum_players(players_t[1-fd], altPP.players)  # alt-fork PPs per PP
                 PP_[i] = CgPP(PP=PP, players_t=players_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
             # cluster PPs into graphs:
             levels = agg_recursion(dir_blob, PP_, rng=2, fseg=0)
@@ -459,8 +460,8 @@ def sum2seg(seg_Ps, fPd, fds):  # sum params of vertically connected Ps into seg
         accum_derP(seg, P.uplink_layers[-1][0])  # derP = P.uplink_layers[-1][0]
         for derP in P.uplink_layers[-2]:
             if derP not in P.uplink_layers[-1]:
-                seg.nvalt[fPd] += derP.valt[fPd]  # neg link
-
+                seg.nvalt[fPd][0] += derP.valt[fPd]  # neg link
+                seg.nvalt[fPd][1] += 1  # counter
     accum_derP(seg, seg_Ps[-1])  # accum last P only, top P uplink_layers are not part of seg
     seg.y0 = seg_Ps[0].y
     seg.yn = seg.y0 + len(seg_Ps)
@@ -492,7 +493,9 @@ def sum2PP(PP_segs, base_rdn):  # sum PP_segs into PP
         accum_PP(PP, seg)
         for derP in seg.P__[-1].uplink_layers[-2]:
             if derP not in seg.P__[-1].uplink_layers[-1]:
-                seg.nvalt[seg.fds[-1]] += derP.valt[seg.fds[-1]]  # neg link
+                fd = seg.fds[-1]
+                PP.nvalt[fd][0] += derP.valt[fd][0]  # neg link
+                PP.nvalt[fd][1] += seg.nvalt[fd][1]  # counter
     PP.fds = copy(seg.fds)
 
     return PP
@@ -514,6 +517,7 @@ def accum_PP(PP, inp):  # comp_slice inp is seg, or segPP in agg+
         PP.downlink_layers[-1] += [inp.downlink_.copy()]
 
         for P in inp.P__:  # add Ps in P__[y]:
+            # assign
             P.root = object  # reset root, to be assigned next sub_recursion
             PP.P__.append(P)
     else:
@@ -681,6 +685,7 @@ def copy_P_(P__, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is 
 
     new_P__ = [[copy_P(P, iPtype) for P in P_] for P_ in P__]
 
+    '''
     # update oP_ to new copied P
     for new_P_ in new_P__:
         for new_P in new_P_:
@@ -689,6 +694,8 @@ def copy_P_(P__, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is 
                     for alt_new_P in alt_new_P_:
                         if alt_new_P.id == oP.id:  # same id to determine same P
                             new_P.oP_[i] = alt_new_P
+    '''
+
     return new_P__
 
 def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP | =4: P is CaggPP
@@ -715,8 +722,7 @@ def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP
         rlayers = P.rlayers
         dlayers = P.dlayers
         P__ = P.P__
-        oPP_ = P.oPP_
-        P.seg_levels, P.rlayers, P.dlayers, P.P__, P.oPP_ = [], [], [], [], []  # reset
+        P.seg_levels, P.rlayers, P.dlayers, P.P__ = [], [], [], []  # reset
     elif Ptype == 3:
         PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
         P.PP, P._PP = None, None  # reset
@@ -741,12 +747,10 @@ def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP
         P.seg_levels = seg_levels
         P.rlayers = rlayers
         P.dlayers = dlayers
-        P.oPP_ = oPP_
         new_P.rlayers = copy(rlayers)
         new_P.dlayers = copy(dlayers)
         new_P.P__ = copy(P__)
         new_P.seg_levels = copy(seg_levels)
-        new_P.oPP_ = copy(oPP_)
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
