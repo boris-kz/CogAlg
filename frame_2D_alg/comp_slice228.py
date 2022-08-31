@@ -604,3 +604,42 @@ def comp_centroid(PPP_, fPd):  # comp PP to average PP in PPP, sum >ave PPs into
     if update_val > PP_aves[fPd]:
         comp_centroid(PPP_)  # recursion while min update value
 
+
+def accum_PP(PP, inp, fd):  # comp_slice inp is seg, or segPP from agg+
+
+    sum_players(PP.players, inp.players)  # not empty inp's players
+    for i in 0,1: PP.valt[i] += inp.valt[i]
+    PP.x0 = min(PP.x0, inp.x0)  # external params: 2nd player?
+    PP.xn = max(PP.xn, inp.xn)
+    PP.y0 = min(inp.y0, PP.y0)
+    PP.yn = max(inp.yn, PP.yn)
+    PP.Rdn += inp.rdn  # base_rdn + PP.Rdn / PP: recursion + forks + links: nderP / len(P__)?
+    PP.nderP += len(inp.P__[-1].uplink_layers[-1][fd])  # redundant derivatives of the same P
+
+    if PP.P__ and not isinstance(PP.P__[0], list):  # PP is seg if fseg in agg_recursion
+        PP.uplink_layers[-1] += [inp.uplink_.copy()]  # += seg.link_s, they are all misses now
+        PP.downlink_layers[-1] += [inp.downlink_.copy()]
+
+        for P in inp.P__:  # add Ps in P__[y]:
+            # assign
+            P.root = object  # reset root, to be assigned next sub_recursion
+            PP.P__.append(P)
+    else:
+        for P in inp.P__:  # add Ps in P__[y]:
+            if not PP.P__:
+                PP.P__.append([P])
+            else:
+                append_P(PP.P__, P)  # add P into nested list of P__
+            # add terminated seg links for rng+:
+            for derP in inp.P__[0].downlink_layers[-1][fd]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
+                if derP not in PP.downlink_layers[-2] and derP.P.roott[fd] not in PP.seg_levels[-1]:
+                    PP.downlink_layers[-2] += [derP]
+            for derP in inp.P__[-1].uplink_layers[-1][fd]:  # if downlink not in current PP's downlink and not part of the seg in current PP:
+                if derP not in PP.downlink_layers[-2] and derP.P.roott[fd] not in PP.seg_levels[-1]:
+                    PP.uplink_layers[-2] += [derP]
+
+    for P_ in PP.P__[:-1]:  # add derP root, except for top row and bottom row derP
+        for P in P_:
+            for derP in P.uplink_layers[-1][fd]:
+                derP.roott[fd] = PP
+
