@@ -49,7 +49,7 @@ class CgPP(CPP, CderPP):  # generic PP, of any composition
     rlayers = list  # | mlayers
     dlayers = list  # | alayers
     levels = lambda: [[]]  # agg_PPs ) agg_PPPs ) agg_PPPPs..
-    root = object  # lambda: CgPP()  # higher-order segP or PPP
+    roott = lambda: [None, None]  # lambda: CgPP()  # higher-order segP or PPP
 
 
 def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.Plevel; P, PP, PPP are relative to each other
@@ -82,12 +82,12 @@ def comp_PP_(PP_, rng):  # 1st cross-comp
 
     while PP_:  # compare _PP to all other PPs within rng
         _PP, _PPP = PP_.pop(), iPPP_.pop()
-        _PP.root = _PPP
-        _fd = _PP.fds[-1]
+        _fid = _PP.fds[-1]
+        _PP.roott[_fid] = _PPP
 
         for PPP, PP in zip(iPPP_, PP_):  # add selection by dy<rng if incremental y? accum derPPs in PPPs
-            fd = PP.fds[-1]
-            area = PP.players_t[fd][0][0].L; _area = _PP.players_t[_fd][0][0].L
+            fid = PP.fds[-1]
+            area = PP.players_t[fid][0][0].L; _area = _PP.players_t[_fid][0][0].L
             dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
             dy = _PP.y / _area - PP.y / area
             distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
@@ -95,7 +95,7 @@ def comp_PP_(PP_, rng):  # 1st cross-comp
             val = sum(_PP.valt) / (ave_mPP+ave_dPP)  # draft
             if distance * val <= rng:
                 # comp PPs:
-                mplayer, dplayer = comp_players(_PP.players_t[_fd], PP.players_t[fd], _PP.fds, PP.fds)
+                mplayer, dplayer = comp_players(_PP.players_t[_fid], PP.players_t[fid], _PP.fds, PP.fds)
                 valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
                 derPP = CderPP(player=[mplayer, dplayer], valt=valt)  # derPP is single-layer
                 fint = []
@@ -124,7 +124,7 @@ def form_graph(PPP_):  # cluster PPPs by match of mutual connections, which is s
     graph_= []
     for PPP in PPP_:  # initialize graph for each PPP:
         graph=CgPP(gPP_=[PPP], players_t = deepcopy(PPP.players_t), valt=PPP.valt)  # graph.gPP_: connected PPPs
-        PPP.root=graph
+        PPP.roott[0]=graph  # set root of core part as graph
         graph_+=[graph]
     merged_graph_ = []
     while graph_:
@@ -142,26 +142,26 @@ def eval_ref_layer(graph_, graph, PPP_, shared_M):  # recursive eval of increasi
         for (PP, derPP, fint) in PPP.gPP_:
             shared_M += derPP.valt[0]  # accum shared_M across mediating node layers
 
-            for (_PP, _derPP, _fint) in PP.root.gPP_:  # _PP.PPP / PP.PPP reciprocal refs:
+            for (_PP, _derPP, _fint) in PP.roott[0].gPP_:  # _PP.PPP / PP.PPP reciprocal refs:
                 if _PP is PP:  # mutual connection
                     shared_M += _derPP.valt[0] - ave_agg  # eval graph inclusion by match to mediating gPP
                     # * rdn: sum PP_ rdns / len PP_ + cross-PPP overlap rate + cross-graph overlap rate?
                     if shared_M > 0:
-                        _graph = _PP.root.root  # PP.PPP.graph: two nesting layers above PP
+                        _graph = _PP.roott[0].roott[0]  # PP.PPP.graph: two nesting layers above PP
                         if _graph is not graph:  # this should checked before evaluation?
                             # merge graphs:
                             for fd in 0, 1:
                                 if _graph.players_t[fd]:
                                     sum_players(graph.players_t[fd], _graph.players_t[fd])
                                     graph.valt[fd] += _graph.valt[fd]
-                            for rPP in _graph.gPP_: rPP.root = graph  # update graph reference
+                            for rPP in _graph.gPP_: rPP.roott[0] = graph  # update graph reference
                             graph.gPP_ += _graph.gPP_
                             graph_.remove(_graph)
 
                             # recursive search of increasingly intermediated refs for mutual connections
                             for __PP in _PP.gPP_:
                                 for (_root_PP,_,_) in __PP.root.gPP_:
-                                    eval_ref_layer(graph_, graph, _root_PP.root.root.gPP_, shared_M)
+                                    eval_ref_layer(graph_, graph, _root_PP.roott[0].roott[0].gPP_, shared_M)
 
 
 # not revised:
