@@ -146,7 +146,8 @@ class CPP(CderP):  # derP params include P.ptuple
     P__ = list  # input + derPs, common root for downward layers and upward levels:
     rlayers = list  # or mlayers: sub_PPs from sub_recursion within PP
     dlayers = list  # or alayers
-    seg_levels = list  # from 1st agg_recursion[fPd], seg_levels[0] is seg_, higher seg_levels are segP_..s
+    mseg_levels = list  # from 1st agg_recursion[fPd], seg_levels[0] is seg_, higher seg_levels are segP_..s
+    dseg_levels = list
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     altPP_ = list  # alt-fork PPs per PP, from P.roott[1] in sum2PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
@@ -167,9 +168,10 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # PPs are graphs of segs:
         PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)  # not mixed-fork PP_, select by PP.fPd?
         # intra PP:
-        dir_blob.rlayers, dir_blob.dlayers = sub_recursion_eval(PPm_ + PPd_)  # add rlayers, dlayers, seg_levels to select PPs
+        dir_blob.rlayers = sub_recursion_eval(PPm_, fd=0)
+        dir_blob.dlayers = sub_recursion_eval(PPd_, fd=1)  # add rlayers, dlayers, seg_levels to select PPs
 
-        comb_levels, levels = [],[]  # dir_blob agg_levels
+        comb_levels, levels = [],[]  # dir_blob agg levels
         M = dir_blob.M; G = dir_blob.G  # weak-fork rdn, or combined value?
         if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PPm_) > ave_nsub):
         # cross PP:
@@ -184,13 +186,13 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                     if altPP.players: sum_players(players[1-fd], altPP.players)  # alt-fork PPs per PP
                 PPm_[i] = CgPP(PP=PP, players_t=players, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
             # cluster PPs into graphs:
-            levels = agg_recursion(dir_blob, PPm_, rng=2, fseg=0)
+            levels = agg_recursion(dir_blob, PPm_, rng=2, fseg=0)  # only PPms for now
 
             for i, (comb_level, level) in enumerate(zip_longest(comb_levels, levels, fillvalue=[])):
                 if level:
                     if i > len(comb_levels)-1: comb_levels += [level]  # add new level
                     else: comb_levels[i] += [level]  # append existing level
-        dir_blob.agg_levels = [[PP_]] + comb_levels  # 1st + higher agg_levels
+        dir_blob.levels = [[PPm_+PPd_]] + comb_levels  # 1st + higher levels
 
     # splice_dir_blob_(blob.dir_blobs)  # draft
 
@@ -299,6 +301,7 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
     dderPs__ = []  # derP__ = [[] for P_ in P__[:-1]]  # init derP rows, exclude bottom P row
 
     for P_ in P__[1:-1]:  # higher compared row, exclude 1st: no +ve uplinks, and last: no +ve downlinks
+        # not revised:
         dderPs_ = []  # row of dderPs
         for P in P_:
             dderPs = []  # dderP for each _derP, derP pair in P links
@@ -769,13 +772,12 @@ def splice_2dir_blobs(_blob, blob):
     pass
 
 
-def sub_recursion_eval(PP_):  # for PP or dir_blob
+def sub_recursion_eval(PP_, fd):  # for PP or dir_blob
 
     from agg_recursion import agg_recursion, CgPP
     mcomb_layers, dcomb_layers, PPm_, PPd_ = [], [], [], []
     for PP in PP_:
 
-        fd = PP.fds[-1]
         if fd:  # add root to derP for der+:
             for P_ in PP.P__[1:-1]:  # skip 1st and last row
                 for P in P_:
@@ -796,7 +798,7 @@ def sub_recursion_eval(PP_):  # for PP or dir_blob
                     else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
 
         # segs rng_comp agg_recursion:
-        if val > ave*3 and len(PP.seg_levels[-1]) > ave_nsub:   # 3: agg_coef
+        if val > ave*3 and len(PP.seg_levels[-1]) > ave_nsub and not fd:  # no independent agg_recursion for PPds
             for i, seg in enumerate(PP.seg_levels[-1]):  # convert seg to CgPP
                 players = [[], []]
                 fd = seg.fds[-1]
