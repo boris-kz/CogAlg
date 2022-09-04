@@ -171,10 +171,11 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         dir_blob.rlayers = sub_recursion_eval(PPm_, fd=0)
         dir_blob.dlayers = sub_recursion_eval(PPd_, fd=1)  # add rlayers, dlayers, seg_levels to select PPs
 
-        comb_levels, levels = [],[]  # dir_blob agg levels
+        dir_blob.mlevels, dir_blob.dlevels = [PPm_], [PPd_]  # agg levels
         M = dir_blob.M; G = dir_blob.G  # weak-fork rdn, or combined value?
+        # cross PP, currently PPm_ only:
         if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PPm_) > ave_nsub):
-        # cross PP:
+
             dir_blob.valt = [M,G]
             from agg_recursion import agg_recursion, CgPP
             # convert PPs to CgPPs:
@@ -186,13 +187,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                     if altPP.players: sum_players(players[1-fd], altPP.players)  # alt-fork PPs per PP
                 PPm_[i] = CgPP(PP=PP, players_t=players, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
             # cluster PPs into graphs:
-            levels = agg_recursion(dir_blob, PPm_, rng=2, fseg=0)  # only PPms for now
-
-            for i, (comb_level, level) in enumerate(zip_longest(comb_levels, levels, fillvalue=[])):
-                if level:
-                    if i > len(comb_levels)-1: comb_levels += [level]  # add new level
-                    else: comb_levels[i] += [level]  # append existing level
-        dir_blob.levels = [[PPm_+PPd_]] + comb_levels  # 1st + higher levels
+            agg_recursion(dir_blob, PPm_, rng=2, fseg=0)  # only PPms for now
 
     # splice_dir_blob_(blob.dir_blobs)  # draft
 
@@ -490,7 +485,8 @@ def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
 def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
 
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn)  # L = yn-y0, redundant
-    PP.seg_levels = [PP_segs]  # PP_segs is levels[0]
+    if fd: PP.dseg_levels = [PP_segs]  # PP_segs is levels[0]
+    else:  PP.mseg_levels = [PP_segs]
 
     for seg in PP_segs:
         sum_players(PP.players, seg.players)  # not empty inp's players
@@ -690,19 +686,18 @@ def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP
         P_derP, _P_derP = P.P, P._P  # local copy of derP.P and derP._P
         P.P, P._P = None, None  # reset
     elif Ptype == 2:
-        seg_levels = P.seg_levels
-        rlayers = P.rlayers
-        dlayers = P.dlayers
+        mseg_levels, dseg_levels = P.mseg_levels, P.dseg_levels
+        rlayers, dlayers = P.rlayers, P.dlayers
         P__ = P.P__
-        P.seg_levels, P.rlayers, P.dlayers, P.P__ = [], [], [], []  # reset
+        P.mseg_levels, P.dseg_levels, P.rlayers, P.dlayers, P.P__ = [], [], [], [], []  # reset
     elif Ptype == 3:
         PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
         P.PP, P._PP = None, None  # reset
     elif Ptype == 4:
         gPP_, cPP_ = P.gPP_, P.cPP_
         rlayers, dlayers = P.rlayers, P.dlayers
-        levels = P.levels
-        P.gPP_, P.cPP_, P.rlayers, P.dlayers, P.levels = [], [], [], [], []  # reset
+        mlevels, dlevels = P.mlevels, P.dlevels
+        P.gPP_, P.cPP_, P.rlayers, P.dlayers, P.mlevels, P.dlevels = [], [], [], [], [], []  # reset
 
     new_P = deepcopy(P)  # copy P with empty root and link layers, reassign link layers:
     new_P.uplink_layers += copy(uplink_layers)
@@ -716,27 +711,21 @@ def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP
         new_P.P, new_P._P = P_derP, _P_derP
         P.P, P._P = P_derP, _P_derP
     elif Ptype == 2:
-        P.seg_levels = seg_levels
-        P.rlayers = rlayers
-        P.dlayers = dlayers
-        new_P.rlayers = copy(rlayers)
-        new_P.dlayers = copy(dlayers)
+        P.mseg_levels, P.dseg_levels = mseg_levels, dseg_levels
+        P.rlayers, P.dlayers = rlayers, dlayers
+        new_P.rlayers, new_P.dlayers = copy(rlayers), copy(dlayers)
         new_P.P__ = copy(P__)
-        new_P.seg_levels = copy(seg_levels)
+        new_P.mseg_levels, new_P.dseg_levels = copy(mseg_levels), copy(dseg_levels)
     elif Ptype == 3:
         new_P.PP, new_P._PP = PP_derP, _PP_derP
         P.PP, P._PP = PP_derP, _PP_derP
     elif Ptype == 4:
-        P.gPP_ = gPP_
-        P.cPP_ = cPP_
-        P.rlayers = rlayers
-        P.dlayers = dlayers
+        P.gPP_, P.cPP_ = gPP_, cPP_
+        P.rlayers, P.dlayers = rlayers, dlayers
         P.roott = roott
-        new_P.gPP_ = copy(gPP_)
-        new_P.cPP_ = copy(cPP_)
-        new_P.rlayers = copy(rlayers)
-        new_P.dlayers = copy(dlayers)
-        new_P.levels = copy(levels)
+        new_P.gPP_, new_P.cPP_ = [], []
+        new_P.rlayers, new_P.dlayers = copy(rlayers), copy(dlayers)
+        new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
 
     return new_P
 
@@ -777,7 +766,6 @@ def sub_recursion_eval(PP_, fd):  # for PP or dir_blob
     from agg_recursion import agg_recursion, CgPP
     mcomb_layers, dcomb_layers, PPm_, PPd_ = [], [], [], []
     for PP in PP_:
-
         if fd:  # add root to derP for der+:
             for P_ in PP.P__[1:-1]:  # skip 1st and last row
                 for P in P_:
@@ -797,14 +785,16 @@ def sub_recursion_eval(PP_, fd):  # for PP or dir_blob
                     if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
                     else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
 
-        # segs rng_comp agg_recursion:
+        # segs agg_recursion:
         if val > ave*3 and len(PP.seg_levels[-1]) > ave_nsub and not fd:  # no independent agg_recursion for PPds
-            for i, seg in enumerate(PP.seg_levels[-1]):  # convert seg to CgPP
+            if fd: seg_levels = PP.mseg_levels
+            else:  seg_levels = PP.dseg_levels
+            for i, seg in enumerate(seg_levels[-1]):  # convert seg to CgPP
                 players = [[], []]
                 fd = seg.fds[-1]
                 players[fd] = seg.players  # there's no alt seg, always 1 empty players at players_t
-                PP.seg_levels[-1][i] = CgPP(PP=seg, players_t=players, fds=deepcopy(seg.fds), x0=seg.x0, xn=seg.xn, seg=PP.y0, yn=seg.yn)
-            agg_recursion(PP, PP.seg_levels[-1], rng=2, fseg=1)
+                seg_levels[-1][i] = CgPP(PP=seg, players_t=players, fds=deepcopy(seg.fds), x0=seg.x0, xn=seg.xn, seg=PP.y0, yn=seg.yn)
+            agg_recursion(PP, seg_levels[-1], rng=2, fseg=1)
 
     return [[PPm_] + mcomb_layers], [[PPd_] + dcomb_layers]  # including empty comb_layers
 
@@ -819,5 +809,5 @@ def sub_recursion(PP):  # evaluate each PP for rng+ and der+
     sub_segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=PP.fds)  # returns bottom-up
     sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdn + 1)  # PP is parameterized graph of linked segs
 
-    sub_rlayers, sub_dlayers = sub_recursion_eval(sub_PPm_ + sub_PPd_)  # add rlayers, dlayers, seg_levels to select sub_PPs
-    PP.rlayers += [sub_rlayers]; PP.dlayers += [sub_dlayers]
+    PP.rlayers = sub_recursion_eval(sub_PPm_, fd=0)  # add rlayers, dlayers, seg_levels to select sub_PPs
+    PP.dlayers = sub_recursion_eval(sub_PPd_, fd=1)

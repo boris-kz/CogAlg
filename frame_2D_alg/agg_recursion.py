@@ -48,41 +48,33 @@ class CgPP(CPP, CderPP):  # generic PP, of any composition
     cPP_ = list  # co-refs in other PPPs
     rlayers = list  # | mlayers
     dlayers = list  # | alayers
-    mlevels = lambda: [[]]  # agg_PPs ) agg_PPPs ) agg_PPPPs..
-    dlevels = lambda: [[]]
+    mlevels = list  # agg_PPs ) agg_PPPs ) agg_PPPPs..
+    dlevels = list
     roott = lambda: [None, None]  # lambda: CgPP()  # higher-order segP or PPP
 
 
 def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.Plevel; P, PP, PPP are relative to each other
 
-    PPP_ = comp_PP_(PP_, rng)  # cross-comp all PPs within rng, same PPP_ for both forks, add fseg?
+    PPP_ = comp_PP_(copy(PP_), rng, fseg)  # cross-comp all PPs (which may be segs) within rng, same PPP_ for both forks
     graph_ = form_graph(PPP_, rng)  # if top level miss, lower levels match: splice PPs vs form PPPs
 
-    # intra graph:
+    # intra-graph:
     if sum(root.valt) > ave_agg * root.rdn:
-        valt = sub_recursion_agg(graph_)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
-        for rval, val in zip(root.valt, valt):
-            rval+=val
-    # cross graph:
+        # draft:
+        sub_rlayers, rvalt = sub_recursion_agg(graph_, root.valt, fd=0)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
+        root.valt[0] += sum(rvalt); root.rlayers = sub_rlayers
+        sub_dlayers, dvalt = sub_recursion_agg(graph_, root.valt, fd=1)
+        root.valt[1] += sum(dvalt); root.dlayers = sub_dlayers
+    # cross-graph:
     val = sum(root.valt)
-    comb_levels = []
-    if (val > ave_agg * root.rdn) and len(graph_) > ave_nsub:
-        root.rdn += 1  # i think we need increase rdn for each new recursion, so probably use local rdn here?
-        if fseg: levels = root.seg_levels
-        else:    levels = root.levels
-
-        levels += [agg_recursion(root, graph_, rng = val/ave_agg, fseg=fseg)]  # cross-comp graphs
-        for graph in graph_:
-            for i, (comb_level, level) in enumerate(zip_longest(comb_levels, graph.levels, fillvalue=[])):
-                if level:
-                    if i > len(comb_levels) - 1: comb_levels += [[level]]  # add new level
-                    else: comb_levels[i] += [level]  # append existing layer
-        comb_levels += [graph_] + comb_levels
-
-    return comb_levels
+    if (val > ave_agg * (root.rdn/len(graph_))) and len(graph_) > ave_nsub:  # not sure about rdn norm
+        root.rdn += 1  # estimate, replace by actual after agg_recursion?
+        root.mlevels += graph_  # bottom-up
+        root.dlevels += []  # none for now
+        agg_recursion(root, graph_, rng = val/ave_agg, fseg=0)  # cross-comp graphs
 
 
-def comp_PP_(PP_, rng):  # 1st cross-comp
+def comp_PP_(PP_, rng, fseg):  # 1st cross-comp, PPs may be segs inside a PP
 
     PPP_ = []
     iPPP_ = [copy_P(PP, iPtype=4) for PP in PP_]
@@ -174,30 +166,30 @@ def eval_ref_layer(graph_, graph, PPP_, shared_M):  # recursive eval of increasi
 
 
 # draft:
-def sub_recursion_agg(graph_):  # rng+: extend PP_ per PPP, der+: replace PP with derPP in PPt
+def sub_recursion_agg(graph_, fseg, fd):  # rng+: extend PP_ per PPP, der+: replace PP with derPP in PPt
 
     comb_layers = []
+    sub_valt = [0,0]
 
     for graph in graph_:
-        fd = graph.fds[-1]
         if graph.valt[fd] > PP_aves[fd] and len(graph.gPP_) > ave_nsub:
 
-            sub_PPP_ = comp_PP_(graph.gPP_)  # cross-comp all PPs within rng, same PPP_ for both forks, add fseg?
+            sub_PPP_ = comp_PP_(graph.gPP_, fseg)  # cross-comp all PPs within rng, same PPP_ for both forks, add fseg?
             sub_graph_ = form_graph(sub_PPP_, graph.rng)  # if top level miss, lower levels match: splice PPs vs form PPPs
 
-            if fd: graph_layers = graph.dlayers
-            else:  graph_layers = graph.rlayers
+            sub_rlayers, valt = sub_recursion_agg(sub_graph_, graph.valt, fd=0)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
+            rvalt = sum(valt); graph.valt[0] += rvalt; sub_valt[0] += rvalt  # not sure
+            sub_dlayers, valt = sub_recursion_agg(sub_graph_, graph.valt, fd=1)
+            dvalt = sum(valt); graph.valt[1] += dvalt; sub_valt[1] += dvalt
 
-            graph_layers += sub_recursion_agg(sub_graph_, graph.valt)  # re-form PPP.PP_ by der+ if PPP.fPd else rng+, accum root.valt
-
-            for i, (comb_layer, graph_layer) in enumerate(zip_longest(comb_layers, graph_layers, fillvalue=[])):
+            for i, (comb_layer, graph_layer) in enumerate(zip_longest(comb_layers, graph.dlayers if fd else graph.rlayers, fillvalue=[])):
                 if graph_layer:
                     if i > len(comb_layers) - 1:
                         comb_layers += [graph_layer]  # add new r|d layer
                     else:
                         comb_layers[i] += graph_layer  # splice r|d PP layer into existing layer
 
-    return comb_layers
+    return comb_layers, sub_valt
 
 
 # not fully revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
