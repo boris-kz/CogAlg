@@ -171,25 +171,21 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         dir_blob.rlayers = sub_recursion_eval(PPm_, fd=0)
         dir_blob.dlayers = sub_recursion_eval(PPd_, fd=1)  # add rlayers, dlayers, seg_levels to select PPs
 
-        dir_blob.mlevels, dir_blob.dlevels = [PPm_], [PPd_]  # agg levels
-        M = dir_blob.M; G = dir_blob.G  # weak-fork rdn, or combined value?
-        # cross PP, currently PPm_ only:
-        if ((M - ave_mPP * (1+(G>M)) + (G - ave_dPP * (1+M>=G)) - ave_agg * (dir_blob.rdn+1) > 0) and len(PPm_) > ave_nsub):
+        dir_blob.mlevels = [PPm_]; dir_blob.dlevels = [PPd_]  # agg levels
+        M = dir_blob.M; G = dir_blob.G; dir_blob.valt = [M, G]; fork_rdnt = [1+(G>M), 1+(M>=G)]
+        from agg_recursion import agg_recursion, CgPP
+        # cross PP:
+        for i, PP_ in enumerate([PPm_, PPd_]):
+            if (dir_blob.valt[i] > PP_aves[i] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[i]) and len(PP_) > ave_nsub:
+                for j, PP in enumerate(PP_):  # convert to CgPP
+                    alt_players = []
+                    for altPP in PP.altPP_: sum_players(alt_players, altPP.players)
+                    PP_[j] = CgPP(PP=PP, players_t=[PP.players,alt_players], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+                # cluster PPs into graphs:
+                dir_blob.rdn += 1  # estimate, replace by actual after agg_recursion?
+                agg_recursion(dir_blob, PP_, rng=2, fseg=0)
 
-            dir_blob.valt = [M,G]
-            from agg_recursion import agg_recursion, CgPP
-            # convert PPs to CgPPs:
-            for i, PP in enumerate(PPm_):
-                players = [[], []]
-                fd = PP.fds[-1]
-                players[fd] = PP.players
-                for altPP in PP.altPP_:
-                    if altPP.players: sum_players(players[1-fd], altPP.players)  # alt-fork PPs per PP
-                PPm_[i] = CgPP(PP=PP, players_t=players, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
-            # cluster PPs into graphs:
-            agg_recursion(dir_blob, PPm_, rng=2, fseg=0)  # only PPms for now
-
-    # splice_dir_blob_(blob.dir_blobs)  # draft
+        # splice_dir_blob_(blob.dir_blobs)  # draft
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
@@ -457,8 +453,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
         P.roott[fd] = seg
         for derP in P.uplink_layers[-2]:
             if derP not in P.uplink_layers[-1][fd]:
-                # actually nval and nderP_ in segs, they are not sign-complemented:
-                seg.nvalt += derP.valt[fd]  # -ve links in full links, not in +ve links
+                seg.nvalt[fd] += derP.valt[fd]  # -ve links in full links, not in +ve links
                 seg.nderP_t += [derP]
     accum_derP(seg, seg_Ps[-1], fd)  # accum last P only, top P uplink_layers are not part of seg
     seg.y0 = seg_Ps[0].y
@@ -484,9 +479,9 @@ def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
 
 def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
 
-    PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn)  # L = yn-y0, redundant
-    if fd: PP.dseg_levels = [PP_segs]  # PP_segs is levels[0]
-    else:  PP.mseg_levels = [PP_segs]
+    PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn)
+    if fd: PP.dseg_levels, PP.mseg_levels = [PP_segs], [[]]  # empty alt_seg_levels
+    else:  PP.mseg_levels, PP.dseg_levels = [PP_segs], [[]]
 
     for seg in PP_segs:
         sum_players(PP.players, seg.players)  # not empty inp's players
@@ -786,15 +781,13 @@ def sub_recursion_eval(PP_, fd):  # for PP or dir_blob
                     else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
 
         # segs agg_recursion:
-        if val > ave*3 and len(PP.seg_levels[-1]) > ave_nsub and not fd:  # no independent agg_recursion for PPds
-            if fd: seg_levels = PP.mseg_levels
-            else:  seg_levels = PP.dseg_levels
-            for i, seg in enumerate(seg_levels[-1]):  # convert seg to CgPP
-                players = [[], []]
-                fd = seg.fds[-1]
-                players[fd] = seg.players  # there's no alt seg, always 1 empty players at players_t
-                seg_levels[-1][i] = CgPP(PP=seg, players_t=players, fds=deepcopy(seg.fds), x0=seg.x0, xn=seg.xn, seg=PP.y0, yn=seg.yn)
-            agg_recursion(PP, seg_levels[-1], rng=2, fseg=1)
+        if val > ave_agg and len(PP.mseg_levels[-1]) > ave_nsub:  # no agg_recursion for dsegs?
+            for fd, seg_levels in enumerate([PP.mseg_levels[-1], PP.dseg_levels[-1]]):  # convert seg to CgPP
+                for i, seg in enumerate(seg_levels):
+                    players = [[], []]
+                    players[fd] = seg.players  # there's no alt seg, always 1 empty players at players_t
+                    seg_levels[i] = CgPP(PP=seg, players_t=players, fds=deepcopy(seg.fds), x0=seg.x0, xn=seg.xn, seg=PP.y0, yn=seg.yn)
+            agg_recursion(PP, [PP.mseg_levels[-1], PP.dseg_levels[-1]], rng=2, fseg=1)
 
     return [[PPm_] + mcomb_layers], [[PPd_] + dcomb_layers]  # including empty comb_layers
 
