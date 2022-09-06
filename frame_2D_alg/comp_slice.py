@@ -61,6 +61,7 @@ ave_dPP = 10
 ave_splice = 10
 ave_nsub = 1
 ave_agg = 3
+ave_overlap = 10
 
 param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]
 aves = [ave_dx, ave_dI, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mval, ave_dval]
@@ -136,6 +137,7 @@ class CPP(CderP):  # derP params include P.ptuple
     rng = lambda: 1  # rng starts with 1
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
     Rdn = int  # for accumulation only
+    alt_rdn = int  # overlapping redundancy between core and edge
     P_cnt = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
     derP_cnt = int  # redundant per P
     uplink_layers = lambda: [[]]  # the links here will be derPPs from discontinuous comp, not in layers?
@@ -171,21 +173,44 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         dir_blob.rlayers = sub_recursion_eval(PPm_, fd=0)
         dir_blob.dlayers = sub_recursion_eval(PPd_, fd=1)  # add rlayers, dlayers, seg_levels to select PPs
 
+        # agg recursion
         dir_blob.mlevels = [PPm_]; dir_blob.dlevels = [PPd_]  # agg levels
-        M = dir_blob.M; G = dir_blob.G; dir_blob.valt = [M, G]; fork_rdnt = [1+(G>M), 1+(M>=G)]
-        from agg_recursion import agg_recursion, CgPP
-        # cross PP:
-        for i, PP_ in enumerate([PPm_, PPd_]):
-            if (dir_blob.valt[i] > PP_aves[i] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[i]) and len(PP_) > ave_nsub:
-                for j, PP in enumerate(PP_):  # convert to CgPP
-                    alt_players = []
-                    for altPP in PP.altPP_: sum_players(alt_players, altPP.players)
-                    PP_[j] = CgPP(PP=PP, players_t=[PP.players,alt_players], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
-                # cluster PPs into graphs:
-                dir_blob.rdn += 1  # estimate, replace by actual after agg_recursion?
-                agg_recursion(dir_blob, PP_, rng=2, fseg=0)
-
+        agg_recursion_eval(dir_blob, [PPm_, PPd_], fseg=0)
         # splice_dir_blob_(blob.dir_blobs)  # draft
+
+
+def agg_recursion_eval(dir_blob, PP_t, fseg):
+    from agg_recursion import agg_recursion, CgPP
+
+    if fseg: M = dir_blob.players[0][0].M; G = dir_blob.players[0][0].G  # dir_blob is CPP
+    else:    M = dir_blob.M; G = dir_blob.G; dir_blob.valt = [M, G]      # update valt only if dir_blob is Cblob
+    fork_rdnt = [1+(G>M), 1+(M>=G)]
+
+    # cross PP:
+    for fd, PP_ in enumerate(PP_t):
+        alt_Rdn = 0  # sum of alt_rdn across PP_
+
+        for PP in PP_:
+            if fseg: PP = PP.roott[PP.fds[-1]]  # use seg's root if fseg
+            PP_P_ = [P for P_ in PP.P__ for P in P_]  # PP's Ps
+            for altPP in PP.altPP_:  # check overlapping Ps from each alt PP
+                altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
+                alt_rdn = len(set(PP_P_).intersection(altPP_P_))
+                # not accumulation of alt_rdn for fseg = true
+                if not fseg: PP.alt_rdn += alt_rdn  # add number of overlapping Ps
+                # (we don't assign bilaterally here because each PP will compute their alt_rdn in their own loop)
+                alt_Rdn += alt_rdn
+
+        if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) and len(PP_) > ave_nsub and alt_Rdn < ave_overlap:
+            for j, PP in enumerate(PP_):  # convert to CgPP
+                alt_players = []
+                if not fseg:  # seg doesn't have altPP
+                    for altPP in PP.altPP_: sum_players(alt_players, altPP.players)
+                PP_[j] = CgPP(PP=PP, players_t=[PP.players,alt_players], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+            # cluster PPs into graphs:
+            dir_blob.rdn += 1  # estimate, replace by actual after agg_recursion?
+            agg_recursion(dir_blob, PP_, rng=2, fseg=fseg)
+
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
@@ -484,6 +509,7 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
     else:  PP.mseg_levels, PP.dseg_levels = [PP_segs], [[]]
 
     for seg in PP_segs:
+        seg.roott[fd] = PP
         sum_players(PP.players, seg.players)  # not empty inp's players
         PP.fds = copy(seg.fds)
         PP.x0 = min(PP.x0, seg.x0)  # external params: 2nd player?
@@ -781,13 +807,7 @@ def sub_recursion_eval(PP_, fd):  # for PP or dir_blob
                     else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
 
         # segs agg_recursion:
-        if val > ave_agg and len(PP.mseg_levels[-1]) > ave_nsub:  # no agg_recursion for dsegs?
-            for fd, seg_levels in enumerate([PP.mseg_levels[-1], PP.dseg_levels[-1]]):  # convert seg to CgPP
-                for i, seg in enumerate(seg_levels):
-                    players = [[], []]
-                    players[fd] = seg.players  # there's no alt seg, always 1 empty players at players_t
-                    seg_levels[i] = CgPP(PP=seg, players_t=players, fds=deepcopy(seg.fds), x0=seg.x0, xn=seg.xn, seg=PP.y0, yn=seg.yn)
-            agg_recursion(PP, [PP.mseg_levels[-1], PP.dseg_levels[-1]], rng=2, fseg=1)
+        agg_recursion_eval(PP, [PP.mseg_levels[-1], PP.dseg_levels[-1]], fseg=1)
 
     return [[PPm_] + mcomb_layers], [[PPd_] + dcomb_layers]  # including empty comb_layers
 
