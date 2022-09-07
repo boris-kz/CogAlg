@@ -41,7 +41,7 @@ class CgPP(CPP, CderPP):  # graph or generic PP of any composition
     alt_PP_ = list  # alt-fork gPPs
     box = list
     link_player_t = lambda: [[], []]  # one player, accum per fork
-    link_ = list  # lateral (PP, derPP, fint)_, + deeper layers?
+    link_ = list  # lateral gPP connections: (PP, derPP, fint)_, + deeper layers?
     node_ = list  # gPP elements, root of layers and levels:
     rlayers = list  # | mlayers, top-down
     dlayers = list  # | alayers
@@ -53,13 +53,16 @@ class CgPP(CPP, CderPP):  # graph or generic PP of any composition
 
 def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.Plevel; P, PP, PPP are relative to each other
 
-    comp_PP_(PP_, rng, fseg)  # cross-comp all PPs (which may be segs) within rng, same PP_ for both forks
-    mgraph_ = form_graph(PP_, rng, fd=0)  # if top level miss, lower levels match: splice PPs vs form PPPs
-    dgraph_ = form_graph(PP_, rng, fd=1)
+    mgraph_, dgraph_ = comp_PP_(PP_, rng, fseg)  # cross-comp all PPs (which may be segs) in rng, same PP_ for both forks
+    # init graph per PP, if top level miss, lower levels match: splice PPs vs form graphs?
+
+    for fd, graph_ in enumerate(mgraph_, dgraph_):
+        for graph in graph_:  # eval intermediate nodes to prune, merge graphs:
+            eval_ref_layer(graph_=graph_, graph=graph, node_=graph.node_, shared_Val=0, fid=fd)
     # intra-graph:
     if sum(root.valt) > ave_agg * root.rdn:
         # draft:
-        sub_rlayers, rvalt = sub_recursion_agg(mgraph_, root.valt, fd=0)  # subdivide graph.node_ by der+ if fd else rng+, accum root.valt
+        sub_rlayers, rvalt = sub_recursion_agg(mgraph_, root.valt, fd=0)  # subdivide graph.node_ by der+|rng+, accum root.valt
         root.valt[0] += sum(rvalt); root.rlayers = sub_rlayers
         sub_dlayers, dvalt = sub_recursion_agg(dgraph_, root.valt, fd=1)
         root.valt[1] += sum(dvalt); root.dlayers = sub_dlayers
@@ -67,95 +70,86 @@ def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.P
     for i, graph_ in enumerate([mgraph_, dgraph_]):
         val = root.valt[i]
         if (val > PP_aves[i] * ave_agg * (root.rdn + 1)) and len(graph_) > ave_nsub:
-
             root.rdn += 1  # estimate, replace by actual after agg_recursion?
             root.mlevels += mgraph_  # bottom-up
             root.dlevels += dgraph_
             agg_recursion(root, graph_, rng=val / ave_agg, fseg=0)  # cross-comp graphs
 
 
-def comp_PP_(PP_, rng, fseg):  # 1st cross-comp, PPs may be segs inside a PP
+def comp_PP_(PP_, rng, fseg):  # 1st cross-comp, same val,rng for both forks? PPs may be segs inside a PP
 
-    for i, _PP in enumerate(PP_):  # compare _PP to all other PPs within rng
-        _fid = _PP.fds[-1]
-        for PP in PP_[i:]:  # add selection by dy<rng if incremental y? accum derPPs in link_player_t
-            fid = PP.fds[-1]
+    fd = PP_[0].fds[-1]  # for all PPs
+    graph_t = [[],[]]
+    for PP in PP_:
+        for f in 0,1:  # init two graphs per PP, no alt players yet?
+            graph=CgPP(node_=[PP], players_t=[deepcopy(PP.players_t),[]], fds=copy(PP.fds), valt=PP.valt, x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+            PP.roott[f] = graph  # set root of core part as graph
+            graph_t[f] += [graph]
 
-            area = PP.players_t[fid][0][0].L; _area = _PP.players_t[_fid][0][0].L
+    for i, _PP in enumerate(PP_):
+        for PP in PP_[i:]:  # comp _PP to all other PPs in rng, select by dy<rng if incremental y? accum derPPs in link_player_t
+
+            area = PP.players_t[fd][0][0].L; _area = _PP.players_t[fd][0][0].L
             dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
             dy = _PP.y / _area - PP.y / area
             distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
             #  fork_rdnt = [1 + (root.valt[1] > root.valt[0]), 1 + (root.valt[0] >= root.valt[1])]  # not per graph_?
 
-            val = sum(_PP.valt) / (ave_mPP+ave_dPP)  # complimented PP eval
+            val = sum(_PP.valt) / (ave_mPP+ave_dPP)  # complimented val: cross-fork support, if spread spectrum?
             if distance * val <= rng:
                 # comp PPs:
-                mplayer, dplayer = comp_players(_PP.players_t[_fid], PP.players_t[fid], _PP.fds, PP.fds)
+                mplayer, dplayer = comp_players(_PP.players_t[fd], PP.players_t[fd], _PP.fds, PP.fds)
                 valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
                 derPP = CderPP(player_t=[mplayer, dplayer], valt=valt)  # single-layer
                 fint = []
-                for fd in 0,1:  # sum players per fork
-                    if valt[fd] > PP_aves[fd]:
-                        fin = 1  # PPs match, sum derPP in both PPP and _PPP:
-                        sum_players(_PP.players_t[fd], PP.players_t[fd])
-                        sum_players(PP.players_t[fd], PP.players_t[fd])  # all PP.players in each PPP.players
-                        sum_player(_PP.link_players_t[fd], derPP.player_t[fd])
-                        sum_player(_PP.link_players_t[fd], derPP.player_t[fd])
+                for fdd in 0,1:  # sum players per fork
+                    if valt[fdd] > PP_aves[fdd]:  # no cross-fork support?
+                        fin = 1
+                        for gPP in _PP, PP:  # bilateral inclusion
+                            graph = gPP.roott[fdd]
+                            sum_players(graph.players_t[fd], PP.players_t[fd])
+                            graph.node_ += PP
+                            sum_player(gPP.link_player_t[fd], derPP.player_t[fd])
                     else:
                         fin = 0
                     fint += [fin]
                 _PP.link_ += [[PP, derPP, fint]]
                 PP.link_ += [[_PP, derPP, fint]]
-                '''
-                _PP.cPP_ += [[PP, derPP, [1,1]]]  # rdn refs, initial fins=1, derPP is reversed
-                PP.cPP_ += [[_PP, derPP, [1,1]]]  # bilateral assign to eval in centroid clustering, derPP is reversed
-                if derPP.match params[-1]: form PPP
-                elif derPP.match params[:-1]: splice PPs and their segs? 
-                '''
 
-def form_graph(PP_, rng, fd):  # cluster PPPs by match of mutual connections, which is summed across shared nodes and their roots
+    return graph_t
+'''
+_PP.cPP_ += [[PP, derPP, [1,1]]]  # rdn refs, initial fins=1, derPP is reversed
+PP.cPP_ += [[_PP, derPP, [1,1]]]  # bilateral assign to eval in centroid clustering, derPP is reversed
+if derPP.match params[-1]: form PPP
+elif derPP.match params[:-1]: splice PPs and their segs? 
+'''
 
-    graph_= []
-    for PP in PP_:  # initialize graph for each PP:
-        graph=CgPP(node_=[PP], fds = copy(PP.fds), rng=rng, players_t = deepcopy(PP.players_t), valt=PP.valt)
-        PP.roott[fd]=graph  # set root of core part as graph
-        graph_+=[graph]
-    merged_graph_ = []
-    while graph_:
-        graph = graph_.pop(0)
-        eval_ref_layer(graph_=graph_, graph=graph, node_=graph.node_, shared_Val=0, fid=fd)
-        merged_graph_ += [graph]  # graphs merge (split?) in eval_ref_layer, each layer is intermediate PPPs
-        # add|remove individual nodes+links: PPPs, not the links between PPs in PPP?
-
-    return merged_graph_
-
-# draft
-def eval_ref_layer(graph_, graph, node_, shared_Val, fid):  # recursive eval of increasingly mediated nodes (graph_, graph, shared_M)?
+# draft, add splitting graphs?
+def eval_ref_layer(graph_, graph, node_, shared_Val, fid):  # recursive eval of mutual links in increasingly mediated nodes
 
     for node in node_:
         for (PP, derPP, fint) in node.link_:
-            shared_Val += derPP.valt[fid]  # accum shared_M across mediating node layers
-
-            for (_PP, _derPP, _fint) in PP.roott[fid].link_:  # test for reciprocal refs:
-                if _PP is PP:  # mutual link
-                    shared_Val += _derPP.valt[fid] - ave_agg  # eval graph inclusion by match to mediating node
-                    # * rdn: sum PP_ rdns / len PP_ + cross-PPP overlap rate + cross-graph overlap rate?
-                    if shared_Val > 0:
-                        _graph = _PP.roott[fid]
-                        if _graph is not graph:
-                            # merge graphs:
+            shared_Val += derPP.valt[fid]  # mediating nodes
+            # sum reciprocal links:
+            for (_PP, _derPP, _fint) in PP.link_:
+                if _PP is PP:
+                    _graph = _PP.roott[fid]
+                    if _graph is not graph:
+                        shared_Val += _derPP.valt[fid] - ave_agg  # * rdn: sum PP_ rdns / len PP_ + graphs overlap rate?
+                        if shared_Val > 0:  # merge graphs if mediating nodes match
                             for fd in 0, 1:
                                 if _graph.players_t[fd]:
                                     sum_players(graph.players_t[fd], _graph.players_t[fd])
                                     graph.valt[fd] += _graph.valt[fd]
-                            for rPP in _graph.link_: rPP.roott[fid] = graph  # update graph reference
-                            graph.link_ += _graph.link_
+                            for _node in _graph.node_:
+                                _node.roott[fid] = graph; graph.node_ += [_node]
                             graph_.remove(_graph)
 
-                            # recursive search of increasingly intermediated refs for mutual connections
+                            # recursively intermediated search for mutual connections
                             for __PP,_,_ in _PP.link_:
-                                if __PP.roott[fid] is not graph:
-                                    eval_ref_layer(graph_, graph, __PP.roott[fid].link_, shared_Val, fid)
+                                __graph = __PP.roott[fid]
+                                if __graph is not graph:
+                                    eval_ref_layer(graph_, graph, __graph.node_, shared_Val, fid)
 
 # not reviewed:
 

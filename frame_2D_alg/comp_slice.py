@@ -172,10 +172,10 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         # intra PP:
         dir_blob.rlayers = sub_recursion_eval(PPm_, fd=0)
         dir_blob.dlayers = sub_recursion_eval(PPd_, fd=1)  # add rlayers, dlayers, seg_levels to select PPs
-
-        # agg recursion
+        # cross PP:
         dir_blob.mlevels = [PPm_]; dir_blob.dlevels = [PPd_]  # agg levels
-        agg_recursion_eval(dir_blob, [PPm_, PPd_], fseg=0)
+        dir_blob.mlevels += agg_recursion_eval(PPm_, fseg=0, fd=0)
+        dir_blob.dlevels += agg_recursion_eval(PPd_, fseg=0, fd=1)
         # splice_dir_blob_(blob.dir_blobs)  # draft
 
 
@@ -564,7 +564,7 @@ def sum_player(Player, player, fneg=0):  # accum players in Players
     for i, (Ptuple, ptuple) in enumerate(zip_longest(Player, player, fillvalue=[])):
         if ptuple:
             if Ptuple: accum_ptuple(Ptuple, ptuple, fneg)
-            elif Ptuple == None: Player[i] = ptuple  # not sure
+            elif Ptuple == None: Player[i] = deepcopy(ptuple)  # not sure
             elif not fneg: Player.append(deepcopy(ptuple))
 
 def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
