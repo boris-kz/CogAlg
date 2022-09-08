@@ -173,3 +173,60 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                 agg_recursion(dir_blob, PP_, rng=2, fseg=0)
 
         # splice_dir_blob_(blob.dir_blobs)  # draft
+
+
+def comp_PP_(PP_, rng, fseg):  # cross-comp + init clustering, same val,rng for both forks? PPs may be segs inside a PP
+
+    graph_t = [[],[]]
+
+    for PP in PP_:
+        for f in 0,1:  # init mgraph, dgraph per PP, no new alt_players_t yet, draft:
+            # actually, we can't initialize graphs with PPs, they should only contain positive links
+            # comp_PP_ forms links, not graphs?
+            graph = CgPP(node_=[PP], fds=copy(PP.fds), valt=PP.valt, x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn,
+                         players_T = [deepcopy(PP.players_t),deepcopy(PP.alt_players_t)])  # nested lower-composition core,edge tuples
+            PP.roott[f] = graph  # set root of core part as graph
+            graph_t[f] += [graph]
+
+    for i, _PP in enumerate(PP_):
+        for PP in PP_[i:]:  # comp _PP to all other PPs in rng, select by dy<rng if incremental y? accum derPPs in link_player_t
+
+            for fd in 0,1:  # add indefinite nesting:
+                if PP.players_t[fd] and _PP.players_t[fd]:
+                    continue
+                area = PP.players_t[fd][0][0].L; _area = _PP.players_t[fd][0][0].L
+                dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
+                dy = _PP.y / _area - PP.y / area
+                distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+                #  fork_rdnt = [1 + (root.valt[1] > root.valt[0]), 1 + (root.valt[0] >= root.valt[1])]  # not per graph_?
+
+                # separated val for evaluation now?
+                val = _PP.valt[fd] / PP_aves[fd]  # complimented val: cross-fork support, if spread spectrum?
+                if distance * val <= rng:
+                    # comp PPs:
+                    mplayer, dplayer = comp_players(_PP.players_t[fd], PP.players_t[fd], _PP.fds, PP.fds)
+                    valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
+                    derPP = CderPP(player_t=[mplayer, dplayer], valt=valt)  # single-layer
+                    fint = []
+
+                    for fdd in 0,1:  # sum players per fork
+                        if valt[fdd] > PP_aves[fdd]:  # no cross-fork support?
+                            fin = 1
+                            for gPP in _PP, PP:  # bilateral inclusion
+                                graph = gPP.roott[fd]
+                                sum_players(graph.players_t[fdd], PP.players_t[fdd])
+                                graph.node_ += [PP]
+                                sum_player(gPP.link_player_t[fdd], derPP.player_t[fdd])
+                        else:
+                            fin = 0
+                        fint += [fin]
+                    _PP.link_ += [[PP, derPP, fint]]
+                    PP.link_ += [[_PP, derPP, fint]]
+
+    return graph_t
+'''
+_PP.cPP_ += [[PP, derPP, [1,1]]]  # rdn refs, initial fins=1, derPP is reversed
+PP.cPP_ += [[_PP, derPP, [1,1]]]  # bilateral assign to eval in centroid clustering, derPP is reversed
+if derPP.match params[-1]: form PPP
+elif derPP.match params[:-1]: splice PPs and their segs? 
+'''
