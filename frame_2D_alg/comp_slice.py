@@ -206,7 +206,7 @@ def agg_recursion_eval(dir_blob, PP_t, fseg):
                 alt_players = []
                 if not fseg:  # seg doesn't have altPP
                     for altPP in PP.altPP_: sum_players(alt_players, altPP.players)
-                PP_[j] = CgPP(PP=PP, players_t=[PP.players,alt_players], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+                PP_[j] = CgPP(PP=PP, node_=[PP], players_T=[PP.players,alt_players], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
             # cluster PPs into graphs:
             dir_blob.rdn += 1  # estimate, replace by actual after agg_recursion?
             agg_recursion(dir_blob, PP_, rng=2, fseg=fseg)
