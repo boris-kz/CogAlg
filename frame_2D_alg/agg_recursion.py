@@ -14,8 +14,11 @@ This may form closed edge patterns around flat core blobs, which defines stable 
 
 class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlink_, PP can also be PPP, etc.
 
-    player_t = lambda: [[], []]  # lists of ptuples in current derivation layer per fork
+    player_t = lambda: [[],[]]  # lists of ptuples in current derivation layer per fork
     valt = lambda: [0,0]  # tuple of mval, dval
+    # CderGraph:
+    # alt_player = []  # ders of summed adjacent alt-fork PP params
+    # alt_valt = lambda: [0, 0]
     # 5 below are not needed?
     box = list  # 2nd level, stay in PP?
     rdn = int  # mrdn, + uprdn if branch overlap?
@@ -28,19 +31,20 @@ class CderPP(ClusterStructure):  # tuple of derivatives in PP uplink_ or downlin
     # from comp_dx
     fdx = NoneType
 
-class CgPP(CPP, CderPP):  # graph or generic PP of any composition
+class Cgraph(CPP, CderPP):  # graph or generic PP of any composition
 
-    players_T = lambda: [[], []]  # mPlayers, dPlayers, max n ptuples / layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
-    # nested tuple, includes lower-composition (players_t, alt_players_t)s
+    alt_PP_ = list  # adjacent alt-fork gPPs, cross-support for sub, cross-suppression for agg?
+    plevels = list  # max n ptuples / level = n ptuples in all lower layers: 1, 1, 2, 4, 8...
+    alt_plevels = list
     valt = lambda: [0, 0]  # mval, dval
     nvalt = lambda: [0, 0]  # neg links
+    alt_valt = lambda: [0, 0]  # mval, dval; no nvalt?
     fds = list  # prior fork sequence, map to mplayer or dplayer in lower (not parallel) player, none for players[0]
-    rng = lambda: 1  # rng starts with 1
+    alt_fds = list
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs
     Rdn = int  # for accumulation only
-    alt_PP_ = list  # adjacent alt-fork gPPs
     alt_rdn = int  # valt representation in alt_PP_ valts
-    alt_players_T = list
+    rng = lambda: 1  # rng starts with 1, not for alt_PPs
     box = list
     link_player_t = lambda: [[], []]  # one player, accum per fork
     link_ = list  # lateral gPP connections: (PP, derPP, fint)_, + deeper layers?
@@ -49,7 +53,7 @@ class CgPP(CPP, CderPP):  # graph or generic PP of any composition
     dlayers = list  # | alayers
     mlevels = list  # agg_PPs ) agg_PPPs ) agg_PPPPs.., bottom-up
     dlevels = list
-    roott = lambda: [None, None]  # lambda: CgPP()  # higher-order segP or PPP
+    roott = lambda: [None, None]  # lambda: Cgraph()  # higher-order segP or PPP
     # cPP_ = list  # co-refs in other PPPs
 
 
@@ -77,6 +81,12 @@ def agg_recursion(root, PP_, rng, fseg=0):  # compositional recursion per blob.P
 
 def form_graph_(PP_, rng, fseg):
 
+    for PP in PP_:  # initialize mgraph, dgraph for each PP
+        for fd in 0,1:
+            graph = Cgraph( plevels= [[deepcopy(PP.players), copy(PP.fds), PP.valt]],
+                            node_=[PP], fds=[fd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)  # probably some other params too
+            PP.roott[fd] = graph
+
     mgraph_, dgraph_ = comp_PP_(PP_, rng, fseg)  # cross-comp all PPs in rng (PPs may be segs), compose graphs from +ve PP links
 
     for fd, graph_ in enumerate([mgraph_, dgraph_]):
@@ -94,12 +104,12 @@ def comp_PP_(PP_, rng, fseg):  # cross-comp, same val,rng for both forks? PPs ma
 
     for fd in 0,1:
         graph_ = []
-        for i, _PP in enumerate(PP_):
-            if not _PP.players_T[fd]: continue  # skip current _PP
-            for PP in PP_[i:]:
-                if not PP.players_T[fd]: continue  # skip current PP, comp _PP to all other PPs in rng
+        for i, _PP in enumerate(PP_):  # comp _PP to all other PPs in rng, no alt_PPs yet:
+            if not _PP.players: continue  # skip current _PP
+            for PP in PP_[i+1:]:
+                if not PP.players: continue  # skip current PP
 
-                area = PP.players_T[PP.fds][0].L; _area = _PP.players_T[PP.fds][0].L  # draft
+                area = PP.players[-1].L; _area = _PP.players[-1].L
                 dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
                 dy = _PP.y / _area - PP.y / area
                 distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
@@ -108,31 +118,28 @@ def comp_PP_(PP_, rng, fseg):  # cross-comp, same val,rng for both forks? PPs ma
                 val = _PP.valt[fd] / PP_aves[fd]  # complimented val: cross-fork support, if spread spectrum?
                 if distance * val <= rng:
                     # comp PPs:
-                    mplayer, dplayer = comp_players(_PP.players_T[fd], PP.players_T[fd], _PP.fds, PP.fds)
+                    mplayer, dplayer = comp_players(_PP.players, PP.players, _PP.fds, PP.fds)
                     valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
                     derPP = CderPP(player_t=[mplayer, dplayer], valt=valt)  # single-layer
-                    # draft:
+                    # no comp alt_PPs yet
                     fint = []
-                    graph = CgPP(node_=[PP], fds=copy(PP.fds), valt=PP.valt, x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn,
-                                 players_T=[deepcopy(PP.players_T), deepcopy(PP.alt_players_T)])  # nested lower-composition core,edge tuples
-                    PP.roott[fd] = graph  # set root of core part as graph
-                    graph_t[fd] += [graph]
                     for fdd in 0,1:  # sum players per fork
                         if valt[fdd] > PP_aves[fdd]:  # no cross-fork support?
                             fin = 1
-                            for gPP in _PP, PP:  # bilateral inclusion
-                                graph = gPP.roott[fd]
-                                sum_players(graph.players_T[fdd], PP.players_T[fdd])
-                                graph.node_ += [PP]
-                                sum_player(gPP.link_player_t[fdd], derPP.player_t[fdd])
+                            # draft:
+                            for node, graph in zip([_PP, PP], [PP.roott[fd], _PP.roott[fd]]):  # bilateral inclusion
+                                graph.node_ += [node]
+                                sum_player(node.link_player_t[fdd], derPP.player_t[fdd])
+                                sum_players(graph.plevels[0][0], node.players)  # graph.plevels[i] = (players, fds, valt)
                         else:
                             fin = 0
                         fint += [fin]
                     _PP.link_ += [[PP, derPP, fint]]
                     PP.link_ += [[_PP, derPP, fint]]
 
-            if _PP.roott[fd].node_:
-                graph_ += [_PP.roott[fd]]
+            if len(_PP.roott[fd].node_)>1:
+                graph_ += [_PP.roott[fd]]  # only positively linked PPs are stored as actual graphs
+
         graph_t += [graph_]
 
     return graph_t
@@ -142,6 +149,8 @@ PP.cPP_ += [[_PP, derPP, [1,1]]]  # bilateral assign to eval in centroid cluster
 if derPP.match params[-1]: form PPP
 elif derPP.match params[:-1]: splice PPs and their segs? 
 '''
+
+# below is not revised:
 
 def sum2graph(graph, PP, fd):  # sum PP into graph
 
