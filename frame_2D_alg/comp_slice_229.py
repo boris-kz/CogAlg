@@ -229,4 +229,12 @@ _PP.cPP_ += [[PP, derPP, [1,1]]]  # rdn refs, initial fins=1, derPP is reversed
 PP.cPP_ += [[_PP, derPP, [1,1]]]  # bilateral assign to eval in centroid clustering, derPP is reversed
 if derPP.match params[-1]: form PPP
 elif derPP.match params[:-1]: splice PPs and their segs? 
+
+valt = [sum([mtuple.val for mtuple in mplevel]), sum([dtuple.val for dtuple in dplevel])]
+_players = _PP.plevels[-1][0]; players = PP.plevels[-1][0]
+_fds = _PP.plevels[-1][1]; fds = PP.plevels[-1][1]
+
+                                all plevels accum when graph is complete, easier in batches, no sum/subtract at exclusion or merge 
+                                we only need to reform node_ and accumulate link_valt to evaluate cluster_node_layer and reforming
+                                # sum_player(node.link_plevel_t[fdd], derPP.plevel_t[fdd])  # accum links
 '''

@@ -206,14 +206,21 @@ def agg_recursion_eval(dir_blob, PP_t, fseg):
                 alt_players = []
                 alt_valt = [0, 0]
                 alt_fds = []
-                if not fseg:  # seg doesn't have altPP
+                if not fseg and PP.altPP_:  # seg doesn't have altPP_
+                    common_fds = PP.altPP_[0].fds
+                    for altPP in PP.altPP_[1:]:  # get fd sequence that's common for all altPPs
+                        for i, (_fd, fd) in enumerate(zip(common_fds, altPP.fds)):
+                            if _fd != fd:
+                                common_fds = common_fds[:i]
+                                break
                     for altPP in PP.altPP_:
-                        sum_players(alt_players, altPP.players)
+                        sum_players(alt_players, altPP.players[:len(common_fds)])  # sum same-fd players only
                         alt_valt[0] += altPP.valt[0]; alt_valt[1] += altPP.valt[1]
-                        # sum only lowest players with same fds sequence?
+
                 alt_plevels = [[alt_players, alt_fds, alt_valt]]
                 plevels = [[PP.players,PP.fds, PP.valt]]
-                PP_[j] = Cgraph(PP=PP, node_=[PP], plevels=plevels, alt_plevels=alt_plevels, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+                PP_[j] = Cgraph(
+                    PP=PP, node_=[PP], plevels=plevels, alt_plevels=alt_plevels, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
             # cluster PPs into graphs:
             dir_blob.rdn += 1  # estimate, replace by actual after agg_recursion?
             agg_recursion(dir_blob, PP_, rng=2, fseg=fseg)
