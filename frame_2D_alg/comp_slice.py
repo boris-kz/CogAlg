@@ -110,6 +110,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     Players in derP are zipped with fds: taken forks. Players, mplayer, dplayer are replaced by those in PP
     '''
     players = list  # max n ptuples in layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
+    link_player = lambda: [],[]  # last mplayer, dplayer
     valt = lambda: [0,0]  # tuple of mval, dval, summed from last player, both are signed
     x0 = int
     y = int  # or while isinstance(P, CderP): P = CderP._P; else y = _P.y
@@ -203,12 +204,11 @@ def agg_recursion_eval(dir_blob, PP_t, fseg):
         if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) and len(PP_) > ave_nsub and alt_Rdn < ave_overlap:
             # CPP -> Cgraph:
             for j, PP in enumerate(PP_):
-                alt_players = []
-                alt_valt = [0, 0]
-                alt_fds = []
+                alt_players, alt_fds = [],[]
+                alt_valt = [0,0]
                 if not fseg and PP.altPP_:  # seg doesn't have altPP_
                     common_fds = PP.altPP_[0].fds
-                    for altPP in PP.altPP_[1:]:  # get fd sequence that's common for all altPPs
+                    for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
                         for i, (_fd, fd) in enumerate(zip(common_fds, altPP.fds)):
                             if _fd != fd:
                                 common_fds = common_fds[:i]
@@ -299,7 +299,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
         players = deepcopy(_P.players)
 
-    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=deepcopy(players)+[[mplayer,dplayer]], valt=valt, P=P, _P=_P)
+    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=deepcopy(_P.players), link_player=[mplayer,dplayer], valt=valt, P=P, _P=_P)
 
 
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
@@ -512,7 +512,7 @@ def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
         seg.xn = max(seg.xn, derP.x0 + derP.ptuple.L)
     else:
         sum_players(seg.players, derP.players)  # last derP player is current mplayer, dplayer
-        seg.valt += derP.valt[fd]
+        seg.valt[0] += derP.valt[0]; seg.valt[1] += derP.valt[1]
         seg.xn = max(seg.xn, derP.x0 + derP.players[0][0].L)
 
 
@@ -602,19 +602,20 @@ def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
         if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
         else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
 
-# need update on fds later
-def comp_players(_layers, layers, _fds=[0], fds=[0]):  # unpack and compare der layers, if any from der+
+
+def comp_players(_layers, layers):  # unpack and compare der layers, if any from der+
 
     mtuple, dtuple = comp_ptuple(_layers[0][0], layers[0][0])  # initial latuples, always present and nested
     mplayer=[mtuple]; dplayer=[dtuple]
 
-    for i, (_layer, layer) in enumerate(zip(_layers[1:], layers[1:])):
-        # compare fPd ptuples on all layers:
-        for _ptuple, ptuple in zip(_layer[_fds[i]], layer[fds[i]]):
+    for _layer, layer in zip(_layers[1:], layers[1:]):
+        for _ptuple, ptuple in zip(_layer, layer):
+
             mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
             mplayer+=[mtuple]; dplayer+=[dtuple]
 
     return mplayer, dplayer
+
 
 def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
 
@@ -622,8 +623,7 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
     dval, mval = 0, 0
 
     flatuple = isinstance(_params.angle, list)  # else vertuple
-    rn = _params.n / params.n  # normalize param as param*rn, for n-invariant ratio of compared params:
-    # _param / param*rn = (_param/_n) / (param/n)?
+    rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
     # same set:
     comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
     comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
