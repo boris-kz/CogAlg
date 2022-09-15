@@ -238,3 +238,38 @@ _fds = _PP.plevels[-1][1]; fds = PP.plevels[-1][1]
                                 we only need to reform node_ and accumulate link_valt to evaluate cluster_node_layer and reforming
                                 # sum_player(node.link_plevel_t[fdd], derPP.plevel_t[fdd])  # accum links
 '''
+
+def sum_players(Layers, layers, fneg=0):  # no accum across fPd, that's checked in comp_players?
+
+    if not Layers:
+        if not fneg: Layers.append(deepcopy(layers[0]))
+    else: accum_ptuple(Layers[0][0], layers[0][0], fneg)  # latuples, in purely formal nesting
+
+    for Layer, layer in zip_longest(Layers[1:], layers[1:], fillvalue=[]):
+        if layer:
+            if Layer:
+                for fork_Layer, fork_layer in zip(Layer, layer):
+                    sum_player(fork_Layer, fork_layer, fneg=fneg)
+            elif not fneg: Layers.append(deepcopy(layer))
+
+def sum_player(Player, player, fneg=0):  # accum players in Players
+
+    for i, (Ptuple, ptuple) in enumerate(zip_longest(Player, player, fillvalue=[])):
+        if ptuple:
+            if Ptuple: accum_ptuple(Ptuple, ptuple, fneg)
+            elif Ptuple == None: Player[i] = deepcopy(ptuple)  # not sure
+            elif not fneg: Player.append(deepcopy(ptuple))
+
+
+def comp_players(_layers, layers):  # unpack and compare der layers, if any from der+
+
+    mtuple, dtuple = comp_ptuple(_layers[0][0], layers[0][0])  # initial latuples, always present and nested
+    mplayer=[mtuple]; dplayer=[dtuple]
+
+    for _layer, layer in zip(_layers[1:], layers[1:]):
+        for _ptuple, ptuple in zip(_layer, layer):
+
+            mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+            mplayer+=[mtuple]; dplayer+=[dtuple]
+
+    return mplayer, dplayer

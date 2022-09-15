@@ -110,7 +110,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     Players in derP are zipped with fds: taken forks. Players, mplayer, dplayer are replaced by those in PP
     '''
     players = list  # max n ptuples in layer = n ptuples in all lower layers: 1, 1, 2, 4, 8...
-    link_player = lambda: [],[]  # last mplayer, dplayer
+    link_player = lambda: [[],[]]  # last mplayer, dplayer
     valt = lambda: [0,0]  # tuple of mval, dval, summed from last player, both are signed
     x0 = int
     y = int  # or while isinstance(P, CderP): P = CderP._P; else y = _P.y
@@ -167,7 +167,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
         # segments are stacks of (P,derP)s:
         segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
-        segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])
+        segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
         # PPs are graphs of segs:
         PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)  # not mixed-fork PP_, select by PP.fPd?
         # intra PP:
@@ -207,14 +207,14 @@ def agg_recursion_eval(dir_blob, PP_t, fseg):
                 alt_players, alt_fds = [],[]
                 alt_valt = [0,0]
                 if not fseg and PP.altPP_:  # seg doesn't have altPP_
-                    common_fds = PP.altPP_[0].fds
+                    same_fds = PP.altPP_[0].fds
                     for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-                        for i, (_fd, fd) in enumerate(zip(common_fds, altPP.fds)):
+                        for i, (_fd, fd) in enumerate(zip(same_fds, altPP.fds)):
                             if _fd != fd:
-                                common_fds = common_fds[:i]
+                                same_fds = same_fds[:i]
                                 break
                     for altPP in PP.altPP_:
-                        sum_players(alt_players, altPP.players[:len(common_fds)])  # sum same-fd players only
+                        sum_players(alt_players, altPP.players[:len(same_fds)])  # sum same-fd players only
                         alt_valt[0] += altPP.valt[0]; alt_valt[1] += altPP.valt[1]
 
                 alt_plevels = [[alt_players, alt_fds, alt_valt]]
@@ -295,11 +295,11 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         mplayer = [mtuple]; dplayer = [dtuple]
         players = [[_P.ptuple]]
     else:  # P is derP
-        mplayer, dplayer = comp_players(_P.players, P.players)  # passed from seg.fds
-        valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
+        mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)  # passed from seg.fds
+        valt = [mval, dval]
         players = deepcopy(_P.players)
 
-    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=deepcopy(_P.players), link_player=[mplayer,dplayer], valt=valt, P=P, _P=_P)
+    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=players, link_player=[mplayer,dplayer], valt=valt, P=P, _P=_P)
 
 
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
@@ -486,15 +486,19 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     # seg rdn: up cost to init, up+down cost for comp_seg eval, in 1st agg_recursion?
     # P rdn is up+down M/n, but P is already formed and compared?
     seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], y0 = seg_Ps[0].y)
-
+    new_player = []
     for P in seg_Ps[:-1]:
-        accum_derP(seg, P.uplink_layers[-1][fd][0], fd)  # derP = P.uplink_layers[-1][0]
+        derP = P.uplink_layers[-1][fd][0]
+        sum_player(new_player, derP.link_player[fd])
+        accum_derP(seg, derP, fd)  # derP = P.uplink_layers[-1][0]
         P.roott[fd] = seg
         for derP in P.uplink_layers[-2]:
             if derP not in P.uplink_layers[-1][fd]:
                 seg.nvalt[fd] += derP.valt[fd]  # -ve links in full links, not in +ve links
                 seg.nderP_t += [derP]
+
     accum_derP(seg, seg_Ps[-1], fd)  # accum last P only, top P uplink_layers are not part of seg
+    if new_player: seg.players += [new_player]  # add new player
     seg.y0 = seg_Ps[0].y
     seg.yn = seg.y0 + len(seg_Ps)
     seg.fds = fds + [fd]  # fds of root PP
@@ -568,17 +572,16 @@ def sum_players(Layers, layers, fneg=0):  # no accum across fPd, that's checked 
 
     for Layer, layer in zip_longest(Layers[1:], layers[1:], fillvalue=[]):
         if layer:
-            if Layer:
-                for fork_Layer, fork_layer in zip(Layer, layer):
-                    sum_player(fork_Layer, fork_layer, fneg=fneg)
+            if Layer: sum_player(Layer, layer, fneg=fneg)
             elif not fneg: Layers.append(deepcopy(layer))
+
 
 def sum_player(Player, player, fneg=0):  # accum players in Players
 
     for i, (Ptuple, ptuple) in enumerate(zip_longest(Player, player, fillvalue=[])):
         if ptuple:
             if Ptuple: accum_ptuple(Ptuple, ptuple, fneg)
-            elif Ptuple == None: Player[i] = deepcopy(ptuple)  # not sure
+            elif Ptuple == None: Player[i] = deepcopy(ptuple)
             elif not fneg: Player.append(deepcopy(ptuple))
 
 def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
@@ -605,16 +608,17 @@ def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
 
 def comp_players(_layers, layers):  # unpack and compare der layers, if any from der+
 
-    mtuple, dtuple = comp_ptuple(_layers[0][0], layers[0][0])  # initial latuples, always present and nested
-    mplayer=[mtuple]; dplayer=[dtuple]
+    mplayer, dplayer = [],[]
+    mval, dval = 0,0
 
-    for _layer, layer in zip(_layers[1:], layers[1:]):
+    for _layer, layer in zip(_layers, layers):
         for _ptuple, ptuple in zip(_layer, layer):
 
             mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
-            mplayer+=[mtuple]; dplayer+=[dtuple]
+            mplayer +=[mtuple]; mval+=mtuple.val
+            dplayer +=[dtuple]; dval+=dtuple.val
 
-    return mplayer, dplayer
+    return mplayer, dplayer, mval, dval
 
 
 def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
