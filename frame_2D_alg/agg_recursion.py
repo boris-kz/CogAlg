@@ -84,65 +84,58 @@ def form_graph_(PP_, rng, fseg):
             graph = [[PP],[0,0]]  # [node_, valt]
             PP.roott[fd] = graph
 
-    # cross-comp all PPs within rng (PPs may be segs), init graphs with +ve PP links:
-    mgraph_, dgraph_ = comp_graph_(PP_, rng, fseg)
+    comp_graph_(PP_, rng, fseg)  # cross-comp all PPs within rng, PPs may be segs
+    mgraph_, dgraph_ = [[],[]]  # initialize graphs with >0 positive links in PP roots:
+    for PP in PP_:
+        if len(PP.roott[0][0])>1: mgraph_ += [PP.roott[0]]  # root = [node_, valt] for cluster_node_layer eval, + link_nvalt?
+        if len(PP.roott[1][0])>1: dgraph_ += [PP.roott[1]]
 
-    graph_t = []
-    for fd, graph_ in enumerate([mgraph_, dgraph_]):
+    for fd, graph_ in enumerate([mgraph_, dgraph_]):  # eval intermediate nodes to extend / prune / merge graphs:
         regraph_ = []
         while graph_:
-            graph = graph_.pop(0)  # eval intermediate nodes to extend / prune / merge graphs:
-            cluster_node_layer(graph_= graph_, graph=graph, med_node__=[PP.link_ for PP in graph[0]], fd=fd)
-            if graph[1][fd] >= ave_agg :   # neg adjusted val
-                regraph_ += [graph]  # graph reformed by merges and deletions
+            graph = graph_.pop(0)
+            med_node__ = [[link[0] for link in PP.link_ for PP in graph[0]]]
 
-        graph_t.append( sum2graph_(graph_, fd))  # sum node_ params into graph
+            cluster_node_layer(graph_= graph_, graph=graph, med_node__=med_node__, fd=fd)
+            if graph[1][fd] > ave_agg: regraph_ += [graph]  # graph reformed by merges and deletions in cluster_node_layer
 
-    return graph_t
+        graph_ = sum2graph_(regraph_, fd)  # sum node_ params into graph
+
+    return mgraph_, dgraph_
 
 
 def comp_graph_(PP_, rng, fseg):  # cross-comp, same val,rng for both forks? PPs may be segs inside a PP
 
-    graph_t = []
-    for fd in 0,1:
-        graph_ = []
-        for i, _PP in enumerate(PP_):  # compare patterns of patterns: _PP to all other PPs in rng, bilateral assign:
-            for PP in PP_[i+1:]:
+    for i, _PP in enumerate(PP_):  # compare patterns of patterns: _PP to other PPs in rng, bilateral link assign:
+        for PP in PP_[i+1:]:
 
-                area = PP.plevels[0][0][0][0].L; _area = _PP.plevels[0][0][0][0].L  # 1st plevel' players' 1st player' 1st ptuple' L
-                dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
-                dy = _PP.y / _area - PP.y / area
-                distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
-                # fork_rdnt = [1 + (root.valt[1] > root.valt[0]), 1 + (root.valt[0] >= root.valt[1])]  # not per graph_?
+            area = PP.plevels[0][0][0][0].L; _area = _PP.plevels[0][0][0][0].L  # 1st plevel' players' 1st player' 1st ptuple' L
+            dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
+            dy = _PP.y / _area - PP.y / area
+            distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+            # fork_rdnt = [1 + (root.valt[1] > root.valt[0]), 1 + (root.valt[0] >= root.valt[1])]  # not per graph_?
 
-                val = _PP.valt[fd] / PP_aves[fd]  # no complimented val: cross-fork support if spread spectrum?
-                if distance * val <= rng:
-                    # comp PPs:
-                    mplevel, dplevel, mval, dval = comp_plevels(_PP.plevels, PP.plevels, _PP.fds, PP.fds)
-                    alt_mplevel, alt_dplevel, alt_mVal, alt_dVal = comp_plevels(_PP.alt_plevels, PP.alt_plevels, _PP.alt_fds, PP.alt_fds)
-                    # combined core,edge PP?
-                    valt = [mval, dval]
-                    derPP = CderG(plevel_t=[mplevel, dplevel], valt=valt)
-
-                    fint = []
-                    for fdd in 0,1:  # sum players per fork
-                        if valt[fdd] > PP_aves[fdd]:  # no cross-fork support?
-                            fin = 1
-                            for node, (graph, gvalt) in zip([_PP, PP], [PP.roott[fd], _PP.roott[fd]]):  # bilateral inclusion
-                                if node not in graph:
-                                    graph += [node]
-                                    gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
-                        else:
-                            fin = 0
-                        fint += [fin]
-                    _PP.link_ += [[PP, derPP, fint]]
-                    PP.link_ += [[_PP, derPP, fint]]
-
-            if len(_PP.roott[fd][0])>1:  # only positively linked PPs are stored in graphs
-                graph_ += [_PP.roott[fd]]  # root = [node_, valt] for cluster_node_layer eval, add link_nvalt?
-
-        graph_t += [graph_]
-    return graph_t
+            val = sum(_PP.valt) / sum(PP_aves)  # combined-fork eval for comp
+            if distance * val <= rng:
+                # comp PPs:
+                mplevel, dplevel, mval, dval = comp_plevels(_PP.plevels, PP.plevels, _PP.fds, PP.fds)
+                alt_mplevel, alt_dplevel, alt_mVal, alt_dVal = comp_plevels(_PP.alt_plevels, PP.alt_plevels, _PP.alt_fds, PP.alt_fds)
+                # combined core,edge PP?
+                valt = [mval, dval]
+                derPP = CderG(plevel_t=[mplevel, dplevel], valt=valt)
+                fint = []
+                for fd in 0,1:  # sum players per fork
+                    if valt[fd] > PP_aves[fd]:  # no cross-fork support?
+                        fin = 1
+                        for node, (graph, gvalt) in zip([_PP, PP], [PP.roott[fd], _PP.roott[fd]]):  # bilateral inclusion
+                            if node not in graph:
+                                graph += [node]
+                                gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
+                    else:
+                        fin = 0
+                    fint += [fin]
+                _PP.link_ += [[PP, derPP, fint]]
+                PP.link_ += [[_PP, derPP, fint]]
 
 
 def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutual links in increasingly mediated nodes
@@ -150,17 +143,18 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
     node_, valt = graph
     med_PP__ = []  # __PPs mediating between PPs and _PPs
 
-    for PP, (_PP, _derPP, _fint) in zip(node_, med_node__):  # graph node_
+    for PP, med_node_ in zip(node_, med_node__):
         med_PP_ = []
-        for (__PP, __derPP, __fint) in _PP.link_:
-            if __PP is not PP:
-                for (___PP, ___derPP, ___fint) in __PP.link_:
-                    if ___PP is PP:  # __PP mediates between _PP and PP
-                        adj_val = ___derPP.valt[fd] - ave_agg  # or ave per mediation depth?
-                        # adjust vals per node and graph:
-                        PP.valt[fd] += adj_val; _PP.valt[fd] += adj_val; valt[fd] += adj_val
-                        if __PP not in med_PP_:
-                            med_PP_ += [__PP]
+        for _PP in med_node_:
+            for (__PP, _, _) in _PP.link_:
+                if __PP is not PP:
+                    for (___PP, ___derPP, ___fint) in __PP.link_:
+                        if ___PP is PP:  # __PP mediates between _PP and PP
+                            adj_val = ___derPP.valt[fd] - ave_agg  # or ave per mediation depth?
+                            # adjust vals per node and graph:
+                            PP.valt[fd] += adj_val; _PP.valt[fd] += adj_val; valt[fd] += adj_val
+                            if __PP not in med_PP_:
+                                med_PP_ += [__PP]
         med_PP__ += [med_PP_]
 
     # re-eval full graph after adjusting it with mediating node layer:
@@ -175,16 +169,15 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
         for PP, _PP_ in zip(save_node_, save_med__):
             for _PP in _PP_:
                 _graph = _PP.roott[fd]
-                if _graph in graph_:  # was not removed via prior _PP
-                    if _graph is not graph:  # was not merged via prior _PP
-                        _node_, _valt = _graph
-                        if _valt[fd] > 0:  # merge graphs:
-                            for _node in _node_:
-                                add_node_ += [_node]
-                                add_med__ += [_node.link_]  # only initialization, med_node_ should be saved somewhere?
-                            valt[fd] += _valt[fd]
-                            graph_.remove(_graph)
-                        else: graph_.remove(_graph)  # neg val
+                if _graph in graph_ and _graph is not graph:  # was not removed or merged via prior _PP
+                    _node_, _valt = _graph
+                    if _valt[fd] > 0:  # merge graphs:
+                        for _node in _node_:
+                            add_node_ += [_node]
+                            add_med__.append([link[0] for link in _node.link_])  # initial mediation only
+                        valt[fd] += _valt[fd]
+                        graph_.remove(_graph)
+                    else: graph_.remove(_graph)  # neg val
 
             if add_med__: save_med__ += add_med__
         node_ += save_node_ + add_node_  # add mediated nodes
@@ -192,39 +185,6 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
         if valt[fd] > ave_agg:  # or ave_agg * nmed_layers?
             # eval reformed graph with next mediation layer:
             cluster_node_layer(graph_, graph, save_med__, fd)
-
-
-def comp_plevels(_plevels, plevels, _fds, fds):
-
-    mlevel, dlevel = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
-    mVal, dVal = 0,0
-
-    for (_plevel, _lfds, _valt), (plevel, lfds, valt), _fd, fd in zip(_plevels, plevels, _fds, fds):
-        if _fd==fd:
-            mplayer, dplayer, mval, dval = comp_players(_plevel, plevel, _lfds, lfds)
-            mlevel += mplayer; mVal += mval
-            dlevel += dplayer; dVal += dval
-        else:
-            break  # only same-fd players are compared
-
-    return mlevel, dlevel, mVal, dVal
-
-def comp_players(_layers, layers, _fds, fds):  # unpack and compare der layers, if any from der+
-
-    mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
-    mval, dval = 0, 0
-
-    for _player, player, _fd, fd in zip(_layers, layers, _fds, fds):
-        if _fd==fd:
-            for _ptuple, ptuple in zip(_player, player):
-                mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
-                mplayer += [mtuple]; mval = mtuple.val
-                dplayer += [dtuple]; dval = dtuple.val
-        else:
-            break  # only same-fd players are compared
-
-    return mplayer, dplayer, mval, dval
-
 
 # not revised:
 def sub_recursion_agg(graph_, fseg, fd):  # rng+: extend PP_ per PPP, der+: replace PP with derPP in PPt
@@ -235,12 +195,15 @@ def sub_recursion_agg(graph_, fseg, fd):  # rng+: extend PP_ per PPP, der+: repl
     for graph in graph_:
         if graph.valt[fd] > PP_aves[fd] and len(graph.node_) > ave_nsub:
 
-            sub_mgraph_, sub_dgraph_ = form_graph_(graph.node_, graph.rng, fseg)
-            # sub rng +:
+            # we need fd in form_graph_:
+            # if fd: comp_players(_PP.plevels[-1][0], PP.plevels[-1][0], _fds=_PP.plevels[-1][1], fds=PP.plevels[-1][1])
+            # else:  comp_plevels(_PP.plevels[:-1], PP.plevels[:-1], _PP.fds[:-1], PP.fds[:-1])
+            sub_mgraph_, sub_dgraph_ = form_graph_(graph.node_, graph.rng, fseg)  # cross-comp and clustering cycle
+            # rng +:
             sub_rlayers, valt = sub_recursion_agg(sub_mgraph_, graph.valt, fd=0)
             rvalt = sum(valt); graph.valt[0] += rvalt; sub_valt[0] += rvalt  # not sure
             graph.rlayers = sub_rlayers
-            # sub der+:
+            # der+:
             sub_dlayers, valt = sub_recursion_agg(sub_dgraph_, graph.valt, fd=1)
             dvalt = sum(valt); graph.valt[1] += dvalt; sub_valt[1] += dvalt
             graph.dlayers = sub_dlayers
@@ -303,12 +266,42 @@ def sum2graph_(igraph_, fd):  # sum nodes' params into graph
         if new_plevel: graph.plevels += [[[new_plevel], new_fds, new_valt]]
         if new_alt_plevel: graph.alt_plevels += [[[new_alt_plevel], new_alt_fds, new_alt_valt]]
 
-
         graph_ += [graph]
     return graph_
 
+def comp_plevels(_plevels, plevels, _fds, fds):
 
-# not fully revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
+    mlevel, dlevel = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
+    mVal, dVal = 0,0
+
+    for (_plevel, _lfds, _valt), (plevel, lfds, valt), _fd, fd in zip(_plevels, plevels, _fds, fds):
+        if _fd==fd:
+            mplayer, dplayer, mval, dval = comp_players(_plevel, plevel, _lfds, lfds)
+            mlevel += mplayer; mVal += mval
+            dlevel += dplayer; dVal += dval
+        else:
+            break  # only same-fd players are compared
+
+    return mlevel, dlevel, mVal, dVal
+
+def comp_players(_layers, layers, _fds, fds):  # unpack and compare der layers, if any from der+
+
+    mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
+    mval, dval = 0, 0
+
+    for _player, player, _fd, fd in zip(_layers, layers, _fds, fds):
+        if _fd==fd:
+            for _ptuple, ptuple in zip(_player, player):
+                mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+                mplayer += [mtuple]; mval = mtuple.val
+                dplayer += [dtuple]; dval = dtuple.val
+        else:
+            break  # only same-fd players are compared
+
+    return mplayer, dplayer, mval, dval
+
+
+# not revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
 def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new centroid, recursion while update>ave
 
     update_val = 0  # update val, terminate recursion if low
@@ -396,8 +389,6 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
         comp_centroid(PPP_)  # recursion while min update value
 
     return PPP_
-
-
 '''
     1st and 2nd layers are single sublayers, the 2nd adds tuple pair nesting. Both are unpacked by func_pairs, not func_layers.  
     Multiple sublayers start on the 3rd layer, because it's derived from comparison between two (not one) lower layers. 
@@ -405,79 +396,7 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
     initial 3-layer nesting: https://github.com/assets/52521979/ea6d436a-6c5e-429f-a152-ec89e715ebd6
     '''
 
-
 # the below is out of date:
-# for deeper agg_recursion:
-def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
-
-    # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
-    der_levels += [comp_players(_levels[0], levels[0])]
-
-    # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
-    for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
-        der_levels += [comp_levels(_level, level, der_levels=[], fsubder=fsubder)]
-
-    return der_levels  # possibly nested param layers
-
-
-def form_PPP_t(iPPP_t):  # form PPs from match-connected segs
-    PPP_t = []
-
-    for fPd, iPPP_ in enumerate(iPPP_t):
-        # sort by value of last layer: derivatives of all lower layers:
-        if fPd:
-            iPPP_ = sorted(iPPP_, key=lambda iPPP: iPPP.dval, reverse=True)  # descending order
-        else:
-            iPPP_ = sorted(iPPP_, key=lambda iPPP: iPPP.mval, reverse=True)  # descending order
-
-        PPP_ = []
-        for i, iPPP in enumerate(iPPP_):
-            if fPd:
-                iPPP_val = iPPP.dval
-            else:
-                iPPP_val = iPPP.mval
-
-            for mptuple, dptuple in zip(iPPP.mplayer, iPPP.dplayer):
-                if mptuple and dptuple:  # could be None
-                    if fPd:
-                        iPPP.rdn += dptuple.val > mptuple.val
-                    else:
-                        iPPP.rdn += mptuple.val > dptuple.val
-            '''
-            for param_layer in iPPP.params:  # may need recursive unpack here
-                iPPP.rdn += sum_named_param(param_layer, 'val', fPd=fPd)> sum_named_param(param_layer, 'val', fPd=1-fPd)
-            '''
-
-            ave = vaves[fPd] * iPPP.rdn * (i + 1)  # derPP is redundant to higher-value previous derPPs in derPP_
-            if iPPP_val > ave:
-                PPP_ += [iPPP]  # base derPP and PPP is CPP
-                if iPPP_val > ave * 10:
-                    comp_graph_(iPPP, fPd)  # replace with reclustering?
-            else:
-                break  # ignore below-ave PPs
-        PPP_t.append(PPP_)
-    return PPP_t
-
-
-def form_segPPP_root(PP_, root_rdn, fPd):  # not sure about form_seg_root
-
-    for PP in PP_:
-        link_eval(PP.uplink_layers, fPd)
-        link_eval(PP.downlink_layers, fPd)
-
-    for PP in PP_:
-        form_segPPP_(PP)
-
-
-def form_segPPP_(PP):
-    pass
-
-
-# pending update
-def splice_segs(seg_):  # in 1st run of agg_recursion
-    pass
-
-
 # draft, splice 2 PPs for now
 def splice_PPs(PP_, frng):  # splice select PP pairs if der+ or triplets if rng+
 
