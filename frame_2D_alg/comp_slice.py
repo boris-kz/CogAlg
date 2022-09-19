@@ -60,7 +60,8 @@ ave_mPP = 10
 ave_dPP = 10
 ave_splice = 10
 ave_nsub = 1
-ave_agg = 3
+ave_sub = 2  # cost of calling sub_recursion and looping
+ave_agg = 3  # cost of agg_recursion
 ave_overlap = 10
 
 param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]
