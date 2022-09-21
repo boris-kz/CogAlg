@@ -99,7 +99,7 @@ def form_graph_(root, PP_, rng, fseg, fd=1):
 
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum node_ params in graph, accum root.plevels:
-            root.plevels = graph_[0].plevels  # initialize [players, fds, valt]
+            root.plevels = deepcopy(graph_[0].plevels)  # initialize [players, fds, valt]
             for graph in graph_[1:]:
                 sum_players(root.plevels[-1][0],graph.plevels[-1][0], root.plevels[-1][1],graph.plevels[-1][1], fneg=0)  # add players, fds
                 root.plevels[-1][2][0] += graph.plevels[-1][2][0]; root.plevels[-1][2][1] += graph.plevels[-1][2][1]     # add valt
@@ -247,7 +247,7 @@ def sum2graph_(igraph_, fd):  # sum nodes' params into graph
                 for pLevel, plevel in zip_longest(pLevels, plevels, fillvalue=[]):
                     if plevel and plevel[0]:
                         if pLevel:
-                            if pLevel[0]: sum_players(pLevel[0], plevel[0])  # accum nodes' players
+                            if pLevel[0]: sum_players(pLevel[0], plevel[0], pLevel[1], plevel[1])  # accum nodes' players
                             else:         pLevel[0] = deepcopy(plevel[0])  # append node's players
                             pLevel[1] = deepcopy(plevel[1])  # assign fds
                             pLevel[2][0] += plevel[2][0]; pLevel[2][1] += plevel[2][1]  # accumulate valt
@@ -303,26 +303,15 @@ def comp_players(_layers, layers, _fds, fds):  # unpack and compare der layers, 
 
     return mplayer, dplayer, mval, dval
 
-
 def sum_players(Layers, layers, Fds, fds, fneg=0):  # accum layers of same fds
 
-    for i, (Layer, layer, Fd, fd) in enumerate(zip_longest(Layers, layers, Fds, fds, fillvalue=[])):
-        if layer:
-            if Layer:
-                if Fd==fd: sum_player(Layer, layer, fneg=fneg)
-                else:      break
-            elif not fneg:
-                Layers.append(deepcopy(layer))
-
+    for i, (Layer, layer, Fd, fd) in enumerate(zip(Layers, layers, Fds, fds)):
+        if Fd==fd:
+            sum_player(Layer, layer, fneg=fneg)
+        else:
+            break
     Fds[:]=Fds[:i]  # maybe cut short by the break
-'''
-    for Layer, layer, Fd, fd in zip_longest(Layers, layers, Fds, fds, fillvalue=[]):
-        if layer:
-            if Layer and Fd==fd:
-                sum_player(Layer, layer, fneg=fneg)
-            elif not fneg:
-                Layers.append(deepcopy(layer))
-'''
+
 
 # not revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
 def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new centroid, recursion while update>ave

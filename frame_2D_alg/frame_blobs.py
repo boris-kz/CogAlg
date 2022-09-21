@@ -82,8 +82,11 @@ class CBlob(ClusterStructure):
     P__ = list  # input + derPs, common root for downward layers and upward levels:
     rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers = list  # separate for range and angle forks per blob
-    # agglomeration hierarchy:
-    agg_levels = lambda: [[]]  # 2nd agg_recursion: PPs ) PPPs PPPPs.., not sure about initialization
+    # agglomeration hierarchy: covert to Cgraph instead?
+    mplevels = []
+    dplevels = []
+    mlevels = lambda: [[]]  # 2nd agg_recursion: PPs ) PPPs PPPPs.., not sure about initialization
+    dlevels = lambda: [[]]
     # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
     fsliced = bool

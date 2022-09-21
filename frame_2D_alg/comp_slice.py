@@ -31,6 +31,7 @@ from itertools import zip_longest
 from copy import deepcopy, copy
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
 from segment_by_direction import segment_by_direction
+from frame_blobs import CBlob
 
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
@@ -203,28 +204,48 @@ def agg_recursion_eval(dir_blob, PP_t, fseg):
                 alt_Rdn += alt_rdn  # sum across PP_
 
         if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) and len(PP_) > ave_nsub and alt_Rdn < ave_overlap:
-            # CPP -> Cgraph:
-            for j, PP in enumerate(PP_):
-                alt_players, alt_fds = [],[]
-                alt_valt = [0,0]
-                if not fseg and PP.altPP_:  # seg doesn't have altPP_
-                    same_fds = PP.altPP_[0].fds
-                    for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-                        for i, (_fd, fd) in enumerate(zip(same_fds, altPP.fds)):
-                            if _fd != fd:
-                                same_fds = same_fds[:i]
-                                break
-                    for altPP in PP.altPP_:
-                        sum_players(alt_players, altPP.players[:len(same_fds)])  # sum same-fd players only
-                        alt_valt[0] += altPP.valt[0]; alt_valt[1] += altPP.valt[1]
+            # CPP or Cblob -> Cgraph:
+            converted_PP_ = []
+            for j, PP in enumerate(PP_): converted_PP_ += [CPP2Cgraph(PP, fseg, Cgraph)]
+            dir_blob.rdn += 1  # estimate
+            if   isinstance(dir_blob, CPP):   dir_blob = CPP2Cgraph(dir_blob, fseg, Cgraph)
+            elif isinstance(dir_blob, CBlob): dir_blob = CBlob2Cgraph(dir_blob, fseg, Cgraph)
 
-                alt_plevels = [[alt_players, alt_fds, alt_valt]]
-                plevels = [[PP.players,PP.fds, PP.valt]]
-                PP_[j] = Cgraph(
-                    PP=PP, node_=[PP], plevels=plevels, alt_plevels=alt_plevels, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
-            # cluster PPs into graphs:
-            dir_blob.rdn += 1  # estimate, replace by actual after agg_recursion?
-            agg_recursion(dir_blob, PP_, rng=2, fseg=fseg)
+            agg_recursion(dir_blob, converted_PP_, rng=2, fseg=fseg)
+
+
+def CBlob2Cgraph(dir_blob, fseg, Cgraph):
+
+    from agg_recursion import sum2graph_
+
+    for fd, iPP_ in enumerate( dir_blob.mlevels[-1], dir_blob.dlevels[-1]):
+        PP_ = []  # sum PPs into graph.plevels:
+
+        for PP in iPP_: PP_ += [CPP2Cgraph(PP, fseg, Cgraph)]
+        valt = [dir_blob.M, dir_blob.G]
+        graph = sum2graph_([[PP_, valt]], fd)[0]  # pack PP into graph
+
+
+def CPP2Cgraph(PP, fseg, Cgraph):
+
+    alt_players, alt_fds = [],[]
+    alt_valt = [0,0]
+
+    if not fseg and PP.altPP_:  # seg doesn't have altPP_
+        same_fds = PP.altPP_[0].fds
+        for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
+            for i, (_fd, fd) in enumerate(zip(same_fds, altPP.fds)):
+                if _fd != fd:
+                    same_fds = same_fds[:i]
+                    break
+        for altPP in PP.altPP_:
+            sum_players(alt_players, altPP.players[:len(same_fds)])  # sum same-fd players only
+            alt_valt[0] += altPP.valt[0]; alt_valt[1] += altPP.valt[1]
+
+    alt_plevels = [[alt_players, alt_fds, alt_valt]]
+    plevels = [[PP.players,PP.fds, PP.valt]]
+    PP[:] = Cgraph(
+        PP=PP, node_=[PP], plevels=plevels, alt_plevels=alt_plevels, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs

@@ -273,3 +273,23 @@ def comp_players(_layers, layers):  # unpack and compare der layers, if any from
             mplayer+=[mtuple]; dplayer+=[dtuple]
 
     return mplayer, dplayer
+
+def sum_players(Layers, layers, Fds, fds, fneg=0):  # accum layers of same fds
+
+    for i, (Layer, layer, Fd, fd) in enumerate(zip_longest(Layers, layers, Fds, fds, fillvalue=[])):
+        if layer:
+            if Layer:
+                if Fd==fd: sum_player(Layer, layer, fneg=fneg)
+            elif not fneg:
+                Layers.append(deepcopy(layer))
+        if Fd!=fd:
+            break
+    Fds[:]=Fds[:i]  # maybe cut short by the break
+'''
+    for Layer, layer, Fd, fd in zip_longest(Layers, layers, Fds, fds, fillvalue=[]):
+        if layer:
+            if Layer and Fd==fd:
+                sum_player(Layer, layer, fneg=fneg)
+            elif not fneg:
+                Layers.append(deepcopy(layer))
+'''
