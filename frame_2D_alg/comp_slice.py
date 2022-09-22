@@ -131,7 +131,7 @@ class CPP(CderP):  # derP params include P.ptuple
     players = list  # 1st plevel, same as in derP but L is area
     valt = lambda: [0,0]  # mval, dval summed across players
     nvalt = lambda: [0,0]  # from neg derPs:
-    nderP_t = lambda: [[],[]]  # miss links, add with nvalt for compemented PP
+    nderP_t = lambda: [[],[]]  # miss links, add with nvalt for complemented PP
     fds = list  # fPd per player except 1st, to comp in agg_recursion
     x0 = int  # box, update by max, min; this is a 2nd plevel?
     xn = int
@@ -162,7 +162,7 @@ class CPP(CderP):  # derP params include P.ptuple
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     segment_by_direction(blob, verbose=False)  # forms blob.dir_blobs
-    for dir_blob in blob.dir_blobs:  # same-direction blob should be CBlob
+    for dir_blob in blob.dir_blobs:
 
         P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
         comp_P_root(P__)  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx?
@@ -172,6 +172,8 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
         # PPs are graphs of segs:
         PPm_, PPd_ = form_PP_root((segm_, segd_), base_rdn=2)  # not mixed-fork PP_, select by PP.fPd?
+        # not sure if this is a right place for it:
+        dir_blob = CBlob2Cgraph(dir_blob, fseg, Cgraph)
         # intra PP:
         dir_blob.rlayers = sub_recursion_eval(PPm_, fd=0)
         dir_blob.dlayers = sub_recursion_eval(PPd_, fd=1)  # add rlayers, dlayers, seg_levels to select PPs
@@ -204,48 +206,47 @@ def agg_recursion_eval(dir_blob, PP_t, fseg):
                 alt_Rdn += alt_rdn  # sum across PP_
 
         if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) and len(PP_) > ave_nsub and alt_Rdn < ave_overlap:
-            # CPP or Cblob -> Cgraph:
-            converted_PP_ = []
-            for j, PP in enumerate(PP_): converted_PP_ += [CPP2Cgraph(PP, fseg, Cgraph)]
             dir_blob.rdn += 1  # estimate
-            if   isinstance(dir_blob, CPP):   dir_blob = CPP2Cgraph(dir_blob, fseg, Cgraph)
-            elif isinstance(dir_blob, CBlob): dir_blob = CBlob2Cgraph(dir_blob, fseg, Cgraph)
+            agg_recursion(dir_blob, PP_, rng=2, fseg=fseg)
 
-            agg_recursion(dir_blob, converted_PP_, rng=2, fseg=fseg)
 
+# rough draft:
 
 def CBlob2Cgraph(dir_blob, fseg, Cgraph):
 
-    from agg_recursion import sum2graph_
+    root = Cgraph(node_=deepcopy(dir_blob.PPm_), alt_node_=deepcopy(dir_blob.PPd_))
 
-    for fd, iPP_ in enumerate( dir_blob.mlevels[-1], dir_blob.dlevels[-1]):
-        PP_ = []  # sum PPs into graph.plevels:
+    for fd, PP_ in enumerate([root.node_, root.alt_node_]):
+        gPP_ = []
+        for PP in PP_:
+            # need to sum PP.alt_players from PP.altPP_
+            sum_players(root.alt_plevels[0] if fd else root.plevels[0], PP.alt_players if fd else PP.players)
+            gPP_ += [CPP2Cgraph(PP, fseg, Cgraph)]
 
-        for PP in iPP_: PP_ += [CPP2Cgraph(PP, fseg, Cgraph)]
         valt = [dir_blob.M, dir_blob.G]
-        graph = sum2graph_([[PP_, valt]], fd)[0]  # pack PP into graph
 
+    # graph = sum2graph_([[gPP_, valt]], fd)[0]  # pack PP into graph
+    return root
 
 def CPP2Cgraph(PP, fseg, Cgraph):
-
-    alt_players, alt_fds = [],[]
-    alt_valt = [0,0]
+    alt_players, alt_fds = [], []
+    alt_valt = [0, 0]
 
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
-        same_fds = PP.altPP_[0].fds
+        alt_fds = PP.altPP_[0].fds
         for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-            for i, (_fd, fd) in enumerate(zip(same_fds, altPP.fds)):
+            for i, (_fd, fd) in enumerate(zip(alt_fds, altPP.fds)):
                 if _fd != fd:
-                    same_fds = same_fds[:i]
+                    alt_fds = alt_fds[:i]
                     break
         for altPP in PP.altPP_:
-            sum_players(alt_players, altPP.players[:len(same_fds)])  # sum same-fd players only
-            alt_valt[0] += altPP.valt[0]; alt_valt[1] += altPP.valt[1]
+            sum_players(alt_players, altPP.players[:len(alt_fds)])  # sum same-fd players only
+            alt_valt[0] += altPP.valt[0];  alt_valt[1] += altPP.valt[1]
 
     alt_plevels = [[alt_players, alt_fds, alt_valt]]
-    plevels = [[PP.players,PP.fds, PP.valt]]
-    PP[:] = Cgraph(
-        PP=PP, node_=[PP], plevels=plevels, alt_plevels=alt_plevels, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+    plevels = [[deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]]
+
+    return Cgraph(PP=PP, node_=[PP], plevels=plevels, alt_plevels=alt_plevels, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
 
 
 def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -605,6 +606,7 @@ def sum_player(Player, player, fneg=0):  # accum players in Players
             if Ptuple: accum_ptuple(Ptuple, ptuple, fneg)
             elif Ptuple == None: Player[i] = deepcopy(ptuple)
             elif not fneg: Player.append(deepcopy(ptuple))
+
 
 def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
 
