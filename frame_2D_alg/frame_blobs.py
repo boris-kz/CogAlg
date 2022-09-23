@@ -85,11 +85,11 @@ class CBlob(ClusterStructure):
     PPm_ = []
     PPd_ = []
     # comp_slice:
-    dir_blobs = list  # always Cgraphs, primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
+    dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
     fsliced = bool
     fflip = bool  # x-y swap in comp_slice
     # frame_bblob:
-    root_bblob = object
+    root = object  # bblob or blob to dir_blob
 
 '''
     Conventions:
