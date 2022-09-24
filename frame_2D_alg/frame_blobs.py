@@ -57,7 +57,6 @@ class CBlob(ClusterStructure):
     sign = bool
     # composite params:
     M = float  # summed PP.M, for both types of recursion?
-    valt = list
     box = list  # x0, xn, y0, yn
     mask__ = object
     dert__ = object
@@ -82,8 +81,9 @@ class CBlob(ClusterStructure):
     P__ = list  # input + derPs, common root for downward layers and upward PP_s:
     rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers = list  # separate for range and angle forks per blob
-    PPm_ = []
-    PPd_ = []
+    PPm_ = list
+    PPd_ = list
+    valt = list  # PPm_ val, PPd_ val, += M,G?
     # comp_slice:
     dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
     fsliced = bool
