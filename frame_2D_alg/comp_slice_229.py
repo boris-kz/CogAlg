@@ -381,3 +381,15 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
             # eval next mediation layer in reformed graph:
             cluster_node_layer(graph_, graph, med_node__, fd)
 
+'''
+            plevels = deepcopy(graph_[0].plevels)  # initialization
+            alt_plevels = deepcopy(graph_[0].alt_plevels)
+            for graph in graph_[1:]:
+                sum_plevels(plevels, graph.plevels)  # add players, fds
+                sum_plevels(alt_plevels, graph.alt_plevels)
+            root.plevels = plevels
+            root.alt_plevels = alt_plevels
+
+                sum_players(plevels[-1][0],graph.plevels[-1][0], plevels[-1][1],graph.plevels[-1][1], fneg=0)  # add players, fds
+                plevels[-1][2][0] += graph.plevels[-1][2][0]; plevels[-1][2][1] += graph.plevels[-1][2][1]     # add valt
+'''

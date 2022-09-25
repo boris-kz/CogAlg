@@ -212,9 +212,10 @@ def CBlob2graph(dir_blob, fseg, Cgraph):
     plevels = [[players, fds, valt]]
     alt_plevels = [[alt_players, alt_fds, alt_valt]]
     gPPm_, gPPd_ = [], []  # converted gPPs, node_ and alt_node_
+    root_fds = PPm_[0].fds[:-1]  # root fds is the shorter fork?
 
     root = Cgraph(node_= gPPm_, alt_node_=gPPd_, plevels=plevels, alt_plevels=alt_plevels, rng = PPm_[0].rng,
-                  rdn=dir_blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
+                  fds = root_fds, rdn=dir_blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
 
     for fd, (PP_, gPP_) in enumerate(zip([PPm_, PPd_], [gPPm_, gPPd_])):
         for PP in PP_:

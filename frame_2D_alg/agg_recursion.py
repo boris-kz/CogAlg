@@ -107,18 +107,19 @@ def form_graph_(root, PP_, rng, fd=1):
                        med_node_ += [derPP.PPt[1]]
                     else:
                        med_node_ += [derPP.PPt[0]]
-                med_node__ += [med_node_] '''
+                med_node__ += [med_node_] 
+                '''
             cluster_node_layer(graph_= graph_, graph=graph, med_node__= med_node__, fd=fd)
             if graph[1][fd] > ave_agg: regraph_ += [graph]  # graph reformed by merges and deletions in cluster_node_layer
 
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum node_ params in graph
-            # accum root plevels:
-            plevels = (root.plevels, root.alt_root.plevels) [root.fds[-1]]
-            plevels[:] = deepcopy(graph_[0].plevels)  # initialize [players, fds, valt]
+            # plevel_t = (plevel, alt_plevel), pack in form_graph?
+
+            plevels = deepcopy(graph_[0].plevels)  # accum root plevels:
             for graph in graph_[1:]:
-                sum_players(plevels[-1][0],graph.plevels[-1][0], plevels[-1][1],graph.plevels[-1][1], fneg=0)  # add players, fds
-                plevels[-1][2][0] += graph.plevels[-1][2][0]; plevels[-1][2][1] += graph.plevels[-1][2][1]     # add valt
+                sum_plevel_ts(plevels, graph.plevels)  # add players, fds
+            root.plevels = plevels
 
     return mgraph_, dgraph_
 
@@ -137,6 +138,7 @@ def comp_graph_(PP_, rng, fd):  # cross-comp, same val,rng for both forks? PPs m
             val = _PP.valt[fd] / PP_aves[fd]  # rng+|der+ fork eval, init der+: single level
             if distance * val <= rng:
                 # comp PPs:
+                '''
                 if fd:
                     mplevel, dplevel, mval, dval = \
                         comp_players(_PP.plevels[-1][0], PP.plevels[-1][0], _fds=_PP.plevels[-1][1], fds=PP.plevels[-1][1])
@@ -148,8 +150,11 @@ def comp_graph_(PP_, rng, fd):  # cross-comp, same val,rng for both forks? PPs m
                     alt_mplevel, alt_dplevel, alt_mVal, alt_dVal = \
                         comp_plevels(_PP.alt_plevels[:-1], PP.alt_plevels[:-1], _PP.alt_fds[:-1], PP.alt_fds[:-1])
                 # comb core,edge PP?
-                valt = [mval-ave_Gm, dval-ave_Gd]  # adjust for link rdn?
-                derPP = CderG(plevel_t=[mplevel, dplevel], valt=valt, PPt=[PP,_PP])
+                '''
+                # draft
+                mplevel_t, dplevel_t, mval_t, dval_t = comp_plevel_ts(_PP.plevels, PP.plevels)
+                valt = [mval_t-ave_Gm, dval_t-ave_Gd]  # adjust for link rdn?
+                derPP = CderG(plevel_t=[mplevel_t, dplevel_t], valt=valt, PPt=[PP,_PP])
                 # any val:
                 _PP.link_ += [derPP]
                 PP.link_ += [derPP]
@@ -178,11 +183,11 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
                         if PP in _derPP.PPt and _derPP not in PP.link_:  # __PP mediates between _PP and PP
                             PP.link_ += [_derPP]
                             adj_val = _derPP.valt[fd] - ave_agg  # or increase ave per mediation depth
-                            # adjust vals per node and graph:
+                            # bilateral adjust per node:
                             PP.valt[fd] += adj_val; _PP.valt[fd] += adj_val
-                            valt[fd] += adj_val; _PP.roott[fd].valt[fd] += adj_val
+                            valt[fd] += adj_val; _PP.roott[fd][0][fd] += adj_val  # root is not graph yet
                             # or batch recompute?
-                            __PP = _derPP.PP if _derPP.PP is not _PP else _derPP._PP
+                            __PP = _derPP.PPt[0] if _derPP.PPt[0] is not _PP else _derPP.PPt[1]
                             if __PP not in save_med_:  # if not saved via prior _PP
                                 save_med_ += [__PP]
                                 adj_Val += adj_val  # save_med__ val?
