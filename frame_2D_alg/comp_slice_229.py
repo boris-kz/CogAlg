@@ -392,4 +392,144 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
 
                 sum_players(plevels[-1][0],graph.plevels[-1][0], plevels[-1][1],graph.plevels[-1][1], fneg=0)  # add players, fds
                 plevels[-1][2][0] += graph.plevels[-1][2][0]; plevels[-1][2][1] += graph.plevels[-1][2][1]     # add valt
+                
+    # not per graph_: fork_rdnt = [1 + (root.valt[1] > root.valt[0]), 1 + (root.valt[0] >= root.valt[1])]?
 '''
+class CderG(ClusterStructure):  # tuple of graph derivatives in graph link_
+
+    plevel_t = lambda: [[],[]]  # lists of ptuples in current derivation layer per fork
+    valt = lambda: [0,0]  # tuple of mval, dval
+    rdn = int
+    PPt = list  # PP,_PP comparands, the order is not fixed
+    roott = lambda: [None, None]  # PP, not segment in sub_recursion
+    # not relevant: alt_plevel_t = lambda: [[],[]]; alt_valt = lambda: [0, 0]
+    # not sure:
+    box = list  # 2nd level, stay in PP?
+    uplink_layers = lambda: [[], []]  # init a layer of dderPs and a layer of match_dderPs
+    downlink_layers = lambda: [[], []]
+    fdx = NoneType
+    link_ = list
+
+def form_graph_(root, PP_, rng):
+
+    for PP in PP_:  # initialize mgraph, dgraph as roott per PP, for comp_PP_
+        for i in 0,1:
+            graph = [[PP],[0,0]]  # [node_, valt]
+            PP.roott[i] = graph
+
+    comp_graph_(PP_, rng)  # cross-comp all PPs within rng, PPs may be segs
+    mgraph_, dgraph_ = [],[]  # initialize graphs with >0 positive links in PP roots:
+    for PP in PP_:
+        if len(PP.roott[0][0])>1: mgraph_ += [PP.roott[0]]  # root = [node_, valt] for cluster_node_layer eval, + link_nvalt?
+        if len(PP.roott[1][0])>1: dgraph_ += [PP.roott[1]]
+
+    for fd, graph_ in enumerate([mgraph_, dgraph_]):  # evaluate intermediate nodes to delete or merge graphs:
+        regraph_ = []
+        while graph_:
+            graph = graph_.pop(0)
+            med_node__ = [[derPP.PPt[1] if derPP.PPt[0] is PP else derPP.PPt[0] for derPP in PP.link_]for PP in graph[0]]
+            ''' unpacked:
+            med_node__ = []
+            for PP in graph[0]:
+                med_node_ = []
+                for derPP in PP.link_:
+                    if derPP.PPt[0] is PP:
+                       med_node_ += [derPP.PPt[1]]
+                    else:
+                       med_node_ += [derPP.PPt[0]]
+                med_node__ += [med_node_] 
+                '''
+            cluster_node_layer(graph_= graph_, graph=graph, med_node__= med_node__, fd=fd)
+            if graph[1][fd] > ave_agg: regraph_ += [graph]  # graph reformed by merges and deletions in cluster_node_layer
+
+        if regraph_:
+            graph_[:] = sum2graph_(regraph_, fd)  # sum node_ params in graph
+            # accum root plevels:
+            plevels = deepcopy(graph_[0].plevels)  # each level is plevel_t: plevel, alt_plevel
+            for graph in graph_[1:]:
+                sum_plevel_ts(plevels, graph.plevels)
+            root.plevels = plevels
+
+    return mgraph_, dgraph_
+
+
+def comp_graph_(PP_):  # cross-comp PPs: Gs, derGs if fd?, or segs inside PP. same val, ave_rng for both forks?
+
+    for i, _PP in enumerate(PP_):  # compare patterns of patterns: _PP to other PPs in rng, bilateral link assign:
+        for PP in PP_[i+1:]:
+
+            area = PP.plevels[0][PP.fds[-1]][0][0][0].L; _area = _PP.plevels[0][_PP.fds[-1]][0][0][0].L
+            # not revised: 1st plevel_t' fork' players' 1st player' 1st ptuple' L
+            dx = ((_PP.xn - _PP.x0) / 2) / _area - ((PP.xn - PP.x0) / 2) / area
+            dy = _PP.y / _area - PP.y / area
+            distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
+            # not per graph_: fork_rdnt = [1 + (root.valt[1] > root.valt[0]), 1 + (root.valt[0] >= root.valt[1])]?
+
+            if distance <= ave_rng * (sum(_PP.valt) / sum(PP_aves)):  # max distance depends on combined val
+                if isinstance(PP, Cgraph):
+                    mplevel_t, dplevel_t, mval, dval = comp_plevel_ts(_PP.plevels, PP.plevels)
+                else:  # draft for CderG, der+
+                    mplevel_t, dplevel_t, mval, dval = comp_players(_PP.plevel_t, PP.plevel_t)
+
+                valt = [mval - ave_Gm, dval - ave_Gd]  # adjust for link rdn?
+                derPP = CderG(plevel_t=[mplevel_t, dplevel_t], valt=valt, PPt=[PP,_PP])
+                # any val:
+                _PP.link_ += [derPP]
+                PP.link_ += [derPP]
+                for fd in 0,1:
+                    if valt[fd] > 0:  # no alt fork support?
+                        for node, (graph, gvalt) in zip([_PP, PP], [PP.roott[fd], _PP.roott[fd]]):  # bilateral inclusion
+                            if node not in graph:
+                                graph += [node]
+                                gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
+
+
+def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutual links in increasingly mediated nodes
+
+    node_, valt = graph
+    save_node_, save_med__ = [],[]  # __PPs mediating between PPs and _PPs
+    adj_Val = 0
+
+    for PP, med_node_ in zip(node_, med_node__):
+        save_med_ = []
+        for _PP in med_node_:
+            for derPP in _PP.link_:
+                if derPP not in PP.link_:  # link_ includes all unique evaluated mediated links, flat or in layers?
+                    # med_PP.link_:
+                    med_link_ = derPP.PPt[0].link_ if derPP.PPt[0] is not _PP else derPP.PPt[1].link_
+                    for _derPP in med_link_:
+                        if PP in _derPP.PPt and _derPP not in PP.link_:  # __PP mediates between _PP and PP
+                            PP.link_ += [_derPP]
+                            adj_val = _derPP.valt[fd] - ave_agg  # or increase ave per mediation depth
+                            # adjust nodes:
+                            PP.valt[fd] += adj_val; _PP.valt[fd] += adj_val
+                            valt[fd] += adj_val; _PP.roott[fd][0][fd] += adj_val  # root is not graph yet
+                            # or batch recompute?
+                            __PP = _derPP.PPt[0] if _derPP.PPt[0] is not _PP else _derPP.PPt[1]
+                            if __PP not in save_med_:  # if not saved via prior _PP
+                                save_med_ += [__PP]
+                                adj_Val += adj_val  # save_med__ val?
+        if PP.valt[fd]>0:
+            # PP is connected enough to remain in the graph
+            save_node_ += [PP]; save_med__ += [save_med_]  # save_med__ is nested, may be empty
+
+    # re-eval full graph after adjusting it with mediating node layer:
+    add_node_, add_med__ = [], []
+    for PP, _PP_ in zip(save_node_, save_med__):
+        for _PP in _PP_:
+            _graph = _PP.roott[fd]
+            if _graph in graph_ and _graph is not graph:  # was not removed or merged via prior _PP
+                _node_, _valt = _graph
+                for _node in _node_:  # merge graphs, add direct links:
+                    add_node_ += [_node]
+                    add_med__.append([derPP.PPt[1] if derPP.PPt[0] is _node else derPP.PPt[0] for derPP in _node.link_])
+                valt[fd] += _valt[fd]
+                graph_.remove(_graph)
+
+    if valt[fd] > ave_G:  # adjusted graph value
+        node_[:] = save_node_ + add_node_  # reassign as save_node_ (>0 after mediation) + add_node_ (mediated positive link nodes)
+        med_node__[:] = save_med__ + add_med__
+
+        if adj_Val > ave_med:  # eval next mediation layer in reformed graph: extra ops, no rdn+?
+            cluster_node_layer(graph_, graph, med_node__, fd)
+

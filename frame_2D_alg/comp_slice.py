@@ -264,9 +264,9 @@ def CPP2graph(PP, fseg, Cgraph):
             sum_players(alt_players, altPP.players_t[ifd][:len(alt_fds)])  # sum same-fd players only
             alt_valt[0] += altPP.valt[0];  alt_valt[1] += altPP.valt[1]
 
-    # no more alt_plevel_t, pack 1st plevel
-    plevel_t = [[[deepcopy(PP.players_t[PP.fds[-1]]), deepcopy(PP.fds), deepcopy(PP.valt)],[alt_players, alt_fds, alt_valt]]]
-
+    plevel_t = [[[], []]]
+    plevel_t[0][ifd] = [deepcopy(PP.players_t[PP.fds[-1]]), deepcopy(PP.fds), deepcopy(PP.valt)]
+    plevel_t[0][1-ifd] = [alt_players, alt_fds, alt_valt]  # alt plevel should be based on 1-ifd
     return Cgraph(PP=PP, node_=[PP], plevels=plevel_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
 '''
     alt_plevels = [[alt_players, alt_fds, alt_valt]]
