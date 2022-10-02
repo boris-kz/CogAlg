@@ -533,3 +533,95 @@ def cluster_node_layer(graph_, graph, med_node__, fd):  # recursive eval of mutu
         if adj_Val > ave_med:  # eval next mediation layer in reformed graph: extra ops, no rdn+?
             cluster_node_layer(graph_, graph, med_node__, fd)
 
+def comp_plevel_ts(_plevels, plevels):
+    mplayer_t, dplayer_t = [[],[]], [[],[]]
+    mValt, dValt = [0,0], [0,0]
+
+    for _plevel_t, plevel_t in zip(_plevels, plevels):
+        for alt, (_plevel, plevel) in enumerate(zip(_plevel_t, plevel_t)):
+            # cis | alt fork:
+            if _plevel and plevel:
+                _players, _fds, _valt = _plevel
+                players, fds, valt = plevel
+                mplayer, dplayer, mval, dval = comp_players(_players, players, _fds, fds)
+                mplayer_t[alt] += [mplayer]; dplayer_t[alt] += [dplayer]
+                mValt[alt] += mval; dValt[alt] += dval
+    return mplayer_t, dplayer_t, mValt, dValt
+
+def comp_plevels(_plevels, plevels, _fds, fds):
+
+    mlevel, dlevel = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
+    mVal, dVal = 0,0
+
+    for (_plevel, _lfds, _valt), (plevel, lfds, valt), _fd, fd in zip(_plevels, plevels, _fds, fds):
+        if _fd==fd:
+            mplayer, dplayer, mval, dval = comp_players(_plevel, plevel, _lfds, lfds)
+            mlevel += mplayer; mVal += mval
+            dlevel += dplayer; dVal += dval
+        else:
+            break  # only same-fd players are compared
+
+    return mlevel, dlevel, mVal, dVal
+
+
+def sum_plevels(pLevels, plevels):
+
+    for pLevel, plevel in zip_longest(pLevels, plevels, fillvalue=[]):
+        if plevel and plevel[0]:
+            if pLevel:
+                if pLevel[0]: sum_players(pLevel[0], plevel[0], pLevel[1], plevel[1])  # accum nodes' players
+                else:         pLevel[0] = deepcopy(plevel[0])  # append node's players
+                pLevel[1] = deepcopy(plevel[1])  # assign fds
+                pLevel[2][0] += plevel[2][0]; pLevel[2][1] += plevel[2][1]  # accumulate valt
+            else:
+                pLevels.append(deepcopy(plevel))  # pack new plevel
+
+
+# draft, splice 2 PPs for now
+def splice_PPs(PP_, frng):  # splice select PP pairs if der+ or triplets if rng+
+
+    spliced_PP_ = []
+    while PP_:
+        _PP = PP_.pop(0)  # pop PP, so that we can differentiate between tested and untested PPs
+        tested_segs = []  # new segs may be added during splicing, their links also need to be checked for splicing
+        _segs = _PP.seg_levels[0]
+
+        while _segs:
+            _seg = _segs.pop(0)
+            _avg_y = sum([P.y for P in _seg.P__]) / len(_seg.P__)  # y centroid for _seg
+
+            for link in _seg.uplink_layers[1] + _seg.downlink_layers[1]:
+                seg = link.P.root  # missing link of current seg
+
+                if seg.root is not _PP:  # after merging multiple links may have the same PP
+                    avg_y = sum([P.y for P in seg.P__]) / len(seg.P__)  # y centroid for seg
+
+                    # test for y distance (temporary)
+                    if (_avg_y - avg_y) < ave_splice:
+                        if seg.root in PP_:
+                            PP_.remove(seg.root)  # remove merged PP
+                        elif seg.root in spliced_PP_:
+                            spliced_PP_.remove(seg.root)
+                        # splice _seg's PP with seg's PP
+                        merge_PP(_PP, seg.root)
+
+            tested_segs += [_seg]  # pack tested _seg
+        _PP.seg_levels[0] = tested_segs
+        spliced_PP_ += [_PP]
+
+    return spliced_PP_
+
+
+def merge_PP(_PP, PP, fPd):  # only for PP splicing
+
+    for seg in PP.seg_levels[fPd][-1]:  # merge PP_segs into _PP:
+        accum_PP(_PP, seg, fPd)
+        _PP.seg_levels[fPd][-1] += [seg]
+
+    # merge uplinks and downlinks
+    for uplink in PP.uplink_layers:
+        if uplink not in _PP.uplink_layers:
+            _PP.uplink_layers += [uplink]
+    for downlink in PP.downlink_layers:
+        if downlink not in _PP.downlink_layers:
+            _PP.down_layers += [downlink]

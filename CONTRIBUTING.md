@@ -69,7 +69,7 @@ Aqib Mumtaz and Ayesha Ali, $1400: audio interfacing for 1D alg, April-May
 
 2022:  
 
-Kok Wei Chee, $16500: lead developer, January-August
+Kok Wei Chee, $18500: lead developer, January-September
 
 Alex Pitertsev, $1000 for porting line_comp to Julia, June
 
