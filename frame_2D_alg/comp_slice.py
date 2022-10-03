@@ -198,7 +198,7 @@ def agg_recursion_eval(dir_blob, PP_t):
         if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) \
             and len(PP_) > ave_nsub and dir_blob.alt_rdn < ave_overlap:
             dir_blob.rdn += 1  # estimate
-            agg_recursion(dir_blob, PP_, rng=2, fseg=fseg)
+            agg_recursion(dir_blob, PP_, fseg=fseg)
 
 
 # not revised:
@@ -261,13 +261,13 @@ def CPP2graph(PP, fseg, Cgraph):
                     alt_fds = alt_fds[:i]
                     break
         for altPP in PP.altPP_:
-            sum_players(alt_players, altPP.players_t[ifd][:len(alt_fds)])  # sum same-fd players only
+            sum_players(alt_players, altPP.players_t[0][:len(alt_fds)])  # sum same-fd players only
             alt_valt[0] += altPP.valt[0];  alt_valt[1] += altPP.valt[1]
 
     plevel_t = [[[], []]]
-    plevel_t[0][ifd] = [deepcopy(PP.players_t[PP.fds[-1]]), deepcopy(PP.fds), deepcopy(PP.valt)]
-    plevel_t[0][1-ifd] = [alt_players, alt_fds, alt_valt]  # alt plevel should be based on 1-ifd
-    return Cgraph(PP=PP, node_=[PP], plevels=plevel_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+    plevel_t[0][0] = [deepcopy(PP.players_t[PP.fds[-1]]), deepcopy(PP.fds), deepcopy(PP.valt)]
+    plevel_t[0][1] = [alt_players, alt_fds, alt_valt]  # alt plevel's index is 1
+    return Cgraph(node_=[], plevels=plevel_t, fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
 '''
     alt_plevels = [[alt_players, alt_fds, alt_valt]]
     plevels = [[deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]]
@@ -341,6 +341,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         valt = [mtuple.val, dtuple.val]
         mplayer = [mtuple]; dplayer = [dtuple]
         players = [[_P.ptuple]]
+
     else:  # P is derP
         mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)  # passed from seg.fds
         valt = [mval, dval]
