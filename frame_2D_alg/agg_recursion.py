@@ -39,10 +39,10 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     alt_graph_ = list
 
 
-def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
+def agg_recursion(root, G_, fseg, fsub):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
     ivalt = root.valt
-    mgraph_, dgraph_ = form_graph_(root, G_)  # PP cross-comp and clustering
+    mgraph_, dgraph_ = form_graph_(root, G_, fsub)  # PP cross-comp and clustering
 
     # intra graph:
     if root.valt[0] > ave_sub * root.rdn:
@@ -59,17 +59,17 @@ def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, prett
         # recursion if adjusted val:
         if (adj_val > G_aves[fd] * ave_agg * (root.rdn + 1)) and len(graph_) > ave_nsub:
             root.rdn += 1  # estimate
-            agg_recursion(root, graph_, fseg=fseg)  # cross-comp graphs
+            agg_recursion(root, graph_, fseg=fseg, fsub=fsub)  # cross-comp graphs
 
 
-def form_graph_(root, G_):  # G is potential node graph, in higher-order GG graph
+def form_graph_(root, G_, fsub):  # G is potential node graph, in higher-order GG graph
 
     for G in G_:  # initialize mgraph, dgraph as roott per G, for comp_G_
         for i in 0,1:
             graph = [[G], [], [0,0]]  # proto-GG: [node_, meds_, valt]
             G.roott[i] = graph
 
-    comp_G_(G_)  # cross-comp all graphs within rng, graphs may be segs
+    comp_G_(G_, fsub)  # cross-comp all graphs within rng, graphs may be segs
     mgraph_, dgraph_ = [],[]  # initialize graphs with >0 positive links in graph roots:
     for G in G_:
         if len(G.roott[0][0])>1: mgraph_ += [G.roott[0]]  # root = [node_, valt] for cluster_node_layer eval, + link_nvalt?
@@ -92,21 +92,23 @@ def form_graph_(root, G_):  # G is potential node graph, in higher-order GG grap
     return mgraph_, dgraph_
 
 
-def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP
+def comp_G_(G_, fini):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP
 
     for i, _G in enumerate(G_):  # compare _G to other Gs in rng, bilateral link assign:
         for G in G_[i+1:]:
             if G in [node for link in _G.link_ for node in link.node_]:  # add frng to skip?
                 continue  # in rng+, G may have been compared to _G in prior sub_recursion
 
-            area = G.plevels[0][G.fds[-1]][0][0][0].L; _area = _G.plevels[0][_G.fds[-1]][0][0][0].L
-            # area: 1st plevel_t' last fork' players' 1st player' 1st ptuple L
+            area = G.plevels[0][0][0][0][0].L; _area = _G.plevels[0][0][0][0][0].L  # 1st plevel_t' last fork' players' 1st player' 1st ptuple L
             dx = ((_G.xn - _G.x0) / 2) / _area - ((G.xn - G.x0) / 2) / area
             dy = ((_G.yn - _G.y0) / 2) / _area - ((G.yn - G.y0) / 2) / area
             distance = np.hypot(dy, dx)  # Euclidean distance between PP centroids
-            if distance <= ave_rng * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):  # max distance depends on combined val
-
-                mplayers, dplayers, mvalt, dvalt  = comp_plevel_ts(_G.plevels, G.plevels)
+            # max distance depends on combined value:
+            if distance <= ave_rng * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):
+                if fini:
+                    mplayers, dplayers, mvalt, dvalt = comp_plevel_t(_G.plevels, G.plevels)
+                else:
+                    mplayers, dplayers, mvalt, dvalt = comp_plevel_ts(_G.plevels, G.plevels)
                 valt = [sum(mvalt) - ave_Gm, sum(dvalt) - ave_Gd]  # *= link rdn?
                 fds = deepcopy(_G.plevels[-1][0][1])  # last plevel fds
                 derG = Cgraph(
@@ -187,7 +189,7 @@ def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: repla
         # or if adj_val: top-level only?
         if graph.valt[fd] > G_aves[fd] and len(node_) > ave_nsub:
 
-            sub_mgraph_, sub_dgraph_ = form_graph_(graph, node_)  # cross-comp and clustering cycle
+            sub_mgraph_, sub_dgraph_ = form_graph_(graph, node_, fsub=1)  # cross-comp and clustering cycle
             # rng+:
             if graph.valt[0] > ave_sub * graph.rdn:  # >cost of calling sub_recursion and looping:
                 sub_rlayers, valt = sub_recursion_g(sub_mgraph_, graph.valt, fd=0)
@@ -234,8 +236,11 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
             for derG in node.link_:  # accum derG in new level
                 if derG in link_:
                     continue
+                # i think this need depend on fsub? plevels's players could be players or players_t
+                # so it will be sum_plevel here, and sum_players or sum_player_ts will be depend on fsub inside the sum_plevel
                 sum_player_ts(graph.plevels[-1][0], derG.plevels[0][fd])  # sum last plevel_t[0] only
                 valt[0] += derG.valt[0]; valt[1] += derG.valt[1]
+                derG.fds = [fd]
                 derG.roott[fd] = graph
                 link_ = [derG]
 
@@ -247,7 +252,7 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
                 for G in derG.node_:
                     if G not in graph.node_:  # alt graphs are roots of not-in-graph G in derG.node_
                         alt_graph = G.roott[fd]
-                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # maybe proto-graph
+                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph
                             sum_player_ts(graph.plevels[-1][1], alt_graph.plevels[-1][0])
                             graph.alt_graph_ += [alt_graph]
     return graph_
@@ -255,26 +260,73 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
 
 def comp_plevel_ts(_plevels, plevels):
 
-    mplayers_, dplayers_ = [],[]
+    mplevel_t, dplevel_t = [],[]  # output
     mValt, dValt = [0,0], [0,0]
 
     for _plevel_t, plevel_t in zip(_plevels, plevels):
-        mplayers, dplayers = [], []
+        mplevel, dplevel = [], []  # each is cis,alt tuple
+
         for alt, (_plevel, plevel) in enumerate(zip(_plevel_t, plevel_t)):
             # cis | alt fork:
             if _plevel and plevel:
-                _players, _fds, _valt = _plevel
-                players, fds, valt = plevel
-                mplayer, dplayer, mval, dval = comp_players(_players, players, _fds, fds)
-                mplayers += mplayer; dplayers += dplayer
+                _players, _fds, _valt = _plevel; players, fds, valt = plevel
+                if len(players) == 2:
+                    mplayers, dplayers, mval, dval = comp_player_ts(_players, players, _fds, fds)
+                else: mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
+
+                mplevel += [mplayers, fds, mval]; dplevel += [dplayers, fds, dval]  # each is cis,alt tuple
                 mValt[alt] += mval; dValt[alt] += dval
+            else:
+                mplevel += []; dplevel += []   # not sure
 
-    mplayers_ += [mplayers]; dplayers_ +=  [dplayers]
+        mplevel_t += [mplevel]; dplevel_t += [dplevel]
 
-    return mplayers_, dplayers_, mValt, dValt
+    return mplevel_t, dplevel_t, mValt, dValt
+
+# if fini:
+def comp_plevel_t(_plevel_t, plevel_t):
+    # plevel is fd tuple in derG if der+ or alt tuple in 1-plevel PP'G if initial rng+
+
+    mplayers_t, dplayers_t = [],[]
+    mvalt, dvalt = [], []
+
+    for (_players, _fds, _valt), (players, fds, valt) in zip(_plevel_t, plevel_t):
+        if len(players)==2:
+            mplayers, dplayers, mval, dval = comp_player_ts(_players, players, _fds, fds)
+        else: mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
+
+        mplayers_t += [mplayers]; dplayers_t += [dplayers]  # or combined into flat lists?
+        mvalt += [mval]; dvalt += [dval]
+
+    return mplayers_t, dplayers_t, mvalt, dvalt
 
 
-# comp_player_ts:
+def comp_player_ts(_players, players, _fds, fds):  # unpack and compare der layers, if any from der+
+
+    mplayer_ts, dplayer_ts = [[],[]], [[],[]]  # flat lists of ptuples, nesting decoded by mapping to lower levels
+    mval, dval = 0, 0
+
+    for _player_t, player_t, _fd, fd in zip(_players, players, _fds, fds):
+        if _fd==fd:
+            mplayer_t, dplayer_t = [],[]
+            for _player, player in zip(_player_t, player_t):
+                # cis|alt
+                if _player and player:  # alt_players may be empty
+                    mplayer, dplayer = [],[]
+                    for _ptuple, ptuple in zip(_player, player):
+
+                        mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+                        mplayer += [mtuple]; dplayer += [dtuple]
+                        mval += mtuple.val; dval += dtuple.val
+
+                    mplayer_t += [mplayer]; dplayer_t += [dplayer]
+            mplayer_ts += [mplayer_t]; dplayer_ts += [dplayer_t]
+        else:
+            break  # only same-fd players are compared
+
+    return mplayer_ts, dplayer_ts, mval, dval
+
+# if len(players)!=2:
 def comp_players(_layers, layers, _fds, fds):  # unpack and compare der layers, if any from der+
 
     mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
@@ -292,6 +344,7 @@ def comp_players(_layers, layers, _fds, fds):  # unpack and compare der layers, 
     return mplayer, dplayer, mval, dval
 
 
+# summing part pending update
 def sum_plevel_ts(pLevels, plevels):
 
     for pLevel_t, plevel_t in zip_longest(pLevels, plevels, fillvalue=[]):
@@ -312,8 +365,7 @@ def sum_plevel_ts(pLevels, plevels):
                 pLevels.append(deepcopy(plevel_t))
 
 
-# need to convert to sum_player_ts
-def sum_player_ts(pLevel, plevel):
+def sum_player_ts(pLevel, plevel, fsub):
 
     if plevel and plevel[0]:
        if pLevel:
