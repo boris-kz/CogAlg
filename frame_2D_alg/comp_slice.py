@@ -112,7 +112,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     Players in derP are zipped with fds: taken forks. Players, mplayer, dplayer are replaced by those in PP
     '''
     players = list  # max ntuples in layer = ntuples in lower layers: 1, 1, 2, 4, 8..: one selected fork per compared ptuple
-    # nesting = len players ( player ( sub_player.., explicit to align comparands
+    # nesting = len players ( player ( sub_player.., explicit to align comparands?
     lplayer = lambda: [[], []]  # last mplayer, dplayer; der+ comp: players+dplayer or dplayer: link only?
     valt = lambda: [0,0]  # tuple of mval, dval, summed from last player, both are signed
     x0 = int
@@ -129,10 +129,10 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
 class CPP(CderP):  # derP params include P.ptuple
 
-    players = []  # 1st plevel, same as in derP but L is area
+    players = list  # 1st plevel, same as in derP but L is area
     valt = lambda: [0,0]  # mval, dval summed across players
     nvalt = lambda: [0,0]  # from neg derPs:
-    nderP_ = []  # miss links, add with nvalt for complemented PP
+    nderP_ =list  # miss links, add with nvalt for complemented PP
     fds = list  # fPd per player except 1st, to comp in agg_recursion
     x0 = int  # box, update by max, min; this is a 2nd plevel?
     xn = int
@@ -430,13 +430,10 @@ def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
                     P.roott[fd] = PP  # update root from seg to PP
                     if fd:
                         PPm = P.roott[0]
-                        # i think we need fds_t and val_t too? Then the process to convert PP to graph will be simpler too
                         if PPm not in PP.altPP_:
                             PP.altPP_ += [PPm]  # bilateral assignment of altPPs
-                            sum_players(PP.players[0], PPm.players[0])  # sum PP's players[0] (mplayer)
                         if PP not in PPm.altPP_:
                             PPm.altPP_ += [PP]  # PPd here
-                            sum_players(PPm.players[1], PP.players[1])  # sum PPm's players[1] (dplayer)
         PP_t += [PP_]
     return PP_t
 
@@ -478,10 +475,10 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
         for derP in P.uplink_layers[-2]:
             if derP not in P.uplink_layers[-1][fd]:
                 seg.nvalt[fd] += derP.valt[fd]  # -ve links in full links, not in +ve links
-                seg.nderP_t += [derP]
+                seg.nderP_ += [derP]
 
     accum_derP(seg, seg_Ps[-1], fd)  # accum last P only, top P uplink_layers are not part of seg
-    if lplayer: seg.players += [lplayer[fd]]  # add new player
+    if lplayer: seg.players += [lplayer]  # add new player
     seg.y0 = seg_Ps[0].y
     seg.yn = seg.y0 + len(seg_Ps)
     seg.fds = fds + [fd]  # fds of root PP
@@ -524,7 +521,7 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
         # only PPs are sign-complemented, seg..[not fd]s are empty:
         PP.valt[fd] += seg.valt[fd]
         PP.nvalt[fd] += seg.nvalt[fd]
-        PP.nderP_t[fd] += seg.nderP_t[fd]
+        PP.nderP_ += seg.nderP_
         # += miss seg.link_s:
         for i, (PP_layer, seg_layer) in enumerate(zip_longest(PP.uplink_layers, seg.uplink_layers, fillvalue=[])):
             if seg_layer:
@@ -545,7 +542,7 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
                     PP.valt[i] += val
                 else:  # -ve links
                     PP.nvalt[i] += val
-                    PP.nderP_t[i] += [derP]
+                    PP.nderP_ += [derP]
     return PP
 
 
@@ -832,7 +829,6 @@ def CBlob2graph(dir_blob, fseg, Cgraph):
     return root
 
 def CPP2graph(PP, fseg, Cgraph):
-    ifd = PP.fds[-1]
 
     alt_players, alt_fds = [], []
     alt_valt = [0, 0]
@@ -848,7 +844,7 @@ def CPP2graph(PP, fseg, Cgraph):
             sum_players(alt_players, altPP.players[:len(alt_fds)])  # sum same-fd players only
             alt_valt[0] += altPP.valt[0];  alt_valt[1] += altPP.valt[1]
 
-    plevel_t = [[[], []]]
+    plevel_t = [[], []]  # level bracket will be added when we assign plevels = [plevel_t] below
     plevel_t[0] = [deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]
     plevel_t[1] = [alt_players, alt_fds, alt_valt]
     return Cgraph(node_=[], plevels=[plevel_t], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
