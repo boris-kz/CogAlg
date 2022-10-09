@@ -250,27 +250,40 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
 
     return graph_
 
-
-def comp_plevels(_plevels, plevels):  # each packed plevel is nested as alT: variable-depth cis/alt tuple
+# draft:
+''' plevel, player nesting in agg+:
+    + internal der_plevel per comp_graph_, extending plevel to fdQue,
+    + external alt_plevel per alt_graph_, extending fdQue to caTree:
+    ->
+    plevels ( caTree ( fdQue ( playerst: players,fds,valt ))), 
+    players ( caTree ( fdQue ( ptuple)))
+'''
+def comp_plevels(_plevels, plevels):  # each packed plevel is caTree|caT: binary cis,alt tree with fdQue pair as terminal leaf
 
     new_plevel = [[], []]
     mValt, dValt = [0,0], [0,0]
 
-    for naltT,(_plevel, plevel) in enumerate(zip( reversed(_plevels),reversed(plevels))):  # top-down depth increase
+    for _caTree, caTree in zip(_plevels, plevels):  # loop bottom-up to align different-depth comparands?
+        # not sure we need to return to index:
+        for i, (_fdQuep, fdQuep) in enumerate( zip(_caTree, caTree)):  # implicit binary tree: nleaves = 2**depth
+            for j, (_fdQue, fdQue) in enumerate( zip(_fdQuep, fdQuep)):  # fdQuep is cis,alt pair
 
-        while naltT:  # recursively unpack nested c/a tuple
-            for _pplevel, pplevel in zip(_plevel, plevel):
-                naltT -= 1
-                for fd in 0,1:
-                    new_plevel[fd] += []  # we get [],[],[].., then use it as indices?
-                    # also add mValt, dValt?
-
-        mplevel, dplevel = comp_plevel(_pplevel, pplevel, mValt, dValt)
-        new_plevel[0] += [mplevel]; new_plevel[1] += [dplevel]  # nested derivatives of all compared plevels
+                if _fdQue and fdQue:  # alt fdQue may be empty
+                    for _playerst, playerst_ in zip_longest(_fdQue, fdQue, fillvalue=[]):
+                        if _playerst and playerst_:
+                            # draft:
+                            mplevel, dplevel, mvalt, dvalt = comp_plevel(_playerst, _playerst, mValt, dValt)
+                            new_plevel[0] += [mplevel]; mValt += mvalt
+                            new_plevel[1] += [dplevel]; dValt += dvalt
+                        # not sure, store partial comparands?:
+                        else:
+                            _fdQue[j] = _playerst if _playerst else playerst_
+                elif _fdQuep or fdQuep:
+                    _caTree[i] = _fdQuep if _fdQuep else fdQuep
 
     return new_plevel, mValt, dValt  # always single new plevel
 
-# draft, callable separately
+# not revised, callable separately
 def comp_plevel(_plevel, plevel, mValt, dValt):  # each unpacked plevel is nested as derivatives from comp in prior agg+
 
     new_players = [[]]  # single taken fd fork per input level per agg+
