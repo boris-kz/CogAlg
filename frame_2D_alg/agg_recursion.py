@@ -104,9 +104,10 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
             # max distance depends on combined value:
             if distance <= ave_rng * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):
 
-                plevels, mvalt, dvalt = comp_plevels(_G.plevels, G.plevels)
-                valt = [sum(mvalt) - ave_Gm, sum(dvalt) - ave_Gd]  # *= link rdn?
-                derG = Cgraph(plevels=plevels, x0=min(_G.x0,G.x0), xn=max(_G.xn,G.xn), y0=min(_G.y0,G.y0), yn=max(_G.yn,G.yn), valt=valt, node_=[_G,G])
+                plevel, valt = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds)
+                valt = [valt[0] - ave_Gm, valt[1] - ave_Gd]  # or already normalized, *= link rdn?
+                derG = Cgraph(
+                    plevels=plevel, x0=min(_G.x0,G.x0), xn=max(_G.xn,G.xn), y0=min(_G.y0,G.y0), yn=max(_G.yn,G.yn), valt=valt, node_=[_G,G])
                 _G.link_ += [derG]; G.link_ += [derG]  # any val
                 for fd in 0,1:
                     if valt[fd] > 0:  # alt fork is redundant, no support?
@@ -245,7 +246,7 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
                     if G not in graph.node_:  # alt graphs are roots of not-in-graph G in derG.node_
                         alt_graph = G.roott[fd]
                         if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph
-                            sum_plevels(alt_plevels, alt_graph.plevels, fa=1)  # fa adds plevel_t[0]s, per plevel
+                            sum_plevels(graph.plevels, alt_graph.plevels, fa=1)  # fa adds plevel_t[0]s per plevel
                             graph.alt_graph_ += [alt_graph]
 
     return graph_
@@ -258,74 +259,57 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
     plevels ( caTree ( fdQue ( playerst: players,fds,valt ))), 
     players ( caTree ( fdQue ( ptuple)))
 '''
-def comp_plevels(_plevels, plevels):  # each packed plevel is caTree|caT: binary cis,alt tree with fdQue pair as terminal leaf
+def comp_plevels(_plevels, plevels, _fds, fds):  # each plevel is caTree|caT: binary cis,alt tree with fdQue pair as terminal leaf
 
-    new_plevel = [[], []]
-    mValt, dValt = [0,0], [0,0]
+    new_plevel = [[],[]]  # fd plevels, each cis+alt, same as new_caT
+    Valt = 0,0  # each cis+alt
+    iVal = 999  # to start for loop:
 
-    for _caTree, caTree in zip(_plevels, plevels):  # loop bottom-up to align different-depth comparands?
-        # not sure we need to return to index:
-        for i, (_fdQuep, fdQuep) in enumerate( zip(_caTree, caTree)):  # implicit binary tree: nleaves = 2**depth
-            for j, (_fdQue, fdQue) in enumerate( zip(_fdQuep, fdQuep)):  # fdQuep is cis,alt pair
-
-                if _fdQue and fdQue:  # alt fdQue may be empty
-                    for _playerst, playerst_ in zip_longest(_fdQue, fdQue, fillvalue=[]):
-                        if _playerst and playerst_:
-                            # draft:
-                            mplevel, dplevel, mvalt, dvalt = comp_plevel(_playerst, _playerst, mValt, dValt)
-                            new_plevel[0] += [mplevel]; mValt += mvalt
-                            new_plevel[1] += [dplevel]; dValt += dvalt
-                        # not sure, store partial comparands?:
+    for _caTree, caTree in zip(reversed(_plevels), reversed(plevels)):  # loop top-down for selective comp depth, same agg+?
+        fdQp_p = [[],[]]; pvalt = [0,0]
+        if iVal < ave_G:  # loop only if higher plevels match, variable comp depth
+            break
+        for _fdQuep, fdQuep in zip(_caTree, caTree):  # fdQuep is ca pair: leaf in implicit binary tree, nleaves = 2**depth
+            fdQ_p = [[],[]]; qvalt = [0,0]
+            for _fdQue, fdQue in zip(_fdQuep, fdQuep):  # cis fdQue | alt fdQue, alts may be empty
+                if _fdQue and fdQue:
+                    for _playerst, playerst, _fd, fd in zip_longest(_fdQue, fdQue, _fds, fds, fillvalue=[]):
+                        # bottom-up der+, fds per G or fdQue?
+                        if _fd==fd:
+                            mplayert, dplayert = comp_playerst(_playerst, playerst)
+                            fdQ_p[0] += [mplayert]; qvalt[0] += mplayert[2][0]
+                            fdQ_p[1] += [dplayert]; qvalt[1] += dplayert[2][1]
                         else:
-                            _fdQue[j] = _playerst if _playerst else playerst_
-                elif _fdQuep or fdQuep:
-                    _caTree[i] = _fdQuep if _fdQuep else fdQuep
+                            break  # contig same-fd comp only
+            for i in 0,1:
+                fdQp_p[i] += [fdQ_p[i]]; pvalt[i] += qvalt[i]  # fdQp_p is ca pair in each element of md pair
+        for i in 0,1:
+            new_plevel[i] += [fdQp_p[i]]; Valt[i] += pvalt[i]  # new_plevel is md pair of candidate players
+        iVal = sum(Valt)  # after 1st loop
 
-    return new_plevel, mValt, dValt  # always single new plevel
-
-# not revised, callable separately
-def comp_plevel(_plevel, plevel, mValt, dValt):  # each unpacked plevel is nested as derivatives from comp in prior agg+
-
-    new_players = [[]]  # single taken fd fork per input level per agg+
-    mValt, dValt = [0, 0], [0, 0]
-
-    for nderT, (_der_plevel, der_plevel) in enumerate(zip(reversed(_plevel), reversed(plevel))):  # nderT: n ders of lower agg levels
-
-        while nderT:  # recursively unpack ders per per lower agg level
-            for _der_pplevel, der_pplevel in zip(_der_plevel, der_plevel):
-                nderT -= 1
-                # add packing: new_players[fd] += [], we get [],[],[].., then use it as indices?
-
-        mplayer, dplayer = comp_players(_der_pplevel, der_pplevel, mValt, dValt)
-        # as below but we need to unpack naltT per player first:
-        # not updated:
-        for i, ((_players, _fds, _valt), (players, fds, valt)) in enumerate(zip(_plevel, plevel)):
-            mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
-            plevels_[0] += [[[mplayers], _fds, [mval, dval]]]  # m fork output, will be selected in sum2graph based on fd
-            plevels_[1] += [[[dplayers], _fds, [mval, dval]]]  # d fork output, will be selected in sum2graph based on fd
-            if i % 2: dValt[0] += mval; dValt[1] += dval  # odd index is d fork
-            else:     mValt[0] += mval; mValt[1] += dval
-
-    return plevels_
+    return new_plevel, Valt  # always single new plevel
 
 
-def comp_players(_layers, layers, _fds, fds):  # unpack and compare der layers, if any from der+
+def comp_playerst(_playerst, playerst):  # unpack and compare der layers, if any from der+
 
     mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
-    mval, dval = 0, 0
+    mval, dval = 0, 0  # new, the old ones in valt for sum2graph
+    _players, _fds, _valt = _playerst
+    players, fds, valt = playerst
 
-    for _player, player, _fd, fd in zip(_layers, layers, _fds, fds):
+    for _player, player, _fd, fd in zip_longest(_players, players, _fds, fds, fillvalue=[]):
         if _fd==fd:
             for _ptuple, ptuple in zip(_player, player):
                 mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
-                mplayer += [mtuple]; mval = mtuple.val
-                dplayer += [dtuple]; dval = dtuple.val
+                mplayer += [mtuple]; mval += mtuple.val
+                dplayer += [dtuple]; dval += dtuple.val
         else:
             break  # only same-fd players are compared
 
-    return mplayer, dplayer, mval, dval
+    return [mplayer, mval], [dplayer, dval]  # single new lplayer, fds are redundant to playerst until sum2graph
 
 
+# not revised
 def sum_plevels(pLevels, plevels):
 
     # nesting increases with depth

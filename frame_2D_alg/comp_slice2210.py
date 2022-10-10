@@ -301,6 +301,31 @@ def comp_plevel_t(_plevel_t, plevel_t):
     return mplayers_t, dplayers_t, mvalt, dvalt
 
 
+def comp_plevel(_plevel, plevel, mValt, dValt):  # each unpacked plevel is nested as derivatives from comp in prior agg+
+
+    new_players = [[]]  # single taken fd fork per input level per agg+
+    mValt, dValt = [0, 0], [0, 0]
+
+    for nderT, (_der_plevel, der_plevel) in enumerate(zip(reversed(_plevel), reversed(plevel))):  # nderT: n ders of lower agg levels
+
+        while nderT:  # recursively unpack ders per per lower agg level
+            for _der_pplevel, der_pplevel in zip(_der_plevel, der_plevel):
+                nderT -= 1
+                # add packing: new_players[fd] += [], we get [],[],[].., then use it as indices?
+
+        mplayer, dplayer = comp_players(_der_pplevel, der_pplevel, mValt, dValt)
+        # as below but we need to unpack naltT per player first:
+        # not updated:
+        for i, ((_players, _fds, _valt), (players, fds, valt)) in enumerate(zip(_plevel, plevel)):
+            mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
+            plevels_[0] += [[[mplayers], _fds, [mval, dval]]]  # m fork output, will be selected in sum2graph based on fd
+            plevels_[1] += [[[dplayers], _fds, [mval, dval]]]  # d fork output, will be selected in sum2graph based on fd
+            if i % 2: dValt[0] += mval; dValt[1] += dval  # odd index is d fork
+            else:     mValt[0] += mval; mValt[1] += dval
+
+    return plevels_
+
+
 def comp_player_ts(_players, players, _fds, fds):  # unpack and compare der layers, if any from der+
 
     mplayer_ts, dplayer_ts = [[],[]], [[],[]]  # flat lists of ptuples, nesting decoded by mapping to lower levels
