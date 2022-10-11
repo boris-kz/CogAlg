@@ -845,6 +845,10 @@ def CPP2graph(PP, fseg, Cgraph):
             alt_valt[0] += altPP.valt[0];  alt_valt[1] += altPP.valt[1]
 
     plevel_t = [[], []]  # level bracket will be added when we assign plevels = [plevel_t] below
+
+    plevel_t[0].append([[deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]])  # pack each non alt fdQues
+    plevel_t[1].append([[alt_players, alt_fds, alt_valt]])  # # pack each alt fdQues
+
     plevel_t[0] = [deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]
     plevel_t[1] = [alt_players, alt_fds, alt_valt]
     return Cgraph(node_=[], plevels=[plevel_t], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)

@@ -556,3 +556,13 @@ def comp_plevels(_plevels, plevels):  # each packed plevel is nested as altT: va
 
     return new_plevel, mValt, dValt  # always single new plevel
 
+def sum_derG(plevels, lplevel, fd):
+
+    plevels += lplevel[fd]
+
+    for fdQueP, fdQuep in zip(CaTree, caTree):  # fdQuep is ca pair: leaf in implicit binary tree, nleaves = 2**depth
+        for FdQue, fdQue in zip(FdQuep, fdQuep):  # cis fdQue | alt fdQue, alts may be empty
+            if FdQue and fdQue:
+                for Playerst, playerst in zip_longest(FdQue, fdQue, fillvalue=[]):
+                    sum_playerst(Playerst, playerst)
+
