@@ -566,3 +566,44 @@ def sum_derG(plevels, lplevel, fd):
                 for Playerst, playerst in zip_longest(FdQue, fdQue, fillvalue=[]):
                     sum_playerst(Playerst, playerst)
 
+
+def sum_playerst(pLayerst, playerst):  # accum layers while same fds
+
+    pLayers, Fds, Valt = pLayerst
+    players, fds, valt = playerst
+    fbreak = 0
+
+    for i, (pLayer, player, Fd, fd) in enumerate( zip_longest(pLayers, players, Fds, fds, fillvalue=[])):
+        if Fd==fd:
+            if fa:  # when pLayer is not converted to pLayerst yet
+                if player and  pLayer:
+                    if isinstance(player[0], Cptuple):
+                        pLayers[i] = [pLayer, deepcopy(player)]  # player is not playerst, add alt part
+                    else:
+                        pLayers[i] = [pLayer, deepcopy(player[0])]  # player is playerst, add only playerst[0] as alt part
+
+            elif player:
+                if isinstance(player[0], Cptuple):  # playerst not converted to playerst yet
+                    if pLayer:
+                        if isinstance(pLayer[0], Cptuple):  # pLayerst not converted too
+                            if pLayer:
+                                sum_player(pLayer, player, fneg=0)
+                            else:
+                                pLayers+=[player]
+                        else:
+                            if pLayer[0]:
+                                sum_player(pLayer[0], player, fneg=0)
+                            else:
+                                pLayers[0]+=[player]
+                    # need to sum vals per player:
+                    # Val, val in zip(Valt, valt): Val+=val?
+
+                else:  # both converted to playerst
+                    for ppLayer, pplayer in zip_longest(pLayer, player, fillvalue=[]):  # pLayer and player is playerst
+                        if pplayer:
+                            if ppLayer: sum_player(ppLayer, pplayer, fneg=0)
+                            else:       ppLayers+=[pplayer]
+        else:
+            fbreak = 1
+            break
+    Fds[:] = Fds[:i + 1 - fbreak]
