@@ -607,3 +607,14 @@ def sum_playerst(pLayerst, playerst):  # accum layers while same fds
             fbreak = 1
             break
     Fds[:] = Fds[:i + 1 - fbreak]
+
+def fork_select(caTree, faTree, fa):
+
+    if len(caTree) > 1:  # not leaf
+        # split into cisT, altT:
+        caT = [ caTree[:len(caTree)/2 +1], caTree[len(caTree)/2:] ]
+        faTree += caT[fa]  # altT if fa else cisT
+        fork_select(caT[not fa], faTree, fa)
+
+    return faTree
+
