@@ -618,3 +618,45 @@ def fork_select(caTree, faTree, fa):
 
     return faTree
 
+
+def old_splice(cis, alt):  # recursive unpack and splice alt forks to extend (add?) list nesting:
+
+    cQ, cvalt = cis
+    if alt:
+        aQ, avalt = alt
+    else:
+        aQ, avalt = [], 0
+
+    # valt[0] += cval; valt[1] += aval
+    for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
+
+    cQ[:] = cQ, aQ  # this adds nesting, we need to keep it?
+    if not isinstance(cQ[0], Cptuple):
+        ca_splice(cQ, aQ)
+    ''' 
+    unpacked Cgraph.plevels: plevels ( caTree ( players ( caTree ( ptuples
+    Ts have pair valt, Qs have single val?
+
+        for (cTree, cvalt), (aTree, avalt) in zip(graph.plevels, Alt_plevels):
+            cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+            cTree[:] = cTree, aTree
+            for cplayerst, aplayerst in zip(cTree, aTree):
+                if cplayerst: cplayers, cvalt = cplayerst
+                else: cplayers = [], cvalt = [0,0]
+                if aplayerst: aplayers, avalt = cplayerst
+                else: aplayers = [], avalt = [0,0]
+                cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+                cplayers[:] = cplayers, aplayers
+
+                for (cT, cvalt), (aT, avalt) in zip(cplayers, aplayers):
+                    cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+                    cT[:] = cT, aT
+                    for cptuplest, aptuplest in zip(cTree, aTree):
+                        if cptuplest: cptuples, cfds, cvalt = cptuplest
+                        else: cptuples = [], cvalt = [0,0]
+                        if aptuplest: aptuples, afds, avalt = cptuplest
+                        else: aptuples = [], avalt = [0,0]
+                        cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+                        cptuples[:] = cptuples, aptuples
+    '''
+

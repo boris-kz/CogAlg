@@ -256,66 +256,60 @@ def sum2graph_(G_, fd):  # sum node and link params into graph
 
     return graph_
 
-def ca_splice(cis, alt):  # recursive unpack and splice alt forks of each nesting level: [level, valt]
+def ca_splice_deep(cQue, aQue):  # Que is plevels or players, unpack and splice alt forks in two calls
+    fplayers=0
 
-    cQ, cvalt = cis
-    if alt: aQ, avalt = alt
-    else:   aQ, avalt = [], 0
+    for (cTree, cvalt), (aTree, avalt) in zip(cQue, aQue):
+        cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+        cTree += cTree
+        for cQt, aQt in zip(cTree, aTree):
+            if cQt:
+                if len(cQt) == 2: cQ, cvalt = cQt; fplayers = 1  # Q is players
+                else:             cQ, cfds, cvalt = cQt  # Q is ptuples
+            else: cQ = [], cvalt = [0, 0]
+            if aQt:
+                if len(aQt) == 2: aQ, avalt = aQt
+                else:             aQ, afds, avalt = cQt
+            else: aQ = [], avalt = [0, 0]
 
-    for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
-    cQ[:] = cQ, aQ
-    if not isinstance(cQ[0], Cptuple):
-        ca_splice(cQ, aQ)
-    ''' 
-    unpacked: 
-    plevels ( caTree ( fdQue:players ( caTree ( fdQue:ptuples:  Ts have pair valt, Qs have single val?
-    
-    for (cT, cvalt), (aT, avalt) in zip(graph.plevels, Alt_plevels):
-        for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
-        cT[:] = cT, aT
-        for (cQ, cvalt), (aQ, avalt) in zip(cT, aT):
-            for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
-            cQ[:] = cQ, aQ
-            for (cplayers, cvalt), (aplayers, avalt) in zip(cQ, aQ): # Q is fa plevel, consisting of players:
-                for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
-                cplayers[:] = [cplayers, aplayers]
-                for (cT, cvalt), (aT, avalt) in zip(cplayers, aplayers):
-                    for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
-                    cT[:] = cT, aT
-                    for (cQ, cvalt), (aQ, avalt) in zip(cT, aT):
-                        for i, (cval, aval) in enumerate(zip(cvalt, avalt)): cval += aval
-                        cQ[:] = cQ, aQ  # each Q is ptuples, former player
-    '''
+            cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+            cQ += aQ
 
-# draft:
-''' plevel, player nesting in agg+:
-    + internal der_plevel per comp_graph_, extending plevel to fdQue,
-    + external alt_plevel per alt_graph_, extending fdQue to caTree:
-    ->
-    plevels ( caTree ( fdQue ( playerst: players,fds,valt ))), 
-    players ( caTree ( fdQue ( ptuple)))
+            if fplayers:
+                ca_splice(cQ, aQ)
+
+
+def ca_splice(cQue, aQue):  # Que is plevels or players, unpack and splice alt forks in two calls
+
+    for (cTree, cvalt), (aTree, avalt) in zip(cQue, aQue):
+        cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+        cTree += aTree  # Tree is flat list,
+        # aQs remain packed in aTree?
+
+# need to revise:
+''' 
+plevels ( caTree ( players ( caTree ( ptuples )))
 '''
-def comp_plevels(_plevels, plevels, _fds, fds):  # each plevel is caTree|caT: binary cis,alt tree with fdQue pair as terminal leaf
+def comp_plevels(_plevels, plevels, _fds, fds):  # each plevel is caTree|caT: binary cis,alt tree with players as leaves
 
     mplevel, dplevel = [],[]  # fd plevels, each cis+alt, same as new_caT
     Valt = [0,0]  # each cis+alt
     iVal = ave_G  # to start loop:
 
-    for _caTree, caTree in zip(reversed(_plevels), reversed(plevels)):  # loop top-down for selective comp depth, same agg+?
-        if iVal < ave_G:  # loop only if higher plevels match, variable comp depth
+    for (_caTree, cvalt), (caTree, cvalt), _fd, fd in zip(reversed(_plevels), reversed(plevels), _fds, fds):
+        if iVal < ave_G:  # top-down, comp if higher plevels match, same agg+
             break
         fdQ, alt_fdQ = [], []; qvalt = [0,0]
-        # last element is ivalt
-        for _fdQue, fdQue in zip(_caTree[:-1], caTree[:-1]):  # cis fdQue | alt fdQue, alts may be empty
-            if _fdQue and fdQue:
-                for _playerst, playerst, _fd, fd in zip(_fdQue, fdQue, _fds, fds):
-                        # bottom-up der+, fds per G or fdQue?
-                        if _fd==fd:
-                            mplayert, dplayert = comp_playerst(_playerst, playerst)
-                            fdQ += [mplayert]; qvalt[0] += mplayert[1]
-                            alt_fdQ += [dplayert]; qvalt[1] += dplayert[1]
-                        else:
-                            break  # comp same fds
+        for _players, _players, _fd, fd in zip(_caTree, cvalt, _fds, fds):  # bottom-up der+
+            if _fd == fd:
+                if _players and _players:  # skip alts if empty
+        # below is not revised:
+
+                    mplayert, dplayert = comp_players(_players, players)
+                    fdQ += [mplayert]; qvalt[0] += mplayert[1]
+                    alt_fdQ += [dplayert]; qvalt[1] += dplayert[1]
+            else:
+                break  # comp same fds
         mplevel += [fdQ]; dplevel += [alt_fdQ]
         for i in 0,1: Valt[i] += qvalt[i]  # new plevel is m,d pair of candidate plevels
         iVal = sum(Valt)  # after 1st loop
@@ -323,7 +317,7 @@ def comp_plevels(_plevels, plevels, _fds, fds):  # each plevel is caTree|caT: bi
     return [mplevel, dplevel], Valt  # always single new plevel
 
 
-def comp_playerst(_playerst, playerst):  # unpack and compare der layers, if any from der+
+def comp_players(_playerst, playerst):  # unpack and compare der layers, if any from der+
 
     mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
     mval, dval = 0, 0  # new, the old ones in valt for sum2graph

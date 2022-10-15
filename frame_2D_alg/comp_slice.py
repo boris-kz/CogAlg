@@ -844,14 +844,26 @@ def CPP2graph(PP, fseg, Cgraph):
             sum_players(alt_players, altPP.players[:len(alt_fds)])  # sum same-fd players only
             alt_valt[0] += altPP.valt[0];  alt_valt[1] += altPP.valt[1]
 
-    plevel_t = [[], []]  # level bracket will be added when we assign plevels = [plevel_t] below
+    players, alt_players = deepcopy(PP.players), deepcopy(alt_players)
+    #-> Cgraph.plevels: plevels ( caTree ( players ( caTree ( ptuples:
+    players = []
+    valt = [0,0]
+    for i, (player, alt_player), fd in enumerate(zip_longest(players, alt_players, PP.fds, fillvalue=[])):
+        cval, aval = 0,0
+        for ptuple, alt_ptuple in zip_longest(player, alt_player, fillvalue=None):
+            if ptuple:
+                cval += ptuple.val
+                if alt_ptuple: aval += alt_ptuple.val
+        caTree = [[player, alt_player], [cval, aval]]
+        valt[0] += cval; valt[1] += aval
+        players += [caTree]
 
-    plevel_t[0].append([[deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]])  # pack each non alt fdQues
-    plevel_t[1].append([[alt_players, alt_fds, alt_valt]])  # # pack each alt fdQues
+    # need to revise:
+    players[:] = [players, PP.fds, valt]
+    plevel = [[caTree, valt]]  # alt_plevel will be appended to [players] in form_graph_
+    fds = [1]  # 1st plevel fd is always der+?
 
-    plevel_t[0] = [deepcopy(PP.players), deepcopy(PP.fds), deepcopy(PP.valt)]
-    plevel_t[1] = [alt_players, alt_fds, alt_valt]
-    return Cgraph(node_=[], plevels=[plevel_t], fds=deepcopy(PP.fds), x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+    return Cgraph(node_=[], plevels=[[plevel],valt], fds=fds, x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
 
 
 def sub_recursion_eval(root):  # for PP or dir_blob
