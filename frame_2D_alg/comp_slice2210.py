@@ -659,4 +659,32 @@ def old_splice(cis, alt):  # recursive unpack and splice alt forks to extend (ad
                         cvalt[0] += avalt[0]; avalt[1] += avalt[1]
                         cptuples[:] = cptuples, aptuples
     '''
+# ca_splice(graph.plevels, Alt_plevels)  # recursive unpack and splice alt forks
+def ca_splice_deep(cQue, aQue):  # Que is plevels or players, unpack and splice alt forks in two calls
+    fplayers=0
+
+    for (cTree, cvalt), (aTree, avalt) in zip(cQue, aQue):
+        cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+        cTree += cTree
+        for cQt, aQt in zip(cTree, aTree):
+            if cQt:
+                if len(cQt) == 2: cQ, cvalt = cQt; fplayers = 1  # Q is players
+                else:             cQ, cfds, cvalt = cQt  # Q is ptuples
+            else: cQ=[], cvalt=[0,0]
+            if aQt:
+                if len(aQt) == 2: aQ, avalt = aQt
+                else:             aQ, afds, avalt = cQt
+            else: aQ=[], avalt=[0,0]
+
+            cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+            cQ += aQ
+
+            if fplayers:
+                ca_splice(cQ, aQ)
+
+def ca_splice(cQue, aQue):  # Que is plevels or players, unpack and splice alt forks in two calls
+
+    for (cTree, cvalt), (aTree, avalt) in zip(cQue, aQue):
+        cvalt[0] += avalt[0]; avalt[1] += avalt[1]
+        cTree += aTree  # Tree is flat list, aQs remain packed in aTree?
 
