@@ -659,6 +659,27 @@ def old_splice(cis, alt):  # recursive unpack and splice alt forks to extend (ad
                         cvalt[0] += avalt[0]; avalt[1] += avalt[1]
                         cptuples[:] = cptuples, aptuples
     '''
+def accum_ptuple(Ptuple, ptuple, fneg=0):  # lataple or vertuple
+
+    for param_name in Ptuple.numeric_params:
+        if param_name != "G" and param_name != "Ga":
+            Param = getattr(Ptuple, param_name)
+            param = getattr(ptuple, param_name)
+            if fneg: out = Param-param
+            else:    out = Param+param
+            setattr(Ptuple, param_name, out)  # update value
+
+    if isinstance(Ptuple.angle, list):
+        for i, angle in enumerate(ptuple.angle):
+            if fneg: Ptuple.angle[i] -= angle
+            else:    Ptuple.angle[i] += angle
+        for i, aangle in enumerate(ptuple.aangle):
+            if fneg: Ptuple.aangle[i] -= aangle
+            else:    Ptuple.aangle[i] += aangle
+    else:
+        if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
+        else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
+
 # ca_splice(graph.plevels, Alt_plevels)  # recursive unpack and splice alt forks
 def ca_splice_deep(cQue, aQue):  # Que is plevels or players, unpack and splice alt forks in two calls
     fplayers=0
