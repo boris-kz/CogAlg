@@ -110,7 +110,7 @@ def comp_PP_(iPP_):  # rng cross-comp, draft
 
                 if distance * ((_PP.mval+PP.mval)/2 / ave_mPP) <= 3:  # ave_rng
                     # comp PPs:
-                    mplayer, dplayer = comp_players(_PP.players, PP.players)
+                    mplayer, dplayer = comp_ptuples(_PP.players, PP.players)
                     mval = sum([ptuple.val for ptuple in mplayer])
                     derPP = CderPP(players = deepcopy(_PP.players), mplayer=mplayer, dplayer=dplayer, _PP=_PP, PP=PP, mval=mval)
                     if mval > ave_mPP:
@@ -140,7 +140,7 @@ def comp_PP_centroid(PP_, fsubder=0, fPd=0):  # PP can also be PPP, etc.
         for compared_PP in compared_PP_:  # accum summed_params over compared_PP_:
             sum_players(Players, compared_PP.players)
 
-        mplayer, dplayer = comp_players(PP.players, Players)  # sum_params is now ave_params
+        mplayer, dplayer = comp_ptuples(PP.players, Players)  # sum_params is now ave_params
 
         pre_PPP = CPPP(players=deepcopy(PP.players) + [dplayer if fPd else mplayer],
                       fPds=deepcopy(PP.fPds)+[fPd], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn,
@@ -159,7 +159,7 @@ Multiple sublayers start on the 3rd layer, because it's derived from comparison 
 def comp_levels(_levels, levels, der_levels, fsubder=0):  # only for agg_recursion, each param layer may consist of sub_layers
 
     # recursive unpack of nested param layers, each layer is ptuple pair_layers if from der+
-    der_levels += [comp_players(_levels[0], levels[0])]
+    der_levels += [comp_ptuples(_levels[0], levels[0])]
 
     # recursive unpack of deeper layers, nested in 3rd and higher layers, if any from agg+, down to nested tuple pairs
     for _level, level in zip(_levels[1:], levels[1:]):  # level = deeper sub_levels, stop if none
@@ -518,7 +518,7 @@ def comp_PP_(PP_, rng, fPd):  # rng cross-comp, draft
                 val = ((_PP.mval + PP.mval) / 2 / ave_mPP)
             if distance * val <= 3:  # ave_rng
                 # comp PPs:
-                mplayer, dplayer = comp_players(_PP.players, PP.players, _PP.fPds, PP.fPds)
+                mplayer, dplayer = comp_ptuples(_PP.players, PP.players, _PP.fPds, PP.fPds)
                 mval = sum([mtuple.val for mtuple in mplayer])
                 dval = sum([dtuple.val for dtuple in dplayer])
                 derPP = CderPP(player=[mplayer, dplayer], mval=mval, dval=dval)  # derPP is single-layer, PP stays as is
@@ -550,7 +550,7 @@ def comp_centroid(PPP_, fPd):  # comp PP to average PP in PPP, sum >ave PPs into
         PPP_players = []
         for i, (PP, _, fin) in enumerate(PPP.PP_):  # comp PP to PPP centroid, derPP is replaced, use comp_plevels?
 
-            mplayer, dplayer = comp_players(PPP.players, PP.players, PPP.fPds, PP.fPds)  # norm params in comp_ptuple
+            mplayer, dplayer = comp_ptuples(PPP.players, PP.players, PPP.fPds, PP.fPds)  # norm params in comp_ptuple
             mval = sum([mtuple.val for mtuple in mplayer])
             dval = sum([dtuple.val for dtuple in dplayer])
             derPP = CderPP(player=[mplayer, dplayer], mval=mval, dval=dval)  # derPP is recomputed at each call

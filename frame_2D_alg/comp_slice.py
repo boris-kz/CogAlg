@@ -272,7 +272,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         players = [[_P.ptuple]]
 
     else:  # P is derP
-        mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)  # passed from seg.fds
+        mplayer, dplayer, mval, dval = comp_ptuples(_P.players, P.players)  # passed from seg.fds
         valt = [mval, dval]
         players = deepcopy(_P.players)
 
@@ -560,40 +560,43 @@ def sum_ptuples(Player, player, fneg=0):  # accum players in Players
 
     for i, (Ptuple, ptuple) in enumerate(zip_longest(Player, player, fillvalue=[])):
         if ptuple:
-            if Ptuple:  # accum ptuple
-                for param_name in Ptuple.numeric_params:
-                    if param_name != "G" and param_name != "Ga":
-                        Param = getattr(Ptuple, param_name)
-                        param = getattr(ptuple, param_name)
-                        if fneg: out = Param - param
-                        else:    out = Param + param
-                        setattr(Ptuple, param_name, out)  # update value
-                if isinstance(Ptuple.angle, list):
-                    for i, angle in enumerate(ptuple.angle):
-                        if fneg: Ptuple.angle[i] -= angle
-                        else:    Ptuple.angle[i] += angle
-                    for i, aangle in enumerate(ptuple.aangle):
-                        if fneg: Ptuple.aangle[i] -= aangle
-                        else:    Ptuple.aangle[i] += aangle
-                else:
-                    if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
-                    else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
-
+            if Ptuple: sum_ptuple(Ptuple, ptuple, fneg)  # accum ptuple
             elif Ptuple == None: Player[i] = deepcopy(ptuple)
             elif not fneg: Player.append(deepcopy(ptuple))
 
-def comp_players(_layers, layers):  # unpack and compare der layers, if any from der+
+def sum_ptuple(Ptuple, ptuple, fneg=0):
 
-    mplayer, dplayer = [],[]
+    for param_name in Ptuple.numeric_params:
+        if param_name != "G" and param_name != "Ga":
+            Param = getattr(Ptuple, param_name)
+            param = getattr(ptuple, param_name)
+            if fneg: out = Param - param
+            else:    out = Param + param
+            setattr(Ptuple, param_name, out)  # update value
+    if isinstance(Ptuple.angle, list):
+        for i, angle in enumerate(ptuple.angle):
+            if fneg: Ptuple.angle[i] -= angle
+            else:    Ptuple.angle[i] += angle
+        for i, aangle in enumerate(ptuple.aangle):
+            if fneg: Ptuple.aangle[i] -= aangle
+            else:    Ptuple.aangle[i] += aangle
+    else:
+        if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
+        else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
+
+
+def comp_ptuples(_layers, layers):  # unpack and compare der layers, if any from der+
+
+    mptuples, dptuples = [],[]
     mval, dval = 0,0
 
     for _layer, layer in zip(_layers, layers):
         for _ptuple, ptuple in zip(_layer, layer):
             mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
-            mplayer +=[mtuple]; mval+=mtuple.val
-            dplayer +=[dtuple]; dval+=dtuple.val
+            mptuples +=[mtuple]; mval+=mtuple.val
+            dptuples +=[dtuple]; dval+=dtuple.val
 
-    return mplayer, dplayer, mval, dval
+    return mptuples, dptuples, mval, dval
 
 
 def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params

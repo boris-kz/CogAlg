@@ -272,7 +272,7 @@ def comp_plevel_ts(_plevels, plevels):
                 _players, _fds, _valt = _plevel; players, fds, valt = plevel
                 if len(players) == 2:
                     mplayers, dplayers, mval, dval = comp_player_ts(_players, players, _fds, fds)
-                else: mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
+                else: mplayers, dplayers, mval, dval = comp_ptuples(_players, players, _fds, fds)
 
                 mplevel += [mplayers, fds, mval]; dplevel += [dplayers, fds, dval]  # each is cis,alt tuple
                 mValt[alt] += mval; dValt[alt] += dval
@@ -293,7 +293,7 @@ def comp_plevel_t(_plevel_t, plevel_t):
     for (_players, _fds, _valt), (players, fds, valt) in zip(_plevel_t, plevel_t):
         if len(players)==2:
             mplayers, dplayers, mval, dval = comp_player_ts(_players, players, _fds, fds)
-        else: mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
+        else: mplayers, dplayers, mval, dval = comp_ptuples(_players, players, _fds, fds)
 
         mplayers_t += [mplayers]; dplayers_t += [dplayers]  # or combined into flat lists?
         mvalt += [mval]; dvalt += [dval]
@@ -313,11 +313,11 @@ def comp_plevel(_plevel, plevel, mValt, dValt):  # each unpacked plevel is neste
                 nderT -= 1
                 # add packing: new_players[fd] += [], we get [],[],[].., then use it as indices?
 
-        mplayer, dplayer = comp_players(_der_pplevel, der_pplevel, mValt, dValt)
+        mplayer, dplayer = comp_ptuples(_der_pplevel, der_pplevel, mValt, dValt)
         # as below but we need to unpack naltT per player first:
         # not updated:
         for i, ((_players, _fds, _valt), (players, fds, valt)) in enumerate(zip(_plevel, plevel)):
-            mplayers, dplayers, mval, dval = comp_players(_players, players, _fds, fds)
+            mplayers, dplayers, mval, dval = comp_ptuples(_players, players, _fds, fds)
             plevels_[0] += [[[mplayers], _fds, [mval, dval]]]  # m fork output, will be selected in sum2graph based on fd
             plevels_[1] += [[[dplayers], _fds, [mval, dval]]]  # d fork output, will be selected in sum2graph based on fd
             if i % 2: dValt[0] += mval; dValt[1] += dval  # odd index is d fork
@@ -435,7 +435,7 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
             # both PP core and edge are compared to PPP core, results are summed or concatenated:
             for fd in 0, 1:
                 if PP.players_t[fd]:  # PP.players_t[1] may be empty
-                    mplayer, dplayer = comp_players(PPP.players_t[0], PP.players_t[fd], PPP.fds, PP.fds)  # params norm in comp_ptuple
+                    mplayer, dplayer = comp_ptuples(PPP.players_t[0], PP.players_t[fd], PPP.fds, PP.fds)  # params norm in comp_ptuple
                     player_t = [Mplayer + mplayer, Dplayer + dplayer]
                     valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
                     Valt[0] += valt[0]; Valt[1] += valt[1]  # accumulate mval and dval
