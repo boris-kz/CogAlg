@@ -23,7 +23,8 @@ class Cgraph(CPP):  # graph or generic PP of any composition
 
     plevels = list  # plevel_t[1]s is summed from alt_graph_, sub comp support, agg comp suppression?
     fds = list  # prior forks in plevels, then player fds in plevel
-    valt = lambda: [0, 0]  # mval, dval from cis+alt forks
+    valt = lambda: [0, 0]
+    valts = lambda: [[0, 0]]  # [cis,alt] vals per plevel
     nvalt = lambda: [0, 0]  # from neg open links
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?
     rng = lambda: 1  # not for alt_graphs
@@ -39,7 +40,7 @@ class Cgraph(CPP):  # graph or generic PP of any composition
 
 def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
-    ivalt = root.valt
+    ivalt = root.valts[-1]
     mgraph_, dgraph_ = form_graph_(root, G_, fsub=0)  # PP cross-comp and clustering
 
     # intra graph:
@@ -53,7 +54,7 @@ def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, prett
     # cross graph:
     root.mlevels += mgraph_; root.dlevels += dgraph_
     for fd, graph_ in enumerate([mgraph_, dgraph_]):
-        adj_val = root.valt[fd] - ivalt[fd]
+        adj_val = root.valt[fd] - ivalt[fd]  # or valts[-1][fa]?
         # recursion if adjusted val:
         if (adj_val > G_aves[fd] * ave_agg * (root.rdn + 1)) and len(graph_) > ave_nsub:
             root.rdn += 1  # estimate
@@ -82,10 +83,10 @@ def form_graph_(root, G_, fsub):  # forms plevel in agg+ or player in sub+, G is
 
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd, fsub)  # sum proto-graph node_ params in graph
-            # the below is already done in sum2graph?
-            plevels = deepcopy(graph_[0].plevels)
+
+            plevels = deepcopy(graph_[0].plevels); fds = graph_[0].fds  # same for all nodes?
             for graph in graph_[1:]:
-                sum_plevels(plevels, graph.plevels)  # each plevel is (caTree, valt)
+                sum_plevels(plevels, graph.plevels, fds, graph.fds)  # each plevel is (caTree, valt)
             root.plevels = plevels
 
     return mgraph_, dgraph_
@@ -102,8 +103,8 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
             distance = np.hypot(dy, dx)  # Euclidean distance between centroids, max depends on combined value:
             if distance <= ave_rng * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):
 
-                mplevel, dplevel, caValt = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds)
-                valt = [mplevel[1][0] - ave_Gm, dplevel[1][1] - ave_Gd]  # or already normalized, *= link rdn?
+                mplevel, dplevel = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds)
+                valt = [mplevel[1][0] - ave_Gm, dplevel[1][1] - ave_Gd]  # valt is already normalized, *= link rdn?
                 derG = Cgraph(
                     plevels=[mplevel, dplevel], x0=min(_G.x0,G.x0), xn=max(_G.xn,G.xn), y0=min(_G.y0,G.y0), yn=max(_G.yn,G.yn), valt=valt, node_=[_G,G])
                 _G.link_ += [derG]; G.link_ += [derG]  # any val
@@ -134,7 +135,7 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
                             G.link_ += [_derG]
                             adj_val = _derG.valt[fd] - ave_agg  # or increase ave per mediation depth
                             # adjust nodes:
-                            G.valt[fd] += adj_val; _G.valt[fd] += adj_val
+                            G.valt[fd] += adj_val; _G.valt[fd] += adj_val  # valts not updated
                             valt[fd] += adj_val; _G.roott[fd][2][fd] += adj_val  # root is not graph yet
                             __G = _derG.node_[0] if _derG.node_[0] is not _G else _derG.node_[1]
                             if __G not in mmed_node_:  # not saved via prior _G
@@ -210,7 +211,7 @@ def sum2graph_(G_, fd, fsub):  # sum node and link params into graph, plevel in 
     for G in G_:
         node_, meds_, valt = G
         node = node_[0]  # init graph with 1st node:
-        graph = Cgraph( plevels=deepcopy(node.plevels), fds=deepcopy(node.fds), valt=node.valt,
+        graph = Cgraph( plevels=deepcopy(node.plevels), fds=deepcopy(node.fds), valt=node.valt, valts=node.valts,
                         x0=node.x0, xn=node.xn, y0=node.y0, yn=node.yn, node_ = node_, meds_ = meds_)
 
         derG = node.link_[0]  # init new_plevel with 1st derG:
@@ -220,10 +221,12 @@ def sum2graph_(G_, fd, fsub):  # sum node and link params into graph, plevel in 
             valt[0] += derG.valt[0]; valt[1] += derG.valt[1]
             derG.roott[fd] = graph
         for node in node_[1:]:
-            graph.valt[0] += node.valt[0]; graph.valt[1] += node.valt[1]
+            for Val, val in zip(graph.valt, node.valt): Val+=val
+            for Valt, valt in zip(graph.valts, node.valts):
+                Valt[0] += valt[0]; Valt[1] += valt[1]
             graph.x0=min(graph.x0, node.x0); graph.xn=max(graph.xn, node.xn); graph.y0=min(graph.y0, node.y0); graph.yn=max(graph.yn, node.yn)
             # accum params:
-            sum_plevels(graph.plevels, node.plevels)  # same for fsub
+            sum_plevels(graph.plevels, node.plevels, graph.fds, node.fds)  # same for fsub
             for derG in node.link_:
                 sum_plevel(new_plevel, derG.plevels[fd])  # accum derG, add to graph when complete
                 valt[0] += derG.valt[0]; valt[1] += derG.valt[1]
@@ -241,11 +244,12 @@ def sum2graph_(G_, fd, fsub):  # sum node and link params into graph, plevel in 
                         alt_graph = G.roott[fd]
                         if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph
                             # der+: plevels[-1] += player, rng+: players[-1] = player
+                            # add sum alt valts
                             if fsub:
                                 if Alt_plevels: sum_plevel(Alt_plevels, alt_graph.plevels[-1])  # same-length caTrees?
                                 else:           Alt_plevels = deepcopy(alt_graph.plevels[-1])
                             else:  # agg+
-                                if Alt_plevels: sum_plevels(Alt_plevels, alt_graph.plevels)
+                                if Alt_plevels: sum_plevels(Alt_plevels, alt_graph.plevels, alt_graph.fds, alt_graph.fds)  # redundant fds
                                 else:           Alt_plevels = deepcopy(alt_graph.plevels)
                             graph.alt_graph_ += [alt_graph]
         if graph.alt_graph_:
@@ -255,6 +259,7 @@ def sum2graph_(G_, fd, fsub):  # sum node and link params into graph, plevel in 
         if graph.alt_graph_:
             Alt_plevels = graph.alt_graph_.pop()
         else: Alt_plevels = []
+    # add sum valts:
     if fsub:
         for playerst, aplayerst in zip(graph.plevels[-1], Alt_plevels):  # each plevel is caTree
             if playerst and aplayerst:  # else empty
@@ -273,7 +278,6 @@ def comp_plevels(_plevels, plevels, _fds, fds):  #  plevels ( caTree ( players (
 
     mplevel, dplevel = [],[]  # fd plevels, each cis+alt, same as new_caT
     Valt = [0,0]  # each cis+alt
-    CaValt = [[0,0],[0,0]]
     iVal = ave_G  # to start loop:
 
     for (_caTree, cvalt), (caTree, cvalt), _fd, fd in zip(reversed(_plevels), reversed(plevels), _fds, fds):  # caTree is a list of players
@@ -287,11 +291,8 @@ def comp_plevels(_plevels, plevels, _fds, fds):  #  plevels ( caTree ( players (
                     mplayert, dplayert, caValt = comp_players(_players, players)
                     mTree += [mplayert]; pvalt[0] += mplayert[1]
                     dTree += [dplayert]; pvalt[1] += dplayert[1]
-                    for Valt, valt in zip(CaValt, caValt):
-                        for Val, val in zip(Valt, valt):
-                            Val+=val
                 else:
-                    mTree += []; dTree += []
+                    mTree += [[]]; dTree += [[]]  # to align same-length trees for comp and sum
             else:
                 break  # comp same fds
         # merge Trees in candidate plevels:
@@ -299,46 +300,60 @@ def comp_plevels(_plevels, plevels, _fds, fds):  #  plevels ( caTree ( players (
         for i in 0,1: Valt[i] += pvalt[i]
         iVal = sum(Valt)  # after 1st loop
 
-    return [mplevel,Valt[0]], [dplevel,Valt[1]], CaValt  # always single new plevel
+    return [mplevel,Valt[0]], [dplevel,Valt[1]]  # always single new plevel
 
 
 def comp_players(_playerst, playerst):  # unpack and compare der layers, if any from der+
 
     mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
     mVal, dVal = 0,0  # new, the old ones in valt for sum2graph
-    caValt = [[0,0],[0,0]]
     _players, _fds, _valt = _playerst
     players, fds, valt = playerst
 
-    for (_caTree, valt), (caTree, valt), _fd, fd in zip(_players, players, _fds, fds):
+    for (_caTree, valt), (caTree, valt) in zip(_players, players):
         mTree, dTree = [],[]
         mTval, dTval = 0,0
-        if _fd==fd:
-            mid = len(caTree)/2
-            for i, (_ptuples, ptuples) in enumerate(zip(_caTree, caTree)):
-                if _ptuples and ptuples:
-                    mtuples, dtuples, mval, dval = comp_ptuples(ptuples, ptuples)
-                    mTree += mtuples; dTree += dtuples
-                    mTval += mval; mTval += dval
-                    alt = i > mid
-                    caValt[alt][0] += mval; caValt[alt][1] += dval
-                else:
-                    mTree += []; dTree += []
-        else:
-            break  # comp same fds
-        mplayer += [[mTree, mTval]] if mTree else []
+
+        for i, (_ptuples, ptuples) in enumerate(zip(_caTree, caTree)):
+            if _ptuples and ptuples:
+                mtuples, dtuples, mval, dval = comp_ptuples(ptuples, ptuples, _fds, fds)
+                mTree += [[mtuples, mval]]
+                dTree += [[dtuples, dval]]
+                mTval += mval; mTval += dval
+            else:
+                mTree += [[]]; dTree += [[]]
+
+        mplayer += [[mTree, mTval]] if mTree else []  # nested or flat?
         dplayer += [[dTree, dTval]] if dTree else []
         mVal += mTval; dVal += dTval
 
-    return [mplayer,mVal], [dplayer,dVal], caValt  # single new lplayer, no fds till sum2graph
+    return [mplayer,mVal], [dplayer,dVal]  # single new lplayer, no fds till sum2graph
+
+def comp_ptuples(_ptuples, ptuples, _fds, fds):  # unpack and compare der layers, if any from der+
+
+    mptuples, dptuples = [],[]
+    mval, dval = 0,0
+
+    for _ptuple, ptuple, _fd, fd in zip(ptuples, ptuples, _fds, fds):
+        if _fd == fd:
+            mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+            mptuples +=[mtuple]; mval+=mtuple.val
+            dptuples +=[dtuple]; dval+=dtuple.val
+        else:
+            break  # comp same fds
+
+    return mptuples, dptuples, mval, dval
 
 
-def sum_plevels(pLevels, plevels):
+def sum_plevels(pLevels, plevels, Fds, fds):
 
-    for CaTreet, caTreet in zip_longest(pLevels, plevels, fillvalue=[]):  # loop top-down for selective comp depth, same agg+?
-        if caTreet:
-            if CaTreet: sum_plevel(CaTreet, caTreet)
-            else:       pLevels.append(deepcopy(caTreet))
+    for CaTreet, caTreet, Fd, fd in zip_longest(pLevels, plevels, Fds, fds, fillvalue=[]):  # loop top-down for selective comp depth, same agg+?
+        if Fd==fd:
+            if caTreet:
+                if CaTreet: sum_plevel(CaTreet, caTreet)
+                else:       pLevels.append(deepcopy(caTreet))
+        else:
+            break
 
 # separate to sum derGs
 def sum_plevel(CaTreet, caTreet):
@@ -347,30 +362,31 @@ def sum_plevel(CaTreet, caTreet):
 
     for Playerst, playerst in zip(CaTree, caTree):
         if Playerst and playerst:
-            Players, Fds, Valt = Playerst
-            players, fds, valt = playerst
+
+            Players, Fds, Valts = Playerst  # also Valt?
+            players, fds, valts = playerst
+            for Valt, valt in zip(Valts, valts):
+                Valt[0] += valt[0]; Valt[1] += valt[1]
 
             for pLayert, playert in zip_longest(Players, players, fillvalue=[]):
                 if playert:
-                    if pLayert: sum_player(pLayert, playert, fneg=0)
+                    if pLayert: sum_player(pLayert, playert, Fds, fds, fneg=0)
                     else:       Players += [deepcopy(playert)]
 
 # draft
-def sum_player(pLayert, playert, fneg=0):  # accum layers while same fds
+def sum_player(pLayert, playert, Fds, fds, fneg=0):  # accum layers while same fds
 
-    Ptuples, Fds, Valt = pLayert
-    ptuples, fds, valt = playert
-    fbreak = 0
+    Ptuples, Valt = pLayert
+    ptuples, valt = playert
+    Valt[0] += valt[0]; Valt[1] += valt[1]
 
     for i, (Ptuple, ptuple, Fd, fd) in enumerate( zip_longest(Ptuples, ptuples, Fds, fds, fillvalue=[])):
-        if ptuple:
-            if Fd==fd:
+        if Fd==fd:
+            if ptuple:
                 if Ptuple: sum_ptuple(Ptuple, ptuple, fneg=0)
                 else:      Ptuples += [deepcopy(ptuple)]
-            else:
-                fbreak = 1
-                break
-    Fds[:] = Fds[:i + 1 - fbreak]
+        else:
+            break
 
 
 # not revised, this is an alternative to form_graph, but may not be accurate enough to cluster:
@@ -390,7 +406,7 @@ def comp_centroid(PPP_):  # comp PP to average PP in PPP, sum >ave PPs into new 
             # both PP core and edge are compared to PPP core, results are summed or concatenated:
             for fd in 0, 1:
                 if PP.players_t[fd]:  # PP.players_t[1] may be empty
-                    mplayer, dplayer = comp_ptuples(PPP.players_t[0], PP.players_t[fd], PPP.fds, PP.fds)  # params norm in comp_ptuple
+                    mplayer, dplayer = comp_players(PPP.players_t[0], PP.players_t[fd], PPP.fds, PP.fds)  # params norm in comp_ptuple
                     player_t = [Mplayer + mplayer, Dplayer + dplayer]
                     valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
                     Valt[0] += valt[0]; Valt[1] += valt[1]  # accumulate mval and dval

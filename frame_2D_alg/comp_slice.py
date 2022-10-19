@@ -272,7 +272,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         players = [[_P.ptuple]]
 
     else:  # P is derP
-        mplayer, dplayer, mval, dval = comp_ptuples(_P.players, P.players)  # passed from seg.fds
+        mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)  # passed from seg.fds
         valt = [mval, dval]
         players = deepcopy(_P.players)
 
@@ -585,7 +585,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
         else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
 
 
-def comp_ptuples(_layers, layers):  # unpack and compare der layers, if any from der+
+def comp_players(_layers, layers):  # unpack and compare der layers, if any from der+
 
     mptuples, dptuples = [],[]
     mval, dval = 0,0
