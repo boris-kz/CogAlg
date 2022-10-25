@@ -183,6 +183,7 @@ def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: repla
         '''
         val_sub = sum([ptuple.val for caFork in graph.plevels[-1][0] for cafork in caFork[0][-1] for ptuple in cafork[0][-1]])
         '''
+        or 
         val_sub = 0
         for caFork in graph.plevels[-1][0]:  # last plevel forks
             val_lplayers = 0
@@ -258,7 +259,6 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
                         alt_graph = G.roott[fd]
                         if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph
                             # der+: plevels[-1] += player, rng+: players[-1] = player
-                            # add sum alt valts
                             if fder:
                                 if Alt_plevels: sum_plevel(Alt_plevels, alt_graph.plevels[-1])  # same-length caTrees?
                                 else:           Alt_plevels = deepcopy(alt_graph.plevels[-1])
@@ -273,33 +273,37 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
     for graph in graph_:  # 3rd pass: add alt fork to each graph plevel, separate to fix nesting in 2nd pass
         if graph.alt_graph_:
             Alt_plevels = graph.alt_graph_.pop()
-        else: Alt_plevels = []
-    if fder:
-        add_alts(graph.plevels, Alt_plevels)  # derG, plevels are actually caForks, so we skip looping plevels
-    else:
-        for cplevel, aplevel in zip(graph.plevels, Alt_plevels):  # G
-            cForks, cvalt = cplevel
-            aForks, avalt = aplevel
-            cvalt[0] += avalt[0]; avalt[1] += avalt[1]
-            cForks += aForks
-        add_alts(cplevel, aplevel)  # plevel caTree leaves
+        else:
+            Alt_plevels = []
+        if fder:
+            graph.valt[:] = [graph.valt, 0]  # val per c|a half of plevel tree, for sub+ eval
+            add_alts(graph.plevels, Alt_plevels)  # derG, plevels are actually caForks, no loop plevels
+        else:
+            graph.valt[:] = [sum(graph.valt), 0]  # all existing graph forks are relatively cis(internal) vs new alt
+            for cplevel, aplevel in zip(graph.plevels, Alt_plevels):  # G
+                graph.valt[1] += sum(aplevel[1])  # alt valt
+                add_alts(cplevel, aplevel)  # plevel is caForks: caTree leaves
 
     return graph_
 
-# not fully reviewed
+
 def add_alts(cplevel, aplevel):
 
-    cForks, cVal = cplevel; aForks, aVal = aplevel
-    csize = len(cForks); asize = len(aForks)
-    cplevel[:] = [cForks + aForks, [cVal, aVal]]  # reassign with alts
+    # I think all vals should be valts here?
+    cForks, cValt = cplevel; aForks, aValt = aplevel
+    csize = len(cForks)
+    cplevel[:] = [cForks + aForks, [sum(cValt), aValt[0]]]  # reassign with alts
 
-    for cFork, aFork in zip(cplevel[:csize], aplevel[asize:]):
-        cplayers, cval, cfds = cFork; aplayers, aval, afds = aFork
-        cFork[1] = [cval, aval]
+    for cFork, aFork in zip(cplevel[0][:csize], cplevel[0][csize:]):
+        cplayers, cfvalt, cfds = cFork
+        aplayers, afvalt, afds = aFork
+        # not sure here:
+        cFork[1] = [sum(cfvalt), afvalt[0]]
 
         for cplayer, aplayer in zip(cplayers, aplayers):
-            cforks, cval = cplayer; aforks, aval = aplayer
-            cplayer[:] = [cforks + aforks, [cval, aval]]  # reassign with alts
+            cforks, cvalt = cplayer
+            aforks, avalt = aplayer
+            cplayer[:] = [cforks+aforks, [sum(cvalt), avalt[0]]]  # reassign with alts
 
 
 def comp_plevels(_plevels, plevels, _fds, fds):
@@ -314,14 +318,13 @@ def comp_plevels(_plevels, plevels, _fds, fds):
     cafork = ptuples, val  
     '''
     for _plevel, plevel, _fd, fd in zip(reversed(_plevels), reversed(plevels), _fds, fds):  # caForks (caTree)
-        if iVal < ave_G or _fd != fd:  # top-down, comp if higher plevels match, same agg+
+        if iVal < ave_G or _fd != fd:  # top-down, comp if higher plevels and fds match, same agg+
             break
-        mTree, dTree = [],[]; mtval, dtval = 0,0  # caFork trees
+        mTree, dTree = [],[]; mtval, dtval = 0,0  # Fork trees
         _caForks, _valt = _plevel; caForks, valt = plevel
 
         for _caFork, caFork in zip(_caForks, caForks):  # bottom-up alt+, pass-through fds
             mplayers, dplayers = [],[]; mlval, dlval = 0,0
-
             if _caFork and caFork:
                 mplayer, dplayer = comp_players(_caFork, caFork)  # caTree2 is a player
                 mplayers += [mplayer]; dplayers += [dplayer]
@@ -355,11 +358,14 @@ def comp_players(_caFork, caFork):  # unpack and compare layers from der+;  plev
         _caforks,_ = _player; caforks,_ = player
 
         for _cafork, cafork in zip(_caforks, caforks):  # bottom-up alt+, pass-through fds
-            _ptuples,_ = _cafork; ptuples,_ = cafork
-            if _ptuples and ptuples:
-                mtuples, dtuples, mval, dval = comp_ptuples(ptuples, ptuples, _fds, fds)
-                mTree += [[mtuples, mval]]; dTree += [[dtuples, dval]]
-                mtval += mval; mtval += dval
+            if _cafork and cafork:
+                _ptuples,_ = _cafork; ptuples,_ = cafork
+                if _ptuples and ptuples:
+                    mtuples, dtuples, mval, dval = comp_ptuples(ptuples, ptuples, _fds, fds)
+                    mTree += [[mtuples, mval]]; dTree += [[dtuples, dval]]
+                    mtval += mval; dtval += dval
+                else:
+                    mTree += [[]]; dTree += [[]]
             else:
                 mTree += [[]]; dTree += [[]]
         # merge Trees:
@@ -401,19 +407,21 @@ def sum_plevel(Plevel, plevel):
     CaForks, lValt = Plevel; caForks, lvalt = plevel  # plevels tree
 
     for CaFork, caFork in zip(CaForks, caForks):
-        if CaFork and caFork:
-            Players, Fds, Valt = CaFork; players, fds, valt = caFork
+        if caFork:
+            if CaFork:
+                Players, Fds, Valt = CaFork; players, fds, valt = caFork
+                if isinstance(valt, list):  # G
+                    Valt[0] += valt[0]; Valt[1] += valt[1]
+                    lValt[0] += valt[0]; lValt[1] += valt[1]
+                else:  # derG
+                    Valt += valt; lValt += valt
 
-            if isinstance(valt, list):  # G
-                Valt[0] += valt[0]; Valt[1] += valt[1]
-                lValt[0] += valt[0]; lValt[1] += valt[1]
-            else:  # derG
-                Valt += valt; lValt += valt
-
-            for Player, player in zip_longest(Players, players, fillvalue=[]):
-                if player:
-                    if Player: sum_player(Player, player, Fds, fds, fneg=0)
-                    else:      Players += [deepcopy(player)]
+                for Player, player in zip_longest(Players, players, fillvalue=[]):
+                    if player:
+                        if Player: sum_player(Player, player, Fds, fds, fneg=0)
+                        else:      Players += [deepcopy(player)]
+            else:
+                CaFork[:] = caFork
 
 # draft
 def sum_player(Player, player, Fds, fds, fneg=0):  # accum layers while same fds
