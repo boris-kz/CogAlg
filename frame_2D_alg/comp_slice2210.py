@@ -760,3 +760,14 @@ def sum_player(CaTreet, caTreet, Fds, fds, fneg=0):  # accum layers while same f
             else:
                 break
 
+'''
+        val_sub = 0
+        for caFork in graph.plevels[-1][0]:  # last plevel forks
+            val_lplayers = 0
+            for cafork in caFork[0][-1]:  # last player forks
+                val_lptuples = 0
+                for ptuple in cafork[0][-1]:  # last ptuples
+                    val_lptuples += ptuple.val
+                val_lplayers += val_lptuples
+            val_sub += val_lplayers
+'''

@@ -92,18 +92,20 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
     for i, _G in enumerate(G_):
 
         for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign
-            # if fder: comp_derG(_G.plevels[-1], G.plevels[-1])  # G is derG
-            #    continue
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
-            dx = (_G.xn-_G.x0)/2 - (G.xn-G.x0)/2; dy = (_G.yn-_G.y0)/2 - (G.yn-G.y0)/2
-            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, max depends on combined value:
+            _x = (_G.xn+_G.x0)/2; _y = (_G.yn+_G.y0)/2; x = (G.xn+G.x0)/2; y = (G.yn+G.y0)/2
+            dx = _x - x; dy = _y - y
+            distance = np.hypot(dy, dx)
+            # Euclidean distance between centroids, max depends on combined G value:
             if distance <= ave_rng * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):
-
+                # if fder:
+                # comp link angle: dx,dy in players[-1], caforks[0], ptuples[-1],
+                # distance /= dangle before evaluation in 101?
                 mplevel, dplevel = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds)
                 valt = [mplevel[1] - ave_Gm, dplevel[1] - ave_Gd]  # valt is already normalized, *= link rdn?
-                derG = Cgraph(
-                    plevels=[mplevel, dplevel], x0=min(_G.x0,G.x0), xn=max(_G.xn,G.xn), y0=min(_G.y0,G.y0), yn=max(_G.yn,G.yn), valt=valt, node_=[_G,G])
+                # mean x,y instead of x0,y0, no xn,yn, or same?:
+                derG = Cgraph( plevels=[mplevel, dplevel], x0=_x+dx/2, y0=_y+dy/2, valt=valt, node_=[_G,G])
                 _G.link_ += [derG]; G.link_ += [derG]  # any val
                 for fd in 0,1:
                     if valt[fd] > 0:  # alt fork is redundant, no support?
@@ -162,7 +164,13 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
     if adj_Val > ave_med:  # positive adj_Val from eval mmed_
         eval_med_layer(graph_, graph, fd)  # eval next med layer in reformed graph
 
-
+'''
+plevel = caForks, valt
+caFork = players, valt, fds
+player = caforks, valt
+cafork = ptuples, val:
+valSub = sum([ptuple.val for caFork in graph.plevels[-1][0] for player in caFork[0] for cafork in player[0] for ptuple in cafork[0]])  
+'''
 def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
     comb_layers_t = [[],[]]
@@ -173,33 +181,20 @@ def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: repla
             for node in graph.node_:
                 for link in node.link_:
                     if link.valt[1]>0 and link not in node_:
+                        # or the below should be assigned in sum2graph?
+                        link.fds = [fd]
+                        link.valt = [link.plevels[fd][1],0]
+                        link.plevels = [link.plevels[fd]]  # single-plevel plevels
                         node_ += [link]
         else: node_ = graph.node_
-        '''
-        plevel = caForks, valt
-        caFork = players, val, fds
-        player = caforks, valt
-        cafork = ptuples, val
-        '''
-        val_sub = sum([ptuple.val for caFork in graph.plevels[-1][0] for cafork in caFork[0][-1] for ptuple in cafork[0][-1]])
-        '''
-        or 
-        val_sub = 0
-        for caFork in graph.plevels[-1][0]:  # last plevel forks
-            val_lplayers = 0
-            for cafork in caFork[0][-1]:  # last player forks
-                val_lptuples = 0
-                for ptuple in cafork[0][-1]:  # last ptuples
-                    val_lptuples += ptuple.val
-                val_lplayers += val_lptuples
-            val_sub += val_lplayers
-        '''
-        if val_sub > G_aves[fd] and len(node_) > ave_nsub:  # graph.valt eval for agg+ only
+        # draft:
+        valSub = graph.plevels[-1][1][fd]  # cis if mG else alt?
+        # last player valt: ca = dm if fd else md: edge or core?
+        # last plevel: fd=1 players, else new plevel?
+        if valSub > G_aves[fd] and len(node_) > ave_nsub:  # graph.valt eval for agg+ only
 
             sub_mgraph_, sub_dgraph_ = form_graph_(graph, node_, fder=fd)  # cross-comp and clustering cycle
             # rng+:
-            # last player valt: ca = dm if fd else md: edge or core?
-            # last plevel: fd=1 players, else new plevel?
             if graph.valt[0] > ave_sub * graph.rdn:  # >cost of calling sub_recursion and looping:
                 sub_rlayers, valt = sub_recursion_g(sub_mgraph_, graph.valt, fd=0)
                 rvalt = sum(valt); graph.valt[0] += rvalt; sub_valt[0] += rvalt  # not sure
@@ -238,6 +233,8 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
             graph.valt[0] += derG.valt[fd]
             derG.roott[fd] = graph
         for node in node_[1:]:
+            if fder:
+                node.plevels[:] = [node.plevels]  # unless done in sub_recursion?
             graph.x0=min(graph.x0, node.x0); graph.xn=max(graph.xn, node.xn); graph.y0=min(graph.y0, node.y0); graph.yn=max(graph.yn, node.yn)
             # accum params:
             sum_plevels(graph.plevels, node.plevels, graph.fds, node.fds)  # same for fsub
