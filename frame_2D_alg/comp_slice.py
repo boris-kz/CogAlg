@@ -843,18 +843,22 @@ def CPP2graph(PP, fseg, Cgraph):
     valt = [0,0]
     for i, (ptuples, alt_ptuples, fd) in enumerate(zip_longest(deepcopy(PP.players), deepcopy(alt_players), PP.fds, fillvalue=[])):
         cval, aval = 0,0
-        for ptuple, alt_ptuple in zip_longest(ptuples, alt_ptuples, fillvalue=None):
+        for i, (ptuple, alt_ptuple) in enumerate(zip_longest(ptuples, alt_ptuples, fillvalue=None)):
             if ptuple:
-                cval += ptuple.val
-                if alt_ptuple: aval += alt_ptuple.val
-        caTree = [[ptuples, alt_ptuples], [cval, aval]]
+                if isinstance(ptuple, list): cval += ptuple[0].val  # already converted
+                else: cval += ptuple.val; ptuples[i] = [ptuple]  # convert to Ptuple
+                if alt_ptuple:
+                    if isinstance(ptuple, list): aval += alt_ptuple[0].val
+                    else: aval += alt_ptuple.val; alt_ptuples[i] = [alt_ptuple]
+
+        caTree = [[[ptuples, cval], [alt_ptuples, aval]], [cval, aval]]
         valt[0] += cval; valt[1] += aval
         players += [caTree]
 
-    caTree = [[players, deepcopy(PP.fds), [valt]]]  # pack single playerst
+    caTree = [[players, valt, deepcopy(PP.fds)]]  # pack single playerst
     plevel = [caTree, valt]
 
-    return Cgraph(node_=[], plevels=[plevel], valt=valt, valts = [valt], fds=[1], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)  # 1st plevel fd is always der+?
+    return Cgraph(node_=[], plevels=[plevel], valt=valt, fds=[1], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)  # 1st plevel fd is always der+?
 
 
 def sub_recursion_eval(root):  # for PP or dir_blob

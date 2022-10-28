@@ -770,4 +770,41 @@ def sum_player(CaTreet, caTreet, Fds, fds, fneg=0):  # accum layers while same f
                     val_lptuples += ptuple.val
                 val_lplayers += val_lptuples
             val_sub += val_lplayers
+        
+        dLx = abs(_G.xn-_G.x0) - abs(G.xn-G.x0); dLy = abs(_G.yn-_G.y0) - abs(G.yn-G.y0)  # dimensions are not meaningful
+        
+        PLe: patt(subs, pLe: plevel ( players ( Ptuples of all lower players, per new agg span?
 '''
+
+graph_ = []
+for G in G_:
+    node_, meds_, valt = G
+    node = node_[0]  # init graph with 1st node:
+    graph = Cgraph(plevels=deepcopy(node.plevels), fds=deepcopy(node.fds), valt=deepcopy(node.valt),
+                   x0=node.x0, xn=node.xn, y0=node.y0, yn=node.yn, node_=node_, meds_=meds_)
+
+    derG = node.link_[0]  # init new_plevel with 1st derG:
+    graph.valt[0] += derG.valt[fd]  # add new level of valt, cis only
+    new_plevel = derG.plevels[fd];
+    derG.roott[fd] = graph
+    for derG in node.link_[1:]:
+        sum_plevel(new_plevel, derG.plevels[fd])  # accum derG in new plevel
+        graph.valt[0] += derG.valt[fd]
+        derG.roott[fd] = graph
+    for node in node_[1:]:
+        if fder:
+            node.plevels[:] = [node.plevels]  # unless done in sub_recursion?
+        graph.x0 = min(graph.x0, node.x0);
+        graph.xn = max(graph.xn, node.xn);
+        graph.y0 = min(graph.y0, node.y0);
+        graph.yn = max(graph.yn, node.yn)
+        # accum params:
+        sum_plevels(graph.plevels, node.plevels, graph.fds, node.fds)  # same for fsub
+        for derG in node.link_:
+            sum_plevel(new_plevel, derG.plevels[fd])  # accum derG, add to graph when complete
+            valt[0] += derG.valt[fd]
+            derG.roott[fd] = graph
+            # link_ = [derG]?
+        for Val, val in zip(graph.valt, node.valt): Val += val
+    graph_ += [graph]
+    graph.plevels += [new_plevel]
