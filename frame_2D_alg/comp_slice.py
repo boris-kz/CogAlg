@@ -846,14 +846,17 @@ def CPP2graph(PP, fseg, Cgraph):
         for i, (ptuple, alt_ptuple) in enumerate(zip_longest(ptuples, alt_ptuples, fillvalue=None)):
             if ptuple:
                 if isinstance(ptuple, list): cval += ptuple[0].val  # already converted
-                else: cval += ptuple.val; ptuples[i] = [ptuple]  # convert to Ptuple
-                if alt_ptuple:
-                    if isinstance(ptuple, list): aval += alt_ptuple[0].val
-                    else: aval += alt_ptuple.val; alt_ptuples[i] = [alt_ptuple]
+                else: cval += ptuple.val; ptuples[i] = [ptuple, []]  # convert to Ptuple
+            if alt_ptuple:
+                if isinstance(ptuple, list):
+                    aval += alt_ptuple[0].val
+                else: aval += alt_ptuple.val; alt_ptuples[i] = [alt_ptuple, []]
 
-        caTree = [[[ptuples, cval], [alt_ptuples, aval]], [cval, aval]]
-        valt[0] += cval; valt[1] += aval
-        players += [caTree]
+            cfork = [ptuples, cval]  # can't be empty
+            afork = [alt_ptuples, aval] if alt_ptuples else []
+            caTree = [[cfork, afork], [cval, aval]]
+            valt[0] += cval; valt[1] += aval
+            players += [caTree]
 
     caTree = [[players, valt, deepcopy(PP.fds)]]  # pack single playerst
     plevel = [caTree, valt]
