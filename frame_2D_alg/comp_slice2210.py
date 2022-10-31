@@ -808,3 +808,32 @@ for G in G_:
         for Val, val in zip(graph.valt, node.valt): Val += val
     graph_ += [graph]
     graph.plevels += [new_plevel]
+
+
+def comp_ptuples(_Ptuples, Ptuples, _fds, fds, extset):  # unpack and compare der layers, if any from der+
+
+    mPtuples, dPtuples = [],[]; mVAL, dVAL = 0,0
+
+    for _Ptuple, Ptuple, _fd, fd in zip(_Ptuples, Ptuples, _fds, fds):  # bottom-up der+, Ptuples per player, pass-through fds
+        if _fd == fd:
+            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0])
+            mext___, dext___ = [],[]; mVAl, dVAl = 0,0
+            _new_extuple = Cptuple(angle=extset[0][0], L=extset[0][1])
+            new_extuple = Cptuple(angle=extset[1][0], L=extset[1][1])
+
+            for _ext__, ext__ in zip(_Ptuple[1]+[[[_new_extuple]]], Ptuple[1]+[[[new_extuple]]]):  # ext__: extuple level
+                mext__, dext__ = [],[]; mVal, dVal = 0,0
+                for _ext_, ext_ in zip(_ext__, ext__):  # ext_: extuple layer
+                    mext_, dext_ = [],[]; mval, dval = 0,0
+
+                    for _extuple, extuple in zip(_ext_, ext_):  # loop ders from prior comps in each lower ext_
+                        mextuple, dextuple = comp_extuple(_extuple, extuple)
+                        mext_ += [mextuple]; dext_ += [dextuple]; mval += mextuple.val; dval += dextuple.val  # add der extlayer
+
+                    mext__ += [mext_]; dext__ += [dext_]; mVal += mval; dVal += dval  # add der extlevel
+                mext___ += [mext__]; dext___ += [dext__]; mVAl += mVal; dVAl += dVal  # add der inplayer
+            mPtuples += [[mtuple, mext___]]; dPtuples += [[dtuple, dext___]]; mVAL += mVAl; dVAL += dVAl  # derPtuple per inPtuple
+        else:
+            break  # comp same fds
+
+    return mPtuples, dPtuples, mVAL, dVAL
