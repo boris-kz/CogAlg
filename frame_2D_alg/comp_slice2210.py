@@ -837,3 +837,38 @@ def comp_ptuples(_Ptuples, Ptuples, _fds, fds, extset):  # unpack and compare de
             break  # comp same fds
 
     return mPtuples, dPtuples, mVAL, dVAL
+
+def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare der layers, if any from der+
+
+    mPtuples, dPtuples = [[],0], [[],0]
+
+    for _Ptuple, Ptuple, _fd, fd in zip(_Ptuples, Ptuples, _fds, fds):  # bottom-up der+, Ptuples per player, pass-through fds
+        if _fd == fd:
+            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0])
+
+            mext___, dext___ = [],[]; mVAl, dVAl = 0,0
+            for _ext__, ext__ in zip(_Ptuple[1], Ptuple[1]):  # ext__: extuple level
+                mext__, dext__ = [],[]; mVal, dVal = 0,0
+                for _ext_, ext_ in zip(_ext__, ext__):  # ext_: extuple layer
+                    mext_= []; dext_= []; mval=0; dval=0
+
+                    for _extuple, extuple in zip(_ext_, ext_):  # loop ders from prior comps in each lower ext_
+                        mextuple, dextuple = comp_extuple(_extuple, extuple)
+                        # + der extlayer:
+                        mext_ += [mextuple]; mval += mextuple.val
+                        dext_ += [dextuple]; dval += dextuple.val
+                    # + der extlevel:
+                    mext__ += [[mext_+[derext[0]],mval]]; mVal += mval+derext[2]
+                    dext__ += [[dext_+[derext[1]],dval]]; dVal += dval+derext[3]
+                # + der inplayer:
+                mext___ += [[mext__,mVal]]; mVAl += mVal
+                dext___ += [[dext__,dVal]]; dVAl += dVal
+            # + der Ptuple:
+            mPtuples[0] += [[mtuple, [mext___,mVAl]]]; mPtuples[1] += mVAl
+            dPtuples[0] += [[dtuple, [dext___,dVAl]]]; dPtuples[1] += dVAl
+        else:
+            break  # comp same fds
+    # add der extset:
+
+
+    return mPtuples, dPtuples, mVAL, dVAL
