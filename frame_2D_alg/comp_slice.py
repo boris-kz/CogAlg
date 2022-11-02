@@ -816,7 +816,6 @@ def CBlob2graph(dir_blob, fseg, Cgraph):
 
             # convert and pack gPP
             gPP_ += [CPP2graph(PP, fseg, Cgraph)]
-
             root.x0=min(root.x0, PP.x0)
             root.xn=max(root.xn, PP.xn)
             root.y0=min(root.y0, PP.y0)
@@ -847,12 +846,15 @@ def CPP2graph(PP, fseg, Cgraph):
             if alt_ptuple:
                 if isinstance(ptuple, list):
                     aval += alt_ptuple[0].val
-                else: aval += alt_ptuple.val; alt_ptuples[i] = [alt_ptuple, []]
+                else:
+                    aval += alt_ptuple.val
+                    alt_ptuples[i] = [alt_ptuple, [[[[[[]]]]]]]  # convert to Ptuple
             if ptuple:
-                if isinstance(ptuple, list): cval += ptuple[0].val  # already converted
+                if isinstance(ptuple, list):  # already converted
+                    cval += ptuple[0].val
                 else:  # convert to Ptuple
                     cval += ptuple.val
-                    ptuples[i] = [ptuple, [[[None,[0,0]],[0,0]],[0,0]]]
+                    ptuples[i] = [ptuple, [[[[[[]]]]]]]
 
             cfork = [ptuples, cval]  # can't be empty
             afork = [alt_ptuples, aval] if alt_ptuples else []
@@ -862,8 +864,9 @@ def CPP2graph(PP, fseg, Cgraph):
 
     caTree = [[players, valt, deepcopy(PP.fds)]]  # pack single playerst
     plevel = [caTree, valt]
+    x0 = PP.x0, xn = PP.xn, y0 = PP.y0, yn = PP.yn
 
-    return Cgraph(node_=[], plevels=[plevel], sparsity=1.0, valt=valt, fds=[1], x0=PP.x0, xn=PP.xn, y0=PP.y0, yn=PP.yn)
+    return Cgraph(node_=PP.P__, plevels=[plevel], angle=(yn-y0,xn-x0), sparsity=1.0, valt=valt, fds=[1], x0=x0, xn=xn, y0=y0, yn=yn)
     # 1st plevel fd is always der+?
 
 

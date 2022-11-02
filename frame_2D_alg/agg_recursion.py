@@ -107,7 +107,7 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
             _x = (_G.xn +_G.x0)/2; _y = (_G.yn +_G.y0)/2; x = (G.xn + G.x0)/2; y = (G.yn + G.y0)/2
             dx = _x - x; dy = _y - y
 
-            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, - fill: accum elements sparsity?
+            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity
             proximit = ave_rng-distance  # coord. match
             mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
             if fder:
@@ -115,9 +115,11 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
             else:
                 _L = len(_G.node_); L = len(G.node_)
                 dlen = _L - L; mlen = min(_L, L)
-                sparsity = sum(node.sparsity for node in G.node_) / L
-                _sparsity = sum(node.sparsity for node in _G.node_) / _L
-            # orders of len and sparsity?
+                if _G.fds == [1] and G.fds == [1]: _sparsity, sparsity = 1, 1  # if isinstance(G.node_[0], CP)
+                else:
+                    _sparsity = sum(node.sparsity for node in _G.node_) / _L
+                    sparsity = sum(node.sparsity for node in G.node_) / L
+            # orders of len and sparsity, -= fill: sparsity inside nodes?
             dspar = _sparsity-sparsity; mspar = min(_sparsity,sparsity)
             # draft:
             dext = [distance, dang, dlen, dspar]; dVal = distance + dang + dlen + dspar
@@ -151,7 +153,9 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
         for _G in med_node_:
             for derG in _G.link_:
                 if derG not in G.link_:  # link_ includes all unique evaluated mediated links, flat or in layers?
-                    # med_PP.link_:
+                    pass
+                    # if derG.distance <
+                else:  # med_PP.link_:
                     med_link_ = derG.node_[0].link_ if derG.node_[0] is not _G else derG.node_[1].link_
                     for _derG in med_link_:
                         if G in _derG.node_ and _derG not in G.link_:  # __G mediates between _G and G
@@ -258,7 +262,7 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
                 sum_plevel(new_plevel, derG.plevels[fd])  # accum derG
                 derG.roott[fd] = graph  # + link_ = [derG]?
                 valt[fd] += derG.valt[fd]
-                sparsity += derG.sparsity
+                sparsity += derG.sparsity  # probably wrong
                 nlinks += 1
             node.valt[0] += valt[fd]  # derG valts summed in eval_med_layer added to lower-plevels valt
             graph.valt[0]+= node.valt[0]; graph.valt[1]+= node.valt[1]
@@ -359,6 +363,7 @@ def comp_plevels(_plevels, plevels, _fds, fds, derext):
 
     return [mplevel,mval], [dplevel,dval]  # always single new plevel
 
+
 def comp_players(_caFork, caFork, derext):  # unpack and compare layers from der+
 
     mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
@@ -392,19 +397,19 @@ def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare de
     mPtuples, dPtuples = [[],0], [[],0]  # [list, val] each
 
     for _Ptuple, Ptuple, _fd, fd in zip(_Ptuples, Ptuples, _fds, fds):  # bottom-up der+, Ptuples per player, pass-through fds
-        if _fd == fd:  # Ptuple: ptuple, [[[[],00],00],00]
+        if _fd == fd:
 
-            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0])
+            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0])  # init Ptuple = ptuple, [[[[[[]]]]]]
             mext___, dext___ = [[],0], [[],0]
-            for _ext__, ext__ in zip(_Ptuple[1], Ptuple[1]):  # ext__: extuple level
+            for _ext__, ext__ in zip(_Ptuple[1][0], Ptuple[1][0]):  # ext__: extuple level
                 mext__, dext__ = [[],0], [[],0]
-                for _ext_, ext_ in zip(_ext__, ext__):  # ext_: extuple layer
-                    mext_, dext_= [[],0], [[],0]
-                    for _extuple, extuple in zip(_ext_, ext_):  # loop ders from prior comps in each lower ext_
+                for _ext_, ext_ in zip(_ext__[0], ext__[0]):  # ext_: extuple layer
+                    mext_, dext_ = [[],0], [[],0]
+                    for _extuple, extuple in zip(_ext_[0], ext_[0]):  # loop ders from prior comps in each lower ext_
                         # + der extlayer:
-                        mextuple, dextuple = comp_extuple(_extuple, extuple)
-                        mext_[0] += [mextuple]; mext_[1] += mextuple.val
-                        dext_[0] += [dextuple]; dext_[1] += dextuple.val
+                        mextuple, dextuple, meval, deval = comp_extuple(_extuple, extuple)
+                        mext_[0] += [mextuple]; mext_[1] += meval
+                        dext_[0] += [dextuple]; dext_[1] += deval
                     # + der extlevel:
                     mext__[0] += [mext_]; mext__[1] += mext_[1]
                     dext__[0] += [dext_]; mext__[1] += dext_[1]
@@ -423,20 +428,18 @@ def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare de
 
     return mPtuples, dPtuples
 
-# not revised, unpack comps as in comp_G_, add comp dS:
+
 def comp_extuple(_extuple, extuple):
 
-    mextuple, dextuple = Cptuple(), Cptuple()
+    mval, dval = 0,0
+    dextuple, mextuple = [],[]
 
-    comp("distance", _extuple.distance, extuple.distance, dextuple.val, mextuple.val, dextuple, mextuple, ave_distance, finv=0)
+    for _param, param, ave in zip(_extuple, extuple, (ave_distance, ave_dangle, ave_len, ave_sparsity)):
+        # params: distance, dangle, len, sparsity: all derived scalars
+        d = _param-param;           dextuple += [d]; dval += d - ave
+        m = min(_param,param)-ave;  mextuple += [m]; mval += m
 
-    comp("sparsity", _extuple.sparsity, extuple.sparsity, dextuple.val, mextuple.val, dextuple, mextuple, ave_sparsity, finv=0)
-
-    comp("L", _extuple.L, extuple.L, dextuple.val, mextuple.val, dextuple, mextuple, ave_L, finv=0)
-    # angle is always scalar here?
-    comp("angle", _extuple.angle, extuple.angle, dextuple.val, mextuple.val, dextuple, mextuple, ave_dangle, finv=0)
-
-    return mextuple, dextuple
+    return mextuple, dextuple, mval, dval
 
 def comp_angle(_angle, angle):
     _Dy, _Dx=_angle; Dy, Dx=angle
