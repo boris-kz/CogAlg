@@ -35,7 +35,7 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?
     rng = lambda: 1  # not for alt_graphs
     link_ = list  # all evaluated external graph links, nested in link_layers? open links replace alt_node
-    meds_ = list  # last checked mediating nodes
+    meds_ = list  # last checked mediating nodes, combined across node_, dir link for each?
     node_ = list  # graph elements, root of layers and levels:
     rlayers = list  # | mlayers, top-down
     dlayers = list  # | alayers
@@ -116,10 +116,12 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
             else:
                 _L = len(_G.node_); L = len(G.node_)
                 dlen = _L - L; mlen = min(_L, L)
-                if isinstance(G.node_[0][0], CP): _sparsity, sparsity = 1, 1
-                else:
+                if isinstance(G.node_[0], Cgraph):
                     _sparsity = sum(node.sparsity for node in _G.node_) / _L
                     sparsity = sum(node.sparsity for node in G.node_) / L
+                else:  # G.node_[0] could be CP (fseg=1) or [CP]
+                    _sparsity, sparsity = 1, 1
+
             dspar = _sparsity-sparsity; mspar = min(_sparsity,sparsity)
             # draft:
             mext = [proximity, mang, mlen, mspar]; mVal = proximity + mang + mlen + mspar
@@ -138,9 +140,12 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                         for node, (graph, meds_, gvalt) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
                             if node not in graph:
                                 graph += [node]
-                                meds_ += [[derG.node_[0] if derG.node_[1] is node else derG.node_[1] for derG in node.link_]]  # immediate links
+                                for derG in node.link_:
+                                    med = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
+                                    if med not in meds_: meds_ += [med]
                                 gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
 
+# draft, need to pack direct derGs: (G,med_node) per med node:
 
 def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links from increasingly mediated nodes
 
@@ -148,37 +153,38 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
     save_node_, save_meds_ = [], []
     adj_Val = 0  # adjust connect val in graph
 
-    for G, med_node_ in zip(node_, meds_):  # G: node or sub-graph, also pass med_derGs with node_ = G, med_node?
-        mmed_node_ = []  # __Gs that mediate between Gs and _Gs
-        for _G in med_node_:
-            for med_derG in _G.link_:
-                mmed_node = med_derG.node_[1] if med_derG.node_[0] is _G else med_derG.node_[0]
-                for mmed_derG in mmed_node.link_:
+    for G, med_node_ in zip(node_, meds_):  # G: node or sub-graph
+        mmG_ = []  # __Gs that mediate between Gs and _Gs
+        fin = 0
+        for mG, dir_mderG in med_node_:  # pack direct derGs per med node?
+            for mderG in mG.link_:
+                mmG = mderG.node_[1] if mderG.node_[0] is mG else mderG.node_[0]
 
-                    if med_derG in G.link_:  # med_derG is reciprocal, eval alt links:
-                        mmmed_node = mmed_derG.node_[1] if mmed_derG.node_[0] is _G else mmed_derG.node_[0]
-                        if mmmed_node is G:  # select the shortest of:
-                            # dir derG.node_ = G, mmed_node: direct in G.link_, pass it?
-                            # med_derG.node_ = G, med_node: mediating mmed_node?
-                            _y = (_G.yn+_G.y0)/2; _x = (_G.xn+_G.x0)/2; y = (G.yn+G.y0)/2; x = (G.xn+G.x0)/2
-                            dir_distance = hypot((_y-y),(_x-x))  # form or pass direct derG: node_ = [G, med_node]?
-                            if med_derG.distance < dir_distance:
-                                # replace direct derG with med derG
-                                pass
-                    else:  # med_derG is not reciprocal, link_ is all unique evaluated mediated links, flat or in layers?
-                        if G in mmed_derG.node_ and mmed_derG not in G.link_:  # __G mediates between _G and G
-                            G.link_ += [mmed_derG]
-                            adj_val = mmed_derG.valt[fd] - ave_agg  # or increase ave per mediation depth
+                for derG in G.link_:  # check if mmG is already directly linked to G, I don't know if this can be simpler
+                    dirG = derG.node_[0] if derG.node_[1] is G else derG.node_[1]
+                    if mmG is dirG:
+                        fin = 1  # mmG is directly linked to G
+                        # draft:
+                        if derG.sparsity < dir_mderG.sparsity:  # select the shortest
+                            del dirG
+                        else: del dir_mderG
+                        break
+                if not fin:  # mderG is not reciprocal, link_ is all unique evaluated mediated links, flat or in layers?
+                    for mmderG in mmG.link_:
+                        if G in mmderG.node_ and mmderG not in G.link_:  # __G mediates between _G and G
+                            G.link_ += [mmderG]
+                            adj_val = mmderG.valt[fd] - ave_agg  # or increase ave per mediation depth
                             # adjust nodes:
-                            G.valt[fd] += adj_val; _G.valt[fd] += adj_val  # valts not updated
-                            valt[fd] += adj_val; _G.roott[fd][2][fd] += adj_val  # root is not graph yet
-                            __G = mmed_derG.node_[0] if mmed_derG.node_[0] is not _G else mmed_derG.node_[1]
-                            if __G not in mmed_node_:  # not saved via prior _G
-                                mmed_node_ += [__G]
+                            G.valt[fd] += adj_val; mG.valt[fd] += adj_val  # valts not updated
+                            valt[fd] += adj_val; mG.roott[fd][2][fd] += adj_val  # root is not graph yet
+                            mmG = mmderG.node_[0] if mmderG.node_[0] is not mG else mmderG.node_[1]
+                            if mmG not in mmG_:  # not saved via prior _G
+                                mmG_ += [mmG]
                                 adj_Val += adj_val
         if G.valt[fd]>0:
-            # G remains in graph
-            save_node_ += [G]; save_meds_ += [mmed_node_]  # mmed_node_ may be empty
+            save_node_+= [G]  # G remains in graph
+            for mmG in mmG_:  # may be empty
+                if mmG not in save_meds_: save_meds_ += [mmG]
 
     for G, mmed_ in zip(save_node_, save_meds_):  # eval graph merge after adjusting graph by mediating node layer
         add_mmed_= []
@@ -524,7 +530,8 @@ def sum_extuples(exTuple___, extuple___):
                 if extuple_:
                     for exTuple, extuple in zip_longest(exTuple_[0], extuple_[0], fillvalue=[]):
                         if extuple:
-                            sum_ptuple(exTuple, extuple)
+                            for i in range(len(exTuple)):  # params: ddistance, dangle, dlen, dsparsity:
+                                exTuple[i] += extuple[i]
                         else:
                             exTuple_ += [extuple]
                 else:
