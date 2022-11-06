@@ -342,7 +342,6 @@ def form_seg_root(P__, fd, fds):  # form segs from Ps
                 form_seg_(seg_, P__, [P], fd, fds)  # test P.matching_uplink_, not known in form_seg_root
             else:
                 seg_.append( sum2seg([P], fd, fds))  # no link_s, terminate seg_Ps = [P]
-
     return seg_
 
 

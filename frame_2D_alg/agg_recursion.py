@@ -19,6 +19,7 @@ G_aves = [ave_Gm, ave_Gd]
 ave_med = 3  # call cluster_node_layer
 ave_rng = 3  # rng per combined val
 ave_ext = 5  # to eval comp_plevel
+ave_len = 3
 ave_distance = 5
 ave_sparsity = 2
 
@@ -31,12 +32,11 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     nvalt = lambda: [0,0]  # from neg open links
     angle = lambda: [0,0]  # dy,dx, comp if derG or high-aspect (maxL/minL) G
     sparsity = float  # sum(node.sparsity for node in G.node_) / L, starting with derG distance
-
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?
     rng = lambda: 1  # not for alt_graphs
-    link_ = list  # all evaluated external graph links, nested in link_layers? open links replace alt_node
-    medG_ = list  # last checked mediating nodes, store dir link for each?
-    node_ = list  # graph elements, root of layers and levels:
+    medG_ = list  # last checked mediating [mG, dir_link, G]s, from all nodes?
+    link_ = list  # evaluated graph links, open links replace alt_node
+    node_ = list  # graph elements, root of layers, levels:
     rlayers = list  # | mlayers, top-down
     dlayers = list  # | alayers
     mlevels = list  # agg_PPs ) agg_PPPs ) agg_PPPPs.., bottom-up
@@ -143,7 +143,7 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                                 for derG in node.link_:
                                     mG = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
                                     if mG not in medG_:
-                                        medG_ += [[_G, mG, derG]]  # derG is initial dir_mderG
+                                        medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
                                 gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
 
 # draft:
@@ -153,42 +153,38 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
     save_node_, save_medG_ = [], []
     adj_Val = 0  # adjust connect val in graph
 
-    for G, mG, dir_mderG in medG_:  # assign G and shortest direct derG to each med node?
+    for mG, dir_mderG, G in medG_:  # assign G and shortest direct derG to each med node?
         mmG_ = []  # __Gs that mediate between Gs and _Gs
-        fdir = 0
-        for mderG in mG.link_:  # all unique evaluated mediated links, flat or in layers?
+        fmed = 1
+        for mderG in mG.link_:  # all direct evaluated links
 
             mmG = mderG.node_[1] if mderG.node_[0] is mG else mderG.node_[0]
-            # test if mmG is directly linked to G:
             for derG in G.link_:
-                dirG = derG.node_[0] if derG.node_[1] is G else derG.node_[1]
-                if mmG is dirG:  # directly linked
+                try_mG = derG.node_[0] if derG.node_[1] is G else derG.node_[1]
+                if mmG is try_mG:  # mmG is directly linked to G
                     if derG.sparsity > dir_mderG.sparsity:
-                        dir_mderG = derG  # for next med eval
-                        fdir = 1  # dir link is shorter, no med eval:
+                        dir_mderG = derG  # for next med eval if dir link is shorter
+                        fmed = 0
                     break
-            if not fdir:  # mderG is not reciprocal
+            if fmed:  # mderG is not reciprocal, else explore try_mG links in the rest of medG_
                 for mmderG in mmG.link_:
-                    if G in mmderG.node_ and mmderG not in G.link_:  # __G mediates between _G and G
-                        G.link_ += [mmderG]
+                    if G in mmderG.node_:  # mmG mediates between mG and G
                         adj_val = mmderG.valt[fd] - ave_agg  # or increase ave per mediation depth
                         # adjust nodes:
-                        G.valt[fd] += adj_val; mG.valt[fd] += adj_val  # valts not updated
+                        G.valt[fd] += adj_val; mG.valt[fd] += adj_val  # valts are not updated
                         valt[fd] += adj_val; mG.roott[fd][2][fd] += adj_val  # root is not graph yet
                         mmG = mmderG.node_[0] if mmderG.node_[0] is not mG else mmderG.node_[1]
-                        if mmG not in mmG_:  # not saved via prior _G
+                        if mmG not in mmG_:  # not saved via prior mG
                             mmG_ += [mmG]
                             adj_Val += adj_val
         if G.valt[fd]>0:
             save_node_+= [G]  # G remains in graph
             for mmG in mmG_:  # may be empty
                 if mmG not in save_medG_:
-                    save_medG_ += [[G, mmG, dir_mderG]]
+                    save_medG_ += [[mmG, dir_mderG, G]]
 
-    # not fully revised:
-    add_medG_, add_node_ = [],[]  # need node_?
-    for G, mmG, dir_mderG in save_medG_:  # eval graph merge after adjusting graph by mediating node layer
-        add_mmed_= []
+    add_medG_, add_node_ = [],[]
+    for mmG, dir_mderG, G in save_medG_:  # eval graph merge after adjusting graph by mediating node layer
         _graph = mmG.roott[fd]
         if _graph in graph_ and _graph is not graph:  # was not removed or merged via prior _G
             _node_, _medG_, _valt = _graph
@@ -197,19 +193,14 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
                     if _node not in add_node_ + save_node_: add_node_ += [_node]
                 for _medG in _medG_:
                     if _medG not in add_medG_ + save_medG_: add_medG_ += [_medG]
-                # not sure if that's needed:
-                for derG in _node.link_:
-                    __G = derG.node_[0] if derG.node_[0] is not _G else derG.node_[1]
-                    if __G not in add_mmed_ + mmed_:  # not saved via prior _G
-                        add_mmed_ += [__G]
-                        adj_Val += derG.valt[fd] - ave_agg
+                for _derG in _node.link_:
+                    adj_Val += _derG.valt[fd] - ave_agg
 
             valt[fd] += _valt[fd]
             graph_.remove(_graph)
-        mmed_ += add_mmed_
 
     graph[:] = [save_node_+ add_node_, save_medG_+ add_medG_, valt]
-    if adj_Val > ave_med:  # positive adj_Val from eval mmed_
+    if adj_Val > ave_med:  # positive adj_Val from eval mmG_
         eval_med_layer(graph_, graph, fd)  # eval next med layer in reformed graph
 
 '''
