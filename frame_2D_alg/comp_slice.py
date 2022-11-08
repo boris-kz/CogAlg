@@ -25,10 +25,11 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 '''
 
 import sys
+import numpy as np
 from itertools import zip_longest
 from copy import deepcopy, copy
 from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
-from sub_recursion import *
+
 # import warnings  # to detect overflow issue, in case of infinity loop
 # warnings.filterwarnings('error')
 
@@ -158,49 +159,24 @@ class CPP(CderP):  # derP params include P.ptuple
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    from sub_recursion import sub_recursion_eval,splice_dir_blob_
+    from sub_recursion import sub_recursion_eval, rotate_blob
+    alt_grid = rotate_blob(blob)  # form alternative axes for blob slicing
 
-    segment_by_direction(blob, verbose=False)  # forms blob.dir_blobs
-    for dir_blob in blob.dir_blobs:
+    P__ = slice_blob(blob, alt_grid, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices, recursively
+    comp_P_root(P__)  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx?
 
-        P__ = slice_blob(dir_blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
-        comp_P_root(P__)  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx?
-
-        # segments are stacks of (P,derP)s:
-        segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
-        segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
-        # PPs are graphs of segs:
-        dir_blob.PPm_, dir_blob.PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
-        # intra PP:
-        sub_recursion_eval(dir_blob)  # add rlayers, dlayers, seg_levels to select PPs, sum M,G
-        # cross PP:
-        agg_recursion_eval(dir_blob, [copy(dir_blob.PPm_), copy(dir_blob.PPd_)])  # Cgraph conversion doesn't replace PPs?
-    splice_dir_blob_(blob.dir_blobs)
+    # segments are stacks of (P,derP)s:
+    segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
+    segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
+    # PPs are graphs of segs:
+    blob.PPm_, blob.PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
+    # intra PP:
+    sub_recursion_eval(blob)  # add rlayers, dlayers, seg_levels to select PPs, sum M,G
+    # cross PP:
+    agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # Cgraph conversion doesn't replace PPs?
 
 
-def agg_recursion_eval(dir_blob, PP_t):
-    from agg_recursion import agg_recursion, Cgraph
-
-    if not isinstance(dir_blob, Cgraph):
-        fseg = isinstance(dir_blob, CPP)
-        convert = CPP2graph if fseg else CBlob2graph
-
-        dir_blob = convert(dir_blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
-        for PP_ in PP_t:
-            for i, PP in enumerate(PP_):
-                PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph)  # convert PP to graph
-
-    M, G = dir_blob.valt
-    fork_rdnt = [1+(G>M), 1+(M>=G)]
-    for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
-
-        if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) \
-            and len(PP_) > ave_nsub and dir_blob.alt_rdn < ave_overlap:
-            dir_blob.rdn += 1  # estimate
-            agg_recursion(dir_blob, PP_, fseg=fseg)
-
-
-def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
+def slice_blob(blob, alt_grid, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
     mask__ = blob.mask__  # same as positive sign here
     dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
@@ -213,6 +189,9 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines
         P_ = []  # line of Ps
         _mask = True
+        # while P.angle - axis_angle > ave_dangle:
+        # axis = min([dangle for P.angle - axis_angle for axi in axes],
+        # reconstruct dert_, mask_ in the axis:
         for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
 
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
@@ -453,6 +432,8 @@ def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
 
 def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
 
+    from sub_recursion import append_P
+
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn, rlayers=[[]], dlayers=[[]])
     if fd: PP.dseg_levels, PP.mseg_levels = [PP_segs], [[]]  # empty alt_seg_levels
     else:  PP.mseg_levels, PP.dseg_levels = [PP_segs], [[]]
@@ -615,4 +596,26 @@ def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
 
+
+def agg_recursion_eval(dir_blob, PP_t):
+    from agg_recursion import agg_recursion, Cgraph
+    from sub_recursion import CPP2graph, CBlob2graph
+
+    if not isinstance(dir_blob, Cgraph):
+        fseg = isinstance(dir_blob, CPP)
+        convert = CPP2graph if fseg else CBlob2graph
+
+        dir_blob = convert(dir_blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
+        for PP_ in PP_t:
+            for i, PP in enumerate(PP_):
+                PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph)  # convert PP to graph
+
+    M, G = dir_blob.valt
+    fork_rdnt = [1+(G>M), 1+(M>=G)]
+    for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
+
+        if (dir_blob.valt[fd] > PP_aves[fd] * ave_agg * (dir_blob.rdn+1) * fork_rdnt[fd]) \
+            and len(PP_) > ave_nsub and dir_blob.alt_rdn < ave_overlap:
+            dir_blob.rdn += 1  # estimate
+            agg_recursion(dir_blob, PP_, fseg=fseg)
 

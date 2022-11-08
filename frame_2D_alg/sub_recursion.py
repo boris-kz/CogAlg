@@ -118,91 +118,45 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
 
     return dderPs__
 
-'''
-- Segment input blob into dir_blobs by primary direction of kernel gradient: dy>dx
-- Merge weakly directional dir_blobs, with dir_val < cost of comp_slice_
-- Evaluate merged blobs for comp_slice_: if blob.M > ave_M
-'''
-def segment_by_direction(iblob, **kwargs):
 
-    dert__ = list(iblob.dert__)
-    mask__ = iblob.mask__
-    dy__ = dert__[1]; dx__ = dert__[2]
-    verbose = kwargs.get('verbose')
-    render = kwargs.get('render')
+# rotate blob by 45 degree virtually
+def rotate_blob(blob):
+    from intra_comp import comp_a
 
-    # segment blob into primarily vertical and horizontal sub blobs according to the direction of kernel-level gradient:
-    dir_blob_, idmap, adj_pairs = flood_fill(dert__, abs(dy__) > abs(dx__), verbose=verbose, mask__=mask__, fseg=True)
-    assign_adjacents(adj_pairs)  # fseg=True: skip adding the pose
+    dert__ = list(blob.dert__)
+    dert = dert__[0]
 
-    if render: _dir_blob_ = deepcopy(dir_blob_) # get a copy for dir blob before merging, for visualization purpose
-    merged_ids = []  # ids of merged adjacent blobs, to skip in the rest of dir_blobs
+    ysize, xsize = dert__[0].shape
+    eysize, exsize = ysize + 1, xsize + 1
+    edert = np.zeros((eysize, exsize), dtype="uint8")
+    # copy dert with single extended row and column
+    edert[:-1, :-1] = copy(dert)
+    edert[:-1, -1:] = copy(dert[:, -1:])  # extended column
+    edert[-1:, :-1] = copy(dert[-1:, :])  # extended row
 
-    for i, blob in enumerate(dir_blob_):
-        if blob.id not in merged_ids:
-            blob = merge_adjacents_recursive(blob, merged_ids, blob.adj_blobs[0], strong_adj_blobs=[])  # no pose
+    # get rotated 45 degree's p__
+    top__ = edert[:-1, :]
+    right__ = edert[:, 1:]
+    p__ = np.zeros((eysize, exsize), dtype="uint8")
+    p__[:-1, :] += (top__ / np.cos(np.deg2rad(45))).astype("uint8")
+    p__[:, 1:] += (right__ / np.cos(np.deg2rad(45))).astype("uint8")
 
-            if (blob.M > ave_M) and (blob.box[1]-blob.box[0]>1):  # y size >1, else we can't form derP
-                blob.fsliced = True
-                slice_blob(blob, verbose)  # slice and comp_slice_ across directional sub-blob
-            iblob.dir_blobs.append(blob)
+    # from rotated p__, recompute dert
+    topleft__ = p__[:-1, :-1]
+    topright__ = p__[:-1, 1:]
+    bottomleft__ = p__[1:, :-1]
+    bottomright__ = p__[1:, 1:]
 
-        for dir_blob in iblob.dir_blobs:
-            if dir_blob.id in merged_ids:  # strong blob was merged to another blob, remove it
-                iblob.dir_blobs.remove(dir_blob)
+    d_upright__ = bottomleft__ - topright__
+    d_upleft__ = bottomright__ - topleft__
 
-        if render: visualize_merging_process(iblob, dir_blob_, _dir_blob_,mask__, i)
-    if render:
-        # for debugging: visualize adjacents of merged blob to see that adjacents are assigned correctly after the merging:
-        if len(dir_blob_)>50 and len(dir_blob_)<500:
-            new_idmap = (np.zeros_like(idmap).astype('int'))-2
-            for blob in iblob.dir_blobs:
-                y0,yn,x0,xn = blob.box
-                new_idmap[y0:yn,x0:xn] += (~blob.mask__)*(blob.id + 2)
+    G__ = np.hypot(d_upright__, d_upleft__)  # 2x2 kernel gradient (variation), match = inverse deviation, for sign_ only
+    rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
 
-            visualize_merging_process(iblob, dir_blob_, _dir_blob_, mask__, 0)
-            from draw_frame_blobs import visualize_blobs
-            visualize_blobs(new_idmap, iblob.dir_blobs)
+    rotated_dert__ = [topleft__, d_upleft__, d_upright__, G__, rp__]
 
+    dert__, mask__ = comp_a(rotated_dert__, mask__=blob.mask__)
 
-def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
-
-    if dir_eval(blob.Dy, blob.Dx):  # directionally weak blob, merge with all adjacent weak blobs
-
-        if blob in adj_blobs: adj_blobs.remove(blob)  # remove current blob from adj adj blobs (assigned bilaterally)
-        merged_adj_blobs = []  # weak adj_blobs
-        for adj_blob in adj_blobs:
-
-            if dir_eval(adj_blob.Dy, adj_blob.Dx):  # also directionally weak, merge adj blob in blob:
-                if adj_blob.id not in merged_ids:
-                    merged_ids.append(adj_blob.id)
-                    blob = merge_blobs(blob, adj_blob, strong_adj_blobs)
-                    # recursively add adj_adj_blobs to merged_adj_blobs:
-                    for adj_adj_blob in adj_blob.adj_blobs[0]:
-                        # not included in merged_adj_blobs via prior adj_blob.adj_blobs, or is adj_blobs' blob:
-                        if adj_adj_blob not in merged_adj_blobs and adj_adj_blob is not blob \
-                                and adj_adj_blob.id not in merged_ids: # not merged to prior blob in dir_blobs
-                            merged_adj_blobs.append(adj_adj_blob)
-            else:
-                strong_adj_blobs.append(adj_blob)
-
-        if merged_adj_blobs:
-            blob = merge_adjacents_recursive(blob, merged_ids, merged_adj_blobs, strong_adj_blobs)
-
-        # all weak adj_blobs should now be merged, resulting blob may be weak or strong, vertical or lateral
-        blob.adj_blobs = [[],[]]  # replace with same-dir strong_adj_blobs.adj_blobs + opposite-dir strong_adj_blobs:
-
-        for adj_blob in strong_adj_blobs:
-            # merge with same-direction strong adj_blobs:
-            if (adj_blob.sign == blob.sign) and adj_blob.id not in merged_ids and adj_blob is not blob:
-                merged_ids.append(adj_blob.id)
-                blob = merge_blobs(blob, adj_blob, strong_adj_blobs)
-            # append opposite-direction strong_adj_blobs:
-            elif adj_blob not in blob.adj_blobs[0] and adj_blob.id not in merged_ids:
-                blob.adj_blobs[0].append(adj_blob)
-                blob.adj_blobs[1].append(2)  # assuming adjacents are open, just to visualize the adjacent blobs
-
-    return blob
 
 def dir_eval(Dy, Dx):  # blob direction strength eval
 
