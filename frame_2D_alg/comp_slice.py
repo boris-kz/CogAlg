@@ -51,6 +51,7 @@ ave_G = 10
 ave_Ga = 2  # related to dx?
 ave_L = 10
 ave_dx = 5  # inv, difference between median x coords of consecutive Ps
+ave_dy = 5
 ave_dangle = 2  # vertical difference between angles
 ave_daangle = 2
 ave_mval = ave_dval = 10  # should be different
@@ -88,7 +89,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
-    x0 = int
+    x0 = int  # initially x0, then ave_x after directional reforming
     y = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -159,10 +160,9 @@ class CPP(CderP):  # derP params include P.ptuple
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    from sub_recursion import sub_recursion_eval, rotate_blob
-    alt_grid = rotate_blob(blob)  # form alternative axes for blob slicing
+    from sub_recursion import sub_recursion_eval
 
-    P__ = slice_blob(blob, alt_grid, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices, recursively
+    P__ = slice_blob(blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices, redirected
     comp_P_root(P__)  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx?
 
     # segments are stacks of (P,derP)s:
@@ -176,7 +176,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
     agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # Cgraph conversion doesn't replace PPs?
 
 
-def slice_blob(blob, alt_grid, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
+def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
     mask__ = blob.mask__  # same as positive sign here
     dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
@@ -185,13 +185,14 @@ def slice_blob(blob, alt_grid, verbose=False):  # form blob slices nearest to sl
     height, width = mask__.shape
     if verbose: print("Converting to image...")
     P__ = []  # blob of Ps
+    from sub_recursion import rotate_dert_
 
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines
+
+        if sum([dert.dy for dert in dert_]) / len(dert_) > ave_dy:
+            rotate_dert_(dert_, mask_)  # reconstruct dert_, mask_ across the dert__ in axis = Dy,Dx
         P_ = []  # line of Ps
         _mask = True
-        # while P.angle - axis_angle > ave_dangle:
-        # axis = min([dangle for P.angle - axis_angle for axi in axes],
-        # reconstruct dert_, mask_ in the axis:
         for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
 
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
