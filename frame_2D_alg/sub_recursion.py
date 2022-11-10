@@ -118,39 +118,33 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
 
     return dderPs__
 
+# not revised, should be rotate():
 
-# rotate blob by 45 degree virtually
-def rotate_blob(blob):
-    from intra_comp import comp_a
-
-    dert__ = list(blob.dert__)
-    dert_ = dert__[0]
-
-    rotated_dert__ = []
-    for dert in dert__:
-        rotated_dert__ += [rotate_dert_(dert_, angle=45)]
-
-    return rotated_dert__
-
-
-def rotate_dert_(dert_, angle):
+def rotate_dert_(idert_, mask_):
 
     # method from here:
     # https://homepages.inf.ed.ac.uk/rbf/HIPR2/rotate.htm
-    ysize, xsize = dert.shape[:2]
-    ycenter = int(ysize/2)  # assume centroid is center of x and y, and this is center of rotation
-    xcenter = int(xsize/2)
 
-    y_ = []; new_y_ = []
+    idert_ = list(idert_)  # idert_ is zipped, need to convert it
+    nparams = len(idert_[0])
+    ysize = 1
+    xsize = len(idert_)
+
+    dert_ = [[] for _ in range(nparams)]
+    for dert in list(idert_):
+        for i in range(nparams):
+            dert_[i].append(dert[i])
+
+    ave_ga = sum(dert_[2]) / xsize  # average of ga in rad
+    ave_x = int(xsize/2)  # local ave_x to dert_ only
+
     x_ = []; new_x_ = []
-    # rotate 45 degree
-    angle = np.deg2rad(angle)
-    for y in range(ysize):
-        for x in range(xsize):
-            y_ += [y]; x_ += [x]
-            new_x_ += [int(np.around((np.cos(angle) * (x-xcenter)) - (np.sin(angle) * (y-ycenter)) + xcenter))]
-            new_y_ += [int(np.around((np.sin(angle) * (x-xcenter)) + (np.cos(angle) * (y-ycenter)) + ycenter))]
-
+    y_ = []; new_y_ = []
+    # rotate by ga
+    for x in range(xsize):
+        x_ += [x]; y_ += [0]
+        new_x_ += [int(np.round((np.cos(ave_ga) * (x-ave_x)) + ave_x))]
+        new_y_ += [int(np.round((np.sin(ave_ga) * (x-ave_x)) + 0))]
 
     # remove negative coordinates by scaling it to positive
     min_x = min(new_x_)
@@ -158,28 +152,20 @@ def rotate_dert_(dert_, angle):
     new_x_ = [ new_x - min_x for new_x in new_x_]
     new_y_ = [ new_y - min_y for new_y in new_y_]
 
-    # initialize rotate image
+    # initialize rotate dert and mask
     new_xsize = max(new_x_) + 1
     new_ysize = max(new_y_) + 1
-    rotated_dert = np.zeros((new_ysize, new_xsize), dtype="uint8")
+    rotated_dert_ = [np.zeros((new_ysize, new_xsize), dtype="uint8") for _ in range(nparams)]
+    rotated_mask = np.full((new_ysize, new_xsize), fill_value=True, dtype="bool")
 
     # fill value
     for x,y,new_x, new_y in zip(x_,y_,new_x_, new_y_):
-        rotated_dert[new_y, new_x] = dert[y,x]
+        for i in range(nparams):
+            rotated_dert_[i][new_y, new_x] = dert_[i][x]
+            rotated_mask[new_y, new_x] = mask_[x]
 
-    # fill holes by using average of 4 sides
-    for x in range(new_xsize-1):
-        for y in range(new_ysize-1):
-            if rotated_dert[y, x] == 0:
-                top    = rotated_dert[y-1, x]
-                bottom = rotated_dert[y+1, x]
-                left   = rotated_dert[y, x-1]
-                right  = rotated_dert[y, x+1]
+    return rotated_dert_, rotated_mask
 
-                if top and bottom and left and right:
-                    rotated_dert[y, x] = np.uint8((float(top) + float(bottom) + float(left) + float(right)) / 4)
-
-    return rotated_dert
 
 def rotate_dert2(dert, angle):
 

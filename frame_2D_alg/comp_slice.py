@@ -62,6 +62,7 @@ ave_nsub = 1
 ave_sub = 2  # cost of calling sub_recursion and looping
 ave_agg = 3  # cost of agg_recursion
 ave_overlap = 10
+ave_rotate = 10
 
 param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]
 aves = [ave_dx, ave_dI, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mval, ave_dval]
@@ -88,7 +89,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
+    ptuple = object  # x, L, I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
     x0 = int  # initially x0, then ave_x after directional reforming
     y = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
@@ -160,11 +161,15 @@ class CPP(CderP):  # derP params include P.ptuple
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    from sub_recursion import sub_recursion_eval
+    from sub_recursion import sub_recursion_eval, rotate
 
-    P__ = slice_blob(blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices, redirected
-    comp_P_root(P__)  # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx?
-
+    P__ = slice_blob(blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
+    for P_ in P__:  # recursive reform Ps along new axes within blob.dert__
+        for P in P_:
+            while P.ptuple.G * P.ptuple.angle[0] > ave_rotate:  # angle[0]=Dy: deviation from horizontal
+                rotate(P, blob.dert__, blob.mask__)
+    comp_P_root(P__)
+    # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx
     # segments are stacks of (P,derP)s:
     segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
@@ -187,10 +192,8 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     P__ = []  # blob of Ps
     from sub_recursion import rotate_dert_
 
-    for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines
+    for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple
 
-        if sum([dert.dy for dert in dert_]) / len(dert_) > ave_dy:
-            rotate_dert_(dert_, mask_)  # reconstruct dert_, mask_ across the dert__ in axis = Dy,Dx
         P_ = []  # line of Ps
         _mask = True
         for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
