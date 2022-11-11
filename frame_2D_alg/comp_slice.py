@@ -160,16 +160,15 @@ class CPP(CderP):  # derP params include P.ptuple
 # Functions:
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
-
     from sub_recursion import sub_recursion_eval, rotate
 
     P__ = slice_blob(blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
-    for P_ in P__:  # recursive reform Ps along new axes within blob.dert__
+    for P_ in P__:
         for P in P_:
-            while P.ptuple.G * P.ptuple.angle[0] > ave_rotate:  # angle[0]=Dy: deviation from horizontal
-                rotate(P, blob.dert__, blob.mask__)
-    comp_P_root(P__)
-    # scan_P_, comp_P | link_layer, adds mixed uplink_, downlink_ per P; comp_dx_blob(P__), comp_dx
+            while P.ptuple.G * P.ptuple.angle[0] > ave_rotate:  # Dy is deviation from current horizontal axis
+                rotate(P, blob.dert__, blob.mask__)  # recursive reform Ps along new axes within blob.dert__
+
+    comp_P_root(P__)  # rotated Ps overlap, so comp_P_ forms redundant derPs?
     # segments are stacks of (P,derP)s:
     segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
@@ -186,15 +185,12 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     mask__ = blob.mask__  # same as positive sign here
     dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
     dert__ = [zip(*dert_) for dert_ in dert__]  # convert 1D array of 10-tuple rows into 2D array of 10-tuples per blob
-
+    P__ = []
     height, width = mask__.shape
     if verbose: print("Converting to image...")
-    P__ = []  # blob of Ps
-    from sub_recursion import rotate_dert_
 
-    for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple
-
-        P_ = []  # line of Ps
+    for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple slices -> Ps:
+        P_ = []
         _mask = True
         for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
 

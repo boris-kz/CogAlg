@@ -180,3 +180,9 @@ def merge_adjacents_recursive(blob, merged_ids, adj_blobs, strong_adj_blobs):
                 blob.adj_blobs[1].append(2)  # assuming adjacents are open, just to visualize the adjacent blobs
 
     return blob
+'''
+    mulptiple (x,y)s are overlaid by (rx,ry), we need to compute overlaid_area for each (x,y)
+    for (overlaid_y, overlaid_x), overlaid_area in overlaid_pixels:
+        rdert__t[i][ry, rx] += dert__t[i][overlaid_y, overlaid_x] * overlaid_area # overlaid_area is per pixel, fractional.
+    or distance between (rx,ry) and (x,y): max=1,   
+'''
