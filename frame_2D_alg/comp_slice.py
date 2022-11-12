@@ -168,7 +168,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
             while P.ptuple.G * P.ptuple.angle[0] > ave_rotate:  # Dy is deviation from current horizontal axis
                 rotate(P, blob.dert__, blob.mask__)  # recursive reform Ps along new axes within blob.dert__
 
-    comp_P_root(P__)  # rotated Ps overlap, so comp_P_ forms redundant derPs?
+    comp_P_root(P__)  # rotated Ps are sparse or overlapping, so derPs are partly redundant, but not biased?
     # segments are stacks of (P,derP)s:
     segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
