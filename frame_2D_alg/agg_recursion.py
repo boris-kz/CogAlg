@@ -452,20 +452,6 @@ def comp_extuple(_extuple, extuple):
 
     return mextuple, dextuple, mval, dval
 
-def comp_angle(_angle, angle):
-    _Dy, _Dx=_angle; Dy, Dx=angle
-
-    _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
-    sin = Dy / (.1 if G == 0 else G); cos = Dx / (.1 if G == 0 else G)
-    _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
-    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    # dangle is scalar
-    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
-
-    return mangle, dangle
-
 
 def sum_plevels(pLevels, plevels, Fds, fds):
 

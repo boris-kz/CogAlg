@@ -90,8 +90,9 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = object  # x, L, I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
-    x0 = int  # initially x0, then ave_x after directional reforming
-    y = int  # for vertical gap in PP.P__
+    axis = lambda: [0,1]  # initially horizontal, ultimately replaced by difference from ptuple.angle
+    x0 = int
+    y0 = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
     uplink_layers = lambda: [ [], [[],[]] ]  # init a layer of derPs and a layer of match_derPs
@@ -115,7 +116,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
     lplayer = lambda: [[], []]  # last mplayer, dplayer; der+ comp: players+dplayer or dplayer: link only?
     valt = lambda: [0,0]  # tuple of mval, dval, summed from last player, both are signed
     x0 = int
-    y = int  # or while isinstance(P, CderP): P = CderP._P; else y = _P.y
+    y0 = int  # or while isinstance(P, CderP): P = CderP._P; else y = _P.y0
     _P = object  # higher comparand
     P = object  # lower comparand
     roott = lambda: [None,None]  # for der++
@@ -160,15 +161,18 @@ class CPP(CderP):  # derP params include P.ptuple
 # Functions:
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
-    from sub_recursion import sub_recursion_eval, rotate
+    from sub_recursion import sub_recursion_eval, rotate_P
 
     P__ = slice_blob(blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
     for P_ in P__:
         for P in P_:
-            while P.ptuple.G * P.ptuple.angle[0] > ave_rotate:  # Dy is deviation from current horizontal axis
-                rotate(P, blob.dert__, blob.mask__)  # recursive reform Ps along new axes within blob.dert__
+            dangle = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
+            while P.ptuple.G * dangle > ave_rotate:
+                rotate_P(P, blob.dert__, blob.mask__)  # recursive reform P along new axis in blob.dert__
+                mangle, dangle = comp_angle(P.axis, P.ptuple.angle)
+            P.axis = dangle  # final P.axis is daxis
 
-    comp_P_root(P__)  # rotated Ps are sparse or overlapping, so derPs are partly redundant, but not biased?
+    comp_P_root(P__)  # rotated Ps are sparse or overlapping, so derPs are partly redundant, but results are not biased?
     # segments are stacks of (P,derP)s:
     segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
@@ -197,7 +201,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
             g, ga, ri, angle, aangle = dert[1], dert[2], dert[3], list(dert[4:6]), list(dert[6:])
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
-                if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
+                if _mask:  # ini P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
                     Pdert_ = [dert]
                     params = Cptuple(M=ave_g-g,Ma=ave_ga-ga,I=ri, angle=angle, aangle=aangle)
                 else:
@@ -217,7 +221,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             params.L = len(Pdert_)
             params.G = np.hypot(*params.angle)
             params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
-            P_.append(CP(ptuple=params, x0=x - (params.L - 1), y=y, dert_=Pdert_))
+            P_.append(CP(ptuple=params, x0=x - (params.L - 1), y0=y, dert_=Pdert_))
         P__ += [P_]
 
     blob.P__ = P__
@@ -242,6 +246,7 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
+    #  add comp daxis, ~externals in comp_G?
     if isinstance(_P, CP):
         mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple)
         valt = [mtuple.val, dtuple.val]
@@ -254,6 +259,21 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         players = deepcopy(_P.players)
 
     return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=players, lplayer=[mplayer,dplayer], valt=valt, P=P, _P=_P)
+
+
+def comp_angle(_angle, angle):
+    _Dy, _Dx=_angle; Dy, Dx=angle
+
+    _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
+    sin = Dy / (.1 if G == 0 else G); cos = Dx / (.1 if G == 0 else G)
+    _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
+    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    # dangle is scalar
+    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
+
+    return mangle, dangle
 
 
 def form_seg_root(P__, fd, fds):  # form segs from Ps
@@ -408,7 +428,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
         if fd: seg.players += [lplayer]  # der+
         else:  seg.players = [lplayer]  # rng+
         seg.players += [lplayer]  # add new player
-    seg.y0 = seg_Ps[0].y
+    seg.y0 = seg_Ps[0].y0
     seg.yn = seg.y0 + len(seg_Ps)
     seg.fds = fds + [fd]  # fds of root PP
 
