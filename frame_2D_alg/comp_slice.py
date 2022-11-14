@@ -73,8 +73,6 @@ PP_aves = [ave_mPP, ave_dPP]
 class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
 
     # add prefix v in vertuples: 9 vs. 10 params:
-    x = int
-    L = int  # area in PP
     I = int
     M = int
     Ma = float
@@ -86,11 +84,12 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     Ga = float
     # only in vertuple, combined tuple m|d value:
     val = float
+    L = int  # internalized in PP, area in G?
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple = object  # x, L, I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
-    axis = lambda: [0,1]  # initially horizontal, ultimately replaced by difference from ptuple.angle
+    ptuple = object  # I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
+    daxis = float  # final dangle in rotate_P
     x0 = int
     y0 = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
@@ -106,11 +105,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     Mdx = int
     Ddx = int
 
-class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
-    '''
-    Derivation forms a binary tree where the root is latuple and all forks are vertuples.
-    Players in derP are zipped with fds: taken forks. Players, mplayer, dplayer are replaced by those in PP
-    '''
+class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_: binary tree with latuple root and vertuple forks
+    # players in derP are zipped with fds: taken forks. Players, mplayer, dplayer are replaced by those in PP
+
     players = list  # max ntuples in layer = ntuples in lower layers: 1, 1, 2, 4, 8..: one selected fork per compared ptuple
     # nesting = len players ( player ( sub_player.., explicit to align comparands?
     lplayer = lambda: [[], []]  # last mplayer, dplayer; der+ comp: players+dplayer or dplayer: link only?
@@ -163,14 +160,15 @@ class CPP(CderP):  # derP params include P.ptuple
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
     from sub_recursion import sub_recursion_eval, rotate_P
 
-    P__ = slice_blob(blob, verbose=False)  # cluster dir_blob.dert__ into 2D array of blob slices
+    P__ = slice_blob(blob, verbose=False)  # cluster blob.dert__ into 2D array of blob slices
     for P_ in P__:
         for P in P_:
-            dangle = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
+            dangle = P.ptuple.angle[0] / len(P.dert_)  # dy: deviation from horizontal axis
             while P.ptuple.G * dangle > ave_rotate:
+                _angle = P.ptuple.angle
                 rotate_P(P, blob.dert__, blob.mask__)  # recursive reform P along new axis in blob.dert__
-                mangle, dangle = comp_angle(P.axis, P.ptuple.angle)
-            P.axis = dangle  # final P.axis is daxis
+                mangle, dangle = comp_angle(_angle, P.ptuple.angle, rn=1)
+            P.daxis = dangle  # final dangle, combine with dangle in comp_ptuple to orient params
 
     comp_P_root(P__)  # rotated Ps are sparse or overlapping, so derPs are partly redundant, but results are not biased?
     # segments are stacks of (P,derP)s:
@@ -214,7 +212,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
                 params.G = np.hypot(*params.angle)  # Dy, Dx
                 params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
-                P_.append( CP(ptuple=params, x0=x-(params.L-1), y=y, dert_=Pdert_))
+                P_.append( CP(ptuple=params, x0=x-(params.L-1), y0=y, dert_=Pdert_))
             _mask = mask
 
         if not _mask:  # pack last P, same as above:
@@ -239,16 +237,18 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
                     P.uplink_layers[-2] += [derP]  # append derPs, uplink_layers[-1] is match_derPs
                     _P.downlink_layers[-2] += [derP]
                 elif (P.x0 + P.ptuple.L) < _P.x0:
-                    break  # no P xn overlap, stop scanning lower P_
+                    break  # no xn overlap, stop scanning lower P_
         _P_ = P_
 
     return P__
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
-    #  add comp daxis, ~externals in comp_G?
+    Daxis = _P.daxis - P.daxis
+    Daxis *= np.hypot(_P.x0-len(_P.dert_)-(P.x0-len(P.dert_)), 1)  # project param orthogonal to blob axis, by dx
+
     if isinstance(_P, CP):
-        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple)
+        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, Daxis)
         valt = [mtuple.val, dtuple.val]
         mplayer = [mtuple]; dplayer = [dtuple]
         players = [[_P.ptuple]]
@@ -258,22 +258,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         valt = [mval, dval]
         players = deepcopy(_P.players)
 
-    return CderP(x0=min(_P.x0, P.x0), y=_P.y, players=players, lplayer=[mplayer,dplayer], valt=valt, P=P, _P=_P)
-
-
-def comp_angle(_angle, angle):
-    _Dy, _Dx=_angle; Dy, Dx=angle
-
-    _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
-    sin = Dy / (.1 if G == 0 else G); cos = Dx / (.1 if G == 0 else G)
-    _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
-    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    # dangle is scalar
-    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
-
-    return mangle, dangle
+    return CderP(x0=min(_P.x0, P.x0), y0=_P.y0, players=players, lplayer=[mplayer,dplayer], valt=valt, P=P, _P=_P)
 
 
 def form_seg_root(P__, fd, fds):  # form segs from Ps
@@ -547,64 +532,38 @@ def comp_players(_layers, layers):  # unpack and compare der layers, if any from
     return mptuples, dptuples, mval, dval
 
 
-def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
+def comp_ptuple(_params, params, daxis):  # compare lateral or vertical tuples, similar operations for m and d params
 
     dtuple, mtuple = Cptuple(), Cptuple()
     dval, mval = 0, 0
+    rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     flatuple = isinstance(_params.angle, list)  # else vertuple
-    rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
-    # same set:
+    if flatuple:
+        # angle:
+        mangle, dangle = comp_angle(_params.angle, params.angle, rn)
+        dtuple.angle = dangle; dval += abs(dangle)
+        mtuple.angle = mangle; mval += mangle
+        # angle of angle, no change in daxis?
+        maangle, daangle = comp_aangle(_params.aangle, params.aangle, rn)
+        dtuple.aangle = daangle; dval += abs(daangle)
+        mtuple.aangle = maangle; mval += maangle
+        comp("G", _params.G, params.G*rn / daxis, dval, mval, dtuple, mtuple, ave_G, finv=0)
+        comp("Ga", _params.Ga, params.Ga*rn / daxis, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
+    else:  # vertuple, all scalars:
+        comp("val", _params.val, params.val*rn / daxis, dval, mval, dtuple, mtuple, ave_mval, finv=0)
+        comp("angle", _params.angle, params.angle*rn / daxis, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
+        comp("aangle", _params.aangle, params.aangle*rn / daxis, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
+    # both:
     comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
     comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
-    hyp = np.hypot(dtuple.x, 1)  # dx, project param orthogonal to blob axis:
-    comp("L", _params.L, params.L*rn / hyp, dval, mval, dtuple, mtuple, ave_L, finv=0)
-    comp("M", _params.M, params.M*rn / hyp, dval, mval, dtuple, mtuple, ave_M, finv=0)
-    comp("Ma",_params.Ma, params.Ma*rn / hyp, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
-    # diff set
-    if flatuple:
-        comp("G", _params.G, params.G*rn / hyp, dval, mval, dtuple, mtuple, ave_G, finv=0)
-        comp("Ga", _params.Ga, params.Ga*rn / hyp, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
-        # angle:
-        _Dy,_Dx = _params.angle[:]; Dy,Dx = params.angle[:]
-        _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy*rn,Dx*rn)
-        sin = Dy*rn / (.1 if G == 0 else G); cos = Dx*rn / (.1 if G == 0 else G)
-        _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
-        sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-        cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-        # dangle is scalar now?
-        dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
-        mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
-        dtuple.angle = dangle; mtuple.angle= mangle
-        dval += dangle; mval += mangle
-
-        # angle of angle:
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
-        sin_dda0 = (cos_da0*rn * _sin_da0) - (sin_da0*rn * _cos_da0)
-        cos_dda0 = (cos_da0*rn * _cos_da0) + (sin_da0*rn * _sin_da0)
-        sin_dda1 = (cos_da1*rn * _sin_da1) - (sin_da1*rn * _cos_da1)
-        cos_dda1 = (cos_da1*rn * _cos_da1) + (sin_da1*rn * _sin_da1)
-        # for 2D, not reduction to 1D:
-        # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
-        # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
-        # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
-        gay = np.arctan2( (-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
-        gax = np.arctan2( (-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
-        daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
-        maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
-        dtuple.aangle = daangle; mtuple.aangle = maangle
-        dval += abs(daangle); mval += maangle
-
-    else:  # vertuple, all ders are scalars:
-        comp("val", _params.val, params.val*rn / hyp, dval, mval, dtuple, mtuple, ave_mval, finv=0)
-        comp("angle", _params.angle, params.angle*rn / hyp, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
-        comp("aangle", _params.aangle, params.aangle*rn / hyp, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
+    comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
+    comp("M", _params.M, params.M*rn / daxis, dval, mval, dtuple, mtuple, ave_M, finv=0)
+    comp("Ma",_params.Ma, params.Ma*rn / daxis, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
 
     mtuple.val = mval; dtuple.val = dval
 
     return mtuple, dtuple
-
 
 def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
 
@@ -615,6 +574,41 @@ def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
     mval += m
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
+
+def comp_angle(_angle, angle, rn):
+
+    _Dy, _Dx = _angle
+    Dy, Dx = angle
+    _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy*rn,Dx*rn)
+    sin = Dy*rn / (.1 if G == 0 else G); cos = Dx*rn / (.1 if G == 0 else G)
+    _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
+    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    # dangle is scalar
+    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
+
+    return mangle, dangle
+
+def comp_aangle(_aangle, aangle, rn):
+
+    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = aangle
+    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
+
+    sin_dda0 = (cos_da0 * rn * _sin_da0) - (sin_da0 * rn * _cos_da0)
+    cos_dda0 = (cos_da0 * rn * _cos_da0) + (sin_da0 * rn * _sin_da0)
+    sin_dda1 = (cos_da1 * rn * _sin_da1) - (sin_da1 * rn * _cos_da1)
+    cos_dda1 = (cos_da1 * rn * _cos_da1) + (sin_da1 * rn * _sin_da1)
+    # for 2D, not reduction to 1D:
+    # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
+    # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
+    # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
+    gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
+    gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
+    daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
+    maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
+
+    return maangle, daangle
 
 
 def agg_recursion_eval(dir_blob, PP_t):
