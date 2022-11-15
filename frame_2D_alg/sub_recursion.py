@@ -118,48 +118,67 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
 
     return dderPs__
 
+
+def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
+
+    for P_ in P__:
+        for P in P_:
+            dangle = P.ptuple.angle[0] / len(P.dert_)  # dy: deviation from horizontal axis
+            while P.ptuple.G * dangle > ave_rotate:
+                _angle = P.ptuple.angle
+                rotate_P(P, dert__, mask__)  # recursive reform P along new axis in blob.dert__
+                mangle, dangle = comp_angle(_angle, P.ptuple.angle)
+
+            P.daxis = dangle  # final dangle, combine with dangle in comp_ptuple to orient params
+
 def rotate_P(P, dert__t, mask__):
 
-    xcenter = int(P.x0 + len(P.dert_) / 2)  # center of P
-    ycenter = int(P.y0 + len(P.dert_) / 2) if P.daxis else P.y0  # horizontal P
-    rx = xcenter; ry = ycenter  # r = rotated
-    L = P.ptuple.L; Dy, Dx = P.ptuple.angle
+    L = len(P.dert_)
+    if P.daxis: # rotated P, use old angle
+        ycenter = int(P.y0 + P.angle[0]/2)
+        xcenter = int(P.x0 + P.angle[1]/2)
+    else:  # horizontal P, P.daxis==0
+        ycenter = P.y0
+        xcenter = int(P.x0 + L/2)
+    Dy, Dx = P.ptuple.angle
     dy = Dy/L; dx = Dx/L  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
-
-    rdert_ = [P.dert_[int( len(P.dert_)/2)]]  # init with central dert
-    rx-=dx; ry-=dy; x1,x2,y1,y2 = 1,1,1,1  # to start scan left
+    yn, xn = dert__t[0].shape[:2]
+    if dy<0: ymin =-yn; ymax = 0
+    else:    ymin = 0; ymax = yn
+    # r = rotated:
+    rdert_ = [P.dert_[int(L/2)]]  # init with central dert
+    rx=xcenter-dx; ry=ycenter-dy; x1,x2,y1,y2 = 1,1,1,1  # to start scan left
     # scan left:
-    while x1>0 and x2>0 and y1>0 and y2>0 and rx>=0 and ry>=0:
+    while x1>0 and x2>0 and y1>0 and y2>0 and rx>=0 and ry>=ymin:
         rdert = form_rdert(rx, ry, dert__t, mask__)
         if rdert:
-            rx-=dx; ry-=dy; x1,x2,y1,y2 = rdert[1]  # mapped coords
+            rx-=dx; ry-=dy; x1,x2,y1,y2 = rdert[1]  # next rx, next ry, mapped coords
             rdert_.insert(0, rdert[0])  # ptuple
         else:  # mask==1
             break
-    Px = rx; Py = ry  # left-most
-    rx=xcenter+dx; ry=ycenter+dy; x1,x2,y1,y2 = 1,1,1,1; yn, xn = dert__t[0].shape[:2]  # to start scan right
+    P.x0 = rx+dx; P.y0 = ry+dy  # left-most, revert from next rx, next ry
+    rx=xcenter+dx; ry=ycenter+dy; x1,x2,y1,y2 = 1,1,1,1  # to start scan right
     # scan right:
-    while x1<xn and x2<xn and y1<yn and y2<yn and rx<xn and ry<yn:
+    while x1<xn and x2<xn and y1<yn and y2<yn and np.ceil(rx)<xn and np.ceil(ry)<ymax:
         rdert = form_rdert(rx,ry, dert__t, mask__)
         if rdert:
             rx+=dx; ry+=dy; x1,x2,y1,y2 = rdert[1]  # mapped coords
             rdert_ += [rdert[0]]  # ptuple
         else:  # mask==1
             break
-    # rP:
+    # form rP:
     # initialization:
-    rdert = rdert_[0]  # get rdert's params
-    _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; ndert_=[rdert[0]]
+    rdert = rdert_[0]; _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; ndert_=[rdert]
     # accumulation:
     for rdert in rdert_[1:]:
         _, g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert[0]
         I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
-        ndert_ += [rdert[0]]
-    G = np.hypot(Dy,Dx)
-    Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
+        ndert_ += [rdert]
+    # re-form gradients:
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
     ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))  # no n,val,L
     # replace P:
-    P.ptuple=ptuple; P.dert_=ndert_; P.y0=Py; P.x0=Px
+    P.ptuple=ptuple; P.dert_=ndert_
 
 
 def form_rdert(rx,ry, dert__t, mask__):
@@ -368,16 +387,16 @@ def splice_2dir_blobs(_blob, blob):
 
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
-    current_ys = [P_[0].y for P_ in P__]  # list of current-layer seg rows
-    if P.y in current_ys:
+    current_ys = [P_[0].y0 for P_ in P__]  # list of current-layer seg rows
+    if P.y0 in current_ys:
         P__[current_ys.index(P.y)].append(P)  # append P row
-    elif P.y > current_ys[0]:  # P.y > largest y in ys
+    elif P.y0 > current_ys[0]:  # P.y0 > largest y in ys
         P__.insert(0, [P])
-    elif P.y < current_ys[-1]:  # P.y < smallest y in ys
+    elif P.y0 < current_ys[-1]:  # P.y0 < smallest y in ys
         P__.append([P])
-    elif P.y < current_ys[0] and P.y > current_ys[-1]:  # P.y in between largest and smallest value
+    elif P.y0 < current_ys[0] and P.y0 > current_ys[-1]:  # P.y0 in between largest and smallest value
         for i, y in enumerate(current_ys):  # insert y if > next y
-            if P.y > y: P__.insert(i, [P])  # PP.P__.insert(P.y - current_ys[-1], [P])
+            if P.y0 > y: P__.insert(i, [P])  # PP.P__.insert(P.y0 - current_ys[-1], [P])
 
 
 def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP | =4: P is CaggPP

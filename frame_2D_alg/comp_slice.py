@@ -158,28 +158,20 @@ class CPP(CderP):  # derP params include P.ptuple
 # Functions:
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
-    from sub_recursion import sub_recursion_eval, rotate_P
 
-    P__ = slice_blob(blob, verbose=False)  # cluster blob.dert__ into 2D array of blob slices
-    for P_ in P__:
-        for P in P_:
-            dangle = P.ptuple.angle[0] / len(P.dert_)  # dy: deviation from horizontal axis
-            while P.ptuple.G * dangle > ave_rotate:
-                _angle = P.ptuple.angle
-                rotate_P(P, blob.dert__, blob.mask__)  # recursive reform P along new axis in blob.dert__
-                mangle, dangle = comp_angle(_angle, P.ptuple.angle, rn=1)
-            P.daxis = dangle  # final dangle, combine with dangle in comp_ptuple to orient params
+    from sub_recursion import sub_recursion_eval, rotate_P_
+    P__ = slice_blob(blob, verbose=False)  # cluster blob.dert__ in 2D array of blob slices
+    rotate_P_(P__, blob.dert__, blob.mask__)  # rotate each P to align it with direction of P gradient
 
-    comp_P_root(P__)  # rotated Ps are sparse or overlapping, so derPs are partly redundant, but results are not biased?
-    # segments are stacks of (P,derP)s:
+    comp_P_root(P__)  # rotated Ps are sparse or overlapping: derPs are partly redundant, but results are not biased?
+    # segment is stack of (P,derP)s:
     segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=[0])  # shallow copy: same Ps in different lists
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
-    # PPs are graphs of segs:
+    # PP is graph of segs:
     blob.PPm_, blob.PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
-    # intra PP:
-    sub_recursion_eval(blob)  # add rlayers, dlayers, seg_levels to select PPs, sum M,G
-    # cross PP:
-    agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # Cgraph conversion doesn't replace PPs?
+    # micro and macro recursion:
+    sub_recursion_eval(blob)  # intra PP, add rlayers, dlayers, seg_levels to select PPs, sum M,G
+    agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # cross PP, Cgraph conversion doesn't replace PPs?
 
 
 def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -245,8 +237,13 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
     Daxis = _P.daxis - P.daxis
-    Daxis *= np.hypot(_P.x0-len(_P.dert_)-(P.x0-len(P.dert_)), 1)  # project param orthogonal to blob axis, by dx
-
+    dx = _P.x0-len(_P.dert_)/2 - P.x0-len(P.dert_)/2
+    Daxis *= np.hypot(dx, 1)  # project param orthogonal to blob axis, dy=1
+    '''
+    internalize externals? need to think about it:
+    comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
+    comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
+    '''
     if isinstance(_P, CP):
         mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, Daxis)
         valt = [mtuple.val, dtuple.val]
@@ -396,7 +393,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     miss_downlink_ = [ddownlink for ddownlink in ddownlink_t[fd] if ddownlink not in downlink_]
     # seg rdn: up cost to init, up+down cost for comp_seg eval, in 1st agg_recursion?
     # P rdn is up+down M/n, but P is already formed and compared?
-    seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], y0 = seg_Ps[0].y)
+    seg = CPP(x0=seg_Ps[0].x0, P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], y0 = seg_Ps[0].y0)
     lplayer = []
     for P in seg_Ps[:-1]:
         derP = P.uplink_layers[-1][fd][0]
@@ -556,8 +553,6 @@ def comp_ptuple(_params, params, daxis):  # compare lateral or vertical tuples, 
         comp("aangle", _params.aangle, params.aangle*rn / daxis, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
     # both:
     comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
-    comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
-    comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
     comp("M", _params.M, params.M*rn / daxis, dval, mval, dtuple, mtuple, ave_M, finv=0)
     comp("Ma",_params.Ma, params.Ma*rn / daxis, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
 
@@ -575,7 +570,7 @@ def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
 
-def comp_angle(_angle, angle, rn):
+def comp_angle(_angle, angle, rn=1):
 
     _Dy, _Dx = _angle
     Dy, Dx = angle
