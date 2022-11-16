@@ -89,7 +89,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = object  # I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
-    daxis = float  # final dangle in rotate_P
+    daxis = lambda: None  # final dangle in rotate_P
     x0 = int
     y0 = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
@@ -160,7 +160,7 @@ class CPP(CderP):  # derP params include P.ptuple
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     from sub_recursion import sub_recursion_eval, rotate_P_
-    P__ = slice_blob(blob, verbose=False)  # cluster blob.dert__ in 2D array of blob slices
+    P__ = slice_blob(blob, verbose=False)  # form 2D array of blob slices in blob.dert__
     rotate_P_(P__, blob.dert__, blob.mask__)  # rotate each P to align it with direction of P gradient
 
     comp_P_root(P__)  # rotated Ps are sparse or overlapping: derPs are partly redundant, but results are not biased?
@@ -169,7 +169,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
     # PP is graph of segs:
     blob.PPm_, blob.PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
-    # micro and macro recursion:
+    # micro and macro re-clustering:
     sub_recursion_eval(blob)  # intra PP, add rlayers, dlayers, seg_levels to select PPs, sum M,G
     agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # cross PP, Cgraph conversion doesn't replace PPs?
 
@@ -240,7 +240,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     dx = _P.x0-len(_P.dert_)/2 - P.x0-len(P.dert_)/2
     Daxis *= np.hypot(dx, 1)  # project param orthogonal to blob axis, dy=1
     '''
-    internalize externals? need to think about it:
+    form and compare extuple?
     comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
     comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
     '''
@@ -537,16 +537,16 @@ def comp_ptuple(_params, params, daxis):  # compare lateral or vertical tuples, 
 
     flatuple = isinstance(_params.angle, list)  # else vertuple
     if flatuple:
+        comp("G", _params.G, params.G*rn / daxis, dval, mval, dtuple, mtuple, ave_G, finv=0)
+        comp("Ga", _params.Ga, params.Ga*rn / daxis, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
         # angle:
         mangle, dangle = comp_angle(_params.angle, params.angle, rn)
         dtuple.angle = dangle; dval += abs(dangle)
         mtuple.angle = mangle; mval += mangle
-        # angle of angle, no change in daxis?
+        # angle of angle:
         maangle, daangle = comp_aangle(_params.aangle, params.aangle, rn)
         dtuple.aangle = daangle; dval += abs(daangle)
         mtuple.aangle = maangle; mval += maangle
-        comp("G", _params.G, params.G*rn / daxis, dval, mval, dtuple, mtuple, ave_G, finv=0)
-        comp("Ga", _params.Ga, params.Ga*rn / daxis, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
     else:  # vertuple, all scalars:
         comp("val", _params.val, params.val*rn / daxis, dval, mval, dtuple, mtuple, ave_mval, finv=0)
         comp("angle", _params.angle, params.angle*rn / daxis, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
@@ -579,9 +579,9 @@ def comp_angle(_angle, angle, rn=1):
     _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
     sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
     cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    # dangle is scalar
-    dangle = np.arctan2(sin_da, cos_da)  # vertical difference between angles
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed
+
+    dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
 
     return mangle, dangle
 

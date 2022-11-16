@@ -410,7 +410,7 @@ def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare de
     for _Ptuple, Ptuple, _fd, fd in zip(_Ptuples, Ptuples, _fds, fds):  # bottom-up der+, Ptuples per player, pass-through fds
         if _fd == fd:
 
-            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0])  # init Ptuple = ptuple, [[[[[[]]]]]]
+            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0], daxis=derext[1][1])  # init Ptuple = ptuple, [[[[[[]]]]]]
             mext___, dext___ = [[],0], [[],0]
             for _ext__, ext__ in zip(_Ptuple[1][0], Ptuple[1][0]):  # ext__: extuple level
                 mext__, dext__ = [[],0], [[],0]
