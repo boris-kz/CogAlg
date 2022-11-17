@@ -72,24 +72,27 @@ PP_aves = [ave_mPP, ave_dPP]
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
 
-    # add prefix v in vertuples: 9 vs. 10 params:
+    # compared params, add prefix v in vertuples: 9 vs. 10 params:
     I = int
     M = int
     Ma = float
     angle = lambda: [0, 0]  # in lataple only, replaced by float in vertuple
     aangle = lambda: [0, 0, 0, 0]
-    n = lambda: 1  # accumulation count
     # only in lataple, for comparison but not summation:
     G = float
     Ga = float
     # only in vertuple, combined tuple m|d value:
     val = float
-    L = int  # internalized in PP, area in G?
+    # in P, m|d if vertuple, layered?:
+    n = lambda: 1  # accum count
+    x = int  # median vs. x0?
+    daxis = lambda: None  # final dangle in rotate_P
+    L = int
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = object  # I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
-    daxis = lambda: None  # final dangle in rotate_P
+    daxis = lambda: None  # final dangle in rotate_P, move to ptuple?
     x0 = int
     y0 = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
@@ -240,7 +243,9 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     dx = _P.x0-len(_P.dert_)/2 - P.x0-len(P.dert_)/2
     Daxis *= np.hypot(dx, 1)  # project param orthogonal to blob axis, dy=1
     '''
-    form and compare extuple?
+    form and compare extuple: m|d x, axis, L, -> explayers || players, vs macro as in graph?
+    or ptuple extension += [med_x. axis, L]?
+        
     comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
     comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
     '''

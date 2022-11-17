@@ -108,7 +108,6 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
             dx = _x - x; dy = _y - y
             distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity
             proximity = ave_rng-distance  # coord match
-
             mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
             # n orders of len and sparsity, -= fill: sparsity inside nodes?
             if fder:
@@ -123,10 +122,10 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                     _sparsity, sparsity = 1, 1
 
             dspar = _sparsity-sparsity; mspar = min(_sparsity,sparsity)
-            # draft:
+            # draft, add to ptuple instead?:
             mext = [proximity, mang, mlen, mspar]; mVal = proximity + mang + mlen + mspar
             dext = [distance, dang, dlen, dspar];  dVal = distance + dang + dlen + dspar
-            derext = [mext,dext,mVal,dVal]
+            derext = [mext, dext, mVal, dVal]
 
             if mVal > ave_ext * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):  # max depends on combined G value
                 mplevel, dplevel = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds, derext)
