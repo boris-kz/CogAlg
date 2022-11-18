@@ -293,3 +293,111 @@ def rotate(P, dert__t, mask__):
         rdert_.append([rdert__[cy,cx] for rdert__ in rdert__t])  # pack right
 
     # form P with new_dert_ and new_mask_ here, reuse from comp_slice?
+
+def comp_plevels(_plevels, plevels, _fds, fds, derext):
+
+    mplevel, dplevel = [],[]  # fd plevels, each cis+alt, same as new_caT
+    mval, dval = 0,0  # m,d in new plevel, else c,a
+    iVal = ave_G  # to start loop:
+
+    for _plevel, plevel, _fd, fd in zip(reversed(_plevels), reversed(plevels), _fds, fds):  # caForks (caTree)
+        if iVal < ave_G or _fd != fd:  # top-down, comp if higher plevels and fds match, same agg+
+            break
+        mTree, dTree = [],[]; mtval, dtval = 0,0  # Fork trees
+        _caForks, _valt = _plevel; caForks, valt = plevel
+
+        for _caFork, caFork in zip(_caForks, caForks):  # bottom-up alt+, pass-through fds
+            mplayers, dplayers = [],[]; mlval, dlval = 0,0
+            if _caFork and caFork:
+                mplayer, dplayer = comp_players(_caFork, caFork, derext)
+                mplayers += [mplayer]; dplayers += [dplayer]
+                mlval += mplayer[1]; dlval += dplayer[1]
+            else:
+                mplayers += [[]]; dplayers += [[]]  # to align same-length trees for comp and sum
+            # pack fds:
+            mTree += [[mplayers, mlval, caFork[2]]]; dTree += [[dplayers, dlval, caFork[2]]]
+            mtval += mlval; dtval += dlval
+        # merge trees:
+        mplevel += mTree; dplevel += mTree  # merge Trees in candidate plevels
+        mval += mtval; dval += dtval
+        iVal = mval+dval  # after 1st loop
+
+    return [mplevel,mval], [dplevel,dval]  # always single new plevel
+
+
+def comp_players(_caFork, caFork, derext):  # unpack and compare layers from der+
+
+    mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
+    mVal, dVal = 0,0  # m,d in new player, else c,a
+    _players, _val, _fds =_caFork; players, val, fds = caFork
+
+    for _player, player in zip(_players, players):
+        mTree, dTree = [],[]; mtval, dtval = 0,0
+        _caforks,_ = _player; caforks,_ = player
+
+        for _cafork, cafork in zip(_caforks, caforks):  # bottom-up alt+, pass-through fds
+            if _cafork and cafork:
+                _ptuples,_ = _cafork; ptuples,_ = cafork  # no comp valt?
+                if _ptuples and ptuples:
+                    mtuples, dtuples = comp_ptuples(_ptuples, ptuples, _fds, fds, derext)
+                    mTree += [mtuples]; dTree += [dtuples]
+                    mtval += mtuples[1]; dtval += dtuples[1]
+                else:
+                    mTree += [[]]; dTree += [[]]
+            else:
+                mTree += [[]]; dTree += [[]]
+        # merge Trees:
+        mplayer += mTree; dplayer += dTree
+        mVal += mtval; dVal += dtval
+
+    return [mplayer,mVal], [dplayer,dVal]  # single new lplayer
+
+
+def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare der layers, if any from der+
+
+    mPtuples, dPtuples = [[],0], [[],0]  # [list, val] each
+
+    for _Ptuple, Ptuple, _fd, fd in zip(_Ptuples, Ptuples, _fds, fds):  # bottom-up der+, Ptuples per player, pass-through fds
+        if _fd == fd:
+
+            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0], daxis=derext[1][1])  # init Ptuple = ptuple, [[[[[[]]]]]]
+            mext___, dext___ = [[],0], [[],0]
+            for _ext__, ext__ in zip(_Ptuple[1][0], Ptuple[1][0]):  # ext__: extuple level
+                mext__, dext__ = [[],0], [[],0]
+                for _ext_, ext_ in zip(_ext__[0], ext__[0]):  # ext_: extuple layer
+                    mext_, dext_ = [[],0], [[],0]
+                    for _extuple, extuple in zip(_ext_[0], ext_[0]):  # loop ders from prior comps in each lower ext_
+                        # + der extlayer:
+                        mextuple, dextuple, meval, deval = comp_extuple(_extuple, extuple)
+                        mext_[0] += [mextuple]; mext_[1] += meval
+                        dext_[0] += [dextuple]; dext_[1] += deval
+                    # + der extlevel:
+                    mext__[0] += [mext_]; mext__[1] += mext_[1]
+                    dext__[0] += [dext_]; mext__[1] += dext_[1]
+                # + der inplayer:
+                mext___[0] += [mext__]; mext___[1] += mext__[1]
+                dext___[0] += [dext__]; dext___[1] += dext__[1]
+            # + der Ptuple:
+            mPtuples[0] += [[mtuple, mext___]]; mPtuples[1] += mtuple.val+mext___[1]
+            dPtuples[0] += [[dtuple, dext___]]; dPtuples[1] += dtuple.val+dext___[1]
+        else:
+            break  # comp same fds
+
+    mV = derext[2]; dV = derext[3]  # add der extset to all last elements:
+    mext_[0] += [derext[0]]; mext_[1] += mV; mext__[1] += mV; mext___[1] += mV; mPtuples[1] += mV
+    dext_[0] += [derext[1]]; dext_[1] += dV; dext__[1] += dV; dext___[1] += dV; dPtuples[1] += dV
+
+    return mPtuples, dPtuples
+
+
+def comp_extuple(_extuple, extuple):
+
+    mval, dval = 0,0
+    dextuple, mextuple = [],[]
+
+    for _param, param, ave in zip(_extuple, extuple, (ave_distance, ave_dangle, ave_len, ave_sparsity)):
+        # params: ddistance, dangle, dlen, dsparsity: all derived scalars
+        d = _param-param;          dextuple += [d]; dval += d - ave
+        m = min(_param,param)-ave; mextuple += [m]; mval += m
+
+    return mextuple, dextuple, mval, dval

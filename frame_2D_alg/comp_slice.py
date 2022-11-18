@@ -83,11 +83,21 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     Ga = float
     # only in vertuple, combined tuple m|d value:
     val = float
-    # in P, m|d if vertuple, layered?:
-    n = lambda: 1  # accum count
-    x = int  # median vs. x0?
-    daxis = lambda: None  # final dangle in rotate_P
-    L = int
+    n = lambda: 1  # accum count, combine from CpH?
+
+class CpH(ClusterStructure):  # hierarchy of params: plevels, players, or ptuples
+
+    pH = list
+    fds = list  # m|d per plevel
+    valt = lambda: [0],[0]
+    nvalt = lambda: [0, 0]  # from neg open links?
+    # extuple = list  # one per composition order, list individually, each can be m|d:
+    L = int  # distance in Cgraph
+    ax = float  # median x: x0+L/2
+    ay = float  # only in graph
+    axis = float
+    sparsity = float  # only in graph
+
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
@@ -157,7 +167,12 @@ class CPP(CderP):  # derP params include P.ptuple
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     altPP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
-
+    '''
+    G: plevels ( plevel:
+                 [players ( player:
+                            [ptuple+P_ext], der_G_ext
+                 ], G_ext)
+    '''
 # Functions:
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
@@ -172,7 +187,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
     # PP is graph of segs:
     blob.PPm_, blob.PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
-    # micro and macro re-clustering:
+    # micro and macro re-comp,clustering:
     sub_recursion_eval(blob)  # intra PP, add rlayers, dlayers, seg_levels to select PPs, sum M,G
     agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # cross PP, Cgraph conversion doesn't replace PPs?
 
@@ -243,24 +258,19 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     dx = _P.x0-len(_P.dert_)/2 - P.x0-len(P.dert_)/2
     Daxis *= np.hypot(dx, 1)  # project param orthogonal to blob axis, dy=1
     '''
-    form and compare extuple: m|d x, axis, L, -> explayers || players, vs macro as in graph?
-    or ptuple extension += [med_x. axis, L]?
-        
-    comp("x", _params.x, params.x*rn, dval, mval, dtuple, mtuple, ave_dx, finv=flatuple)
-    comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
+    add med_x. axis, L?
     '''
     if isinstance(_P, CP):
         mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, Daxis)
-        valt = [mtuple.val, dtuple.val]
         mplayer = [mtuple]; dplayer = [dtuple]
-        players = [[_P.ptuple]]
+        players = CpH(plevels=[[_P.ptuple]], valt=[mtuple.val, dtuple.val])
 
     else:  # P is derP
         mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)  # passed from seg.fds
-        valt = [mval, dval]
         players = deepcopy(_P.players)
+        players.valt = [mval, dval]
 
-    return CderP(x0=min(_P.x0, P.x0), y0=_P.y0, players=players, lplayer=[mplayer,dplayer], valt=valt, P=P, _P=_P)
+    return CderP(x0=min(_P.x0, P.x0), y0=_P.y0, players=players, lplayer=[mplayer,dplayer], P=P, _P=_P)
 
 
 def form_seg_root(P__, fd, fds):  # form segs from Ps

@@ -26,10 +26,10 @@ ave_sparsity = 2
 
 class Cgraph(CPP):  # graph or generic PP of any composition
 
-    plevels = list  # plevel_t[1]s is summed from alt_graph_, sub comp support, agg comp suppression?
-    fds = list  # prior forks in plevels, then player fds in plevel
-    valt = lambda: [0, 0]
-    nvalt = lambda: [0,0]  # from neg open links
+    plevels = lambda: CpH  # plevel_t[1]s is summed from alt_graph_, sub comp support, agg comp suppression?
+    # fds = list  # prior forks in plevels, then player fds in plevel
+    # valt = lambda: [0, 0]
+    nvalt = lambda: [0,0]  # from neg open links, also
     angle = lambda: [0,0]  # dy,dx, comp if derG or high-aspect (maxL/minL) G
     sparsity = float  # sum(node.sparsity for node in G.node_) / L, starting with derG distance
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?

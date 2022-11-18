@@ -157,7 +157,7 @@ def rotate_P(P, dert__t, mask__, yn, xn):
         rdert = form_rdert(rx,ry, dert__t, mask__)
         if rdert:
             rdert_ += [rdert]
-        rx += dx; ry += dy  # next rx,ry
+            rx += dx; ry += dy  # next rx,ry
     # form rP:
     # initialization:
     rdert = rdert_[0]; _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; ndert_=[rdert]
