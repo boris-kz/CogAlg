@@ -31,7 +31,7 @@ def sub_recursion_eval(root):  # for PP or dir_blob
             else:
                 comb_layers = mcomb_layers; PP_layers = PP.rlayers; PPm_ += [PP]
 
-            val = PP.valt[fd]; alt_val = PP.valt[1-fd]  # for fork rdn:
+            val = PP.players.valt[fd]; alt_val = PP.players.valt[1-fd]  # for fork rdn:
             ave = PP_aves[fd] * (PP.rdn + 1 + (alt_val > val))
             if val > ave and len(PP.P__) > ave_nsub:
                 sub_recursion(PP)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
@@ -50,16 +50,16 @@ def sub_recursion_eval(root):  # for PP or dir_blob
 
             # or higher der val?
             if isinstance(root, CPP):  # root is CPP
-                root.valt[fd] += PP.valt[fd]
+                root.players.valt[fd] += PP.players.valt[fd]
             else:  # root is CBlob
-                if fd: root.G += PP.valt[1]
-                else:  root.M += PP.valt[0]
+                if fd: root.G += PP.players.valt[1]
+                else:  root.M += PP.players.valt[0]
 
 def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
     P__  = [P_ for P_ in reversed(PP.P__)]  # revert to top down
     P__ = comp_P_der(P__) if PP.fds[-1] else comp_P_rng(P__, PP.rng + 1)   # returns top-down
-    PP.rdn += 2  # two-fork rdn, priority is not known?
+    PP.rdn += 2  # two-fork rdn, priority is not known?  rotate?
 
     sub_segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=PP.fds)
     sub_segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=PP.fds)  # returns bottom-up
@@ -123,24 +123,19 @@ def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction 
     yn, xn = dert__[0].shape[:2]
     for P_ in P__:
         for P in P_:
-            dangle = P.ptuple.angle[0] / len(P.dert_)  # dy: deviation from horizontal axis
+            dangle = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
             while P.ptuple.G * abs(dangle) > ave_rotate:
-                _angle = P.ptuple.angle
+                P.axis = P.ptuple.angle
                 rotate_P(P, dert__, mask__, yn, xn)  # recursive reform P along new axis in blob.dert__
-                mangle, dangle = comp_angle(_angle, P.ptuple.angle)
-                P.daxis = dangle  # final dangle, combine with dangle in comp_ptuple to orient params
+                _, dangle = comp_angle(P.axis, P.ptuple.angle)
 
 def rotate_P(P, dert__t, mask__, yn, xn):
 
     L = len(P.dert_)
     rdert_ = [P.dert_[int(L/2)]]  # init rotated dert_ with old central dert
 
-    if P.daxis != None: # rotated P, old angle defined P axis
-        ycenter = int(P.y0 + P.ptuple.angle[0]/2)  # can be negative
-        xcenter = int(P.x0 + abs(P.ptuple.angle[1]/2))  # always positive
-    else:  # horizontal P, daxis=None
-        ycenter = P.y0
-        xcenter = int(P.x0 + L/2)
+    ycenter = int(P.y0 + P.ptuple.axis[0]/2)  # can be negative
+    xcenter = int(P.x0 + abs(P.ptuple.axis[1]/2))  # always positive
     Dy, Dx = P.ptuple.angle
     dy = Dy/L; dx = abs(Dx/L)  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     # scan left:
@@ -380,7 +375,7 @@ def append_P(P__, P):  # pack P into P__ in top down sequence
 
     current_ys = [P_[0].y0 for P_ in P__]  # list of current-layer seg rows
     if P.y0 in current_ys:
-        P__[current_ys.index(P.y)].append(P)  # append P row
+        P__[current_ys.index(P.y0)].append(P)  # append P row
     elif P.y0 > current_ys[0]:  # P.y0 > largest y in ys
         P__.insert(0, [P])
     elif P.y0 < current_ys[-1]:  # P.y0 < smallest y in ys
@@ -519,19 +514,8 @@ def CPP2graph(PP, fseg, Cgraph):
     for i, (ptuples, alt_ptuples, fd) in enumerate(zip_longest(deepcopy(PP.players), deepcopy(alt_players), PP.fds, fillvalue=[])):
         cval, aval = 0,0
         for i, (ptuple, alt_ptuple) in enumerate(zip_longest(ptuples, alt_ptuples, fillvalue=None)):
-            if alt_ptuple:
-                if isinstance(ptuple, list):
-                    aval += alt_ptuple[0].val
-                else:
-                    aval += alt_ptuple.val
-                    alt_ptuples[i] = [alt_ptuple, [[[[[[]]]]]]]  # convert to Ptuple
-            if ptuple:
-                if isinstance(ptuple, list):  # already converted
-                    cval += ptuple[0].val
-                else:  # convert to Ptuple
-                    cval += ptuple.val
-                    ptuples[i] = [ptuple, [[[[[[]]]]]]]
-
+            if alt_ptuple: aval += alt_ptuple.val
+            if ptuple:     cval += ptuple.val
             cfork = [ptuples, cval]  # can't be empty
             afork = [alt_ptuples, aval] if alt_ptuples else []
             caTree = [[cfork, afork], [cval, aval]]

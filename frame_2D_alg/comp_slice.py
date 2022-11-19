@@ -50,6 +50,7 @@ ave_Ma = 10
 ave_G = 10
 ave_Ga = 2  # related to dx?
 ave_L = 10
+ave_x = 1
 ave_dx = 5  # inv, difference between median x coords of consecutive Ps
 ave_dy = 5
 ave_dangle = 2  # vertical difference between angles
@@ -76,6 +77,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     I = int
     M = int
     Ma = float
+    axis = lambda: [1, 0]  # init dy=1,dx=0, old angle after rotation
     angle = lambda: [0, 0]  # in lataple only, replaced by float in vertuple
     aangle = lambda: [0, 0, 0, 0]
     # only in lataple, for comparison but not summation:
@@ -84,32 +86,34 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     # only in vertuple, combined tuple m|d value:
     val = float
     n = lambda: 1  # accum count, combine from CpH?
+    # P externals:
+    x = int  # median: x0+L/2
+    L = int  # len dert_ in P, area in PP
 
 class CpH(ClusterStructure):  # hierarchy of params: plevels, players, or ptuples
 
-    pH = list
-    fds = list  # m|d per plevel
-    valt = lambda: [0],[0]
-    nvalt = lambda: [0, 0]  # from neg open links?
-    # extuple = list  # one per composition order, list individually, each can be m|d:
-    L = int  # distance in Cgraph
-    ax = float  # median x: x0+L/2
-    ay = float  # only in graph
-    axis = float
-    sparsity = float  # only in graph
+    H = list  # plevels, players, or ptuples
+    fds = list  # m|d per element
+    valt = lambda: [0, 0]
+    nvalt = lambda: [0, 0]  # of neg open links?
+    # extuple per composition order, each param can be original or m|d:
+    L = int  # len node_
+    S = float  # sparsity: summed distances
+    x = float  # median: x0+L/2
+    y = float
+    axis = float  # optional, if derG or high-aspect graph?
 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple = object  # I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
-    daxis = lambda: None  # final dangle in rotate_P, move to ptuple?
+    ptuple = object  # I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val, x, L, A
     x0 = int
     y0 = int  # for vertical gap in PP.P__
-    rdn = int  # blob-level redundancy, ignore for now
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
     uplink_layers = lambda: [ [], [[],[]] ]  # init a layer of derPs and a layer of match_derPs
     downlink_layers = lambda: [ [], [[],[]] ]
     roott = lambda: [None,None]  # m,d seg|PP that contain this P
+    rdn = int  # blob-level redundancy, ignore for now
     # only in Pd:
     dxdert_ = list
     # only in Pm:
@@ -119,14 +123,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     Ddx = int
 
 class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_: binary tree with latuple root and vertuple forks
-    # players in derP are zipped with fds: taken forks. Players, mplayer, dplayer are replaced by those in PP
 
-    players = list  # max ntuples in layer = ntuples in lower layers: 1, 1, 2, 4, 8..: one selected fork per compared ptuple
-    # nesting = len players ( player ( sub_player.., explicit to align comparands?
+    players = lambda: CpH()  # max ntuples in layer = ntuples in lower layers: 1, 1, 2, 4, 8..: one selected fork per compared ptuple
     lplayer = lambda: [[], []]  # last mplayer, dplayer; der+ comp: players+dplayer or dplayer: link only?
-    valt = lambda: [0,0]  # tuple of mval, dval, summed from last player, both are signed
-    x0 = int
-    y0 = int  # or while isinstance(P, CderP): P = CderP._P; else y = _P.y0
     _P = object  # higher comparand
     P = object  # lower comparand
     roott = lambda: [None,None]  # for der++
@@ -139,12 +138,8 @@ class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_
 
 class CPP(CderP):  # derP params include P.ptuple
 
-    players = list  # 1st plevel, same as in derP but L is area
-    valt = lambda: [0,0]  # mval, dval summed across players
-    nvalt = lambda: [0,0]  # from neg derPs:
-    nderP_ =list  # miss links, add with nvalt for complemented PP
-    fds = list  # fPd per player except 1st, to comp in agg_recursion
-    x0 = int  # box, update by max, min; this is a 2nd plevel?
+    players = lambda: CpH()  # 1st plevel
+    x0 = int  # box, update by max, min
     xn = int
     y0 = int
     yn = int
@@ -159,6 +154,7 @@ class CPP(CderP):  # derP params include P.ptuple
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
     mask__ = bool
+    nderP_ = list  # miss links, add with nvalt for complemented PP?
     P__ = list  # input + derPs, common root for downward layers and upward levels:
     rlayers = list  # or mlayers: sub_PPs from sub_recursion within PP
     dlayers = list  # or alayers
@@ -167,12 +163,8 @@ class CPP(CderP):  # derP params include P.ptuple
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     altPP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
-    '''
-    G: plevels ( plevel:
-                 [players ( player:
-                            [ptuple+P_ext], der_G_ext
-                 ], G_ext)
-    '''
+
+# G: plevels ( players (ptuples, der_G_ext), G_ext)
 # Functions:
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
@@ -219,17 +211,19 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                     Pdert_.append(dert)
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
-                params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
+                # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
                 params.G = np.hypot(*params.angle)  # Dy, Dx
                 params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
-                P_.append( CP(ptuple=params, x0=x-(params.L-1), y0=y, dert_=Pdert_))
+                L = len(Pdert_)
+                params.L = L; params.x = x-L/2
+                P_.append( CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_))
             _mask = mask
 
         if not _mask:  # pack last P, same as above:
-            params.L = len(Pdert_)
+            L = len(Pdert_); params.L = L; params.x = x-L/2
             params.G = np.hypot(*params.angle)
             params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
-            P_.append(CP(ptuple=params, x0=x - (params.L - 1), y0=y, dert_=Pdert_))
+            P_.append(CP(ptuple=params, x0=x - (L - 1), y0=y, dert_=Pdert_))
         P__ += [P_]
 
     blob.P__ = P__
@@ -242,11 +236,12 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
     for P_ in P__[1:]:  # lower row
         for P in P_:
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
-                if (P.x0 - 1 < _P.x0 + _P.ptuple.L) and (P.x0 + P.ptuple.L + 1 > _P.x0):
+                _L = len(_P.dert_); L = len(P.dert_)
+                if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
                     derP = comp_P(_P, P)
                     P.uplink_layers[-2] += [derP]  # append derPs, uplink_layers[-1] is match_derPs
                     _P.downlink_layers[-2] += [derP]
-                elif (P.x0 + P.ptuple.L) < _P.x0:
+                elif (P.x0 + L) < _P.x0:
                     break  # no xn overlap, stop scanning lower P_
         _P_ = P_
 
@@ -254,23 +249,16 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
-    Daxis = _P.daxis - P.daxis
-    dx = _P.x0-len(_P.dert_)/2 - P.x0-len(P.dert_)/2
-    Daxis *= np.hypot(dx, 1)  # project param orthogonal to blob axis, dy=1
-    '''
-    add med_x. axis, L?
-    '''
     if isinstance(_P, CP):
-        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, Daxis)
-        mplayer = [mtuple]; dplayer = [dtuple]
-        players = CpH(plevels=[[_P.ptuple]], valt=[mtuple.val, dtuple.val])
-
-    else:  # P is derP
-        mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)  # passed from seg.fds
+        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple)
+        mplayer = [[mtuple]]; dplayer = [[dtuple]]
+        players = CpH(H=[[_P.ptuple]], valt=[mtuple.val, dtuple.val])
+    else:  # P = derP
+        mplayer, dplayer, mval, dval = comp_players(_P.players, P.players)
         players = deepcopy(_P.players)
         players.valt = [mval, dval]
 
-    return CderP(x0=min(_P.x0, P.x0), y0=_P.y0, players=players, lplayer=[mplayer,dplayer], P=P, _P=_P)
+    return CderP(x0=min(_P.x0, P.x0), y0=_P.y0, players=players, lplayer=[mplayer, dplayer], P=P, _P=_P)
 
 
 def form_seg_root(P__, fd, fds):  # form segs from Ps
@@ -412,19 +400,20 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     lplayer = []
     for P in seg_Ps[:-1]:
         derP = P.uplink_layers[-1][fd][0]
-        sum_ptuples(lplayer, derP.lplayer[fd])  # not comp derP.players, fd only
+        sum_pH_recursive(lplayer, derP.lplayer[fd])  # not comp derP.players, fd only
         accum_derP(seg, derP, fd)  # derP = P.uplink_layers[-1][0]
+        seg.xn = max(seg.xn, derP.x0 + len(P.dert_))
         P.roott[fd] = seg
         for derP in P.uplink_layers[-2]:
             if derP not in P.uplink_layers[-1][fd]:
-                seg.nvalt[fd] += derP.valt[fd]  # -ve links in full links, not in +ve links
+                seg.players.nvalt[fd] += derP.players.valt[fd]  # -ve links in full links, not in +ve links
                 seg.nderP_ += [derP]
 
     accum_derP(seg, seg_Ps[-1], fd)  # accum last P only, top P uplink_layers are not part of seg
     if lplayer:
-        if fd: seg.players += [lplayer]  # der+
-        else:  seg.players = [lplayer]  # rng+
-        seg.players += [lplayer]  # add new player
+        if fd: seg.players.H += [lplayer]  # der+
+        else:  seg.players.H = [lplayer]  # rng+
+
     seg.y0 = seg_Ps[0].y0
     seg.yn = seg.y0 + len(seg_Ps)
     seg.fds = fds + [fd]  # fds of root PP
@@ -437,14 +426,11 @@ def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
 
     if isinstance(derP, CP):
         derP.roott[fd] = seg
-        if seg.players: sum_players(seg.players, [[derP.ptuple]])
-        # players:
-        else:           seg.players.append([deepcopy(derP.ptuple)])
-        seg.xn = max(seg.xn, derP.x0 + derP.ptuple.L)
+        if seg.players.H: sum_pH_recursive(seg.players.H, [[derP.ptuple]])
+        else:             seg.players.H.append([deepcopy(derP.ptuple)])
     else:
-        sum_players(seg.players, derP.players)  # last derP player is current mplayer, dplayer
-        seg.valt[0] += derP.valt[0]; seg.valt[1] += derP.valt[1]
-        seg.xn = max(seg.xn, derP.x0 + derP.players[0][0].L)
+        sum_pH_recursive(seg.players.H, derP.players.H)  # last derP player is current mplayer, dplayer
+        seg.players.valt[0] += derP.players.valt[0]; seg.players.valt[1] += derP.players.valt[1]
 
 
 def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
@@ -458,7 +444,7 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
     for seg in PP_segs:
         seg.roott[fd] = PP
         # selection should be alt, not fd, only in convert?
-        sum_players(PP.players, seg.players)  # not empty inp's players
+        sum_pH_recursive(PP.players.H, seg.players.H)  # not empty inp's players
         PP.fds = copy(seg.fds)
         PP.x0 = min(PP.x0, seg.x0)  # external params: 2nd player?
         PP.xn = max(PP.xn, seg.xn)
@@ -467,8 +453,8 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
         PP.Rdn += seg.rdn  # base_rdn + PP.Rdn / PP: recursion + forks + links: nderP / len(P__)?
         PP.derP_cnt += len(seg.P__[-1].uplink_layers[-1][fd])  # redundant derivatives of the same P
         # only PPs are sign-complemented, seg..[not fd]s are empty:
-        PP.valt[fd] += seg.valt[fd]
-        PP.nvalt[fd] += seg.nvalt[fd]
+        PP.players.valt[fd] += seg.players.valt[fd]
+        PP.players.nvalt[fd] += seg.players.nvalt[fd]
         PP.nderP_ += seg.nderP_
         # += miss seg.link_s:
         for i, (PP_layer, seg_layer) in enumerate(zip_longest(PP.uplink_layers, seg.uplink_layers, fillvalue=[])):
@@ -489,18 +475,24 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
                 if derP in seg.P__[-1].uplink_layers[-1][fd]:  # +ve links
                     PP.valt[i] += val
                 else:  # -ve links
-                    PP.nvalt[i] += val
+                    PP.players.nvalt[i] += val
                     PP.nderP_ += [derP]
     return PP
 
 
-def sum_players(Layers, layers, fneg=0):  # no accum across fPd, that's checked in comp_players?
+def sum_pH_recursive(PH, pH, fneg=0):  # no accum across fPd, that's checked in comp_players?
 
-    for Layer, layer in zip_longest(Layers, layers, fillvalue=[]):
+    for Layer, layer in zip_longest(PH, pH, fillvalue=[]):
         if layer:
-            if Layer: sum_ptuples(Layer, layer, fneg=fneg)
-            elif not fneg: Layers.append(deepcopy(layer))
+            if Layer:
+                if isinstance(Layer, Cptuple):
+                    sum_ptuple(Layer, layer, fneg=fneg)
+                else:
+                    sum_pH_recursive(Layer, layer, fneg=0)  # unpack hierarchy recursively
+            elif not fneg:
+                PH.append(deepcopy(layer))
 
+# remove:
 def sum_ptuples(Player, player, fneg=0):  # accum players in Players
 
     for i, (Ptuple, ptuple) in enumerate(zip_longest(Player, player, fillvalue=[])):
@@ -535,7 +527,7 @@ def comp_players(_layers, layers):  # unpack and compare der layers, if any from
     mptuples, dptuples = [],[]
     mval, dval = 0,0
 
-    for _layer, layer in zip(_layers, layers):
+    for _layer, layer in zip(_layers.pH, layers.pH):
         for _ptuple, ptuple in zip(_layer, layer):
             mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
             mptuples +=[mtuple]; mval+=mtuple.val
@@ -544,11 +536,17 @@ def comp_players(_layers, layers):  # unpack and compare der layers, if any from
     return mptuples, dptuples, mval, dval
 
 
-def comp_ptuple(_params, params, daxis):  # compare lateral or vertical tuples, similar operations for m and d params
+def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
 
     dtuple, mtuple = Cptuple(), Cptuple()
     dval, mval = 0, 0
+
     rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
+    maxis, daxis = comp_angle(_params.axis, params.axis)
+    mval+=maxis; dval+=daxis; mtuple.axis=maxis; dtuple.axis=daxis
+
+    comp("x", _params.x, params.x, 1, dval, mval, dtuple, mtuple, ave_x, finv=1)
+    comp("L", _params.L, params.L*rn / daxis, dval, mval, dtuple, mtuple, ave_L, finv=0)
 
     flatuple = isinstance(_params.angle, list)  # else vertuple
     if flatuple:
@@ -642,4 +640,3 @@ def agg_recursion_eval(dir_blob, PP_t):
             and len(PP_) > ave_nsub and dir_blob.alt_rdn < ave_overlap:
             dir_blob.rdn += 1  # estimate
             agg_recursion(dir_blob, PP_, fseg=fseg)
-

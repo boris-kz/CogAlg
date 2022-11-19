@@ -103,10 +103,10 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
         for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
-            # comp external params:
+            # comp external params: move to comp_plevels
             _x = (_G.xn +_G.x0)/2; _y = (_G.yn +_G.y0)/2; x = (G.xn + G.x0)/2; y = (G.yn + G.y0)/2
             dx = _x - x; dy = _y - y
-            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity
+            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, replace?
             proximity = ave_rng-distance  # coord match
             mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
             # n orders of len and sparsity, -= fill: sparsity inside nodes?
