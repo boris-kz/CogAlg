@@ -294,6 +294,7 @@ def rotate(P, dert__t, mask__):
 
     # form P with new_dert_ and new_mask_ here, reuse from comp_slice?
 
+
 def comp_plevels(_plevels, plevels, _fds, fds, derext):
 
     mplevel, dplevel = [],[]  # fd plevels, each cis+alt, same as new_caT
@@ -401,3 +402,4 @@ def comp_extuple(_extuple, extuple):
         m = min(_param,param)-ave; mextuple += [m]; mval += m
 
     return mextuple, dextuple, mval, dval
+
