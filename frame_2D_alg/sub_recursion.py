@@ -8,8 +8,6 @@ import numpy as np
 from frame_blobs import CBlob, flood_fill, assign_adjacents
 from comp_slice import *
 
-flip_ave = 10
-ave_dir_val = 50
 ave_M = -500  # high negative ave M for high G blobs
 
 
@@ -127,7 +125,7 @@ def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction 
             while P.ptuple.G * abs(daxis) > ave_rotate:
                 P.ptuple.axis = P.ptuple.angle
                 rotate_P(P, dert__, mask__, yn, xn)  # recursive reform P along new axis in blob.dert__
-                _, daxis = comp_angle(P.ptuple.axis, P.ptuple.angle)
+                _, daxis = comp_angle("axis", P.ptuple.axis, P.ptuple.angle)
             # store as P.daxis to adjust params?
 
 def rotate_P(P, dert__t, mask__, yn, xn):
@@ -275,32 +273,25 @@ def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP
     return new_P
 
 
-def CBlob2graph(dir_blob, fseg, Cgraph):
+def CBlob2graph(blob, fseg, Cgraph):
 
-    PPm_ = dir_blob.PPm_; PPd_ = dir_blob.PPd_
+    PPm_ = blob.PPm_; PPd_ = blob.PPd_
+    root_fds = PPm_[0].players.fds[:-1]  # root fds is the shorter fork?
+    root = Cgraph(
+        node_=PPm_, alt_graph_=PPd_, rng = PPm_[0].rng, fds = root_fds, rdn=blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
 
-    # init graph params in CpH?
-    players, fds, valt = [], [], [0,0]  # players, fds and valt
-    alt_players, alt_fds, alt_valt = [], [], [0,0]
-    plevels = [[[players, fds, valt],[alt_players, alt_fds, alt_valt]]]
-    gPPm_, gPPd_ = [], []  # converted gPPs, node_ and alt_node_
-    root_fds = PPm_[0].fds[:-1]  # root fds is the shorter fork?
-
-    root = Cgraph(node_= gPPm_, alt_node_=gPPd_, plevels=plevels, rng = PPm_[0].rng,
-                  fds = root_fds, rdn=dir_blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
-
-    for fd, (PP_, gPP_) in enumerate(zip([PPm_, PPd_], [gPPm_, gPPd_])):
+    for fd, PP_ in [PPm_, PPd_]:
         for PP in PP_:
-            # should be summing alts when fd= 1?
+            # mostly wrong below:
             if fd:  # sum from altPP's players
                 for altPP in PP.altPP_:
-                    sum_players(alt_players, altPP.players)
-                    alt_valt[0] += altPP.valt[0]; alt_valt[1] += altPP.valt[1]
-                    alt_fds[:] = deepcopy(altPP.fds)
+                    sum_pH(alt_players.H, altPP.players.H)
+                    alt_valt[0] += altPP.players.valt[0]; alt_valt[1] += altPP.players.valt[1]
+                    alt_fds[:] = deepcopy(altPP.players.fds)
             else:  # sum from players
-                sum_players(players, PP.players)
-                valt[0] += PP.valt[0]; valt[1] += PP.valt[1]
-                fds[:] = deepcopy(PP.fds)
+                sum_pH(players.H, PP.players.H)
+                valt[0] += PP.players.valt[0]; valt[1] += PP.players.valt[1]
+                fds[:] = deepcopy(PP.players.fds)
 
             # compute rdn
             if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
@@ -321,38 +312,26 @@ def CBlob2graph(dir_blob, fseg, Cgraph):
 
 def CPP2graph(PP, fseg, Cgraph):
 
-    alt_players, alt_fds = [], []
-    alt_valt = [0, 0]
-
+    alt_players = CpH()
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
-        alt_fds = PP.altPP_[0].fds
+        alt_players.fds = PP.altPP_[0].players.fds
         for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-            for i, (_fd, fd) in enumerate(zip(alt_fds, altPP.players.fds)):
+            for i, (_fd, fd) in enumerate(zip(alt_players.fds, altPP.players.fds)):
                 if _fd != fd:
-                    alt_fds = alt_fds[:i]
+                    alt_players.fds = alt_players.fds[:i]
                     break
         for altPP in PP.altPP_:
-            sum_pH_recursive(alt_players, altPP.players.H[:len(alt_fds)])  # sum same-fd players only
-            alt_valt[0] += altPP.players.valt[0];  alt_valt[1] += altPP.players.valt[1]
-    # Cgraph: plevels ( caTree ( players ( caTree ( ptuples:
-    players = []
-    valt = [0,0]
-    # add to sum_pH_recursive
-    for i, (ptuples, alt_ptuples, fd) in enumerate(zip_longest(deepcopy(PP.players.H), deepcopy(alt_players), PP.players.fds, fillvalue=[])):
-        cval, aval = 0,0
-        for i, (ptuple, alt_ptuple) in enumerate(zip_longest(ptuples, alt_ptuples, fillvalue=None)):
-            if alt_ptuple: aval += alt_ptuple.val
-            if ptuple:     cval += ptuple.val
-            cfork = [ptuples, cval]  # can't be empty
-            afork = [alt_ptuples, aval] if alt_ptuples else []
-            caTree = [[cfork, afork], [cval, aval]]
-            valt[0] += cval; valt[1] += aval
-            players += [caTree]
+            sum_pH(alt_players.H, altPP.players.H[:len(alt_players.fds)])  # sum same-fd players only
+            alt_players.valt[0] += altPP.players.valt[0];  alt_players.valt[1] += altPP.players.valt[1]
+    # graph: plevels ( players ( ptuples:
+    players = deepcopy(PP.players)
+    caTree = CpH(H=[players], valt=deepcopy(players.valt), fds=deepcopy(players.fds))
+    alt_caTree = CpH(H=[alt_players], valt=deepcopy(alt_players.valt), fds=deepcopy(players.fds))
 
-    caTree = [[players, valt, deepcopy(PP.players.fds)]]  # pack single player
-    plevel = CpH(H = caTree,  valt=valt)
+    plevel = CpH(H = [caTree],  valt=deepcopy(caTree.valt))
+    alt_plevel = CpH(H = [alt_caTree],  valt=deepcopy(alt_caTree.valt))
     x0 = PP.x0; xn = PP.xn; y0 = PP.y0; yn = PP.yn
 
     return Cgraph(
-        node_=PP.P__, plevels=[plevel], alt_plevels=[alt_plevel], angle=(yn-y0,xn-x0), sparsity=1.0, valt=valt, x0=x0, xn=xn, y0=y0, yn=yn)
+        node_=PP.P__, plevels=plevel, alt_plevels=alt_plevel, angle=(yn-y0,xn-x0), sparsity=1.0, x0=x0, xn=xn, y0=y0, yn=yn)
         # 1st plevel fd is always der+?

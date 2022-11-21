@@ -26,8 +26,9 @@ ave_sparsity = 2
 
 class Cgraph(CPP):  # graph or generic PP of any composition
 
-    plevels = lambda: CpH  # zipped with alt_plevels in comp_plevels
-    alt_plevels = lambda: CpH  # summed from alt_graph_, sub comp support, agg comp suppression?
+    plevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
+    alt_plevels = lambda: CpH()  # summed from alt_graph_, sub comp support, agg comp suppression?
+    alt_graph_ = list
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?
     rng = lambda: 1  # not for alt_graphs
     medG_ = list  # last checked mediating [mG, dir_link, G]s, from all nodes?
@@ -38,7 +39,6 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     mlevels = list  # agg_PPs ) agg_PPPs ) agg_PPPPs.., bottom-up
     dlevels = list
     roott = lambda: [None, None]  # higher-order segG or graph
-    alt_graph_ = list
 
 
 def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
@@ -52,7 +52,6 @@ def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, prett
     if root.valt[1] > ave_sub * root.rdn:
         sub_dlayers, dvalt = sub_recursion_g(dgraph_, root.valt, fd=1)
         root.valt[1] += sum(dvalt); root.dlayers = sub_dlayers
-
     # cross graph:
     root.mlevels += mgraph_; root.dlevels += dgraph_
     for fd, graph_ in enumerate([mgraph_, dgraph_]):
