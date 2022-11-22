@@ -403,3 +403,37 @@ def comp_extuple(_extuple, extuple):
 
     return mextuple, dextuple, mval, dval
 
+
+def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
+
+    if isinstance(_P, CP):
+        mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple)
+        mplayer = CpH(H=[mtuple], val=mtuple.val)  # CpH is ptuples
+        dplayer = CpH(H=[dtuple], val=dtuple.val)
+        players = CpH(H=[[_P.ptuple]], val=_P.ptuple.val)  # CpH is players
+        derP = CderP(x0=min(_P.x0, P.x0), y0=_P.y0, players=players, lplayer=[mplayer, dplayer], P=P, _P=_P)
+    else:  # P is derP
+        mtuples, dtuples, mval, dval = comp_players(_P.players, P.players)
+        mplayer = CpH(H=mtuples, val=mval)  # CpH is ptuples
+        dplayer = CpH(H=dtuples, val=dval)
+        _P.lplayer=[mplayer, dplayer]
+        derP = _P
+
+    return derP
+
+
+def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
+
+    if isinstance(derP, CderP): seg.x0 = min(seg.x0, derP._P.x0)
+    else:                       seg.x0 = min(seg.x0, derP.x0)
+
+    if isinstance(derP, CP):
+        derP.roott[fd] = seg
+        lplayer = CpH(H=[deepcopy(derP.ptuple)], val=derP.ptuple.val, fds=[fd])
+
+        if isinstance(seg.players, CpH): sum_pH(seg.players, lplayer)
+        else: seg.players = CpH(H=[lplayer], val=derP.lplayer.val, fds=[fd])
+    else:
+        der_players = CpH(H=derP.players.H +[derP.lplayer[fd]], val=derP.players.val+derP.lplayer[fd].val, fds=copy(derP.players.fds)+[fd])
+        sum_pH(seg.players, der_players)  # last derP player is current mplayer, dplayer
+

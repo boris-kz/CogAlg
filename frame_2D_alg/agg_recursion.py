@@ -24,6 +24,19 @@ ave_distance = 5
 ave_sparsity = 2
 
 
+class CpH(ClusterStructure):  # hierarchy of params: plevels, players, or ptuples, + their vars
+
+    H = list  # plevels, players, or ptuples
+    fds = list  # m|d per element
+    val = 0
+    nval = 0  # of neg open links?
+    # extuple per composition order, each param can be original or m|d:
+    L = int  # len node_
+    S = float  # sparsity: summed distances
+    x = float  # median: x0+L/2
+    y = float
+    axis = float  # optional, if derG or high-aspect graph?
+
 class Cgraph(CPP):  # graph or generic PP of any composition
 
     plevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
@@ -197,13 +210,7 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
     if adj_Val > ave_med:  # positive adj_Val from eval mmG_
         eval_med_layer(graph_, graph, fd)  # eval next med layer in reformed graph
 
-'''
-plevel = caForks, valt
-caFork = players, valt, fds
-player = caforks, valt  # each is der Ptuples of all lower players, per new agg span
-cafork = ptuples, valt:
-valSub = sum([ptuple.val for caFork in graph.plevels[-1][0] for player in caFork[0] for cafork in player[0] for ptuple in cafork[0]])  
-'''
+
 def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
     comb_layers_t = [[],[]]
@@ -308,6 +315,37 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
                     add_alts(cplevel, aplevel)  # plevel is caForks: caTree leaves
 
     return graph_
+
+# draft:
+def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( ptuples
+
+    # comp L?, while val?
+
+    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
+        if _fd==fd:
+            if isinstance(spH, Cptuple):
+                comp_ptuple(_spH, spH)
+            else:
+                comp_pH(_spH, spH)
+
+
+def sum_pH(PH, pH, fneg=0):  # hierarchically recursive unpack: plevels ( players ( ptuples
+    # no accum across fd: matched in comp_pH
+
+    for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):
+        if spH:
+            if SpH:
+                if isinstance(SpH, Cptuple):
+                    sum_ptuple(SpH, spH, fneg=fneg)
+                else:
+                    sum_pH(SpH, spH, fneg=0)  # unpack sub-hierarchy, recursively
+            elif not fneg:
+                PH.H.append(deepcopy(spH))  # new Sub_pH
+
+            # accum ptuple.val in player.val or player.val in plevel.val:
+            PH.val += spH.val
+
+# old:
 
 def val2valt(plevels):
     for plevel in plevels:

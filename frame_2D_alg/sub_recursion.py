@@ -126,7 +126,7 @@ def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction 
                 P.ptuple.axis = P.ptuple.angle
                 rotate_P(P, dert__, mask__, yn, xn)  # recursive reform P along new axis in blob.dert__
                 _, daxis = comp_angle("axis", P.ptuple.axis, P.ptuple.angle)
-            # store as P.daxis to adjust params?
+            # store P.daxis to adjust params?
 
 def rotate_P(P, dert__t, mask__, yn, xn):
 
@@ -209,17 +209,12 @@ def append_P(P__, P):  # pack P into P__ in top down sequence
             if P.y0 > y: P__.insert(i, [P])  # PP.P__.insert(P.y0 - current_ys[-1], [P])
 
 
-def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP | =4: P is CaggPP
+def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP | =4: P is CaggPP
 
-    if not iPtype:  # assign Ptype based on instance type if no input type is provided
-        if isinstance(P, CPP):
-            Ptype = 2
-        elif isinstance(P, CderP):
-            Ptype = 1
-        elif isinstance(P, CP):
-            Ptype = 0
-    else:
-        Ptype = iPtype
+    if not Ptype:  # assign Ptype based on instance type if no input type is provided
+        if isinstance(P, CPP):     Ptype = 2
+        elif isinstance(P, CderP): Ptype = 1
+        else:                      Ptype = 0  # CP
 
     uplink_layers, downlink_layers = P.uplink_layers, P.downlink_layers  # local copy of link layers
     P.uplink_layers, P.downlink_layers = [], []  # reset link layers
@@ -272,29 +267,31 @@ def copy_P(P, iPtype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP
 
     return new_P
 
+# not revised:
 
-def CBlob2graph(blob, fseg, Cgraph):
+def CBlob2graph(blob, fseg, Cgraph):  # this secondary, don't worry for now
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     root_fds = PPm_[0].players.fds[:-1]  # root fds is the shorter fork?
-    root = Cgraph(
-        node_=PPm_, alt_graph_=PPd_, rng = PPm_[0].rng, fds = root_fds, rdn=blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
+    root = Cgraph(plevels=CpH(), alt_plevels=CpH(),
+           rng = PPm_[0].rng, fds = root_fds, rdn=blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
+    gPP_t = [root.node_, root.alt_graph_]
 
-    for fd, PP_ in [PPm_, PPd_]:
+    for fd, PP_ in enumerate([PPm_, PPd_]):
         for PP in PP_:
-            # mostly wrong below:
+            # mostly wrong below: (actually i think we need sum both plevels and alt_plevels now? So we need to remove the if loop)
             if fd:  # sum from altPP's players
                 for altPP in PP.altPP_:
-                    sum_pH(alt_players.H, altPP.players.H)
-                    alt_valt[0] += altPP.players.valt[0]; alt_valt[1] += altPP.players.valt[1]
-                    alt_fds[:] = deepcopy(altPP.players.fds)
+                    sum_pH(root.alt_plevels, altPP.players)
+                    root.alt_plevels.valt[0] += altPP.players.valt[0]; root.alt_plevels.valt[1] += altPP.players.valt[1]
+                    root.alt_plevels.fds = deepcopy(altPP.players.fds)
             else:  # sum from players
-                sum_pH(players.H, PP.players.H)
-                valt[0] += PP.players.valt[0]; valt[1] += PP.players.valt[1]
-                fds[:] = deepcopy(PP.players.fds)
+                sum_pH(root.plevels, PP.players)
+                root.plevels.valt[0] += PP.players.valt[0]; root.plevels.valt[1] += PP.players.valt[1]
+                root.plevels.fds = PP.players.fds
 
             # compute rdn
-            if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
+            if fseg: PP = PP.roott[PP.players.fds[-1]]  # seg root
             PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
             for altPP in PP.altPP_:  # overlapping Ps from each alt PP
                 altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
@@ -303,7 +300,7 @@ def CBlob2graph(blob, fseg, Cgraph):
                 root.alt_rdn += alt_rdn  # sum across PP_
 
             # convert and pack gPP
-            gPP_ += [CPP2graph(PP, fseg, Cgraph)]
+            gPP_t[fd] += [CPP2graph(PP, fseg, Cgraph)]
             root.x0=min(root.x0, PP.x0)
             root.xn=max(root.xn, PP.xn)
             root.y0=min(root.y0, PP.y0)
@@ -321,11 +318,13 @@ def CPP2graph(PP, fseg, Cgraph):
                     alt_players.fds = alt_players.fds[:i]
                     break
         for altPP in PP.altPP_:
-            sum_pH(alt_players.H, altPP.players.H[:len(alt_players.fds)])  # sum same-fd players only
+            alt_PP_players = deepcopy(altPP.players)
+            alt_PP_players.H = alt_PP_players.H[:len(alt_players.fds)]
+            sum_pH(alt_players, alt_PP_players)  # sum same-fd players only
             alt_players.valt[0] += altPP.players.valt[0];  alt_players.valt[1] += altPP.players.valt[1]
     # graph: plevels ( players ( ptuples:
     players = deepcopy(PP.players)
-    caTree = CpH(H=[players], valt=deepcopy(players.valt), fds=deepcopy(players.fds))
+    caTree = CpH(H=players, valt=deepcopy(players.valt), fds=deepcopy(players.fds))
     alt_caTree = CpH(H=[alt_players], valt=deepcopy(alt_players.valt), fds=deepcopy(players.fds))
 
     plevel = CpH(H = [caTree],  valt=deepcopy(caTree.valt))
