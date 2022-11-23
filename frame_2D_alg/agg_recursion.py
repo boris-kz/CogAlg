@@ -28,8 +28,8 @@ class CpH(ClusterStructure):  # hierarchy of params: plevels, players, or ptuple
 
     H = list  # plevels, players, or ptuples
     fds = list  # m|d per element
-    val = 0
-    nval = 0  # of neg open links?
+    val = int
+    nval = int  # of neg open links?
     # extuple per composition order, each param can be original or m|d:
     L = int  # len node_
     S = float  # sparsity: summed distances
@@ -111,7 +111,7 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
         for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
-            # comp external params: move to comp_plevels
+            # comp external params: move to comp_plevels / comp_pH
             _x = (_G.xn +_G.x0)/2; _y = (_G.yn +_G.y0)/2; x = (G.xn + G.x0)/2; y = (G.yn + G.y0)/2
             dx = _x - x; dy = _y - y
             distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, replace?
@@ -317,7 +317,7 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
     return graph_
 
 # draft:
-def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( ptuples
+def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
 
     # comp L?, while val?
 
@@ -329,7 +329,7 @@ def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( pt
                 comp_pH(_spH, spH)
 
 
-def sum_pH(PH, pH, fneg=0):  # hierarchically recursive unpack: plevels ( players ( ptuples
+def sum_pH(PH, pH, fneg=0):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
     # no accum across fd: matched in comp_pH
 
     for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):
@@ -341,9 +341,7 @@ def sum_pH(PH, pH, fneg=0):  # hierarchically recursive unpack: plevels ( player
                     sum_pH(SpH, spH, fneg=0)  # unpack sub-hierarchy, recursively
             elif not fneg:
                 PH.H.append(deepcopy(spH))  # new Sub_pH
-
-            # accum ptuple.val in player.val or player.val in plevel.val:
-            PH.val += spH.val
+            PH.val += spH.val  # accum ptuple.val in player.val or player.val in plevel.val
 
 # old:
 

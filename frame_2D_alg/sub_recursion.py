@@ -7,9 +7,9 @@ from copy import copy, deepcopy
 import numpy as np
 from frame_blobs import CBlob, flood_fill, assign_adjacents
 from comp_slice import *
+from agg_recursion import *
 
-ave_M = -500  # high negative ave M for high G blobs
-
+ave_rotate = 10
 
 def sub_recursion_eval(root):  # for PP or dir_blob
 
@@ -29,7 +29,7 @@ def sub_recursion_eval(root):  # for PP or dir_blob
             else:
                 comb_layers = mcomb_layers; PP_layers = PP.rlayers; PPm_ += [PP]
 
-            val = PP.players.valt[fd]; alt_val = PP.players.valt[1-fd]  # for fork rdn:
+            val = PP.players[1]; alt_val = PP.alt_players[1]  # for fork rdn:
             ave = PP_aves[fd] * (PP.rdn + 1 + (alt_val > val))
             if val > ave and len(PP.P__) > ave_nsub:
                 sub_recursion(PP)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
@@ -50,8 +50,8 @@ def sub_recursion_eval(root):  # for PP or dir_blob
             if isinstance(root, CPP):  # root is CPP
                 root.players.valt[fd] += PP.players.valt[fd]
             else:  # root is CBlob
-                if fd: root.G += PP.players.valt[1]
-                else:  root.M += PP.players.valt[0]
+                if fd: root.G += PP.alt_players[1]
+                else:  root.M += PP.players[1]
 
 def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
@@ -272,26 +272,26 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
 def CBlob2graph(blob, fseg, Cgraph):  # this secondary, don't worry for now
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
-    root_fds = PPm_[0].players.fds[:-1]  # root fds is the shorter fork?
+    root_fds = PPm_[0].fds[:-1]  # root fds is the shorter fork?
     root = Cgraph(plevels=CpH(), alt_plevels=CpH(),
            rng = PPm_[0].rng, fds = root_fds, rdn=blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
     gPP_t = [root.node_, root.alt_graph_]
 
     for fd, PP_ in enumerate([PPm_, PPd_]):
         for PP in PP_:
-            # mostly wrong below: (actually i think we need sum both plevels and alt_plevels now? So we need to remove the if loop)
-            if fd:  # sum from altPP's players
+            if fd:
+                # we don't need altPP_ here, it's a blob
                 for altPP in PP.altPP_:
-                    sum_pH(root.alt_plevels, altPP.players)
-                    root.alt_plevels.valt[0] += altPP.players.valt[0]; root.alt_plevels.valt[1] += altPP.players.valt[1]
-                    root.alt_plevels.fds = deepcopy(altPP.players.fds)
+                    sum_pH(root.alt_plevels, CpH(H=altPP.players[0]))
+                    root.alt_plevels.val += altPP.players[1]
+                    root.alt_plevels.fds = deepcopy(altPP.fds)
             else:  # sum from players
-                sum_pH(root.plevels, PP.players)
-                root.plevels.valt[0] += PP.players.valt[0]; root.plevels.valt[1] += PP.players.valt[1]
-                root.plevels.fds = PP.players.fds
+                sum_pH(root.plevels, CpH(H=PP.players[0]))
+                root.plevels.val += PP.players[1]
+                root.plevels.fds = deepcopy(PP.fds)
 
             # compute rdn
-            if fseg: PP = PP.roott[PP.players.fds[-1]]  # seg root
+            if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
             PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
             for altPP in PP.altPP_:  # overlapping Ps from each alt PP
                 altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
@@ -311,24 +311,20 @@ def CPP2graph(PP, fseg, Cgraph):
 
     alt_players = CpH()
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
-        alt_players.fds = PP.altPP_[0].players.fds
+        alt_players.fds = PP.altPP_[0].fds
         for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-            for i, (_fd, fd) in enumerate(zip(alt_players.fds, altPP.players.fds)):
+            for i, (_fd, fd) in enumerate(zip(alt_players.fds, altPP.fds)):
                 if _fd != fd:
                     alt_players.fds = alt_players.fds[:i]
                     break
         for altPP in PP.altPP_:
-            alt_PP_players = deepcopy(altPP.players)
-            alt_PP_players.H = alt_PP_players.H[:len(alt_players.fds)]
-            sum_pH(alt_players, alt_PP_players)  # sum same-fd players only
-            alt_players.valt[0] += altPP.players.valt[0];  alt_players.valt[1] += altPP.players.valt[1]
+            sum_pH(alt_players, CpH(H=altPP.players[0][:len(alt_players.fds)]))  # sum same-fd players only
+            alt_players.val += altPP.players[1]
     # graph: plevels ( players ( ptuples:
-    players = deepcopy(PP.players)
-    caTree = CpH(H=players, valt=deepcopy(players.valt), fds=deepcopy(players.fds))
-    alt_caTree = CpH(H=[alt_players], valt=deepcopy(alt_players.valt), fds=deepcopy(players.fds))
+    players = CpH(H=deepcopy(PP.players[0]), val = PP.players[1], fds=deepcopy(PP.fds) )
 
-    plevel = CpH(H = [caTree],  valt=deepcopy(caTree.valt))
-    alt_plevel = CpH(H = [alt_caTree],  valt=deepcopy(alt_caTree.valt))
+    plevel = CpH(H = [players],  val=players.val, fds = deepcopy(players.fds))
+    alt_plevel = CpH(H = [alt_players],  val = alt_players.val, fds=deepcopy(alt_players.fds))
     x0 = PP.x0; xn = PP.xn; y0 = PP.y0; yn = PP.yn
 
     return Cgraph(
