@@ -30,7 +30,10 @@ class CpH(ClusterStructure):  # hierarchy of params: plevels, players, or ptuple
     fds = list  # m|d per element
     val = int
     nval = int  # of neg open links?
-    # extuple per composition order, each param can be original or m|d:
+    ext = lambda: Cext
+
+class Cext(ClusterStructure):    # extuple per composition order, each param can be original or m|d:
+
     L = int  # len node_
     S = float  # sparsity: summed distances
     x = float  # median: x0+L/2
@@ -111,47 +114,65 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
         for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
-            # comp external params: move to comp_plevels / comp_pH
-            _x = (_G.xn +_G.x0)/2; _y = (_G.yn +_G.y0)/2; x = (G.xn + G.x0)/2; y = (G.yn + G.y0)/2
-            dx = _x - x; dy = _y - y
-            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, replace?
-            proximity = ave_rng-distance  # coord match
-            mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
-            # n orders of len and sparsity, -= fill: sparsity inside nodes?
-            if fder:
-                mlen,dlen = 0,0; _sparsity = _G.sparsity; sparsity = G.sparsity  # single-link derGs
-            else:
-                _L = len(_G.node_); L = len(G.node_)
-                dlen = _L - L; mlen = min(_L, L)
-                if isinstance(G.node_[0], Cgraph):
-                    _sparsity = sum(node.sparsity for node in _G.node_) / _L
-                    sparsity = sum(node.sparsity for node in G.node_) / L
-                else:  # G.node_[0] could be CP (fseg=1) or [CP]
-                    _sparsity, sparsity = 1, 1
+            # draft below:
+
+            for _plevel, plevel in zip(_G.plevels, G.plevels):
+                mext, dext, mVal, dVal = comp_ext(_plevel.ext, plevel.ext, fder)  # only in plevels
+
+                if mVal > ave_ext * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):  # max depends on combined G value
+                    mplevel, dplevel = comp_pH(_G.plevels, G.plevels, fder)
+                    # old:
+                    valt = [mplevel[1] - ave_Gm, dplevel[1] - ave_Gd]  # norm valt: *= link rdn?
+                    derG = Cgraph(  # or mean x0=_x+dx/2, y0=_y+dy/2:
+                        plevels=[mplevel,dplevel], y0=min(G.y0,_G.y0), yn=max(G.yn,_G.yn), x0=min(G.x0,_G.x0), xn=max(G.xn,_G.xn),
+                        sparsity=distance, angle=[dy,dx], valt=valt, node_=[_G,G])
+                    _G.link_ += [derG]; G.link_ += [derG]  # any val
+                    for fd in 0,1:
+                        if valt[fd] > 0:  # alt fork is redundant, no support?
+                            for node, (graph, medG_, gvalt) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
+                                if node not in graph:
+                                    graph += [node]
+                                    for derG in node.link_:
+                                        mG = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
+                                        if mG not in medG_:
+                                            medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
+                                    gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
+
+# draft:
+def comp_ext(_pH, pH, _G, G, fder=1):  # only for comp_plevels?
+
+    _x = (_G.xn + _G.x0) / 2; _y = (_G.yn + _G.y0) / 2; x = (G.xn + G.x0) / 2;    y = (G.yn + G.y0) / 2
+    dx = _x - x; dy = _y - y
+    distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, replace?
+    proximity = ave_rng - distance  # coord match
+    mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
+    # n orders of len and sparsity, -= fill: sparsity inside nodes?
+    if fder:
+        mlen, dlen = 0, 0; _sparsity = _G.sparsity; sparsity = G.sparsity  # single-link derGs
+    else:
+        _L = len(_G.node_); L = len(G.node_)
+        dlen = _L - L;  mlen = min(_L, L)
+        if isinstance(G.node_[0], Cgraph):
+            _sparsity = sum(node.sparsity for node in _G.node_) / _L
+            sparsity = sum(node.sparsity for node in G.node_) / L
+        else:  # G.node_[0] could be CP (fseg=1) or [CP]
+            _sparsity, sparsity = 1, 1
 
             dspar = _sparsity-sparsity; mspar = min(_sparsity,sparsity)
             # draft, add to ptuple instead?:
             mext = [proximity, mang, mlen, mspar]; mVal = proximity + mang + mlen + mspar
             dext = [distance, dang, dlen, dspar];  dVal = distance + dang + dlen + dspar
-            derext = [mext, dext, mVal, dVal]
 
-            if mVal > ave_ext * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):  # max depends on combined G value
-                mplevel, dplevel = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds, derext)
-                valt = [mplevel[1] - ave_Gm, dplevel[1] - ave_Gd]  # norm valt: *= link rdn?
-                derG = Cgraph(  # or mean x0=_x+dx/2, y0=_y+dy/2:
-                    plevels=[mplevel,dplevel], y0=min(G.y0,_G.y0), yn=max(G.yn,_G.yn), x0=min(G.x0,_G.x0), xn=max(G.xn,_G.xn),
-                    sparsity=distance, angle=[dy,dx], valt=valt, node_=[_G,G])
-                _G.link_ += [derG]; G.link_ += [derG]  # any val
-                for fd in 0,1:
-                    if valt[fd] > 0:  # alt fork is redundant, no support?
-                        for node, (graph, medG_, gvalt) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
-                            if node not in graph:
-                                graph += [node]
-                                for derG in node.link_:
-                                    mG = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
-                                    if mG not in medG_:
-                                        medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
-                                gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
+    return mext, dext, mVal, dVal
+
+def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
+
+    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
+        if _fd==fd:
+            if isinstance(spH, Cptuple):
+                comp_ptuple(_spH, spH)
+            else:
+                comp_pH(_spH, spH)
 
 # draft:
 def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links from increasingly mediated nodes
@@ -315,18 +336,6 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
                     add_alts(cplevel, aplevel)  # plevel is caForks: caTree leaves
 
     return graph_
-
-# draft:
-def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
-
-    # comp L?, while val?
-
-    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
-        if _fd==fd:
-            if isinstance(spH, Cptuple):
-                comp_ptuple(_spH, spH)
-            else:
-                comp_pH(_spH, spH)
 
 
 def sum_pH(PH, pH, fneg=0):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple

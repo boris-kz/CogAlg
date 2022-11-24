@@ -39,8 +39,7 @@ def sub_recursion_eval(root):  # for PP or dir_blob
                     if PP_layer:
                         if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
                         else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
-
-            # segs agg_recursion:
+            # segs:
             agg_recursion_eval(PP, [copy(PP.mseg_levels[-1]), copy(PP.dseg_levels[-1])])
             # include empty comb_layers:
             if fd: root.dlayers = [[[PPm_] + mcomb_layers], [[PPd_] + dcomb_layers]]
@@ -48,7 +47,7 @@ def sub_recursion_eval(root):  # for PP or dir_blob
 
             # or higher der val?
             if isinstance(root, CPP):  # root is CPP
-                root.players.valt[fd] += PP.players.valt[fd]
+                root.players[1] += PP.players[1]  # vals
             else:  # root is CBlob
                 if fd: root.G += PP.alt_players[1]
                 else:  root.M += PP.players[1]
@@ -56,11 +55,11 @@ def sub_recursion_eval(root):  # for PP or dir_blob
 def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
     P__  = [P_ for P_ in reversed(PP.P__)]  # revert to top down
-    P__ = comp_P_der(P__) if PP.players.fds[-1] else comp_P_rng(P__, PP.rng + 1)   # returns top-down
+    P__ = comp_P_der(P__) if PP.fds[-1] else comp_P_rng(P__, PP.rng + 1)   # returns top-down
     PP.rdn += 2  # two-fork rdn, priority is not known?  rotate?
 
-    sub_segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=PP.players.fds)
-    sub_segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=PP.players.fds)  # returns bottom-up
+    sub_segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=PP.fds)
+    sub_segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=PP.fds)  # returns bottom-up
     # sub_PPm_, sub_PPd_:
     PP.rlayers[0], PP.dlayers[0] = form_PP_root((sub_segm_, sub_segd_), PP.rdn + 1)
     sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs

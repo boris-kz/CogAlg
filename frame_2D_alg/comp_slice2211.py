@@ -437,3 +437,52 @@ def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
         der_players = CpH(H=derP.players.H +[derP.lplayer[fd]], val=derP.players.val+derP.lplayer[fd].val, fds=copy(derP.players.fds)+[fd])
         sum_pH(seg.players, der_players)  # last derP player is current mplayer, dplayer
 
+
+def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP
+
+    for i, _G in enumerate(G_):
+
+        for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign
+            if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
+                continue
+            # move to comp_plevels / comp_pH
+            _x = (_G.xn +_G.x0)/2; _y = (_G.yn +_G.y0)/2; x = (G.xn + G.x0)/2; y = (G.yn + G.y0)/2
+            dx = _x - x; dy = _y - y
+            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, replace?
+            proximity = ave_rng-distance  # coord match
+            mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
+            # n orders of len and sparsity, -= fill: sparsity inside nodes?
+            if fder:
+                mlen,dlen = 0,0; _sparsity = _G.sparsity; sparsity = G.sparsity  # single-link derGs
+            else:
+                _L = len(_G.node_); L = len(G.node_)
+                dlen = _L - L; mlen = min(_L, L)
+                if isinstance(G.node_[0], Cgraph):
+                    _sparsity = sum(node.sparsity for node in _G.node_) / _L
+                    sparsity = sum(node.sparsity for node in G.node_) / L
+                else:  # G.node_[0] could be CP (fseg=1) or [CP]
+                    _sparsity, sparsity = 1, 1
+
+            dspar = _sparsity-sparsity; mspar = min(_sparsity,sparsity)
+            # draft, add to ptuple instead?:
+            mext = [proximity, mang, mlen, mspar]; mVal = proximity + mang + mlen + mspar
+            dext = [distance, dang, dlen, dspar];  dVal = distance + dang + dlen + dspar
+            derext = [mext, dext, mVal, dVal]
+
+            if mVal > ave_ext * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):  # max depends on combined G value
+                mplevel, dplevel = comp_plevels(_G.plevels, G.plevels, _G.fds, G.fds, derext)
+                valt = [mplevel[1] - ave_Gm, dplevel[1] - ave_Gd]  # norm valt: *= link rdn?
+                derG = Cgraph(  # or mean x0=_x+dx/2, y0=_y+dy/2:
+                    plevels=[mplevel,dplevel], y0=min(G.y0,_G.y0), yn=max(G.yn,_G.yn), x0=min(G.x0,_G.x0), xn=max(G.xn,_G.xn),
+                    sparsity=distance, angle=[dy,dx], valt=valt, node_=[_G,G])
+                _G.link_ += [derG]; G.link_ += [derG]  # any val
+                for fd in 0,1:
+                    if valt[fd] > 0:  # alt fork is redundant, no support?
+                        for node, (graph, medG_, gvalt) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
+                            if node not in graph:
+                                graph += [node]
+                                for derG in node.link_:
+                                    mG = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
+                                    if mG not in medG_:
+                                        medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
+                                gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
