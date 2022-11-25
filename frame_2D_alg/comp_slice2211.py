@@ -486,3 +486,32 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                                     if mG not in medG_:
                                         medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
                                 gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
+
+def comp_players_r(_layers, layers, flayer=1):  # unpack and compare der layers, if any from der+, no fds, same within PP
+
+    mlayers, dlayers = [],[]
+    mval, dval = 0,0
+
+    for _layer, layer in zip(_layers[0], layers[0]):
+        if flayer:
+            mlayer, dlayer = comp_players_r(_layer, layer, flayer=0)
+            mval += mlayer[1]; dval += dlayer[1]
+        else:
+            mlayer, dlayer = comp_ptuple(_layer, layer)  # _ptuple, ptuple
+            mval+=mlayer.val; dval+=dlayer.val
+
+        mlayers +=[mlayer]; dlayers +=[dlayer]
+
+    return [mlayers,mval], [dlayers,dval]
+
+def sum_players(Layers, layers, fneg=0, fplayer=1):  # no accum across fd, that's checked in comp_players?
+
+    for Layer, layer in zip_longest(Layers[0], layers[0], fillvalue=[]):
+        if layer[0]:
+            if Layer[0]:
+                if fplayer: sum_players(Layer, layer, fneg=fneg, fplayer=0)  # sub-recursion with ptuples vs. players
+                else:       sum_ptuple(Layer, layer, fneg)  # Layer is Ptuple, accum ptuple
+            elif not fneg:
+                Layers[0].append(deepcopy(layer))
+            Layers[1] += layer[1]  # sum val while present
+

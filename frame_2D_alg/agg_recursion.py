@@ -32,13 +32,14 @@ class CpH(ClusterStructure):  # hierarchy of params: plevels, players, or ptuple
     nval = int  # of neg open links?
     ext = lambda: Cext
 
-class Cext(ClusterStructure):    # extuple per composition order, each param can be original or m|d:
+class Cext(ClusterStructure):  # extuple per composition order, each param can be original or m|d:
 
     L = int  # len node_
     S = float  # sparsity: summed distances
     x = float  # median: x0+L/2
     y = float
     axis = float  # optional, if derG or high-aspect graph?
+    explayers = list  # add (L,S,axis) explayer per deeper plevel
 
 class Cgraph(CPP):  # graph or generic PP of any composition
 
@@ -116,7 +117,7 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                 continue
             # draft below:
 
-            for _plevel, plevel in zip(_G.plevels, G.plevels):
+            for _plevel, plevel in zip(_G.plevels, G.plevels):  # lower plevels pack higher derivatives, so it's the same as players?
                 mext, dext, mVal, dVal = comp_ext(_plevel.ext, plevel.ext, fder)  # only in plevels
 
                 if mVal > ave_ext * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):  # max depends on combined G value
@@ -139,6 +140,21 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                                     gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
 
 # draft:
+
+def comp_pH(_pH, pH, fder):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
+
+    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
+        if _fd==fd:
+            if isinstance(spH, Cptuple):
+                comp_ptuple(_spH, spH)
+            else:
+                # proximity, axis, angle, len, sparsity: top plevel ext only, same for lower plevels?
+                mext, dext, mVal, dVal = comp_ext(_spH.ext, spH.ext)
+                # max depends on combined G value
+                if mVal > ave_ext * ((sum(_G.valt) + sum(G.valt)) / (2 * sum(G_aves))):
+                    mplevel, dplevel = comp_pH(_spH, spH, fder)
+
+
 def comp_ext(_pH, pH, _G, G, fder=1):  # only for comp_plevels?
 
     _x = (_G.xn + _G.x0) / 2; _y = (_G.yn + _G.y0) / 2; x = (G.xn + G.x0) / 2;    y = (G.yn + G.y0) / 2
@@ -164,15 +180,6 @@ def comp_ext(_pH, pH, _G, G, fder=1):  # only for comp_plevels?
             dext = [distance, dang, dlen, dspar];  dVal = distance + dang + dlen + dspar
 
     return mext, dext, mVal, dVal
-
-def comp_pH(_pH, pH):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
-
-    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
-        if _fd==fd:
-            if isinstance(spH, Cptuple):
-                comp_ptuple(_spH, spH)
-            else:
-                comp_pH(_spH, spH)
 
 # draft:
 def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links from increasingly mediated nodes
