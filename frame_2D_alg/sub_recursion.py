@@ -277,17 +277,14 @@ def CBlob2graph(blob, fseg, Cgraph):  # this secondary, don't worry for now
 
     for fd, PP_ in enumerate([PPm_, PPd_]):
         for PP in PP_:
-            if fd:
-                # we don't need altPP_ here, it's a blob
-                for altPP in PP.altPP_:
-                    sum_pH(root.alt_plevels, CpH(H=altPP.players[0]))
-                    root.alt_plevels.val += altPP.players[1]
-                    root.alt_plevels.fds = deepcopy(altPP.fds)
-            else:  # sum from players
-                sum_pH(root.plevels, CpH(H=PP.players[0]))
-                root.plevels.val += PP.players[1]
-                root.plevels.fds = deepcopy(PP.fds)
+            plevels = root.alt_plevels if fd else root.plevels
+            H, val = [], PP.players[1]
+            for ptuples, val in PP.players[0]: H.append(CpH(H=deepcopy(ptuples), val=val))
 
+            if plevels: sum_pH(plevels, CpH(H=H, val=val))
+            else:       plevels.H, plevels.val = H, val
+            plevels.fds = copy(PP.fds)
+            # not updated:
             # compute rdn
             if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
             PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
@@ -316,15 +313,23 @@ def CPP2graph(PP, fseg, Cgraph):
                     alt_players.fds = alt_players.fds[:i]
                     break
         for altPP in PP.altPP_:
-            sum_pH(alt_players, CpH(H=altPP.players[0][:len(alt_players.fds)]))  # sum same-fd players only
-            alt_players.val += altPP.players[1]
+            # convert altPP's players into CpH
+            alt_H, alt_val = [], altPP.players[1]
+            for ptuples, val in altPP.players[0]: alt_H.append(CpH(H=deepcopy(ptuples), val=val))
+            if alt_players.H:
+                sum_pH(alt_players, CpH(H=alt_H[:len(alt_players.fds)], val=alt_val))  # sum same-fd players only
+            else:
+                alt_players.H, alt_players.val = alt_H, alt_val
     # graph: plevels ( players ( ptuples:
-    players = CpH(H=deepcopy(PP.players[0]), val = PP.players[1], fds=deepcopy(PP.fds) )
+    players = CpH(H=[], val = PP.players[1], fds=deepcopy(PP.fds) )
+    # convert multiple ptuples into [CpH]
+    for ptuples, val in PP.players[0]:
+        players.H.append(CpH(H=deepcopy(ptuples), val=val))
 
-    plevel = CpH(H = [players],  val=players.val, fds = deepcopy(players.fds))
-    alt_plevel = CpH(H = [alt_players],  val = alt_players.val, fds=deepcopy(alt_players.fds))
+    plevels = CpH(H = [players],  val=players.val, fds = deepcopy(players.fds))
+    alt_plevels = CpH(H = [alt_players],  val = alt_players.val, fds=deepcopy(alt_players.fds))
     x0 = PP.x0; xn = PP.xn; y0 = PP.y0; yn = PP.yn
 
     return Cgraph(
-        node_=PP.P__, plevels=plevel, alt_plevels=alt_plevel, angle=(yn-y0,xn-x0), sparsity=1.0, x0=x0, xn=xn, y0=y0, yn=yn)
+        node_=PP.P__, plevels=plevels, alt_plevels=alt_plevels, angle=(yn-y0,xn-x0), sparsity=1.0, x0=x0, xn=xn, y0=y0, yn=yn)
         # 1st plevel fd is always der+?
