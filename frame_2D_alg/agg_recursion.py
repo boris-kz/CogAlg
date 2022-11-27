@@ -24,13 +24,13 @@ ave_distance = 5
 ave_sparsity = 2
 
 
-class CpH(ClusterStructure):  # hierarchy of params: plevels or ptuples, + their vars, only the highest player in plevel
+class CpH(ClusterStructure):  # hierarchy of params: plevels | players | ptuples, + their vars, only the highest player in plevel
 
-    H = list  # plevels or ptuples
+    H = list  # plevels | players | ptuples
     fds = list  # m|d per element
     val = int
     nval = int  # of neg open links?
-    # derH of L,S,A per plevel, empty in ptuples?
+    # derH of L,S,A per plevel, empty in ptuples?:
     extH = list  # [[L,S,A]]: Len_node_, Sparsity: sum_len_links, Axis: of derG or high-aspect G?
     # external but one per plevel:
     x = float  # median: x0+L/2
@@ -103,73 +103,101 @@ def form_graph_(root, G_, fder):  # forms plevel in agg+ or player in sub+, G is
     return mgraph_, dgraph_
 
 
-def comp_G_(G_, fd, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP
+def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP
 
     for i, _G in enumerate(G_):
         for G in G_[i+1:]:
             # compare each G to other Gs in rng, bilateral link assign:
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
-            mplevel, dplevel = comp_pH(_G.plevels, G.plevels, fder)
-            alt_mplevel, alt_dplevel = comp_pH(_G.alt_plevels, G.alt_plevels, fder)
-            # draft:
-            val = mplevel.val + alt_mplevel.val
-            derG = Cgraph(  # or mean x0=_x+dx/2, y0=_y+dy/2:
-            plevels=[mplevel,dplevel], y0=min(G.y0,_G.y0), yn=max(G.yn,_G.yn), x0=min(G.x0,_G.x0), xn=max(G.xn,_G.xn), val=val, node_=[_G,G])
-            _G.link_ += [derG]; G.link_ += [derG]  # any val
-            # not sure:
-            for fd, val in enumerate(mplevel.val, alt_mplevel.val):
-                if val > 0:  # alt fork is redundant, no support?
-                    for node, (graph, medG_, gvalt) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
-                        if node not in graph:
-                            graph += [node]
-                            for derG in node.link_:
-                                mG = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
-                                if mG not in medG_:
-                                    medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
-                            gvalt[0] += node.valt[0]; gvalt[1] += node.valt[1]
+            dx = _G.plevels.x - G.plevels.x; dy = _G.plevels.y - G.plevels.y
+            distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in sparsity
+            # proximity = ave_rng - distance?
+            if distance < ave_distance * ((_G.plevels.val+G.plevels.val) / (2*sum(G_aves))):
+                # depends on combined G val
+                mplevel, dplevel = comp_G(_G.plevels, G.plevels, _G, G, fder)
+                alt_mplevel, alt_dplevel = comp_G(_G.alt_plevels, G.alt_plevels, _G, G, fder)
+                # draft:
+                mplevel = CpH(H=[mplevel], extH=[[1, distance, [dy, dx]]])  # L,S,A
+                dplevel = CpH(H=[dplevel], extH=[[1, distance, [dy, dx]]])  # not sure L,S,A applies to dplayer?
+                plevels = CpH(H=[mplevel,dplevel])
+                derG = Cgraph( node_=[_G,G], plevels=plevels, val=mplevel.val + alt_mplevel.val,  # comb val?
+                               y0=min(G.y0,_G.y0), yn=max(G.yn,_G.yn), x0=min(G.x0,_G.x0), xn=max(G.xn,_G.xn))  # or mean x0=_x+dx/2, y0=_y+dy/2?
+                _G.link_ += [derG]; G.link_ += [derG]  # any val
+                for fd, val in enumerate([mplevel.val, alt_mplevel.val]):  # alt fork is redundant, no support?
+                    if val > 0:
+                        for node, (graph, medG_, gvalt) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
+                            if node not in graph:
+                                graph += [node]
+                                for derG in node.link_:
+                                    mG = derG.node_[0] if derG.node_[1] is node else derG.node_[1]
+                                    if mG not in medG_:
+                                        medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
 
-# draft:
-def comp_pH(_pH, pH, fder):  # hierarchically recursive unpack: plevels ( players ( ptuples ( ptuple
 
-    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
+# draft, to replace comp_pH, or need players ( pllayers anyway?
+def comp_G(_plevels, plevels, fder):  # unpack plevels ( ptuples ( ptuple
+
+    mplevel, dplevel = CpH(), CpH()
+
+    for _ptuples, ptuples, _fd, fd in zip(_plevels.H, plevels.H, _plevels.fds, plevels.fds):
         if _fd==fd:
-            if isinstance(spH, Cptuple):
-                comp_ptuple(_spH, spH)
-            else:
-                mext, dext, mVal, dVal = comp_ext(_spH.extH, spH.extH, fder)  # only in plevels
-                # max depends on combined G value:
-                if mVal > ave_ext * ((sum(_G.valt)+sum(G.valt)) / (2*sum(G_aves))):
-                    mplevel, dplevel = comp_pH(_spH, spH, fder)  # old, unpack to comp_ptuples?
+            if plevels.extH:  # in lower plevels
+                mext, dext, mval, dval = comp_ext(_ptuples, ptuples, fder)  # not sure about passing _G,G?
+                mplevel.extH += [mext];  mplevel.val += mval
+                dplevel.extH += [dext];  dplevel.val += dval
+
+            for _ptuples, ptuples, _fd, fd in zip(_ptuples.H, ptuples.H, _ptuples.fds, ptuples.fds):
+                if _fd == fd:
+                    for _ptuple, ptuple in zip(_ptuples, ptuples):
+                        mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+                        # no nesting in players?
+                        mplevel.H += [mtuple]; mplevel.val += mtuple.val
+                        dplevel.H += [dtuple]; dplevel.val += dtuple.val
 
     return mplevel, dplevel
 
+def comp_ext(_pH, pH, _G, G, fder=1): # only for comp_plevels?
+
+    mext_, dext_ = [],[]; mVal, dVal = 0,0
+
+    for (_L,_S,_A), (L,S,A) in zip(_pH.extH, pH.extH):
+        mA, dA = comp_angle(None, _A, A)  # axis: dy,dx for derG or high-aspect Gs, both *= aspect?
+        if fder:
+            mL, dL = 0, 0  # single-link derGs
+        else:
+            dL = _L - L;  mL = min(_L, L)
+            if isinstance(G.node_[0], Cgraph):
+                _sparsity = _S / _L
+                sparsity = S / L
+            else:  # G.node_[0] is CP (fseg=1) or [CP]
+                _sparsity, sparsity = 1, 1
+            dS = _sparsity-sparsity; mS = min(_sparsity,sparsity)
+
+        mext_ += [[mL, mA, mS]]; mVal += mA + mL + mS
+        dext_ += [[dL, dA, dS]]; dVal += dA + dL + dS
+
+    return mext_, dext_, mVal, dVal
+
 # old:
-def comp_ext(_pH, pH, _G, G, fder=1):  # only for comp_plevels?
+def comp_pH(_pH, pH, fder):  # unpack plevels ( ptuples ( ptuple
 
-    _x = (_G.xn + _G.x0) / 2; _y = (_G.yn + _G.y0) / 2; x = (G.xn + G.x0) / 2;    y = (G.yn + G.y0) / 2
-    dx = _x - x; dy = _y - y
-    distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in G.sparsity, replace?
-    proximity = ave_rng - distance  # coord match
-    mang, dang = comp_angle(_G.angle, G.angle)  # dy,dx for derG or high-aspect Gs, both *= aspect?
-    # n orders of len and sparsity, -= fill: sparsity inside nodes?
-    if fder:
-        mlen, dlen = 0, 0; _sparsity = _G.sparsity; sparsity = G.sparsity  # single-link derGs
-    else:
-        _L = len(_G.node_); L = len(G.node_)
-        dlen = _L - L;  mlen = min(_L, L)
-        if isinstance(G.node_[0], Cgraph):
-            _sparsity = sum(node.sparsity for node in _G.node_) / _L
-            sparsity = sum(node.sparsity for node in G.node_) / L
-        else:  # G.node_[0] could be CP (fseg=1) or [CP]
-            _sparsity, sparsity = 1, 1
+    mplevel, dplevel = CpH(), CpH()
+    for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
+        if _fd == fd:
+            if isinstance(spH, Cptuple):
+                mtuple, dtuple = comp_ptuple(_spH, spH)
+                mplevel.H += [mtuple]; mplevel.val += mtuple.val
+                dplevel.H += [dtuple]; dplevel.val += dtuple.val
+            else:
+                if pH.extH:
+                    mext, dext, mval, dval = comp_ext(_spH, spH, _G, G, fder)  # only in lower plevels
+                sub_mplevel, sub_dplevel = comp_pH(_spH, spH, _G, G, fder)
+                # unpack to comp_ptuples? no nesting per plevel?
+                mplevel.H += [sub_mplevel]; mplevel.val += sub_mplevel.val
+                dplevel.H += [sub_dplevel]; dplevel.val += sub_dplevel.val
 
-            dspar = _sparsity-sparsity; mspar = min(_sparsity,sparsity)
-            # draft, add to ptuple instead?:
-            mext = [proximity, mang, mlen, mspar]; mVal = proximity + mang + mlen + mspar
-            dext = [distance, dang, dlen, dspar];  dVal = distance + dang + dlen + dspar
-
-    return mext, dext, mVal, dVal
+    return mplevel, dplevel
 
 # draft:
 def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links from increasingly mediated nodes
@@ -337,6 +365,9 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
 
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( ptuples ( ptuple, no accum across fd: matched in comp_pH
 
+    for (_L,_S,_A), (L,S,A) in zip(PH.extH, pH.extH):  # n explayers = n higher plevels
+        _L+=L; _S+=S; _A[0]+=A[0]; _A[1]+=A[1]
+
     for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):
         if spH:
             if SpH:
@@ -347,211 +378,3 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( ptuples ( ptuple, no a
             elif not fneg:
                 PH.H.append(deepcopy(spH))  # new Sub_pH
     PH.val += pH.val
-# old:
-
-def val2valt(plevels):
-    for plevel in plevels:
-        if not isinstance(plevel[1], list): plevel[1] = [plevel[1], 0]  # plevel valt
-        for caFork in plevel[0]:
-            if not isinstance(caFork[1], list): caFork[1] = [caFork[1], 0]  # caFork valt
-            for player in caFork[0]:
-                if not isinstance(player[1], list): player[1] = [player[1],0]  # player valt
-
-def add_alts(cplevel, aplevel):
-
-    cForks, cValt = cplevel; aForks, aValt = aplevel
-    csize = len(cForks)
-    cplevel[:] = [cForks + aForks, [sum(cValt), sum(aValt)]]  # reassign with alts
-
-    for cFork, aFork in zip(cplevel[0][:csize], cplevel[0][csize:]):
-        cplayers, cfvalt, cfds = cFork
-        aplayers, afvalt, afds = aFork
-        cFork[1] = [sum(cfvalt), afvalt[0]]
-
-        for cplayer, aplayer in zip(cplayers, aplayers):
-            cforks, cvalt = cplayer
-            aforks, avalt = aplayer
-            cplayer[:] = [cforks+aforks, [sum(cvalt), avalt[0]]]  # reassign with alts
-'''
-    plevel = caForks, valt
-    caFork = players, valt, fds 
-    player = caforks, valt
-    cafork = ptuples, valt      
-'''
-def comp_plevels(_plevels, plevels, _fds, fds, derext):
-
-    mplevel, dplevel = [],[]  # fd plevels, each cis+alt, same as new_caT
-    mval, dval = 0,0  # m,d in new plevel, else c,a
-    iVal = ave_G  # to start loop:
-
-    for _plevel, plevel, _fd, fd in zip(reversed(_plevels), reversed(plevels), _fds, fds):  # caForks (caTree)
-        if iVal < ave_G or _fd != fd:  # top-down, comp if higher plevels and fds match, same agg+
-            break
-        mTree, dTree = [],[]; mtval, dtval = 0,0  # Fork trees
-        _caForks, _valt = _plevel; caForks, valt = plevel
-
-        for _caFork, caFork in zip(_caForks, caForks):  # bottom-up alt+, pass-through fds
-            mplayers, dplayers = [],[]; mlval, dlval = 0,0
-            if _caFork and caFork:
-                mplayer, dplayer = comp_players(_caFork, caFork, derext)
-                mplayers += [mplayer]; dplayers += [dplayer]
-                mlval += mplayer[1]; dlval += dplayer[1]
-            else:
-                mplayers += [[]]; dplayers += [[]]  # to align same-length trees for comp and sum
-            # pack fds:
-            mTree += [[mplayers, mlval, caFork[2]]]; dTree += [[dplayers, dlval, caFork[2]]]
-            mtval += mlval; dtval += dlval
-        # merge trees:
-        mplevel += mTree; dplevel += mTree  # merge Trees in candidate plevels
-        mval += mtval; dval += dtval
-        iVal = mval+dval  # after 1st loop
-
-    return [mplevel,mval], [dplevel,dval]  # always single new plevel
-
-
-def comp_players(_caFork, caFork, derext):  # unpack and compare layers from der+
-
-    mplayer, dplayer = [], []  # flat lists of ptuples, nesting decoded by mapping to lower levels
-    mVal, dVal = 0,0  # m,d in new player, else c,a
-    _players, _val, _fds =_caFork; players, val, fds = caFork
-
-    for _player, player in zip(_players, players):
-        mTree, dTree = [],[]; mtval, dtval = 0,0
-        _caforks,_ = _player; caforks,_ = player
-
-        for _cafork, cafork in zip(_caforks, caforks):  # bottom-up alt+, pass-through fds
-            if _cafork and cafork:
-                _ptuples,_ = _cafork; ptuples,_ = cafork  # no comp valt?
-                if _ptuples and ptuples:
-                    mtuples, dtuples = comp_ptuples(_ptuples, ptuples, _fds, fds, derext)
-                    mTree += [mtuples]; dTree += [dtuples]
-                    mtval += mtuples[1]; dtval += dtuples[1]
-                else:
-                    mTree += [[]]; dTree += [[]]
-            else:
-                mTree += [[]]; dTree += [[]]
-        # merge Trees:
-        mplayer += mTree; dplayer += dTree
-        mVal += mtval; dVal += dtval
-
-    return [mplayer,mVal], [dplayer,dVal]  # single new lplayer
-
-
-def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare der layers, if any from der+
-
-    mPtuples, dPtuples = [[],0], [[],0]  # [list, val] each
-
-    for _Ptuple, Ptuple, _fd, fd in zip(_Ptuples, Ptuples, _fds, fds):  # bottom-up der+, Ptuples per player, pass-through fds
-        if _fd == fd:
-
-            mtuple, dtuple = comp_ptuple(_Ptuple[0], Ptuple[0], daxis=derext[1][1])  # init Ptuple = ptuple, [[[[[[]]]]]]
-            mext___, dext___ = [[],0], [[],0]
-            for _ext__, ext__ in zip(_Ptuple[1][0], Ptuple[1][0]):  # ext__: extuple level
-                mext__, dext__ = [[],0], [[],0]
-                for _ext_, ext_ in zip(_ext__[0], ext__[0]):  # ext_: extuple layer
-                    mext_, dext_ = [[],0], [[],0]
-                    for _extuple, extuple in zip(_ext_[0], ext_[0]):  # loop ders from prior comps in each lower ext_
-                        # + der extlayer:
-                        mextuple, dextuple, meval, deval = comp_extuple(_extuple, extuple)
-                        mext_[0] += [mextuple]; mext_[1] += meval
-                        dext_[0] += [dextuple]; dext_[1] += deval
-                    # + der extlevel:
-                    mext__[0] += [mext_]; mext__[1] += mext_[1]
-                    dext__[0] += [dext_]; mext__[1] += dext_[1]
-                # + der inplayer:
-                mext___[0] += [mext__]; mext___[1] += mext__[1]
-                dext___[0] += [dext__]; dext___[1] += dext__[1]
-            # + der Ptuple:
-            mPtuples[0] += [[mtuple, mext___]]; mPtuples[1] += mtuple.val+mext___[1]
-            dPtuples[0] += [[dtuple, dext___]]; dPtuples[1] += dtuple.val+dext___[1]
-        else:
-            break  # comp same fds
-
-    mV = derext[2]; dV = derext[3]  # add der extset to all last elements:
-    mext_[0] += [derext[0]]; mext_[1] += mV; mext__[1] += mV; mext___[1] += mV; mPtuples[1] += mV
-    dext_[0] += [derext[1]]; dext_[1] += dV; dext__[1] += dV; dext___[1] += dV; dPtuples[1] += dV
-
-    return mPtuples, dPtuples
-
-
-def comp_extuple(_extuple, extuple):
-
-    mval, dval = 0,0
-    dextuple, mextuple = [],[]
-
-    for _param, param, ave in zip(_extuple, extuple, (ave_distance, ave_dangle, ave_len, ave_sparsity)):
-        # params: ddistance, dangle, dlen, dsparsity: all derived scalars
-        d = _param-param;          dextuple += [d]; dval += d - ave
-        m = min(_param,param)-ave; mextuple += [m]; mval += m
-
-    return mextuple, dextuple, mval, dval
-
-
-def sum_plevels(pLevels, plevels, Fds, fds):
-
-    for Plevel, plevel, Fd, fd in zip_longest(pLevels, plevels, Fds, fds, fillvalue=[]):  # loop top-down, selective comp depth, same agg+?
-        if Fd==fd:
-            if plevel:
-                if Plevel: sum_plevel(Plevel, plevel)
-                else:      pLevels.append(deepcopy(plevel))
-        else:
-            break
-
-# separate to sum derGs
-def sum_plevel(Plevel, plevel):
-
-    CaForks, lValt = Plevel; caForks, lvalt = plevel  # plevels tree
-
-    for CaFork, caFork in zip_longest(CaForks, caForks, fillvalue=[]):
-        if caFork:
-            if CaFork:
-                Players, Fds, Valt = CaFork; players, fds, valt = caFork
-                Valt[0] += valt[0]; Valt[1] += valt[1]
-                lValt[0] += valt[0]; lValt[1] += valt[1]
-
-                for Player, player in zip_longest(Players, players, fillvalue=[]):
-                    if player:
-                        if Player: sum_player(Player, player, Fds, fds, fneg=0)
-                        else:      Players += [deepcopy(player)]
-            else:
-                CaForks += [deepcopy(caFork)]
-                lvalt[0] += caFork[1][0]; lvalt[1] += caFork[1][1]
-
-# draft
-def sum_player(Player, player, Fds, fds, fneg=0):  # accum layers while same fds
-
-    Caforks, Valt = Player; caforks, valt = player
-    Valt[0] += valt[0]; Valt[1] += valt[1]
-
-    for Cafork, cafork in zip(Caforks, caforks):
-        if Cafork and cafork:
-            pTuples, Val = Cafork
-            ptuples, val = cafork
-            for pTuple, ptuple, Fd, fd in zip_longest(pTuples, ptuples, Fds, fds, fillvalue=[]):
-                if Fd==fd:
-                    if ptuple:
-                        if pTuple:
-                            sum_ptuple(pTuple[0], ptuple[0], fneg=0)
-                            if ptuple[1]: sum_extuples(pTuple[1], ptuple[1])
-                        else:
-                            pTuples += [deepcopy(ptuple)]
-                        Val += val
-                else:
-                    break
-
-# draft
-def sum_extuples(exTuple___, extuple___):
-    for exTuple__, extuple__ in zip_longest(exTuple___[0], extuple___[0], fillvalue=[]):
-        if extuple__:
-            for exTuple_, extuple_ in zip_longest(exTuple__[0], extuple__[0], fillvalue=[]):
-                if extuple_:
-                    for exTuple, extuple in zip_longest(exTuple_[0], extuple_[0], fillvalue=[]):
-                        if extuple:
-                            for i in range(len(exTuple)):  # params: ddistance, dangle, dlen, dsparsity:
-                                exTuple[i] += extuple[i]
-                        else:
-                            exTuple_ += [extuple]
-                else:
-                    exTuple__ += [extuple_]
-        else:
-            exTuple___ += [extuple__]

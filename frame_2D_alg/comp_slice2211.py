@@ -294,6 +294,35 @@ def rotate(P, dert__t, mask__):
 
     # form P with new_dert_ and new_mask_ here, reuse from comp_slice?
 
+def val2valt(plevels):
+    for plevel in plevels:
+        if not isinstance(plevel[1], list): plevel[1] = [plevel[1], 0]  # plevel valt
+        for caFork in plevel[0]:
+            if not isinstance(caFork[1], list): caFork[1] = [caFork[1], 0]  # caFork valt
+            for player in caFork[0]:
+                if not isinstance(player[1], list): player[1] = [player[1],0]  # player valt
+
+def add_alts(cplevel, aplevel):
+
+    cForks, cValt = cplevel; aForks, aValt = aplevel
+    csize = len(cForks)
+    cplevel[:] = [cForks + aForks, [sum(cValt), sum(aValt)]]  # reassign with alts
+
+    for cFork, aFork in zip(cplevel[0][:csize], cplevel[0][csize:]):
+        cplayers, cfvalt, cfds = cFork
+        aplayers, afvalt, afds = aFork
+        cFork[1] = [sum(cfvalt), afvalt[0]]
+
+        for cplayer, aplayer in zip(cplayers, aplayers):
+            cforks, cvalt = cplayer
+            aforks, avalt = aplayer
+            cplayer[:] = [cforks+aforks, [sum(cvalt), avalt[0]]]  # reassign with alts
+'''
+    plevel = caForks, valt
+    caFork = players, valt, fds 
+    player = caforks, valt
+    cafork = ptuples, valt      
+'''
 
 def comp_plevels(_plevels, plevels, _fds, fds, derext):
 
@@ -390,7 +419,6 @@ def comp_ptuples(_Ptuples, Ptuples, _fds, fds, derext):  # unpack and compare de
 
     return mPtuples, dPtuples
 
-
 def comp_extuple(_extuple, extuple):
 
     mval, dval = 0,0
@@ -402,6 +430,76 @@ def comp_extuple(_extuple, extuple):
         m = min(_param,param)-ave; mextuple += [m]; mval += m
 
     return mextuple, dextuple, mval, dval
+
+
+def sum_plevels(pLevels, plevels, Fds, fds):
+
+    for Plevel, plevel, Fd, fd in zip_longest(pLevels, plevels, Fds, fds, fillvalue=[]):  # loop top-down, selective comp depth, same agg+?
+        if Fd==fd:
+            if plevel:
+                if Plevel: sum_plevel(Plevel, plevel)
+                else:      pLevels.append(deepcopy(plevel))
+        else:
+            break
+
+# separate to sum derGs
+def sum_plevel(Plevel, plevel):
+
+    CaForks, lValt = Plevel; caForks, lvalt = plevel  # plevels tree
+
+    for CaFork, caFork in zip_longest(CaForks, caForks, fillvalue=[]):
+        if caFork:
+            if CaFork:
+                Players, Fds, Valt = CaFork; players, fds, valt = caFork
+                Valt[0] += valt[0]; Valt[1] += valt[1]
+                lValt[0] += valt[0]; lValt[1] += valt[1]
+
+                for Player, player in zip_longest(Players, players, fillvalue=[]):
+                    if player:
+                        if Player: sum_player(Player, player, Fds, fds, fneg=0)
+                        else:      Players += [deepcopy(player)]
+            else:
+                CaForks += [deepcopy(caFork)]
+                lvalt[0] += caFork[1][0]; lvalt[1] += caFork[1][1]
+
+# draft
+def sum_player(Player, player, Fds, fds, fneg=0):  # accum layers while same fds
+
+    Caforks, Valt = Player; caforks, valt = player
+    Valt[0] += valt[0]; Valt[1] += valt[1]
+
+    for Cafork, cafork in zip(Caforks, caforks):
+        if Cafork and cafork:
+            pTuples, Val = Cafork
+            ptuples, val = cafork
+            for pTuple, ptuple, Fd, fd in zip_longest(pTuples, ptuples, Fds, fds, fillvalue=[]):
+                if Fd==fd:
+                    if ptuple:
+                        if pTuple:
+                            sum_ptuple(pTuple[0], ptuple[0], fneg=0)
+                            if ptuple[1]: sum_extuples(pTuple[1], ptuple[1])
+                        else:
+                            pTuples += [deepcopy(ptuple)]
+                        Val += val
+                else:
+                    break
+
+# draft
+def sum_extuples(exTuple___, extuple___):
+    for exTuple__, extuple__ in zip_longest(exTuple___[0], extuple___[0], fillvalue=[]):
+        if extuple__:
+            for exTuple_, extuple_ in zip_longest(exTuple__[0], extuple__[0], fillvalue=[]):
+                if extuple_:
+                    for exTuple, extuple in zip_longest(exTuple_[0], extuple_[0], fillvalue=[]):
+                        if extuple:
+                            for i in range(len(exTuple)):  # params: ddistance, dangle, dlen, dsparsity:
+                                exTuple[i] += extuple[i]
+                        else:
+                            exTuple_ += [extuple]
+                else:
+                    exTuple__ += [extuple_]
+        else:
+            exTuple___ += [extuple__]
 
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
