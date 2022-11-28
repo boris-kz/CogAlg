@@ -278,7 +278,7 @@ def CBlob2graph(blob, fseg, Cgraph):  # this secondary, don't worry for now
     for fd, PP_ in enumerate([PPm_, PPd_]):
         for PP in PP_:
             plevels = root.alt_plevels if fd else root.plevels
-            H=[],val= PP.players[1]
+            H=[]; val=PP.players[1]
             for ptuples, val in PP.players[0]: H.append(CpH(H=deepcopy(ptuples), val=val))
 
             if plevels: sum_pH(plevels, CpH(H=H, val=val))
@@ -319,13 +319,12 @@ def CPP2graph(PP, fseg, Cgraph):
                 sum_pH(alt_players, CpH(H=altH[:len(alt_players.fds)], val=alt_val))  # sum same-fd players only
             else:
                 alt_players.H, alt_players.val = altH, alt_val
-    # G:
-    # some changes need to be reverted:
-    players = CpH(H=[], val=PP.players[1], fds=copy(PP.fds))
+    # Cgraph:
+    players = CpH(val=PP.players[1], fds=copy(PP.fds))
     for ptuples, val in PP.players[0]:
-        players.H.append( CpH(H=deepcopy(ptuples), val=val))
+        players.H.append(CpH(H=deepcopy(ptuples), val=val))  # fds = root player.fd?
 
-    plevels = CpH(H=[players], val=players.val, fds=copy(players.fds))
+    plevels = CpH(H=[players], val=players.val, fds=[1])  # init fd is der+?
     alt_plevels = CpH(H=[alt_players], val=alt_players.val, fds=copy(alt_players.fds))
     x0 = PP.x0; xn = PP.xn; y0 = PP.y0; yn = PP.yn
 

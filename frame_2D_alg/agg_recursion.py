@@ -23,24 +23,24 @@ ave_len = 3
 ave_distance = 5
 ave_sparsity = 2
 
+class CpH(ClusterStructure):  # hierarchy of params + associated vars
 
-class CpH(ClusterStructure):  # hierarchy of params: plevels | players | ptuples, + their vars, only the highest player in plevel
-
-    H = list  # plevels | players | ptuples
-    fds = list  # m|d per element
+    H = list  # plevels | players | PPlayers | ptuples
     val = int
     nval = int  # of neg open links?
-    # derH of L,S,A per plevel, empty in ptuples?:
-    extH = list  # [[L,S,A]]: Len_node_, Sparsity: sum_len_links, Axis: of derG or high-aspect G?
-    # external but one per plevel:
-    x = float  # median: x0+L/2
-    y = float
+    fds = list  # m|d per element, not in plevels
+    # extuple in players only, replace with ext: skip if empty?
+    L = float  # len_node_
+    S = float  # sparsity: sum_len_links
+    A = list  # axis: in derG or high-aspect G only?
 
 class Cgraph(CPP):  # graph or generic PP of any composition
 
     plevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
     alt_plevels = lambda: CpH()  # summed from alt_graph_, sub comp support, agg comp suppression?
     alt_graph_ = list
+    x = float  # median: x0+L/2
+    y = float
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?
     rng = lambda: 1  # not for alt_graphs
     medG_ = list  # last checked mediating [mG, dir_link, G]s, from all nodes?
@@ -58,17 +58,17 @@ def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, prett
     mgraph_, dgraph_ = form_graph_(root, G_, fder=0)  # PP cross-comp and clustering
 
     # intra graph:
-    if root.valt[0] > ave_sub * root.rdn:
+    if root.plevels.val > ave_sub * root.rdn:
         sub_rlayers, rvalt = sub_recursion_g(mgraph_, root.valt, fd=0)  # subdivide graph.node_ by der+|rng+, accum root.valt
         root.valt[0] += sum(rvalt); root.rlayers = sub_rlayers
-    if root.valt[1] > ave_sub * root.rdn:
+    if root.alt_plevels.val > ave_sub * root.rdn:
         sub_dlayers, dvalt = sub_recursion_g(dgraph_, root.valt, fd=1)
         root.valt[1] += sum(dvalt); root.dlayers = sub_dlayers
     # cross graph:
     root.mlevels += mgraph_; root.dlevels += dgraph_
     for fd, graph_ in enumerate([mgraph_, dgraph_]):
         # agg+ if new plevel valt:
-        if (sum(root.plevels[-1][1]) > G_aves[fd] * ave_agg * (root.rdn + 1)) and len(graph_) > ave_nsub:
+        if (root.plevels.H[-1].val > G_aves[fd] * ave_agg * (root.rdn + 1)) and len(graph_) > ave_nsub:
             root.rdn += 1  # estimate
             agg_recursion(root, graph_, fseg=fseg)  # cross-comp graphs
 
@@ -95,9 +95,9 @@ def form_graph_(root, G_, fder):  # forms plevel in agg+ or player in sub+, G is
 
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd, fder)  # sum proto-graph node_ params in graph
-            plevels = deepcopy(graph_[0].plevels); fds = graph_[0].fds  # same for all nodes?
+            plevels = deepcopy(graph_[0].plevels)  # same fds in all nodes?
             for graph in graph_[1:]:
-                sum_plevels(plevels, graph.plevels, fds, graph.fds)  # each plevel is (caTree, valt)
+                sum_pH(plevels, graph.plevels)
             root.plevels = plevels
 
     return mgraph_, dgraph_
@@ -114,12 +114,12 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
             distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in sparsity
             # proximity = ave_rng - distance?
             if distance < ave_distance * ((_G.plevels.val+G.plevels.val) / (2*sum(G_aves))):
-                # depends on combined G val
-                mplevel, dplevel = comp_G(_G.plevels, G.plevels, _G, G, fder)
-                alt_mplevel, alt_dplevel = comp_G(_G.alt_plevels, G.alt_plevels, _G, G, fder)
+                # comb G eval
+                mplevel, dplevel = comp_G(_G.plevels, G.plevels)
+                alt_mplevel, alt_dplevel = comp_G(_G.alt_plevels, G.alt_plevels)
                 # draft:
-                mplevel = CpH(H=[mplevel], extH=[[1, distance, [dy, dx]]])  # L,S,A
-                dplevel = CpH(H=[dplevel], extH=[[1, distance, [dy, dx]]])  # not sure L,S,A applies to dplayer?
+                mplevel.H=[CpH(L=1, S=distance, A=[dy,dx])]  # 1st player: L,S,A of derG, in G: summed derG S, redefined L,A?
+                dplevel.H=[CpH(L=1, S=distance, A=[dy,dx])]  # external params or their derivatives in graph of any fd?
                 plevels = CpH(H=[mplevel,dplevel])
                 derG = Cgraph( node_=[_G,G], plevels=plevels, val=mplevel.val + alt_mplevel.val,  # comb val?
                                y0=min(G.y0,_G.y0), yn=max(G.yn,_G.yn), x0=min(G.x0,_G.x0), xn=max(G.xn,_G.xn))  # or mean x0=_x+dx/2, y0=_y+dy/2?
@@ -134,55 +134,33 @@ def comp_G_(G_, fder):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
                                     if mG not in medG_:
                                         medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
 
-
-# draft, to replace comp_pH, or need players ( pllayers anyway?
-def comp_G(_plevels, plevels, fder):  # unpack plevels ( ptuples ( ptuple
+# replace with comp_pH: need to add players ( PPlayers, unpack extH?
+def comp_G(_plevels, plevels):  # unpack plevels ( ptuples ( ptuple
 
     mplevel, dplevel = CpH(), CpH()
+    pri_fd = 0
 
-    for _ptuples, ptuples, _fd, fd in zip(_plevels.H, plevels.H, _plevels.fds, plevels.fds):
+    for _plevel, plevel, _fd, fd in zip(_plevels.H, plevels.H, _plevels.fds, plevels.fds):
         if _fd==fd:
-            if plevels.extH:  # in lower plevels
-                mext, dext, mval, dval = comp_ext(_ptuples, ptuples, fder)  # not sure about passing _G,G?
+            if fd: pri_fd = 1
+            if plevels.extH:  # in lower plevels only, PP and top-G plevels don't have external params
+                mext, dext, mval, dval = comp_ext(_plevel, plevel, pri_fd)  # revise to extuple, include comp_angle(x,y)
                 mplevel.extH += [mext];  mplevel.val += mval
                 dplevel.extH += [dext];  dplevel.val += dval
 
-            for _ptuples, ptuples, _fd, fd in zip(_ptuples.H, ptuples.H, _ptuples.fds, ptuples.fds):
-                if _fd == fd:
-                    for _ptuple, ptuple in zip(_ptuples, ptuples):
-                        mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
-                        # no nesting in players?
-                        mplevel.H += [mtuple]; mplevel.val += mtuple.val
-                        dplevel.H += [dtuple]; dplevel.val += dtuple.val
+            for _ptuples, ptuples in zip(_plevel.H, plevel.H):  # same fd as in plevel
+                for _ptuple, ptuple in zip(_ptuples.H, ptuples.H):
+                    # no nest in players?
+                    mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+                    mplevel.H += [mtuple]; mplevel.val += mtuple.val
+                    dplevel.H += [dtuple]; dplevel.val += dtuple.val
 
     return mplevel, dplevel
 
-def comp_ext(_pH, pH, _G, G, fder=1): # only for comp_plevels?
+# init redraft:
+def comp_pH(_pH, pH):  # unpack plevels ( players ( PPlayers ( ptuples ( ptuple:
 
-    mext_, dext_ = [],[]; mVal, dVal = 0,0
-
-    for (_L,_S,_A), (L,S,A) in zip(_pH.extH, pH.extH):
-        mA, dA = comp_angle(None, _A, A)  # axis: dy,dx for derG or high-aspect Gs, both *= aspect?
-        if fder:
-            mL, dL = 0, 0  # single-link derGs
-        else:
-            dL = _L - L;  mL = min(_L, L)
-            if isinstance(G.node_[0], Cgraph):
-                _sparsity = _S / _L
-                sparsity = S / L
-            else:  # G.node_[0] is CP (fseg=1) or [CP]
-                _sparsity, sparsity = 1, 1
-            dS = _sparsity-sparsity; mS = min(_sparsity,sparsity)
-
-        mext_ += [[mL, mA, mS]]; mVal += mA + mL + mS
-        dext_ += [[dL, dA, dS]]; dVal += dA + dL + dS
-
-    return mext_, dext_, mVal, dVal
-
-# old:
-def comp_pH(_pH, pH, fder):  # unpack plevels ( ptuples ( ptuple
-
-    mplevel, dplevel = CpH(), CpH()
+    mpH, dpH = CpH(), CpH()
     for _spH, spH, _fd, fd in zip(_pH.H, pH.H, _pH.fds, pH.fds):
         if _fd == fd:
             if isinstance(spH, Cptuple):
@@ -191,13 +169,41 @@ def comp_pH(_pH, pH, fder):  # unpack plevels ( ptuples ( ptuple
                 dplevel.H += [dtuple]; dplevel.val += dtuple.val
             else:
                 if pH.extH:
-                    mext, dext, mval, dval = comp_ext(_spH, spH, _G, G, fder)  # only in lower plevels
-                sub_mplevel, sub_dplevel = comp_pH(_spH, spH, _G, G, fder)
+                    mext, dext, mval, dval = comp_ext(_spH, spH, fd)  # only in lower plevels
+                sub_mplevel, sub_dplevel = comp_pH(_spH, spH, fd)
                 # unpack to comp_ptuples? no nesting per plevel?
                 mplevel.H += [sub_mplevel]; mplevel.val += sub_mplevel.val
                 dplevel.H += [sub_dplevel]; dplevel.val += sub_dplevel.val
 
     return mplevel, dplevel
+
+# revise to comp(x,y,L,S,A)
+def comp_ext(_pH, pH, fd):  # only for comp_plevels, fd: all scalars?
+
+    mext_, dext_ = [],[]; mval, dval = 0,0
+
+    for (_L,_S,_A), (L,S,A) in zip(_pH.extH, pH.extH):
+        m_, d_ = [], []  # matches, diffs
+        if fd:  # all scalars
+            for _param, param in zip((_L,_S,_A), (L,S,A)):
+                d_+= [_param - param]
+                m_+= [min(_param, param)]
+        else:
+            _sparsity = _S / (_L-1); sparsity = S / (L-1)  # average distance between connected nodes
+            d_+= [_sparsity - sparsity]
+            m_+= [min(_sparsity, sparsity)]  # same for derGs?
+            d_+= [_L - L]  # len node_, same for 2-node derGs?
+            m_+= [min(_L, L)]
+            if _A and A:  # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
+                mA, dA = comp_angle(None, _A, A)
+            else:
+                mA=1; dA=0  # no difference, matching low-aspect, only if both?
+            m_+= [mA]; d_+= [dA]
+
+        mext_+=[m_]; mval += sum(m_)
+        dext_+=[d_]; dval += sum(d_)
+
+    return mext_, dext_, mval, dval
 
 # draft:
 def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links from increasingly mediated nodes
@@ -222,15 +228,15 @@ def eval_med_layer(graph_, graph, fd):   # recursive eval of reciprocal links fr
             if fmed:  # mderG is not reciprocal, else explore try_mG links in the rest of medG_
                 for mmderG in mmG.link_:
                     if G in mmderG.node_:  # mmG mediates between mG and G
-                        adj_val = mmderG.valt[fd] - ave_agg  # or increase ave per mediation depth
+                        adj_val = mmderG.plevels.H[fd].val - ave_agg  # or increase ave per mediation depth
                         # adjust nodes:
-                        G.valt[fd] += adj_val; mG.valt[fd] += adj_val  # valts are not updated
+                        G.plevels.val += adj_val; mG.plevels.val += adj_val  # valts are not updated
                         valt[fd] += adj_val; mG.roott[fd][2][fd] += adj_val  # root is not graph yet
                         mmG = mmderG.node_[0] if mmderG.node_[0] is not mG else mmderG.node_[1]
                         if mmG not in mmG_:  # not saved via prior mG
                             mmG_ += [mmG]
                             adj_Val += adj_val
-        if G.valt[fd]>0:
+        if G.plevels.val>0:
             save_node_+= [G]  # G remains in graph
             for mmG in mmG_:  # may be empty
                 if mmG not in save_medG_:
@@ -300,34 +306,29 @@ def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: repla
 
 def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in agg+ or player in sub+: if fder
 
-    for (node_, _, _) in G_:  # for both derG and G: add new level of valt
-        for node in node_:
-            val2valt(node.plevels)
-            for link in node.link_:
-                for fd in 0,1:
-                    val2valt([link.plevels[fd]])
     graph_ = []
     for G in G_:
         node_, medG_, valt = G
-        graph = Cgraph(fds=deepcopy(node_[0].fds), x0=node_[0].x0, xn=node_[0].xn, y0=node_[0].y0, yn=node_[0].yn, node_=node_, medG_=medG_)
-        new_plevel = [[], [0, 0]]
+        graph = Cgraph(x0=node_[0].x0, xn=node_[0].xn, y0=node_[0].y0, yn=node_[0].yn, node_=node_, medG_=medG_)
+        new_plevel = CpH()
         sparsity, nlinks = 0, 0
         for node in node_:
             graph.x0=min(graph.x0, node.x0); graph.xn=max(graph.xn, node.xn); graph.y0=min(graph.y0, node.y0); graph.yn=max(graph.yn, node.yn)
             # accum params:
-            sum_plevels(graph.plevels, node.plevels, graph.fds, node.fds)  # same for fder
+            sum_pH(graph.plevels, node.plevels)  # same for fder
             for derG in node.link_:
-                sum_plevel(new_plevel, derG.plevels[fd])  # accum derG
+                sum_pH(new_plevel, derG.plevels.H[fd])  # accum derG
                 derG.roott[fd] = graph  # + link_ = [derG]?
-                valt[fd] += derG.valt[fd]
+                valt[fd] += derG.plevels.H[fd].val
                 sparsity += derG.sparsity  # probably wrong, eval per node:
                 nlinks += 1
-            node.valt[0] += valt[fd]  # derG valts summed in eval_med_layer added to lower-plevels valt
-            graph.valt[0]+= node.valt[0]; graph.valt[1]+= node.valt[1]
+            node.plevels.val += valt[fd]  # derG valts summed in eval_med_layer added to lower-plevels valt
+            graph.plevels.val += node.plevels.val
 
+        graph.plevels.fds = copy(node.plevels.fds) + [fd]
         graph.sparsity = sparsity/nlinks  # angle: of line between max distant nodes, hard to compute and value depends on aspect ratio
         graph_ += [graph]
-        graph.plevels += [new_plevel]
+        graph.plevels.H += [new_plevel]
 
     for graph in graph_:  # 2nd pass: accum alt_graph_ params
         Alt_plevels = []  # Alt_players if fsub
@@ -359,7 +360,6 @@ def sum2graph_(G_, fd, fder):  # sum node and link params into graph, plevel in 
                 for cplevel, aplevel in zip(graph.plevels, Alt_plevels):  # G
                     graph.valt[1] += sum(aplevel[1])  # alt valt
                     add_alts(cplevel, aplevel)  # plevel is caForks: caTree leaves
-
     return graph_
 
 
