@@ -154,7 +154,7 @@ class CPP(CderP):  # derP params include P.ptuple
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
 
-# G: plevels ( players (ptuples, der_G_ext), G_ext)
+# G: plevels ( pptuples ( players ( ptuples ( ptuple
 # Functions:
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
@@ -509,42 +509,42 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 def comp_players(_layers, layers):  # unpack and compare der layers, if any from der+, no fds, same within PP
 
     mtuples, dtuples = [],[]; mval, dval = 0,0
+    fd = 0  # latuple, else vertuple
 
     for _layer, layer in zip(_layers[0], layers[0]):
         for _ptuple, ptuple in zip(_layer[0], layer[0]):
 
-            mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+            mtuple, dtuple = comp_ptuple(_ptuple, ptuple, fd)
             mtuples +=[mtuple]; mval+=mtuple.val
             dtuples +=[dtuple]; dval+=dtuple.val
+        fd=1
 
     return [mtuples,mval], [dtuples,dval]
 
-def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar operations for m and d params
+def comp_ptuple(_params, params, fd):  # compare lateral or vertical tuples, similar operations for m and d params
 
     dtuple, mtuple = Cptuple(), Cptuple()
     dval, mval = 0,0
     rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
     # if ext: x,axis,L match? or same val, no discontinuity?
 
-    flatuple = isinstance(_params.angle, list)  # else vertuple
-    if flatuple:
+    if fd:  # vertuple, all params are scalars:
+        comp("val", _params.val, params.val*rn, dval, mval, dtuple, mtuple, ave_mval, finv=0)
+        comp("axis", _params.axis, params.axis*rn, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
+        comp("angle", _params.angle, params.angle*rn, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
+        comp("aangle", _params.aangle, params.aangle*rn, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
+    else:  # latuple
         comp("G", _params.G, params.G*rn, dval, mval, dtuple, mtuple, ave_G, finv=0)
         comp("Ga", _params.Ga, params.Ga*rn, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
         comp_angle("axis", _params.axis, params.axis, dval, mval, dtuple, mtuple)  # rotated, thus no adjustment by daxis?
         comp_angle("angle", _params.angle, params.angle, dval, mval, dtuple, mtuple)
         comp_aangle(_params.aangle, params.aangle, dval, mval, dtuple, mtuple)
-    else:
-        # vertuple, all params are scalars:
-        comp("val", _params.val, params.val*rn, dval, mval, dtuple, mtuple, ave_mval, finv=0)
-        comp("axis", _params.axis, params.axis*rn, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
-        comp("angle", _params.angle, params.angle*rn, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
-        comp("aangle", _params.aangle, params.aangle*rn, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
     # either:
-    comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=flatuple)  # inverse match if latuple
+    comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=fd)  # inverse match if latuple
     comp("M", _params.M, params.M*rn, dval, mval, dtuple, mtuple, ave_M, finv=0)
     comp("Ma",_params.Ma, params.Ma*rn, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
     comp("L", _params.L, params.L*rn, dval, mval, dtuple, mtuple, ave_L, finv=0)
-    comp("x", _params.x, params.x, dval, mval, dtuple, mtuple, ave_x, finv=flatuple)
+    comp("x", _params.x, params.x, dval, mval, dtuple, mtuple, ave_x, finv=fd)
     # adjust / daxis+dx: Dim compensation in same area, alt axis definition?
 
     mtuple.val = mval; dtuple.val = dval

@@ -519,7 +519,6 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
     return derP
 
-
 def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
 
     if isinstance(derP, CderP): seg.x0 = min(seg.x0, derP._P.x0)
@@ -613,3 +612,85 @@ def sum_players(Layers, layers, fneg=0, fplayer=1):  # no accum across fd, that'
                 Layers[0].append(deepcopy(layer))
             Layers[1] += layer[1]  # sum val while present
 
+# replace with comp_pH: need to add players ( PPlayers, unpack extH?
+def comp_G(_plevels, plevels):  # unpack plevels ( ptuples ( ptuple
+
+    mplevel, dplevel = CpH(), CpH()
+    pri_fd = 0
+
+    for _plevel, plevel, _fd, fd in zip(_plevels.H, plevels.H, _plevels.fds, plevels.fds):
+        if _fd==fd:
+            if fd: pri_fd = 1
+            if plevels.extH:  # in lower plevels only, PP and top-G plevels don't have external params
+                mext, dext, mval, dval = comp_ext(_plevel, plevel, pri_fd)  # revise to extuple, include comp_angle(x,y)
+                mplevel.extH += [mext];  mplevel.val += mval
+                dplevel.extH += [dext];  dplevel.val += dval
+
+            for _ptuples, ptuples in zip(_plevel.H, plevel.H):  # same fd as in plevel
+                for _ptuple, ptuple in zip(_ptuples.H, ptuples.H):
+                    # no nest in players?
+                    mtuple, dtuple = comp_ptuple(_ptuple, ptuple)
+                    mplevel.H += [mtuple]; mplevel.val += mtuple.val
+                    dplevel.H += [dtuple]; dplevel.val += dtuple.val
+
+    return mplevel, dplevel
+
+
+# init redraft:
+def comp_pH(_pH, pH, fd=None, fext=0):  # unpack plevels ( pptuples ( players ( ptuples ( ptuple:
+
+    mplevel, dplevel = CpH(), CpH()
+    if fd != None and fd:
+        mplevel.A = 0; dplevel.A = 0
+    for i, (_spH, spH) in enumerate(zip(_pH.H, pH.H)):
+        if (fd != None) or (_pH.fds[i] == pH.fds[i]):
+            if isinstance(spH, Cptuple):
+                mtuple, dtuple = comp_ptuple(_spH, spH)
+                mplevel.H += [mtuple]; mplevel.val += mtuple.val
+                dplevel.H += [dtuple]; dplevel.val += dtuple.val
+            else:
+                sub_mplevel, sub_dplevel = comp_pH(_spH, spH, fd=_pH)
+                if fext:
+                    if fd == None: fd = _pH.fds[i]
+                    mext, dext, mval, dval = comp_ext(_spH, spH, fd)  # only in lower plevels
+                    # pack ext values into sub level
+                    for sub_plevel, exts in zip([sub_mplevel.H, sub_dplevel.H], [mext, dext]):
+                        for sub_H, ext_params in zip(sub_plevel, exts):
+                            sub_H.L += ext_params[0]
+                            sub_H.S += ext_params[1]
+                            if isinstance(ext_params[2], list):
+                                sub_H.A[0] += ext_params[2][0]
+                                sub_H.A[1] += ext_params[2][1]
+                            else:
+                                sub_H.A += ext_params[2]
+
+                # unpack to comp_ptuples? no nesting per plevel?
+                mplevel.H += [sub_mplevel]; mplevel.val += sub_mplevel.val
+                dplevel.H += [sub_dplevel]; dplevel.val += sub_dplevel.val
+
+    return mplevel, dplevel
+
+
+def comp_ext(_pH, pH, fd):  # only for comp_plevels, fd: all scalars?
+
+    _L, _S, _A = _pH.L, _pH.S, _pH.A
+    L, S, A = pH.L, pH.S, pH.A
+
+    m_, d_ = [], []  # matches, diffs
+    if fd:  # all scalars
+        for _param, param in zip((_L,_S,_A), (L,S,A)):
+            d_+= [_param - param]
+            m_+= [min(_param, param)]
+    else:
+        _sparsity = _S / (_L-1); sparsity = S / (L-1)  # average distance between connected nodes
+        d_+= [_sparsity - sparsity]
+        m_+= [min(_sparsity, sparsity)]  # same for derGs?
+        d_+= [_L - L]  # len node_, same for 2-node derGs?
+        m_+= [min(_L, L)]
+        if _A and A:  # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
+            mA, dA = comp_angle(None, _A, A)
+        else:
+            mA=1; dA=0  # no difference, matching low-aspect, only if both?
+        m_+= [mA]; d_+= [dA]
+
+    return m_, d_, sum(m_), sum(d_)

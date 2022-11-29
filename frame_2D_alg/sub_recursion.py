@@ -322,10 +322,10 @@ def CPP2graph(PP, fseg, Cgraph):
     # Cgraph:
     players = CpH(val=PP.players[1], fds=copy(PP.fds))
     for ptuples, val in PP.players[0]:
-        players.H.append(CpH(H=deepcopy(ptuples), val=val))  # fds = root player.fd?
+        players.H.append(CpH(H=deepcopy(ptuples), val=val))  # fd = root player.fd?
 
-    plevels = CpH(H=[players], val=players.val, fds=[1])  # init fd is der+?
-    alt_plevels = CpH(H=[alt_players], val=alt_players.val, fds=copy(alt_players.fds))
+    plevels = CpH(H=[players], val=players.val)
+    alt_plevels = CpH(H=[alt_players], val=alt_players.val)
     x0 = PP.x0; xn = PP.xn; y0 = PP.y0; yn = PP.yn
 
     return Cgraph( node_=PP.P__, plevels=plevels, alt_plevels=alt_plevels, x0=x0, xn=xn, y0=y0, yn=yn)
