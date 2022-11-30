@@ -305,27 +305,35 @@ def CBlob2graph(blob, fseg, Cgraph):  # this secondary, don't worry for now
 def CPP2graph(PP, fseg, Cgraph):
 
     alt_players = CpH()
+    alt_fds = []
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
-        alt_players.fds = PP.altPP_[0].fds
+        alt_fds = PP.altPP_[0].fds
         for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-            for i, (_fd, fd) in enumerate(zip(alt_players.fds, altPP.fds)):
+            for i, (_fd, fd) in enumerate(zip(alt_fds, altPP.fds)):
                 if _fd != fd:
-                    alt_players.fds = alt_players.fds[:i]
+                    alt_fds = alt_players.fds[:i]
                     break
         for altPP in PP.altPP_:  # convert altPP.players to CpH
             altH=[]; alt_val= altPP.players[1]
             for ptuples, val in altPP.players[0]: altH.append(CpH(H=deepcopy(ptuples), val=val))
             if alt_players.H:
-                sum_pH(alt_players, CpH(H=altH[:len(alt_players.fds)], val=alt_val))  # sum same-fd players only
+                sum_pH(alt_players, CpH(H=altH[:len(alt_fds)], val=alt_val))  # sum same-fd players only
             else:
                 alt_players.H, alt_players.val = altH, alt_val
-    # Cgraph:
+
+    # Cgraph: plevels ( pplayer ( players ( ptuples ( ptuple:
+
     players = CpH(val=PP.players[1], fds=copy(PP.fds))
     for ptuples, val in PP.players[0]:
-        players.H.append(CpH(H=deepcopy(ptuples), val=val))  # fd = root player.fd?
+        players.H.append(CpH(H=deepcopy(ptuples), val=val))
 
-    plevels = CpH(H=[players], val=players.val)
-    alt_plevels = CpH(H=[alt_players], val=alt_players.val)
+    pplayer = CpH(H=[players], val=players.val)
+    plevels = CpH(H=[pplayer], val=pplayer.val, fds=[0])
+    if PP.altPP_:
+        alt_pplayer = CpH(H=[altPP.players], val=altPP.players.val)
+        alt_plevels = CpH(H=[alt_pplayer], val=alt_pplayer.val, fds=[0])
+    else:
+        alt_plevels = []
     x0 = PP.x0; xn = PP.xn; y0 = PP.y0; yn = PP.yn
 
     return Cgraph( node_=PP.P__, plevels=plevels, alt_plevels=alt_plevels, x0=x0, xn=xn, y0=y0, yn=yn)
