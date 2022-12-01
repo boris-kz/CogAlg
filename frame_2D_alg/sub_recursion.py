@@ -330,7 +330,7 @@ def CPP2graph(PP, fseg, Cgraph):
     pplayer = CpH(H=[players], val=players.val)
     plevels = CpH(H=[pplayer], val=pplayer.val, fds=[0])
     if PP.altPP_:
-        alt_pplayer = CpH(H=[altPP.players], val=altPP.players.val)
+        alt_pplayer = CpH(H=[alt_players], val=alt_players.val)
         alt_plevels = CpH(H=[alt_pplayer], val=alt_pplayer.val, fds=[0])
     else:
         alt_plevels = []
