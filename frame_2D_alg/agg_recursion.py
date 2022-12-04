@@ -29,7 +29,7 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars
     fds = list  # (m|d)s, only in plevels and players
     val = int
     nval = int  # of neg open links?
-    # extuple in pplayer=plevel, skip if L==0:
+    # extuple in pplayer=plevel only, skip if L==0:
     L = float  # len_node_
     S = float  # sparsity: sum_len_links
     A = list   # axis: in derG or high-aspect G only?
@@ -117,7 +117,7 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
             # compare each G to other Gs in rng, bilateral link assign:
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
-            dx = _G.x0 - G.x0; dy = _G.y0 - G.y0  # x0,y0: center, xn,yn: max distance from center; new ave in derG for der+?
+            dx = _G.x0 - G.x0; dy = _G.y0 - G.y0  # x0,y0: center
             distance = np.hypot(dy, dx)  # Euclidean distance between centroids, sum in sparsity
             # proximity = ave_rng - distance?
             if distance < ave_distance * ((_G.plevels.val+G.plevels.val) / (2*sum(G_aves))):
@@ -127,14 +127,11 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
                     altTopm, altTopd = comp_pH(_G.plevels.altTop, G.plevels.altTop)
                     mplevel.altTop = altTopm; dplevel.altTop=altTopd  # for sum,comp in agg+, reduced weighting of altVs?
                 # new derG:
-                mplevel.L=2; mplevel.S=distance; mplevel.A=[dy,dx]  # L,S,A in both fd, L=1 if fd? summed L,S, redefined A in higher G
-                dplevel.L=2; dplevel.S=distance; dplevel.A=[dy,dx]
-                plevels = CpH(H=[mplevel,dplevel])
-                y0 = (G.y0+_G.y0) / 2; x0 = (G.x0+_G.x0) / 2
-                # new center
-                derG = Cgraph( y0=y0, x0=x0, node_=[_G,G], plevels=plevels, val=mplevel.val + dplevel.val,  # comb val?
+                plevels = CpH(H=[mplevel,dplevel], L=1, S=distance, A=[dy,dx])  # per link: += L=1node, S, [Xn,Yn]
+                y0 = (G.y0+_G.y0)/2; x0 = (G.x0+_G.x0)/2  # new center coords
+
+                derG = Cgraph( node_=[_G,G], plevels=plevels, val=mplevel.val + dplevel.val, y0=y0, x0=x0, # max distance from center:
                                xn=max((_G.x0+_G.xn)/2 -x0, (G.x0+G.xn)/2 -x0), yn=max((_G.y0+_G.yn)/2 -y0, (G.y0+G.yn)/2 -y0))
-                               # max distance from the center
                 _G.link_ += [derG]; G.link_ += [derG]  # any val
                 for fd, val in enumerate([mplevel.val, dplevel.val]):  # alt fork is redundant, no support?
                     if val > 0:
@@ -147,7 +144,7 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
                                         medG_ += [[mG, derG, _G]]  # derG is init dir_mderG
 
 def comp_pH(_pH, pH):  # recursive unpack plevels ( pplayer ( players ( ptuples -> ptuple:
-    # if derG: compare mplevel or dplevel?
+    # if derG: compare mplevel or dplevel
 
     mpH, dpH = CpH(), CpH()
     pri_fd = 0
@@ -269,14 +266,14 @@ def sub_recursion_g(graph_, fseg, fd):  # rng+: extend G_ per graph, der+: repla
         if valSub > G_aves[fd] and len(node_) > ave_nsub:  # graph.valt eval for agg+ only
             sub_mgraph_, sub_dgraph_ = form_graph_(graph, node_, fd)  # cross-comp and clustering cycle
             # rng+:
-            if graph.plevels.val > ave_sub * graph.rdn:  # >cost of calling sub_recursion and looping:
+            if graph.rval > ave_sub * graph.rdn:  # >cost of calling sub_recursion and looping:
                 sub_rlayers, rval = sub_recursion_g(sub_mgraph_, fseg=fseg, fd=0)
-                graph.plevels.val += rval; sub_val += rval
+                graph.rval += rval; sub_val += rval
                 graph.rlayers = [sub_mgraph_] + [sub_rlayers]
             # der+:
-            if graph.plevels.altTop.val > ave_sub * graph.rdn:
+            if graph.dval > ave_sub * graph.rdn:
                 sub_dlayers, dval = sub_recursion_g(sub_dgraph_, fseg=fseg, fd=1)
-                graph.plevels.altTop.val += dval; sub_val += dval
+                graph.dval += dval; sub_val += dval
                 graph.dlayers = [sub_dgraph_] + [sub_dlayers]
 
             for comb_layers, graph_layers in zip(comb_layers_t, [graph.rlayers, graph.dlayers]):
@@ -294,33 +291,36 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
                          # fd for clustering, same or fderG for alts?
     graph_ = []
     for G in G_:
+
         node_, medG_, val = G
-        L=len(node_)
-        graph = Cgraph(L=L, node_=node_, medG_=medG_)
-        sparsity,nlinks, X0,Y0,Xn,Yn = 0,0,0,0,0,0
+        S,nlinks, X0,Y0, Xn,Yn = 0,0,0,0,0,0
+        L = len(node_)
         for node in node_: X0+=node.x0; Y0+=node.y0  # first pass defines center
         X0/=L; Y0/=L
+        graph = Cgraph(L=L, node_=node_, medG_=medG_)
+        new_plevel = CpH(L=1)  # 1st link adds 2 nodes, other links add 1, one node is already in the graph
+
         for node in node_:  # 2nd pass defines max distance and other params:
-            # x0+xn = box xn:
-            Xn = max(Xn, (node.x0+node.xn)-X0)
-            Yn = max(Yn, (node.y0+node.yn)-Y0)
+            # x0 + xn = box xn:
+            Xn = max(Xn,(node.x0+node.xn)-X0)
+            Yn = max(Yn,(node.y0+node.yn)-Y0)
             # accum params:
             sum_pH(graph.plevels, node.plevels)  # same for fder
-            new_plevel = CpH()
             for derG in node.link_:
-                sum_pH(new_plevel, derG.plevels.H[fd])  # accum derG
+                sum_pH(new_plevel, derG.plevels.H[fd])  # accum derG, += L=1, S=link.S, preA: [Xn,Yn]
                 derG.roott[fd] = graph  # + link_ = [derG]?
                 val += derG.plevels.H[fd].val
                 nlinks += 1
             node.plevels.val += val  # derG valts summed in eval_med_layer added to lower-plevels valt
-            graph.plevels.H += [new_plevel]
             graph.plevels.val += node.plevels.val
 
-        graph.x0=X0; graph.xn=Xn; graph.y0=Y0; graph.yn=Yn
+        new_plevel.A = [Xn*2,Yn*2]
+        graph.plevels.H += [new_plevel]
         graph.plevels.fds = copy(node.plevels.fds) + [fd]
+        graph.x0=X0; graph.xn=Xn; graph.y0=Y0; graph.yn=Yn
         graph_ += [graph]
 
-    # below not updated yet
+    # below not updated yet (so we need retrieve altTop from alt_graph?)
     for graph in graph_:  # 2nd pass: accum alt_graph_ params
         Alt_plevels = []  # Alt_players if fsub
         for node in graph.node_:

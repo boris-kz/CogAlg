@@ -311,25 +311,24 @@ def CPP2graph(PP, fseg, Cgraph):
                 if _fd != fd:
                     alt_fds = alt_fds[:i]
                     break
-        AltTop.fds = [alt_fds[-1]]  #?
         for altPP in PP.altPP_:  # convert altPP.players to CpH
             H = [];  val = 0
-            for ptuples in altPP.players[0]:
+            for ptuples, alt_fd in zip(altPP.players[0], alt_fds):
                 for ptuple in ptuples[0][:2]:  # latuple and vertuple only
                     H += [ptuple]; val += ptuple.val
-            altTop = CpH(H=H,val=val, fds=[alt_fds[-1]])
+            altTop = CpH(H=H,val=val)  # player/ptuples doesn't have fds
             sum_pH(AltTop, altTop)
 
     # Cgraph: plevels ( pplayer ( players ( ptuples ( ptuple:
-    players = CpH(val=PP.players[1], fds=copy(PP.fds))
+    players = CpH(val=PP.players[1], fds=copy(PP.fds), altTop = deepcopy(AltTop))
     for ptuples, val in PP.players[0]:
         players.H.append(CpH(H=deepcopy(ptuples), val=val))
 
-    pplayer = CpH(H=[players], val=players.val)
+    AltTop.fds = []  # no fds for pplayer's altTop
+    pplayer = CpH(H=[players], val=players.val, altTop = AltTop)
     plevels = CpH(H=[pplayer], val=pplayer.val, fds=[0], altTop=AltTop)
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-
-    return Cgraph(node_=PP.P__, plevels=plevels, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=y0(y0+yn)/2, yn=(yn-y0)/2)
+    return Cgraph(node_=PP.P__, plevels=plevels, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     # 1st plevel fd is always der+?
