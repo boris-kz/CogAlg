@@ -265,40 +265,33 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
 
     return new_P
 
-# not revised:
+# not fully revised:
 
 def CBlob2graph(blob, fseg, Cgraph):  # this is secondary, don't worry for now
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     root_fds = PPm_[0].fds[:-1]  # root fds is the shorter fork?
-    root = Cgraph(plevels=CpH(), rng = PPm_[0].rng, fds = root_fds, rdn=blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
-    # gPP_t = [root.node_, root.alt_graph_]  # i think root.alt_graph_ should be empty here?
+    root = Cgraph(mplevels=CpH, dplevels=CpH, rng = PPm_[0].rng, rdn=blob.rdn, x0=PPm_[0].x0, xn=PPm_[0].xn, y0=PPm_[0].y0, yn=PPm_[0].yn)
+    # alt_graph_ = []: no blob contour, no node_?
+    for fd, PP_ in enumerate(PPm_, PPd_):
+        for PP in PP_:
+            graph = CPP2graph(PP, fseg, Cgraph)
+            sum_pH(root.dplevels if fd else root.mplevels, graph.plevels)
+            # not updated:
+            # compute rdn
+            if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
+            PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
+            for altPP in PP.altPP_:  # overlapping Ps from each alt PP
+                altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
+                alt_rdn = len(set(PP_P_).intersection(altPP_P_))
+                PP.alt_rdn += alt_rdn  # count overlapping PPs, not bilateral, each PP computes its own alt_rdn
+                root.alt_rdn += alt_rdn  # sum across PP_
 
-    for PP in PPm_:
-        plevels = root.plevels
-        H=[]; val=PP.players[1]
-        for ptuples, val in PP.players[0]: H.append(CpH(H=deepcopy(ptuples), val=val))
-
-        if plevels: sum_pH(plevels, CpH(H=H, val=val))
-        else:       plevels.H, plevels.val = H, val
-        plevels.fds = copy(PP.fds)
-        # not updated:
-        # compute rdn
-        if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
-        PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
-        for altPP in PP.altPP_:  # overlapping Ps from each alt PP
-            altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
-            alt_rdn = len(set(PP_P_).intersection(altPP_P_))
-            PP.alt_rdn += alt_rdn  # count overlapping PPs, not bilateral, each PP computes its own alt_rdn
-            root.alt_rdn += alt_rdn  # sum across PP_
-            # no altTop for blob?
-
-        # convert and pack gPP
-        root.node_ += [CPP2graph(PP, fseg, Cgraph)]
-        root.x0=min(root.x0, PP.x0)
-        root.xn=max(root.xn, PP.xn)
-        root.y0=min(root.y0, PP.y0)
-        root.yn=max(root.yn, PP.yn)
+            root.dlayer[0] if fd else root.rlayers[0] += [graph]
+            root.x0=min(root.x0, PP.x0)
+            root.xn=max(root.xn, PP.xn)
+            root.y0=min(root.y0, PP.y0)
+            root.yn=max(root.yn, PP.yn)
     return root
 
 def CPP2graph(PP, fseg, Cgraph):
