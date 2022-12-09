@@ -270,10 +270,8 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
 def CBlob2graph(blob, fseg, Cgraph):  # this is secondary, don't worry for now
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
-    x0 = blob.x0, xn = blob.xn, y0 = blob.y0, yn = blob.yn
-
-    gblob = Cgraph(mplevels=CpH(), dplevels=CpH(), rng=PPm_[0].rng, rdn=blob.rdn, # node_ can stay empty?
-                  x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    x0, xn, y0, yn = blob.box
+    gblob = Cgraph(rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     # alt_graph_ = []: no blob contour, no node_?
     for fd, PP_ in enumerate([PPm_, PPd_]):
         graph_=[]
