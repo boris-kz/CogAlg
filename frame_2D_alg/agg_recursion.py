@@ -10,6 +10,7 @@ from comp_slice import *
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
 This may form closed edge patterns around flat core blobs, which defines stable objects.   
+All aves are defined for rdn+1 
 '''
 
 ave_G = 6  # fixed costs per G
@@ -44,8 +45,8 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     # agg,sub forks:
     mlevels = list  # PPs) Gs) GGs.: node_ agg, each a flat list
     dlevels = list
-    rlayers = list  # | mlayers: top node_ subdivision, parallel to levels but micro
-    dlayers = list  # | alayers; val=0 for sub_recursion
+    rlayers = list  # | mlayers: node_ subdivision, micro relative to levels
+    dlayers = list  # | alayers; init val = sum node_val, for sub_recursion
     # sum params in all nesting orders:
     mplevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
     dplevels = lambda: CpH()  # both include node params and players from rlayers and dlayers?
@@ -62,28 +63,29 @@ class Cgraph(CPP):  # graph or generic PP of any composition
 def agg_recursion(root, G_, fseg, ifd):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
     mgraph_, dgraph_ = form_graph_(root, G_, ifd=ifd)  # PP cross-comp and clustering
-
-    # intra graph:
-    rval = sum([mgraph.mplevels.val for mgraph in mgraph_])
-    if rval > ave_sub * root.rdn:  # same in blob?
-        root.rdn += 1  # +select per mgraph
-        sub_rlayers, rval = sub_recursion_g(mgraph_, rval, fseg=0, fd=0)  # subdivide graph.node_ by der+|rng+, accum root.valt
-    else: sub_rlayers=[]
-    root.rlayers = [sub_rlayers, rval]  # combined match of all der orders?
-    # combine with the above:
+    mval = sum([mgraph.mplevels.val for mgraph in mgraph_])
     dval = sum([dgraph.dplevels.val for dgraph in dgraph_])
-    if dval > ave_sub * root.rdn:
-        root.rdn += 1  # +select per dgraph
-        sub_dlayers, dval = sub_recursion_g(dgraph_, dval, fseg=0, fd=1)
-    else: sub_dlayers = []
-    root.dlayers = [sub_dlayers, dval]
-    # cross graph:
     root.mlevels += mgraph_; root.dlevels += dgraph_
-    for fd, graph_ in enumerate([mgraph_, dgraph_]):  # include lower-level der vals
-        if ([root.mplevels, root.dplevels][fd].val > G_aves[fd] * ave_agg * (root.rdn + 1)) and len(graph_) > ave_nsub:
-            root.rdn += 1  # estimate
-            agg_recursion(root, graph_, fseg=fseg, ifd=fd)  # cross-comp graphs
+    nroot = root
+    while nroot.root:  # draft: recursive root levels accum:
+        nroot.root.mlevels[-1] += mgraph_; nroot.root.dlevels[-1] += dgraph_
+        nroot = nroot.root
 
+    for fd, (graph_,val) in enumerate(zip([mgraph_,dgraph_],[mval,dval])):  # same graph_, val for sub+ and agg+
+        # intra-graph sub+:
+        if val > ave_sub * (root.rdn):  # same in blob, same base cost for both forks
+            root.rdn+=1  # estimate
+            sub_layers, val = sub_recursion_g(graph_, val, fseg, fd=fd)  # subdivide graph_ by der+|rng+, accum val
+        else:
+            sub_layers = []
+        [root.rlayers,root.dlayers][fd] = [sub_layers, val]  # combined match of all der orders?
+        # cross-graph agg+:
+        if val > G_aves[fd] * ave_agg * (root.rdn) and len(graph_) > ave_nsub:
+            root.rdn+=1  # estimate
+            agg_recursion(root, graph_, fseg=fseg, ifd=fd)  # cross-comp graphs
+        for graph in graph_:
+            sum_pH([root.mlevels,root.dlevels][fd], [graph.mlevels,graph.dlevels][fd])
+            # not mlevels+dlevels?
 
 def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is potential node graph, in higher-order GG graph
                                  # der+: comp_link if fderG, from sub_recursion_g?
@@ -109,8 +111,15 @@ def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is 
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
             for graph in graph_:
                 if ifd:
-                    while graph.mplevel.L==1:  # derG, sum params from node_[0]
-                        pass  # add node params to derG params
+                    for node in graph.node_:  # derG, sum params from node_[0]
+                        while [node.dplevels if node.dplevels.H else node.mplevels][0].H[0].L == 1:
+                            node = node.node_[0]
+                            # draft:
+                            sum_pH([root.mplevels,root.dplevels][fd].H[-1], [node.mplevels,node.dplevels][fd].H[-1])
+                            # derG is last implicit player in last pplayer of plevels,
+                            # we need to loop higher implicit players with each level of node:
+                            # each pplayer is 1,1,2,4... implicit pp_sublayers: ders of all higher-plevel pplayer s, ~players in comp_slice.
+                        # add node params to derG params
                 for node in graph.node_:
                     sum_pH([root.mplevels, root.dplevels][fd], [node.mplevels, node.dplevels][fd])
 
@@ -297,15 +306,16 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
                 sub_dlayers, dval = sub_recursion_g(sub_dgraph_, Dval, fseg=fseg, fd=1)
                 Dval+=dval; graph.dlayers = [[sub_dgraph_]+[sub_dlayers], Dval]
 
-            for comb_layers, graph_layers in zip(comb_layers_t, [graph.rlayers, graph.dlayers]):
+            for comb_layers, graph_layers in zip(comb_layers_t, [graph.rlayers[0], graph.dlayers[0]]):
                 for i, (comb_layer, graph_layer) in enumerate(zip_longest(comb_layers, graph_layers, fillvalue=[])):
                     if graph_layer:
                         if i > len(comb_layers) - 1:
                             comb_layers += [graph_layer]  # add new r|d layer
                         else:
                             comb_layers[i] += graph_layer  # splice r|d PP layer into existing layer
+            Sval += Rval + Dval
 
-    return comb_layers_t, Sval+Rval+Dval
+    return comb_layers_t, Sval
 
 
 def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ or player in sub+: if fderG?
