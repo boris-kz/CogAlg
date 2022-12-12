@@ -45,8 +45,8 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     # agg,sub forks:
     mlevels = list  # PPs) Gs) GGs.: node_ agg, each a flat list
     dlevels = list
-    rlayers = list  # | mlayers: node_ subdivision, micro relative to levels
-    dlayers = list  # | alayers; init val = sum node_val, for sub_recursion
+    rlayers = lambda: [[], 0]  # | mlayers: node_ subdivision, micro relative to levels
+    dlayers = lambda: [[], 0]  # | alayers; init val = sum node_val, for sub_recursion
     # sum params in all nesting orders:
     mplevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
     dplevels = lambda: CpH()  # both include node params and players from rlayers and dlayers?
@@ -66,10 +66,6 @@ def agg_recursion(root, G_, fseg, ifd):  # compositional recursion in root.PP_, 
     mval = sum([mgraph.mplevels.val for mgraph in mgraph_])
     dval = sum([dgraph.dplevels.val for dgraph in dgraph_])
     root.mlevels += mgraph_; root.dlevels += dgraph_
-    nroot = root
-    while nroot.root:  # draft: recursive root levels accum:
-        nroot.root.mlevels[-1] += mgraph_; nroot.root.dlevels[-1] += dgraph_
-        nroot = nroot.root
 
     for fd, (graph_,val) in enumerate(zip([mgraph_,dgraph_],[mval,dval])):  # same graph_, val for sub+ and agg+
         # intra-graph sub+:
@@ -78,14 +74,15 @@ def agg_recursion(root, G_, fseg, ifd):  # compositional recursion in root.PP_, 
             sub_layers, val = sub_recursion_g(graph_, val, fseg, fd=fd)  # subdivide graph_ by der+|rng+, accum val
         else:
             sub_layers = []
-        [root.rlayers,root.dlayers][fd] = [sub_layers, val]  # combined match of all der orders?
+        [root.rlayers, root.dlayers][fd] = [sub_layers, val]  # combined val of all new der orders
+        [root.mplevels,root.dplevels][fd] = CpH  # replace with summed params of higher-composition graphs:
+        for graph in graph_:
+            sum_pH([root.mplevels,root.dplevels][fd], [graph.mplevels,graph.dplevels][fd])  # not mplevels+dplevels?
         # cross-graph agg+:
         if val > G_aves[fd] * ave_agg * (root.rdn) and len(graph_) > ave_nsub:
             root.rdn+=1  # estimate
             agg_recursion(root, graph_, fseg=fseg, ifd=fd)  # cross-comp graphs
-        for graph in graph_:
-            sum_pH([root.mlevels,root.dlevels][fd], [graph.mlevels,graph.dlevels][fd])
-            # not mlevels+dlevels?
+
 
 def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is potential node graph, in higher-order GG graph
                                  # der+: comp_link if fderG, from sub_recursion_g?
@@ -110,16 +107,24 @@ def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is 
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
             for graph in graph_:
-                if ifd:
-                    for node in graph.node_:  # derG, sum params from node_[0]
-                        while [node.dplevels if node.dplevels.H else node.mplevels][0].H[0].L == 1:
-                            node = node.node_[0]
-                            # draft:
-                            sum_pH([root.mplevels,root.dplevels][fd].H[-1], [node.mplevels,node.dplevels][fd].H[-1])
-                            # derG is last implicit player in last pplayer of plevels,
-                            # we need to loop higher implicit players with each level of node:
-                            # each pplayer is 1,1,2,4... implicit pp_sublayers: ders of all higher-plevel pplayer s, ~players in comp_slice.
-                        # add node params to derG params
+                if ifd:  # derG, sum params of its node hierarchy before its own:
+                    # draft:
+                    node = graph; plevels = [node.mplevels, node.dplevels][fd]
+                    n = 2 ** len(plevels.H)
+                    while plevels[0].H[0].L==1:  # node is derG
+                        plevels = [node.mplevels, node.dplevels][fd]; root_plevels = [root.mplevels, root.dplevels][fd]
+                        # plevels( pplayers( players( ptuples:
+                        # implicit nesting in pplayers: pplayer = 1| 1| 2| 4... players: n_higher_plevels ^ 2:
+                        '''
+                        if _n in locals: pplayer = plevels.H[-1].H[-n:_n]
+                        else: pplayer = plevels.H[-1].H[-n:]
+                        replace: 
+                        '''
+                        for players, root_players in zip(plevels.H[-1].H[-n:_n], root_plevels.H[-1].H[-n:_n]):
+                            # sum last pplayers' lower ders, 1st node'derG is the highest
+                            sum_pH(root_players, players)
+                            _n = n; n=np.sqrt(n); node = node.node_[0]
+                # node is G or derG:
                 for node in graph.node_:
                     sum_pH([root.mplevels, root.dplevels][fd], [node.mplevels, node.dplevels][fd])
 
