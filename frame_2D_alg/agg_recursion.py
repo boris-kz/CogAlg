@@ -103,30 +103,12 @@ def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is 
             graph = graph_.pop(0)
             eval_med_layer(graph_= graph_, graph=graph, fd=fd)
             if graph[2][fd] > ave_agg: regraph_ += [graph]  # graph reformed by merges and removes above
-
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
             for graph in graph_:
-                if ifd:  # derG, sum params of its node hierarchy before its own:
-                    # draft:
-                    node = graph; plevels = [node.mplevels, node.dplevels][fd]
-                    n = 2 ** len(plevels.H)
-                    while plevels[0].H[0].L==1:  # node is derG
-                        plevels = [node.mplevels, node.dplevels][fd]; root_plevels = [root.mplevels, root.dplevels][fd]
-                        # plevels( pplayers( players( ptuples:
-                        # implicit nesting in pplayers: pplayer = 1| 1| 2| 4... players: n_higher_plevels ^ 2:
-                        '''
-                        if _n in locals: pplayer = plevels.H[-1].H[-n:_n]
-                        else: pplayer = plevels.H[-1].H[-n:]
-                        replace: 
-                        '''
-                        for players, root_players in zip(plevels.H[-1].H[-n:_n], root_plevels.H[-1].H[-n:_n]):
-                            # sum last pplayers' lower ders, 1st node'derG is the highest
-                            sum_pH(root_players, players)
-                            _n = n; n=np.sqrt(n); node = node.node_[0]
-                # node is G or derG:
-                for node in graph.node_:
-                    sum_pH([root.mplevels, root.dplevels][fd], [node.mplevels, node.dplevels][fd])
+                root_plevels = [root.mplevels, root.dplevels][fd]; plevels = [graph.mplevels, graph.dplevels][fd]
+                if root_plevels.H or plevels.H:  # better init plevels=list?
+                    sum_pH(root_plevels, plevels)
 
     return mgraph_, dgraph_
 
@@ -338,19 +320,26 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
         for node in node_:  # 2nd pass defines max distance and other params:
             Xn = max(Xn,(node.x0+node.xn)-X0)  # box xn = x0+xn
             Yn = max(Yn,(node.y0+node.yn)-Y0)
-            graph_plevels = [graph.mplevels,graph.dplevels][fd]; node_plevels = [node.mplevels, node.dplevels][fd]
-            # accum params:
-            sum_pH(graph_plevels, node_plevels)  # same for fder
+            graph_plevels = [graph.mplevels,graph.dplevels][fd]; plevels = [node.mplevels, node.dplevels][fd]
+            # sum node plevels(pplayers(players(ptuples:
+            while plevels.H[0].L==1:  # node is derG
+                node = node.node_[0]
+                plevels = [node.mplevels, node.dplevels][fd]
+                i = 2 ** len(plevels.H); _i = -i  # n_players in implicit pplayer = n_higher_plevels ^2: 1|1|2|4...
+                for graph_players, players in zip(graph_plevels.H[-1].H[-i:-_i], plevels.H[-1].H[-i:-_i]):
+                    sum_pH(graph_players, players)  # sum pplayer' players
+                    _i = i; i += int(np.sqrt(i))
+            sum_pH(graph_plevels, plevels)  # G or derG
             for derG in node.link_:
                 derG_plevels = [derG.mplevels, derG.dplevels][fd]
-                sum_pH(new_plevel, derG_plevels.H[0])  # accum derG, += L=1, S=link.S, preA: [Xn,Yn]
+                sum_pH(new_plevel, derG_plevels.H[0])  # the only plevel, accum derG, += L=1, S=link.S, preA: [Xn,Yn]
                 val += derG_plevels.val
-            node_plevels.val += val
-            graph_plevels.val += node_plevels.val
+            plevels.val += val
+            graph_plevels.val += plevels.val
 
         new_plevel.A = [Xn*2,Yn*2]
         graph_plevels.H += [new_plevel]
-        graph_plevels.fds = copy(node_plevels.fds) + [fd]
+        graph_plevels.fds = copy(plevels.fds) + [fd]
         graph.x0=X0; graph.xn=Xn; graph.y0=Y0; graph.yn=Yn
         graph_ += [graph]
 
