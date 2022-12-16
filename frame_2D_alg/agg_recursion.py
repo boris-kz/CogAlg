@@ -45,7 +45,7 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     # agg,sub forks:
     mlevels = list  # PPs) Gs) GGs.: node_ agg, each a flat list
     dlevels = list
-    rlayers = lambda: [[], 0]  # | mlayers: node_ subdivision, micro relative to levels
+    rlayers = lambda: [[], 0]  # | mlayers: init from node_ for subdivision, micro relative to levels
     dlayers = lambda: [[], 0]  # | alayers; init val = sum node_val, for sub_recursion
     # sum params in all nesting orders:
     mplevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
@@ -224,8 +224,8 @@ def eval_med_layer(graph_, graph, fd):  # recursive eval of reciprocal links fro
                     break
             if fmed:  # mderG is not reciprocal, else explore try_mG links in the rest of medG_
                 for mmderG in mmG.link_:
-                    if G in mmderG.node_:  # mmG mediates between mG and G
-                        adj_val = [mmderG.mplevels, mmderG.mplevels][fd].val - ave_agg
+                    if G in mmderG.node_:  # mmG mediates between mG and G: mmderG adds to connectivity of mG?
+                        adj_val = [mmderG.mplevels, mmderG.dplevels][fd].val - ave_agg
                         # adjust nodes:
                         G_plevels.val += adj_val; [mG.mplevels, mG.dplevels][fd].val += adj_val
                         val += adj_val; mG.roott[fd][2] += adj_val  # root is not graph yet
@@ -321,29 +321,25 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
         for node in node_:  # define max distance,A, sum plevels:
             Xn = max(Xn,(node.x0+node.xn)-X0)  # box xn = x0+xn
             Yn = max(Yn,(node.y0+node.yn)-Y0)
-            # draft:
-            plevels = [node.mplevels, node.dplevels][fd]
-            sum_pH(graph_plevels, plevels)  # node is G or derG, sum plevels ( pplayers ( players ( ptuples
+            plevels = [node.mplevels, node.dplevels][fd]  # node: G|derG, sum plevels ( pplayers ( players ( ptuples:
+            sum_pH(graph_plevels, plevels)
             rev=0
             while len(node.mplevels.H)==1 and len(node.dplevels.H)==1: # or plevels.H and plevels.H[0].L==1: node is derG:
                 rev=1
                 node = node.node_[0]  # get lower pplayers from node.node_[0]:
                 node_plevels = node.mplevels if node.mplevels.H else node.dplevels  # prior sub+ fork
-                sum_pH(graph_plevels, node_plevels)  # sum last pplayers in reverse order
+                if len(node.mplevels.H)==1 and len(node.dplevels.H)==1:  # node is derG in der++
+                   sum_pH(graph_plevels, node_plevels)  # sum lower pplevels of the top plevel in reverse order
             if rev:
-                i = 2**len(plevels.H); _i = -i  # n_players in implicit pplayer = n_higher_plevels ^2: 1|1|2|4..
+                i = 2**len(plevels.H); _i = -i  # n_players in implicit pplayer = n_higher_plevels ^2: 1|1|2|4...
                 rev_pplayers = []
-                for pplayer in graph_plevels.H[0].H[-i:-_i]:  # pplayers were added top-down, should be bottom-up
-                    rev_pplayers += [pplayer]; _i = i; i += int(np.sqrt(i))
-                Low_plevels = CpH
-                node = node.node_[0]  # get lower plevels from last node.node_[0]:
-                low_plevels = node.mplevels if node.mplevels.H else node.dplevels  # prior sub+ fork
-                sum_pH(Low_plevels, low_plevels)
-                graph_plevels.H = Low_plevels + [rev_pplayers]  # all layers of node==derG + node==G plevels in last loop
-            # sum new_plevel across nodes:
+                for players in graph_plevels.H[0].H[-i:-_i]:  # pplayers were added top-down, should be bottom-up
+                    rev_pplayers += [players]; _i=i; i+=int(np.sqrt(i))  # keep players sequence in pplayer
+                graph_plevels = CpH(H=node_plevels.H+[rev_pplayers], val=node_plevels.val+graph_plevels.val, fds=node_plevels.fds+[fd])
+                # low plevels: last node_[0] in while derG + top plevel: pplayers of node==derG
             for derG in node.link_:
                 derG_plevels = [derG.mplevels, derG.dplevels][fd]
-                sum_pH(new_plevel, derG_plevels.H[0])  # 1 plevel, accum derG, += L=1, S=link.S, preA: [Xn,Yn]
+                sum_pH(new_plevel, derG_plevels.H[0])  # sum new_plevel across nodes, accum derG, += L=1, S=link.S, preA: [Xn,Yn]
                 val += derG_plevels.val
             plevels.val += val  # new val in node
             graph_plevels.val += plevels.val
