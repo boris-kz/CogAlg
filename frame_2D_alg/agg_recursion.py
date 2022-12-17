@@ -39,17 +39,16 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars
 
 class Cgraph(CPP):  # graph or generic PP of any composition
 
-    medG_ = list  # last checked mediating [mG, dir_link, G]s, from all nodes?
-    link_ = list  # evaluated graph links, open links replace alt_node
-    node_ = list  # elements, common root of layers, levels:
-    # agg,sub forks:
+    link_ = lambda: [[], 0]  # evaluated graph_as_node external links, replace alt_node if open, direct only?
+    node_ = lambda: [[], 0]  # elements, common root of layers, levels:
+    # agg,sub forks: [[],0] if called only
     mlevels = list  # PPs) Gs) GGs.: node_ agg, each a flat list
     dlevels = list
-    rlayers = lambda: [[], 0]  # | mlayers: init from node_ for subdivision, micro relative to levels
-    dlayers = lambda: [[], 0]  # | alayers; init val = sum node_val, for sub_recursion
+    rlayers = list  # | mlayers: init from node_ for subdivision, micro relative to levels
+    dlayers = list  # | alayers; init val = sum node_val, for sub_recursion
     # sum params in all nesting orders:
     mplevels = lambda: CpH()  # zipped with alt_plevels in comp_plevels
-    dplevels = lambda: CpH()  # both include node params and players from rlayers and dlayers?
+    dplevels = lambda: CpH()  # both include node_ params (layer0) and rlayers'players + dlayers'players?
     x0 = float
     y0 = float  # center: box x0|y0 + L/2
     xn = float  # max distance from center
@@ -88,20 +87,19 @@ def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is 
                                  # der+: comp_link if fderG, from sub_recursion_g?
     for G in G_:  # roott: mgraph, dgraph
         for i in 0,1:
-            graph = [[G], [], 0]  # proto-GG: [node_, medG_, val]
-            G.roott[i] = graph  # initial overlap between graphs is eliminated in eval_med_layer
+            G.roott[i] = [[G],[],0]  # proto-graph is initialized for each [node, link_, val]
 
     comp_G_(G_, ifd)  # cross-comp all graphs within rng, graphs may be segs | fderGs?
     mgraph_, dgraph_ = [],[]  # initialize graphs with >0 positive links in graph roots:
     for G in G_:
-        if len(G.roott[0][0])>1 and G.roott[0] not in mgraph_: mgraph_ += [G.roott[0]]  # root = [node_, val] for eval_med_layer, + link_nvalt?
-        if len(G.roott[1][0])>1 and G.roott[1] not in dgraph_: dgraph_ += [G.roott[1]]
+        if len(G.roott[0][2])>ave_Gm and G.roott[0] not in mgraph_: mgraph_ += [G.roott[0]]  # root = [node_, link_, val], + link_nvalt?
+        if len(G.roott[1][2])>ave_Gd and G.roott[1] not in dgraph_: dgraph_ += [G.roott[1]]
 
     for fd, graph_ in enumerate([mgraph_, dgraph_]):  # evaluate intermediate nodes to delete or merge their graphs:
         regraph_ = []
         while graph_:
             graph = graph_.pop(0)
-            eval_med_layer(graph_= graph_, graph=graph, fd=fd)
+            node_reval(graph_= graph_, graph=graph, fd=fd)
             if graph[2][fd] > ave_agg: regraph_ += [graph]  # graph reformed by merges and removes above
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
@@ -117,7 +115,7 @@ def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or seg
 
     for i, _G in enumerate(G_):
         for G in G_[i+1:]:
-            # compare each G to other Gs in rng, bilateral link assign:
+            # compare each G to other Gs in rng, bilateral link assign, val accum:
             if G in [node for link in _G.link_ for node in link.node_]:  # G,_G was compared in prior rng+, add frng to skip?
                 continue
             _plevels = [_G.mplevels, _G.dplevels][ifd]; plevels = [G.mplevels, G.dplevels][ifd]
@@ -138,7 +136,8 @@ def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or seg
                 y0 = (G.y0+_G.y0)/2; x0 = (G.x0+_G.x0)/2  # new center coords
                 derG = Cgraph( node_=[_G,G], mplevels=mplevels, dplevels=dplevels, y0=y0, x0=x0, # compute max distance from center:
                                xn=max((_G.x0+_G.xn)/2 -x0, (G.x0+G.xn)/2 -x0), yn=max((_G.y0+_G.yn)/2 -y0, (G.y0+G.yn)/2 -y0))
-                _G.link_ += [derG]; G.link_ += [derG]  # any val
+                _G.link_[0] += [derG]; _G.link_[1] += derG.mplevels.val
+                G.link_[0] += [derG];   G.link_[1] += derG.dplevels.val  # any val
                 for fd, val in enumerate([mplevel.val, dplevel.val]):  # alt fork is redundant, no support?
                     if val > 0:
                         for node, (graph, medG_, val) in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
@@ -198,13 +197,26 @@ def comp_ext(_spH, spH, mpH, dpH):
         mpH.A = 1; dpH.A = 0  # no difference, matching low-aspect, only if both?
     mpH.val += mpH.A; dpH.val += dpH.A
 
+'''
+draft: recursive eval of links per node, add/remove nodes and their reciprocal links
+'''
+def node_reval(graph_, graph, fd):
 
-def eval_med_layer(graph_, graph, fd):  # recursive eval of reciprocal links from increasingly mediated nodes,
-                                        # links m,d of mediating node += reciprocal m,d?
-    node_, medG_, val = graph  # node_ not used
-    save_node_, save_medG_ = [], []
+    node_, link_, val = graph
     adj_Val = 0  # adjustment in connect val in graph
 
+    for node in node_:
+        graph = node.roott[fd]
+        if node.link_[1] > G_aves[fd]:
+            for link in node.link_[0]:
+                if [link.mplevels, link.dplevels][fd].val > G_aves[fd]:
+                    _node = link.node_[0][0] if link.node_[0][1] is node else link.node_[0][1]
+                    _graph = _node.roott[fd]
+                    if _node.link_[1] > G_aves[fd] and _node not in graph.node_:
+                        graph.node_[0] += [_node]; graph.node_[1] += _node.link_[1]  # val
+                        _graph.node_[0] += [node]; _graph.node_[1] += node.link_[1]  # val
+
+    # old:
     mmG__ = []  # not reviewed
     for mG, dir_mderG, G in medG_:  # assign G and shortest direct derG to each med node?
         if not mG.roott[fd]:  # root graph was deleted
@@ -329,25 +341,29 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
                 node = node.node_[0]  # get lower pplayers from node.node_[0]:
                 node_plevels = node.mplevels if node.mplevels.H else node.dplevels  # prior sub+ fork
                 if len(node.mplevels.H)==1 and len(node.dplevels.H)==1:  # node is derG in der++
-                   sum_pH(graph_plevels, node_plevels)  # sum lower pplevels of the top plevel in reverse order
+                   sum_pH(graph_plevels, node_plevels)  # sum lower pplayers of the top plevel in reverse order
             if rev:
                 i = 2**len(plevels.H); _i = -i  # n_players in implicit pplayer = n_higher_plevels ^2: 1|1|2|4...
-                rev_pplayers = []
-                for players in graph_plevels.H[0].H[-i:-_i]:  # pplayers were added top-down, should be bottom-up
-                    rev_pplayers += [players]; _i=i; i+=int(np.sqrt(i))  # keep players sequence in pplayer
+                inp = graph_plevels.H[0]
+                rev_pplayers = CpH(val=inp.val, L=inp.L, S=inp.S, A=inp.A)
+                for players, fd in zip(inp.H[-i:-_i], inp.fds[-i:-_i]): # reverse pplayers to bottom-up, keep sequence of players in pplayer:
+                    rev_pplayers.H += [players]; rev_pplayers.fds += [fd]
+                    _i = i; i += int(np.sqrt(i))
                 graph_plevels = CpH(H=node_plevels.H+[rev_pplayers], val=node_plevels.val+graph_plevels.val, fds=node_plevels.fds+[fd])
-                # low plevels: last node_[0] in while derG + top plevel: pplayers of node==derG
+                # low plevels: last node_[0] in while derG, + top plevel: pplayers of node==derG
+                plevels = graph_plevels  # for accum below?
             for derG in node.link_:
                 derG_plevels = [derG.mplevels, derG.dplevels][fd]
                 sum_pH(new_plevel, derG_plevels.H[0])  # sum new_plevel across nodes, accum derG, += L=1, S=link.S, preA: [Xn,Yn]
                 val += derG_plevels.val
+
             plevels.val += val  # new val in node
             graph_plevels.val += plevels.val
 
         new_plevel.A = [Xn*2,Yn*2]
         graph.x0=X0; graph.xn=Xn; graph.y0=Y0; graph.yn=Yn
         graph_plevels.H += [new_plevel]  # val is summed per node
-        graph_plevels.fds = copy(plevels.fds) + [fd]
+        graph_plevels.fds += [fd]
         graph_ += [graph]
 
     for graph in graph_:  # 2nd pass: accum alt_graph_ params

@@ -89,7 +89,6 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
                 for graph_players, players in zip(graph_plevels.H[-1].H[-i:-_i], plevels.H[-1].H[-i:-_i]):
                     sum_pH(graph_players, players)  # sum pplayer' players
                     _i = i; i += int(np.sqrt(i))
-
             for derG in node.link_:
                 derG_plevels = [derG.mplevels, derG.dplevels][fd]
                 sum_pH(new_plevel, derG_plevels.H[0])  # the only plevel, accum derG, += L=1, S=link.S, preA: [Xn,Yn]
@@ -129,3 +128,106 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
     return graph_
 
 graph_plevels = [node_[0].mplevels, node_[0].dplevels][fd]  # sum top-down
+
+
+def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is potential node graph, in higher-order GG graph
+
+    # der+: comp_link if fderG, from sub_recursion_g?
+    for G in G_:  # roott: mgraph, dgraph
+        for i in 0, 1:
+            graph = [[G], [], 0]  # proto-GG: [node_, medG_, val]
+            G.roott[i] = graph  # initial overlap between graphs is eliminated in eval_med_layer
+
+    comp_G_(G_, ifd)  # cross-comp all graphs within rng, graphs may be segs | fderGs?
+    mgraph_, dgraph_ = [], []  # initialize graphs with >0 positive links in graph roots:
+    for G in G_:
+        if len(G.roott[0][0]) > 1 and G.roott[0] not in mgraph_: mgraph_ += [G.roott[0]]  # root = [node_, val] for eval_med_layer, + link_nvalt?
+        if len(G.roott[1][0]) > 1 and G.roott[1] not in dgraph_: dgraph_ += [G.roott[1]]
+
+    for fd, graph_ in enumerate([mgraph_, dgraph_]):  # evaluate intermediate nodes to delete or merge their graphs:
+        regraph_ = []
+        while graph_:
+            graph = graph_.pop(0)
+            eval_med_layer(graph_=graph_, graph=graph, fd=fd)
+            if graph[2][fd] > ave_agg: regraph_ += [graph]  # graph reformed by merges and removes above
+        if regraph_:
+            graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
+            for graph in graph_:
+                root_plevels = [root.mplevels, root.dplevels][fd]; plevels = [graph.mplevels, graph.dplevels][fd]
+                if root_plevels.H or plevels.H:  # better init plevels=list?
+                    sum_pH(root_plevels, plevels)
+
+    return mgraph_, dgraph_
+
+medG_ = list  # last checked mediating [mG, dir_link, G]s, from all nodes?
+'''
+keep the shorter of direct or mediating links for both nodes, add value of mediated links: if shorter, unique for med eval:
+recursive node eval of combined links, direct + mediated: not reciprocal, *= accum mediation coef, unless known direct?
+or remove vs. med_eval, including reciprocal links: too complex, may be removed anyway, ave/ ave_rdn? 
+remove links of removed nodes, add link_ val?
+'''
+def eval_med_layer(graph_, graph, fd):  # recursive eval of reciprocal links from increasingly mediated nodes,
+                                        # links m,d of mediating node += reciprocal m,d?
+    node_, medG_, val = graph  # node_ not used
+    save_node_, save_medG_ = [], []
+    adj_Val = 0  # adjustment in connect val in graph
+
+    mmG__ = []  # not reviewed
+    for mG, dir_mderG, G in medG_:  # assign G and shortest direct derG to each med node?
+        if not mG.roott[fd]:  # root graph was deleted
+            continue
+        G_plevels = [G.mplevels, G.dplevels][fd]
+        fmed = 1; mmG_ = []  # __Gs that mediate between Gs and _Gs
+        mmG__ += [mmG_]
+        for mderG in mG.link_:  # all evaluated links
+
+            mmG = mderG.node_[1] if mderG.node_[0] is mG else mderG.node_[0]
+            for derG in G.link_:
+                try_mG = derG.node_[0] if derG.node_[1] is G else derG.node_[1]
+                if mmG is try_mG:  # mmG is directly linked to G
+                    if derG.mplevels.S > dir_mderG.mplevels.S:  # same Sd
+                        dir_mderG = derG  # next med derG if dir link is shorter
+                        fmed = 0
+                    break
+            if fmed:  # mderG is not reciprocal, else explore try_mG links in the rest of medG_
+                for mmderG in mmG.link_:
+                    if G in mmderG.node_:  # mmG mediates between mG and G: mmderG adds to connectivity of mG?
+                        adj_val = [mmderG.mplevels, mmderG.dplevels][fd].val - ave_agg
+                        # adjust nodes:
+                        G_plevels.val += adj_val; [mG.mplevels, mG.dplevels][fd].val += adj_val
+                        val += adj_val; mG.roott[fd][2] += adj_val  # root is not graph yet
+                        mmG = mmderG.node_[0] if mmderG.node_[0] is not mG else mmderG.node_[1]
+                        if mmG not in mmG_:  # not saved via prior mG
+                            mmG_ += [mmG]; adj_Val += adj_val
+
+    for (mG, dir_mderG, G), mmG_ in zip(medG_, mmG__):  # new
+        if G_plevels.val>0:
+            if G not in save_node_:
+                save_node_+= [G]  # G remains in graph
+            for mmG in mmG_:  # may be empty
+                if mmG not in save_medG_:
+                    save_medG_ += [[mmG, dir_mderG, G]]
+
+    add_medG_, add_node_ = [],[]
+    for mmG, dir_mderG, G in save_medG_:  # eval graph merge after adjusting graph by mediating node layer
+        _graph = mmG.roott[fd]
+        if _graph in graph_ and _graph is not graph:  # was not removed or merged via prior _G
+            _node_, _medG_, _val = _graph
+            for _node, _medG in zip(_node_, _medG_):  # merge graphs, add direct links:
+                for _node in _node_:
+                    if _node not in add_node_ + save_node_:
+                        _node.roott[fd]=graph; add_node_ += [_node]
+                for _medG in _medG_:
+                    if _medG not in add_medG_ + save_medG_: add_medG_ += [_medG]
+                for _derG in _node.link_:
+                    adj_Val += [_derG.mplevels,_derG.dplevels][fd].val - ave_agg
+            val += _val
+            graph_.remove(_graph)
+
+    if val > ave_G:
+        graph[:] = [save_node_+ add_node_, save_medG_+ add_medG_, val]
+        if adj_Val > ave_med:  # positive adj_Val from eval mmG_
+            eval_med_layer(graph_, graph, fd)  # eval next med layer in reformed graph
+    else:
+        for node in save_node_+ add_node_: node.roott[fd] = []  # delete roots
+
