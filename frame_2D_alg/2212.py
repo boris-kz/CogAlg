@@ -159,6 +159,29 @@ def form_graph_(root, G_, ifd):  # forms plevel in agg+ or player in sub+, G is 
 
     return mgraph_, dgraph_
 
+for node in graph.Q:  # node_
+        graph = node.roott[fd]
+        if node.link_.valt[fd] > G_aves[fd]:
+            for link in node.link_.Q:
+                if [link.mplevels, link.dplevels][fd].val > G_aves[fd]:
+                    _node = link.node_.Q[1] if link.node_.Q[0] is node else link.node_.Q[0]
+                    _graph = _node.roott[fd]
+                    val = _node.link_.val
+                    if val > G_aves[fd]:
+                        if _node not in graph.Q:
+                            graph.Q += [_node]; graph.val += val
+                            _graph.Q += [node]; _graph.val += val
+                            adj_Val += val
+                    elif _node in graph.Q:
+                        graph.Q.remove(graph.Q.index(_node)); graph.val -= val
+                        _graph.Q.remove(_graph.Q.index(node)); _graph.val -= val
+                        adj_Val += val
+        '''            
+        else: remove pos reciprocal links 
+        always for link in node.link_.Q: eval add|remove positive link
+        links are added in comp_G_, separate if pos, remove if neg node, stays in tested node_: from tested link_?
+        '''
+
 medG_ = list  # last checked mediating [mG, dir_link, G]s, from all nodes?
 '''
 keep the shorter of direct or mediating links for both nodes, add value of mediated links: if shorter, unique for med eval:
