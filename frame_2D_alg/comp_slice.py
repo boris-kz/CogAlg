@@ -524,44 +524,41 @@ def comp_players(_layers, layers):  # unpack and compare der layers, if any from
 def comp_ptuple(_params, params, fd=0):  # compare lateral or vertical tuples, similar operations for m and d params
 
     dtuple, mtuple = Cptuple(), Cptuple()
-    dval, mval = 0,0
     rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     if fd:  # vertuple, all params are scalars:
-        comp("val", _params.val, params.val*rn, dval, mval, dtuple, mtuple, ave_mval, finv=0)
-        comp("axis", _params.axis, params.axis*rn, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
-        comp("angle", _params.angle, params.angle*rn, dval, mval, dtuple, mtuple, ave_dangle, finv=0)
-        comp("aangle", _params.aangle, params.aangle*rn, dval, mval, dtuple, mtuple, ave_daangle, finv=0)
+        comp("val", _params.val, params.val*rn, dtuple, mtuple, ave_mval, finv=0)
+        comp("axis", _params.axis, params.axis*rn, dtuple, mtuple, ave_dangle, finv=0)
+        comp("angle", _params.angle, params.angle*rn, dtuple, mtuple, ave_dangle, finv=0)
+        comp("aangle", _params.aangle, params.aangle*rn, dtuple, mtuple, ave_daangle, finv=0)
     else:  # latuple
-        comp("G", _params.G, params.G*rn, dval, mval, dtuple, mtuple, ave_G, finv=0)
-        comp("Ga", _params.Ga, params.Ga*rn, dval, mval, dtuple, mtuple, ave_Ga, finv=0)
-        comp_angle("axis", _params.axis, params.axis, dval, mval, dtuple, mtuple)  # rotated, thus no adjustment by daxis?
-        comp_angle("angle", _params.angle, params.angle, dval, mval, dtuple, mtuple)
-        comp_aangle(_params.aangle, params.aangle, dval, mval, dtuple, mtuple)
+        comp("G", _params.G, params.G*rn, dtuple, mtuple, ave_G, finv=0)
+        comp("Ga", _params.Ga, params.Ga*rn, dtuple, mtuple, ave_Ga, finv=0)
+        comp_angle("axis", _params.axis, params.axis, dtuple, mtuple)  # rotated, thus no adjustment by daxis?
+        comp_angle("angle", _params.angle, params.angle, dtuple, mtuple)
+        comp_aangle(_params.aangle, params.aangle, dtuple, mtuple)
     # either:
-    comp("I", _params.I, params.I*rn, dval, mval, dtuple, mtuple, ave_dI, finv=not fd)  # inverse match if latuple
-    comp("M", _params.M, params.M*rn, dval, mval, dtuple, mtuple, ave_M, finv=0)
-    comp("Ma",_params.Ma, params.Ma*rn, dval, mval, dtuple, mtuple, ave_Ma, finv=0)
-    comp("L", _params.L, params.L*rn, dval, mval, dtuple, mtuple, ave_L, finv=0)
-    comp("x", _params.x, params.x, dval, mval, dtuple, mtuple, ave_x, finv=not fd)
+    comp("I", _params.I, params.I*rn, dtuple, mtuple, ave_dI, finv=not fd)  # inverse match if latuple
+    comp("M", _params.M, params.M*rn, dtuple, mtuple, ave_M, finv=0)
+    comp("Ma",_params.Ma, params.Ma*rn, dtuple, mtuple, ave_Ma, finv=0)
+    comp("L", _params.L, params.L*rn, dtuple, mtuple, ave_L, finv=0)
+    comp("x", _params.x, params.x, dtuple, mtuple, ave_x, finv=not fd)
     # adjust / daxis+dx: Dim compensation in same area, alt axis definition?
-
-    mtuple.val = mval; dtuple.val = dval
 
     return mtuple, dtuple
 
 
-def comp(param_name, _param, param, dval, mval, dtuple, mtuple, ave, finv):
+def comp(param_name, _param, param, dtuple, mtuple, ave, finv):
 
     d = _param-param
     if finv: m = ave - abs(d)  # inverse match for primary params, no mag/value correlation
     else:    m = min(_param,param) - ave
-    dval += abs(d)
-    mval += m
+    dtuple.val += abs(d)
+    mtuple.val += m
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
 
-def comp_angle(param_name, _angle, angle, dval=0, mval=0, dtuple=[], mtuple=[]):  # rn doesn't matter for angles
+def comp_angle(param_name, _angle, angle, dtuple, mtuple):  # rn doesn't matter for angles
 
     _Dy, _Dx = _angle
     Dy, Dx = angle
@@ -574,12 +571,12 @@ def comp_angle(param_name, _angle, angle, dval=0, mval=0, dtuple=[], mtuple=[]):
     dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
     if dtuple:  # not parsed in rotate_P
-        setattr(dtuple, param_name, dangle); dval += abs(dangle)
-        setattr(mtuple, param_name, mangle); mval += mangle
+        setattr(dtuple, param_name, dangle); dtuple.val += abs(dangle)
+        setattr(mtuple, param_name, mangle); mtuple.val += mangle
 
     return mangle, dangle
 
-def comp_aangle(_aangle, aangle, dval, mval, dtuple, mtuple):
+def comp_aangle(_aangle, aangle, dtuple, mtuple):
 
     _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
     sin_da0, cos_da0, sin_da1, cos_da1 = aangle
@@ -597,8 +594,9 @@ def comp_aangle(_aangle, aangle, dval, mval, dtuple, mtuple):
 
     daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
-    dtuple.aangle = daangle; dval += abs(daangle)
-    mtuple.aangle = maangle; mval += maangle
+
+    dtuple.aangle = daangle; dtuple.val += abs(daangle)
+    mtuple.aangle = maangle; mtuple.val += maangle
 
 
 def agg_recursion_eval(blob, PP_t):
@@ -609,11 +607,11 @@ def agg_recursion_eval(blob, PP_t):
         fseg = isinstance(blob, CPP)
         convert = CPP2graph if fseg else CBlob2graph
         blob = convert(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
-        for PP_ in PP_t:
+        for fd, PP_ in enumerate(PP_t):
             for i, PP in enumerate(PP_):
-                PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph)  # convert PP to graph
+                PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph, ifd=fd)  # convert PP to graph
 
-    if isinstance(blob, Cgraph):  M, G = blob.plevels.val, blob.alt_plevels.val
+    if isinstance(blob, Cgraph):  M, G = blob.mplevels.val, blob.dplevels.val
     elif isinstance(blob, CPP):   M, G = blob.players.val, blob.alt_players.val
     valt = [M, G]
     fork_rdnt = [1+(G>M), 1+(M>=G)]
@@ -621,4 +619,4 @@ def agg_recursion_eval(blob, PP_t):
         if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
             and len(PP_) > ave_nsub and blob.alt_rdn < ave_overlap:
             blob.rdn += 1  # estimate
-            agg_recursion(blob, PP_, fseg=fseg)
+            agg_recursion(blob, PP_, fseg=fseg, ifd=fd)
