@@ -254,3 +254,28 @@ def eval_med_layer(graph_, graph, fd):  # recursive eval of reciprocal links fro
     else:
         for node in save_node_+ add_node_: node.roott[fd] = []  # delete roots
 
+def form_graph_(root, G_, ifd):  # form plevel in agg+ or player in sub+, G is node in GG graph; der+: comp_link if fderG, from sub+
+
+    comp_G_(G_, ifd)  # cross-comp all graphs within rng, graphs may be segs | fderGs, G.roott += link, link.node
+    mnode_, dnode_ = [],[]  # Gs with >0 +ve fork links:
+    for G in G_:
+        if G.link_.Qm: mnode_ += G  # all nodes with +ve links, not clustered in graphs yet
+        if G.link_.Qd: dnode_ += G
+    graph_t = []
+    for fd, node_ in enumerate([mnode_, dnode_]):
+        graph_ = []
+        for G in G_.pop():  # form graphs of linked nodes: Gs not removed in add_node_layer
+            gnode_ = [G]; val = 0
+            add_node_layer(gnode_, val, G_, G, fd)  # recursive depth-first gnode_+=[_G]
+            graph_ += CQ(Q=gnode_, val=val)
+
+        regraph_ = graph_reval(graph_, fd)  # graphs recursively reformed by node re-evaluation
+        if regraph_:
+            graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
+            for graph in graph_:
+                root_plevels = [root.mplevels, root.dplevels][fd]; plevels = [graph.mplevels, graph.dplevels][fd]
+                if root_plevels.H or plevels.H:  # better init plevels=list?
+                    sum_pH(root_plevels, plevels)
+        graph_t += [graph_]
+
+    return graph_t
