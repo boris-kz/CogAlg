@@ -279,3 +279,11 @@ def form_graph_(root, G_, ifd):  # form plevel in agg+ or player in sub+, G is n
         graph_t += [graph_]
 
     return graph_t
+
+def merge(_graph, graph, fd):
+
+    for node in graph.Q:
+        if node not in _graph.Q:
+            _graph.Q += [node]
+            _graph.valt[fd] += node.link_.valt[fd]
+

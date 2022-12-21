@@ -26,11 +26,11 @@ ave_sparsity = 2
 
 class CQ(ClusterStructure):  # nodes or links
 
-    Q = list  # all tested links / nodes
-    valt = lambda: [0,0]  # valt in link_, single-fork node_?
-    Qm = list  # positive links / nodes per mfork
+    Q = list  # all tested links or +ve nodes
+    val = lambda: [0,0]  # valt in link_, val in node_
+    lQm = list  # positive links per mfork
     mval = float
-    Qd = list  # positive links / nodes per dfork
+    lQd = list  # positive links per dfork
     dval = float
 
 class CpH(ClusterStructure):  # hierarchy of params + associated vars
@@ -95,21 +95,22 @@ def agg_recursion(root, G_, fseg, ifd):  # compositional recursion in root.PP_, 
 def form_graph_(root, G_, ifd): # form plevel in agg+ or player in sub+, G is node in GG graph; der+: comp_link if fderG, from sub+
 
     comp_G_(G_, ifd)  # cross-comp all graphs within rng, graphs may be segs | fderGs, G.roott += link, link.node
-    mnode_, dnode_ = [],[]  # Gs with >0 +ve fork links:
+    mnode_, dnode_ = [], []  # Gs with >0 +ve fork links:
     for G in G_:
         if G.link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
         if G.link_.Qd: dnode_ += [G]
-    graph_t = []; Gm_, Gd_ = copy(G_), copy(G_)
-
-    for fd, (node_, G_) in enumerate(zip([mnode_, dnode_], [Gm_, Gd_])):  # form proto-graphs of linked nodes
+    graph_t = []
+    Gm_, Gd_ = copy(G_), copy(G_)
+    # form proto-graphs of linked nodes:
+    for fd, (node_, G_) in enumerate(zip([mnode_, dnode_], [Gm_, Gd_])):
         graph_ = []
-        while G_:
-            G = G_.pop(0)  # all Gs not removed in add_node_layer
-            gnode_ = [G]; val = 0
-            add_node_layer(gnode_, val, G_, G, fd)  # recursive depth-first gnode_+=[_G]
+        while G_:  # all Gs not removed in add_node_layer
+            G = G_.pop()
+            gnode_=[G]; val=0
+            val = add_node_layer(gnode_, val, G_, G, fd)  # recursive depth-first gnode_+=[_G]
             graph_ += CQ(Q=gnode_, val=val)
 
-        regraph_ = graph_reval(graph_, fd)  # graphs recursively reformed by node re-evaluation
+        regraph_ = graph_reval(graph_, fd)  # graphs recursively reformed by node.link_.val, reduced by pruning links
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
             for graph in graph_:
@@ -120,15 +121,44 @@ def form_graph_(root, G_, ifd): # form plevel in agg+ or player in sub+, G is no
 
     return graph_t
 
+def graph_reval(graph_, fd):  # recursive eval nodes for regraph, increasingly selective with reduced node.link_.val
+
+    regraph_ = []
+    while graph_:
+        graph = graph_.pop()
+        # some links will be lost in reval, the graph may split into multiple regraphs, init each with graph.Q node:
+        while graph.Q:
+            node = graph.Q.pop()  # node_, not removed below
+            val = node.link_.valt[fd]  # in-graph links only
+            if val > G_aves[fd]:  # else skip
+                regraph = CQ(Q=[node], val=val)  # init for each node, then add _nodes
+                node.roott[fd] = regraph
+                readd_node_layer(regraph, graph.Q, node, fd)  # recursive depth-first regraph.Q+=[_node]
+                regraph_ += regraph
+        if graph.val-regraph.val > ave_G:  # graph reval while min val reduction
+            regraph_ += [regraph]
+    if regraph_: regraph_ = graph_reval(regraph_, fd)
+
+    return regraph_
+
+def readd_node_layer(regraph, graph_Q, node, fd):  # recursive depth-first regraph.Q+=[_node]
+
+    for link in node.link_.Q:  # all positive
+        _node = link.node_.Q[1] if link.node_.Q[0] is node else link.node_.Q[0]
+        _val = _node.link_.valt[fd]
+        if _val > G_aves[fd]:
+            regraph.Q += [_node]; regraph.val += _val; _node.roott[fd] = regraph
+            graph_Q.remove(_node)
+            readd_node_layer(regraph, graph_Q, _node, fd)
+
 def add_node_layer(gnode_, val, G_, G, fd):  # recursive depth-first gnode_+=[_G]
 
-    link_ = G.link_.Qd if fd else G.link_.Qm  # all positive
-    for link in link_:
+    for link in G.link_.Q:  # all positive
         _G = link.node_.Q[1] if link.node_.Q[0] is G else link.node_.Q[0]
         if _G in G_:  # _G is not removed in prior loop
             gnode_ += [_G]
             G_.remove(_G)
-            add_node_layer(gnode_, val, G_, _G, fd)
+            val += add_node_layer(gnode_, val, G_, _G, fd)
 
 
 def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP, same process, no fderG?
@@ -166,12 +196,6 @@ def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or seg
                 if dval > ave_Gd:
                     _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
                     G.link_.Qd += [derG]; G.link_.dval += dval
-                # no alt fork support:
-                for fd, val in enumerate([mplevel.val, dplevel.val]):
-                    if val > 0:
-                        for node, root in zip([_G, G], [G.roott[fd], _G.roott[fd]]):  # bilateral inclusion
-                            if node not in root.Q:
-                                root.Q += [node]; root.valt[fd] += node.link_.valt[fd]
 
 
 def comp_pH(_pH, pH):  # recursive unpack plevels ( pplayer ( players ( ptuples -> ptuple:
@@ -223,45 +247,6 @@ def comp_ext(_spH, spH, mpH, dpH):
     mpH.val += mpH.A; dpH.val += dpH.A
 
 
-def graph_reval(graph_, adjV_, fd):  # recursive eval of nodes for regraph, increasingly selective with node exclusion?
-
-    regraph_ = []
-    # draft:
-    while graph_:
-        graph = graph_.pop(); adjV = adjV_.pop()
-        if adjV < ave_G: continue  # skip stable graphs
-        regraph = CQ()
-        for node in graph.Q:  # node_
-            val = node.link_.valt[fd]  # in-graph links only
-            if val > G_aves[fd]:  # else skip
-                regraph.Q += [node]; node.roott[fd]=regraph; regraph.valt[fd] += val
-                for link in node.link_.Q:
-                    _node = link.node_.Q[1] if link.node_.Q[0] is node else link.node_.Q[0]
-                    _val = _node.link_.valt[fd]
-                    _graph = _node.roott[fd]
-                    if _graph is graph and _graph in graph_:  # _graph is not removed prior this call
-                        if _val > G_aves[fd]:  # link and both nodes must be positive for inclusion in regraph
-                        # in regraph only if root was merged, then also remove nodes?
-                        # no longer needed?:
-                            merge(regraph, _graph, fd)  # or reval _graph nodes: not accessed yet, else removed:
-                            graph_.remove(_graph)
-        # draft:
-        adjV = abs(graph.valt[fd]-regraph.valt[fd])  # adjustment in connect val in graph
-        if adjV > ave_G:
-            regraph_ += [regraph]; adjV_ += [adjV]
-
-    if regraph_: regraph_ = graph_reval(regraph_, adjV_, fd)
-
-    return regraph_
-
-def merge(_graph, graph, fd):
-
-    for node in graph.Q:
-        if node not in _graph.Q:
-            _graph.Q += [node]
-            _graph.valt[fd] += node.link_.valt[fd]
-
-
 def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
     comb_layers_t = [[],[]]
@@ -285,7 +270,7 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
                 sub_rlayers, rval = sub_recursion_g(sub_mgraph_, Rval, fseg=fseg, fd=0)
                 Rval+=rval; graph.rlayers = [[sub_mgraph_]+[sub_rlayers], Rval]
             else:
-                graph.rlayers = [[]]  # this can be skipped if we layers as [[]]
+                graph.rlayers = [[]]  # this can be skipped if we init layers as [[]]
             # der+:
             Dval = sum([sub_dgraph.dplevels.val for sub_dgraph in sub_dgraph_])
             if Dval > ave_sub * graph.rdn:
