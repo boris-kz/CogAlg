@@ -24,13 +24,16 @@ ave_len = 3
 ave_distance = 5
 ave_sparsity = 2
 
-class CQ(ClusterStructure):  # nodes or links
+class CQ(ClusterStructure):  # nodes or links' forks
+    Q = list
+    val = float
 
-    Q = list  # all tested links or +ve nodes
-    val = lambda: [0,0]  # valt in link_, val in node_
-    lQm = list  # positive links per mfork
+class Clink_(ClusterStructure):
+    Q = list
+    val = float
+    Qm = list
     mval = float
-    lQd = list  # positive links per dfork
+    Qd = list
     dval = float
 
 class CpH(ClusterStructure):  # hierarchy of params + associated vars
@@ -43,11 +46,11 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars
     L = float  # len_node_
     S = float  # sparsity: sum_len_links
     A = list   # axis: in derG or high-aspect G only?
-    altTop = list  # optional lower-nested alt_CpH = cis_CpH.H[0] for agg+ sum,comp
+    alt = list  # top plevel only: optional lower-nested alt_CpH = cis_CpH.H[0] for agg+ sum,comp
 
 class Cgraph(CPP):  # graph or generic PP of any composition
 
-    link_ = lambda: CQ() # evaluated graph_as_node external links, replace alt_node if open, direct only?
+    link_ = lambda: Clink_()  # evaluated graph_as_node external links, replace alt_node if open, direct only?
     node_ = lambda: CQ() # fd-selected elements, common root of layers, levels:
     # agg,sub forks: [[],0] if called
     mlevels = list  # PPs) Gs) GGs.: node_ agg, each a flat list
@@ -108,10 +111,8 @@ def form_graph_(root, G_, ifd): # form plevel in agg+ or player in sub+, G is no
             gnode_=[G]
             val = add_node_layer(gnode_, G_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
             graph_ += [CQ(Q=gnode_, val=val)]
-
-        reval_ = [ave_G for graph in graph_]  # init value
-        
-        regraph_ = graph_reval(graph_, reval_, fd)  # graphs recursively reformed by node.link_.val, reduced by pruning links
+        # reform graphs by node val:
+        regraph_ = graph_reval(graph_, [ave_G for graph in graph_], fd)  # init reval_ to start
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
             for graph in graph_:
@@ -129,11 +130,11 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, increa
     while graph_:
         graph = graph_.pop()
         reval = reval_.pop()
-        if reval < ave_G:  # same graph, skip re-evaluation
+        if reval < ave_G:  # same graph, skip re-evaluation:
             regraph_ += [graph]; rreval_ += [0]
             continue
         while graph.Q:  # some links will be removed, graph may split into multiple regraphs, init each with graph.Q node:
-            regraph = CQ
+            regraph = CQ()
             node = graph.Q.pop()  # node_, not removed below
             val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
             if val > G_aves[fd]:  # else skip
@@ -150,7 +151,7 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, increa
 
 def readd_node_layer(regraph, graph_Q, node, fd):  # recursive depth-first regraph.Q+=[_node]
 
-    for link in node.link_.Q:  # all positive
+    for link in [node.link_.Qm, node.link_.Qd][fd]:  # all positive
         _node = link.node_.Q[1] if link.node_.Q[0] is node else link.node_.Q[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
         if _val > G_aves[fd] and _node in graph_Q:
@@ -198,15 +199,15 @@ def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or seg
                                xn=max((_G.x0+_G.xn)/2 -x0, (G.x0+G.xn)/2 -x0), yn=max((_G.y0+_G.yn)/2 -y0, (G.y0+G.yn)/2 -y0))
                 mval = derG.mplevels.val
                 dval = derG.dplevels.val
-                _G.link_.Q += [derG]; _G.link_.val += mval; _G.link_.val += dval  # val of combined-fork +- links?
-                G.link_.Q += [derG]; G.link_.val += mval; G.link_.val += dval
+                tval = mval + dval
+                _G.link_.Q += [derG]; _G.link_.val += tval  # val of combined-fork' +- links?
+                G.link_.Q += [derG]; G.link_.val += tval
                 if mval > ave_Gm:
-                    _G.link_.lQm += [derG]; _G.link_.mval += mval  # no dval for Qm
-                    G.link_.lQm += [derG]; G.link_.mval += mval
+                    _G.link_.Qm += [derG]; _G.link_.mval += mval  # no dval for Qm
+                    G.link_.Qm += [derG]; G.link_.mval += mval
                 if dval > ave_Gd:
-                    _G.link_.lQd += [derG]; _G.link_.dval += dval  # no mval for Qd
-                    G.link_.lQd += [derG]; G.link_.dval += dval
-
+                    _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
+                    G.link_.Qd += [derG]; G.link_.dval += dval
 
 def comp_pH(_pH, pH):  # recursive unpack plevels ( pplayer ( players ( ptuples -> ptuple:
                        # if derG: compare mplevel or dplevel
@@ -265,7 +266,7 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
             graph_plevels = graph.dplevels
             node_ = []  # fill with positive links in graph:
             for node in graph.node_:
-                for link in node.link_:
+                for link in node.link_.lQd:
                     if link.dplevels.val>0 and link not in node_:
                         node_ += [link]
         else:
@@ -311,8 +312,7 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
         for node in node_: X0+=node.x0; Y0+=node.y0  # first pass defines center
         X0/=L; Y0/=L
         graph = Cgraph(L=L, node_=node_)
-        graph_plevels = [graph.mplevels, graph.dplevels][fd]  # init with node_[0]?
-        new_plevel = CpH(L=1)  # 1st link adds 2 nodes, other links add 1, one node is already in the graph
+        graph_plevels = CpH(); new_plevel = CpH(L=1)  # 1st link adds 2 nodes, other links add 1, one node is already in the graph
 
         for node in node_:  # define max distance,A, sum plevels:
             Xn = max(Xn,(node.x0+node.xn)-X0)  # box xn = x0+xn
@@ -322,7 +322,7 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
             rev=0
             while len(node.mplevels.H)==1 and len(node.dplevels.H)==1: # or plevels.H and plevels.H[0].L==1: node is derG:
                 rev=1
-                node = node.node_[0]  # get lower pplayers from node.node_[0]:
+                node = node.node_.Q[0]  # get lower pplayers from node.node_[0]:
                 node_plevels = node.mplevels if node.mplevels.H else node.dplevels  # prior sub+ fork
                 if len(node.mplevels.H)==1 and len(node.dplevels.H)==1:  # node is derG in der++
                    sum_pH(graph_plevels, node_plevels)  # sum lower pplayers of the top plevel in reversed order
@@ -347,7 +347,8 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
         new_plevel.A = [Xn*2,Yn*2]
         graph.x0=X0; graph.xn=Xn; graph.y0=Y0; graph.yn=Yn
         graph_plevels.H += [new_plevel]  # val is summed per node
-        graph_plevels.fds += [fd]
+        graph_Plevels = [graph.mplevels, graph.dplevels][fd]  # currently empty
+        graph_Plevels(H=graph_plevels.H, val=graph_plevels.val, fds=[copy(node.mplevels.fds),copy(node.dplevels.fds)][fd] + [fd])
         graph_ += [graph]
 
     for graph in graph_:  # 2nd pass: accum alt_graph_ params
@@ -370,41 +371,19 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
 
     for graph in graph_:  # 3rd pass: add alt fork to each graph plevel, separate to fix nesting in 2nd pass
         if graph.alt_graph_:
-            AltTop = graph.alt_graph_.pop()
+            AltTop = graph.alt_graph_.pop()  # temporary storage
             add_alt_top(graph_plevels, AltTop)
 
     return graph_
 
-# not revised:
+# draft:
 def add_alt_top(plevels, AltTop):
-    # plevels, not sure on fds yet
-    plevels.altTop = AltTop; plevels.val = AltTop.val
-    # pplayer
-    for pplayer, AltTop_pplayer in zip(plevels.H, AltTop.H[:1]):  # get only 1st index
-        pplayer.altTop = AltTop_pplayer; pplayer.val = AltTop_pplayer.val
-        # players, not sure on fds yet
-        for players, AltTop_players in zip(pplayer.H, AltTop_pplayer.H[:1]):
-            players.altTop = AltTop_players; players.val = AltTop_players.val
-            # ptuples
-            for ptuples, AltTop_ptuples in zip(players.H, AltTop_players.H[:1]):
-                ptuples.altTop = AltTop_ptuples; ptuples.val = AltTop_ptuples.val
 
-# please revise:
-def add_alts(cplevel, aplevel):
-
-    cForks, cValt = cplevel; aForks, aValt = aplevel
-    csize = len(cForks)
-    cplevel[:] = [cForks + aForks, [sum(cValt), sum(aValt)]]  # reassign with alts
-
-    for cFork, aFork in zip(cplevel[0][:csize], cplevel[0][csize:]):
-        cplayers, cfvalt, cfds = cFork
-        aplayers, afvalt, afds = aFork
-        cFork[1] = [sum(cfvalt), afvalt[0]]
-
-        for cplayer, aplayer in zip(cplayers, aplayers):
-            cforks, cvalt = cplayer
-            aforks, avalt = aplayer
-            cplayer[:] = [cforks+aforks, [sum(cvalt), avalt[0]]]  # reassign with alts
+    plevels.alt = AltTop  # no combined val, fd = 1-fds[0]
+    for players, alt_players in zip(plevels.H[0].H, AltTop.H):  # top pplayers only, pplayer is implicit
+        players.alt = alt_players
+        for ptuples, alt_ptuples in zip(players.H, alt_players.H):
+            ptuples.alt = alt_ptuples
 
 
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
@@ -418,7 +397,7 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( p
                 PH.A += pH.A
         else:
             PH.A = copy(pH.A)
-    for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):
+    for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):  # assume same fds
         if spH:
             if SpH:
                 if isinstance(SpH, Cptuple):

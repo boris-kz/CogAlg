@@ -287,3 +287,18 @@ def merge(_graph, graph, fd):
             _graph.Q += [node]
             _graph.valt[fd] += node.link_.valt[fd]
 
+def add_alts(cplevel, aplevel):
+
+    cForks, cValt = cplevel; aForks, aValt = aplevel
+    csize = len(cForks)
+    cplevel[:] = [cForks + aForks, [sum(cValt), sum(aValt)]]  # reassign with alts
+
+    for cFork, aFork in zip(cplevel[0][:csize], cplevel[0][csize:]):
+        cplayers, cfvalt, cfds = cFork
+        aplayers, afvalt, afds = aFork
+        cFork[1] = [sum(cfvalt), afvalt[0]]
+
+        for cplayer, aplayer in zip(cplayers, aplayers):
+            cforks, cvalt = cplayer
+            aforks, avalt = aplayer
+            cplayer[:] = [cforks+aforks, [sum(cvalt), avalt[0]]]  # reassign with alts
