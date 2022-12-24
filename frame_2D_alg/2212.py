@@ -302,3 +302,40 @@ def add_alts(cplevel, aplevel):
             cforks, cvalt = cplayer
             aforks, avalt = aplayer
             cplayer[:] = [cforks+aforks, [sum(cvalt), avalt[0]]]  # reassign with alts
+
+def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs inside PP, same process, no fderG?
+
+    for i, _G in enumerate(G_):
+        for G in G_[i+1:]:
+            # compare each G to other Gs in rng, bilateral link assign, val accum:
+            if G in [node for link in _G.link_.Q for node in link.node_.Q]:  # G,_G was compared in prior rng+, add frng to skip?
+                continue
+            _plevels = [_G.mplevels, _G.dplevels][ifd]; plevels = [G.mplevels, G.dplevels][ifd]
+            dx = _G.x0 - G.x0; dy = _G.y0 - G.y0  # center x0,y0
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity
+            # proximity = ave_rng - distance?
+            if distance < ave_distance * ((_plevels.val+plevels.val) / (2*sum(G_aves))):
+                # comb G eval
+                mplevel, dplevel = comp_pH(_plevels, plevels)
+                mplevel.L, dplevel.L = 1,1; mplevel.S, dplevel.S = distance,distance; mplevel.A, dplevel.A = [dy,dx],[dy,dx]
+                mplevels = CpH(H=[mplevel], fds=[0], val=mplevel.val); dplevels = CpH(H=[dplevel], fds=[1], val=dplevel.val)
+                # comp alts
+                if _plevels.altTop and plevels.altTop:
+                    altTopm,altTopd = comp_pH(_plevels.altTop, plevels.altTop)
+                    mplevels.altTop = CpH(H=[altTopm],fds=[0],val=altTopm.val)  # for sum,comp in agg+, reduced weighting of altVs?
+                    dplevels.altTop = CpH(H=[altTopd],fds=[1],val=altTopd.val)
+                # new derG:
+                y0 = (G.y0+_G.y0)/2; x0 = (G.x0+_G.x0)/2  # new center coords
+                derG = Cgraph( node_=CQ(Q=[_G,G]), mplevels=mplevels, dplevels=dplevels, y0=y0, x0=x0, # compute max distance from center:
+                               xn=max((_G.x0+_G.xn)/2 -x0, (G.x0+G.xn)/2 -x0), yn=max((_G.y0+_G.yn)/2 -y0, (G.y0+G.yn)/2 -y0))
+                mval = derG.mplevels.val
+                dval = derG.dplevels.val
+                tval = mval + dval
+                _G.link_.Q += [derG]; _G.link_.val += tval  # val of combined-fork' +- links?
+                G.link_.Q += [derG]; G.link_.val += tval
+                if mval > ave_Gm:
+                    _G.link_.Qm += [derG]; _G.link_.mval += mval  # no dval for Qm
+                    G.link_.Qm += [derG]; G.link_.mval += mval
+                if dval > ave_Gd:
+                    _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
+                    G.link_.Qd += [derG]; G.link_.dval += dval
