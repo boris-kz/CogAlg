@@ -339,3 +339,6 @@ def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or seg
                 if dval > ave_Gd:
                     _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
                     G.link_.Qd += [derG]; G.link_.dval += dval
+'''
+[gblob.node_.Q, gblob.alt_graph_][fd][:] = graph_  # node_=PPm_, alt_graph_=PPd_, [:] to enable to left hand assignment, not valid for object
+'''

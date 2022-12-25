@@ -77,7 +77,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
     M = int
     Ma = float
     axis = lambda: [1, 0]  # ini dy=1,dx=0, old angle after rotation
-    angle = lambda: [0, 0]  # in lataple only, replaced by float in vertuple
+    angle = lambda: [0, 0]  # in latuple only, replaced by float in vertuple
     aangle = lambda: [0, 0, 0, 0]
     # only in lataple, for comparison but not summation:
     G = float
@@ -169,7 +169,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
     segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=[0])  # initial latuple fd=0
     # PP is graph of segs:
     blob.PPm_, blob.PPd_ = form_PP_root((segm_, segd_), base_rdn=2)
-    # micro and macro re-comp,clustering:
+    # micro and macro recomp, clustering:
     sub_recursion_eval(blob)  # intra PP, add rlayers, dlayers, seg_levels to select PPs, sum M,G
     agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # cross PP, Cgraph conversion doesn't replace PPs?
 
@@ -231,9 +231,7 @@ def comp_P_root(P__):  # vertically compares y-adjacent and x-overlapping Ps: bl
                 elif (P.x0 + L) < _P.x0:
                     break  # no xn overlap, stop scanning lower P_
         _P_ = P_
-
     return P__
-
 
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
@@ -408,7 +406,6 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
 
     return seg
 
-
 def accum_derP(seg, derP, fd):  # derP might be CP, though unlikely
 
     if isinstance(derP, CderP): seg.x0 = min(seg.x0, derP._P.x0)
@@ -484,7 +481,6 @@ def sum_players(Layers, layers, fneg=0):  # same fds from comp_players
     elif not fneg:
         Layers[:] = deepcopy(layers)
 
-
 def sum_ptuple(Ptuple, ptuple, fneg=0):
 
     for param_name in Ptuple.numeric_params:
@@ -547,7 +543,6 @@ def comp_ptuple(_params, params, fd=0):  # compare lateral or vertical tuples, s
 
     return mtuple, dtuple
 
-
 def comp(param_name, _param, param, dtuple, mtuple, ave, finv):
 
     d = _param-param
@@ -609,14 +604,14 @@ def agg_recursion_eval(blob, PP_t):
         blob = convert(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
         for fd, PP_ in enumerate(PP_t):
             for i, PP in enumerate(PP_):
-                PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph, ifd=fd)  # convert PP to graph
+                PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph)  # convert PP to graph
 
-    if isinstance(blob, Cgraph):  M, G = blob.mplevels.val, blob.dplevels.val
-    elif isinstance(blob, CPP):   M, G = blob.players.val, blob.alt_players.val
+    if isinstance(blob, Cgraph): M, G = blob.plevels.val, blob.alt_plevels.val
+    elif isinstance(blob, CPP):  M, G = blob.players.val, blob.alt_players.val
     valt = [M, G]
     fork_rdnt = [1+(G>M), 1+(M>=G)]
     for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
         if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
             and len(PP_) > ave_nsub and blob.alt_rdn < ave_overlap:
             blob.rdn += 1  # estimate
-            agg_recursion(blob, PP_, fseg=fseg, ifd=fd)
+            agg_recursion(blob, PP_, fseg=fseg)

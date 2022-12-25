@@ -81,15 +81,11 @@ class CBlob(ClusterStructure):
     P__ = list  # input + derPs, common root for downward layers and upward PP_s:
     rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers = list  # separate for range and angle forks per blob
-    PPm_ = list
-    PPd_ = list
+    PPm_ = list  # mblobs in frame
+    PPd_ = list  # dblobs in frame
     valt = list  # PPm_ val, PPd_ val, += M,G?
-    # comp_slice:
-    dir_blobs = list  # primarily vertically | laterally oriented edge blob segments, formed in segment_by_direction
-    fsliced = bool
-    fflip = bool  # x-y swap in comp_slice
-    # frame_bblob:
-    root = object  # bblob or blob to dir_blob
+    fsliced = bool  # from comp_slice
+    root = object  # frame or from frame_bblob
 
 '''
     Conventions:
