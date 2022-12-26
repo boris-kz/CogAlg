@@ -341,4 +341,12 @@ def comp_G_(G_, ifd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or seg
                     G.link_.Qd += [derG]; G.link_.dval += dval
 '''
 [gblob.node_.Q, gblob.alt_graph_][fd][:] = graph_  # node_=PPm_, alt_graph_=PPd_, [:] to enable to left hand assignment, not valid for object
+
+if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
+PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
+for altPP in PP.altPP_:  # overlapping Ps from each alt PP
+    altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
+    alt_rdn = len(set(PP_P_).intersection(altPP_P_))
+    PP.alt_rdn += alt_rdn  # count overlapping PPs, not bilateral, each PP computes its own alt_rdn
+    gblob.alt_rdn += alt_rdn  # sum across PP_
 '''

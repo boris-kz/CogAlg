@@ -282,39 +282,33 @@ def frame2graph(frame, fseg, Cgraph):  # not sure
     for fd, blob_, plevels in enumerate(zip([mblob_,dblob_], [gframe.plevels, gframe.alt_plevels])):
         graph_ = []
         for blob in blob_:
-            graph = CPP2graph(blob, fseg, Cgraph)
+            graph = PP2graph(blob, fseg, Cgraph)
             sum_pH(plevels, graph.plevels)
             graph_ += [graph]
         [gframe.node_.Q, gframe.alt_graph_][fd][:] = graph_  # mblob_|dblob_, [:] to enable to left hand assignment, not valid for object
 
     return gframe
 
-def CBlob2graph(blob, fseg, Cgraph):  # was meant for frame, not sure
+def blob2graph(blob, fseg, Cgraph):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-    gblob = Cgraph(alt_plevels=CpH, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-
-    for fd, PP_, plevels in enumerate(zip([PPm_,PPd_], [gblob.plevels, gblob.alt_plevels])):
-        graph_ = []
+    gblob = Cgraph(alt_plevels=CpH(), rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    blob.graph = gblob  # update graph reference
+    # convert elements
+    for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
-            graph = CPP2graph(PP, fseg, Cgraph)
-            sum_pH(plevels, graph.plevels)
-            graph_ += [graph]
-            # not reviewed:
-            if fseg: PP = PP.roott[PP.fds[-1]]  # seg root
-            PP_P_ = [P for P_ in PP.P__ for P in P_]  # PPs' Ps
-            for altPP in PP.altPP_:  # overlapping Ps from each alt PP
-                altPP_P_ = [P for P_ in altPP.P__ for P in P_]  # altPP's Ps
-                alt_rdn = len(set(PP_P_).intersection(altPP_P_))
-                PP.alt_rdn += alt_rdn  # count overlapping PPs, not bilateral, each PP computes its own alt_rdn
-                gblob.alt_rdn += alt_rdn  # sum across PP_
+            graph = PP2graph(PP, fseg, Cgraph)
+            sum_pH(gblob.plevels, graph.plevels)
+            gblob.node_.Q += [graph]
+    for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
+        if not alt_blob.graph:
+            blob2graph(alt_blob)  # convert alt_blob to graph
+        sum_pH(gblob.alt_plevels, alt_blob.graph.plevels)
 
-        [gblob.node_.Q, gblob.alt_graph_][fd][:] = graph_  # PPm_|PPd_, [:] to enable to left hand assignment, not valid for object
     return gblob
 
-
-def CPP2graph(PP, fseg, Cgraph):
+def PP2graph(PP, fseg, Cgraph):
 
     alt_players = CpH()
     if not fseg and PP.altPP_:  # seg doesn't have altPP_

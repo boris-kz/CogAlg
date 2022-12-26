@@ -86,6 +86,7 @@ class CBlob(ClusterStructure):
     valt = list  # PPm_ val, PPd_ val, += M,G?
     fsliced = bool  # from comp_slice
     root = object  # frame or from frame_bblob
+    graph = lambda: None  # reference to converted blob
 
 '''
     Conventions:

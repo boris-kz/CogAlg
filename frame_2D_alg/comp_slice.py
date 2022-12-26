@@ -553,7 +553,7 @@ def comp(param_name, _param, param, dtuple, mtuple, ave, finv):
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
 
-def comp_angle(param_name, _angle, angle, dtuple, mtuple):  # rn doesn't matter for angles
+def comp_angle(param_name, _angle, angle, dtuple=None, mtuple=None):  # rn doesn't matter for angles
 
     _Dy, _Dx = _angle
     Dy, Dx = angle
@@ -596,12 +596,14 @@ def comp_aangle(_aangle, aangle, dtuple, mtuple):
 
 def agg_recursion_eval(blob, PP_t):
     from agg_recursion import agg_recursion, Cgraph
-    from sub_recursion import CPP2graph, CBlob2graph
+    from sub_recursion import PP2graph, blob2graph
 
     if not isinstance(blob, Cgraph):
         fseg = isinstance(blob, CPP)
-        convert = CPP2graph if fseg else CBlob2graph
-        blob = convert(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
+        if fseg: blob = PP2graph(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
+        else:
+            if blob.graph: blob = blob.graph  # get converted graph
+            else:          blob = blob2graph(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
         for fd, PP_ in enumerate(PP_t):
             for i, PP in enumerate(PP_):
                 PP_[i] = CPP2graph(PP, fseg=fseg, Cgraph=Cgraph)  # convert PP to graph
