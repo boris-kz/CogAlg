@@ -9,10 +9,16 @@ from comp_slice import *
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
-This may form closed edge patterns around flat core blobs, which defines stable objects.   
-All aves are defined for rdn+1 
+This may form closed edge patterns around flat core blobs, which defines stable objects. 
+
+Graphs are formed from blobs that match over <max distance. 
+They are also assigned adjacent alt-fork graphs, which borrow predictive value from the graph. 
+Primary value is match, so difference patterns don't have independent value. 
+They borrow value from proximate or average match patterns, to the extent that they cancel their projected match. 
+But alt match patterns would borrow borrowed value, which may be too tenuous to track, we can use the average instead.
 '''
 
+# All aves are defined for rdn+1:
 ave_G = 6  # fixed costs per G
 ave_Gm = 5  # for inclusion in graph
 ave_Gd = 4
@@ -118,7 +124,7 @@ def form_graph_(root, G_): # form plevel in agg+ or player in sub+, G is node in
                     sum_pH(root.plevels, graph.plevels)
         graph_t += [graph_]
 
-    add_alt_graph_(graph_t)
+    add_alt_graph_(graph_t)  # overlap + contour, to compute borrowed value?
     return graph_t
 
 def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, increasingly selective with reduced node.link_.val
@@ -184,7 +190,7 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
                 # combined G eval
                 mplevel, dplevel = comp_pH(_G.plevels, G.plevels)
                 mplevel.L, dplevel.L = 1,1; mplevel.S, dplevel.S = distance,distance; mplevel.A, dplevel.A = [dy,dx],[dy,dx]
-                # comp contour
+                # comp contour+overlap:
                 if _G.alt_plevels and G.alt_plevels:  # or if comb plevels.val > ave * alt_rdn
                     alt_mplevel, alt_dplevel = comp_pH(_G.alt_plevels, G.alt_plevels)
                     alt_plevels = [alt_mplevel, alt_dplevel]  # no separate extuple?
@@ -193,8 +199,7 @@ def comp_G_(G_):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs ins
                 y0 = (G.y0+_G.y0)/2; x0 = (G.x0+_G.x0)/2  # new center coords
                 derG = Cgraph( node_=CQ(Q=[_G,G]), plevels=[mplevel,dplevel], alt_plevels=alt_plevels, y0=y0, x0=x0, # max distance from center:
                                xn=max((_G.x0+_G.xn)/2 -x0, (G.x0+G.xn)/2 -x0), yn=max((_G.y0+_G.yn)/2 -y0, (G.y0+G.yn)/2 -y0))
-                mval = derG.mplevels.val
-                dval = derG.dplevels.val
+                mval, dval = mplevel.val, dplevel.val
                 tval = mval + dval
                 _G.link_.Q += [derG]; _G.link_.val += tval  # val of combined-fork' +- links?
                 G.link_.Q += [derG]; G.link_.val += tval
@@ -263,8 +268,12 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
             for node in graph.node_:
                 for link in node.link_.Qd:  # always positive
                     if link not in node_:
-                        link.plevels = CpH(H=[link.plevels[1]], val=link.plevels[1].val, fds=[1])
-                        node_ += [link]
+                        # is there a simpler way?
+                        der_node = Cgraph(node_=link.node_, link_=link.link_, y0=link.y0, x0=link.x0, xn=link.xn, yn=link.yn,
+                                   plevels = CpH(H=[link.plevels[1]], val=link.plevels[1].val, fds=[1]))
+                        if link.alt_plevels:
+                            der_node.alt_plevels = CpH(H=[link.alt_plevels[1]], val=link.alt_plevels[1].val, fds=[0])
+                        node_ += [der_node]
         else: node_ = graph.node_
 
         if graph.plevels.val > G_aves[fd] and len(node_) > ave_nsub:
@@ -344,25 +353,21 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
 
     for fd, graph_ in enumerate(graph_t):
         for graph in graph_:
-            Alt_plevels = CpH()  # Alt_players if fsub?
             for node in graph.node_:
                 for derG in node.link_.Q:
-                    for G in derG.node_.Q:
-                        if G not in graph.node_:  # alt graphs are roots of not-in-graph G in derG.node_
-                            alt_graph = G.roott[1-fd]
-                            if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph or removed
-                                if Alt_plevels.H:  # der+: plevels[-1] += player, rng+: players[-1] = player?
-                                    sum_pH(Alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
-                                else:
-                                    Alt_plevels.val = alt_graph.plevels.val
-                                    Alt_plevels.fds = copy(alt_graph.plevels.fds)
-                                    Alt_plevels.H = copy(alt_graph.plevels.H)
-                                # overlapping nodes, not bilateral: graph may already be in alt_graph.alt_graph:
-                                graph.alt_rdn += len(set(graph.node_).intersection(alt_graph.node_))
-                                graph.alt_graph_ += [alt_graph]
-                                alt_graph.alt_graph_ += [graph]  # bilateral assign
+                    for G in derG.node_.Q:  # both overlap: in-graph nodes, and contour: not in-graph nodes
+                        alt_graph = G.roott[1-fd]  # never Cgraph here?
+                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph or removed
+                            graph.alt_graph_ += [alt_graph]
+                            alt_graph.alt_graph_ += [graph]  # bilateral assign
+
+    for fd, graph_ in enumerate(graph_t):
+        for graph in graph_:
             if graph.alt_graph_:
-                graph.alt_plevels = Alt_plevels
+                graph.alt_plevels = CpH()  # players if fsub? der+: plevels[-1] += player, rng+: players[-1] = player?
+            for alt_graph in graph.alt_graph_:
+                sum_pH(graph.alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
+                graph.alt_rdn += len(set(graph.node_).intersection(alt_graph.node_))  # overlap
 
 
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH

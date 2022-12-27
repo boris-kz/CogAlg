@@ -350,3 +350,25 @@ for altPP in PP.altPP_:  # overlapping Ps from each alt PP
     PP.alt_rdn += alt_rdn  # count overlapping PPs, not bilateral, each PP computes its own alt_rdn
     gblob.alt_rdn += alt_rdn  # sum across PP_
 '''
+
+def add_alt_graph_(graph_t):  # mgraph_, dgraph_
+
+    for fd, graph_ in enumerate(graph_t):
+        for graph in graph_:
+            for node in graph.node_:
+                for derG in node.link_.Q:
+                    for G in derG.node_.Q:
+                        if G not in graph.node_:  # alt graphs are roots of not-in-graph G in derG.node_
+                            alt_graph = G.roott[1-fd]  # never Cgraph here?
+                            if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph or removed
+                                graph.alt_graph_ += [alt_graph]
+                                alt_graph.alt_graph_ += [graph]  # bilateral assign
+    for fd, graph_ in enumerate(graph_t):
+        for graph in graph_:
+            if graph.alt_graph_:
+                graph.alt_plevels = CpH()  # players if fsub? der+: plevels[-1] += player, rng+: players[-1] = player?
+            for alt_graph in graph.alt_graph_:
+                sum_pH(graph.alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
+                graph.alt_rdn += len(set(graph.node_).intersection(alt_graph.node_))  # overlap
+
+
