@@ -372,3 +372,18 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                 graph.alt_rdn += len(set(graph.node_).intersection(alt_graph.node_))  # overlap
 
 
+    comb_layers_t = [[],[]]
+    for graph in graph_:
+        if fd:
+            link_ = []
+            for node in node_:
+                for link in node.link_.Qd:  # always positive
+                    if link_ not in link_: link_+=[link]
+            node_ = []
+            for link in link_:
+                der_node = Cgraph(node_=copy(link.node_), y0=link.y0, x0=link.x0, xn=link.xn, yn=link.yn,
+                           plevels = CpH(H=[link.plevels[1]], val=link.plevels[1].val, fds=[1]))
+                if link.alt_plevels:
+                    der_node.alt_plevels = CpH(H=[link.alt_plevels[1]], val=link.alt_plevels[1].val, fds=[0])
+                node_ += [der_node]
+        else: node_ = graph.node_
