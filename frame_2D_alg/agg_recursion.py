@@ -19,8 +19,7 @@ But alt match patterns would borrow borrowed value, which may be too tenuous to 
 
 cross_comp(alt_graph_) if high value?
 '''
-
-# All aves are defined for rdn+1:
+# aves defined for rdn+1:
 ave_G = 6  # fixed costs per G
 ave_Gm = 5  # for inclusion in graph
 ave_Gd = 4
@@ -75,7 +74,7 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     yn = float
     rdn = int  # for PP evaluation, recursion count + Rdn / nderPs; no alt_rdn: valt representation in alt_PP_ valts?
     rng = lambda: 1  # not for alt_graphs
-    root = lambda: [None]  # higher-order segG or graph
+    roott = lambda: [None, None]  # higher-order segG or graphs of two forks
 
 
 def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
@@ -104,15 +103,13 @@ def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, prett
 def form_graph_(root, G_): # form plevel in agg+ or player in sub+, G is node in GG graph; der+: comp_link if fderG, from sub+
 
     comp_G_(G_)  # cross-comp all graphs within rng, graphs may be segs | fderGs, G.roott += link, link.node
-    node_, link_ = [], []  # Gs with >0 +ve fork links:
+    mnode_, dnode_ = [], []  # Gs with >0 +ve fork links:
     for G in G_:
-        if G.link_.Qm: node_ += [G]  # all nodes with +ve links, not clustered in graphs yet
-        if G.link_.Qd:
-            for link in G.link_.Qd:  # positive abs d val, neg m?
-                if link not in link_: link_ += [link]
+        if G.link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
+        if G.link_.Qd: dnode_ += [G]
     graph_t = []
-    # Gm_, Gd_ = copy(G_), copy(G_)  # not sure yet
-    for fd, (node_, G_) in enumerate(zip([node_, link_], [Gm_, Gd_])):
+    Gm_, Gd_ = copy(G_), copy(G_)
+    for fd, (node_, G_) in enumerate(zip([mnode_, dnode_], [Gm_, Gd_])):
         graph_ = []  # form graphs by link val:
         while G_:  # all Gs not removed in add_node_layer
             G = G_.pop()
@@ -147,7 +144,6 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, increa
             val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
             if val > G_aves[fd]:  # else skip
                 regraph.Q = [node]; regraph.val = val  # init for each node, then add _nodes
-                node.roott[fd] = regraph
                 readd_node_layer(regraph, graph.Q, node, fd)  # recursive depth-first regraph.Q+=[_node]
             reval = graph.val - regraph.val
             if regraph.val > ave_G:
@@ -266,15 +262,14 @@ def comp_ext(_spH, spH, mpH, dpH):
 def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
     comb_layers_t = [[],[]]
-    for graph in graph_:
-        if fd:
-            node_ = []
-            for node in node_:
-                for link in node.link_.Qd:  # always positive
-                    if link not in node_: node_ += [link]
-        else: node_ = graph.node_
 
+    for graph in graph_:
+        node_ = graph.node_
         if graph.plevels.val > G_aves[fd] and len(node_) > ave_nsub:
+            if fd:
+                for node in node_:
+                    Mdplevel, Ddplevel = comp_links(node)  # forms quasi-gradient with variable link length
+                    # cluster nodes by Mdplevel.val or Ddplevel.val?
             sub_mgraph_, sub_dgraph_ = form_graph_(graph, node_)  # cross-comp and clustering cycle
             # rng+:
             Rval = sum([sub_mgraph.plevels.val for sub_mgraph in sub_mgraph_])
@@ -302,6 +297,9 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
 
     return comb_layers_t, Sval
 
+def comp_links(node):  # forms quasi-gradient with variable link length
+    pass
+
 
 def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ or player in sub+: if fderG?
                          # fd for clustering, same or fderG for alts?
@@ -320,7 +318,6 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
             Yn = max(Yn,(node.y0+node.yn)-Y0)
             # node: G|derG, sum plevels ( pplayers ( players ( ptuples:
             sum_pH(graph_plevels, node.plevels)
-            node.node[0].roott[1-fd] if fd else node.roott[fd] = graph  # in der+, converted link.node.roott is assigned instead
             rev=0
             while isinstance(node.plevels, list): # node is derG:
                 rev=1
@@ -353,7 +350,7 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
     for fd, graph_ in enumerate(graph_t):
         for graph in graph_:
             for node in graph.node_:
-                for derG in node.link_.Q:
+                for derG in node.link_.Q:  # contour if link.plevels.val < ave_Gm: link outside the graph
                     for G in derG.node_.Q:  # both overlap: in-graph nodes, and contour: not in-graph nodes
                         alt_graph = G.roott[1-fd]
                         if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph or removed
