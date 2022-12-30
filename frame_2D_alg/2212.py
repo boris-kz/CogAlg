@@ -476,3 +476,22 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
             else:
                 node.root = graph
             # node.node[0].roott[1-fd] if fd else n  # in der+, converted link.node.roott is assigned instead
+
+def cluster_dnode_(_node, node_, link_):
+
+    for link in link_:
+        node = link.node_.Q[1] if link.node_.Q[0] is _node else link.node_.Q[0]
+
+        if node in node_ and node.Ddplevel.val > 0:  # merge node into _node
+            # accumulate plevels and alt_plevels
+            sum_pH(_node.plevels, node.plevels)
+            sum_pH(_node.alt_plevels, node.alt_plevels)
+            # pack links
+            for link in node.link_.Q:
+                if link not in _node.link_.Q:
+                    _node.link_.Q += [link]
+            node_.remove(node)
+            # search continuously with links
+            next_link_ = copy(node.link_.Q)  # copy to prevent link added a same link_.Q while looping it in the nextl oop
+            cluster_dnode_(_node, node_, next_link_)
+

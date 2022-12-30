@@ -10,13 +10,13 @@ from comp_slice import *
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
 This may form closed edge patterns around flat core blobs, which defines stable objects. 
-
 Graphs are formed from blobs that match over <max distance. 
+-
 They are also assigned adjacent alt-fork graphs, which borrow predictive value from the graph. 
 Primary value is match, so difference patterns don't have independent value. 
 They borrow value from proximate or average match patterns, to the extent that they cancel their projected match. 
 But alt match patterns would borrow borrowed value, which may be too tenuous to track, we can use the average instead.
-
+-
 cross_comp(alt_graph_) if high value?
 '''
 # aves defined for rdn+1:
@@ -76,6 +76,9 @@ class Cgraph(CPP):  # graph or generic PP of any composition
     rng = lambda: 1  # not for alt_graphs
     roott = lambda: [None, None]  # higher-order segG or graphs of two forks
 
+    Mdplevel = lambda: CpH()
+    Ddplevel = lambda: CpH()
+
 
 def agg_recursion(root, G_, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
@@ -108,13 +111,12 @@ def form_graph_(root, G_): # form plevel in agg+ or player in sub+, G is node in
         if G.link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
         if G.link_.Qd: dnode_ += [G]
     graph_t = []
-    Gm_, Gd_ = copy(G_), copy(G_)
-    for fd, (node_, G_) in enumerate(zip([mnode_, dnode_], [Gm_, Gd_])):
+    for fd, node_ in enumerate([mnode_, dnode_]):
         graph_ = []  # form graphs by link val:
-        while G_:  # all Gs not removed in add_node_layer
-            G = G_.pop()
+        while node_:  # all Gs not removed in add_node_layer
+            G = node_.pop()
             gnode_ = [G]
-            val = add_node_layer(gnode_, G_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
+            val = add_node_layer(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
             graph_ += [CQ(Q=gnode_, val=val)]
         # reform graphs by node val:
         regraph_ = graph_reval(graph_, [ave_G for graph in graph_], fd)  # init reval_ to start
@@ -157,7 +159,8 @@ def readd_node_layer(regraph, graph_Q, node, fd):  # recursive depth-first regra
 
     for link in [node.link_.Qm, node.link_.Qd][fd]:  # all positive
         _node = link.node_.Q[1] if link.node_.Q[0] is node else link.node_.Q[0]
-        _val = [_node.link_.mval, _node.link_.dval][fd]
+        _val = [_node.link_.mval, _node.link_.dval][fd] \
+             + [_node.Mdplevel.val, _node.Ddplevel.val][fd]  # eval by comb intra-node and inter-node M|D
         if _val > G_aves[fd] and _node in graph_Q:
             regraph.Q += [_node]
             graph_Q.remove(_node)
@@ -267,9 +270,12 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
         node_ = graph.node_
         if graph.plevels.val > G_aves[fd] and len(node_) > ave_nsub:
             if fd:
-                for node in node_:
-                    Mdplevel, Ddplevel = comp_links(node)  # forms quasi-gradient with variable link length
-                    # cluster nodes by Mdplevel.val or Ddplevel.val?
+                for node in node_:  # node.Mdplevel, node.Ddplevel = comp_links(node): comp resolution should not increase, stay with node:
+                    Dplevel = CpH()
+                    for link in node.link_:  # form quasi-gradient from links of variable length:
+                        sum_pH(Dplevel, link.plevels[1])  # adjust by dangle?
+                    node.plevels.H += Dplevel; node.plevels.val += Dplevel.val; node.plevels.fds += [1]
+            # comp extended plevels:
             sub_mgraph_, sub_dgraph_ = form_graph_(graph, node_)  # cross-comp and clustering cycle
             # rng+:
             Rval = sum([sub_mgraph.plevels.val for sub_mgraph in sub_mgraph_])
@@ -298,7 +304,14 @@ def sub_recursion_g(graph_, Sval, fseg, fd):  # rng+: extend G_ per graph, der+:
     return comb_layers_t, Sval
 
 def comp_links(node):  # forms quasi-gradient with variable link length
-    pass
+
+    Mdplevel = CpH(); Ddplevel = CpH()
+    for i, _link in enumerate(node.link_.Qd):
+        for link in node.link_.Q[i+1:]:
+            mdplevel, ddplevel = comp_pH(_link.plevels[1], link.plevels[1])
+            sum_pH(Mdplevel, mdplevel); sum_pH(Ddplevel, ddplevel)
+
+    return Mdplevel, Ddplevel
 
 
 def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ or player in sub+: if fderG?
@@ -318,6 +331,7 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
             Yn = max(Yn,(node.y0+node.yn)-Y0)
             # node: G|derG, sum plevels ( pplayers ( players ( ptuples:
             sum_pH(graph_plevels, node.plevels)
+            node.roott[fd] = graph
             rev=0
             while isinstance(node.plevels, list): # node is derG:
                 rev=1
@@ -361,7 +375,7 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
         for graph in graph_:
             if graph.alt_graph_:
                 graph.alt_plevels = CpH()  # players if fsub? der+: plevels[-1] += player, rng+: players[-1] = player?
-                for alt_graph in graph.alt_graph_:  # this should be run only if alt_graph is not empty
+                for alt_graph in graph.alt_graph_:
                     sum_pH(graph.alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.node_).intersection(alt_graph.node_))  # overlap
 
