@@ -477,6 +477,51 @@ def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ o
                 node.root = graph
             # node.node[0].roott[1-fd] if fd else n  # in der+, converted link.node.roott is assigned instead
 
+def sum2graph_(G_, fd):  # sum node and link params into graph, plevel in agg+ or player in sub+: if fderG?
+                         # fd for clustering, same or fderG for alts?
+    graph_ = []
+    for G in G_:
+        X0,Y0, Xn,Yn = 0,0,0,0
+        node_, val = G.Q, G.val
+        L = len(node_)
+        for node in node_: X0+=node.x0; Y0+=node.y0  # first pass defines center
+        X0/=L; Y0/=L
+        graph = Cgraph(L=L, node_=node_)
+        graph_plevels = CpH(); new_plevel = CpH(L=1)  # 1st link adds 2 nodes, other links add 1, one node is already in the graph
+
+        for node in node_:  # define max distance,A, sum plevels:
+            Xn = max(Xn,(node.x0+node.xn)-X0)  # box xn = x0+xn
+            Yn = max(Yn,(node.y0+node.yn)-Y0)
+            # node: G|derG, sum plevels ( pplayers ( players ( ptuples:
+            sum_pH(graph_plevels, node.plevels)
+            node.roott[fd] = graph
+            rev=0
+            while isinstance(node.plevels, list): # node is derG:
+                rev=1
+                Node = node.node_.Q[0]  # get lower pplayers from node.node_[0]:
+                if isinstance(Node.plevels, list):  # node is derG in der++
+                   sum_pH(graph_plevels, Node.plevels)  # sum lower pplayers of the top plevel in reversed order
+            if rev:
+                i = 2**len(node.plevels.H)  # n_players in implicit pplayer = n_higher_plevels ^2: 1|1|2|4...
+                _i = -i; inp = graph_plevels.H[0]
+                rev_pplayers = CpH(val=inp.val, L=inp.L, S=inp.S, A=inp.A)
+                for players, fd in zip(inp.H[-i:-_i], inp.fds[-i:-_i]): # reverse pplayers to bottom-up, keep sequence of players in pplayer:
+                    rev_pplayers.H += [players]; rev_pplayers.fds += [fd]
+                    _i = i; i += int(np.sqrt(i))
+                graph_plevels = CpH(H=Node.plevels.H+[rev_pplayers], val=Node.plevels.val+graph_plevels.val, fds=Node.plevels.fds+[fd])
+                # low plevels in last node_[0] while derG, + top plevel: rev pplayers of node==derG
+            for derG in node.link_.Q:
+                sum_pH(new_plevel, derG.plevels[fd])  # sum new_plevel across nodes, accum derG, += L=1, S=link.S, preA: [Xn,Yn]
+
+        new_plevel.A = [Xn*2,Yn*2]
+        graph.x0=X0; graph.xn=Xn; graph.y0=Y0; graph.yn=Yn
+        graph.plevels.H = graph_plevels.H + [new_plevel]  # currently empty
+        graph.plevels.fds = copy(node.plevels.fds) + [fd]
+        graph.plevels.val = graph_plevels.val
+        graph_ += [graph]
+
+    return graph_
+
 def cluster_dnode_(_node, node_, link_):
 
     for link in link_:
@@ -495,3 +540,12 @@ def cluster_dnode_(_node, node_, link_):
             next_link_ = copy(node.link_.Q)  # copy to prevent link added a same link_.Q while looping it in the nextl oop
             cluster_dnode_(_node, node_, next_link_)
 
+def comp_links(node):  # forms quasi-gradient with variable link length
+
+    Mdplevel = CpH(); Ddplevel = CpH()
+    for i, _link in enumerate(node.link_.Qd):
+        for link in node.link_.Q[i+1:]:
+            mdplevel, ddplevel = comp_pH(_link.plevels[1], link.plevels[1])
+            sum_pH(Mdplevel, mdplevel); sum_pH(Ddplevel, ddplevel)
+
+    return Mdplevel, Ddplevel
