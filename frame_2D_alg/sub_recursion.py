@@ -303,7 +303,7 @@ def blob2graph(blob, fseg, Cgraph):
             gblob.node_.Q += [graph]
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.graph:
-            blob2graph(alt_blob)  # convert alt_blob to graph
+            blob2graph(alt_blob, fseg, Cgraph)  # convert alt_blob to graph
         sum_pH(gblob.alt_plevels, alt_blob.graph.plevels)
 
     return gblob

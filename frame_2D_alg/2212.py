@@ -537,7 +537,7 @@ def cluster_dnode_(_node, node_, link_):
                     _node.link_.Q += [link]
             node_.remove(node)
             # search continuously with links
-            next_link_ = copy(node.link_.Q)  # copy to prevent link added a same link_.Q while looping it in the nextl oop
+            next_link_ = copy(node.link_.Q)  # copy to prevent link added a same link_.Q while looping it in the next loop
             cluster_dnode_(_node, node_, next_link_)
 
 def comp_links(node):  # forms quasi-gradient with variable link length
@@ -549,3 +549,19 @@ def comp_links(node):  # forms quasi-gradient with variable link length
             sum_pH(Mdplevel, mdplevel); sum_pH(Ddplevel, ddplevel)
 
     return Mdplevel, Ddplevel
+'''
+            # in form_graph if plevels per mlevels, dlevels:
+            root.plevels.H=[]; root.plevels.val=0; root.plevels.fds=[]
+            for graph in graph_:
+                sum_pH(root.plevels, graph.plevels)  # replace root.plevels
+                
+            # in sub_recursion if last plevel is not added in sum2graph: 
+            if fd:
+                for node in node_:  # comp sum_node_link, not comp_links: revert explosion in links?
+                                    # or selective comp_links?
+                    Dplevel = CpH()
+                    for link in node.link_.Q:  # form quasi-gradient from links of variable length:
+                        sum_pH(Dplevel, link.plevels[1])  # adjust by dangle?
+                    node.plevels.H = [Dplevel]; node.plevels.val = Dplevel.val; node.plevels.fds = [1]
+                    # comp new plevel only:
+'''
