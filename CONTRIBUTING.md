@@ -35,7 +35,7 @@ Khanh Nguyen, $2700, for debugging and improving line_POC, December 2018.
 
 Stephan Verbeeck, $2000 for insistence on using 2x2 gradient, as well as his perspective on colors, contour tracing, and languages, January-June
 
-Todor Arnaudov, $1600, frequent contributor, March-June
+Todor Arnaudov, $1600, various, March-June
 
 Kok Wei Chee, $900, for diagrams of line_POC and frame_blobs, December 
 
@@ -69,7 +69,7 @@ Aqib Mumtaz and Ayesha Ali, $1400: audio interfacing for 1D alg, April-May
 
 2022:  
 
-Kok Wei Chee, $22300: lead developer, January-November
+Kok Wei Chee, $25300: lead developer, January-December
 
 Alex Pitertsev, $2000 for porting line_comp to Julia, June
 

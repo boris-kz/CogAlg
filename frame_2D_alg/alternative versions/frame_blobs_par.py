@@ -1,51 +1,3 @@
-'''
-Draft of blob-parallel version of frame_blobs
-
-pseudo code:
-
-def frame_blobs_parallel(frame_dert__):  # grow blob.dert__ in all blobs in parallel:
-
-    blob__ = frame_dert__  # initialize one blob per dert
-    frame_dert__[:].append(blob__[:])  # add blob ID to each dert, not sure expression is correct
-    i = 0
-    for blob, dert in zip(blob__, frame_dert__):
-        blob[i] = [[blob],[dert]]  # add open_derts and empty connected_blobs to each blob
-        i += 1
-
-    while blob__:  # flood-fill blobs by single layer of open_derts per cycle, stream compaction in next cycle
-        cycle(blob__, frame_dert__)
-
-def cycle(blob__, frame_dert__):  # parallel blob extension cycle, initial blobs are open derts
-
-    blob__ = remove_overlapping blobs(blob__, frame_dert__)
-    # check ids in all frame derts, remove blob__ blobs with >lowest id in any frame dert
-    # or by blob.G: remove blobs with < highest-G in any frame dert?
-    # each frame dert is mapped to a node?
-
-    for i, blob in enumerate(blob__):
-        open_AND = 0  # counter of AND(open_dert.sign, unfilled_rim_dert.sign)
-        new_open_derts = []
-
-        for dert in blob.open_derts:  # open_derts: list of derts in dert__ with unfilled derts in their 3x3 rim
-            j = 0
-            while j < 7:
-                _y, _x = compute_rim(dert.y, dert.x, j)  # compute rim _y _x from dert y x, clock-wise from top-left
-                j += 1
-                if not (_y in blob.dert__ and _x in blob.dert__):
-                    _dert = frame_dert__[_y][_x]  # load unfilled rim dert from frame.dert__
-                    if dert.sign and _dert.sign:
-                        open_AND += 1
-                        new_open_derts.append(_dert)
-                        # add: blob params += _dert params
-                        frame_dert__[_y][_x].append(blob.ID)
-                        # multiple blob IDs maybe assigned to each frame_dert, with the lowest one selected in next cycle
-
-        if open_AND==0:  # add: or yn-y0 < Y or xn-x0 < X: generic box < frame?
-            del blob[i]  # blob is terminated, remove from next extension cycle
-
-Chee's implementation:
-'''
-
 from class_cluster import ClusterStructure, NoneType
 from utils import (
     pairwise,
@@ -95,6 +47,47 @@ class CBlob(ClusterStructure):
     dert_open_ = list
     dert_ = list
     min_id = int
+'''
+Draft of blob-parallel version of frame_blobs, pseudo code:
+
+def frame_blobs_parallel(frame_dert__):  # grow blob.dert__ in all blobs in parallel:
+
+    blob__ = [Cblob() for dert in frame_dert__]  # initialize one blob per dert
+    for i, (blob, dert) in enumerate( zip(blob__, frame_dert__)):
+        blob__[i] = [dert], blob  # add open_derts and empty connected_blobs to each blob
+
+    while blob__:  # flood-fill blobs by single layer of open_derts per cycle, stream compaction in next cycle
+        cycle(blob__, frame_dert__)
+
+def cycle(blob__, frame_dert__):  # parallel blob extension cycle, initial blobs are open derts
+
+    blob__ = remove_overlapping blobs(blob__, frame_dert__)
+    # check ids in all frame derts, remove blob__ blobs with >lowest id in any frame dert
+    # or by blob.G: remove blobs with < highest-G in any frame dert?
+    # each frame dert is mapped to a node?
+
+    for i, blob in enumerate(blob__):
+        open_AND = 0  # counter of AND(open_dert.sign, unfilled_rim_dert.sign)
+        new_open_derts = []
+
+        for dert in blob.open_derts:  # open_derts: list of derts in dert__ with unfilled derts in their 3x3 rim
+            j = 0
+            while j < 7:
+                _y, _x = compute_rim(dert.y, dert.x, j)  # compute rim _y _x from dert y x, clock-wise from top-left
+                j += 1
+                if not (_y in blob.dert__ and _x in blob.dert__):
+                    _dert = frame_dert__[_y][_x]  # load unfilled rim dert from frame.dert__
+                    if dert.sign and _dert.sign:
+                        open_AND += 1
+                        new_open_derts.append(_dert)
+                        # add: blob params += _dert params
+                        frame_dert__[_y][_x].append(blob.ID)
+                        # multiple blob IDs maybe assigned to each frame_dert, with the lowest one selected in next cycle
+
+        if open_AND==0:  # add: or yn-y0 < Y or xn-x0 < X: generic box < frame?
+            del blob[i]  # blob is terminated, remove from next extension cycle
+'''
+# Chee's implementation:
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
 
@@ -113,9 +106,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 
 
 def generate_blobs(dert_input, y, x):
-    '''
-    generate dert__ and blob at each dert
-    '''
+    # generate dert__ and blob at each dert
     # dert class instance
     dert = CDert(i=dert_input[0], g=dert_input[1] - ave, dy=dert_input[2], dx=dert_input[3],
                  x_coord=x, y_coord=y, sign=dert_input[1] - ave > 0, fopen=1)
@@ -129,9 +120,7 @@ def generate_blobs(dert_input, y, x):
 
 
 def check_open_rims(blob):
-    '''
-    check connectivity of blob's rim derts and update each dert ids
-    '''
+    # check connectivity of blob's rim derts and update each dert ids
     new_dert_open_ = []  # for next cycle
 
     while blob.dert_open_:
@@ -174,7 +163,6 @@ def check_open_rims(blob):
             blob = []
 
     return blob
-
 
 # there could be a better way to replace this function with parallel process ,need to think about it
 def get_rim_dert(dert_, height, width):
