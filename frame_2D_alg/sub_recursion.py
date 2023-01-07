@@ -274,7 +274,7 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
 
     return new_P
 
-def frame2graph(frame, fseg, Cgraph):  # not sure
+def frame2graph(frame, fseg, Cgraph):  # for frame_recursive
 
     mblob_ = frame.PPm_; dblob_ = frame.PPd_  # PPs are blobs here
     x0, xn, y0, yn = frame.box
@@ -282,7 +282,7 @@ def frame2graph(frame, fseg, Cgraph):  # not sure
     for fd, blob_, plevels in enumerate(zip([mblob_,dblob_], [gframe.plevels, gframe.alt_plevels])):
         graph_ = []
         for blob in blob_:
-            graph = PP2graph(blob, fseg, Cgraph)
+            graph = PP2graph(blob, fseg, Cgraph, fd)
             sum_pH(plevels, graph.plevels)
             graph_ += [graph]
         [gframe.node_.Q, gframe.alt_graph_][fd][:] = graph_  # mblob_|dblob_, [:] to enable to left hand assignment, not valid for object
@@ -293,21 +293,23 @@ def blob2graph(blob, fseg, Cgraph):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-    gblob = Cgraph(plevels=CpH(mpH=CpH(),dpH=CpH()),alt_plevels=CpH(), rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    gblob = Cgraph(plevels_t=CQ(Q=[CpH(),CpH(),CpH(),CpH()]), rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     blob.graph = gblob  # update graph reference
     # convert elements
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
-            graph = PP2graph(PP, fseg, Cgraph)
-            sum_pH(gblob.plevels, graph.plevels)
+            graph = PP2graph(PP, fseg, Cgraph, fd)
+            sum_pH(gblob.plevels_t.Q[fd], graph.plevels_t.Q[fd])  # sum mplevels and dplevels (need to sum plevels_t[fd] only because [1-fd] will be empty)
+
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.graph:
             blob2graph(alt_blob, fseg, Cgraph)  # convert alt_blob to graph
-        sum_pH(gblob.alt_plevels, alt_blob.graph.plevels)
+        sum_pH(gblob.plevels_t.Q[2], alt_blob.graph.plevels_t.Q[0])  # sum gblob alt_mplevels with alt_blob's mplevels
+        sum_pH(gblob.plevels_t.Q[3], alt_blob.graph.plevels_t.Q[1])  # sum gblob alt_dplevels with alt_blob's dplevels
 
     return gblob
 
-def PP2graph(PP, fseg, Cgraph):
+def PP2graph(PP, fseg, Cgraph, fd):
 
     alt_players = CpH()
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
@@ -337,6 +339,7 @@ def PP2graph(PP, fseg, Cgraph):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    graph = Cgraph(plevels=plevels, alt_plevels=alt_plevels, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(plevels_t=CQ(Q=[CpH(),CpH(),CpH(),CpH()]), x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph.plevels_t.Q[fd] = plevels; graph.plevels_t.Q[fd+2] = alt_plevels
 
     return graph  # 1st plevel fd is always der+?
