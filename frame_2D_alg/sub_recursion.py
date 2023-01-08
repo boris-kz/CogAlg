@@ -293,23 +293,29 @@ def blob2graph(blob, fseg, Cgraph):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-    gblob = Cgraph(plevels_t=CQ(Q=[CpH(),CpH(),CpH(),CpH()]), rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    gblob = Cgraph(plevels_t=CQ(Q=[[],[],[],[]]), rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     blob.graph = gblob  # update graph reference
     # convert elements
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, Cgraph, fd)
-            sum_pH(gblob.plevels_t.Q[fd], graph.plevels_t.Q[fd])  # sum mplevels and dplevels (need to sum plevels_t[fd] only because [1-fd] will be empty)
+            if gblob.plevels_t.Q[fd]: sum_pH(gblob.plevels_t.Q[fd], graph.plevels_t.Q[fd])  # sum mplevels and dplevels (need to sum plevels_t[fd] only because [1-fd] will be empty)
+            else:                     gblob.plevels_t.Q[fd] = deepcopy(graph.plevels_t.Q[fd])
+            gblob.plevels_t.Q[fd].H[0].node_ += [graph]  # add first layer graph
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
+
         if not alt_blob.graph:
             blob2graph(alt_blob, fseg, Cgraph)  # convert alt_blob to graph
-        sum_pH(gblob.plevels_t.Q[2], alt_blob.graph.plevels_t.Q[0])  # sum gblob alt_mplevels with alt_blob's mplevels
-        sum_pH(gblob.plevels_t.Q[3], alt_blob.graph.plevels_t.Q[1])  # sum gblob alt_dplevels with alt_blob's dplevels
+        if alt_blob.graph.plevels_t.Q[0]:
+            if gblob.plevels_t.Q[2]: sum_pH(gblob.plevels_t.Q[2], alt_blob.graph.plevels_t.Q[0])  # sum gblob alt_mplevels with alt_blob's mplevels
+            else:                    gblob.plevels_t.Q[2] = deepcopy(alt_blob.graph.plevels_t.Q[0])
+            if gblob.plevels_t.Q[3]: sum_pH(gblob.plevels_t.Q[3], alt_blob.graph.plevels_t.Q[1])  # sum gblob alt_dplevels with alt_blob's dplevels
+            else:                    gblob.plevels_t.Q[3] = deepcopy(alt_blob.graph.plevels_t.Q[1])
 
     return gblob
 
-def PP2graph(PP, fseg, Cgraph, fd):
+def PP2graph(PP, fseg, Cgraph, ifd):
 
     alt_players = CpH()
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
@@ -339,7 +345,7 @@ def PP2graph(PP, fseg, Cgraph, fd):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    graph = Cgraph(plevels_t=CQ(Q=[CpH(),CpH(),CpH(),CpH()]), x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    graph.plevels_t.Q[fd] = plevels; graph.plevels_t.Q[fd+2] = alt_plevels
+    graph = Cgraph(plevels_t=CQ(Q=[[],[],[],[]]), x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph.plevels_t.Q[ifd] = plevels; graph.plevels_t.Q[ifd+2] = alt_plevels
 
     return graph  # 1st plevel fd is always der+?
