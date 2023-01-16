@@ -64,21 +64,13 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars, potential
     xn = float  # max distance from center
     yn = float
 ''' 
-    CpH graph is packed as a root of a tree:
-    plevels ( <=4 forks ( pplayers ( <=4 forks ( players ( ptuples
-    G: list of plevels, plevel: list of forks, fork: list of pplayers, pplayer: list of forks.. 
-        
-    Players and ptuples were formed in comp_slice, so they are not forking here?
-    old scheme:
-    externally packed plevels_4: [mplevels, dplevels, alt_mplevels, alt_dplevels]
-    full:
-    plevels_4 [ plevels: [CpH( H=pplayers)]],
-    pplayers_4[ pplayers:[CpH( H=players)] ],
-    players   [ players: [CpH( H=ptuples)] ],
-    ptuples   [ ptuples: [Cptuple]  # players and ptuples are single lists of taken forks, as in any H
+    CpH graph is packed as a root of a tree: plevels[0]:
+    G = plevels ( forks ( pplayers ( forks ( players ( ptuples
     
-    feedback: root_graph[1][ifd][1:][ifd] += der_players_4: dw append/ agg|sub+, uw replace/ sum nodes, der+/ new plevel
+    Or the root is not needed, it remains in a caller?
+    forks are lists, plevels and pplayers are lists with CpH in list[0]
     object per composition level, represent lower levels, len_H = higher-level len_H-1
+    feedback: root_graph[1][ifd][1:][ifd] += der_players_4: dw append/ agg|sub+, uw replace/ sum nodes, der+/ new plevel
 '''
 
 class CderG(ClusterStructure):  # graph links, within root node_
@@ -91,8 +83,9 @@ class CderG(ClusterStructure):  # graph links, within root node_
 
 def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
-    for graph_ in root:  # plevels_4_: mplevels, dplevels, alt_mplevels, alt_dplevels
-        mgraph_, dgraph_ = form_graph_(graph_)  # cross-comp in fork pplayers of top fork plevel: graph[1][ifd][0=top][ifd][0=G]?
+    for fork, pplayers in enumerate(root[1]):  # 1st plevel forks: mpplayers, dpplayers, alt_mpplayers, alt_dpplayers
+        pplayers[0].fds += [fork%2]  # not sure, this should be done in a caller?
+        mgraph_, dgraph_ = form_graph_(pplayers[0])  # cross-comp in fork pplayers[0]: CpH
 
         mval = sum([plevels.val for mgraph in mgraph_ for plevels in mgraph.plevels_4 if plevels])
         dval = sum([plevels.val for dgraph in dgraph_ for plevels in dgraph.plevels_4 if plevels])
@@ -100,14 +93,15 @@ def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty su
         for fd, (graph_,val) in enumerate(zip([mgraph_,dgraph_],[mval,dval])):  # same graph_, val for sub+ and agg+
             # intra-graph sub+ comp node:
             if val > ave_sub * (root[0].rdn):  # same in blob, same base cost for both forks
-                root.rdn+=1  # estimate
+                pplayers[0].rdn+=1  # estimate
                 sub_recursion_g(graph_, val, fseg, fd)  # subdivide graph_ by der+|rng+
             # cross-graph agg+ comp graph:
             if val > G_aves[fd] * ave_agg * (root[0].rdn) and len(graph_) > ave_nsub:
-                root[0].rdn+=1  # estimate
+                pplayers[0].rdn += 1  # estimate
                 agg_recursion(root, fseg=fseg)
 
 
+# not fully updated
 def form_graph_(root): # form plevel in agg+ or player in sub+, G is node in GG graph; der+: comp_link if fderG, from sub+
 
     ifd = root[0].fds[0]  # top pplayers forks
