@@ -294,34 +294,38 @@ def blob2graph(blob, fseg):
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
     gblob = CpH(fds=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    gplevels_4 = [[],[],[],[]]
-    blob.graph = [gblob, gplevels_4]  # update graph reference
+    Pplayers_ = [[],[],[],[]]
+    blob.graph = [gblob, Pplayers_]  # update graph reference
     # convert elements
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
-            [graph, plevels_4] = PP2graph(PP, fseg, fd)
-            if gplevels_4[fd]: sum_pH(gplevels_4[fd], plevels_4[fd])  # sum mplevels and dplevels (need to sum plevels_t[fd] only because [1-fd] will be empty)
-            else:              gplevels_4[fd] = deepcopy(plevels_4[fd])
-            gblob.node_ += [[graph, plevels_4]]  # add first layer graph (in the structure of [node [plevels_4]])
+            graph = PP2graph(PP, fseg, fd)
+            if graph[1][fd]:  # if not empty dpplayers
+                for Dpplayer, dpplayer in zip_longest(Pplayers_[fd], graph[1][fd], fillvalue=[]):
+                    if Dpplayer: sum_pH(Dpplayer, dpplayer)
+                    else:        Pplayers_[fd] += [dpplayer]
+                Pplayers_[fd][0].node_ += [graph]  # add first layer graph (in the structure of [node [plevels_4]])
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
 
         if not alt_blob.graph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        alt_gplevels_4 = alt_blob.graph[1]
-        if alt_gplevels_4[0]:
-            if gplevels_4[2]: sum_pH(gplevels_[2], alt_gplevels_4[0])  # sum gblob alt_mplevels with alt_blob's mplevels
-            else:             gplevels_4[2] = deepcopy(alt_gplevels_4[0])
-        if alt_gplevels_4[1]:
-            if gplevels_4[3]: sum_pH(gplevels_[3], alt_blob.plevel[1])  # sum gblob alt_dplevels with alt_blob's dplevels
-            else:             gplevels_4[3] = deepcopy(alt_blob.plevel[1])
+        alt_mpplayers, alt_dpplayers = alt_blob.graph[1][:2]
+        if alt_mpplayers:  # alt_mpplayers is not empty
+            for Alt_mpplayer, alt_mpplayer in zip_longest(Pplayers_[2], alt_mpplayers, fillvalue=[]):
+                if Alt_mpplayer: sum_pH(Alt_mpplayer, alt_mpplayer)
+                else:            Pplayers_[2] += [alt_mpplayer]
+        if alt_dpplayers:  # alt_dpplayers is not empty
+            for Alt_dpplayer, alt_dpplayer in zip_longest(Pplayers_[3], alt_dpplayers, fillvalue=[]):
+                if Alt_mpplayer: sum_pH(Alt_dpplayer, alt_dpplayer)
+                else:            Pplayers_[3] += [alt_dpplayer]
 
-    return [gblob, gplevels_4]
+    return [gblob, Pplayers_]
 
 
 def PP2graph(PP, fseg, ifd=1):
 
-    alt_players_4 = [[],[],[],[]]
+    alt_players = CpH()
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
         alt_fds = copy(PP.altPP_[0].fds)
         for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
@@ -330,34 +334,59 @@ def PP2graph(PP, fseg, ifd=1):
                     alt_fds = alt_fds[:i]
                     break
         for altPP in PP.altPP_:  # convert altPP.players to CpH
-            plevel = [];  val = 0
+            H = [];  val = 0
             for ptuples, alt_fd in zip(altPP.players[0], alt_fds):
                 for ptuple in ptuples[0][:2]:  # latuple and vertuple only
-                    plevel += [ptuple]; val += ptuple.val
-            alt_ptuples_4 = [[],[CpH(H=plevel, val=val)],[],[]]
-            alt_players = CpH(H=[alt_ptuples_4], val=val)
-            alt_players_4[1] += [alt_players]
+                    H += [ptuple]; val += ptuple.val
+            alt_ptuples = CpH(H=H, val=val)
+            alt_players.H += [alt_ptuples]; alt_players.val += val
+    alt_pplayer = CpH(H=[alt_players], val=alt_players.val, fds=[1]); alt_pplayers = [alt_pplayer]
 
-
-    # graph: plevels_4 ( pplayers_4 ( players_4 ( ptuples_4 ( ptuple:
-    players_4 = [[],[],[],[]]
+    # graph: [CpH, pplayers_1, pplayers_2, _]
+    players = CpH()
     for ptuples, val in PP.players[0]:
-        ptuples_4 = [[],[CpH(H=deepcopy(ptuples), val=val)],[],[]]
-        players = CpH(H=[ptuples_4], val=val)
-        players_4[1] += [players]
-
-    pplayers = CpH(H=[players_4], val=players_4[1][0].val)
-    pplayers_4 = [[],[pplayers],[],[]]
-    plevels = CpH(H=[pplayers_4], val=pplayers.val, fds=[0])
-
-    alt_pplayers = CpH(H=[alt_players_4], val=sum([alt_players.val for alt_players in alt_players_4[1]]))
-    alt_pplayers_4 = [[],[alt_pplayers],[],[]]
-    alt_plevels = CpH(H=[alt_pplayers_4], val=alt_pplayers.val, fds=[1])
-
-    plevels_4 = [[],plevels,[],alt_plevels]
+        ptuples = CpH(H=deepcopy(ptuples), val=val)
+        players.H += [ptuples]; players.val += val
+    pplayer = CpH(H=[players], val=players.val, fds=[1]); pplayers = [pplayer]  # ceate 1st fork - pplayer
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
     graph = CpH(H=pplayers, fds=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    # add alt_plevels_4 in CpH?
-    return [graph, plevels_4]  # 1st plevel fd is always der+?
+    # no mpplayers and alt_mpplayers so assign as None?
+    return [graph, [None, pplayers, None, alt_pplayers] ]  # 1st plevel fd is always der+?
+
+# move here temporary, for debug purpose
+def agg_recursion_eval(blob, PP_t):
+    from agg_recursion import agg_recursion, CpH
+    from sub_recursion import PP2graph, blob2graph
+
+    if not isinstance(blob, CpH):
+        fseg = isinstance(blob, CPP)
+
+        for fd, PP_ in enumerate(PP_t):
+            for i, PP in enumerate(PP_):
+               converted_graph  = PP2graph(PP, fseg=fseg, ifd=fd)  # convert PP to graph
+               PP_[i] = converted_graph
+        if fseg:
+            converted_blob = PP2graph(blob, fseg=fseg, ifd=1)  # convert root to graph (root default fd = 1?)
+            for converted_graph in PP_t[1]:
+                converted_blob[1][1][0].node_ += [converted_graph]  # add converted graph into dpplayer's node_, how about alt_dpplayer?
+            # skip m fork because 1st fork is d fork
+        else:
+            if blob.graph:
+                converted_blob = blob.graph  # get converted graph
+            else:
+                converted_blob = blob2graph(blob, fseg=fseg)  # convert root to graph
+
+    agg_recursion(converted_blob, fseg=fseg)
+
+    M = converted_graph[1][0][0].val if converted_graph[1][0] else 0  # mpplayers[0].val (but m fork is always empty, so no value here?)
+    G = converted_graph[1][1][0].val if converted_graph[1][1] else 0  # dpplayers[0].val
+    valt = [M, G]
+    fork_rdnt = [1+(G>M), 1+(M>=G)]
+    # should be single call of agg_recursion here？
+    for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
+        if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
+            and len(PP_) > ave_nsub and converted_blob[0].alt_rdn < ave_overlap:
+            blob.rdn += 1  # estimate
+            agg_recursion(converted_blob, fseg=fseg)
