@@ -99,9 +99,11 @@ def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty su
                 # cross-graph agg+ comp graph:
                 if val > G_aves[fd] * ave_agg * (root[0].rdn) and len(graph_) > ave_nsub:
                     pplayers[0].rdn += 1  # estimate
+                    '''
                     for G in graph_:  # init new forks:
                         if fd: G += [[CpH(),CpH(),CpH(),CpH()]]
                         else: G[-1] = [[CpH(),CpH(),CpH(),CpH()]]
+                    '''
                     agg_recursion(root, fseg=fseg)
 
 
@@ -215,45 +217,50 @@ def sum2graph_(graph_, root, fd, fork):  # sum node and link params into graph, 
         if graph.val < ave_G:  # form graph if val>min only
             continue
         Glink_= []; X0,Y0 = 0,0
-        for node in graph.Q:  # not sure if node is a tree, before recursion? first pass defines center Y,X and Glink_:
-            Glink_ = list(set(Glink_ + node[0].link_.Q))  # or node.link_.Qd if fd else node.link_.Qm? unique links across graph nodes
+        # 1st pass: define center Y,X and Glink_:
+        for node in graph.Q:  # not sure if node is a tree, before recursion?
+            Glink_ = list(set(Glink_ + [node.link_.Qm, node[0].link_.Qd][fd]))  # unique fork links over graph nodes
             X0 += node[0].x0; Y0 += node[0].y0
         L = len(graph.Q); X0/=L; Y0/=L; Xn,Yn = 0,0
-        Pplayers = CpH()  # Graph.H
-
+        # 2nd pass: extend and sum nodes in graph:
+        Graph = []  # list Graph
         for node in graph.Q:  # CQ(Q=gnode_, val=val)], define max distance,A, sum plevels:
-            G = node[0]
-            Xn = max(Xn,(G.x0+G.xn)-X0)  # box xn = x0+xn
-            Yn = max(Yn,(G.y0+G.yn)-Y0)
-            Levs = []  # for nested Graph
-            for lev in node if fd else node[:1]:  # if multi-plevel, skip last plevel if rng+
-                Lev = CpH()
-                Levs += [sum_pH(Lev, lev)]  # old plevels only
-            new_lev = CpH(L=0,A=[0,0])  # node[-1][fork]
-            for derG in node[0].link_.Q:  # form quasi-gradient per node from variable-length links:
-                der_lev = [derG.mplevel, derG.dplevel][fd]
-                sum_pH(new_lev, der_lev)
+            G = node[0]  # root lev in node
+            Xn = max(Xn, (G.x0 + G.xn) - X0)  # box xn = x0+xn
+            Yn = max(Yn, (G.y0 + G.yn) - Y0)
+            node_pplayers__ = [node[:-1], node][fd]  # plevels ( forks ( pplayers, skip last plevel if rng+
+            sum_pH(Graph, node_pplayers__) # sum old plevels
+            new_lev = CpH(L=0,A=[0,0]) # node[-1][fork]
+            link_ = [node[0].link_.Qm, node[0].link_.Qd][fd]  # fork link_
+            for derG in link_:  # form quasi-gradient per node from variable-length links:
+                der_lev = [derG.mplevel,derG.dplevel][fd]
+                sum_pH(new_lev,der_lev)
                 new_lev.L+=1; new_lev.S+=derG.S; new_lev.A[0]+=derG.A[0]; new_lev.A[1]+=derG.A[1]
-            Pplayers.node_ += [node]  # separate, nodes don't change
-
-        Graph, Levels = [],[]
-        for Level, Lev in zip_longest(Levels, Levs, fillvalue=CpH):
-            Graph += [sum_pH(Level, Lev)]  # form nested Graph
-        new_Lev = CpH()  # may be in links
+                new_lev.node_ += [derG.node0] if node is derG.node1 else [derG.node1]  # redundant to node.link_
+                # or node = nested list: new_node = [old_node, new_lev], where old_node is old_node_levs, also nested
+                # so old node is immutable
+            # replace with forks init in agg+?:
+            if len(node[0].forks)==len(node)-1: node[-1][fork] = [new_lev]
+        new_Lev = CpH()
         for link in Glink_:
             sum_pH(new_Lev, [link.mplevel, link.dplevel][fd])
         new_Lev.A = [Xn * 2, Yn * 2]  # not sure
-        Graph += [new_Lev]
-        # draft:
-        Graph[0].H = Pplayers
+        # replace with forks init in agg+?:
+        new_Lev_ = [CpH(), CpH(), CpH(), CpH()]
+        new_Lev_[fork] = new_Lev
+        Graph += [new_Lev_]
+        Graph[0] = Graph[0][0]  # remove forks: single-element
+        Graph[0].node_ = graph.Q
+        # Graph[0].H = Pplayers?
         Graph[0].x0=X0; Graph[0].xn=Xn; Graph[0].y0=Y0; Graph[0].yn=Yn
-        # old:
-        for plevels in graph[1]:  # plevels_4
-            for Plevel, plevel in zip(root[1][fork].H, plevels):
-                sum_pH(Plevel, plevel)
-            root[1][fork].val += plevels.val
-        Graph_ += [Graph]  # Cgraph, reduction: root fork += all link forks?
+        # not revised:
+        for i, (pplayers_, root_pplayers_) in enumerate(zip(Graph[1:], root[1:])):
+            if root_pplayers_[fork]:
+                sum_pH(root_pplayers_[fork], pplayers_[fork])  # val should be already summed in sum_pH
+            else:
+                root_pplayers_[fork] = deepcopy(pplayers_[fork])
 
+        Graph_ += [Graph]  # Cgraph, reduction: root fork += all link forks?
     return Graph_
 
 
@@ -363,29 +370,43 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                     sum_pH(graph.alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.plevels.H[-1].node_).intersection(alt_graph.plevels.H[-1].node_))  # overlap
 
+# not revised:
+def sum_pHt(PHt, pHt, fneg=0):
+    for PH, pH in zip_longest(PHt, pHt, fillvalue=[]):
+        if pH:
+            if PH:
+                sum_pH(PH, pH, fneg)
+            else:
+                PHt += [deepcopy(pH)]
 
 # add frng to skip pH.H in summing nodes to graph?
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
 
-    if pH.node_:  # valid extuple
-        PH.node_ = list(set(PH.node_+pH.node_))
-        if pH.L: PH.L += pH.L  # not sure
-        PH.S += pH.S
-        if PH.A:
-            if isinstance(PH.A, list):
-                PH.A[0] += pH.A[0]; PH.A[1] += pH.A[1]
-            else:
-                PH.A += pH.A
-        else: PH.A = copy(pH.A)
+    if isinstance(pH, list):
+        if isinstance(PH, CpH):  # convert PH to list if pH is list
+            PH = []
+        sum_pHt(PH, pH)
+    else:
+        if pH.node_:  # valid extuple
+            PH.node_ = list(set(PH.node_+pH.node_))
+            if pH.L: PH.L += pH.L  # not sure
+            PH.S += pH.S
+            if PH.A:
+                if isinstance(PH.A, list):
+                    PH.A[0] += pH.A[0]; PH.A[1] += pH.A[1]
+                else:
+                    PH.A += pH.A
+            else: PH.A = copy(pH.A)
 
-    for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):  # assume same forks
-        if SpH:
-            if spH:  # pH.H may be shorter than PH.H
-                if isinstance(spH, Cptuple):  # PH is ptuples, SpH_4 is ptuple
-                    sum_ptuple(SpH, spH, fneg=fneg)
-                else:  # PH is players, H is ptuples
-                    sum_pH(SpH, spH, fneg=fneg)
+        for SpH, spH in zip_longest(PH.H, pH.H, fillvalue=None):  # assume same forks
+            if SpH:
+                if spH:  # pH.H may be shorter than PH.H
+                    if isinstance(spH, Cptuple):  # PH is ptuples, SpH_4 is ptuple
+                        sum_ptuple(SpH, spH, fneg=fneg)
+                    else:  # PH is players, H is ptuples
+                        sum_pH(SpH, spH, fneg=fneg)
 
-        else:  # PH.H is shorter than pH.H, extend it:
-            PH.H += [deepcopy(spH)]
-    PH.val += pH.val
+            else:  # PH.H is shorter than pH.H, extend it:
+                PH.H += [deepcopy(spH)]
+        PH.val += pH.val
+    return PH
