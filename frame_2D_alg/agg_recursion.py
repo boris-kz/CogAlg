@@ -45,7 +45,7 @@ class Clink_(ClusterStructure):
 
 class CpH(ClusterStructure):  # hierarchy of params + associated vars, potential graph: single-fork, single plevel node_ cluster
 
-    root = object  # root graph?
+    root = object  # root graph
     H = list  # root fork: CpH plevels | pplayers | players | ptuples, for comp only: effectively immutable
     val = int
     nval = int  # of open links: alt_graph_?
@@ -64,13 +64,12 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars, potential
     xn = float  # max distance from center
     yn = float
 ''' 
-    tree G:  plevels ( forks ( pplayers ( players ( ptuples
-    G[0].H:  pplayers ( players ( ptuples  # current graph
+    tree G:  plevels ( forks ( pplayers ( players ( ptuples  # plevels and pplayers list[0] is CpH:
+    G[0].H:  pplayers ( players ( ptuples  # root graph, remains in caller
     G[1:].H: forks ( pplayers ( players ( ptuples    
     
-    Graph is tree root: plevels[0], remains in a caller
-    forks are lists, plevels and pplayers are lists with CpH in list[0]
-    object per composition level, represent lower levels, len_H = higher-level len_H-1
+    top structure is list of plevels: [lev0, lev1, lev2...], representing branching sequence in tree, for comp feedback
+    new mutable node_n and immutable lev_n per composition level, lower-lev len_H = higher-lev len_H-1
     feedback: root_graph[1][ifd][1:][ifd] += der_players_4: dw append/ agg|sub+, uw replace/ sum nodes, der+/ new plevel
 '''
 
@@ -99,11 +98,9 @@ def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty su
                 # cross-graph agg+ comp graph:
                 if val > G_aves[fd] * ave_agg * (root[0].rdn) and len(graph_) > ave_nsub:
                     pplayers[0].rdn += 1  # estimate
-                    '''
-                    for G in graph_:  # init new forks:
+                    for G in graph_:  # ini new_lev forks:
                         if fd: G += [[CpH(),CpH(),CpH(),CpH()]]
-                        else: G[-1] = [[CpH(),CpH(),CpH(),CpH()]]
-                    '''
+                        else:  G[-1][:] = CpH(),CpH(),CpH(),CpH()
                     agg_recursion(root, fseg=fseg)
 
 
@@ -115,7 +112,7 @@ def form_graph_(root, fork): # form plevel in agg+ or player in sub+, G is node 
 
     mnode_, dnode_ = [], []  # Gs with >0 +ve fork links:
     for G in G_:
-        if G[0].link_.Qm: mnode_ += [G]  # no need to pass G[1] separately, all nodes with +ve links, not clustered in graphs yet
+        if G[0].link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
         if G[0].link_.Qd: dnode_ += [G]
     graph_t = []
     for fd, node_ in enumerate([mnode_, dnode_]):
@@ -268,19 +265,21 @@ def comp_pH(_pH, pH, frng=0):  # recursive unpack plevels ( pplayer ( players ( 
 
     mpH, dpH = CpH(), CpH()  # new players in same top plevel?
     pri_fd = 0
-    if frng: _H_, H_ = _pH.H[:-1], _pH.H[:-1]
-    else:    _H_, H_ = _pH.H, pH.H
 
-    for i, (_spH, spH) in enumerate(zip(_pH.H, pH.H)):
+    if frng: _H, H = _pH.H[:-1], _pH.H[:-1]
+    else:    _H, H = _pH.H, pH.H
+    for i, (_spH, spH) in enumerate(zip(_H, H)):
 
         fork = pH.forks[i] if len(pH.forks) else 0  # in plevels or players
         _fork = _pH.forks[i] if len(_pH.forks) else 0
         if _fork == fork:
-            if fork%2: pri_fd = 1  # all scalars
+            if fork%2:
+                pri_fd = 1  # all scalars
             if isinstance(_spH, Cptuple):
                 mtuple, dtuple = comp_ptuple(_spH, spH, pri_fd)
                 mpH.H += [mtuple]; mpH.val += mtuple.val
                 dpH.H += [dtuple]; dpH.val += dtuple.val
+
             elif isinstance(_spH, CpH):
                 if spH.S:  # extuple is valid in graph: pplayer only?
                     comp_ext(_spH, spH, mpH, dpH)
@@ -370,16 +369,15 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                     sum_pH(graph.alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.plevels.H[-1].node_).intersection(alt_graph.plevels.H[-1].node_))  # overlap
 
-# not revised:
+
 def sum_pHt(PHt, pHt, fneg=0):
     for PH, pH in zip_longest(PHt, pHt, fillvalue=[]):
         if pH:
             if PH:
-                sum_pH(PH, pH, fneg)
-            else:
-                PHt += [deepcopy(pH)]
+                if isinstance(pH, list): sum_pHt(PH, pH, fneg)
+                else:                    sum_pH(PH, pH, fneg)
+            else: PHt += [deepcopy(pH)]
 
-# add frng to skip pH.H in summing nodes to graph?
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
 
     if isinstance(pH, list):
@@ -388,7 +386,7 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( p
         sum_pHt(PH, pH)
     else:
         if pH.node_:  # valid extuple
-            PH.node_ = list(set(PH.node_+pH.node_))
+            PH.node_ += [node for node in pH.node_ if node not in PH.node_]
             if pH.L: PH.L += pH.L  # not sure
             PH.S += pH.S
             if PH.A:
