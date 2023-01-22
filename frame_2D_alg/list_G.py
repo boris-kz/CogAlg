@@ -45,8 +45,8 @@ class Clink_(ClusterStructure):
 
 class CpH(ClusterStructure):  # hierarchy of params + associated vars, potential graph: single-fork, single plevel node_ cluster
 
-    H = list  # forks or CpHs: plevels | pplayers | players | ptuples
-    # if H[0] is CpH, the rest is redundant?
+    root = object  # root graph
+    H = list  # root fork: CpH plevels | pplayers | players | ptuples, for comp only: effectively immutable
     val = int
     nval = int  # of open links: alt_graph_?
     forks = list  # m|d|am|ad in plevels|pplayers, m|d in players|ptuples?
@@ -63,10 +63,9 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars, potential
     y0 = float  # center: box x0|y0 + L/2
     xn = float  # max distance from center
     yn = float
-    root = object  # root graph
 ''' 
-    Gtree: plevels ( forks ( pplayers ( players ( ptuples  # plevels and pplayers list[0] is CpH:
-    G.H[0]: pplayers ( players ( ptuples  # root graph, remains in caller
+    tree G:  plevels ( forks ( pplayers ( players ( ptuples  # plevels and pplayers list[0] is CpH:
+    G.H[0]:  pplayers ( players ( ptuples  # root graph, remains in caller
     G.H[1:]: forks ( pplayers ( players ( ptuples    
     
     top structure is list of plevels: [lev0, lev1, lev2...], representing branching sequence in tree, for comp feedback
@@ -86,41 +85,35 @@ class CderG(ClusterStructure):  # graph links, within root node_
 
 def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
-    for fork, pplayers in enumerate(root.H[1]):  # root graph 1st plevel forks: mpplayers, dpplayers, alt_mpplayers, alt_dpplayers
-        if pplayers: # H: plevels ( forks ( pplayers ( players ( ptuples
-
-            # if not fork % 2: pplayers = root.H[0]  # rng+, H[1][fork][-1] remains as immutable
-            for G in pplayers.node_:  # init forks:
-                G.H[1][fork] += [[[],[],[],[]]]  # der+|rng+, only compared pplayers may be different
-            mgraph_, dgraph_ = form_graph_(pplayers, fork)  # cross-comp in pplayers.H[0]
+    for fork, pplayers in enumerate(root[1]):  # root graph 1st plevel forks: mpplayers, dpplayers, alt_mpplayers, alt_dpplayers
+        if pplayers:
+            for G in pplayers.node_:  # ini new_lev forks:
+                if fork%2: G += [[CpH(),CpH(),CpH(),CpH()]]  # or we should init it as None?
+                # else:  G[-1][:] = [CpH(),CpH(),CpH(),CpH()]  We still need the fork for comparison, so we should replace it in sum2graph?
+            mgraph_, dgraph_ = form_graph_(root, fork)  # cross-comp in fork pplayers[0]: CpH
 
             for fd, graph_ in enumerate(mgraph_,dgraph_):  # eval graphs for sub+ and agg+:
                 val = sum([graph.val for graph in graph_])
                 # intra-graph sub+ comp node:
                 if val > ave_sub * (root[0].rdn):  # same in blob, same base cost for both forks
-                    pplayers.rdn+=1  # estimate
+                    pplayers[0].rdn+=1  # estimate
                     sub_recursion_g(graph_, val, fseg, fd)  # subdivide graph_ by der+|rng+
                 # cross-graph agg+ comp graph:
                 if val > G_aves[fd] * ave_agg * (root[0].rdn) and len(graph_) > ave_nsub:
-                    pplayers.rdn += 1  # estimate
+                    pplayers[0].rdn += 1  # estimate
                     agg_recursion(root, fseg=fseg)
-                    '''
-                    # H: plevels ( forks ( pplayers ( players ( ptuples
-                    root = G.H[1][fork][-1] if fork % 2 else G.H[1][fork][-2]  # rng+ G.H[1][fork][-1] remains as immutable
-                    for G in graph_:  # init forks:
-                        G.H[1][fork] += [[[],[],[],[]]]  # der+|rng+, only new root is different
-                    '''
+
 
 def form_graph_(root, fork): # form plevel in agg+ or player in sub+, G is node in GG graph; der+: comp_link if fderG, from sub+
 
-    pplayers = root.H[1][fork]
+    pplayers = root[1][fork]
     G_ = pplayers.node_  # top root fork pplayers, agg+ per fork?
     comp_G_(G_, fork=fork)  # cross-comp all graphs in rng, graphs may be segs | fderGs, root G += link, link.node
 
     mnode_, dnode_ = [], []  # Gs with >0 +ve fork links:
     for G in G_:
-        if G.link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
-        if G.link_.Qd: dnode_ += [G]
+        if G[0].link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
+        if G[0].link_.Qd: dnode_ += [G]
     graph_t = []
     for fd, node_ in enumerate([mnode_, dnode_]):
         graph_ = []  # init graphs by link val:
@@ -152,7 +145,7 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, increa
         while graph.Q:  # some links will be removed, graph may split into multiple regraphs, init each with graph.Q node:
             regraph = CQ()
             node = graph.Q.pop()  # node_, not removed below
-            val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
+            val = [node[0].link_.mval, node[0].link_.dval][fd]  # in-graph links only
             if val > G_aves[fd]:  # else skip
                 regraph.Q = [node]; regraph.val = val  # init for each node, then add _nodes
                 readd_node_layer(regraph, graph.Q, node, fd)  # recursive depth-first regraph.Q+=[_node]
@@ -182,7 +175,7 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
         if _G in G_:  # _G is not removed in prior loop
             gnode_ += [_G]
             G_.remove(_G)
-            val += [_G.link_.mval,_G.link_.dval][fd]
+            val += [_G[0].link_.mval,_G[0].link_.dval][fd]
             val += add_node_layer(gnode_, G_, _G, fd, val)
 
     return val
@@ -191,26 +184,33 @@ def comp_G_(G_, fork):  # cross-comp Gs (patterns of patterns): Gs, derGs, or se
 
     for i, _G in enumerate(G_):  # G is list of plevel CpH: H=der_pplayerss: hierarchy of derivation, ~players
         for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign, val accum:
-
-            if G in [node for link in _G.link_.Q for node in [link.node0[0],link.node1[0]]]:
+            if fork%2:
+                # index -2 due to added fork in agg_recursion
+                _lev = _G[-2][fork]  # lev: root pplayers
+                lev = G[-2][fork]
+            else:
+                _lev = _G[-1][fork]  # lev: root pplayers
+                lev = G[-1][fork]
+            if lev in [node for link in _lev.link_.Q for node in [link.node0[0],link.node1[0]]]:
                 continue  # this G pair was compared in prior rng+, add frng to skip?
-            dx = _G.x0 - G.x0; dy = _G.y0 - G.y0  # center x0,y0
+            dx = _lev.x0 - lev.x0; dy = _lev.y0 - lev.y0  # center x0,y0
             distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity
             # proximity = ave-distance
-            if distance < ave_distance * ((_G.val + G.val) / (2*sum(G_aves))):
-                # comp pplayers:
-                mplevel, dplevel = comp_pH(_G, G, 1-fork%2)  # comp H[0] if rng+, else H[1]
+            if distance < ave_distance * ((_lev.val + lev.val) / (2*sum(G_aves))):
+                # comp G.H pplayers:
+                mplevel, dplevel = comp_pH(_lev, lev, 1-fork%2)  # if rng+: skip last der_pplayers in CpH.H?
                 derG = CderG(node0=_G,node1=G, mplevel=mplevel, dplevel=dplevel, S=distance, A=[dy,dx])
                 mval = mplevel.val; dval = dplevel.val
                 tval = mval + dval
-                _G.link_.Q += [derG]; _G.link_.val += tval  # val of combined-fork' +- links?
-                G.link_.Q += [derG]; G.link_.val += tval
+                # it should be G[0] here? lev is pplayers
+                _G[0].link_.Q += [derG]; _G[0].link_.val += tval  # val of combined-fork' +- links?
+                G[0].link_.Q += [derG]; G[0].link_.val += tval
                 if mval > ave_Gm:
-                    _G.link_.Qm += [derG]; _G.link_.mval += mval  # no dval for Qm
-                    G.link_.Qm += [derG]; G.link_.mval += mval
+                    _G[0].link_.Qm += [derG]; _G[0].link_.mval += mval  # no dval for Qm
+                    G[0].link_.Qm += [derG]; G[0].link_.mval += mval
                 if dval > ave_Gd:
-                    _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
-                    G.link_.Qd += [derG]; G.link_.dval += dval
+                    _G[0].link_.Qd += [derG]; _G[0].link_.dval += dval  # no mval for Qd
+                    G[0].link_.Qd += [derG]; G[0].link_.dval += dval
 
 # draft:
 def sum2graph_(graph_, root, fd, fork):  # sum node and link params into graph, plevel in agg+ or player in sub+
@@ -222,33 +222,41 @@ def sum2graph_(graph_, root, fd, fork):  # sum node and link params into graph, 
         Glink_= []; X0,Y0 = 0,0
         # 1st pass: define center Y,X and Glink_:
         for node in graph.Q:  # not sure if node is a tree, before recursion?
-            Glink_ = list(set(Glink_ + [node.link_.Qm, node.link_.Qd][fd]))  # unique fork links over graph nodes
-            X0 += node.x0; Y0 += node.y0
+            Glink_ = list(set(Glink_ + [node[0].link_.Qm, node[0].link_.Qd][fd]))  # unique fork links over graph nodes
+            X0 += node[0].x0; Y0 += node[0].y0
         L = len(graph.Q); X0/=L; Y0/=L; Xn,Yn = 0,0
         # 2nd pass: extend and sum nodes in graph:
-        Graph = CpH()
+        Graph = []  # list Graph
         for node in graph.Q:  # CQ(Q=gnode_, val=val)], define max distance,A, sum plevels:
-            Xn = max(Xn, (node.x0 + node.xn) - X0)  # box xn = x0+xn
-            Yn = max(Yn, (node.y0 + node.yn) - Y0)
+            G = node[0]  # root lev in node
+            Xn = max(Xn, (G.x0 + G.xn) - X0)  # box xn = x0+xn
+            Yn = max(Yn, (G.y0 + G.yn) - Y0)
             node_pplayers__ = [node[:-1], node][fd]  # plevels ( forks ( pplayers, skip last plevel if rng+
-            sum_pH(Graph.H, node_pplayers__) # sum old plevels
+            sum_pH(Graph, node_pplayers__) # sum old plevels
             new_lev = CpH(L=0,A=[0,0]) # node[-1][fork]
-            link_ = [node.link_.Qm, node.link_.Qd][fd]  # fork link_
-            # form quasi-gradient per node from variable-length links:
-            for derG in link_:
+            link_ = [node[0].link_.Qm, node[0].link_.Qd][fd]  # fork link_
+            for derG in link_:  # form quasi-gradient per node from variable-length links:
                 der_lev = [derG.mplevel,derG.dplevel][fd]
                 sum_pH(new_lev,der_lev)
                 new_lev.L+=1; new_lev.S+=derG.S; new_lev.A[0]+=derG.A[0]; new_lev.A[1]+=derG.A[1]
                 new_lev.node_ += [derG.node0] if node is derG.node1 else [derG.node1]  # redundant to node.link_
+                # or node = nested list: new_node = [old_node, new_lev], where old_node is old_node_levs, also nested
+                # so old node is immutable
+            # replace with forks init in agg+?:
+            node[-1][fork] = new_lev
         new_Lev = CpH()
         for link in Glink_:
             sum_pH(new_Lev, [link.mplevel, link.dplevel][fd])
-            new_Lev.node_ += [link.node0] if link is link.node1 else [link.node1]  # same as graph.Q?
+            new_Lev.node_ += [link.node0] if link is link.node1 else [link.node1]  # we need to pack node to graph too
         new_Lev.A = [Xn * 2, Yn * 2]  # not sure
-        new_forks = [[],[],[],[]]; new_forks[fork] = new_Lev  # replace with forks init in agg+, or selective?
-        Graph.H += [new_forks]
-        Graph.node_ = graph.Q
-        Graph.x0=X0; Graph.xn=Xn; Graph.y0=Y0; Graph.yn=Yn
+        # replace with forks init in agg+?:
+        new_Lev_ = [CpH(), CpH(), CpH(), CpH()]  # or we should init it as None? So that we can test it in next agg+?
+        new_Lev_[fork] = new_Lev
+        Graph += [new_Lev_]
+        # Graph[0] = Graph[0][0]  # remove forks: single-element (Graph[0] is CpH, not quite sure what's the purpose of this line)
+        Graph[0].node_ = graph.Q
+        # Graph[0].H = Pplayers?
+        Graph[0].x0=X0; Graph[0].xn=Xn; Graph[0].y0=Y0; Graph[0].yn=Yn
         # not revised:
         for i, (pplayers_, root_pplayers_) in enumerate(zip(Graph[1:], root[1:])):
             if root_pplayers_[fork]:
@@ -265,8 +273,8 @@ def comp_pH(_pH, pH, frng=0):  # recursive unpack plevels ( pplayer ( players ( 
     mpH, dpH = CpH(), CpH()  # new players in same top plevel?
     pri_fd = 0
 
-    if frng: _H, H = _pH.H[0], pH.H[0]  # single pplayers, not _pH.H[:-1], _pH.H[:-1]?
-    else:    _H, H = _pH.H[1], pH.H[1]
+    if frng: _H, H = _pH.H[:-1], _pH.H[:-1]
+    else:    _H, H = _pH.H, pH.H
     for i, (_spH, spH) in enumerate(zip(_H, H)):
 
         fork = pH.forks[i] if len(pH.forks) else 0  # in plevels or players
