@@ -293,30 +293,30 @@ def blob2graph(blob, fseg):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-    gblob = CpH(fds=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     Pplayers_ = [None,None,None,None]
-    blob.graph = [gblob, Pplayers_]  # update graph reference
-    # convert elements
+    gblob = CpH(forks=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    blob.graph = gblob  # update graph reference
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            if graph[1][fd]:  # if not empty dpplayers
-                if Pplayers_[fd]: sum_pH(Pplayers_[fd], graph[1][fd])
-                else:             Pplayers_[fd] = deepcopy(graph[1][fd])
+            if graph.H[1][fd]:  # if not empty dpplayers
+                if Pplayers_[fd]: sum_pH(Pplayers_[fd], graph.H[1][fd])
+                else:             Pplayers_[fd] = deepcopy(graph.H[1][fd])
                 Pplayers_[fd].node_ += [graph]  # add first layer graph (in the structure of [node [plevels_4]])
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.graph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        alt_mpplayers, alt_dpplayers = alt_blob.graph[1][:2]
+        alt_mpplayers, alt_dpplayers = alt_blob.graph.H[1][:2]
         if alt_mpplayers:  # alt_mpplayers is not empty
-            if Pplayers_[2]: sum_pH(Pplayers_[2], alt_mpplayer)
+            if Pplayers_[2]: sum_pH(Pplayers_[2], alt_mpplayers)
             else:            Pplayers_[2] += [alt_mpplayers]
         if alt_dpplayers:  # alt_dpplayers is not empty
-            if Pplayers_[3]: sum_pH(Pplayers_[3], alt_dpplayer)
+            if Pplayers_[3]: sum_pH(Pplayers_[3], alt_dpplayers)
             else:            Pplayers_[3] += [alt_dpplayers]
 
-    return [gblob, Pplayers_]
+    gblob.H = [Pplayers_[1], Pplayers_]
+    return gblob
 
 
 def PP2graph(PP, fseg, ifd=1):
@@ -348,9 +348,10 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    graph = CpH(H=[pplayers], forks=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = CpH(H=[pplayers, [None, pplayers, None, alt_pplayers]], forks=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     # no mpplayers and alt_mpplayers so assign as None?
-    return [graph, [None, pplayers, None, alt_pplayers] ]  # 1st plevel fd is always der+?
+
+    return graph  # 1st plevel fd is always der+?
 
 # move here temporary, for debug purpose
 def agg_recursion_eval(blob, PP_t):
@@ -375,15 +376,15 @@ def agg_recursion_eval(blob, PP_t):
             else:
                 converted_blob = blob2graph(blob, fseg=fseg)  # convert root to graph
 
-    agg_recursion(converted_blob, fseg=fseg)
+    # agg_recursion(converted_blob, fseg=fseg)  # this line is not needed?
 
-    M = converted_graph[1][0].val if converted_graph[1][0] else 0  # mpplayers.val (but m fork is always empty, so no value here?)
-    G = converted_graph[1][1].val if converted_graph[1][1] else 0  # dpplayers.val
+    M = converted_graph.H[1][0].val if converted_graph.H[1][0] else 0  # mpplayers.val (but m fork is always empty, so no value here?)
+    G = converted_graph.H[1][1].val if converted_graph.H[1][1] else 0  # dpplayers.val
     valt = [M, G]
     fork_rdnt = [1+(G>M), 1+(M>=G)]
     # should be single call of agg_recursion here？
     for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
         if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
-            and len(PP_) > ave_nsub and converted_blob[0].alt_rdn < ave_overlap:  # we don't have alt rdn now?
+            and len(PP_) > ave_nsub : #and converted_blob[0].alt_rdn < ave_overlap:  # we don't have alt rdn now?
             blob.rdn += 1  # estimate
             agg_recursion(converted_blob, fseg=fseg)
