@@ -265,18 +265,17 @@ def comp_pH(_pH, pH, fork=None):  # recursive unpack plevels ( pplayer ( players
         fork = pH.fork[i] if len(pH.fork) else 0  # in plevels or players
         _fork = _pH.fork[i] if len(_pH.fork) else 0
         if _fork == fork:
+            if isinstance(_spH, Cptuple):
+                mtuple, dtuple = comp_ptuple(_spH, spH, fork)
+                mpH.H += [mtuple]; mpH.val += mtuple.val
+                dpH.H += [dtuple]; dpH.val += dtuple.val
 
-        if isinstance(_spH, Cptuple):
-            mtuple, dtuple = comp_ptuple(_spH, spH, fork)
-            mpH.H += [mtuple]; mpH.val += mtuple.val
-            dpH.H += [dtuple]; dpH.val += dtuple.val
-
-        elif isinstance(_spH, CpH):
-            if spH.S:  # extuple is valid in graph: pplayer only?
-                comp_ext(_spH, spH, mpH, dpH)
-            sub_mpH, sub_dpH = comp_pH(_spH, spH, fork)
-            mpH.H += [sub_mpH]; dpH.H += [sub_dpH]
-            mpH.val += sub_mpH.val; dpH.val += sub_dpH.val
+            elif isinstance(_spH, CpH):
+                if spH.S:  # extuple is valid in graph: pplayer only?
+                    comp_ext(_spH, spH, mpH, dpH)
+                sub_mpH, sub_dpH = comp_pH(_spH, spH, fork)
+                mpH.H += [sub_mpH]; dpH.H += [sub_dpH]
+                mpH.val += sub_mpH.val; dpH.val += sub_dpH.val
 
     return mpH, dpH
 
@@ -347,7 +346,7 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                 for derG in node.link_.Q:  # contour if link.plevels.val < ave_Gm: link outside the graph
                     for G in [derG.node0, derG.node1]:  # both overlap: in-graph nodes, and contour: not in-graph nodes
                         alt_graph = G.roott[1-fd]
-                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, Cgraph):  # not proto-graph or removed
+                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, CpH):  # not proto-graph or removed
                             graph.alt_graph_ += [alt_graph]
                             alt_graph.alt_graph_ += [graph]
                             # bilateral assign
