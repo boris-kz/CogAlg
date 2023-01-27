@@ -33,31 +33,26 @@ for _Hm, _Hd, Hm, Hd in zip([_G.mlevels, _G.dlevels, G.mlevels, G.dlevels], [_G.
 mplevel.val += Mlen; dplevel.val += Dlen  # combined cis match and diff
 
 
-def agg_recursion(root, G_, fseg, fd):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
+def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
 
-    G_ = [Cgraph(plevels=G.plevels, alt_plevels=G.alt_plevels, node_=G.node_, link_=copy(G.link_), alt_graph_=G.alt_graph_) for G in G_]
-    # copy G_
-    mgraph_, dgraph_ = form_graph_(root, [copy_G(G) for G in G_], fd)  # PP cross-comp and clustering
+    for fork, pplayers in enumerate(root.wH[0]):  # root graph 1st plevel forks: mpplayers, dpplayers, alt_mpplayers, alt_dpplayers
+        # each is still an individual cLev here, no feedback yet?
+        if pplayers: # H: plevels ( forks ( pplayers ( players ( ptuples
 
-    mval = sum([mgraph.plevels.val for mgraph in mgraph_])
-    dval = sum([dgraph.plevels.val for dgraph in dgraph_])
-    root.mlevels += mgraph_; root.dlevels += dgraph_
+            for G in pplayers.node_:  # init forks, rng+ H[1][fork][-1] is immutable, comp frng pplayers
+                G.wH += [[[],[],[],[]]]
+            mgraph_, dgraph_ = form_graph_(root, fork)  # cross-comp and graph clustering
 
-    for fd, (graph_,val) in enumerate(zip([mgraph_,dgraph_],[mval,dval])):  # same graph_, val for sub+ and agg+
-        # intra-graph sub+:
-        if val > ave_sub * (root.rdn):  # same in blob, same base cost for both forks
-            root.rdn+=1  # estimate
-            sub_layers, val = sub_recursion_g(graph_, val, fseg, fd)  # subdivide graph_ by der+|rng+, accum val
-        else:
-            sub_layers = []
-        [root.rlayers,root.dlayers][:] = [sub_layers, val]  # replace with summed params of higher-composition graphs
-        for graph in graph_:
-            sum_pH(root.plevels, graph.plevels)
-        # cross-graph agg+:
-        if val > G_aves[fd] * ave_agg * (root.rdn) and len(graph_) > ave_nsub:
-            root.rdn+=1  # estimate
-            agg_recursion(root, graph_, fseg=fseg, fd=fd)  # cross-comp graphs
-
+            for fd, graph_ in enumerate([mgraph_,dgraph_]):  # eval graphs for sub+ and agg+:
+                val = sum([graph.val for graph in graph_])
+                # intra-graph sub+ comp node:
+                if val > ave_sub * (root.rdn):  # same in blob, same base cost for both forks
+                    pplayers.rdn+=1  # estimate
+                    sub_recursion_g(graph_, val, fseg, fd)  # subdivide graph_ by der+|rng+
+                # cross-graph agg+ comp graph:
+                if val > G_aves[fd] * ave_agg * (root.rdn) and len(graph_) > ave_nsub:
+                    pplayers.rdn += 1  # estimate
+                    agg_recursion(root, fseg=fseg)
 
 def form_graph_(root, G_, fd): # form plevel in agg+ or player in sub+, G is node in GG graph; der+: comp_link if fderG, from sub+
 
@@ -452,4 +447,6 @@ def sum2graph_(graph_, fd, ifd):  # sum node and link params into graph, plevel 
 for Lev, lev in zip_longest(Graph, node_pplayers__, fillvalue=[]):  # lev: 4 fork pplayers
     for Pplayers, pplayers in zip_longest(Lev, lev, fillvalue=CpH()):
         Graph += [sum_pH(Pplayers, pplayers)]  # sum old plevels
+        
+ H = list  # plevels, higher H[:c+1]=fork CpH_, lower H[c:]=forks_: 4^i fork tree, from [m,d,am,ad], for feedback accum
 '''

@@ -293,27 +293,29 @@ def blob2graph(blob, fseg):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-    Pplayers_ = [None,None,None,None]
-    gblob = CpH(H = [Pplayers_], fork=1, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+
+    mpplayers = CpH(); dpplayers = CpH()
+    wH = [[mpplayers,dpplayers,[],[]]]
+    uH = [mpplayers, dpplayers]  # blob has 2 forks here, uH should get 2 elements?
+    gblob = Cgraph(wH = wH, uH=uH, fork=1, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     blob.graph = gblob  # update graph reference
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            if graph.H[0][fd]:  # if not empty dpplayers
-                if Pplayers_[fd]: sum_pH(Pplayers_[fd], graph.H[0][fd])
-                else:             Pplayers_[fd] = deepcopy(graph.H[0][fd])
-                Pplayers_[fd].node_ += [graph]  # add first layer graph (in the structure of [node [plevels_4]])
+            sum_pH(wH[0][fd], graph.uH[0])
+            wH[0][fd].node_ += [graph]  # add first layer graph (in the structure of [node [plevels_4]])
+
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.graph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        alt_mpplayers, alt_dpplayers = alt_blob.graph.H[0][:2]
+        alt_mpplayers, alt_dpplayers = alt_blob.graph.wH[0][:2]
         if alt_mpplayers:  # alt_mpplayers is not empty
-            if Pplayers_[2]: sum_pH(Pplayers_[2], alt_mpplayers)
-            else:            Pplayers_[2] += [alt_mpplayers]
+            if wH[0][2]: sum_pH(wH[0][2], alt_mpplayers)
+            else:        wH[0][2] = deepcopy(alt_mpplayers)
         if alt_dpplayers:  # alt_dpplayers is not empty
-            if Pplayers_[3]: sum_pH(Pplayers_[3], alt_dpplayers)
-            else:            Pplayers_[3] += [alt_dpplayers]
+            if wH[0][3]: sum_pH(wH[0][3], alt_dpplayers)
+            else:        wH[0][3] = deepcopy(alt_mpplayers)
 
     return gblob
 
@@ -335,7 +337,7 @@ def PP2graph(PP, fseg, ifd=1):
                     H += [ptuple]; val += ptuple.val
             alt_ptuples = CpH(H=H, val=val)
             alt_players.H += [alt_ptuples]; alt_players.val += val
-    alt_pplayers = CpH(H=[alt_players], fork=1, val=alt_players.val)
+    alt_pplayers = Cgraph(H=[alt_players], forks=[1], val=alt_players.val)
     # no need to update alt_pplayers' fork？
 
     # graph: [CpH, pplayers_1, pplayers_2, _]
@@ -343,11 +345,12 @@ def PP2graph(PP, fseg, ifd=1):
     for ptuples, val in PP.players[0]:
         ptuples = CpH(H=deepcopy(ptuples), val=val)
         players.H += [ptuples]; players.val += val
-    pplayers = CpH(H=[players], fork=1, val=players.val)
+    pplayers = CpH(H=[players], forks=[1], val=players.val)
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    graph = CpH(H=[[None, pplayers, None, alt_pplayers]], fork=1, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    wH = [[[], pplayers, [], alt_pplayers]]
+    graph = Cgraph(wH=wH, uH =[pplayers], forks=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     # no mpplayers and alt_mpplayers so assign as None?
 
     return graph  # 1st plevel fd is always der+?
@@ -377,8 +380,8 @@ def agg_recursion_eval(blob, PP_t):
 
     # agg_recursion(converted_blob, fseg=fseg)  # this line is not needed?
 
-    M = converted_graph.H[0][0].val if converted_graph.H[0][0] else 0  # mpplayers.val (but m fork is always empty, so no value here?)
-    G = converted_graph.H[0][1].val if converted_graph.H[0][1] else 0  # dpplayers.val
+    M = converted_graph.wH[0][0].val if converted_graph.wH[0][0] else 0  # mpplayers.val (but m fork is always empty, so no value here?)
+    G = converted_graph.wH[0][1].val if converted_graph.wH[0][1] else 0  # dpplayers.val
     valt = [M, G]
     fork_rdnt = [1+(G>M), 1+(M>=G)]
     # should be single call of agg_recursion here？
