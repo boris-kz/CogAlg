@@ -167,6 +167,34 @@ def comp_G_(G_, fd):  # cross-comp Gs (patterns of patterns): Gs, derGs, or segs
                     _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
                     G.link_.Qd += [derG]; G.link_.dval += dval
 
+def comp_G_(G_):  # cross-comp Graphs, or segs inside PP?
+
+    for i, _G in enumerate(G_):  # G_ is node_ of root graph
+        _uH = _G.uH; _lev = _G.uH[-1]  # CpH pplayers
+        for G in G_[i+1:]:  # compare each G to other Gs in rng, bilateral link assign, val accum:
+            uH = G.uH; lev = G.uH[-1]
+            # test if lev pair was compared in prior rng+:
+            if lev in [node for link in _lev.link_.Q for node in [link.node0,link.node1]]:  # add frng to skip?
+                continue
+            dx = _lev.x0 - lev.x0; dy = _lev.y0 - lev.y0  # center x0,y0
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
+            if distance < ave_distance * ((_G.val + G.val) / (2*sum(G_aves))):
+                # comp pplayers_:
+                mplevel, dplevel = comp_pH_(_uH, uH)  # compare taken forks only, no fork in comp_pH_?
+                derG = CderG(node0=_G,node1=G, mplevel=mplevel,dplevel=dplevel, S=distance, A=[dy,dx])
+                mval = mplevel.val; dval = dplevel.val
+                tval = mval + dval
+                _lev.link_.Q += [derG]; _lev.link_.val += tval  # val of combined-fork' +- links?
+                lev.link_.Q += [derG]; lev.link_.val += tval
+                if mval > ave_Gm:
+                    _lev.link_.Qm += [derG]; _lev.link_.mval += mval  # no dval for Qm
+                    lev.link_.Qm += [derG]; lev.link_.mval += mval
+                if dval > ave_Gd:
+                    _lev.link_.Qd += [derG]; _lev.link_.dval += dval  # no mval for Qd
+                    lev.link_.Qd += [derG]; lev.link_.dval += dval
+
+
+
 def comp_pH(_pH, pH):  # recursive unpack plevels ( pplayer ( players ( ptuples -> ptuple:
 
     mpH, dpH = CpH(), CpH()
@@ -450,3 +478,44 @@ for Lev, lev in zip_longest(Graph, node_pplayers__, fillvalue=[]):  # lev: 4 for
         
  H = list  # plevels, higher H[:c+1]=fork CpH_, lower H[c:]=forks_: 4^i fork tree, from [m,d,am,ad], for feedback accum
 '''
+def sum2graph_(graph_, root, fd, fork_):  # sum node and link params into graph, plevel in agg+ or player in sub+
+
+    Graph_ = []  # Cgraphs
+    for graph in graph_:  # CQs
+        if graph.val < ave_G:  # form graph if val>min only
+            continue
+        Glink_= []; X0,Y0 = 0,0
+        # 1st pass: define center Y,X and Glink_:
+        for G in graph.Q:
+            node = G.uH[-1]  # Cgraph G, CpH node
+            Glink_ = list(set(Glink_ + [node.link_.Qm, node.link_.Qd][fd]))  # unique fork links over graph nodes
+            X0 += node.x0; Y0 += node.y0
+        L = len(graph.Q); X0/=L; Y0/=L; Xn,Yn = 0,0
+        UH = []
+        # 2nd pass: extend and sum nodes in graph:
+        for G in graph.Q:  # CQ(Q=gnode_, val=val)],G is Cgraph, define max distance,A, sum plevels:
+            sum_pH_(UH, G.uH)
+            node = G.uH[-1]  # node is pplayers
+            Xn = max(Xn, (node.x0 + node.xn) - X0)  # box xn = x0+xn
+            Yn = max(Yn, (node.y0 + node.yn) - Y0)
+            new_lev = CpH(L=0,A=[0,0])
+            link_ = [node.link_.Qm, node.link_.Qd][fd]  # fork link_
+            # form quasi-gradient per node from variable-length links:
+            for derG in link_:
+                der_lev = [derG.mplevel,derG.dplevel][fd]
+                sum_pH(new_lev,der_lev)
+                new_lev.L+=1; new_lev.S+=derG.S; new_lev.A[0]+=derG.A[0]; new_lev.A[1]+=derG.A[1]
+                new_lev.node_ += [derG.node0] if node is derG.node1 else [derG.node1]  # redundant to node.link_
+            G.uH += [new_lev]
+            G.ufork__+= [fork_]  # new lev
+            G.val += new_lev.val
+        new_Lev = CpH(node_=graph.Q, val=graph.val, A=[Xn*2,Yn*2], x0=X0,xn=Xn,y0=Y0,yn=Yn)
+        for link in Glink_: sum_pH(new_Lev, [link.mplevel, link.dplevel][fd])
+        UH += [new_Lev]
+        sum_pH_(root.uH, UH)
+        sum_pH(root.wH[0][fork_[-1]], new_Lev)  # higher roots feedback after last fork, in form_graph_?
+
+        Graph_ += [Cgraph( root=root, val=sum([lev.val for lev in UH]), uH=UH, wH=[[]], # 4forks if agg+ only
+                           ufork__=G.ufork__,wforkn_=[1])]  # nodes have same ufork__ as graph, redundant?
+    return Graph_
+

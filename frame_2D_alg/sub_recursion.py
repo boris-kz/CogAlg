@@ -298,7 +298,7 @@ def blob2graph(blob, fseg):
     wH = [[[mpplayers],[dpplayers],[],[]]]
     # no mpplayers?
     uH = [dpplayers]  # blob has 2 forks here, uH should get 2 elements?
-    gblob = Cgraph(wH = wH, uH=uH, uforks=[1], wforks=[2], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    gblob = Cgraph(wH = wH, uH=uH, ufork__=[[1]], wforkn_=[2], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     blob.graph = gblob  # update graph reference
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
@@ -350,7 +350,7 @@ def PP2graph(PP, fseg, ifd=1):
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
     wH = [[[], [pplayers], [], [alt_pplayers]]]
-    graph = Cgraph(wH=wH, uH =[pplayers], uforks=[1], wforks=[2], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(wH=wH, uH =[pplayers], ufork__=[[1]], wforkn_=[2], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     # no mpplayers and alt_mpplayers so assign as None?
 
     return graph  # 1st plevel fd is always der+?
