@@ -301,6 +301,7 @@ def blob2graph(blob, fseg):
     muH = [mpplayers]; duH = [dpplayers]
     mblob = Cgraph(wH = mwH, uH=muH, ufork__=[[0]], wforkn_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     dblob = Cgraph(wH = dwH, uH=duH, ufork__=[[1]], wforkn_=[1], rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    mpplayers.G = mblob; dpplayers.G = dblob
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -358,6 +359,7 @@ def PP2graph(PP, fseg, ifd=1):
     if ifd: wH = [[[], [pplayers], [], [alt_pplayers]]]
     else:   wH = [[[pplayers], [], [alt_pplayers], []]]
     graph = Cgraph(wH=wH, uH =[pplayers], ufork__=[[ifd]], wforkn_=[2], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    pplayers.G = graph
     # no mpplayers and alt_mpplayers so assign as None?
 
     return graph  # 1st plevel fd is always der+?
@@ -379,8 +381,6 @@ def agg_recursion_eval(blob, PP_t):
             converted_dblob = PP2graph(blob, fseg=fseg, ifd=1)  # when fseg = True, we need both forks?
             converted_mblob.node_ = PP_t[0]; converted_dblob.node_ = PP_t[1]
             converted_blobt = [converted_mblob,converted_dblob]
-
-            # skip m fork because 1st fork is d fork
         else:
             if blob.mgraph:
                 converted_blobt = [blob.mgraph, blob.dgraph]  # get converted graph
