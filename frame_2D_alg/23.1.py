@@ -519,3 +519,24 @@ def sum2graph_(graph_, root, fd, fork_):  # sum node and link params into graph,
                            ufork__=G.ufork__,wforkn_=[1])]  # nodes have same ufork__ as graph, redundant?
     return Graph_
 
+def comp_ext(_spH, spH, mpH, dpH):
+    L, S, A = len(spH.G.node_), spH.G.S, spH.G.A
+    _L, _S, _A = len(_spH.G.node_), _spH.G.S, _spH.G.A
+
+    _sparsity = _S /(_L-1); sparsity = S /(L-1)  # average distance between connected nodes, single distance if derG
+    dS = _sparsity - sparsity; mS = min(_sparsity, sparsity)
+
+    if spH.G.L:  # dLs
+        L = spH.G.L; _L = _spH.G.L
+    dL = _L - L; mL = ave_L - dL
+
+    if _A and A:  # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
+        if isinstance(_A, list):
+            mA, dA = comp_angle(None, _A, A)
+        else:  # scalar mA or dA
+            dA = _A - A; mA = min(_A, A)
+    else:
+        mA = 1; dA = 0  # no difference, matching low-aspect, only if both?
+
+    return dS, mS, dL, mL, dA, mA
+
