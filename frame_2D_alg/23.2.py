@@ -265,7 +265,14 @@ def sum2graph_(graph_, root, fd, fork_):  # sum node and link params into graph,
                             val=G.val+new_lev.val, L=L,S=S,A=A, x0=G.x0,xn=G.xn,y0=G.y0,yn=G.yn)
             new_lev.G = new_G  # G is immutable
             node_ += [new_G]
-
+            '''
+            if isinstance(G.uH[-1], list):
+                G_=[]; for guH in G.uH[0]: G_.append(guH.G); guH.G=[]
+            else: G_ = G.uH[-1].G; G.uH[-1].G=[]  # exclude G.G, reassign after deepcopy(G.uH)
+            if isinstance(G.uH[-1], list):
+                uH = deepcopy(G.uH); uH[0]+=[new_lev]; for guH, G in zip(G.uH[0], G_): guH.G = G  # reassign G
+            else: uH = deepcopy(G.uH) + [new_lev]; G.uH[-1].G = G_
+            '''
         new_Lev = CpH(G=Graph, val=graph.val, A=[Xn*2,Yn*2], x0=X0,xn=Xn,y0=Y0,yn=Yn)
         for link in Glink_: sum_pH(new_Lev, [link.mplevel, link.dplevel][fd])
         UH += [new_Lev]

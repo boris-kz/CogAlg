@@ -297,10 +297,10 @@ def blob2graph(blob, fseg):
     mpplayers = CpH(); dpplayers = CpH()
     muH = [[mpplayers]]; duH = [[dpplayers]]
     uHs = [muH, duH]
-    alt_mblob = Cgraph(wH = [], uH=[[CpH()]], ufd__=[[0]], wfdn_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    alt_dblob = Cgraph(wH = [], uH=[[CpH()]], ufd__=[[1]], wfdn_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mblob = Cgraph(wH = [], uH=muH, ufd__=[[0]], wforkn_=[1], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    dblob = Cgraph(wH = [], uH=duH, ufd__=[[1]], wforkn_=[1], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_mblob = Cgraph(wH = [], uH=[[CpH()]], ufds_=[[0]], wfds_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_dblob = Cgraph(wH = [], uH=[[CpH()]], ufds_=[[1]], wfds_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    mblob = Cgraph(wH = [], uH=muH, ufds_=[[0]], wfds_=[1], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    dblob = Cgraph(wH = [], uH=duH, ufds_=[[1]], wfds_=[1], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     mpplayers.G = mblob; dpplayers.G = dblob
 
     blob.mgraph = mblob  # update graph reference
@@ -316,11 +316,9 @@ def blob2graph(blob, fseg):
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        alt_mpplayers, alt_dpplayers = alt_blob.mgraph.uH[0][0], alt_blob.dgraph.uH[0][0]
-        if alt_mpplayers:  # alt_mpplayers is not empty
-            sum_pH(alt_mblob.uH[0][0], alt_mpplayers)
-        if alt_dpplayers:  # alt_dpplayers is not empty
-            sum_pH(alt_dblob.uH[0][0], alt_dpplayers)
+        sum_pH_(alt_mblob.uH, alt_blob.mgraph.uH)
+        sum_pH_(alt_dblob.uH, alt_blob.dgraph.uH)
+
     return mblob, dblob
 
 
@@ -351,9 +349,9 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(wH=[], uH =[[alt_pplayers]], ufd__=[[ifd]], wfdn_=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_Graph = Cgraph(wH=[], uH =[[alt_pplayers]], ufds_=[[ifd]], wfds_=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     alt_pplayers.G = alt_Graph
-    graph = Cgraph(wH=[], uH =[[pplayers]], ufd__=[[ifd]], wfdn_=[1], alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(wH=[], uH =[[pplayers]], ufds_=[[ifd]], wfds_=[1], alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     pplayers.G = graph
     # update alt_Graph.alt_Graph with graph?
 
