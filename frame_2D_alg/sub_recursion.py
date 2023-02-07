@@ -295,13 +295,14 @@ def blob2graph(blob, fseg):
     x0, xn, y0, yn = blob.box
 
     mpplayers = CpH(); dpplayers = CpH()
-    muH = [[mpplayers]]; duH = [[dpplayers]]
-    uHs = [muH, duH]
-    alt_mblob = Cgraph(wH = [], uH=[[CpH()]], ufds_=[[0]], wfds_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    alt_dblob = Cgraph(wH = [], uH=[[CpH()]], ufds_=[[1]], wfds_=[1], rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mblob = Cgraph(wH = [], uH=muH, ufds_=[[0]], wfds_=[1], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    dblob = Cgraph(wH = [], uH=duH, ufds_=[[1]], wfds_=[1], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mpplayers.G = mblob; dpplayers.G = dblob
+    alt_mpplayers = CpH(); alt_dpplayers = CpH()
+    mgraph = Cgraph(pplayers=mpplayers, fd=0); dgraph = Cgraph(pplayers=dpplayers, fd=1)
+    alt_mgraph = Cgraph(pplayers=alt_mpplayers, fd=0); alt_dgraph = Cgraph(pplayers=alt_dpplayers, fd=1)
+    pplayerst = [mpplayers, dpplayers]
+    alt_mblob = Cgraph(pplayers=alt_mpplayers, wH=[], uH=[CpH(H=[alt_mgraph,Cgraph(fd=1)])], fd=0, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_dblob = Cgraph(pplayers=alt_mpplayers, wH=[], uH=[CpH(H=[Cgraph(fd=0),alt_mgraph])], fd=1, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    mblob = Cgraph(pplayers=mpplayers, wH=[], uH=[CpH(H=[mgraph, Cgraph(fd=1)])], fd=0, alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    dblob = Cgraph(pplayers=dpplayers, wH=[], uH=[CpH(H=[Cgraph(fd=0),dgraph])], fd=1, alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -310,14 +311,14 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            sum_pH_(uHs[fd][0], graph.uH[0])  # uH is nested in agg+, conversion starts in agg+
+            sum_pH(pplayerst[fd], graph.pplayers)  # uH is nested in agg+, conversion starts in agg+
             blobs[fd].node_ += [graph]  # add first layer graph (in the structure of [node [plevels_4]])
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        sum_pH_(alt_mblob.uH, alt_blob.mgraph.uH)
-        sum_pH_(alt_dblob.uH, alt_blob.dgraph.uH)
+        sum_pH(alt_mblob.pplayers, alt_blob.mgraph.pplayers)
+        sum_pH(alt_dblob.pplayers, alt_blob.dgraph.pplayers)
 
     return mblob, dblob
 
@@ -349,11 +350,8 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(wH=[], uH =[[alt_pplayers]], ufds_=[[ifd]], wfds_=[1], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    alt_pplayers.G = alt_Graph
-    graph = Cgraph(wH=[], uH =[[pplayers]], ufds_=[[ifd]], wfds_=[1], alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    pplayers.G = graph
-    # update alt_Graph.alt_Graph with graph?
+    alt_Graph = Cgraph(pplayers=alt_pplayers, wH=[], uH = [CpH(H=[Cgraph(fd=0),Cgraph(pplayers=alt_pplayers)])], fd=1, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(pplayers=pplayers, wH=[], uH =[CpH(H=[Cgraph(fd=0),Cgraph(pplayers=pplayers)])], fd=1, alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     return graph  # 1st plevel fd is always der+?
 

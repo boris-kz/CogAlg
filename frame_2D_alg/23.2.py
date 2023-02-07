@@ -266,6 +266,12 @@ def sum2graph_(graph_, root, fd, fork_):  # sum node and link params into graph,
             new_lev.G = new_G  # G is immutable
             node_ += [new_G]
             '''
+            levfd = sum_pH(G.uH[-1].H[fd].pplayers, G.pplayers)
+            new_G = Cgraph( pplayers=new_lev, 
+                            node_=copy(G.node_), val=G.val+new_lev.val, L=L,S=S,A=A, x0=G.x0,xn=G.xn,y0=G.y0,yn=G.yn)
+            sum_pH(new_G.uH[-1].H[fd].pplayers, levfd)  # sum in the root
+            node_ += [new_G]?
+
             if isinstance(G.uH[-1], list):
                 G_=[]; for guH in G.uH[0]: G_.append(guH.G); guH.G=[]
             else: G_ = G.uH[-1].G; G.uH[-1].G=[]  # exclude G.G, reassign after deepcopy(G.uH)
