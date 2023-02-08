@@ -294,15 +294,15 @@ def blob2graph(blob, fseg):
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
 
-    mpplayers = CpH(); dpplayers = CpH()
-    alt_mpplayers = CpH(); alt_dpplayers = CpH()
-    mgraph = Cgraph(pplayers=mpplayers, fd=0); dgraph = Cgraph(pplayers=dpplayers, fd=1)
-    alt_mgraph = Cgraph(pplayers=alt_mpplayers, fd=0); alt_dgraph = Cgraph(pplayers=alt_dpplayers, fd=1)
+    mpplayers = CpH(fds=[0]); dpplayers = CpH(fds=[1])
+    alt_mpplayers = CpH(fds=[0]); alt_dpplayers = CpH(fds=[1])
+    mgraph = Cgraph(pplayers=mpplayers); dgraph = Cgraph(pplayers=dpplayers)
+    alt_mgraph = Cgraph(pplayers=alt_mpplayers); alt_dgraph = Cgraph(pplayers=alt_dpplayers)
     pplayerst = [mpplayers, dpplayers]
     alt_mblob = Cgraph(pplayers=alt_mpplayers, wH=[], uH=[CpH(H=[alt_mgraph,Cgraph(fd=1)])], fd=0, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
     alt_dblob = Cgraph(pplayers=alt_mpplayers, wH=[], uH=[CpH(H=[Cgraph(fd=0),alt_mgraph])], fd=1, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mblob = Cgraph(pplayers=mpplayers, wH=[], uH=[CpH(H=[mgraph, Cgraph(fd=1)])], fd=0, alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    dblob = Cgraph(pplayers=dpplayers, wH=[], uH=[CpH(H=[Cgraph(fd=0),dgraph])], fd=1, alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    mblob = Cgraph(pplayers=mpplayers, wH=[], uH=[CpH(H=[mgraph, Cgraph(fd=1)])], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    dblob = Cgraph(pplayers=dpplayers, wH=[], uH=[CpH(H=[Cgraph(fd=0),dgraph])], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -340,18 +340,18 @@ def PP2graph(PP, fseg, ifd=1):
                     H += [ptuple]; val += ptuple.val
             alt_ptuples = CpH(H=H, val=val)
             alt_players.H += [alt_ptuples]; alt_players.val += val
-    alt_pplayers = CpH(H=[alt_players], forks=[ifd], val=alt_players.val)
+    alt_pplayers = CpH(H=[alt_players], fds=[ifd], val=alt_players.val)
 
     players = CpH()
     for ptuples, val in PP.players[0]:
         ptuples = CpH(H=deepcopy(ptuples), val=val)
         players.H += [ptuples]; players.val += val
-    pplayers = CpH(H=[players], forks=[ifd], val=players.val)
+    pplayers = CpH(H=[players], fds=[ifd], val=players.val)
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(pplayers=alt_pplayers, wH=[], uH = [CpH(H=[Cgraph(fd=0),Cgraph(pplayers=alt_pplayers)])], fd=1, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    graph = Cgraph(pplayers=pplayers, wH=[], uH =[CpH(H=[Cgraph(fd=0),Cgraph(pplayers=pplayers)])], fd=1, alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_Graph = Cgraph(pplayers=alt_pplayers, wH=[], uH = [CpH(H=[Cgraph(fd=0),Cgraph(pplayers=alt_pplayers)])], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(pplayers=pplayers, wH=[], uH =[CpH(H=[Cgraph(fd=0),Cgraph(pplayers=pplayers)])], alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     return graph  # 1st plevel fd is always der+?
 
@@ -386,5 +386,6 @@ def agg_recursion_eval(blob, PP_t):
     for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
         if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
             and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:  # we don't have alt rdn now?
+
             blob.rdn += 1  # estimate
             agg_recursion(converted_blobt[fd], fseg=fseg)
