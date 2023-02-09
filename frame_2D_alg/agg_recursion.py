@@ -46,13 +46,10 @@ class Clink_(ClusterStructure):
 
 class CpH(ClusterStructure):  # hierarchy of params + associated vars in pplayers | players | ptuples
 
-    root = lambda: None  # mapping root node in sub+: CpH pplayers = distributed uH?
-    G = lambda: None  # root graph
     H = list  # pplayers | players | ptuples
     val = float
     rdn = lambda: 1  # for all Qs?
     fds = list  # m|d in pplayers,players,ptuples, m|d|None in levs?
-    nval = float  # of open links: alt_graph_?
     # in xpplayers, each m|d, or per graph?
     derL = int
     derS = int
@@ -60,6 +57,8 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars in pplayer
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
+    G = lambda: None  # mapping base node in sub+: uH is distributed over G.pplayers
+    root = lambda: None  # root graph
     uH = list  # upper Lev += lev per agg+|sub+: up-forking root tree, CpH lev, H=forks: G/agg+ or pplayers/sub+
     wH = list  # lower Lev += node__.. feedback: down-forking node tree, same syntax?
     val = int  # of all params
@@ -78,7 +77,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     # nodes and laterals:
     node_ = list  # sub-node_ s concatenated within root node_
     link_ = lambda: Clink_()  # evaluated external links if node, alt_node if open
-    nval = int  # of open links, base alt rep
+    nval = int  # open links: base alt rep
     alt_graph_ = list  # contour + overlapping contrast graphs
     alt_Graph = None  # conditional, summed and concatenated params of alt_graph_
 
@@ -236,35 +235,36 @@ def sum2graph_(graph_, fd, fds, fsub):  # sum node and link params into graph, p
             Glink_ = list(set(Glink_ + [G.link_.Qm, G.link_.Qd][fd]))  # unique fork links in graph node_
             X0 += G.x0; Y0 += G.y0
         L = len(graph.Q); X0/=L; Y0/=L; Xn,Yn = 0,0
-        Pplayers = CpH()
-        if not fsub: UH,WH = [],[]
+        # 2nd pass: init node_:
         node_ = []
-        # 2nd pass: form new nodes:
         for G in graph.Q:  # CQ(Q=gnode_, val=val)], define new G and graph:
             Xn = max(Xn, (G.x0 + G.xn) - X0)  # box xn = x0+xn
             Yn = max(Yn, (G.y0 + G.yn) - Y0)
-            sum_pH(Pplayers, G.pplayers)
-            if not fsub:
-                sum_pH_(UH, G.uH); sum_pH_(WH, G.wH)
+            if fsub:
+                node_+=[Cgraph(G=G)]  # other params in final G, no need to copy
+        Graph = Cgraph(A=[Xn*2,Yn*2], x0=X0,xn=Xn,y0=Y0,yn=Yn)
+        if not fsub:
+            for node in graph.Q:
+                node.uH[fd] = Cgraph(pplayers=node.pplayers)  # add new_lev, other params?
+                node.pplayers=[]  # fill in 3rd pass, Graph should not sum redundant links
+                sum_G(Graph, node)
+            node_ = graph.Q
+        Graph.node_ = node_
+        for link in Glink_:  # sum unique links
+            sum_pH(Graph.pplayers, [link.mplevel,link.dplevel][fd])
+        # 3rd pass: form new node pplayers
+        for G in Graph.node_:
             link_ = [G.link_.Qm, G.link_.Qd][fd]  # fork link_
-            # form quasi-gradient of node' variable-length links:
-            new_lev = CpH(root=G)
-            for derG in link_:
-                sum_pH(new_lev, [derG.mplevel,derG.dplevel][fd])
-                new_lev.derS += derG.S; new_lev.derA += sum(derG.A)
-                # derA = der_mA + der_dA?
-            node_ += [new_lev if fsub else Cgraph(pplayers=new_lev)]  # or always Cgraph?
+            for derG in link_:  # form quasi-gradient of node' variable-length links, not added to Graph
+                sum_pH(G.pplayers, [derG.mplevel,derG.dplevel][fd])
+                G.pplayers.derS += derG.S; G.pplayers.derA += sum(derG.A)  # derA = der_mA + der_dA?
+            if fsub: G.root = Graph
+            else: sum_pH(G.uH[-1].H[fd].pplayers, Graph.pplayers)
+            # local subset of graph.uH[-1].H[fd]
+        Graph.val = Graph.pplayers.val \
+                  + sum([lev.val for lev in Graph.uH]) / max(1, sum([lev.rdn for lev in Graph.uH])) \
+                  + sum([lev.val for lev in Graph.wH]) / max(1, sum([lev.rdn for lev in Graph.wH]))  # if val > alt_val: rdn += len_Q?
 
-        sum_pH(UH[-1].H[fd].pplayers, Pplayers)  # or full sum_G, in feedback because Graph.val may call sub+?
-        new_Lev = CpH(A=[Xn*2,Yn*2], x0=X0,xn=Xn,y0=Y0,yn=Yn)
-        for link in Glink_: sum_pH(new_Lev, [link.mplevel,link.dplevel][fd])
-
-        Graph = Cgraph(pplayers=new_Lev, node_=node_, uH=UH, wH=WH)
-        for node in Graph.node_:
-            sum_pH(node.uH[-1].H[fd], Pplayers)  # local subset of graph.uH[-1].H[fd], for ultimate root.G?
-        Graph.val = Pplayers.val \
-                  + sum([lev.val for lev in UH]) / sum([lev.rdn for lev in UH]) \
-                  + sum([lev.val for lev in WH]) / sum([lev.rdn for lev in WH])  # if val > alt_val: rdn += len_Q?
         Graph_ += [Graph]
     return Graph_
 
@@ -354,7 +354,7 @@ def sub_recursion_g(graph_, fseg, fd_, RVal=0, DVal=0):  # rng+: extend G_ per g
         Gval = graph.pplayers.val
         if Gval > G_aves[fd_[-1]] and len(node_) > ave_nsub:
 
-            graph.wH.insert(0, CpH(H=[CpH(), CpH()]))  # to sum new graphs, no uH in CpH?
+            graph.wH.insert(0, CpH(H=[Cgraph(), Cgraph()]))  # to sum new graphs, no uH in CpH?
             sub_mgraph_, sub_dgraph_ = form_graph_(graph, fd_, fsub=1)  # cross-comp and clustering
             # rng+:
             Rval = sum([sub_mgraph.pplayers.val for sub_mgraph in sub_mgraph_])
@@ -411,6 +411,53 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                     sum_pH(graph.alt_plevels, alt_graph.plevels)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.plevels.H[-1].node_).intersection(alt_graph.plevels.H[-1].node_))  # overlap
 
+# not reviewed:
+def sum_G(G, g):
+
+    # ext params
+    G.L += g.L
+    G.S += g.S
+    if isinstance(g.A, list):
+        G.A[0] += g.A[0]
+        G.A[1] += g.A[1]
+    else:
+        G.A += g.A
+
+    G.val += g.val
+    G.rdn += g.rdn
+    G.rng = max(G.rng, g.rng)
+    G.nval += g.nval
+
+    # not sure if we need below for coordinates
+    G.x0 = min(G.x0, g.x0)
+    G.y0 = min(G.y0, g.y0)
+    G.xn = max(G.xn, g.xn)
+    G.yn = max(G.yn, g.yn)
+
+    # node and links
+    for node in g.node_:
+        if node not in G.node_:
+            G.node_ += [node]
+    for link in g.link_.Q:
+        if link not in G.link_.Q:
+            G.link_.Q += [link]
+
+    # alts
+    for alt_graph in g.alt_graph:
+        if alt_graph not in G.alt_graph:
+            G.alt_graph_ += [alt_graph]
+    if g.alt_Graph:
+        if G.alt_Graph:
+            sum_pH(G.alt_Graph, g.alt_Graph)
+        else:
+            G.alt_Graph = deepcopy(g.alt_graph)
+
+
+    # pplayers, uH and wH
+    sum_pH(G.pplayers, g.pplayers)
+    sum_pH_(G.uH, g.uH)
+    sum_pH_(G.wH, g.wH)
+
 
 def sum_pH_(PH_, pH_, fneg=0):
     for H, h in zip_longest(PH_, pH_, fillvalue=[]):  # each H is CpH
@@ -425,30 +472,17 @@ def sum_pH_(PH_, pH_, fneg=0):
 
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
 
-    # add sum rdn, map by fds?
-    if isinstance(pH.root, Cgraph) and isinstance(PH.root, Cgraph):  # valid extuple
-        if pH.root.L:
-            if PH.root.L: PH.root.L += pH.root.L
-            else:         PH.root.L = pH.root.L
-        PH.root.S += pH.root.S
-        if PH.root.A:
-            if isinstance(PH.root.A, list):
-                PH.root.A[0] += pH.root.A[0]; PH.root.A[1] += pH.root.A[1]
-            else:
-                PH.root.A += pH.root.A
-        else: PH.root.A = copy(pH.root.A)
-
     for SpH, spH, Fd, fd in zip_longest(PH.H, pH.H, PH.fds, pH.fds, fillvalue=None):  # assume same forks
-        if SpH:
-            if spH:  # pH.H may be shorter than PH.H
+        if spH:  # check spH first because no point in summing PH if pH is shorter and spH is None
+            if SpH:
                 if isinstance(spH, Cptuple):  # PH is ptuples, SpH_ is ptuple
                     sum_ptuple(SpH, spH, fneg=fneg)
                 else:  # PH is players, H is ptuples
                     sum_pH(SpH, spH, fneg=fneg)
+            else:
+                PH.fds += [fd]  # draft
+                PH.H += [deepcopy(spH)]
 
-        else:  # PH.H is shorter than pH.H, extend it:
-            PH.fds += [fd]  # draft
-            PH.H += [deepcopy(spH.H)]
     PH.val += pH.val
     PH.rdn += pH.rdn
     PH.nval += pH.nval
