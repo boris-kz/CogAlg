@@ -47,10 +47,10 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars in pplayer
     rdn = lambda: 1  # for all Qs?
     rng = lambda: 1
     fds = list  # m|d in pplayers,players,ptuples, m|d|None in levs?
-    # in xpplayers, each m|d, or per graph?
-    derL = int
-    derS = int
-    derA = int
+    # in xpplayers, each m|d:
+    L = int
+    S = int
+    A = int
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
@@ -61,11 +61,11 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdn = lambda: 1
     node_ = list  # sub-node_ s concatenated within root node_
     # collaterals:
+    nval = int  # open links in node_: base alt rep
     link_ = lambda: Clink_()  # evaluated external links if node, alt_node if open
-    nval = int  # open links: base alt rep
     alt_graph_ = list  # contour + overlapping contrast graphs
     alt_Graph = None  # conditional, summed and concatenated params of alt_graph_
-    # extuple if S:
+    # or L,S,A in pplayers: already CpH? if S:
     L = list  # der L, init None
     S = int  # sparsity: ave len link
     A = list  # area|axis: Dy,Dx, ini None
@@ -84,6 +84,7 @@ class CderG(ClusterStructure):  # graph links, within root node_
     node1 = lambda: Cgraph()
     mplevel = lambda: CpH()  # in alt/contrast if open
     dplevel = lambda: CpH()
+    # new lev, includes shared node_?:
     S = int  # sparsity: ave len link
     A = list  # area and axis: Dy,Dx
 
@@ -130,7 +131,7 @@ def form_graph_(root, fds, fsub): # form plevel in agg+ or sub-pplayer in sub+, 
         # reform graphs by node val:
         regraph_ = graph_reval(graph_, [ave_G for graph in graph_], fd)  # init reval_ to start
         if regraph_:
-            graph_[:] = sum2graph_(regraph_, fd, fds, fsub)  # sum proto-graph node_ params in graph
+            graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
             # root for feedback: sum val,node_, then selective unpack?
         graph_t += [graph_]
 
@@ -219,86 +220,60 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
     if not f1Q: return mxpplayers_, dxpplayers_
 
 
-def sum2graph_(graph_, fd):  # sum node and link params into graph, plevel in agg+ or player in sub+
+def comp_G(_G, G, fsub):  # comp-> MpH, DpH, H = xpplayers: implicitly nested lists of all lower xpplayers
 
-    Graph_ = []  # Cgraphs
-    for graph in graph_:  # CpHs
-        if graph.val < ave_G:  # form graph if val>min only
-            continue
-        X0,Y0 = 0,0
-        for G in graph.H:  # CpH
-            X0 += G.x0; Y0 += G.y0
-        L = len(graph.H); X0/=L; Y0/=L; Xn,Yn = 0,0
-        Graph = Cgraph(A=[Xn*2, Yn*2], x0=X0, xn=Xn, y0=Y0, yn=Yn)
-        # form G, keep iG:
-        node_,Link_= [],[]
-        for iG in graph.H:
-            Xn = max(Xn, (iG.x0 + iG.xn) - X0)  # box xn = x0+xn
-            Yn = max(Yn, (iG.y0 + iG.yn) - Y0)
-            sum_G(Graph, iG, fd)  # sum(Graph.uH[-1][fd], iG.pplayers), higher levs += G.G.pplayers | G.uH, lower scope than iGraph
-            link_ = [iG.link_.Qm, iG.link_.Qd][fd]
-            Link_ = list(set(Link_ + link_))  # unique links in node_
-            G = Cgraph(G=iG, root=Graph)
-            for derG in link_:  # form quasi-gradient of node' variable-length links, not added to Graph
-                sum_pH(G.pplayers, [derG.mplevel, derG.dplevel][fd])
-                G.pplayers.derS += derG.S; G.pplayers.derA += sum(derG.A)  # derA = der_mA + der_dA?
-                # or sum S,A in Graph?
-            node_ += [G]
-        Graph.node_ = node_ # lower nodes = G.G..; Graph.root = iG.root
-        for Link in Link_:  # sum unique links
-            sum_pH(Graph.pplayers, [Link.mplevel,Link.dplevel][fd])
-        Graph.val = Graph.pplayers.val \
-                  + sum([lev.val for lev in Graph.uH]) / max(1, sum([lev.rdn for lev in Graph.uH])) \
-                  + sum([lev.val for lev in Graph.wH]) / max(1, sum([lev.rdn for lev in Graph.wH])) # if val > alt_val: rdn += len_Q?
+    MpH, DpH = CpH(), CpH()
+    Pplayers, link_, node_ = G.pplayers, G.link_.Q, G.node_
+    _Pplayers,_link_,_node_ = _G.pplayers, G.link_.Q, G.node_
 
-        Graph_ += [Graph]
-    return Graph_
+    # comp core:
+    for _pplayers, pplayers in zip(_Pplayers.H, Pplayers.H):  # Pplayers are implicitly nested ders of all lower Pplayers
+        mpplayers, dpplayers = comp_pH(_pplayers, pplayers)
+        MpH.H+=[mpplayers]; DpH.H+=[dpplayers]; MpH.val+=mpplayers.val; DpH.val+=dpplayers.val
 
+    comp_ext(_Pplayers, Pplayers, MpH, DpH)  # comp LSA, added to the whole nested new pplayers in comp_G_
+    Val = (MpH.val + DpH.val) * (_G.val + G.val)
+    if Val > ave_G:  # selective specification:
 
-def comp_G(_G, G, fsub):  # comp H-> nested MpH, DpH
-
-    MpH, DpH = CpH(), CpH()  # lists of mpH,dpH, with implicit nesting
-    pplayers, link_, node_, L, S, A = G.pplayers, G.link_.Q, G.node_, len(G.node_), G.S, G.A
-    _pplayers,_link_,_node_,_L,_S,_A = _G.pplayers, G.link_.Q, G.node_, len(_G.node_), _G.S, _G.A
-    # add other params?
-    # primary comparand:
-    mpplayers, dpplayers = comp_pH(_pplayers, pplayers)
-    MpH.val, DpH.val = mpplayers.val, dpplayers.val
-    if MpH.val + DpH.val > ave_G:  # selective specification:
-
-        Val = _G.val+G.val
         if Val * (len(_link_)+len(link_)) > ave_G:
             mlink_, dlink_ = comp_derG_(_link_, link_)  # new function?
             MpH.val += sum([mlink.val for mlink in mlink_])
             DpH.val += sum([dlink.val for dlink in dlink_])
 
         if Val * (len(_node_)+len(node_)) > ave_G:
-            mxpplayers_, dxpplayers_ = comp_G_(_node_, node_, f1Q=0, fsub=fsub)  # not sure about fork_ here
+            mxpplayers_, dxpplayers_ = comp_G_(_node_, node_, f1Q=0, fsub=fsub)
             MpH.val += sum([mxpplayers.val for mxpplayers in mxpplayers_])
-            DpH.val = sum([dxpplayers.val for dxpplayers in dxpplayers_])
+            DpH.val += sum([dxpplayers.val for dxpplayers in dxpplayers_])
 
-        # comp_ext
-        _sparsity = _S /(_L-1); sparsity = S /(L-1)  # average distance between connected nodes, single distance if derG
-        dS = _sparsity - sparsity; mS = min(_sparsity, sparsity)
-        MpH.derS += mS; DpH.derS += dS
-        if G.L:  # dLs
-            L = G.L; _L = _G.L
-        dL = _L - L; mL = ave_L - dL
-        MpH.derL += mL; DpH.derL += dL
-        if _A and A:  # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
-            if isinstance(_A, list): mA, dA = comp_angle(None, _A, A)
-            else: dA = _A - A; mA = min(_A, A)  # scalar mA or dA
-        else:
-            mA = 1; dA = 0  # no difference, matching low-aspect, only if both?
-        MpH.derA += mA; DpH.derA += dA
-
+        # comp context: summed roots and nodes, but wH is empty in top-down comp?
         for _forks, forks in zip(_G.uH, G.uH):
             for _g, _fd in zip(forks.H, forks.fds):
                 for g, fd in zip(forks.H, forks.fds):
                     if _fd == fd:
                         mpH, dpH = comp_pH(_g.pplayers, g.pplayers)
                         sum_pH(MpH, mpH); sum_pH(DpH, dpH)
+
+        # comp alts, val, rdn?
     return MpH, DpH
+
+def comp_ext(_pplayers, pplayers, mpH, dpH):
+    _L,_S,_A, L,S,A = _pplayers.L, _pplayers.S, _pplayers.A, pplayers.L, pplayers.S, pplayers.A
+
+    _sparsity = _S /(_L-1); sparsity = S /(L-1)  # average distance between connected nodes, single distance if derG
+    dpH.S = _sparsity - sparsity; dpH.val += dpH.S
+    mpH.S = min(_sparsity, sparsity); mpH.val += mpH.S
+    dpH.L = _L - L; dpH.val += dpH.L
+    mpH.L = min(_L, L); mpH.val += mpH.L
+
+    if _A and A:  # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
+        if isinstance(_A, list):
+            m, d = comp_angle(None, _A, A)
+            mpH.A = m; dpH.A = d
+        else:  # scalar mA or dA
+            dpH.A = _A - A; mpH.A = min(_A, A)
+    else:
+        mpH.A = 1; dpH.A = 0  # no difference, matching low-aspect, only if both?
+    mpH.val += mpH.A; dpH.val += dpH.A
 
 # very initial draft
 def comp_derG_(_derG_, derG_):
@@ -343,25 +318,24 @@ def sum_G(G, g):
         else:  G.uH += [CpH(H=[Cgraph(pplayers=deepcopy(g.pplayers)), Cgraph()])]
 
     # sum uH:
-    UH=[]; n=0; fds = g.pplayers.fds  # g.pplayers.fds include g.G.pplayers.fds
+    i=0; fds = g.pplayers.fds  # g.pplayers.fds include g.G.pplayers.fds
+    # indices: i/lev in uH, j/G in lev.H, k/fd in fds, len H = len fds
     while g.G:
-        n+=1; idx = sum(fd * (2**i) for i, fd in enumerate(fds[-n:]))
-        sum_pH(G.uH[-n].H[idx].pplayers, g.G.pplayers)
+        i += 1; j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
+        sum_pH(G.uH[-i].H[j].pplayers, g.G.pplayers)
         g = g.G
-    for Lev, lev in zip_longest(UH, reversed(g.uH), fillvalue=[]):
-        n += 1
+    for Lev, lev in zip_longest(G.uH, g.uH, fillvalue=[]):
+        i += 1
         if Lev:
-            idx = sum(fd * (2**i) for i, fd in enumerate(fds[-n:]))
-            sum_pH(Lev.H[idx].pplayers, lev.H[idx].pplayers)  # lev is CpH, lev.H is graphs, len H = len fds
+            j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
+            sum_pH(Lev.H[j].pplayers, lev.H[j].pplayers)  # lev is CpH, lev.H is graphs
         else:
-            UH += [copy(lev)]
-    G.uH = reversed(UH) + G.uH  # reversed because UH is appended bottom-up
+            G.uH += [copy(lev)]
     '''
     fds->index examples:
-    0,1: i=int(fds)=2: 1st G in 2nd 2tuple:    0,1, (2),3; 4,5, 6,7;; 8,9, 10,11; 12,13, 14,15
-    1,0,1: 1+4->5: 2nd G in 1st 2t in 2nd 4t:  0,1, 2,3; 4,(5), 6,7;; 8,9, 10,11; 12,13, 14,15
-    0,1,1: 2+4->6: 1st G in 2nd 2t in 2nd 4t:  0,1, 2,3; 4,5, (6),7;; 8,9, 10,11; 12,13, 14,15
-    1,0,1,1: 1+4+8->13: 2'G, 1'2t, 2'4t, 2'8t: 0,1, 2,3; 4,5, 6,7;; 8,9, 10,11; 12,(13), 14,15
+    0,1: 0*2^0 + 1*2^1->2: 1st G in 2nd 2tuple:  0,1, (2),3; 4,5, 6,7;; 8,9, 10,11; 12,13, 14,15
+    1,0,1: 1+4->5: 2nd G in 1st 2t in 2nd 4t:    0,1, 2,3; 4,(5), 6,7;; 8,9, 10,11; 12,13, 14,15
+    1,0,1,1: 1+4+8->13: 2'G, 1'2t, 2'4t, 2'8t:   0,1, 2,3; 4,5, 6,7;; 8,9, 10,11; 12,(13), 14,15
     '''
     # wH is summed in feedback
     # ext params
@@ -400,7 +374,6 @@ def sum_G(G, g):
         else:
             G.alt_Graph = deepcopy(g.alt_graph)
 
-
 def sum_pH_(PH_, pH_, fneg=0):
     for H, h in zip_longest(PH_, pH_, fillvalue=[]):  # each H is CpH
         if h:
@@ -422,12 +395,52 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( p
                 else:  # PH is players, H is ptuples
                     sum_pH(SpH, spH, fneg=fneg)
             else:
-                PH.fds += [fd]  # draft
+                PH.fds += [fd]
                 PH.H += [deepcopy(spH)]
 
     PH.val += pH.val
     PH.rdn += pH.rdn
     return PH
+
+
+def sum2graph_(graph_, fd):  # sum node and link params into graph, plevel in agg+ or player in sub+
+
+    Graph_ = []  # Cgraphs
+    for graph in graph_:  # CpHs
+        if graph.val < ave_G:  # form graph if val>min only
+            continue
+        X0,Y0 = 0,0
+        for G in graph.H:  # CpH
+            X0 += G.x0; Y0 += G.y0
+        L = len(graph.H); X0/=L; Y0/=L; Xn,Yn = 0,0
+        Graph = Cgraph(x0=X0, xn=Xn, y0=Y0, yn=Yn)
+        # form G, keep iG:
+        node_,Link_= [],[]
+        for iG in graph.H:
+            Xn = max(Xn, (iG.x0 + iG.xn) - X0)  # box xn = x0+xn
+            Yn = max(Yn, (iG.y0 + iG.yn) - Y0)
+            sum_G(Graph, iG)  # sum(Graph.uH[-1][fd], iG.pplayers), higher levs += G.G.pplayers | G.uH, lower scope than iGraph
+            link_ = [iG.link_.Qm, iG.link_.Qd][fd]
+            Link_ = list(set(Link_ + link_))  # unique links in node_
+            G = Cgraph(G=iG, root=Graph)
+            for derG in link_:  # form quasi-gradient of node' variable-length links, not added to Graph
+                sum_pH(G.pplayers, [derG.mplevel, derG.dplevel][fd])
+                G.pplayers.S += derG.S; G.pplayers.A += sum(derG.A)  # derA = der_mA + der_dA?
+            # LSA per whole nested pplayers:
+            l=len(link_); G.pplayers.L=l; G.pplayers.S/=l  # l is not len G.node_?
+            node_ += [G]
+        Graph.node_ = node_ # lower nodes = G.G..; Graph.root = iG.root
+        for Link in Link_:  # sum unique links
+            sum_pH(Graph.pplayers, [Link.mplevel,Link.dplevel][fd])
+            Graph.pplayers.S += Link.S
+        # LSA per whole nested pplayers:
+        Graph.pplayers.A = [Xn*2,Yn*2]; Graph.pplayers.L=L; Graph.pplayers.S/=L
+        Graph.val = Graph.pplayers.val \
+                  + sum([lev.val for lev in Graph.uH]) / max(1, sum([lev.rdn for lev in Graph.uH])) \
+                  + sum([lev.val for lev in Graph.wH]) / max(1, sum([lev.rdn for lev in Graph.wH])) # if val > alt_val: rdn += len_Q?
+
+        Graph_ += [Graph]
+    return Graph_
 
 # draft
 def sub_recursion_g(graph_, fseg, fd_, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
