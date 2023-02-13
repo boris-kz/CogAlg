@@ -54,15 +54,16 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars in pplayer
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
-    pplayers = lambda: CpH()  # summed node_ pplayers
-    uH = list  # upper Lev += lev per agg+|sub+: up-forking root tree, CpH lev, H=forks: G/agg+ or pplayers/sub+
-    wH = list  # lower Lev += node__.. feedback: down-forking node tree, same syntax?
+    link_ = lambda: Clink_()  # evaluated external links per node if G.root
+    link_pplayers = lambda: CpH()  # sum link_ pplayers, if G.root
+    node_ = list  # or concatenated sub-node_s in uH levs
+    pplayers = lambda: CpH()  # sum node_ pplayers
     val = int  # of all params
     rdn = lambda: 1
-    node_ = list  # sub-node_ s concatenated within root node_
+    uH = list  # upper Lev += lev per agg+|sub+: up-forking root tree, CpH lev, H=forks: G/agg+ or pplayers/sub+
+    wH = list  # lower Lev += node__.. feedback: down-forking node tree, same syntax?
     # collaterals:
-    nval = int  # open links in node_: base alt rep
-    link_ = lambda: Clink_()  # evaluated external links if node, alt_node if open
+    nval = int  # open links: base alt rep, separate for node_ and link_
     alt_graph_ = list  # contour + overlapping contrast graphs
     alt_Graph = None  # conditional, summed and concatenated params of alt_graph_
     # or L,S,A in pplayers: already CpH? if S:
@@ -322,7 +323,7 @@ def sum_G(G, g):
     # indices: i/lev in uH, j/G in lev.H, k/fd in fds, len H = len fds
     while g.G:
         i += 1; j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
-        sum_pH(G.uH[-i].H[j].pplayers, g.G.pplayers)
+        sum_pH(G.uH[i].H[j].pplayers, g.G.pplayers)
         g = g.G
     for Lev, lev in zip_longest(G.uH, g.uH, fillvalue=[]):
         i += 1
@@ -347,7 +348,6 @@ def sum_G(G, g):
                 G.A[0] += g.A[0]; G.A[1] += g.A[1]
             else: G.A = copy(g.A)
     else: G.A += g.A
-
     G.val += g.val
     G.rdn += g.rdn
     G.nval += g.nval
@@ -400,6 +400,16 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( p
 
     PH.val += pH.val
     PH.rdn += pH.rdn
+
+    PH.L += pH.L
+    PH.S += pH.S
+    if isinstance(pH.A, list):
+        if pH.A:
+            if PH.A:
+                PH.A[0] += pH.A[0]; PH.A[1] += pH.A[1]
+            else: PH.A = copy(pH.A)
+    else: PH.A += pH.A
+
     return PH
 
 
@@ -423,18 +433,19 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, plevel in ag
             link_ = [iG.link_.Qm, iG.link_.Qd][fd]
             Link_ = list(set(Link_ + link_))  # unique links in node_
             G = Cgraph(G=iG, root=Graph)
-            for derG in link_:  # form quasi-gradient of node' variable-length links, not added to Graph
-                sum_pH(G.pplayers, [derG.mplevel, derG.dplevel][fd])
-                G.pplayers.S += derG.S; G.pplayers.A += sum(derG.A)  # derA = der_mA + der_dA?
-            # LSA per whole nested pplayers:
-            l=len(link_); G.pplayers.L=l; G.pplayers.S/=l  # l is not len G.node_?
+            # sum quasi-gradient of G-external links in link_pplayers: redundant to Graph.pplayers, less valuable, optional?:
+            for derG in link_:
+                sum_pH(G.link_pplayers, [derG.mplevel, derG.dplevel][fd])
+                G.link_pplayers.S += derG.S; G.link_pplayers.A += sum(derG.A)  # derA = der_mA + der_dA?
+            l=len(link_); G.link_pplayers.L=l; G.link_pplayers.S/=l
             node_ += [G]
         Graph.node_ = node_ # lower nodes = G.G..; Graph.root = iG.root
         for Link in Link_:  # sum unique links
             sum_pH(Graph.pplayers, [Link.mplevel,Link.dplevel][fd])
             Graph.pplayers.S += Link.S
+            # sum A from link_, or S from node_?
         # LSA per whole nested pplayers:
-        Graph.pplayers.A = [Xn*2,Yn*2]; Graph.pplayers.L=L; Graph.pplayers.S/=L
+        Graph.pplayers.A = [Xn*2,Yn*2]; L=len(Link_); Graph.pplayers.L=L; Graph.pplayers.S/=L
         Graph.val = Graph.pplayers.val \
                   + sum([lev.val for lev in Graph.uH]) / max(1, sum([lev.rdn for lev in Graph.uH])) \
                   + sum([lev.val for lev in Graph.wH]) / max(1, sum([lev.rdn for lev in Graph.wH])) # if val > alt_val: rdn += len_Q?
