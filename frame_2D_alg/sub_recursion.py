@@ -289,6 +289,7 @@ def frame2graph(frame, fseg, Cgraph):  # for frame_recursive
 
     return gframe
 
+# tentative, will be finalized when structure in agg+ is finalized
 def blob2graph(blob, fseg):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
@@ -323,6 +324,7 @@ def blob2graph(blob, fseg):
     return mblob, dblob
 
 
+# tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
     alt_players = CpH()
@@ -338,20 +340,23 @@ def PP2graph(PP, fseg, ifd=1):
             for ptuples, alt_fd in zip(altPP.players[0], alt_fds):
                 for ptuple in ptuples[0][:2]:  # latuple and vertuple only
                     H += [ptuple]; val += ptuple.val
-            alt_ptuples = CpH(H=H, val=val)
+            alt_ptuples = CpH(H=H, val=val, fds=[alt_fd])
             alt_players.H += [alt_ptuples]; alt_players.val += val
+        alt_players.fds = [alt_fds]
     alt_pplayers = CpH(H=[alt_players], fds=[ifd], val=alt_players.val)
 
-    players = CpH()
+    players = CpH(fds=PP.fds)
     for ptuples, val in PP.players[0]:
-        ptuples = CpH(H=deepcopy(ptuples), val=val)
+        ptuples = CpH(H=deepcopy(ptuples), fds=[PP.fds[-1]], val=val)
         players.H += [ptuples]; players.val += val
     pplayers = CpH(H=[players], fds=[ifd], val=players.val)
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(pplayers=alt_pplayers, wH=[], uH = [CpH(H=[Cgraph(),Cgraph(pplayers=alt_pplayers)])], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    graph = Cgraph(pplayers=pplayers, wH=[], uH =[CpH(H=[Cgraph(),Cgraph(pplayers=pplayers)])], alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_Graph = Cgraph(
+        pplayers=alt_pplayers,wH=[],uH=[CpH(H=[Cgraph(),Cgraph(pplayers=alt_pplayers)])], x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(
+        pplayers=pplayers,wH=[],uH=[CpH(H=[Cgraph(),Cgraph(pplayers=pplayers)])], alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     return graph  # 1st plevel fd is always der+?
 
