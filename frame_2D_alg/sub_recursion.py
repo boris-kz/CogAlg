@@ -297,21 +297,21 @@ def blob2graph(blob, fseg):
 
     mpplayers = CpH(fds=[0]); dpplayers = CpH(fds=[1])
     alt_mpplayers = CpH(fds=[0]); alt_dpplayers = CpH(fds=[1])
-    mgraph = Cgraph(pplayers=mpplayers); dgraph = Cgraph(pplayers=dpplayers)
-    alt_mgraph = Cgraph(pplayers=alt_mpplayers); alt_dgraph = Cgraph(pplayers=alt_dpplayers)
+    mgraph = Cgraph(pplayers=mpplayers); dgraph = Cgraph(inset=[dpplayers])
+    alt_mgraph = Cgraph(pplayers=alt_mpplayers); alt_dgraph = Cgraph(inset=[alt_dpplayers])
     muH = [CpH(H=[mgraph,Cgraph()])]; duH = [CpH(H=[Cgraph(),dgraph])]
     alt_muH = [CpH(H=[alt_mgraph,Cgraph()])]; alt_duH = [CpH(H=[Cgraph(),alt_dgraph])]
 
     # pplayers, node_, wH
-    minset = [mpplayers]; mexset = Cgraph(H=muH)
-    alt_minset = [alt_mpplayers]; alt_mexset = Cgraph(H=alt_muH)
-    dinset = [dpplayers]; dexset = Cgraph(H=duH)
-    alt_dinset = [alt_dpplayers]; alt_dexset = Cgraph(H=alt_duH)
+    minset = [mpplayers]; mex = Cgraph(H=muH, node_=Clink_())
+    alt_minset = [alt_mpplayers]; alt_mex = Cgraph(H=alt_muH, node_=Clink_())
+    dinset = [dpplayers]; dex = Cgraph(H=duH, node_=Clink_())
+    alt_dinset = [alt_dpplayers]; alt_dex = Cgraph(H=alt_duH, node_=Clink_())
 
-    alt_mblob = Cgraph(inset=alt_minset,exset=alt_mexset,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    alt_dblob = Cgraph(inset=alt_dinset,exset=alt_dexset,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mblob = Cgraph(inset=minset,exset=mexset, alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    dblob = Cgraph(inset=dinset,exset=dexset, alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_mblob = Cgraph(inset=alt_minset,ex=alt_mex,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_dblob = Cgraph(inset=alt_dinset,ex=alt_dex,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    mblob = Cgraph(fds=[0], inset=minset,ex=mex, alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    dblob = Cgraph(fds=[1], inset=dinset,ex=dex, alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -363,15 +363,15 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_uH = [CpH(H=[Cgraph(),Cgraph(pplayers=alt_pplayers)])]
+    alt_uH = [CpH(H=[Cgraph(),Cgraph(inset=[alt_pplayers])])]
     alt_inset = [alt_pplayers]  # pplayers
-    alt_exset = Cgraph(H=alt_uH)
-    alt_Graph = Cgraph(val=alt_pplayers.val,inset=alt_inset,exset=alt_exset,x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_ex = Cgraph(H=alt_uH, node_=Clink_())
+    alt_Graph = Cgraph(val=alt_pplayers.val,inset=alt_inset,ex=alt_ex,x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
-    uH = [CpH(H=[Cgraph(),Cgraph(pplayers=pplayers)])]
+    uH = [CpH(H=[Cgraph(),Cgraph(inset=[pplayers])])]
     inset = [pplayers]  # pplayers
-    exset = Cgraph(H=uH)
-    graph = Cgraph(val=pplayers.val,inset=inset,exset=exset,alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    ex = Cgraph(H=uH, node_=Clink_())
+    graph = Cgraph(fds=[ifd], val=pplayers.val,inset=inset,ex=ex,alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     return graph  # 1st plevel fd is always der+?
 
