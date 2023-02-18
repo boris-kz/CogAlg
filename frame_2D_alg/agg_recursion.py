@@ -24,6 +24,8 @@ Sub+ re-compares nodes within Gs, adding intermediate Gs, down-forking levels to
 Generic graph is a dual tree with common root: down-forking input node Gs and up-forking output graph Gs. 
 This resembles neuron, which has dendritic tree as input and axonal tree as output.
 But there is a radical difference: recursively structured param sets are packed in each level of these trees.
+Diagram: 
+https://github.com/boris-kz/CogAlg/blob/76327f74240305545ce213a6c26d30e89e226b47/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 '''
 # aves defined for rdn+1:
 ave_G = 6  # fixed costs per G
@@ -103,7 +105,7 @@ def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty su
     for G in root.node_:
         G.ex.H.insert(0, CpH(H=[Cgraph(),Cgraph()]))  # not for sub+: lower node =G.G?
 
-    fds = root.inset[0].fds  # should be root fds? Or their pplayers.fds?
+    fds = root.inset[0][0].fds
     mgraph_, dgraph_ = form_graph_(root, fds, fsub=0)  # node.H cross-comp and graph clustering, comp frng pplayers
 
     for fd, graph_ in enumerate([mgraph_,dgraph_]):  # eval graphs for sub+ and agg+:
@@ -211,24 +213,9 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    minset, dinset = comp_G(_G, G, fsub, fex=0)  # comp pplayers, LSA? comp node_? comp H?
-                    # add params:
-                    Minset= CpH(H=[minset],val=minset[0].val)
-                    if minset[1]: Minset.val+=minset[1].val
-                    Dinset= CpH(H=[dinset],val=dinset[0].val)
-                    if dinset[1]: Dinset.val+=dinset[1].val
-                    # comp lower-der Gs:
-                    while (_G.G and G.G) and (Minset.val + Dinset.val > ave_G):
-                        # lower graph.inset + derG: same-scope /sub+, higher-scope /agg+
-                        lo_minset, lo_dinset = comp_G(_G, G, fsub, fex=0)
-                        Minset.H+=[lo_minset]; Minset.val+=lo_minset[0].val
-                        if lo_minset[1]: Minset.val+=minset[1].val
-                        Dinset.H+=[lo_dinset]; Dinset.val+=lo_dinset[0].val
-                        if lo_dinset[1]: Dinset.val+=dinset[1].val
-                        _G.G = _G.G.G
-                        G.G = G.G.G
-                    derG = CderG(node0=_G, node1=G, mplevel=Minset, dplevel=Dinset, S=distance, A=[dy, dx])
-                    mval = Dinset.val; dval = Dinset.val; tval = mval + dval
+                    minset, dinset, tval = comp_GQ(_G,G, fsub)  # comp pplayers, LSA? comp node_? comp H?)
+                    derG = CderG(node0=_G, node1=G, mplevel=minset, dplevel=dinset, S=distance, A=[dy, dx])
+                    mval = dinset.val; dval = dinset.val
                     # add links:
                     _G.ex.node_.Q += [derG]; _G.ex.node_.val += tval  # combined +-links val?
                     G.ex.node_.Q += [derG]; G.ex.node_.val += tval
@@ -244,19 +231,42 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
     if not f1Q:
         return minset_, dinset_  # or packed in links
 
+def comp_GQ(_G,G,fsub):
+    Minset, Dinset = CpH,CpH
+    Tval = ave_G+1  # start loop
+
+    while (_G and G) and Tval > ave_G:
+        # same-scope if sub+, no agg+ G.G
+        minset, dinset = comp_G(_G, G, fsub, fex=0)
+        Minset.H += [minset]; Minset.val += minset[0].val; Minset.rdn += minset[0].rdn
+        if minset[1]:
+            Minset.val += minset[1].val; Minset.rdn += minset[1].rdn
+        Dinset.H += [dinset]; Dinset.val += dinset[0].val; Dinset.rdn += dinset[0].rdn
+        if dinset[1]:
+            Dinset.val += dinset[1].val; Dinset.rdn += dinset[1].rdn
+        _G = _G.G
+        G = G.G
+        Tval = (Minset.val + Dinset.val) / (Minset.rdn + Dinset.rdn)
+
+    return Minset, Dinset, Tval
 
 def comp_G(_G, G, fsub, fex):  # up|down direction-> MpH,DpH, H = xpplayers: implicitly nested lists of ders from all lower xpplayers
 
-    minset, dinset = CpH(), CpH()
-    inset, node_, H = G.inset, G.node_.Q if fex else G.node_, G.H  # node_ is link_ if fex
-    _inset,_node_,_H =_G.inset,_G.node_.Q if fex else G.node_,_G.H
+    minset, dinset = CpH(A=[0,0]), CpH(A=[0,0])
+    inset, node_, H = G.inset, G.node_.Q if fex else G.node_, G.H
+    _inset,_node_,_H =_G.inset,_G.node_.Q if fex else G.node_,_G.H  # node_ is link_ if fex
 
-    for _pplayers, pplayers in zip(_inset, inset):  # inset is implicitly nested ders of all lower insets
-        # fd = zip(_inset.fds, inset.fds)?
+    for (_pplayers, _expplayers), (pplayers, expplayers) in zip(_inset, inset):  # inset is implicitly nested ders of all lower insets
+        # pack in minset,dinset?
         mpplayers, dpplayers = comp_pH(_pplayers, pplayers)
-        # rdn in form_? add der_pplayers.fds[0], [1:] is redundant between der_pplayers?
-        minset.H += [mpplayers]; minset.val += mpplayers.val; minset.rdn += mpplayers.rdn; minset.fds += [mpplayers.fds]
-        dinset.H += [dpplayers]; dinset.val += dpplayers.val; dinset.rdn += dpplayers.rdn; dinset.fds += [dpplayers.fds]
+        minset.H += [mpplayers]; minset.val += mpplayers.val; minset.rdn += mpplayers.rdn  # add rdn in form_?
+        dinset.H += [dpplayers]; dinset.val += dpplayers.val; dinset.rdn += dpplayers.rdn
+
+        if _expplayers and expplayers:
+            mexpplayers, dexpplayers = comp_pH(_expplayers, expplayers)
+            minset.val += mexpplayers.val; dinset.val += dexpplayers.val
+    # same fds till += [fd]:
+    minset.fds, dinset.fds = pplayers.fds, pplayers.fds
 
     if _G.S and G.S: comp_ext(_G.L,_G.S,_G.A, G.L,G.S,G.A, minset, dinset)
     if (minset.val + dinset.val) * (_G.val + G.val) * (len(_node_)+len(node_)) > ave_G:
@@ -302,7 +312,7 @@ def comp_ext(_L,_S,_A, L,S,A, mpH, dpH):
         mpH.A = 1; dpH.A = 0  # no difference, matching low-aspect, only if both?
     mpH.val += mpH.A; dpH.val += dpH.A
 
-# very initial draft
+# very initial draft, pending update
 def comp_derG_(_derG_, derG_):
 
     mlink_, dlink_ = [], []
@@ -340,8 +350,8 @@ def sum_G(G, g):
     if G.ex.H:  # G summed with prior gs
         sum_pH(G.ex.H[0].H[fd].inset[0][0], g.inset[0][0])
     else:
-        if fd: G.ex.H = [CpH(H=[Cgraph(), Cgraph(inset=copy(g.inset))]) + deepcopy(g.ex.H)]  # + new lev
-        else:  G.ex.H = [CpH(H=[Cgraph(inset=copy(g.inset)), Cgraph()]) + deepcopy(g.ex.H)]
+        if fd: G.ex.H = [CpH(H=[Cgraph(), Cgraph(inset=copy(g.inset))])] + deepcopy(g.ex.H)  # + new lev
+        else:  G.ex.H = [CpH(H=[Cgraph(inset=copy(g.inset)), Cgraph()])] + deepcopy(g.ex.H)
     # sum uH:
     i=0; fds = g.fds  # g.fds include g.G.fds
     # indices: i/lev in uH, j/G in lev.H, k/fd in fds, len H = len fds
@@ -354,9 +364,12 @@ def sum_G(G, g):
             i += 1
             if Lev:
                 j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
-                sum_pH(Lev.H[j].inset[0], lev.H[j].inset[0])  # lev is CpH, lev.H is graphs
+                for (Pplayers,Expplayers), (pplayers,expplayers) in zip(Lev.H[j].inset, lev.H[j].inset):
+                    # lev is CpH, lev.H is graphs, lev.H.inset is list of nested (pplayers, expplayers)
+                    sum_pH(Pplayers,pplayers)
+                    sum_pH(Expplayers,expplayers)
             else:
-                G.ex.H += [copy(lev)]
+                G.ex.H += [deepcopy(lev)]
     ''' 
     fds->index examples:
     0,1: 0*2^0 + 1*2^1->2: 1st G in 2nd 2tuple:  0,1, (2),3; 4,5, 6,7;; 8,9, 10,11; 12,13, 14,15
@@ -458,8 +471,8 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, plevel in ag
         Graph.node_ = node_ # lower nodes = G.G..; Graph.root = iG.root
         for Link in Link_:  # sum unique links
             sum_derG(Graph.inset, [Link.mplevel, Link.dplevel][fd])
-            Graph.inset[-1].S += Link.S; Graph.inset[-1].A[0] += Link.A[0]; Graph.inset[-1].A[1] += Link.A[1]
-        L = len(Link_); G.inset[-1].L = L; G.inset[-1].S /= L  # last pplayers'extuple, or ex'extuple?
+            Graph.inset[-1][0].S += Link.S; Graph.inset[-1][0].A[0] += Link.A[0]; Graph.inset[-1][0].A[1] += Link.A[1]
+        L = len(Link_); G.inset[-1][0].L = L; G.inset[-1][0].S /= L  # last pplayers' extuple
         # inset extuple is defined by node_:
         Graph.A = [Xn*2,Yn*2]; L=len(node_); Graph.L=L; Graph.S = np.hypot(Xn*2-X0,Yn*2-Y0) / L
         Graph.val = Graph.val + sum([lev.val for lev in Graph.H]) / max(1, sum([lev.rdn for lev in Graph.H])) # if val>alt_val: rdn+=len_Q?
@@ -468,18 +481,16 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, plevel in ag
     return Graph_
 
 
-# very initial draft
+# draft
 def sum_derG(Inset, inset):
 
-    for (Inset,Ex), (inset,ex) in zip_longest(Inset.H, inset.H, fillvalue=[[],[]]):
-        if Inset[0]:
-            sum_pH(Inset,inset)
-            if ex:
-                if Ex: sum_G(Ex,ex)
-                elif ex: Ex=deepcopy(ex)
-        else:
-            Inset=deepcopy(inset)
-            if ex: Ex=deepcopy(ex)
+    for (Pplayers,Expplayers), (pplayers,expplayers) in zip_longest(Inset, inset.H, fillvalue=[[],[]]):
+        if pplayers:
+            if Pplayers: sum_pH(Pplayers,pplayers)
+            else:        Inset += [[deepcopy(pplayers), []]]
+            if expplayers:
+                if Expplayers: sum_pH(Expplayers,expplayers)
+                else:          Inset[-1][1] = deepcopy(expplayers)  # Inset[-1]: [pplayers,[]], above: Inset += [[deepcopy(pplayers),[]]]
 
 # draft
 def sub_recursion_g(graph_, fseg, fd_, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
