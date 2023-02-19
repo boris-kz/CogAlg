@@ -232,7 +232,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
         return minset_, dinset_  # or packed in links
 
 def comp_GQ(_G,G,fsub):
-    Minset, Dinset = CpH,CpH
+    Minset, Dinset = CpH(),CpH()
     Tval = ave_G+1  # start loop
 
     while (_G and G) and Tval > ave_G:
@@ -256,26 +256,27 @@ def comp_G(_G, G, fsub, fex):  # up|down direction-> MpH,DpH, H = xpplayers: imp
     inset, node_, H = G.inset, G.node_.Q if fex else G.node_, G.H
     _inset,_node_,_H =_G.inset,_G.node_.Q if fex else G.node_,_G.H  # node_ is link_ if fex
 
-    for (_pplayers, _expplayers), (pplayers, expplayers) in zip(_inset, inset):  # inset is implicitly nested ders of all lower insets
-        # pack in minset,dinset?
+    for (_pplayers, _exset), (pplayers, exset) in zip(_inset, inset):  # inset is implicitly nested ders of all lower insets
+        # pack in comp_pH?
         mpplayers, dpplayers = comp_pH(_pplayers, pplayers)
         minset.H += [mpplayers]; minset.val += mpplayers.val; minset.rdn += mpplayers.rdn  # add rdn in form_?
         dinset.H += [dpplayers]; dinset.val += dpplayers.val; dinset.rdn += dpplayers.rdn
-
-        if _expplayers and expplayers:
-            mexpplayers, dexpplayers = comp_pH(_expplayers, expplayers)
-            minset.val += mexpplayers.val; dinset.val += dexpplayers.val
+        if _exset and exset:
+            mexset, dexset = comp_pH(_exset, exset)  # CpH ders of ex.inset?
+            minset.val += mexset.val; dinset.val += dexset.val
     # same fds till += [fd]:
     minset.fds, dinset.fds = pplayers.fds, pplayers.fds
-
-    if _G.S and G.S: comp_ext(_G.L,_G.S,_G.A, G.L,G.S,G.A, minset, dinset)
-    if (minset.val + dinset.val) * (_G.val + G.val) * (len(_node_)+len(node_)) > ave_G:
-        # specification:
+    if _G.S and G.S:
+        comp_ext(_G.L,_G.S,_G.A, G.L,G.S,G.A, minset, dinset)
+    # specifications:
+    if (minset.val+dinset.val) * _G.val*G.val * len(_node_)*len(node_) > ave_G:
+        # comp node_:
         mxpplayers_, dxpplayers_ = comp_G_(_node_, node_, f1Q=0, fsub=fsub)
         minset.val += sum([mxpplayers.val for mxpplayers in mxpplayers_])
         dinset.val += sum([dxpplayers.val for dxpplayers in dxpplayers_])
+
         # no clustering in node_?
-        if (minset.val + dinset.val) * (_G.val + G.val) * (len(_H) + len(H)) > ave_G:
+        if (minset.val+dinset.val) * _G.val*G.val * len(_H)*len(H) > ave_G:
             # comp uH|wH, wH is empty in top-down comp?
             for _forks, forks in zip(_H, H):
                 for _g, _fd in zip(forks.H, forks.fds):
@@ -283,10 +284,9 @@ def comp_G(_G, G, fsub, fex):  # up|down direction-> MpH,DpH, H = xpplayers: imp
                         if _fd == fd:
                             mpH, dpH = comp_pH(_g.pplayers, g.pplayers)
                             sum_pH(minset, mpH); sum_pH(dinset, dpH)
-    # add der_exset:
-    mval = minset.val; dval = dinset.val; tval = mval + dval  # or sum der_pplayers vals?
-    if tval > ave_G:
-        mex, dex = comp_G(_G.ex, G.ex, fsub, fex=1)  # conditional: redundant to inset
+    # comp ex:
+    if (minset.val + dinset.val) * _G.ex.val * G.ex.val > ave_G:  # also /rdn+1: to inset?
+        mex, dex = comp_G(_G.ex, G.ex, fsub, fex=1)
         minset = [minset,mex[0]]; dinset = [dinset,dex[0]]  # no ex.ex
     else:
         minset = [minset,[]]; dinset = [dinset,[]]
@@ -354,20 +354,18 @@ def sum_G(G, g):
         else:  G.ex.H = [CpH(H=[Cgraph(inset=copy(g.inset)), Cgraph()])] + deepcopy(g.ex.H)
     # sum uH:
     i=0; fds = g.fds  # g.fds include g.G.fds
-    # indices: i/lev in uH, j/G in lev.H, k/fd in fds, len H = len fds
     while g.G:
+        # indices: i/lev in uH, j/G in lev.H, k/fd in fds, len H = len fds
         i += 1; j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
-        sum_pH(G.ex.H[i].H[j].inset[0], g.G.inset[0])  # adds G.uH lev if empty?
+        sum_pH(G.ex.H[i].H[j].inset[0], g.G.inset[0])
         g = g.G
     for Lev, lev in zip_longest(G.ex.H, g.ex.H, fillvalue=[]):
-        if lev:
+        if lev:  # lev: CpH, lev.H: Gs, lev.H.inset: list of (pplayers, expplayers)
             i += 1
             if Lev:
                 j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
-                for (Pplayers,Expplayers), (pplayers,expplayers) in zip(Lev.H[j].inset, lev.H[j].inset):
-                    # lev is CpH, lev.H is graphs, lev.H.inset is list of nested (pplayers, expplayers)
-                    sum_pH(Pplayers,pplayers)
-                    sum_pH(Expplayers,expplayers)
+                for (Pplayers,Ex), (pplayers,ex) in zip(Lev.H[j].inset, lev.H[j].inset):
+                    sum_pH(Pplayers,pplayers); sum_pH(Ex,ex)
             else:
                 G.ex.H += [deepcopy(lev)]
     ''' 
@@ -405,15 +403,21 @@ def sum_G(G, g):
             G.alt_Graph = deepcopy(g.alt_graph)
 
 def sum_pH_(PH_, pH_, fneg=0):
-    for H, h in zip_longest(PH_, pH_, fillvalue=[]):  # each H is CpH
-        if h:
-            if H:
-                for G, g in zip_longest(H.H, h.H, fillvalue=[]):  # each G is Cgraph
-                    if g:
-                        if G: sum_pH(G.pplayers, g.pplayers, fneg)
-                        else: H.H += [deepcopy(g)]  # copy and pack single fork G
+    for PH, pH in zip_longest(PH_, pH_, fillvalue=[]):  # each is CpH
+        if pH:
+            if PH:
+                for fork_G, fork_g in zip_longest(PH.H, pH.H, fillvalue=[]):
+                    if fork_g:
+                        if fork_G:
+                            if fork_g.inset:
+                                for (Pplayers, Expplayers),(pplayers, expplayers) in zip(fork_G.inset, fork_g.inset):
+                                    if Pplayers:   sum_pH(Pplayers, pplayers, fneg)
+                                    else:          fork_G.inset += [[deepcopy(pplayers),[]]]
+                                    if Expplayers: sum_pH(Expplayers, expplayers, fneg)
+                                    else:          fork_G.inset[-1][1] = deepcopy(expplayers)
+                        else: PH.H += [deepcopy(fork_g)]
             else:
-                PH_ += [deepcopy(h)]  # copy and pack CpH
+                PH_ += [deepcopy(pH)]  # CpH
 
 def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
 
@@ -472,14 +476,13 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, plevel in ag
         for Link in Link_:  # sum unique links
             sum_derG(Graph.inset, [Link.mplevel, Link.dplevel][fd])
             Graph.inset[-1][0].S += Link.S; Graph.inset[-1][0].A[0] += Link.A[0]; Graph.inset[-1][0].A[1] += Link.A[1]
-        L = len(Link_); G.inset[-1][0].L = L; G.inset[-1][0].S /= L  # last pplayers' extuple
-        # inset extuple is defined by node_:
-        Graph.A = [Xn*2,Yn*2]; L=len(node_); Graph.L=L; Graph.S = np.hypot(Xn*2-X0,Yn*2-Y0) / L
+        L = len(Link_); Graph.inset[-1][0].L = L; Graph.inset[-1][0].S /= L  # last pplayers LSA per Link_
+        # inset LSA per node_:
+        Graph.A = [Xn*2,Yn*2]; L=len(node_); Graph.L=L; Graph.S = np.hypot(Xn-X0,Yn-Y0) / L
         Graph.val = Graph.val + sum([lev.val for lev in Graph.H]) / max(1, sum([lev.rdn for lev in Graph.H])) # if val>alt_val: rdn+=len_Q?
 
         Graph_ += [Graph]
     return Graph_
-
 
 # draft
 def sum_derG(Inset, inset):
@@ -490,44 +493,57 @@ def sum_derG(Inset, inset):
             else:        Inset += [[deepcopy(pplayers), []]]
             if expplayers:
                 if Expplayers: sum_pH(Expplayers,expplayers)
-                else:          Inset[-1][1] = deepcopy(expplayers)  # Inset[-1]: [pplayers,[]], above: Inset += [[deepcopy(pplayers),[]]]
+                else:          Inset[-1][1] = deepcopy(expplayers)  # Inset[-1]: [pplayers,[]]
 
 # draft
-def sub_recursion_g(graph_, fseg, fd_, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
+def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
     for graph in graph_:
         node_ = graph.node_
-        Gval = graph.pplayers.val
-        if Gval > G_aves[fd_[-1]] and len(node_) > ave_nsub:
+        if graph.val > G_aves[fds[-1]] and len(node_) > ave_nsub:
 
-            graph.wH.insert(0, CpH(H=[Cgraph(), Cgraph()]))  # to sum new graphs, no uH in CpH?
-            sub_mgraph_, sub_dgraph_ = form_graph_(graph, fd_, fsub=1)  # cross-comp and clustering
+            graph.H.insert(0, CpH(H=[Cgraph(), Cgraph()]))  # to sum new graphs, no uH in CpH?
+            sub_mgraph_, sub_dgraph_ = form_graph_(graph, fds, fsub=1)  # cross-comp and clustering
             # rng+:
-            Rval = sum([sub_mgraph.pplayers.val for sub_mgraph in sub_mgraph_])
+            Rval = sum([sub_mgraph.val for sub_mgraph in sub_mgraph_])
             if RVal + Rval > ave_sub * graph.rdn:  # >cost of call:
-                rval, dval = sub_recursion_g(sub_mgraph_, fseg=fseg, fd_=fd_+[0], RVal=Rval, DVal=DVal)
+                rval, dval = sub_recursion_g(sub_mgraph_, fseg=fseg, fds=fds+[0], RVal=Rval, DVal=DVal)
                 RVal += rval+dval
             # der+:
-            Dval = sum([sub_dgraph.pplayers.val for sub_dgraph in sub_dgraph_])
+            Dval = sum([sub_dgraph.val for sub_dgraph in sub_dgraph_])
             if DVal + Dval > ave_sub * graph.rdn:
-                rval, dval = sub_recursion_g(sub_dgraph_, fseg=fseg, fd_=fd_+[1], RVal=Rval, DVal=DVal)
+                rval, dval = sub_recursion_g(sub_dgraph_, fseg=fseg, fds=fds+[1], RVal=Rval, DVal=DVal)
                 Dval += rval+dval
             RVal += Rval
             DVal += Dval
         # unpack?:
-        else: feedback(graph, node_, fd_)  # bottom-up feedback to append root.uH[-1], root.wH, breadth-first
+        else: feedback(node_, fds)  # bottom-up feedback to append root.uH[-1], root.wH, breadth-first
 
     return RVal, DVal  # or SVal= RVal+DVal, separate for each fork of sub+?
 
-# obsolete now, pending update
-# in sub+ and agg+?
-def feedback(graph, node_, fd_):  # bottom-up feedback to append root.uH[-1], root.wH, breadth-first
+# draft
+def feedback(node_, fds):  # bottom-up feedback to append root.H, breadth-first
 
     for node in node_:
-        if node.wH:
-            sum_pH(graph.uH[0].H[fd_[-1]].pplayers, node.wH[0].H[fd_[-1]].pplayers)
-            # the rest of node.wH maps to graph.wH:
-            sum_pH_(graph.wH, node.wH[1:])
+        k = 0
+        for lev in node.ex.H:  # uH
+            k += 1
+            # get fork index, draft, most likely wrong:
+            i = sum(fd * (2**j) for j, fd in enumerate(fds[-k:]))
+            if lev.H[i].inset:
+                root_H_lev = lev.H[i].root.H[-i]
+                if root_H_lev:
+                    sum_inset(root_H_lev.inset, [node.inset, node.ex.inset])
+                else:
+                    root_H_lev.inset = [deepcopy(node.inset), deepcopy(node.ex.inset)]
+    ''' 
+    This is depth-first, which is wrong. 
+    Breadth-first needs to pack feedback per lev for all nodes in node_T: undefinite nesting in the deepest lev, 
+    accessed when top-down comp_node_ stops unpacking nodes, I guess in comp_G.
+    Then get to next lev, etc.
+    '''
+def sum_inset(Inset, inset):
+    pass
 
 # old:
 def add_alt_graph_(graph_t):  # mgraph_, dgraph_
