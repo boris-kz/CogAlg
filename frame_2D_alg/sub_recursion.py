@@ -323,6 +323,7 @@ def blob2graph(blob, fseg):
             sum_pH(blobs[fd].inset[0][0], graph.inset[0][0])  # inset[0] is [pplayers, expplayers]
             blobs[fd].node_ += [graph]  # inset[1] is node_
             blobs[fd].val += graph.val
+            graph.root = blobs[fd]
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
@@ -392,6 +393,8 @@ def agg_recursion_eval(blob, PP_t):
             converted_dblob = PP2graph(blob, fseg=fseg, ifd=1)  # when fseg = True, we need both forks?
             converted_mblob.node_ = PP_t[0]; converted_dblob.node_ = PP_t[1]
             converted_blobt = [converted_mblob,converted_dblob]
+            for PP in PP_t[0]: PP.root = converted_blobt[0]
+            for PP in PP_t[1]: PP.root = converted_blobt[1]
         else:
             if blob.mgraph:
                 converted_blobt = [blob.mgraph, blob.dgraph]  # get converted graph
@@ -405,7 +408,7 @@ def agg_recursion_eval(blob, PP_t):
     # should be single call of agg_recursion here？
     for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
         if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
-            and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:  # we don't have alt rdn now?
+            and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
 
             blob.rdn += 1  # estimate
             agg_recursion(converted_blobt[fd], fseg=fseg)
