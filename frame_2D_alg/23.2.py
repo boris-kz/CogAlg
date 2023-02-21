@@ -470,3 +470,94 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack plevels ( pplayers ( players ( p
                 PH.H += [deepcopy(spH)]
         PH.val += pH.val
     return PH
+
+def feedback(root, node_, fds):  # bottom-up feedback to append root.H, breadth-first
+
+    max_depth = max([len(node.ex.H) for node in node_])  # initial ex.H depth
+    depth = max_depth
+    new_H = []
+    while depth>=0:  # fill new_H with levs(nodes, bottom-up
+        levG = Cgraph()
+        for node in node_:
+            if len(node.ex.H) >= depth:
+                if levG.inset: sum_inset(levG.inset, node.inset); sum_inset(levG.ex.inset, node.ex.inset)  # same in all levs?
+                else:          levG.inset = deepcopy(node.inset); levG.ex.inset = deepcopy(node.ex.inset)
+        new_H += levG
+        depth-=1
+    # root.H.lev.fds = new_H.lev, then to root.root?
+    # or update root.H[-1] only, then loop Gs in root.root.node_ to update root.root.H[-1], etc.
+    # then downward ffeedback to update node.ex.H[:-1]?
+    depth = max_depth
+    for lev, levG in zip(reversed(root.H), new_H):  # both bottom-up
+        i = sum(fd*(2**j) for j,fd in enumerate(fds[depth:]))  # upward fds scope decrease, last fd for root.H[0]
+        # update fork, then update node.ex.H top-down?
+        lev[i].inset = levG.inset; lev[i].ex.inset = levG.ex.inset
+
+
+def sum_G(G, g):
+    # sum inset:
+    fd = g.fds[-1]
+    if G.ex.H:  # G summed with prior gs
+        sum_inset(G.ex.H[0].H[fd].inset[0][0], g.inset[0][0])  # why [0][0]?
+    else:
+        if fd: G.ex.H = deepcopy(g.ex.H) + [CpH(H=[Cgraph(), Cgraph(inset=copy(g.inset))])]  # + new lev
+        else:  G.ex.H = deepcopy(g.ex.H) + [CpH(H=[Cgraph(inset=copy(g.inset)), Cgraph()])]
+    # sum uH:
+    # or in feedback
+    i=0; fds = g.fds  # g.fds include g.G.fds
+    while g.G:
+        ''' indices: i/lev in uH, j/G in lev.H, k/fd in fds, len H = len fds,       
+        fds->i conversion examples:
+        0,1: 0*2^0 + 1*2^1->2: 1st G in 2nd 2tuple:  0,1, (2),3; 4,5, 6,7;; 8,9, 10,11; 12,13, 14,15
+        1,0,1: 1+4->5: 2nd G in 1st 2t in 2nd 4t:    0,1, 2,3; 4,(5), 6,7;; 8,9, 10,11; 12,13, 14,15
+        1,0,1,1: 1+4+8->13: 2'G, 1'2t, 2'4t, 2'8t:   0,1, 2,3; 4,5, 6,7;; 8,9, 10,11; 12,(13), 14,15
+        '''
+        i += 1; j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
+        sum_inset(G.ex.H[i].H[j].inset[0], g.G.inset[0])
+        g = g.G
+    for Lev, lev in zip_longest(G.ex.H, g.ex.H, fillvalue=[]):
+        if lev:  # lev: CpH, lev.H: Gs, lev.H.inset: list of (pplayers, expplayers)
+            i += 1
+            if Lev:
+                j = sum(fd * (2**k) for k, fd in enumerate(fds[i:]))
+                for (Pplayers,Ex), (pplayers,ex) in zip(Lev.H[j].inset, lev.H[j].inset):
+                    sum_pH(Pplayers,pplayers); sum_pH(Ex,ex)
+            else:
+                G.ex.H += [deepcopy(lev)]
+    # sum wH:
+    for H, h in zip(G.H, g.H):  # also zip and test fds: sparse?
+        for G, g in zip_longest(H.H, h.H, fillvalue=[]):
+            if g:
+                if G:
+                    sum_inset(G.inset, g.inset)
+                # no need pack graph here? else their fds will be wrong
+                # else:
+                #    H.H += [deepcopy(hG)]
+    G.L += g.L
+    G.S += g.S
+    if isinstance(g.A, list):
+        if g.A:
+            if G.A:
+                G.A[0] += g.A[0]; G.A[1] += g.A[1]
+            else: G.A = copy(g.A)
+    else: G.A += g.A
+    G.val += g.val
+    G.rdn += g.rdn
+    G.nval += g.nval
+    # not sure if needed:
+    G.x0 = min(G.x0, g.x0); G.y0 = min(G.y0, g.y0); G.xn = max(G.xn, g.xn); G.yn = max(G.yn, g.yn)
+
+    for node in g.node_:
+        if node not in G.node_: G.node_ += [node]
+    for link in g.Link_.Q:
+        if link not in G.Link_.Q: G.Link_.Q += [link]
+    # alts
+    for alt_graph in g.alt_graph_:
+        if alt_graph not in G.alt_graph:
+            G.alt_graph_ += [alt_graph]
+    if g.alt_Graph:
+        if G.alt_Graph:
+            sum_pH(G.alt_Graph, g.alt_Graph)
+        else:
+            G.alt_Graph = deepcopy(g.alt_graph)
+

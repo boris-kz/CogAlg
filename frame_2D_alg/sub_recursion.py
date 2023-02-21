@@ -297,8 +297,8 @@ def blob2graph(blob, fseg):
 
     mpplayers = CpH(fds=[0]); dpplayers = CpH(fds=[1])
     alt_mpplayers = CpH(fds=[0]); alt_dpplayers = CpH(fds=[1])
-    mgraph = Cgraph(pplayers=mpplayers); dgraph = Cgraph(inset=[dpplayers])
-    alt_mgraph = Cgraph(pplayers=alt_mpplayers); alt_dgraph = Cgraph(inset=[alt_dpplayers])
+    mgraph = Cgraph(inset=[[mpplayers,[]]]); dgraph = Cgraph(inset=[[dpplayers,[]]])
+    alt_mgraph = Cgraph(inset=[[alt_mpplayers,[]]]); alt_dgraph = Cgraph(inset=[[alt_dpplayers,[]]])
     muH = [CpH(H=[mgraph,Cgraph()])]; duH = [CpH(H=[Cgraph(),dgraph])]
     alt_muH = [CpH(H=[alt_mgraph,Cgraph()])]; alt_duH = [CpH(H=[Cgraph(),alt_dgraph])]
 
@@ -364,12 +364,12 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_uH = [CpH(H=[Cgraph(),Cgraph(inset=[alt_pplayers])])]
+    alt_uH = [CpH(H=[Cgraph(),Cgraph(inset=[[alt_pplayers,[]]])])]  # each element in inset is [pplayers, expplayers]
     alt_inset = [[alt_pplayers, []]]  # pplayers, expplayers
     alt_ex = Cgraph(H=alt_uH, node_=Clink_(), A=[0,0])
     alt_Graph = Cgraph(val=alt_pplayers.val,inset=alt_inset,ex=alt_ex,x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
-    uH = [CpH(H=[Cgraph(),Cgraph(inset=[pplayers])])]
+    uH = [CpH(H=[Cgraph(),Cgraph(inset=[[pplayers,[]]])])]
     inset = [[pplayers, []]]  # pplayers, expplayers
     ex = Cgraph(H=uH, node_=Clink_(), A=[0,0])
     graph = Cgraph(fds=[ifd], val=pplayers.val,inset=inset,ex=ex,alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
