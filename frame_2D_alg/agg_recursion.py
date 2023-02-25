@@ -93,10 +93,13 @@ class CderG(ClusterStructure):  # graph links, within root node_
 
     node0 = lambda: Cgraph()  # converted to list in recursion
     node1 = lambda: Cgraph()
-    minder_ = lambda: CpH()  # in alt/contrast if open
-    dinder_ = lambda: CpH()
-    mext = list  # added per comp_indert_?
+    minder_ = list  # in alt/contrast if open
+    dinder_ = list
+    # also added per comp_G:
+    mext = list
     dext = list
+    mex = list
+    dex = list
     # new lev, includes shared node_?:
     S = int  # sparsity: ave len link
     A = list  # area and axis: Dy,Dx
@@ -202,7 +205,7 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_s, or segs inside PP?
 
-    if not f1Q: minder__, dinder__ = [],[]
+    if not f1Q: minder__,dinder__, mext_,dext_ = [],[],[],[]
 
     for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph
         for iG in G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng, bilateral link assign, val accum:
@@ -219,7 +222,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
                     minder_, dinder_, mext, dext, mval, dval, tval = comp_GQ(_G,G, fsub)  # comp inder_,LSA? comp node_? comp H?
                     derG = CderG(node0=_G, node1=G, minder_=minder_, dinder_=dinder_, S=distance, A=[dy, dx])
                     # add links:
-                    _G.ex.node_.Q += [derG]; _G.ex.node_.val += tval  # combined +-links val?
+                    _G.ex.node_.Q += [derG]; _G.ex.node_.val += tval  # combined +-links val
                     G.ex.node_.Q += [derG]; G.ex.node_.val += tval
                     if mval > ave_Gm:
                         _G.ex.node_.Qm += [derG]; _G.ex.node_.mval += mval  # no dval for Qm
@@ -229,31 +232,31 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
                         G.ex.node_.Qd += [derG]; G.ex.node_.dval += dval
 
                     if not f1Q:  # implicit cis, alt pair nesting in xpplayers_
-                        minder__ += [minder_]; dinder__ += [dinder_]
+                        minder__+=[minder_]; dinder__+=[dinder_]; mext_+=[mext]; dext_+=[dext]
     if not f1Q:
         return minder__, dinder__, mext_, dext_  # or packed in links
 
 
-def comp_GQ(_G,G,fsub):
+def comp_GQ(_G,G,fsub):  # compare lower-derivation G.G.s and pack results in minder__,dinder__
 
-    minder__,dinder__, mext_,dext_ = [],[],[],[]; Mval,Dval = 0,0; Mrdn,Drdn = 1,1
+    minder__,dinder__ = [],[]; Mval,Dval = 0,0; Mrdn,Drdn = 1,1
     Tval = ave_G+1  # start loop
     while (_G and G) and Tval > ave_G:  # same-scope if sub+, no agg+ G.G
 
         minder_, dinder_, mext, dext, mval, dval, mrdn, drdn = comp_G(_G, G, fsub, fex=0)
-        minder__+=[minder_]; dinder__+=[dinder_]; mext_+=[mext]; dext_+=[dext]
+        minder__+=[minder_, mext]; dinder__+=[dinder_, dext]
         Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn  # also /rdn+1: to inder_?
         # comp ex:
         if (Mval + Dval) * _G.ex.val * G.ex.val > ave_G:
             mex_, dex_, mext, dext, mval, dval, mrdn, drdn = comp_G(_G.ex, G.ex, fsub, fex=1)
-            minder__+=[mex_]; dinder__+=[dex_]; mext_+=[mext]; dext_+=[dext]
+            minder__+=[mex_]; dinder__+=[dex_]
             Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
         else:
-            minder__+=[]; dinder__+=[]  # ex ders
+            minder__+=[[],[]]; dinder__+=[[],[]]  # ex ders
         _G = _G.G; G = G.G
         Tval = (Mval + Dval) / (Mrdn + Drdn)
 
-    return minder__, dinder__, mext_,dext_, Mval, Dval, Tval
+    return minder__, dinder__, Mval, Dval, Tval  # we don't need mext,dext?
 
 
 def comp_G(_G, G, fsub, fex):
@@ -264,20 +267,20 @@ def comp_G(_G, G, fsub, fex):
     minder_, dinder_ = [],[]  # ders of implicitly nested list of pplayers in inder_
     Mval,Dval = 0,0
     Mrdn,Drdn = 1,1
-    minder_,dinder_, Mval,Dval, Mrdn,Drdn = comp_inder_(_inder_,inder_, minder_,dinder_, Mval,Dval, Mrdn,Drdn)
-
+    minder_,dinder_, Mval,Dval, Mrdn,Drdn = \
+        comp_inder_(_inder_,inder_, minder_,dinder_, Mval,Dval, Mrdn,Drdn)
     if _G.S and G.S:
         mext, dext = comp_ext(_G.L,_G.S,_G.A, G.L,G.S,G.A)
         Mval += sum(mext); Dval += sum(dext)  # no separate rdn?
     # specification:
     if (Mval+Dval) * _G.val*G.val * len(_node_)*len(node_) > ave_G:
         if fex:  # comp link_
-            sub_minder_, sub_dinder_, mext_, dext_ = comp_derG_(_node_, node_, G.fds[-1])
+            sub_minder_,sub_dinder_, mext,dext = comp_derG_(_node_, node_, G.fds[-1])
         else:    # comp node_
-            sub_minder_, sub_dinder_, mext_, dext_ = comp_G_(_node_, node_, f1Q=0, fsub=fsub)
+            sub_minder_,sub_dinder_, mext,dext = comp_G_(_node_, node_, f1Q=0, fsub=fsub)
         minder_.val += sum([mxpplayers.val for mxpplayers in sub_minder_])  # add rdn?
         dinder_.val += sum([dxpplayers.val for dxpplayers in sub_dinder_])
-        # no clustering in der_node_?
+        # sub node_ in sub Gs
         if (minder_.val+dinder_.val) * _G.val*G.val * len(_H)*len(H) > ave_G:
             # comp uH|wH, wH is empty in top-down comp?
             for _forks, forks in zip(_H, H):
@@ -307,26 +310,50 @@ def comp_derG_(_derG_, derG_, fd):
 
 def comp_inder_(_inder_, inder_, minder_,dinder_, Mval,Dval, Mrdn,Drdn):
 
-    i = 0
-    _lenlev = 3  # init len of implicit Lev(Pplayers) in inder_ = 3: pplayers,ext,ex
-    lenlev = 0  # next lenlev += _lenlev: 3, 3, 6, 12...
-
-    for _lev, lev in zip(_inder_[i:i+_lenlev], inder_[i:i+_lenlev]):
-        i+=_lenlev
-        lenlev += _lenlev; _lenlev = lenlev  # for delayed accum
-        # step = 3 in lev: list of [pplayers,ext,ex], each CpH|[]:
-        for _pplayers,_ext,_ex, pplayers,ext,ex in zip(_lev[0::3],_lev[1::3],_lev[2::3], lev[0::3],lev[1::3],lev[2::3]):
-
+    _lenlev = 3  # ini len of implicit Lev(Pplayers) in inder_ = 3: pplayers,ext,ex
+    lenlev = 0  # next lenlev = sum lower lenlevs: lev is ders of all lower levs
+    nE = 0
+    i=0;  end = i+_lenlev+nE
+    while end < len(_inder_):
+        _Lev, Lev = _inder_[i:end], inder_[i:end]  # each Lev of implicit nesting is inder_,ext,ex formed by comp_G
+        i+=_lenlev; nE+=2  # +Ext,Ex per lev, +ders of lower-lev Ext,Ex's
+        end=i+nE; lenlev+=_lenlev; _lenlev=lenlev  # delayed accum: _lenlev = 3,3,6,12., levLev = 3, 3+2, 6+4, 12+6..
+        _lev=_Lev[:nE]; lev=Lev[:nE]  # separate Lev Ext,Ex's
+        j=0
+        while j+3 < len(_lev):
+            (_pplayers,_ext,_ex), (pplayers,ext,ex) = _lev[j:j+3], lev[j:j+3]  # each is CpH|[]
+            j+=3
             mpplayers, dpplayers = comp_pH(_pplayers, pplayers)  # same explicit but incr implicit nesting in m|dpplayers
             minder_ += [mpplayers]; Mval += mpplayers.val; Mrdn += mpplayers.rdn  # add rdn in form_?
             dinder_ += [dpplayers]; Dval += dpplayers.val; Drdn += dpplayers.rdn
-            if _ex and ex:
-                # if _ex.val * ex.val > ave_G?
-                mex, dex = comp_pH(_ex, ex)  # or CpH ex.inder_?
+            if _ext and ext: # if S
+                mext, dext = comp_ext(_ext[:],ext[:])
+                minder_+=[mext]; Mval+=sum(mext); dinder_+=[dext]; Dval+=sum(dext)
+            else:
+                minder_+=[[]]; dinder_+=[[]]
+            if _ex and ex:  # if _ex.val * ex.val > ave_G?
+                mex, dex = comp_pH(_ex, ex)  # pack results in comp_pH:
                 minder_ += [mex]; Mval += mex.val; Mrdn += mex.rdn  # add rdn in form_?
                 dinder_ += [dex]; Dval += dex.val; Drdn += dex.rdn
             else:
-                minder_+=[]; dinder_+=[]
+                minder_+=[[]]; dinder_+=[[]]
+        for (_Ext,_Ex), (Ext,Ex) in zip(_Lev[nE:nE+2],Lev[nE:nE+2]):
+            if _Ext and Ext:
+                mExt,dExt = comp_pH(_Ext,Ext)
+                minder_ += [mExt]; Mval += sum(mExt)
+                dinder_ += [dExt]; Dval += sum(dExt)
+            else:
+                minder_+=[[]]; dinder_+=[[]]
+            if _Ex and Ex:
+                mEx, dEx = comp_pH(_Ex, Ex)
+                minder_ += [mEx]; Mval += sum(mEx); Mrdn += sum(mExt.rdn)  # wrong, sum rdn in comp_pH
+                dinder_ += [dEx]; Dval += sum(dEx); Drdn += sum(dExt.rdn)
+            else:
+                minder_+=[[]]; dinder_+=[[]]
+            nE-=2
+    '''
+    add sub_levs per lev: n = n_lowerlevs-1?
+    '''
     # same fds till += [fd]
     return minder_,dinder_, Mval,Dval, Mrdn,Drdn
 
