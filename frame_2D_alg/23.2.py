@@ -561,3 +561,11 @@ def sum_G(G, g):
         else:
             G.alt_Graph = deepcopy(g.alt_graph)
 
+def comp_pack(_Q, Q, mQ_, dQ_, comp):
+
+    mQ, dQ = comp(_Q,Q)
+    if comp == comp_pH or comp == comp_ext:
+        mQ_ += [mQ]
+    else: mQ_ += mQ
+    pass
+
