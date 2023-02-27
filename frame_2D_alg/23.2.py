@@ -569,3 +569,35 @@ def comp_pack(_Q, Q, mQ_, dQ_, comp):
     else: mQ_ += mQ
     pass
 
+def comp_inder_(_inder_, inder_, minder_,dinder_, Mval,Dval, Mrdn,Drdn):
+
+    for _der, der in zip(_inder_, inder_):  # in implicit Levs( sLevs( ssLevs., len= 1, 1+2, 4+2, 10+2, 22+2, 46+2..
+        if der:
+            if isinstance(der, CpH()): # pplayers or ex_pplayers after ext, incr implicit nesting in m|dpplayers:
+                mpplayers, dpplayers = comp_pH(_der, der)
+                minder_ += [mpplayers]; Mval += mpplayers.val; Mrdn += mpplayers.rdn  # add rdn in form_?
+                dinder_ += [dpplayers]; Dval += dpplayers.val; Drdn += dpplayers.rdn
+            else:  # list ext
+                mval, dval, mrdn, drdn = comp_Es(_der, der, minder_, dinder_)
+                Mval += mval; Dval += dval; Mrdn += mrdn; Drdn += drdn
+        else:
+            minder_+=[]; dinder_+=[]
+
+
+def comp_Es(_ext,_ex, ext,ex, minder_, dinder_):
+
+    Mval = 0; Dval = 0; Mrdn = 0; Drdn = 0
+    if _ex and ex:
+        mex, dex = comp_pH(_ex, ex)
+        minder_ += [mex]; Mval += sum(mex); Mrdn += sum(mex.rdn)  # wrong, sum rdn in comp_pH
+        dinder_ += [dex]; Dval += sum(dex); Drdn += sum(dex.rdn)
+    else:
+        minder_+=[[]]; dinder_+=[[]]
+    if _ext and ext:
+        mext,dext = comp_ext(_ext[:],ext[:])
+        minder_ += [mext]; Mval += sum(mext)
+        dinder_ += [dext]; Dval += sum(dext)
+    else:
+        minder_+=[[]]; dinder_+=[[]]
+
+    return Mval, Dval, Mrdn, Drdn
