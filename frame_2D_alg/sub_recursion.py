@@ -297,21 +297,21 @@ def blob2graph(blob, fseg):
 
     mpplayers = CpH(fds=[0]); dpplayers = CpH(fds=[1])
     alt_mpplayers = CpH(fds=[0]); alt_dpplayers = CpH(fds=[1])
-    mgraph = Cgraph(inset=[[mpplayers,[]]]); dgraph = Cgraph(inset=[[dpplayers,[]]])
-    alt_mgraph = Cgraph(inset=[[alt_mpplayers,[]]]); alt_dgraph = Cgraph(inset=[[alt_dpplayers,[]]])
+    mgraph = Cgraph(inder_=[mpplayers]); dgraph = Cgraph(inder_=[dpplayers])
+    alt_mgraph = Cgraph(inder_=[alt_mpplayers]); alt_dgraph = Cgraph(inder_=[alt_dpplayers])
     muH = [CpH(H=[mgraph,Cgraph()])]; duH = [CpH(H=[Cgraph(),dgraph])]
     alt_muH = [CpH(H=[alt_mgraph,Cgraph()])]; alt_duH = [CpH(H=[Cgraph(),alt_dgraph])]
 
     # pplayers, node_, wH
-    minset = [[mpplayers,[]]]; mex = Cgraph(H=muH, node_=Clink_(), A=[0,0])
-    alt_minset = [[alt_mpplayers,[]]]; alt_mex = Cgraph(H=alt_muH, node_=Clink_(), A=[0,0])
-    dinset = [[dpplayers,[]]]; dex = Cgraph(H=duH, node_=Clink_(), A=[0,0])
-    alt_dinset = [[alt_dpplayers,[]]]; alt_dex = Cgraph(H=alt_duH, node_=Clink_(), A=[0,0])
+    minder_ = [mpplayers]; mex = Cgraph(H=muH, node_=Clink_(), A=[0,0])
+    alt_minder_ = [alt_mpplayers]; alt_mex = Cgraph(H=alt_muH, node_=Clink_(), A=[0,0])
+    dinder_ = [dpplayers]; dex = Cgraph(H=duH, node_=Clink_(), A=[0,0])
+    alt_dinder_ = [alt_dpplayers]; alt_dex = Cgraph(H=alt_duH, node_=Clink_(), A=[0,0])
 
-    alt_mblob = Cgraph(inset=alt_minset,ex=alt_mex,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    alt_dblob = Cgraph(inset=alt_dinset,ex=alt_dex,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mblob = Cgraph(fds=[0], inset=minset,ex=mex, alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    dblob = Cgraph(fds=[1], inset=dinset,ex=dex, alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_mblob = Cgraph(inder_=alt_minder_,ex=alt_mex,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_dblob = Cgraph(inder_=alt_dinder_,ex=alt_dex,rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    mblob = Cgraph(fds=[0], inder_=minder_,ex=mex, alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    dblob = Cgraph(fds=[1], inder_=dinder_,ex=dex, alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -320,16 +320,16 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            sum_pH(blobs[fd].inset[0][0], graph.inset[0][0])  # inset[0] is [pplayers, expplayers]
-            blobs[fd].node_ += [graph]  # inset[1] is node_
+            sum_inder_(blobs[fd].inder_, graph.inder_)
+            blobs[fd].node_ += [graph]
             blobs[fd].val += graph.val
             graph.root = blobs[fd]
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        sum_pH(alt_mblob.inset[0][0], alt_blob.mgraph.inset[0][0])
-        sum_pH(alt_dblob.inset[0][0], alt_blob.dgraph.inset[0][0])
+        sum_inder_(alt_mblob.inder_, alt_blob.mgraph.inder_[0][0])
+        sum_inder_(alt_dblob.inder_, alt_blob.dgraph.inder_[0][0])
 
     return mblob, dblob
 
@@ -364,15 +364,15 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_uH = [CpH(H=[Cgraph(),Cgraph(inset=[[alt_pplayers,[]]])])]  # each element in inset is [pplayers, expplayers]
-    alt_inset = [[alt_pplayers, []]]  # pplayers, expplayers
+    alt_uH = [CpH(H=[Cgraph(),Cgraph(inder_=[alt_pplayers])])]  # each element in inder_ is [pplayers, expplayers]
+    alt_inder_ = [alt_pplayers]  # pplayers, expplayers
     alt_ex = Cgraph(H=alt_uH, node_=Clink_(), A=[0,0])
-    alt_Graph = Cgraph(val=alt_pplayers.val,inset=alt_inset,ex=alt_ex,x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_Graph = Cgraph(val=alt_pplayers.val,inder_=alt_inder_,ex=alt_ex,x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
-    uH = [CpH(H=[Cgraph(),Cgraph(inset=[[pplayers,[]]])])]
-    inset = [[pplayers, []]]  # pplayers, expplayers
+    uH = [CpH(H=[Cgraph(),Cgraph(inder_=[pplayers])])]
+    inder_ = [pplayers]  # pplayers, expplayers
     ex = Cgraph(H=uH, node_=Clink_(), A=[0,0])
-    graph = Cgraph(fds=[ifd], val=pplayers.val,inset=inset,ex=ex,alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(fds=[ifd], val=pplayers.val,inder_=inder_,ex=ex,alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     return graph  # 1st plevel fd is always der+?
 
