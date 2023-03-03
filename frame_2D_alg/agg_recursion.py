@@ -78,10 +78,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdn = lambda: 1
     rng = lambda: 1
     nval = int  # of open links: base alt rep
-    x0 = float
-    y0 = float  # center: box x0|y0 + L/2
-    xn = float  # max distance from center
-    yn = float
+    box = lambda: [0,0,0,0,0,0]  # center y,x, y0,yn, x0,xn: max distance is more coarse?
     L = list  # der L, init None
     S = int  # sparsity: ave len link
     A = list  # area|axis: Dy,Dx, ini None
@@ -192,7 +189,7 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
     return val
 
 
-def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_s, or segs inside PP?
+def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_, or segs inside PP?
 
     if not f1Q: minder__,dinder__ = [],[]
 
@@ -201,7 +198,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q else G_
             # if the pair was compared in prior rng+:
             if iG in [node for link in _iG.ex.node_.Q for node in [link.node0,link.node1]]:  # if f1Q? add frng to skip?
                 continue
-            dx = _iG.x0 - iG.x0; dy = _iG.y0 - iG.y0  # center x0,y0
+            dy = _iG.box[0]-iG.box[0];  dx = _iG.box[1]-iG.box[1]  # between center x0,y0
             distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
             if distance < ave_distance * ((_iG.val + iG.val) / (2*sum(G_aves))):
                 # same for cis and alt Gs:
@@ -322,9 +319,9 @@ def comp_inder_(_inder_, inder_, minder_,dinder_, Mval,Dval, Mrdn,Drdn):
         nLev += 1
     '''
     Lev1: pps: 1 pplayers  # inder_+= hLev/ comp_G: comp(inder_, ext:G.link_ coords, G.ex)-> Levs(levs., max lenlevs = lenLevs-1
-    Lev2: pps; ext,ex: lenLev = 3
+    Lev2: pps; ext,ex: lenLev = 3   
     Lev3: pps; pps,ext,ex; ext,ex: lenLev = 6
-    Lev4: pps; pps,ext,ex; pps,pps,ext,ex,ext,ex; ext,ex: lenLev = 12 
+    Lev4: pps; pps,ext,ex; pps,pps,ext,ex,ext,ex; ext,ex: lenLev = 12  # no ext added in comp_GQ?
     '''
     # same fds till += [fd]
     return minder_,dinder_, Mval,Dval, Mrdn,Drdn
@@ -364,43 +361,105 @@ def comp_pH(_pH, pH):  # recursive unpack inder_s ( pplayer ( players ( ptuples 
 
     return mpH, dpH
 
-def sum_G(G, g):
-    # sum inder_:
-    fd = g.fds[-1]
-    if G.ex.H:  # G summed with prior gs
-        sum_inder_(G.ex.H[0].H[fd].inder_, g.inder_)
-    else:
-        if fd: G.ex.H = deepcopy(g.ex.H) + [CpH(H=[Cgraph(), Cgraph(inder_=copy(g.inder_))])]  # + new lev
-        else:  G.ex.H = deepcopy(g.ex.H) + [CpH(H=[Cgraph(inder_=copy(g.inder_)), Cgraph()])]
-    GH=[]  # sum H:
-    for i, (Lev,lev) in enumerate(zip_longest(GH, g.H, fillvalue=CpH())):
-        for j, (Fork,fork, Fd,fd) in enumerate(zip_longest(Lev.H,lev.H, Lev.fds,lev.fds, fillvalue=[])):
-            if fork:
-                if Fork:
-                    if Fd==fd:
+
+def sum2graph_(root, graph_, fd):  # sum node and link params into graph, inder_ in agg+ or player in sub+
+
+    Graph_ = []  # Cgraphs
+    for graph in graph_:  # CpHs
+        if graph.val < aveG:  # form graph if val>min only
+            continue
+        # conditional ex.inder_: remove if few links?
+        Graph = Cgraph(fds=copy(G.fds), ex=Cgraph(node_=Clink_(),A=[0,0]))
+        # form G, keep iG:
+        node_,Link_= [],[]
+        for iG in graph.H:
+            sum_exH(iG, root)  # per der order?
+            sum_node(Graph, iG)
+            link_ = [iG.ex.node_.Qm, iG.ex.node_.Qd][fd]
+            Link_ = list(set(Link_ + link_))  # unique links in node_
+            G = Cgraph(fds=copy(iG.fds), G=iG, root=Graph, ex=Cgraph(node_=Clink_(),A=[0,0]))
+            # sum quasi-gradient of links in ex.inder_: redundant to Graph.inder_, if len node_:
+            for derG in link_:
+                sum_inder_(G.ex.inder_, [derG.minder_, derG.dinder_][fd]) # local feedback
+                G.ex.S += derG.S; G.ex.A[0]+=derG.A[0]; G.ex.A[1]+=derG.A[1]
+            l=len(link_); G.ex.L=l; G.ex.S/=l
+            node_ += [G]
+        Graph.node_ = node_ # lower nodes = G.G..; Graph.root = iG.root
+        for Link in Link_:  # sum unique links
+            sum_inder_(Graph.inder_, [Link.minder_, Link.dinder_][fd])
+            if Graph.inder_[-1]:  # top ext
+                Graph.inder_[-1][1]+=Link.S; Graph.inder_[-1][2][0]+=Link.A[0]; Graph.inder_[-1][2][1]+=Link.A[1]
+            else: Graph.inder_[-1] = [1,Link.S,Link.A]
+        L = len(Link_); Graph.inder_[-1][0] = L; Graph.inder_[-1][1] /= L  # last pplayers LSA per Link_
+        # inder_ LSA per node_:
+        dY = Graph.box[3]-Graph.box[2]; dX = Graph.box[5]- Graph.box[4]  # Yn-Y0, Xn-X0
+        Graph.A = [dY,dX]; L=len(node_); Graph.L=L; Graph.S = dY*dX / L  # per area
+        Graph.box[0]/=L; Graph.box[1]/=L # ave y,x
+        if Graph.ex.H:
+            Graph.val += sum([lev.val for lev in Graph.ex.H]) / sum([lev.rdn for lev in Graph.ex.H])  # if val>alt_val: rdn+=len_Q?
+        Graph_ += [Graph]
+
+    return Graph_
+
+def sum_inder_(Inder_, inder_, fext=1):
+
+    for i, (Inder, inder) in enumerate(zip_longest(Inder_, inder_, fillvalue=None)):
+        if inder is not None:
+            if Inder:
+                if inder:  # not []
+                    if isinstance(inder, CpH):
+                        sum_pH(Inder,inder)
+                    elif fext:  # fext = 0 to exclude summing ext
+                        for i in range(2): Inder[i] += inder[i]  # ext params (L，S)
+                        if isinstance(Inder[2], list):  # A is [0,0]
+                            Inder[2][0] += inder[2][0]; Inder[2][1] += inder[2][1]
+                        else: Inder[2] += inder[2]  # A is int
+
+            elif Inder is None: Inder_ += [deepcopy(inder)]
+            else:               Inder_[i] = deepcopy(inder)
+
+def sum_exH(root, node):  # add root.ex.H to node.ex.H, no eval but possible remove if weak?
+    # or generic sum_H, add concat node_ and link_?
+
+    for i, (rLev, nLev) in enumerate(zip_longest(root.ex.H, node.ex.H[1:], fillvalue=[])):  # root.ex.H maps to node.ex.H[1:]
+        if rLev:
+            j = sum(fd*(2**k) for k,fd in enumerate(node.fds[i:]))
+            if not nLev:  # init:
+                nLev = CpH(H=[[] for fork in range(2**(i+1))])
+            if not nLev.H[j]:
+                nLev.H[j] = Cgraph()
+            sum_inder_(nLev.H[j].inder_, rLev.H[j].inder_)  # same fork
+
+def sum_node(G, g):
+
+    sum_inder_(G.inder_, g.inder_)  # direct node representation
+    if g.ex.H:
+        sum_exH(g, G)  # sum in reverse order: g->G?
+    if g.H:  # not needed in sum2graph, replace with sum_H?
+        for i, (Lev,lev) in enumerate(zip_longest(G.H, g.H, fillvalue=CpH())):  # sum G.H across fork g_s
+            if lev:
+                if not Lev: Lev = CpH(H=[[] for fork in range(2**(i+1))])
+                for j, (Fork,fork) in enumerate(zip_longest(Lev.H,lev.H, fillvalue=[])):
+                    if fork:
+                        if not Fork: Fork[:] = Cgraph()
                         sum_inder_(Fork.inder_, fork.inder_)
-                    else:
-                        Lev.fds.insert(j,fd); Lev[i].H.insert(j, deepcopy(fork))
-                else:   Lev.fds.insert(j,fd); Lev[i].H.insert(j, deepcopy(fork))  # in G.H[i].H[fork]?
-    G.H = GH  # old G.H is not summed
-    G.L += g.L
-    G.S += g.S
+    G.L += g.L; G.S += g.S
     if isinstance(g.A, list):
-        if g.A:
+        if g.A:  # where is it empty?
             if G.A:
                 G.A[0] += g.A[0]; G.A[1] += g.A[1]
             else: G.A = copy(g.A)
     else: G.A += g.A
-    G.val += g.val
-    G.rdn += g.rdn
-    G.nval += g.nval
-    # not sure if needed:
-    G.x0 = min(G.x0, g.x0); G.y0 = min(G.y0, g.y0); G.xn = max(G.xn, g.xn); G.yn = max(G.yn, g.yn)
-
+    G.val += g.val; G.rdn += g.rdn; G.nval += g.nval
+    Y,X, Y0,Yn, X0,Xn = G.box[:]; y,x, y0,yn, x0,xn = g.box[:]
+    G.box[:] = Y+y, X+x, min(X0.x0), max(Xn,xn), min(Y0,y0), max(Yn,yn)
+    ''' 
+    concat node_ and link_: in sum_H only?
     for node in g.node_:
         if node not in G.node_: G.node_ += [node]
     for link in g.Link_.Q:
         if link not in G.Link_.Q: G.Link_.Q += [link]
+    '''
     # alts
     for alt_graph in g.alt_graph_:
         if alt_graph not in G.alt_graph:
@@ -410,7 +469,6 @@ def sum_G(G, g):
             sum_pH(G.alt_Graph, g.alt_Graph)
         else:
             G.alt_Graph = deepcopy(g.alt_graph)
-
 
 def sum_pH_(PH_, pH_, fneg=0):
     for PH, pH in zip_longest(PH_, pH_, fillvalue=[]):  # each is CpH
@@ -455,76 +513,6 @@ def sum_pH(PH, pH, fneg=0):  # recursive unpack inder_s ( pplayers ( players ( p
 
     return PH
 
-def sum2graph_(root, graph_, fd):  # sum node and link params into graph, inder_ in agg+ or player in sub+
-
-    Graph_ = []  # Cgraphs
-    for graph in graph_:  # CpHs
-        if graph.val < aveG:  # form graph if val>min only
-            continue
-        X0,Y0 = 0,0
-        for G in graph.H:  # CpH
-            X0 += G.x0; Y0 += G.y0
-        L = len(graph.H); X0/=L; Y0/=L; Xn,Yn = 0,0
-        # conditional ex.inder_: remove if few links?
-        Graph = Cgraph(fds=copy(G.fds), ex=Cgraph(node_=Clink_(),A=[0,0]), x0=X0, xn=Xn, y0=Y0, yn=Yn)
-        # form G, keep iG:
-        node_,Link_= [],[]
-        for iG in graph.H:
-            Xn = max(Xn, (iG.x0 + iG.xn) - X0)  # box xn = x0+xn
-            Yn = max(Yn, (iG.y0 + iG.yn) - Y0)
-            sum_G(Graph, iG)  # sum(Graph.uH[-1][fd], iG.pplayers), higher levs += G.G.pplayers | G.uH, lower scope than iGraph
-            link_ = [iG.ex.node_.Qm, iG.ex.node_.Qd][fd]
-            Link_ = list(set(Link_ + link_))  # unique links in node_
-            G = Cgraph(fds=copy(iG.fds), G=iG, root=Graph, ex=Cgraph(node_=Clink_(),A=[0,0]))
-            # sum quasi-gradient of links in ex.inder_: redundant to Graph.inder_, if len node_?:
-            for derG in link_:
-                sum_inder_(G.ex.inder_, [derG.minder_, derG.dinder_][fd]) # local feedback
-                G.ex.S += derG.S; G.ex.A[0]+=derG.A[0]; G.ex.A[1]+=derG.A[1]
-            l=len(link_); G.ex.L=l; G.ex.S/=l
-            sum_ex_H(root, iG)
-            node_ += [G]
-        Graph.node_ = node_ # lower nodes = G.G..; Graph.root = iG.root
-        for Link in Link_:  # sum unique links
-            sum_inder_(Graph.inder_, [Link.minder_, Link.dinder_][fd])
-            if Graph.inder_[-1]: # top ext
-                Graph.inder_[-1][1]+=Link.S; Graph.inder_[-1][2][0]+=Link.A[0]; Graph.inder_[-1][2][1]+=Link.A[1]
-            else: Graph.inder_[-1] = [1,Link.S,Link.A]
-        L = len(Link_); Graph.inder_[-1][0] = L; Graph.inder_[-1][1] /= L  # last pplayers LSA per Link_
-        # inder_ LSA per node_:
-        Graph.A = [Xn*2,Yn*2]; L=len(node_); Graph.L=L; Graph.S = np.hypot(Xn-X0,Yn-Y0) / L
-        if Graph.ex.H:
-            Graph.val += sum([lev.val for lev in Graph.ex.H]) / sum([lev.rdn for lev in Graph.ex.H])  # if val>alt_val: rdn+=len_Q?
-        Graph_ += [Graph]
-
-    return Graph_
-
-def sum_inder_(Inder_, inder_, fext=1):
-
-    for i, (Inder, inder) in enumerate(zip_longest(Inder_, inder_, fillvalue=None)):
-        if inder is not None:
-            if Inder:
-                if inder:  # not []
-                    if isinstance(inder, CpH):
-                        sum_pH(Inder,inder)
-                    elif fext:  # fext = 0 to exclude summing ext
-                        for i in range(2): Inder[i] += inder[i]  # ext params (L，S)
-                        if isinstance(Inder[2], list):  # A is [0,0]
-                            Inder[2][0] += inder[2][0]; Inder[2][1] += inder[2][1]
-                        else: Inder[2] += inder[2]  # A is int
-
-            elif Inder is None: Inder_ += [deepcopy(inder)]
-            else:               Inder_[i] = deepcopy(inder)
-
-def sum_ex_H(root, node):  # add root.ex.H to node.ex.H, no eval but possible remove if weak?
-
-    for i, (rLev, nLev) in enumerate(zip_longest(root.ex.H, node.ex.H[1:], fillvalue=[])):  # root.ex.H maps to node.ex.H[1:]
-        if rLev:
-            j = sum(fd*(2**k) for k,fd in enumerate(node.fds[i:]))
-            if not nLev:  # init:
-                nLev = CpH(H=[Cgraph() for fork in range(len(node.fds[i:]))])
-            sum_inder_(nLev.H[j].inder_, rLev.H[j].inder_)  # same fork
-
-
 # draft
 def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
@@ -535,23 +523,21 @@ def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per g
             sub_mgraph_, sub_dgraph_ = form_graph_(graph, fsub=1)  # cross-comp and clustering
             # rng+:
             Rval = sum([sub_mgraph.val for sub_mgraph in sub_mgraph_])
-            if RVal + Rval > ave_sub * graph.rdn:  # >cost of call:
+            # eval if Val>cost of call, else feedback per sub_mgraph?
+            if RVal + Rval > ave_sub * graph.rdn:
                 rval, dval = sub_recursion_g(sub_mgraph_, fseg=fseg, fds=fds+[0], RVal=Rval, DVal=DVal)
                 RVal += rval+dval
-            else:
-                graph.H[-1].H[0] = []; graph.H[-1].fds.insert(0,None)
             # der+:
             Dval = sum([sub_dgraph.val for sub_dgraph in sub_dgraph_])
             if DVal + Dval > ave_sub * graph.rdn:
                 rval, dval = sub_recursion_g(sub_dgraph_, fseg=fseg, fds=fds+[1], RVal=Rval, DVal=DVal)
                 Dval += rval+dval
-            else:
-                graph.H[-1].H[1] = []; graph.H[-1].fds.insert(1,None)  # fds[1]?
             RVal += Rval
             DVal += Dval
         else:
             graph.fterm = 1  # forward is terminated, graph.node_ is empty or weak
             feedback(graph)  # bottom-up feedback to update root.H
+
 
     return RVal, DVal  # or SVal= RVal+DVal, separate for each fork of sub+?
 
@@ -560,15 +546,18 @@ def feedback(root):  # bottom-up update root.H, breadth-first
     fbV = aveG+1
     while root and fbV > aveG:
         if root.fterm:  # forward was terminated in all nodes
-            root.fterm = 0  # or reuse for fforward?
+            root.fterm = 0
             fbval, fbrdn = 0,0
             for node in root.node_:
-                for i, (Lev,lev) in enumerate(zip_longest(root.H[1:], node.H, fillvalue=[])):  # root.H[1:] maps to node.H
-                    if lev:
-                        j = sum(fd*(2**k) for k,fd in enumerate(lev.fds[i:]))
-                        if not Lev:  # init:
-                            Lev=CpH(H=[Cgraph() for fork in range(len(node.fds[i:]))])
-                        sum_inder_(Lev.H[j].inder_, lev.H[j].inder_)  # same fork
+                for sub_node in node.node_:
+                    # sum nodes in root, sub_nodes in root.H:
+                    sum_inder_(root.H[0].H[sub_node.fds[-1]].inder_, sub_node.inder_)
+                    for i, (Lev, lev) in enumerate(zip_longest(root.H[1:], sub_node.H, fillvalue=[])):
+                        if lev:
+                            j = sum(fd*(2**k) for k,fd in enumerate(sub_node.fds[i:]))
+                            if not Lev: Lev = CpH(H=[[] for fork in range(2**(i+1))])
+                            if not Lev.H[j]: Lev.H[j] = Cgraph()
+                            sum_inder_(Lev.H[j].inder_, lev.H[j].inder_)  # in same fork
             for Lev in root.H:
                 fbval += Lev.val; fbrdn += Lev.rdn
             fbV = fbval/fbrdn
