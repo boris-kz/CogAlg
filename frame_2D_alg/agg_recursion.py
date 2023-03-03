@@ -368,19 +368,18 @@ def sum2graph_(root, graph_, fd):  # sum node and link params into graph, inder_
     for graph in graph_:  # CpHs
         if graph.val < aveG:  # form graph if val>min only
             continue
-        # conditional ex.inder_: remove if few links?
         Graph = Cgraph(fds=copy(G.fds), ex=Cgraph(node_=Clink_(),A=[0,0]))
         # form G, keep iG:
         node_,Link_= [],[]
         for iG in graph.H:
-            sum_exH(iG, root)  # per der order?
-            sum_node(Graph, iG)
+            sum_H(iG, root)  # per der order?
+            sum_G(Graph, iG)  # this is a lower-der iG, already in root Graph?
             link_ = [iG.ex.node_.Qm, iG.ex.node_.Qd][fd]
             Link_ = list(set(Link_ + link_))  # unique links in node_
             G = Cgraph(fds=copy(iG.fds), G=iG, root=Graph, ex=Cgraph(node_=Clink_(),A=[0,0]))
             # sum quasi-gradient of links in ex.inder_: redundant to Graph.inder_, if len node_:
             for derG in link_:
-                sum_inder_(G.ex.inder_, [derG.minder_, derG.dinder_][fd]) # local feedback
+                sum_inder_(G.ex.inder_, [derG.minder_, derG.dinder_][fd])  # conditional, remove if few links?
                 G.ex.S += derG.S; G.ex.A[0]+=derG.A[0]; G.ex.A[1]+=derG.A[1]
             l=len(link_); G.ex.L=l; G.ex.S/=l
             node_ += [G]
@@ -393,7 +392,7 @@ def sum2graph_(root, graph_, fd):  # sum node and link params into graph, inder_
         L = len(Link_); Graph.inder_[-1][0] = L; Graph.inder_[-1][1] /= L  # last pplayers LSA per Link_
         # inder_ LSA per node_:
         dY = Graph.box[3]-Graph.box[2]; dX = Graph.box[5]- Graph.box[4]  # Yn-Y0, Xn-X0
-        Graph.A = [dY,dX]; L=len(node_); Graph.L=L; Graph.S = dY*dX / L  # per area
+        Graph.A = [dY,dX]; L=len(node_); Graph.L=L; Graph.S = dY*dX / L  # nodes per area
         Graph.box[0]/=L; Graph.box[1]/=L # ave y,x
         if Graph.ex.H:
             Graph.val += sum([lev.val for lev in Graph.ex.H]) / sum([lev.rdn for lev in Graph.ex.H])  # if val>alt_val: rdn+=len_Q?
@@ -418,31 +417,24 @@ def sum_inder_(Inder_, inder_, fext=1):
             elif Inder is None: Inder_ += [deepcopy(inder)]
             else:               Inder_[i] = deepcopy(inder)
 
-def sum_exH(root, node):  # add root.ex.H to node.ex.H, no eval but possible remove if weak?
-    # or generic sum_H, add concat node_ and link_?
+def sum_H(G, g):  # add g.H to G.H, no eval but possible remove if weak?
 
-    for i, (rLev, nLev) in enumerate(zip_longest(root.ex.H, node.ex.H[1:], fillvalue=[])):  # root.ex.H maps to node.ex.H[1:]
-        if rLev:
-            j = sum(fd*(2**k) for k,fd in enumerate(node.fds[i:]))
-            if not nLev:  # init:
-                nLev = CpH(H=[[] for fork in range(2**(i+1))])
-            if not nLev.H[j]:
-                nLev.H[j] = Cgraph()
-            sum_inder_(nLev.H[j].inder_, rLev.H[j].inder_)  # same fork
+    for i, (Lev, lev) in enumerate(zip_longest(G.ex.H, g.ex.H[1:], fillvalue=[])):  # root.ex.H maps to node.ex.H[1:]
+        if lev:  # not needed: j = sum(fd*(2**k) for k,fd in enumerate(g.fds[i:]))
+            if not Lev:  # init:
+                Lev = CpH(H=[[] for fork in range(2**(i+1))])
+                for Fork, fork in zip(Lev.H, lev.H):  # should be same length: same elevation?
+                    if fork:
+                        if not Fork: Fork[:] = Cgraph()
+                        sum_G(Fork, fork)  # sum G.H across fork g_s
 
-def sum_node(G, g):
+def sum_G(G, g):  # g is a node in G.node_
 
     sum_inder_(G.inder_, g.inder_)  # direct node representation
     if g.ex.H:
-        sum_exH(g, G)  # sum in reverse order: g->G?
-    if g.H:  # not needed in sum2graph, replace with sum_H?
-        for i, (Lev,lev) in enumerate(zip_longest(G.H, g.H, fillvalue=CpH())):  # sum G.H across fork g_s
-            if lev:
-                if not Lev: Lev = CpH(H=[[] for fork in range(2**(i+1))])
-                for j, (Fork,fork) in enumerate(zip_longest(Lev.H,lev.H, fillvalue=[])):
-                    if fork:
-                        if not Fork: Fork[:] = Cgraph()
-                        sum_inder_(Fork.inder_, fork.inder_)
+        sum_H(G.ex, g.ex)  # sum in reverse order: g->G?
+    if g.H:  # not needed in sum2graph
+        sum_H(G, g)
     G.L += g.L; G.S += g.S
     if isinstance(g.A, list):
         if g.A:  # where is it empty?
@@ -451,10 +443,12 @@ def sum_node(G, g):
             else: G.A = copy(g.A)
     else: G.A += g.A
     G.val += g.val; G.rdn += g.rdn; G.nval += g.nval
-    Y,X, Y0,Yn, X0,Xn = G.box[:]; y,x, y0,yn, x0,xn = g.box[:]
+    Y,X, Y0,Yn, X0,Xn = G.box[:]
+    y,x, y0,yn, x0,xn = g.box[:]
     G.box[:] = Y+y, X+x, min(X0.x0), max(Xn,xn), min(Y0,y0), max(Yn,yn)
-    ''' 
-    concat node_ and link_: in sum_H only?
+    G.node_ += [g]
+    '''
+    merge is not needed?
     for node in g.node_:
         if node not in G.node_: G.node_ += [node]
     for link in g.Link_.Q:
@@ -466,7 +460,7 @@ def sum_node(G, g):
             G.alt_graph_ += [alt_graph]
     if g.alt_Graph:
         if G.alt_Graph:
-            sum_pH(G.alt_Graph, g.alt_Graph)
+            sum_G(G.alt_Graph, g.alt_Graph)
         else:
             G.alt_Graph = deepcopy(g.alt_graph)
 
