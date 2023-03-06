@@ -26,6 +26,14 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_ = list  # contour + overlapping contrast graphs
     alt_Graph = None  # conditional, summed and concatenated params of alt_graph_
 
+class CderG(ClusterStructure):  # graph links, within root node_
+
+    node0 = lambda: Cgraph()  # converted to list in recursion
+    node1 = lambda: Cgraph()
+    minder_ = list  # in alt/contrast if open
+    dinder_ = list
+    S = int  # sparsity: ave len link
+    A = list  # area and axis: Dy,Dx
 
 def fforward(root):  # top-down update node.ex.H, breadth-first
 
@@ -87,3 +95,81 @@ def sum2graph_(root, graph_, fd):  # sum node and link params into graph, inder_
         Graph_ += [Graph]
 
     return Graph_
+
+def comp_GQ(_G,G,fsub):  # compare lower-derivation G.G.s, pack results in minder__,dinder__
+
+    minder__,dinder__ = [],[]; Mval,Dval = 0,0; Mrdn,Drdn = 1,1
+    Tval= aveG+1  # start
+    while (_G and G) and Tval > aveG:  # same-scope if sub+, no agg+ G.G
+
+        minder_, dinder_, mval, dval, mrdn, drdn = comp_G(_G, G, fsub, fex=0)
+        minder__+=minder_; dinder__+=dinder_
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn  # also /rdn+1: to inder_?
+        # comp ex:
+        if (Mval + Dval) * _G.ex.val * G.ex.val > aveG:
+            mex_, dex_, mval, dval, mrdn, drdn = comp_G(_G.ex, G.ex, fsub, fex=1)
+            minder__+=mex_; dinder__+=dex_
+            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+        else:
+            minder__+=[[]]; dinder__+=[[]]  # always after not-empty m|dinder_: list until sum2graph?
+        _G = _G.G
+        G = G.G
+        Tval = (Mval+Dval) / (Mrdn+Drdn)
+
+    return minder__, dinder__, Mval, Dval, Tval  # ext added in comp_G_, not within GQ
+
+def comp_G(_G, G, fsub, fex):
+
+    minder_,dinder_ = [],[]  # ders of implicitly nested list of pplayers in inder_
+    Mval, Dval = 0,0; Mrdn, Drdn = 1,1
+
+    minder_,dinder_, Mval,Dval, Mrdn,Drdn = comp_inder_(_G.inder_,G.inder_, minder_,dinder_, Mval,Dval, Mrdn,Drdn)
+    # spec:
+    _node_, node_ = _G.node_.Q if fex else _G.node_, G.node_.Q if fex else G.node_  # node_ is link_ if fex
+    if (Mval+Dval) * _G.val*G.val * len(_node_)*len(node_) > aveG:
+        if fex:  # comp link_
+            sub_minder_,sub_dinder_ = comp_derG_(_node_, node_, G.fds[-1])
+        else:    # comp node_
+            sub_minder_,sub_dinder_ = comp_G_(_node_, node_, f1Q=0, fsub=fsub)
+        Mval += sum([mxpplayers.val for mxpplayers in sub_minder_])  # + rdn?
+        Dval += sum([dxpplayers.val for dxpplayers in sub_dinder_])
+        # + sub node_?
+        if (Mval+Dval) * _G.val*G.val * len(_G.ex.H)*len(G.ex.H) > aveG:
+            # comp uH
+            for _lev, lev in zip(_G.ex.H, G.ex.H):  # wH is empty in top-down comp
+                for _fork, fork in zip(_lev.H, lev.H):
+                    if _fork and fork:
+                        fork_minder_, fork_dinder_, mval, dval, tval = comp_GQ(_fork, fork, fsub=0)
+                        Mval+= mval; Dval+= dval
+                    # else +[[]], if m|dexH:
+    # pack m|dnode_ and m|dexH in minder_, dinder_: still implicit or nested?
+    else: _G.fterm=1
+    # no G.fterm=1: it has it's own specification?
+    # comp alts,val,rdn?
+    return minder_, dinder_, Mval, Dval, Mrdn, Drdn
+
+
+def feedback(root):  # bottom-up update root.H, breadth-first
+
+    fbV = aveG+1
+    while root and fbV > aveG:
+        if all([[node.fterm for node in root.node_]]):  # forward was terminated in all nodes
+            root.fterm = 1
+            fbval, fbrdn = 0,0
+            for node in root.node_:
+                for sub_node in node.node_:
+                    # sum nodes in root, sub_nodes in root.H:
+                    fd = sub_node.fds[-1]
+                    if not root.H: root.H = [CpH(H=[[],[]])]  # append bottom-up
+                    if not root.H[0].H[fd]: root.H[0].H[fd] = Cgraph()
+                    sum_inder_(root.H[0].H[fd].inder_, sub_node.inder_)  # or sum_G?
+                    for i, (Lev,lev) in enumerate(zip_longest(root.H[1:], sub_node.H, fillvalue=[])):
+                        if lev:
+                            j = sum(fd*(2**k) for k,fd in enumerate(sub_node.fds[i:]))
+                            if not Lev: Lev = CpH(H=[[] for fork in range(2**(i+1))])  # n forks *=2 per lev
+                            if not Lev.H[j]: Lev.H[j] = Cgraph()
+                            sum_inder_(Lev.H[j].inder_, lev.H[j].inder_)  # or sum_G?
+            for Lev in root.H:
+                fbval += Lev.val; fbrdn += Lev.rdn
+            fbV = fbval/max(1, fbrdn)
+            root = root.root
