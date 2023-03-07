@@ -148,28 +148,15 @@ def comp_G(_G, G, fsub, fex):
     # comp alts,val,rdn?
     return minder_, dinder_, Mval, Dval, Mrdn, Drdn
 
+def comp_derG_(_derG_, derG_, fd):
 
-def feedback(root):  # bottom-up update root.H, breadth-first
+    mlink_,dlink_ = [],[]
+    for _derG in _derG_:
+        for derG in derG_:
+            mlink, dlink,_,_,_,_,= comp_inder_([_derG.minder_,_derG.dinder_][fd], [derG.dinder_,_derG.dinder_][fd], [],[],0,0,1,1)
+            # add comp fds: may be different?
+            mext, dext = comp_ext(1,_derG.S,_derG.A, 1,derG.S,derG.A)
+            mlink_ += [mlink] + [mext]  # not sure
+            dlink_ += [dlink] + [dext]
 
-    fbV = aveG+1
-    while root and fbV > aveG:
-        if all([[node.fterm for node in root.node_]]):  # forward was terminated in all nodes
-            root.fterm = 1
-            fbval, fbrdn = 0,0
-            for node in root.node_:
-                for sub_node in node.node_:
-                    # sum nodes in root, sub_nodes in root.H:
-                    fd = sub_node.fds[-1]
-                    if not root.H: root.H = [CpH(H=[[],[]])]  # append bottom-up
-                    if not root.H[0].H[fd]: root.H[0].H[fd] = Cgraph()
-                    sum_inder_(root.H[0].H[fd].inder_, sub_node.inder_)  # or sum_G?
-                    for i, (Lev,lev) in enumerate(zip_longest(root.H[1:], sub_node.H, fillvalue=[])):
-                        if lev:
-                            j = sum(fd*(2**k) for k,fd in enumerate(sub_node.fds[i:]))
-                            if not Lev: Lev = CpH(H=[[] for fork in range(2**(i+1))])  # n forks *=2 per lev
-                            if not Lev.H[j]: Lev.H[j] = Cgraph()
-                            sum_inder_(Lev.H[j].inder_, lev.H[j].inder_)  # or sum_G?
-            for Lev in root.H:
-                fbval += Lev.val; fbrdn += Lev.rdn
-            fbV = fbval/max(1, fbrdn)
-            root = root.root
+    return mlink_, dlink_
