@@ -160,3 +160,63 @@ def comp_derG_(_derG_, derG_, fd):
             dlink_ += [dlink] + [dext]
 
     return mlink_, dlink_
+
+def feedback(root):  # bottom-up update root.H, breadth-first
+
+    fbV = aveG+1
+    while root and fbV > aveG:
+        if all([[node.fterm for node in root.node_]]):  # forward was terminated in all nodes
+            root.fterm = 1
+            fbval, fbrdn = 0,0
+            for node in root.node_:
+                # sum nodes in root, sub_nodes in root.H:
+                for sub_node in node.node_:
+                    fd = sub_node.fds[-1]
+                    if not root.H: root.H = [CpH(H=[[],[]])]  # append bottom-up
+                    if not root.H[0].H[fd]: root.H[0].H[fd] = Cgraph()
+                    if isinstance(sub_node.G, list):
+                        sub_inder_ = sub_node.inder_[fd]
+                    else:
+                        sub_inder_ = sub_node.inder_
+                    sum_inder_(root.H[0].H[fd].inder_, sub_inder_)
+                    # or sum_G?
+                    # sum_H(root.H[1:], sub_node.H)
+                    for i, (Lev,lev) in enumerate(zip_longest(root.H[1:], sub_node.H, fillvalue=[])):
+                        if lev:
+                            j = sum(fd*(2**k) for k,fd in enumerate(sub_node.fds[i:]))
+                            if not Lev: Lev = CpH(H=[[] for fork in range(2**(i+1))])  # n forks *=2 per lev
+                            if not Lev.H[j]: Lev.H[j] = Cgraph()
+                            sum_inder_(Lev.H[j].inder_, lev.H[j].inder_)
+                            # or sum_G?
+            for Lev in root.H:
+                fbval += Lev.val; fbrdn += Lev.rdn
+            fbV = fbval/max(1, fbrdn)
+            root = root.root
+
+def sum_G(G, g, fmerge=0):  # g is a node in G.node_
+
+    sum_inder_(G.inder_, g.inder_)  # direct node representation
+    # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
+    if g.H:
+        sum_H(G.H[1:], g.H)  # not in sum2graph
+    G.L += g.L; G.S += g.S
+    if isinstance(g.A, list):
+        if G.A:
+            G.A[0] += g.A[0]; G.A[1] += g.A[1]
+        else: G.A = copy(g.A)
+    else: G.A += g.A
+    G.val += g.val; G.rdn += g.rdn; G.nval += g.nval
+    Y,X,Y0,Yn,X0,Xn = G.box[:]; y,x,y0,yn,x0,xn = g.box[:]
+    G.box[:] = [Y+y, X+x, min(X0,x0), max(Xn,xn), min(Y0,y0), max(Yn,yn)]
+    if fmerge:
+        for node in g.node_:
+            if node not in G.node_: G.node_ += [node]
+        for link in g.Link_.Q:  # redundant?
+            if link not in G.Link_.Q: G.Link_.Q += [link]
+        for alt_graph in g.alt_graph_:
+            if alt_graph not in G.alt_graph: G.alt_graph_ += [alt_graph]
+        if g.alt_Graph:
+            if G.alt_Graph: sum_G(G.alt_Graph, g.alt_Graph)
+            else:           G.alt_Graph = deepcopy(g.alt_graph)
+    else: G.node_ += [g]
+
