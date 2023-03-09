@@ -294,19 +294,14 @@ def blob2graph(blob, fseg):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-
     mpplayers = CpH(fds=[0]); dpplayers = CpH(fds=[1])
     alt_mpplayers = CpH(fds=[0]); alt_dpplayers = CpH(fds=[1])
-    mgraph = Cgraph(inder_=[mpplayers]); dgraph = Cgraph(inder_=[dpplayers])
-    alt_mgraph = Cgraph(inder_=[alt_mpplayers]); alt_dgraph = Cgraph(inder_=[alt_dpplayers])
-    muH = [CpH(H=[mgraph,Cgraph()])]; duH = [CpH(H=[Cgraph(),dgraph])]
-    alt_muH = [CpH(H=[alt_mgraph,Cgraph()])]; alt_duH = [CpH(H=[Cgraph(),alt_dgraph])]
 
     # pplayers, node_
-    alt_mblob = Cgraph(inder_=[alt_mpplayers],rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    alt_dblob = Cgraph(inder_=[alt_dpplayers],rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    mblob = Cgraph(fds=[0], inder_=[mpplayers], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
-    dblob = Cgraph(fds=[1], inder_=[dpplayers], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_mblob = Cgraph(inder_=[alt_mpplayers],rng=PPm_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_dblob = Cgraph(inder_=[alt_dpplayers],rng=PPm_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    mblob = Cgraph(inder_=[mpplayers], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    dblob = Cgraph(inder_=[dpplayers], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -359,9 +354,9 @@ def PP2graph(PP, fseg, ifd=1):
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(fds=[ifd], val=alt_pplayers.val,inder_=[alt_pplayers],x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    alt_Graph = Cgraph(val=alt_pplayers.val,inder_=[alt_pplayers], box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
-    graph = Cgraph(fds=[ifd], val=pplayers.val,inder_=[pplayers],alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(val=pplayers.val,inder_=[pplayers],alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
 
     return graph  # 1st plevel fd is always der+?
 
