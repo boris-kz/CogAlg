@@ -129,6 +129,7 @@ class CPP(CderP):  # derP params include P.ptuple
     alt_players = list  # summed from altPP_, sub comp support, agg comp suppression?
     altPP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
     fds = list
+    val = int
     nval= int
     x0 = int  # box, update by max, min
     xn = int

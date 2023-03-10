@@ -353,10 +353,11 @@ def PP2graph(PP, fseg, ifd=1):
     pplayers = CpH(H=[players], fds=[ifd], val=players.val)
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
+    box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn]
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(val=alt_pplayers.val,inder_=[alt_pplayers], box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_Graph = Cgraph(val=alt_pplayers.val,inder_=[alt_pplayers], box=copy(box))
 
-    graph = Cgraph(val=pplayers.val,inder_=[pplayers],alt_Graph=alt_Graph, x0=(x0+xn)/2, xn=(xn-x0)/2, y0=(y0+yn)/2, yn=(yn-y0)/2)
+    graph = Cgraph(val=pplayers.val,inder_=[pplayers],alt_Graph=alt_Graph,box=box)
 
     return graph  # 1st plevel fd is always der+?
 
