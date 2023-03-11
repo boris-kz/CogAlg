@@ -312,7 +312,7 @@ def blob2graph(blob, fseg):
             graph = PP2graph(PP, fseg, fd)
             sum_inder_(blobs[fd].inder_, graph.inder_)
             blobs[fd].node_ += [graph]
-            blobs[fd].val += graph.val
+            blobs[fd].valt[0] += graph.valt[0]; blobs[fd].valt[1] += graph.valt[1]
             graph.root = blobs[fd]
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
@@ -336,28 +336,32 @@ def PP2graph(PP, fseg, ifd=1):
                     alt_fds = alt_fds[:i]
                     break
         for altPP in PP.altPP_:  # convert altPP.players to CpH
-            H = [];  val = 0
+            H = [];  mval = 0; dval = 0
             for ptuples, alt_fd in zip(altPP.players[0], alt_fds):
                 for ptuple in ptuples[0][:2]:  # latuple and vertuple only
-                    H += [ptuple]; val += ptuple.val
-            alt_ptuples = CpH(H=H, val=val, fds=[alt_fd])
-            alt_players.H += [alt_ptuples]; alt_players.val += val
+                    H += [ptuple]
+                    if alt_fd: dval += ptuple.val
+                    else:      mval += ptuple.val
+            alt_ptuples = CpH(H=H, valt=[mval, dval], fds=[alt_fd])
+            alt_players.H += [alt_ptuples]; alt_players.valt[0] += mval; alt_players.valt[1] += dval;
         alt_players.fds = [alt_fds]
-    alt_pplayers = CpH(H=[alt_players], fds=[ifd], val=alt_players.val)
+    alt_pplayers = CpH(H=[alt_players], fds=[ifd], valt=copy(alt_players.valt))
 
     # number of H in rng+ is lesser than fds due to we didn't add lplayer in rng+
     players = CpH(fds=PP.fds)
-    for ptuples, val in PP.players[0]:
-        ptuples = CpH(H=deepcopy(ptuples), fds=[PP.fds[-1]], val=val)
-        players.H += [ptuples]; players.val += val
-    pplayers = CpH(H=[players], fds=[ifd], val=players.val)
+    for ((ptuples, val), fd) in zip(PP.players[0], PP.fds):
+        if fd: dval = val; mval = 0
+        else:  mval = val; dval = 0
+        ptuples = CpH(H=deepcopy(ptuples), fds=[PP.fds[-1]], valt=[mval, dval])
+        players.H += [ptuples]; players.valt[0] += mval; players.valt[1] += dval
+    pplayers = CpH(H=[players], fds=[ifd], valt=copy(players.valt))
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn]
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(val=alt_pplayers.val,inder_=[alt_pplayers], box=copy(box))
+    alt_Graph = Cgraph(valt=copy(alt_pplayers.valt),inder_=[alt_pplayers], box=copy(box))
 
-    graph = Cgraph(val=pplayers.val,inder_=[pplayers],alt_Graph=alt_Graph,box=box)
+    graph = Cgraph(valt=copy(pplayers.valt),inder_=[pplayers],alt_Graph=alt_Graph,box=box)
 
     return graph  # 1st plevel fd is always der+?
 
@@ -386,8 +390,8 @@ def agg_recursion_eval(blob, PP_t):
             else:
                 converted_blobt = blob2graph(blob, fseg=fseg)  # convert root to graph
 
-    M = converted_blobt[0].val  # mpplayers.val (but m fork is always empty, so no value here?)
-    G = converted_blobt[1].val  # dpplayers.val
+    M = sum(converted_blobt[0].valt)  # mpplayers.val (but m fork is always empty, so no value here?)
+    G = sum(converted_blobt[1].valt)  # dpplayers.val
     valt = [M, G]
     fork_rdnt = [1+(G>M), 1+(M>=G)]
     # should be single call of agg_recursion here？

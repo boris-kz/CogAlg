@@ -220,3 +220,168 @@ def sum_G(G, g, fmerge=0):  # g is a node in G.node_
             else:           G.alt_Graph = deepcopy(g.alt_graph)
     else: G.node_ += [g]
 
+def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
+
+    Graph_ = []  # Cgraphs
+    for graph in graph_:  # CpHs
+        if graph.valt[fd] < aveG:  # form graph if val>min only
+            continue
+        Graph = Cgraph(fds=copy(graph.H[0].fds)+[fd])  # incr der
+        ''' if mult roots: 
+        sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty
+        sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
+        '''
+        node_,Link_ = [],[]  # form G, keep iG:
+        for iG in graph.H:
+            sum_G(Graph, iG, fmerge=0)  # local subset of lower Gs in new graph
+            link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_,dlink_
+            Link_ = list(set(Link_ + link_))  # unique links in node_
+            G = Cgraph(fds=copy(iG.fds)+[fd], root=Graph, node_=link_, box=copy(iG.box))  # no sub_nodes in derG, remove if <ave?
+            for derG in link_:
+                sum_box(G.box, derG.G[0].box if derG.G[1] is iG else derG.G[1].box)
+                sum_derH(G.derH, derG.derH[fd])  # two-fork derGs are not modified
+                Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]
+            add_ext(G.box, len(link_), G.derH[-1])  # composed node ext, not in derG.derH
+            # if mult roots: sum_H(G.uH[1:], Graph.uH)
+            node_ += [G]
+        Graph.root = iG.root  # same root, lower derivation is higher composition
+        Graph.node_ = node_  # G| G.G| G.G.G..
+        for derG in Link_:  # sum unique links, not box
+            sum_derH(Graph.derH, derG.derH[fd])
+            Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]
+        Ext = [0,0,[0,0]]
+        Ext = [sum_ext(Ext, G.derH[-1][1]) for G in node_]  # add composed node Ext
+        add_ext(Graph.box, len(node_), Ext) # add composed graph Ext
+        Graph.derH += [Ext]  # [node Ext, graph Ext]
+        # if Graph.uH: Graph.val += sum([lev.val for lev in Graph.uH]) / sum([lev.rdn for lev in Graph.uH])  # if val>alt_val: rdn+=len_Q?
+        Graph_ += [Graph]
+
+    return Graph_
+
+def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_, or segs inside PP?
+
+    if not f1Q: minder__,dinder__ = [],[]
+
+    for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph
+        for iG in G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng, bilateral link assign, val accum:
+            # if the pair was compared in prior rng+:
+            if iG in [node for link in _iG.link_.Q for node in link.node_]:  # if f1Q? add frng to skip?
+                continue
+            dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
+            if distance < ave_distance * ((_iG.val + iG.val) / (2*sum(G_aves))):
+                # same for cis and alt Gs:
+                for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
+                    if not _G or not G:  # or G.val
+                        continue
+                    minder_, dinder_, mval, dval, tval = comp_GQ(_G,G)  # comp_G while G.G, H/0G: GQ is one distributed node?
+                    ext = [1,distance,[dy,dx]]
+                    derG = Cgraph(G=[_G,G], inder_=[minder_+[[ext]], dinder_+[[ext]]], box=[])  # box is redundant to 2 nodes
+                    # add links:
+                    _G.link_.Q += [derG]; _G.link_.val += tval  # combined +-links val
+                    G.link_.Q += [derG]; G.link_.val += tval
+                    if mval > aveGm:
+                        _G.link_.Qm += [derG]; _G.link_.mval += mval  # no dval for Qm
+                        G.link_.Qm += [derG]; G.link_.mval += mval
+                    if dval > aveGd:
+                        _G.link_.Qd += [derG]; _G.link_.dval += dval  # no mval for Qd
+                        G.link_.Qd += [derG]; G.link_.dval += dval
+
+                    if not f1Q:  # comp G_s
+                        minder__+= minder_; dinder__+= dinder_
+                # implicit cis, alt pair nesting in minder_, dinder_
+    if not f1Q:
+        return minder__, dinder__  # else no return, packed in links
+
+
+def comp_GQ(_G, G):  # compare lower-derivation G.G.s, pack results in minder__,dinder__
+
+    minder__,dinder__ = [],[]; Mval,Dval = 0,0; Mrdn,Drdn = 1,1
+    Tval= aveG+1
+    while (_G and G) and Tval > aveG:  # same-scope if sub+, no agg+ G.G
+
+        minder_, dinder_, mval, dval, mrdn, drdn = comp_G(_G, G)
+        minder__+=minder_; dinder__+=dinder_; Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn  # rdn+=1: to inder_?
+        _G = _G.G
+        G = G.G
+        Tval = (Mval+Dval) / (Mrdn+Drdn)
+
+    return minder__, dinder__, Mval, Dval, Tval  # ext added in comp_G_, not within GQ
+
+def comp_G(_G, G):  # in GQ
+
+    mderH,dderH = [],[]  # ders of implicitly nested list of pplayers in derH
+    # or single dderH:
+    Mval, Dval = 0,0
+    Mrdn, Drdn = 1,1
+    if _G.box: _derH, derH = _G.derH, G.derH
+    else:
+        _fd = _G.root.fds[-1] if _G.root.fds else 0; fd = G.root.fds[-1] if G.root.fds else 0
+        _derH, derH = _G.derH[_fd], G.derH[fd]  # derG if comp node_?
+
+    mderH,dderH, Mval,Dval, Mrdn,Drdn = comp_derH(_derH,derH, mderH,dderH, Mval,Dval, Mrdn,Drdn)
+    # spec:
+    _node_, node_ = _G.node_, G.node_  # link_ if fd, sub_node should be empty
+    if (Mval+Dval)* sum(_G.valt)*sum(G.valt) * len(_node_)*len(node_) > aveG:  # / rdn?
+
+        sub_mderH,sub_dderH = comp_G_(_node_, node_, f1Q=0)
+        Mval += sum([mxpplayers.val for mxpplayers in sub_mderH])  # + rdn?
+        Dval += sum([dxpplayers.val for dxpplayers in sub_dderH])
+        # pack m|dnode_ in m|dderH: implicit?
+    else: _G.fterm=1  # no G.fterm=1: it has it's own specification?
+    '''
+    comp alts,val,rdn?
+    comp H in comp_G_?
+    select >ave m|d vars only: addressable salient mset / dset in derH? 
+    cluster per var or set if recurring across root: type eval if root M|D?
+    '''
+    return mderH, dderH, Mval, Dval, Mrdn, Drdn
+
+def comp_derH(_derH, derH, mderH,dderH, Mval,Dval, Mrdn,Drdn):
+
+    i=0; end=1; Tval = aveG+1; elev=0
+    while end <= min(len(_derH),len(derH)) and Tval > aveG:
+
+        _Lev, Lev = _derH[i:end], derH[i:end]  # each Lev of implicit nesting is derH,ext formed by comp_G
+        for _der,der in zip(_Lev,Lev):
+            if der:
+                if isinstance(der,CpH):  # pplayers, incr implicit nesting in m|dpplayers:
+                    mpplayers, dpplayers = comp_pH(_der, der)
+                    mderH += [mpplayers]; Mval += mpplayers.valt[0]; Mrdn += mpplayers.rdn  # add rdn in form_?
+                    dderH += [dpplayers]; Dval += dpplayers.valt[1]; Drdn += dpplayers.rdn
+                else:
+                    mextt, dextt = [],[]
+                    for _extt, extt in _der, der:  # [node_ext, graph_ext], both are full|empty per der+?
+                        mext, dext = comp_ext(_extt,extt)
+                        mextt+=[mext]; dextt+=[dext]; Mval+=sum(mext); Dval+=sum(dext)
+                    mderH += [mextt]; dderH += [dextt]
+            else:
+                mderH+=[[]]; dderH+=[[]]
+        Tval = (Mval+Dval) / (Mrdn+Drdn)  # eval if looping Levs
+        i = end
+        end = (end*2) + 1*elev
+        elev = 1
+    '''
+    lenLev = (end*2)+1: 1, 1+1, 3+1, 7+1, 15+1.: +[der_ext, agg_ext] per G in GQ, levs | Levs? same fds till += [fd]?
+    Lev1: pps: 1 pplayers  # 0der
+    Lev2: pps,ext: lenLev = 2   
+    Lev3: pps; pps,ext; ext: lenLev = 4
+    Lev4: pps; pps,ext; pps,pps,ext,ext; ext: lenLev = 8
+    '''
+    return mderH,dderH, Mval,Dval, Mrdn,Drdn
+
+def sum_derH(DerH, derH, fext=1):
+
+    for i, (Der, der) in enumerate(zip_longest(DerH, derH, fillvalue=None)):
+        if der is not None:
+            if der:
+                if Der:
+                    if isinstance(der,CpH): sum_pH(Der,der)
+                    else:
+                        for Ext,ext in zip(Der,der):  # pair
+                            sum_ext(Ext,ext)
+                else: derH.insert(i,deepcopy(der))  # for different-length DerH, derH
+
+            elif Der is None: derH += [deepcopy(der)]
+            else:             derH[i] = deepcopy(der)
+
