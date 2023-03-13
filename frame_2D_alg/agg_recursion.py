@@ -27,11 +27,12 @@ But we have recursively structured param sets packed in each level of these tree
 Diagram: 
 https://github.com/boris-kz/CogAlg/blob/76327f74240305545ce213a6c26d30e89e226b47/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 -
-Right now clustering criterion is single m|d, so we have one root per fork. But that m|d is summed across m|d per variable in Gs.
-It should be summing only above-ave m|ds, which will be from different sets of compared vars, for different _G,G pairs. 
+Current clustering criterion is single m|d, summed across all vars in Gs, forming one root per fork.
+But fork selection should be per var or a group: there are different concepts that include same components. 
+What makes them different is the subset of vars that matches within a cluster: size, density, color, stability, etc.
 -
-We obviously have different concepts that may include same components. What makes them different is the subset of component'params 
-that matches within a cluster. For example, the same objects can be classified / clustered by size, density, color, stability, etc.
+So we need to select fork per >ave m|ds, summed from different sets of compared vars, for different _G,G pairs. 
+Weak-val vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 # aves defined for rdn+1:
 aveG = 6  # fixed costs per G
@@ -57,7 +58,7 @@ class CpH(ClusterStructure):  # hierarchy of params + associated vars in pplayer
 
     H = list  # hierarchy of pplayers | players | ptuples, can be sequence
     valt = lambda: [0,0]
-    rdn = lambda: 1  # for all Qs?
+    rdnt = lambda: [1,1]  # for all Qs?
     rng = lambda: 1
     fds = list  # m|d in pplayers,players,ptuples, m|d|None in levs?
     nval = int  # of open links: base alt rep
@@ -73,8 +74,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
     derH = list  # derH ) node_) H: contents, Lev+= node tree slice: feedback, Lev/agg+, lev/sub+?
     valt = lambda: [0,0]
-    fds = list
-    rdn = lambda: 1
+    rdnt = lambda: [1, 1]
+    fds = list  # or fd, with sub fds in derH?
     rng = lambda: 1
     box = lambda: [0,0,0,0,0,0]  # y,x, y0,yn, x0,xn
     node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
@@ -258,30 +259,31 @@ def comp_G(_G, G):  # in GQ
 def comp_derH(_derH, derH, Mval,Dval, Mrdn,Drdn):
 
     dderH = []
-    for _Lev, Lev in zip(derH, derH):  # each Lev is CpH,extp formed by comp_G
-        for _der,der in zip(_Lev,Lev):
-            if _der and der:  # probably not needed
-                if isinstance(der,CpH):  # pplayers, incr implicit nesting in m|dpplayers:
-                    dplayers = comp_pH(_der, der)
-                    Mval += dplayers.valt[0]; Mrdn += dplayers.rdnt[0]  # add rdn in form_?
-                    Dval += dplayers.valt[1]; Drdn += dplayers.rdnt[1]
-                    dderH += [dplayers]
-                else:  # list
-                    dder, Mval, Dval, Mrdn, Drdn = comp_derH(_der[0], der[0], Mval, Dval, Mrdn, Drdn)
-                    mext,dext = comp_ext(_der[1],der[1])
-                    Mval+=sum(mext); Dval+=sum(dext)
-                    dderH += [[dder, [mext,dext]]]
-            else:
-                dderH += [[]]  # probably not needed
-        if (Mval+Dval) / (Mrdn+Drdn) < ave_G:
-            break
+    for _Lev, Lev in zip_longest(derH, derH, fillvalue=[]):  # each Lev or subLev is [CpH|list, ext, valt, rdnt]:
+        if _Lev and Lev:
+            if isinstance(Lev,CpH):  # players, same for both or test? incr nesting in dplayers?
+                # use extended comp_ptuple instead?
+                dplayers = comp_pH(_Lev, Lev)
+                Mval += dplayers.valt[0]; Mrdn += dplayers.rdnt[0]  # add rdn in form_?
+                Dval += dplayers.valt[1]; Drdn += dplayers.rdnt[1]
+                dderH += [dplayers]
+            else:  # [sub derH, ext, valt, rdnt]
+                dder, Mval, Dval, Mrdn, Drdn = comp_derH(_Lev[0],Lev[0], Mval,Dval, Mrdn,Drdn)  # all not-empty
+                mext, dext = comp_ext(_Lev[1],Lev[1])
+                Mval+=sum(mext); Dval+=sum(dext)
+                dderH += [[dder, [mext,dext]], [Mval,Dval], [Mrdn,Drdn]]
+            if (Mval+Dval) / (Mrdn+Drdn) < ave_G:
+                break
+        else:
+            dderH += [_Lev if _Lev else -Lev]  # difference from null comparand, not sure
 
     return dderH, Mval,Dval, Mrdn,Drdn
 '''
-    Lev1: lays: CpH 0der players, ext is added per G Lev:
-    Lev2: [dlays, ext]: list   
-    Lev3: [[dlays, [ddlays,dext]], ext]: nested list, max 1 sub_lev
-    Lev4: [[[dlays, [ddlays,dext]], [[ddlays, [dddlays,ddext],dext]], ext]: nnested list, max 2 sub_levs
+    generic for pTree, including each element of pPP (ptuple extended to 2D)?
+    Lev1: lays: CpH players, 1st ext is added per G.G, 2nd ext per Graph, add subLev nesting per Lev:
+    Lev2: [dlays, ext]: 1 subLev
+    Lev3: [[dlays, [ddlays,dextp]], ext]: 2 sLevs, 1 ssLev
+    Lev4: [[dlays, [ddlays,dextp], [[[dddlays,ddextp]],dextp]], ext]: 3 sLevs, 2 ssLevs, 1 sssLev
 '''
 
 def comp_ext(_ext, ext):
@@ -296,7 +298,7 @@ def comp_ext(_ext, ext):
             dA = _A - A; mA = min(_A, A)
     else:
         mA,dA = 0,0
-    return (mL,mS,mA), (dL,dS,dA)
+    return [mL,mS,mA], [dL,dS,dA]
 
 
 def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+

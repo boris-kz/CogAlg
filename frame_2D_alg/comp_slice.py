@@ -70,7 +70,7 @@ vaves = [ave_mval, ave_dval]
 PP_aves = [ave_mPP, ave_dPP]
 
 
-class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: lataple in P or vertuple in derP
+class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical params: latuple in P or vertuple in derP
 
     # compared params, add prefix v in vertuples: 9 vs. 10 params:
     I = int

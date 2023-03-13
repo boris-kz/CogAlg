@@ -370,6 +370,35 @@ def comp_derH(_derH, derH, mderH,dderH, Mval,Dval, Mrdn,Drdn):
     '''
     return mderH,dderH, Mval,Dval, Mrdn,Drdn
 
+def comp_derH1(_derH, derH, Mval,Dval, Mrdn,Drdn):
+
+    dderH = []
+    for _Lev, Lev in zip(derH, derH):  # each Lev or subLev is CpH,ext formed by comp_G
+        for _der,der in zip(_Lev,Lev):
+            if _der and der:  # probably not needed
+                if isinstance(der,CpH):  # players, incr implicit nesting in dplayers?
+                    dplayers = comp_pH(_der, der)
+                    Mval += dplayers.valt[0]; Mrdn += dplayers.rdnt[0]  # add rdn in form_?
+                    Dval += dplayers.valt[1]; Drdn += dplayers.rdnt[1]
+                    dderH += [dplayers]
+                else:  # list
+                    dder, Mval, Dval, Mrdn, Drdn = comp_derH1(_der[0], der[0], Mval, Dval, Mrdn, Drdn)
+                    mext, dext = comp_ext(_der[1],der[1])
+                    Mval+=sum(mext); Dval+=sum(dext)
+                    dderH += [[dder, [mext,dext]]]
+            else:
+                dderH += [[]]  # probably not needed
+        if (Mval+Dval) / (Mrdn+Drdn) < ave_G:
+            break
+
+    return dderH, Mval,Dval, Mrdn,Drdn
+'''
+    Lev1: lays: CpH 0der players, ext is added per G Lev:
+    Lev2: [dlays, ext]: list   
+    Lev3: [[dlays, [ddlays,dext]], ext]: nested list, max 1 sub_lev
+    Lev4: [[[dlays, [ddlays,dext]], [[ddlays, [dddlays,ddext],dext]]], ext]: nnested list, max 2 sub_levs
+'''
+
 def sum_derH(DerH, derH, fext=1):
 
     for i, (Der, der) in enumerate(zip_longest(DerH, derH, fillvalue=None)):
