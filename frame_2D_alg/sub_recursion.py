@@ -326,8 +326,10 @@ def blob2graph(blob, fseg):
 
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
+    # n and val should be excluded?
+    PP_vars = ["I", "M", "Ma", "axis", "angle", "aangle", "G", "Ga", "x", "L"]
 
-    alt_players = CpH()
+    alt_pPP = [CpH() for _ in PP_vars]; alt_valt = [0,0]
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
         alt_fds = copy(PP.altPP_[0].fds)
         for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
@@ -336,34 +338,58 @@ def PP2graph(PP, fseg, ifd=1):
                     alt_fds = alt_fds[:i]
                     break
         for altPP in PP.altPP_:  # convert altPP.players to CpH
-            H = [];  mval = 0; dval = 0
             for ptuples, alt_fd in zip(altPP.players[0], alt_fds):
                 for ptuple in ptuples[0][:2]:  # latuple and vertuple only
-                    H += [ptuple]
-                    if alt_fd: dval += ptuple.val
-                    else:      mval += ptuple.val
-            alt_ptuples = CpH(H=H, valt=[mval, dval], fds=[alt_fd])
-            alt_players.H += [alt_ptuples]; alt_players.valt[0] += mval; alt_players.valt[1] += dval;
-        alt_players.fds = [alt_fds]
-    alt_pplayers = CpH(H=[alt_players], fds=[ifd], valt=copy(alt_players.valt))
-
-    # number of H in rng+ is lesser than fds due to we didn't add lplayer in rng+
-    players = CpH(fds=PP.fds)
-    for ((ptuples, val), fd) in zip(PP.players[0], PP.fds):
-        if fd: dval = val; mval = 0
-        else:  mval = val; dval = 0
-        ptuples = CpH(H=deepcopy(ptuples), fds=[PP.fds[-1]], valt=[mval, dval])
-        players.H += [ptuples]; players.valt[0] += mval; players.valt[1] += dval
-    pplayers = CpH(H=[players], fds=[ifd], valt=copy(players.valt))
+                    for i, param_name in enumerate(PP_vars):
+                        # retrieve param value from ptuple
+                        param_val = getattr(ptuple, param_name)
+                        # update pPP's valt[fd] to ptuple's param value?
+                        alt_pPP[i].valt[alt_fd] = copy(param_val)  # it will be a list for axis, angle and aangle
+    alt_lays = CpH(H=alt_pPP, valt=alt_valt)
 
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn]
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(valt=copy(alt_pplayers.valt),derH=[alt_pplayers], box=copy(box))
+    alt_Graph = Cgraph(valt=copy(alt_lays.valt),derH=[alt_lays], box=copy(box))
+    graph = Cgraph(valt=copy(lays.valt),derH=[lays],alt_Graph=alt_Graph,box=box)
 
-    graph = Cgraph(valt=copy(pplayers.valt),derH=[pplayers],alt_Graph=alt_Graph,box=box)
+    # draft:
+    pPP = [[] for _ in PP_vars]; valt = [0, 0]  # init each var derH
+    for elev, ptuples in enumerate(PP.players[0]):
+        unrepack(pPP, ptuples, elev)  # pack ptuples into elements of pPP, which need to be nested recursively
 
     return graph  # 1st plevel fd is always der+?
+
+# drafts:
+def unrepack(pPP, derH, elev, selev):  # op: repack, lenlev: 1, 1, 2, 4, 8...
+
+    repack(pPP, derH[0], elev, selev=0)  # single-element 1st lev
+    if len(derH)>1:
+        repack(pPP, derH[1], elev, selev=1)  # single-element 2nd lev
+        i,last = 2,4
+        selev = 0  # sub elevation
+        while last<len(derH):
+            lev = derH[i:last]  # levs are incrementally nested
+            unrepack(pPP, lev, elev, selev+2)
+            i=last; last+=i
+            selev+=1
+
+def repack(pPP, ptuple, elev, selev):  # pack derH in elements of iderH
+
+    for Par, par in zip(pPP[elev][selev], ptuple):
+        Par += [par]  # pack der ptuple par in pPP[lev][sublev].., elev needs to be nested recursively
+
+
+def unpack(derH, op):  # generic, op: operation, lenlev: 1, 1, 2, 4, 8...
+
+    op(derH[0])  # single-element 1st lev
+    if len(derH)>1:
+        op(derH[1])  # single-element 2nd lev
+        i,last = 2,4
+        while last<len(derH):
+            lev = derH[i:last]  # levs are incrementally nested
+            unpack(lev, op)
+            i=last; last+=i
 
 # move here temporary, for debug purpose
 def agg_recursion_eval(blob, PP_t):
