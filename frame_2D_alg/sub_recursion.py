@@ -9,6 +9,8 @@ from agg_recursion import *
 comp_slice_ sub_recursion + utilities
 '''
 ave_rotate = 10
+# n and val should be excluded?
+PP_vars = ["I", "M", "Ma", "axis", "angle", "aangle", "G", "Ga", "x", "L"]
 
 def sub_recursion_eval(root):  # for PP or dir_blob
 
@@ -326,8 +328,6 @@ def blob2graph(blob, fseg):
 
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
-    # n and val should be excluded?
-    PP_vars = ["I", "M", "Ma", "axis", "angle", "aangle", "G", "Ga", "x", "L"]
 
     alt_pPP = [CpH() for _ in PP_vars]; alt_valt = [0,0]
     if not fseg and PP.altPP_:  # seg doesn't have altPP_
@@ -347,49 +347,50 @@ def PP2graph(PP, fseg, ifd=1):
                         alt_pPP[i].valt[alt_fd] = copy(param_val)  # it will be a list for axis, angle and aangle
     alt_lays = CpH(H=alt_pPP, valt=alt_valt)
 
+    pPP = [[] for _ in PP_vars]; valt = [0, 0]  # init each var derH
+
+    repack(pPP, PP.players[0][0], idx_=[0])  # single-element 1st lev
+    if len(PP.players[0])>1:
+        repack(pPP, PP.players[0][1], idx_=[1])  # single-element 2nd lev
+        i=2; last=4
+        idx = 2  # init incremental elevation = i
+        while last<len(PP.players[0]):
+            inpack_derH(pPP, PP.players[0][0], idx_=[idx])  # pack ptuple vars into derH of pPP vars
+            i=last; last+=i  # last=i*2
+            idx+=1  # elevation in derH
+
     x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
     box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn]
     # update to center (x0,y0) and max_distance (xn,yn) in graph:
     alt_Graph = Cgraph(valt=copy(alt_lays.valt),derH=[alt_lays], box=copy(box))
-    graph = Cgraph(valt=copy(lays.valt),derH=[lays],alt_Graph=alt_Graph,box=box)
-
-    # draft:
-    pPP = [[] for _ in PP_vars]; valt = [0, 0]  # init each var derH
-    for elev, ptuples in enumerate(PP.players[0]):
-        unrepack(pPP, ptuples, elev)  # pack ptuples into elements of pPP, which need to be nested recursively
+    graph = Cgraph(valt=copy(lays.valt),derH=[pPP],alt_Graph=alt_Graph,box=box)
 
     return graph  # 1st plevel fd is always der+?
 
 # drafts:
-def unrepack(pPP, derH, elev, selev):  # op: repack, lenlev: 1, 1, 2, 4, 8...
+def inpack_derH(pPP, ptuples, idx_=[]):  # pack ptuple vars in derH of pPP vars, converting macro derH -> micro derH
+    # idx_: indices per lev order in derH, lenlev: 1, 1, 2, 4, 8...
 
-    repack(pPP, derH[0], elev, selev=0)  # single-element 1st lev
-    if len(derH)>1:
-        repack(pPP, derH[1], elev, selev=1)  # single-element 2nd lev
-        i,last = 2,4
-        selev = 0  # sub elevation
-        while last<len(derH):
-            lev = derH[i:last]  # levs are incrementally nested
-            unrepack(pPP, lev, elev, selev+2)
-            i=last; last+=i
-            selev+=1
+    repack(pPP, ptuples[0], idx_+[0])  # single-element 1st lev
+    if len(ptuples)>1:
+        repack(pPP, ptuples[1], idx_+[1])  # single-element 2nd lev
+        i=2; last=4
+        idx = 2  # init incremental elevation = i
+        while last<len(ptuples):
+            lev = ptuples[i:last]  # lev is nested, max len_sublev = lenlev-1, etc.
+            inpack_derH(pPP, lev, idx_+[idx])  # add idx per sublev
+            i=last; last+=i  # last=i*2
+            idx+=1  # elevation in derH
 
-def repack(pPP, ptuple, elev, selev):  # pack derH in elements of iderH
+def repack(pPP, ptuple, idx_):  # pack derH in elements of iderH
 
-    for Par, par in zip(pPP[elev][selev], ptuple):
-        Par += [par]  # pack der ptuple par in pPP[lev][sublev].., elev needs to be nested recursively
-
-
-def unpack(derH, op):  # generic, op: operation, lenlev: 1, 1, 2, 4, 8...
-
-    op(derH[0])  # single-element 1st lev
-    if len(derH)>1:
-        op(derH[1])  # single-element 2nd lev
-        i,last = 2,4
-        while last<len(derH):
-            lev = derH[i:last]  # levs are incrementally nested
-            unpack(lev, op)
-            i=last; last+=i
+    for i, param_name in enumerate(PP_vars):
+        par = getattr(ptuple, param_name)
+        Par = pPP[i]
+        if len(Par > len(idx_)):  # Par is derH of pars
+            Par[-1] += [par]  # pack par in top lev of Par, added per inpack_derH recursion
+        else:
+            Par += [[par]]  # add new Par lev, implicitly nested in ptuples?
 
 # move here temporary, for debug purpose
 def agg_recursion_eval(blob, PP_t):

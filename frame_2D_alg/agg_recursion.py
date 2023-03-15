@@ -255,7 +255,37 @@ def comp_G(_G, G):  # in GQ
     '''
     return dderH, Mval,Dval, Mrdn,Drdn
 
-# draft:
+def op_derH(_derH, derH, op, Mval,Dval, Mrdn,Drdn, idx_=[]):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
+
+    op(_derH[0], derH[0], idx_+[0])  # single-element 1st lev
+    if len(_derH)>1 and len(derH)>1:
+        op(_derH[1], derH[1], idx_+[1])  # single-element 2nd lev
+        i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
+
+        while last<len(derH) and last<len(derH):
+            op_derH(_derH[i:last], derH[i:last], op, Mval,Dval, Mrdn,Drdn, idx_+[idx])  # _lev, lev: incrementally nested
+            i=last; last+=i  # last=i*2
+            idx+=1  # elevation in derH
+
+    elif _derH or derH:
+        pass  # fill into DerH if sum or dderH if comp?
+
+# draft, should be combined into op_derH?
+def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, idx_=[]):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
+
+    dderH = []
+    # modify comp_ptuple to combine mtuple and dtuple, each var should be m,d
+    dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
+    if len(_derH)>1 and len(derH)>1:
+        dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
+        i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
+
+        while last < len(derH) and last < len(derH):
+            op_derH(_derH[i:last], derH[i:last], comp_ptuple, Mval, Dval, Mrdn, Drdn, idx_ + [idx])  # _lev, lev: incrementally nested
+            i=last; last+=i  # last=i*2
+            idx+=1  # elevation in derH
+
+# old:
 def comp_derH(_derH, derH, Mval,Dval, Mrdn,Drdn):
 
     dderH = []
