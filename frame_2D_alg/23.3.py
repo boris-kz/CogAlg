@@ -414,3 +414,39 @@ def sum_derH(DerH, derH, fext=1):
             elif Der is None: derH += [deepcopy(der)]
             else:             derH[i] = deepcopy(der)
 
+def comp_ptuple(_params, params, fd=0):  # compare lateral or vertical tuples, similar operations for m and d params
+
+    dtuple, mtuple = Cptuple(), Cptuple()
+    rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
+
+    if fd:  # vertuple, all params are scalars:
+        comp("val", _params.val, params.val*rn, dtuple, mtuple, ave_mval, finv=0)
+        comp("axis", _params.axis, params.axis*rn, dtuple, mtuple, ave_dangle, finv=0)
+        comp("angle", _params.angle, params.angle*rn, dtuple, mtuple, ave_dangle, finv=0)
+        comp("aangle", _params.aangle, params.aangle*rn, dtuple, mtuple, ave_daangle, finv=0)
+    else:  # latuple
+        comp("G", _params.G, params.G*rn, dtuple, mtuple, ave_G, finv=0)
+        comp("Ga", _params.Ga, params.Ga*rn, dtuple, mtuple, ave_Ga, finv=0)
+        comp_angle("axis", _params.axis, params.axis, dtuple, mtuple)  # rotated, thus no adjustment by daxis?
+        comp_angle("angle", _params.angle, params.angle, dtuple, mtuple)
+        comp_aangle(_params.aangle, params.aangle, dtuple, mtuple)
+    # either:
+    comp("I", _params.I, params.I*rn, dtuple, mtuple, ave_dI, finv=not fd)  # inverse match if latuple
+    comp("M", _params.M, params.M*rn, dtuple, mtuple, ave_M, finv=0)
+    comp("Ma",_params.Ma, params.Ma*rn, dtuple, mtuple, ave_Ma, finv=0)
+    comp("L", _params.L, params.L*rn, dtuple, mtuple, ave_L, finv=0)
+    comp("x", _params.x, params.x, dtuple, mtuple, ave_x, finv=not fd)
+    # adjust / daxis+dx: Dim compensation in same area, alt axis definition?
+
+    return mtuple, dtuple
+
+def comp(param_name, _param, param, dtuple, mtuple, ave, finv):
+
+    d = _param-param
+    if finv: m = ave - abs(d)  # inverse match for primary params, no mag/value correlation
+    else:    m = min(_param,param) - ave
+    dtuple.val += abs(d)
+    mtuple.val += m
+    setattr(dtuple, param_name, d)  # dtuple.param_name = d
+    setattr(mtuple, param_name, m)  # mtuple.param_name = m
+

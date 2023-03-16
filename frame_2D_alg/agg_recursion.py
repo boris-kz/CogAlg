@@ -274,7 +274,6 @@ def op_derH(_derH, derH, op, Mval,Dval, Mrdn,Drdn, idx_=[]):  # idx_: derH indic
 def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, idx_=[]):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
 
     dderH = []
-    # modify comp_ptuple to combine mtuple and dtuple, each var should be m,d
     dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
     if len(_derH)>1 and len(derH)>1:
         dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
