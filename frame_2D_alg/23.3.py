@@ -450,3 +450,41 @@ def comp(param_name, _param, param, dtuple, mtuple, ave, finv):
     setattr(dtuple, param_name, d)  # dtuple.param_name = d
     setattr(mtuple, param_name, m)  # mtuple.param_name = m
 
+
+def comp_ptuple_(_layers, layers):  # unpack and compare der layers, if any from der+, no fds, same within PP
+
+    vertuples = []; mval, dval = 0,0
+    pri_fd = 0  # ptuple, else vert dptuple
+    for _layer, layer in zip(_layers[0], layers[0]):
+
+        for _ptuple, ptuple in zip(_layer[0], layer[0]):
+            vertuple = comp_ptuple(_ptuple, ptuple, pri_fd)
+            vertuples += [vertuple];  mval+=vertuple.valt[0]; dval+=dLine.valt[1]
+        pri_fd=1
+
+    return [vertuple,mval,dval]
+
+
+def comp_ptuple(_params, params, fd=0):  # compare latuples or vertuples, similar operations for m and d params
+    ptuple = Cptuple()
+    Valt = [0,0]
+    rn = _params.n / params.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
+
+    comp_p("I", _params.I[fd], params.I[fd]*rn, ave_dI, Valt, ptuple, finv=not fd)
+    comp_p("M", _params.M[fd], params.M[fd]*rn, ave_M, Valt, ptuple, finv=0)
+    comp_p("Ma", _params.Ma[fd], params.Ma[fd]*rn, ave_Ma, Valt, ptuple, finv=0)
+    comp_p("L", _params.L[fd], params.L[fd]*rn, ave_L, Valt, ptuple, finv=0)
+    comp_p("x", _params.x[fd], params.x[fd], ave_x, Valt, ptuple, finv=not fd)
+    comp_p("G", _params.G[fd], params.G[fd]*rn, ave_G, Valt, ptuple, finv=0)
+    comp_p("Ga", _params.Ga[fd], params.Ga[fd]*rn, ave_Ga, Valt, ptuple, finv=0)
+    if fd:
+        comp_p("axis", _params.axis[fd], params.axis[fd]*rn, ave_dangle, Valt, ptuple, finv=0)
+        comp_p("angle", _params.angle[fd], params.angle[fd]*rn, ave_dangle, Valt, ptuple, finv=0)
+        comp_p("aangle", _params.aangle[fd], params.aangle[fd]*rn, ave_daangle, Valt, ptuple, finv=0)
+    else:
+        comp_angle("axis", _params.axis[fd], params.axis[fd], Valt, ptuple)  # rotated, thus no adjustment by daxis?
+        comp_angle("angle", _params.angle[fd], params.angle[fd], Valt, ptuple)
+        comp_aangle(_params.aangle[fd], params.aangle[fd], ptuple, Valt)
+    # adjust / daxis+dx: Dim compensation in same area, alt axis definition?
+    return ptuple, Valt
+

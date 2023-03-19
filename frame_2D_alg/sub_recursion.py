@@ -21,6 +21,9 @@ def sub_recursion_eval(root):  # for PP or dir_blob
         mcomb_layers, dcomb_layers, PPm_, PPd_ = [], [], [], []
 
         for PP in PP_:
+            '''
+            fd = _P.valt[1]+P.valt[1] > _P.valt[0]+_P.valt[0]  # if exclusive comp fork per latuple in P| vertuple in derP?
+            '''
             if fd:  # add root to derP for der+:
                 for P_ in PP.P__[1:-1]:  # skip 1st and last row
                     for P in P_:

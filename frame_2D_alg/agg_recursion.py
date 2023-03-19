@@ -271,18 +271,19 @@ def op_derH(_derH, derH, op, Mval,Dval, Mrdn,Drdn, idx_=[]):  # idx_: derH indic
         pass  # fill into DerH if sum or dderH if comp?
 
 # draft, should be combined into op_derH?
-def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, idx_=[]):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
+def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, _fds, fds):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
 
     dderH = []
-    dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
-    if len(_derH)>1 and len(derH)>1:
-        dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
-        i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
-
-        while last < len(derH) and last < len(derH):
-            op_derH(_derH[i:last], derH[i:last], comp_ptuple, Mval, Dval, Mrdn, Drdn, idx_ + [idx])  # _lev, lev: incrementally nested
-            i=last; last+=i  # last=i*2
-            idx+=1  # elevation in derH
+    if _fds[0]==fds[0]:  # else higher fds won't match either
+        dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
+        if (len(_derH)>1 and len(derH)>1) and _fds[1]==fds[1]:
+            dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
+            i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
+            # append Mval, Dval, Mrdn, Drdn?
+            while last < len(derH) and last < len(derH):  # loop _lev, lev, may be nested
+                dderH += comp_derH(_derH[i:last], derH[i:last], comp_ptuple, Mval, Dval, Mrdn, Drdn, idx_ + [idx])
+                i=last; last+=i  # last=i*2
+                idx+=1  # elevation in derH
 
 # old:
 def comp_derH(_derH, derH, Mval,Dval, Mrdn,Drdn):
