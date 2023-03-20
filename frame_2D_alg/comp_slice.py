@@ -487,33 +487,36 @@ def comp_ptuple(_ptuple, ptuple, _fds, fds, fd, fder0=0):
 
     vertuple = Cptuple()
     Valt = [0,0]
-    Rdnt = [1,1]
+    Rdnt = [1,1]  # not sure we need it at this point
+    rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
+
     for pname, ave in zip(pnames, aves):
         _derH = getattr(_ptuple, pname); derH = getattr(ptuple, pname)
-        dderH = comp_derH(pname, _derH if fd else _derH[:-1], derH if fd else derH[:-1], Valt, Rdnt, _fds, fds, ave, fder0=fder0)
+        dderH = comp_derH(pname, _derH if fd else _derH[:-1], derH if fd else derH[:-1], Valt, Rdnt, rn, _fds, fds, ave, fder0=fder0)
         setattr(vertuple, pname, dderH)
 
     return vertuple, Valt, Rdnt
 
 
-def comp_derH(pname, _derH, derH, Valt, Rdnt, _fds, fds, ave, fder0=0):  # similar sum_derH
+def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, fder0=0):  # similar sum_derH
 
     dderH = []
-    if _fds[0]==fds[0]:  # else higher fds won't match either
-        if fder0:  # 1st layer is param
+    if _fds[0]==fds[0]:  # 1st fd only matters for sublayer?
+        if fder0:  # 1st layer= param
             if pname=="x" or pname=="I": finv = not fds[0]
             else: finv = 0
             _lay0 = _derH[0]; lay0 = derH[0]
-        else:  # 1st sublayer is [m,d]
-            _lay0 = _derH[0][1]; lay0 = derH[0][1]
+            if pname not in ("x", "axis", "angle", "aangle"): lay0 *= rn  # normalize by relative accum count
+        else:  # 1st sublayer= [m,d]
+            _lay0 = _derH[0][1]; lay0 = derH[0][1]*rn  # all dparams are scalars
         dderH += comp_p(_lay0, lay0, ave, Valt, finv)
         # optional 2nd+ levs:
-        if len(_derH)>1 and len(derH)>1 and _fds[1]==fds[1]:
-            dderH += comp_p(_derH[1][1], derH[1][1], ave, Valt, finv)  # 2nd layer is [m,d], always comp d
-            i,idx=2,2; last=4  # multi-element 2+ layers, init incr elevation = i
+        if len(_derH)>1 and len(derH)>1 and _fds[1]==fds[1]:  # 2nd fd only matters for sublayer?
+            dderH += comp_p(_derH[1][1], derH[1][1]*rn, ave, Valt, finv)  # 2nd layer or sublayer= [m,d], always comp d
+            i,idx=2,2; last=4  # multi-element 2+ layers, init incr elevation=i
             # loop _lay,lay:
             while last < len(derH) and last < len(derH) and sum(Valt)/sum(Rdnt) > ave and _fds[idx]==fds[idx]:
-                dderH += comp_derH(pname, _derH[i:last][0], derH[i:last][0], Valt, Rdnt, _fds[i:last], fds[i:last], ave, fder0=0)
+                dderH += comp_derH(pname, _derH[i:last][0], derH[i:last][0], Valt, Rdnt, rn, _fds[:i+1], fds[:i+1], ave, fder0=0)
                 i=last; last+=i  # last = i*2, lenlev: 1,1,2,4,8...
                 idx+=1  # elevation in derH
 
