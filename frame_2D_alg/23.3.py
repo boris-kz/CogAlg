@@ -488,3 +488,43 @@ def comp_ptuple(_params, params, fd=0):  # compare latuples or vertuples, simila
     # adjust / daxis+dx: Dim compensation in same area, alt axis definition?
     return ptuple, Valt
 
+def sum_ptuple(Layers, layers, fneg=0):  # same fds from comp_ptuple
+
+    if Layers:
+        for Layer, layer in zip_longest(Layers[0], layers[0], fillvalue=[]):
+            if layer:
+                if Layer:
+                    if isinstance(Layer, Cptuple):
+                        sum_ptuple(Layer, layer, fneg)  # Layer is ptuple
+                    else:
+                        for ptuple, ptuple in zip(Layer[0], layer[0]):  # ptuples, ptuples
+                            sum_ptuple(ptuple, ptuple, fneg)
+                        Layer[1] += layer[1]  # sum ptuples val
+                elif not fneg:
+                    Layers[0].append(deepcopy(layer))
+        Layers[1] += layers[1]  # sum vertuple val
+    elif not fneg:
+        Layers[:] = deepcopy(layers)
+
+def sum_ptuple(Ptuple, ptuple, fneg=0):
+
+    for pname in ptuple.numeric_params:
+        if pname != "G" and pname != "Ga":
+            Param = getattr(Ptuple, pname)
+            param = getattr(ptuple, pname)
+            if fneg: out = Param - param
+            else:    out = Param + param
+            setattr(ptuple, pname, out)  # update value
+    if isinstance(ptuple.angle, list):
+        for i, angle in enumerate(ptuple.angle):
+            if fneg: Ptuple.angle[i] -= angle
+            else:    Ptuple.angle[i] += angle
+        for i, aangle in enumerate(ptuple.aangle):
+            if fneg: Ptuple.aangle[i] -= aangle
+            else:    Ptuple.aangle[i] += aangle
+    else:
+        if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
+        else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
+
+
+

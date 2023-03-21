@@ -83,8 +83,8 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     L = int  # len dert_ in P, area in PP
     n = lambda: 1  # accum count, combine from CpH?
     '''
-    lay1: par   # derH per param in vertuple, each layer is derivatives of all lower layers:
-    lay2: [m,d]   
+    lay1: par     # derH per param in vertuple, each layer is derivatives of all lower layers:
+    lay2: [m,d]   # implicit nesting, brackets for clarity:
     lay3: [[m,d], [md,dd]]: 2 sLevs,
     lay4: [[m,d], [md,dd], [[md,dd],[mdd,ddd]]]: 3 sLevs, <=2 ssLevs
     '''
@@ -443,44 +443,40 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
                 PP.nderP_ += [derP]
     return PP
 
+# draft
+def sum_ptuple(Ptuple, ptuple, Fds, fds, fneg, fder0):
 
-def sum_ptuple(Layers, layers, fneg=0):  # same fds from comp_ptuple
+    for pname, ave in zip(pnames, aves):
+        DerH = getattr(Ptuple, pname); derH = getattr(ptuple, pname)
+        if not isinstance(DerH, list):  # convert to int to list, lay0 only
+            DerH = [DerH]; derH = [derH]
+        DerH = sum_derH(pname, DerH, derH, Fds, fds, fneg, fder0)  # why return?
+        setattr(Ptuple, pname, DerH)
+    Ptuple.n += 1
 
-    if Layers:
-        for Layer, layer in zip_longest(Layers[0], layers[0], fillvalue=[]):
-            if layer:
-                if Layer:
-                    if isinstance(Layer, Cptuple):
-                        sum_ptuple(Layer, layer, fneg)  # Layer is ptuple
-                    else:
-                        for ptuple, ptuple in zip(Layer[0], layer[0]):  # ptuples, ptuples
-                            sum_ptuple(ptuple, ptuple, fneg)
-                        Layer[1] += layer[1]  # sum ptuples val
-                elif not fneg:
-                    Layers[0].append(deepcopy(layer))
-        Layers[1] += layers[1]  # sum vertuple val
-    elif not fneg:
-        Layers[:] = deepcopy(layers)
 
-def sum_ptuple(Ptuple, ptuple, fneg=0):
+def sum_derH(pname, DerH, derH, Fds, fds, fneg, fder0):  # not sure about fds
 
-    for pname in ptuple.numeric_params:
-        if pname != "G" and pname != "Ga":
-            Param = getattr(Ptuple, pname)
-            param = getattr(ptuple, pname)
-            if fneg: out = Param - param
-            else:    out = Param + param
-            setattr(ptuple, pname, out)  # update value
-    if isinstance(ptuple.angle, list):
-        for i, angle in enumerate(ptuple.angle):
-            if fneg: Ptuple.angle[i] -= angle
-            else:    Ptuple.angle[i] += angle
-        for i, aangle in enumerate(ptuple.aangle):
-            if fneg: Ptuple.aangle[i] -= aangle
-            else:    Ptuple.aangle[i] += aangle
-    else:
-        if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
-        else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
+    for i, (MD, md, Fd, fd) in enumerate(zip(DerH, derH, Fds, fds)):  # loop flat list of m, d
+        if fder0:
+            if pname in ("angle","axis"):
+                sin_da0 = (MD[0] * md[1]) + (MD[1] * md[0])  # sin(A+B)= (sinA*cosB)+(cosA*sinB)
+                cos_da0 = (MD[1] * md[1]) - (MD[0] * md[0])  # cos(A+B)=(cosA*cosB)-(sinA*sinB)
+                DerH[i] = [sin_da0, cos_da0]
+            elif pname == "aangle":
+                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = MD
+                sin_da0, cos_da0, sin_da1, cos_da1 = md
+                sin_dda0 = (_sin_da0 * cos_da0) + (_cos_da0 * sin_da0)
+                cos_dda0 = (_cos_da0 * cos_da0) - (_sin_da0 * sin_da0)
+                sin_dda1 = (_sin_da1 * cos_da1) + (_cos_da1 * sin_da1)
+                cos_dda1 = (_cos_da1 * cos_da1) - (_sin_da1 * sin_da1)
+                DerH[i] = [sin_dda0, cos_dda0, sin_dda1, cos_dda1]
+        elif Fd==fd:
+            if fneg: MD -= md
+            else:    MD += md
+        else:
+            break
+    return DerH
 
 
 def comp_ptuple(_ptuple, ptuple, _fds, fds, fd, fder0=0):
@@ -497,26 +493,35 @@ def comp_ptuple(_ptuple, ptuple, _fds, fds, fd, fder0=0):
 
     return vertuple, Valt, Rdnt
 
-
+# draft:
 def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, fder0=0):  # similar sum_derH
 
     dderH = []
-    if _fds[0]==fds[0]:  # 1st fd only matters for sublayer?
-        if fder0:  # 1st layer= param
-            if pname=="x" or pname=="I": finv = not fds[0]
-            else: finv = 0
+    if _fds[0]==fds[0]:  # 1st fd only matters for sublayer? or always the same?
+        if fder0:  # 1st layer = param
             _lay0 = _derH[0]; lay0 = derH[0]
-            if pname not in ("x", "axis", "angle", "aangle"): lay0 *= rn  # normalize by relative accum count
-        else:  # 1st sublayer= [m,d]
-            _lay0 = _derH[0][1]; lay0 = derH[0][1]*rn  # all dparams are scalars
-        dderH += comp_p(_lay0, lay0, ave, Valt, finv)
-        # optional 2nd+ levs:
-        if len(_derH)>1 and len(derH)>1 and _fds[1]==fds[1]:  # 2nd fd only matters for sublayer?
+            if pname=="aangle": dderH += comp_aangle(_lay0, lay0, Valt, ptuple=None)
+            elif pname in ("axis","angle"): dderH += comp_angle(pname, _lay0, lay0, Valt, ptuple=None)
+            else:
+                if pname!="x": lay0 *= rn  # normalize by relative accum count
+                if pname=="x" or pname=="I": finv = not fds[0]
+                else: finv=0
+                dderH += comp_p(_lay0, lay0, ave, Valt, finv)
+        else:  # 1st sublayer = [m,d]
+            dderH += comp_p(_derH[0][1], derH[0][1]*rn, ave, Valt, finv=0)  # comp scalar ds
+        # optional 2+ levs:
+        if len(_derH)>1 and len(derH)>1 and _fds[1]==fds[1]:  # 2nd fd is always 1, only matters for sublayer?
             dderH += comp_p(_derH[1][1], derH[1][1]*rn, ave, Valt, finv)  # 2nd layer or sublayer= [m,d], always comp d
-            i,idx=2,2; last=4  # multi-element 2+ layers, init incr elevation=i
-            # loop _lay,lay:
-            while last < len(derH) and last < len(derH) and sum(Valt)/sum(Rdnt) > ave and _fds[idx]==fds[idx]:
-                dderH += comp_derH(pname, _derH[i:last][0], derH[i:last][0], Valt, Rdnt, rn, _fds[:i+1], fds[:i+1], ave, fder0=0)
+            if fds[2]: i,idx=2,2; last=4  # we need generic form here?
+            else:  # i,idx=1,1; last=2: re-comp 2nd lay, rng+ is defined in sub+?:
+                dderH += comp_p(_derH[1][1], derH[1][1]*rn, ave, Valt, finv)
+            # loop 2+ _lay,lay, multi-element, init incr elevation=i:
+            while last < len(derH) and last < len(derH) and sum(Valt)/sum(Rdnt) > ave and _fds[idx+1]==fds[idx+1]:
+                # comp only d in param m,d from lower-lays comp:
+                if not _fds[idx+1]: i/=2; last/=2  # comp lower levs at rng+
+                dH = [md[1] for md in derH[i:last][0]]; _dH = [md[1] for md in _derH[i:last][0]]
+                # lay fds = lower-lays fds + lay fork: skip prior lay if not fds[i+1]?
+                dderH += comp_derH(pname,_dH,dH, Valt,Rdnt,rn, _fds[:i+1],fds[:i+1], ave,fder0=0)
                 i=last; last+=i  # last = i*2, lenlev: 1,1,2,4,8...
                 idx+=1  # elevation in derH
 
