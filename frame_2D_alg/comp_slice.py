@@ -169,7 +169,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
-                    vertuple, valt, rdnt = comp_ptuple(_P.ptuple, P.ptuple, _fds=[0], fds=[0], fd=1, fder0=1)  # fd=0 only in sub+
+                    vertuple, valt, rdnt = comp_ptuple(_P.ptuple, P.ptuple, _fds=[0], fds=[0], fd=1)  # fd=0 only in sub+
                     derP = CderP(ptuple=vertuple, valt=valt, rdnt=rdnt, fds=[0,1], P=P, _P=_P, x0=_P.x0, y0=_P.y0)
                     P.uplink_layers[-2] += [derP]  # uplink_layers[-1] is match_derPs
                     _P.downlink_layers[-2] += [derP]
@@ -367,7 +367,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     vertuple = []
     for P in seg_Ps[:-1]:
         derP = P.uplink_layers[-1][fd][0]
-        vertuple = Cptuple(); sum_ptuple(vertuple, derP.ptuple, fneg=0)
+        vertuple = Cptuple(); sum_ptuple(vertuple, derP.ptuple, P.fds, derP.fds, fneg=0, fder=isinstance(derP.ptuple.I, list))
         accum_derP(seg, derP, fd)  # derP = P.uplink_layers[-1][0]
         seg.xn = max(seg.xn, derP._P.x0 + len(P.dert_))
         P.roott[fd] = seg
@@ -378,6 +378,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
 
     accum_derP(seg, seg_Ps[-1], fd)  # accum last P only, top P uplink_layers are not part of seg
     if vertuple:
+        # if not fd (rng+): eval replace top lev in vertuple with lastvert:
         # we need another fucntion here to pack each param
         if fd: seg.vertuple[0]+= [lastvert]  # der+
         else:  seg.vertuple[0] = [lastvert]  # rng+
@@ -444,42 +445,41 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
     return PP
 
 # draft
-def sum_ptuple(Ptuple, ptuple, Fds, fds, fneg, fder0):
+def sum_ptuple(Ptuple, ptuple, Fds, fds, fneg, fder):
 
     for pname, ave in zip(pnames, aves):
         DerH = getattr(Ptuple, pname); derH = getattr(ptuple, pname)
-        if not isinstance(DerH, list):  # convert to int to list, lay0 only
-            DerH = [DerH]; derH = [derH]
-        DerH = sum_derH(pname, DerH, derH, Fds, fds, fneg, fder0)  # why return?
+        DerH = sum_derH(pname, DerH, derH, Fds, fds, fneg, fder)
         setattr(Ptuple, pname, DerH)
     Ptuple.n += 1
 
 
-def sum_derH(pname, DerH, derH, Fds, fds, fneg, fder0):  # not sure about fds
+def sum_derH(pname, DerH, derH, Fds, fds, fneg, fder):  # not sure about fds
 
-    for i, (MD, md, Fd, fd) in enumerate(zip(DerH, derH, Fds, fds)):  # loop flat list of m, d
-        if fder0:
+    for i, (Par, par, Fd, fd) in enumerate(zip(DerH, derH, Fds, fds)):  # loop flat list of m, d
+        if not fder:
             if pname in ("angle","axis"):
-                sin_da0 = (MD[0] * md[1]) + (MD[1] * md[0])  # sin(A+B)= (sinA*cosB)+(cosA*sinB)
-                cos_da0 = (MD[1] * md[1]) - (MD[0] * md[0])  # cos(A+B)=(cosA*cosB)-(sinA*sinB)
+                sin_da0 = (Par[0] * par[1]) + (Par[1] * par[0])  # sin(A+B)= (sinA*cosB)+(cosA*sinB)
+                cos_da0 = (Par[1] * par[1]) - (Par[0] * par[0])  # cos(A+B)=(cosA*cosB)-(sinA*sinB)
                 DerH[i] = [sin_da0, cos_da0]
             elif pname == "aangle":
-                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = MD
-                sin_da0, cos_da0, sin_da1, cos_da1 = md
+                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Par
+                sin_da0, cos_da0, sin_da1, cos_da1 = par
                 sin_dda0 = (_sin_da0 * cos_da0) + (_cos_da0 * sin_da0)
                 cos_dda0 = (_cos_da0 * cos_da0) - (_sin_da0 * sin_da0)
                 sin_dda1 = (_sin_da1 * cos_da1) + (_cos_da1 * sin_da1)
                 cos_dda1 = (_cos_da1 * cos_da1) - (_sin_da1 * sin_da1)
                 DerH[i] = [sin_dda0, cos_dda0, sin_dda1, cos_dda1]
+            else:
+                Par+= -par if fneg else par
         elif Fd==fd:
-            if fneg: MD -= md
-            else:    MD += md
+            Par+= -par if fneg else par
         else:
             break
     return DerH
 
 
-def comp_ptuple(_ptuple, ptuple, _fds, fds, fd, fder0=0):
+def comp_ptuple(_ptuple, ptuple, _fds, fds, fd):
 
     vertuple = Cptuple()
     Valt = [0,0]
@@ -488,46 +488,41 @@ def comp_ptuple(_ptuple, ptuple, _fds, fds, fd, fder0=0):
 
     for pname, ave in zip(pnames, aves):
         _derH = getattr(_ptuple, pname); derH = getattr(ptuple, pname)
-        dderH = comp_derH(pname, _derH if fd else _derH[:-1], derH if fd else derH[:-1], Valt, Rdnt, rn, _fds, fds, ave, fder0=fder0)
+        dderH = comp_derH(pname, _derH if fd else _derH[:-len(_derH)/2], derH if fd else derH[:-len(derH)/2], # replace top lev in rng+
+                          Valt, Rdnt, rn, _fds, fds, ave, fder = isinstance(_ptuple.I, list))
         setattr(vertuple, pname, dderH)
 
     return vertuple, Valt, Rdnt
 
 # draft:
-def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, fder0=0):  # similar sum_derH
+def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, fder=0):  # similar sum_derH
 
     dderH = []
-    if _fds[0]==fds[0]:  # 1st fd only matters for sublayer? or always the same?
-        if fder0:  # 1st layer = param
-            _lay0 = _derH[0]; lay0 = derH[0]
-            if pname=="aangle": dderH += comp_aangle(_lay0, lay0, Valt, ptuple=None)
-            elif pname in ("axis","angle"): dderH += comp_angle(pname, _lay0, lay0, Valt, ptuple=None)
+    i,idx = 0,0; last = 1; tval = ave+1
+
+    while len(_derH)>last and len(derH)>last and _fds[idx]==fds[idx] and tval > ave:
+
+        if fder:  # derH is a flat list of 0der params or their [m,d]s
+            _lay= [md[1] for md in _derH[i:last]]; _lay_fds =_fds[:i+1]
+            lay = [md[1] for md in derH[i:last]];   lay_fds = fds[:i+1]
+            dderH += comp_derH(pname, _lay, lay*rn, Valt,Rdnt,rn, _lay_fds, lay_fds, ave, fder=1)
+        else:
+            _lay = _derH[i]; lay = derH[i]  # 0der layer, multiple while rng+, same fd
+            if pname=="aangle": dderH += comp_aangle(_lay, lay, Valt, ptuple=None)
+            elif pname in ("axis","angle"): dderH += comp_angle(pname, _lay, lay, Valt, ptuple=None)
             else:
-                if pname!="x": lay0 *= rn  # normalize by relative accum count
+                if pname!="x": lay *= rn  # normalize by relative accum count
                 if pname=="x" or pname=="I": finv = not fds[0]
                 else: finv=0
-                dderH += comp_p(_lay0, lay0, ave, Valt, finv)
-        else:  # 1st sublayer = [m,d]
-            dderH += comp_p(_derH[0][1], derH[0][1]*rn, ave, Valt, finv=0)  # comp scalar ds
-        # optional 2+ levs:
-        if len(_derH)>1 and len(derH)>1 and _fds[1]==fds[1]:  # 2nd fd is always 1, only matters for sublayer?
-            dderH += comp_p(_derH[1][1], derH[1][1]*rn, ave, Valt, finv)  # 2nd layer or sublayer= [m,d], always comp d
-            if fds[2]: i,idx=2,2; last=4  # we need generic form here?
-            else:  # i,idx=1,1; last=2: re-comp 2nd lay, rng+ is defined in sub+?:
-                dderH += comp_p(_derH[1][1], derH[1][1]*rn, ave, Valt, finv)
-            # loop 2+ _lay,lay, multi-element, init incr elevation=i:
-            while last < len(derH) and last < len(derH) and sum(Valt)/sum(Rdnt) > ave and _fds[idx+1]==fds[idx+1]:
-                # comp only d in param m,d from lower-lays comp:
-                if not _fds[idx+1]: i/=2; last/=2  # comp lower levs at rng+
-                dH = [md[1] for md in derH[i:last][0]]; _dH = [md[1] for md in _derH[i:last][0]]
-                # lay fds = lower-lays fds + lay fork: skip prior lay if not fds[i+1]?
-                dderH += comp_derH(pname,_dH,dH, Valt,Rdnt,rn, _fds[:i+1],fds[:i+1], ave,fder0=0)
-                i=last; last+=i  # last = i*2, lenlev: 1,1,2,4,8...
-                idx+=1  # elevation in derH
+                dderH += [comp_p(_lay, lay, ave, Valt, finv)]
+
+        i = last; last += i  # last = i*2, lenlev: 1,1,2,4,8...
+        idx += 1  # elevation in derH
+        tval = sum(Valt) / sum(Rdnt)
 
     return dderH
 
-def comp_p(_param, param, ave, Valt, finv=0):  # comparand is always d in [m,d]
+def comp_p(_param, param, ave, Valt, finv=0):  # comparand is always par or d in [m,d]
 
     d = _param - param
     if finv: m = ave - abs(d)  # inverse match for primary params, no mag/value correlation
@@ -536,7 +531,7 @@ def comp_p(_param, param, ave, Valt, finv=0):  # comparand is always d in [m,d]
     Valt[1] += abs(d)
     return [m,d]
 
-# not updated:
+# not reviewed:
 def comp_angle(pname, _angle, angle, Valt, ptuple=None):  # rn doesn't matter for angles
 
     _Dy, _Dx = _angle
@@ -549,12 +544,12 @@ def comp_angle(pname, _angle, angle, Valt, ptuple=None):  # rn doesn't matter fo
 
     dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
-    if ptuple:  # not parsed in rotate_P
-        setattr(ptuple, pname, [mangle,dangle]); Valt[0] += mangle; Valt[1] += abs(dangle)
+    Valt[0] += mangle; Valt[1] += abs(dangle)
+    if ptuple: setattr(ptuple, pname, [mangle,dangle])  # not parsed in rotate_P
 
-    return mangle, dangle
+    return [mangle, dangle]
 
-def comp_aangle(_aangle, aangle, ptuple, Valt):
+def comp_aangle(_aangle, aangle, Valt, ptuple):
 
     _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
     sin_da0, cos_da0, sin_da1, cos_da1 = aangle
@@ -573,7 +568,10 @@ def comp_aangle(_aangle, aangle, ptuple, Valt):
     daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
-    ptuple.aangle = [maangle,daangle]; Valt[0] += maangle; Valt[1] += abs(daangle)
+    Valt[0] += maangle; Valt[1] += abs(daangle)
+    if ptuple: ptuple.aangle = [maangle,daangle]
+
+    return [maangle,daangle]
 
 
 def agg_recursion_eval(blob, PP_t):
