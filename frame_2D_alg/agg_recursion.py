@@ -27,12 +27,10 @@ But we have recursively structured param sets packed in each level of these tree
 Diagram: 
 https://github.com/boris-kz/CogAlg/blob/76327f74240305545ce213a6c26d30e89e226b47/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 -
-Current clustering criterion is single m|d, summed across all vars in Gs, forming one root per fork.
-But fork selection should be per var or a group: there are different concepts that include same components. 
-What makes them different is the subset of vars that matches within a cluster: size, density, color, stability, etc.
--
-So we need to select fork per >ave m|ds, summed from different sets of compared vars, for different _G,G pairs. 
-Weak-val vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
+Clustering criterion is G.M|D, summed across >ave vars if selective comp: <ave vars are not compared, so they don't add cost.
+Fork selection should be per var | der layer | agg level: co-derived params. There are different concepts that include same components, 
+they differ by specific subset of vars that matches within a cluster: size, density, color, stability, etc.
+Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 # aves defined for rdn+1:
 aveG = 6  # fixed costs per G

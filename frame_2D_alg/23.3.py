@@ -526,5 +526,54 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
         if fneg: Ptuple.angle -= ptuple.angle; Ptuple.aangle -= ptuple.aangle
         else:    Ptuple.angle += ptuple.angle; Ptuple.aangle += ptuple.aangle
 
+def comp_ptuple(_ptuple, ptuple, _fds, fds, fd):
+
+    vertuple = Cptuple()
+    Valt = [0,0]
+    Rdnt = [1,1]  # not sure we need it at this point
+    rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
+
+    for pname, ave in zip(pnames, aves):  # comp full derH of each param in ptuples:
+
+        _derH = getattr(_ptuple, pname); derH = getattr(ptuple, pname)
+        if not isinstance(_ptuple.I, list):
+            _derH = [_derH]; derH = [derH]
+        _par = _derH[0]; par = derH[0]  # layer0 = par, same fd
+        if pname=="aangle": dderH = [[comp_aangle(_par, par, Valt, ptuple=None)]]
+        elif pname in ("axis","angle"): dderH = [[comp_angle(pname, _par, par, Valt, ptuple=None)]]
+        else:
+            if pname!="x": par *= rn  # normalize by relative accum count
+            if pname=="x" or pname=="I": finv = not fds[0]
+            else: finv=0
+            dderH = [[comp_p(_par, par, ave, Valt, finv)]]
+        # lev2:
+        if len(_derH)>1 or len(derH)>1:  # and tval?
+            if fd: _selH, selH = _derH[1:], derH[1:]  # select in derH
+            else:  _selH, selH = _derH[1:-len(_derH)/2], derH[1:-len(derH)/2]  # skip top lev in rng+
+            dderH += comp_derH(pname, _selH, selH, Valt, Rdnt, rn, _fds, fds, ave, first=1)  # also selH in recursion?
+
+        setattr(vertuple, pname, derH+dderH)
+
+    return vertuple, Valt, Rdnt
+
+def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, first):  # similar sum_derH
+
+    dderH = []
+    i=idx = 1-first; last = 2-first
+    tval = ave+1
+    while len(_derH)>last and len(derH)>last and _fds[idx]==fds[idx] and tval > ave:
+
+        _lay = [md[1] for md in _derH[i:last]]; _lay_fds =_fds[:i+1]
+        lay = [md[1]*rn for md in derH[i:last]]; lay_fds = fds[:i+1]
+        if not _lay_fds[-1]:
+            _sel, sel = _lay[:-len(_derH)/2], lay[:-len(derH)/2]  # skip top lev in rng+
+        dderH += comp_derH(pname, _lay,lay, Valt,Rdnt,rn, _lay_fds, lay_fds, ave, first=0)
+
+        i = last; last += i  # last = i*2, lenlev: 1,1,2,4,8...
+        idx += 1  # elevation in derH
+        tval = sum(Valt) / sum(Rdnt)
+
+    return dderH
+
 
 

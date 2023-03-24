@@ -86,7 +86,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     lay1: par     # derH per param in vertuple, each layer is derivatives of all lower layers:
     lay2: [m,d]   # implicit nesting, brackets for clarity:
     lay3: [[m,d], [md,dd]]: 2 sLevs,
-    lay4: [[m,d], [md,dd], [[md,dd],[mdd,ddd]]]: 3 sLevs, <=2 ssLevs
+    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLevs, <=2 ssLevs
     '''
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
@@ -365,7 +365,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     Dertuple = deepcopy(P.uplink_layers[-1][fd][0].ptuple) if len(seg_Ps)>1 else []  # 1 up derP per P in stack
     for P in seg_Ps[1:-1]:
         derP = P.uplink_layers[-1][fd][0]  # must exist
-        sum_ptuple(Ptuple, P.ptuple, 0, 0, fneg=0, fder=0)
+        sum_ptuple(Ptuple, P.ptuple, fds,fds, fneg=0, fder=0)
         sum_ptuple(Dertuple, derP.ptuple, seg.fds, derP.fds, fneg=0, fder=isinstance(derP.ptuple.I, list))
         seg.box[2]= min(seg.box[2],P.x0); seg.box[3]= max(seg.box[3],P.x0+len(P.dert_)-1)
         # AND seg.fds?
@@ -375,7 +375,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
                 seg.nval += derP.valt[fd]  # negative link
                 seg.nderP_ += [derP]
     P = seg_Ps[-1]  # sum last P only, last P uplink_layers are not part of seg:
-    sum_ptuple(Ptuple, P.ptuple, 0, 0, fneg=0, fder=0)
+    sum_ptuple(Ptuple, P.ptuple, fds,fds, fneg=0, fder=0)
     seg.box[2] = min(seg.box[2],P.x0); seg.box[3] = max(seg.box[3],P.x0+len(P.dert_)-1)
     for pname in pnames:
         DerH = getattr(Ptuple, pname)  # 0der: single-par derH
@@ -456,7 +456,8 @@ def sum_derH(pname, DerH, derH, Fds, fds, fneg, fder):  # not sure about fds
             else:
                 Par+= -par if fneg else par
         elif Fd==fd:
-            Par+= -par if fneg else par
+            for i, der in enumerate(par):
+                Par[i] += -der if fneg else der
         else:
             break
     return DerH
@@ -465,42 +466,46 @@ def sum_derH(pname, DerH, derH, Fds, fds, fneg, fder):  # not sure about fds
 def comp_ptuple(_ptuple, ptuple, _fds, fds, fd):
 
     vertuple = Cptuple()
-    Valt = [0,0]
-    Rdnt = [1,1]  # not sure we need it at this point
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
+    Rdnt = [1,1]  # not sure we need it at this point
+    Valt = [0,0]
+    for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
 
-    for pname, ave in zip(pnames, aves):
-        dderH = []
         _derH = getattr(_ptuple, pname); derH = getattr(ptuple, pname)
-        _par = _derH[0]; par = derH[0]  # 0der layer=par, multiple while rng+, same fd
-        if pname=="aangle": dderH += comp_aangle(_par, par, Valt, ptuple=None)
-        elif pname in ("axis","angle"): dderH += comp_angle(pname, _par, par, Valt, ptuple=None)
+        if not isinstance(_ptuple.I, list):
+            _derH = [_derH]; derH = [derH]  # single-par derH
+        dderH = comp_derH(pname, _derH, derH, Valt,Rdnt,rn,_fds,fds, ave, first=1)
+        setattr(vertuple, pname, derH+dderH)
+
+    return vertuple, Valt, Rdnt
+
+def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, first):  # similar sum_derH
+
+    # lay1 = par or [m,d], default, then test layers 2 and 2+, for lenlay = 1,1,2,4,8..:
+    _par = _derH[0]; par = derH[0]
+    if first:  # lay1=par, same fd
+        if pname=="aangle": dderH = [[comp_aangle(_par, par, Valt, ptuple=None)]]
+        elif pname in ("axis","angle"): dderH = [[comp_angle(pname, _par, par, Valt, ptuple=None)]]
         else:
             if pname!="x": par *= rn  # normalize by relative accum count
             if pname=="x" or pname=="I": finv = not fds[0]
             else: finv=0
-        dderH += [comp_p(_par, par, ave, Valt, finv)]
-        dderH = comp_derH(pname, _derH if fd else _derH[:-len(_derH)/2], derH if fd else derH[:-len(derH)/2], # replace top lev in rng+
-                          Valt, Rdnt, rn, _fds, fds, ave, first=1)
-        setattr(vertuple, pname, dderH)
-
-    return vertuple, Valt, Rdnt
-
-# draft:
-def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, first):  # similar sum_derH
-
-    dderH = []
-    i=idx = 1-first; last = 2-first
-    tval = ave+1
-    while len(_derH)>last and len(derH)>last and _fds[idx]==fds[idx] and tval > ave:
-
-        _lay = [md[1] for md in _derH[i:last]]; _lay_fds =_fds[:i+1]
-        lay = [md[1]*rn for md in derH[i:last]]; lay_fds = fds[:i+1]
-        dderH += comp_derH(pname, _lay,lay, Valt,Rdnt,rn, _lay_fds, lay_fds, ave, first=0)
-
-        i = last; last += i  # last = i*2, lenlev: 1,1,2,4,8...
-        idx += 1  # elevation in derH
-        tval = sum(Valt) / sum(Rdnt)
+            dderH = [[comp_p(_par, par, ave, Valt, finv)]]
+    else:
+        dderH = [[comp_p(_par[1], par[1], ave, Valt, finv=0)]]
+        # comp_d in [m,d]
+    if len(_derH)>1 or len(derH)>1:  # and tval, always fd=1?
+        # lay2 = [m,d]
+        dderH += [comp_p(_par[1], par[1], ave, Valt, finv=0)]  # comp_d in [m,d]
+        i=idx=1; last=2; tval=ave+1
+        _fd = _fds[idx+1]; fd=fds[idx+1]  # fd per lay
+        while len(_derH)>last and len(derH)>last and _fd==fd and tval > ave:
+            # each lay2+ is len>1 subH, unpack in sub comp_derH:
+            end = last if fd else last/2  # skip top lev in rng+
+            dderH += comp_derH(pname, _derH[i:end],derH[i:end], Valt,Rdnt,rn, _fds[:idx+1],fds[:idx+1], ave,first=0)
+            i=last; last+=i  # last = i*2
+            idx += 1  # elevation in derH
+            tval = sum(Valt) / sum(Rdnt)
 
     return dderH
 
