@@ -573,3 +573,92 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                 for alt_graph in graph.alt_graph_:
                     sum_pH(graph.alt_derHs, alt_graph.derHs)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.derHs.H[-1].node_).intersection(alt_graph.derHs.H[-1].node_))  # overlap
+
+
+# simplified alternative to multi-pass version of graph_reval, needs to be updated
+def comp_centroid(G_):  # comp node to average node in Graph, sum >ave nodes into new centroid, recursion while update>ave
+
+    update_val = 0  # update val, terminate recursion if low
+
+    for G in G_:
+        G_valt = [0 ,0]  # new total, may delete G
+        G_rdn = 0  # rdn of PPs to cPPs in other Gs
+        G_players_t = [[], []]
+        DerNode = CderG(player=[[], []])  # summed across PP_:
+        Valt = [0, 0]  # mval, dval
+
+        for i, (node, _, fint) in enumerate(G.PP_):  # comp PP to G centroid, derPP is replaced, use comp_plevels?
+            Mplayer, Dplayer = [],[]
+            # both PP core and edge are compared to G core, results are summed or concatenated:
+            for fd in 0, 1:
+                if node.players_t[fd]:  # PP.players_t[1] may be empty
+                    mplayer, dplayer = comp_players(G.players_t[0], node.players_t[fd], G.fds, node.fds)  # params norm in comp_ptuple
+                    player_t = [Mplayer + mplayer, Dplayer + dplayer]
+                    valt = [sum([mtuple.val for mtuple in mplayer]), sum([dtuple.val for dtuple in dplayer])]
+                    Valt[0] += valt[0]; Valt[1] += valt[1]  # accumulate mval and dval
+                    # accum DerPP:
+                    for Ptuple, ptuple in zip_longest(DerNode.player_t[fd], player_t[fd], fillvalue=[]):
+                        if ptuple:
+                            if not Ptuple: DerNode.player_t[fd].append(ptuple)  # pack new layer
+                            else:          sum_players([[Ptuple]], [[ptuple]])
+                    DerNode.valt[fd] += valt[fd]
+            # compute rdn:
+            cnode_ = node.cnode_  # sort by derNode value:
+            cnode_ = sorted(cnode_, key=lambda cnode: sum(cnode[1].valt), reverse=True)
+            rdn = 1
+            fint = [0, 0]
+            for fd in 0, 1:  # sum players per fork
+                for (cnode, CderG, cfint) in cnode_:
+                    if valt[fd] > G_aves[fd] and node.players_t[fd]:
+                        fint[fd] = 1  # nodes match, sum der_node in both G and _G:
+                        sum_players(G.players_t[fd], node.players_t[fd])
+                        sum_players(G.players_t[fd], node.players_t[fd])  # all node.players in each G.players
+
+                    if CderG.valt[fd] > Valt[fd]:  # cPP is instance of PP
+                        if cfint[fd]: G_rdn += 1  # n of cPPs redundant to PP, if included and >val
+                    else:
+                        break  # cnode_ is sorted by value
+
+            fnegm = Valt[0] < G_aves[0] * rdn;  fnegd = Valt[1] < G_aves[1] * rdn  # rdn per PP
+            for fd, fneg, in zip([0, 1], [fnegm, fnegd]):
+
+                if (fneg and fint[fd]) or (not fneg and not fint[fd]):  # re-clustering: exclude included or include excluded PP
+                    G.node_[i][2][fd] = 1 -  G.node_[i][2][fd]  # reverse 1-0 or 0-1
+                    update_val += abs(Valt[fd])  # or sum abs mparams?
+                if not fneg:
+                    G_valt[fd] += Valt[fd]
+                    G_rdn += 1  # not sure
+                if fint[fd]:
+                    # include PP in G:
+                    if G_players_t[fd]: sum_players(G_players_t[fd], node.players_t[fd])
+                    else: G_players_t[fd] = copy(node.players_t[fd])  # initialization is simpler
+                    # not revised:
+                    G.node_[i][1] = derNode   # no derNode now?
+                    for i, cnodet in enumerate(node.cnode_):
+                        cG = cnodet[0].root
+                        for j, nodet in enumerate(cG.cnode_):  # get G and replace their derPP
+                            if nodet[0] is node:
+                                cG.cnode_[j][1] = derNode
+                        if cnodet[0] is node: # replace cnode's derNode
+                            G.cnode_[i][1] = derNode
+                G.valt[fd] = G_valt[fd]
+
+        if G_players_t: G.players_t = G_players_t
+
+        # not revised:
+        if G_val < G_aves[fPd] * G_rdn:  # ave rdn-adjusted value per cost of G
+
+            update_val += abs(G_val)  # or sum abs mparams?
+            G_.remove(G)  # Gs are hugely redundant, need to be pruned
+
+            for (node, derNode, fin) in G.node_:  # remove refs to local copy of PP in other Gs
+                for (cnode, _, _) in node.cnode_:
+                    for i, (ccnode, _, _) in enumerate(cnode.cnode_):  # ref of ref
+                        if ccnode is node:
+                            cnode.cnode_.pop(i)  # remove ccnode tuple
+                            break
+
+    if update_val > sum(G_aves):
+        comp_centroid(G_)  # recursion while min update value
+
+    return G_

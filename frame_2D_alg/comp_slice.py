@@ -501,20 +501,19 @@ def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, first):  # sim
             if pname=="x" or pname=="I": finv = not fds[0]
             else: finv=0
             dderH = [comp_p(_par, par, ave, Valt, finv)]
-    else:
+    elif _fds[0]==fds[0] and sum(Valt)/sum(Rdnt) > ave:
         dderH = [comp_p(_par[1], par[1], ave, Valt, finv=0)]  # comp_d in [m,d]
     # lay2 = [m,d]
     if len(_derH)>1 or len(derH)>1:
-        if _fds[1]==fds[1] and sum(Valt)/sum(Rdnt) > ave:  # next-lay fd
+        if _fds[1]==fds[1] and sum(Valt)/sum(Rdnt) > ave:
             dderH += [comp_p(_derH[1][1], derH[1][1], ave, Valt, finv=0)]  # comp_d in [m,d]
             i=ilay=2; last=4
             # lay 2+ is len>1 subH, unpack in sub comp_derH:
             while len(_derH)>i and len(derH)>i:
-                if not _fds[ilay]==fds[ilay] or sum(Valt)/sum(Rdnt) > ave:  # next-lay fd
-                    break
-                dderH += comp_derH(pname, _derH[i:last],derH[i:last], Valt,Rdnt,rn, _fds[:ilay+1],fds[:ilay+1], ave,first=0)
-                i=last; last+=i  # last = i*2
-                ilay += 1  # elevation in derH
+                if _fds[ilay]==fds[ilay] and sum(Valt)/sum(Rdnt) > ave:  # next-lay fd
+                   dderH += comp_derH(pname, _derH[i:last],derH[i:last], Valt,Rdnt,rn, _fds[:ilay],fds[:ilay], ave,first=0)
+                   i=last; last+=i  # last = i*2
+                   ilay += 1  # elevation in derH
 
     return dderH
 
