@@ -154,7 +154,7 @@ class CPP(CderP):  # derP params include P.ptuple
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    from sub_recursion import sub_recursion_eval, rotate_P_
+    from sub_recursion import sub_recursion_eval, rotate_P_, agg_recursion_eval
 
     P__ = slice_blob(blob, verbose=False)  # form 2D array of Ps: blob slices in dert__
     # rotate each P to align it with the direction of P gradient:
@@ -527,7 +527,7 @@ def comp_p(_param, param, ave, Valt, finv=0):  # comparand is always par or d in
     return [m,d]
 
 
-def comp_angle(pname, _angle, angle, Valt, ptuple=None):  # rn doesn't matter for angles
+def comp_angle(pname, _angle, angle, Valt=None, ptuple=None):  # rn doesn't matter for angles
 
     _Dy, _Dx = _angle
     Dy, Dx = angle
@@ -539,7 +539,8 @@ def comp_angle(pname, _angle, angle, Valt, ptuple=None):  # rn doesn't matter fo
 
     dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
-    Valt[0] += mangle; Valt[1] += abs(dangle)
+    if Valt:
+        Valt[0] += mangle; Valt[1] += abs(dangle)
     if ptuple: setattr(ptuple, pname, [mangle,dangle])  # not parsed in rotate_P
 
     return [mangle, dangle]
@@ -567,28 +568,3 @@ def comp_aangle(_aangle, aangle, Valt, ptuple):
     if ptuple: ptuple.aangle = [maangle,daangle]
 
     return [maangle,daangle]
-
-
-def agg_recursion_eval(blob, PP_t):
-    from agg_recursion import agg_recursion, Cgraph
-    from sub_recursion import PP2graph, blob2graph
-
-    if not isinstance(blob, Cgraph):
-        fseg = isinstance(blob, CPP)
-        if fseg: blob = PP2graph(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
-        else:
-            if blob.graph: blob = blob.graph  # get converted graph
-            else:          blob = blob2graph(blob, fseg=fseg, Cgraph=Cgraph)  # convert root to graph
-        for fd, PP_ in enumerate(PP_t):
-            for i, PP in enumerate(PP_):
-                PP_[i] = PP2graph(PP, fseg=fseg, Cgraph=Cgraph)  # convert PP to graph
-
-    if isinstance(blob, Cgraph): M, G = blob.plevels.val, blob.alt_plevels.val
-    elif isinstance(blob, CPP):  M, G = blob.vertuple.val, blob.altuple.val
-    valt = [M, G]
-    fork_rdnt = [1+(G>M), 1+(M>=G)]
-    for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
-        if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
-            and len(PP_) > ave_nsub and blob.alt_rdn < ave_overlap:
-            blob.rdn += 1  # estimate
-            agg_recursion(blob, PP_, fseg=fseg)

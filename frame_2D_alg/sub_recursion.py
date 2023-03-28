@@ -45,6 +45,8 @@ def sub_recursion_eval(root):  # for PP or dir_blob
                         else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
             # segs:
             agg_recursion_eval(PP, [copy(PP.mseg_levels[-1]), copy(PP.dseg_levels[-1])])
+            # below is pending update
+            """
             # include empty comb_layers:
             if fd:
                 PPmm_ = [PPm_] + mcomb_layers; mVal = sum([PP.players[1] for PP_ in PPmm_ for PP in PP_])
@@ -54,13 +56,13 @@ def sub_recursion_eval(root):  # for PP or dir_blob
                 PPdm_ = [PPm_] + mcomb_layers; mVal = sum([PP.players[1] for PP_ in PPdm_ for PP in PP_])
                 PPdd_ = [PPd_] + dcomb_layers; dVal = sum([PP.players[1] for PP_ in PPdd_ for PP in PP_])
                 root.rlayers = [[PPdm_, mVal], [PPdd_, dVal]]
-
             # or higher der val?
             if isinstance(root, CPP):  # root is CPP
                 root.players[1] += PP.players[1]  # vals
             else:  # root is CBlob
                 if fd: root.G += PP.alt_players[1] if PP.alt_players else 0
                 else:  root.M += PP.players[1]
+            """
 
 def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
@@ -299,14 +301,12 @@ def blob2graph(blob, fseg):
 
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
-    mpplayers = CpH(fds=[0]); dpplayers = CpH(fds=[1])
-    alt_mpplayers = CpH(fds=[0]); alt_dpplayers = CpH(fds=[1])
 
-    # pplayers, node_
-    alt_mblob = Cgraph(derH=[alt_mpplayers],rng=PPm_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    alt_dblob = Cgraph(derH=[alt_dpplayers],rng=PPm_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    mblob = Cgraph(derH=[mpplayers], alt_Graph=alt_mblob, rng=PPm_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    dblob = Cgraph(derH=[dpplayers], alt_Graph=alt_dblob, rng=PPd_[0].rng, rdn=blob.rdn, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), ptuple=Cptuple(), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), ptuple=Cptuple(), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+
+    mblob = Cgraph(fds=copy(PPm_[0].fds), ptuple=Cptuple(), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    dblob = Cgraph(fds=copy(PPd_[0].fds), ptuple=Cptuple(), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -315,16 +315,22 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            sum_derH(blobs[fd].derH, graph.derH)
-            blobs[fd].node_ += [graph]
-            blobs[fd].valt[0] += graph.valt[0]; blobs[fd].valt[1] += graph.valt[1]
+            sum_ptuple(blobs[fd].ptuple, graph.ptuple, blobs[fd].fds, graph.fds)
+            for i in range(2):
+                blobs[fd].valt[i] += graph.valt[i]
+                blobs[fd].rdnt[i] += graph.rdnt[i]
             graph.root = blobs[fd]
 
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        sum_derH(alt_mblob.derH, alt_blob.mgraph.derH)
-        sum_derH(alt_dblob.derH, alt_blob.dgraph.derH)
+        sum_ptuple(alt_mblob.ptuple, alt_blob.mgraph.ptuple)
+        sum_ptuple(alt_dblob.ptuple, alt_blob.dgraph.ptuple)
+        for i in range(2):
+            alt_mblob.valt[i] += alt_blob.mgraph.valt[i]
+            alt_mblob.rdnt[i] += alt_blob.mgraph.rdnt[i]
+            alt_dblob.valt[i] += alt_blob.dgraph.valt[i]
+            alt_dblob.rdnt[i] += alt_blob.dgraph.rdnt[i]
 
     return mblob, dblob
 
@@ -332,43 +338,23 @@ def blob2graph(blob, fseg):
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
-    alt_pPP = [CpH() for _ in PP_vars]; alt_valt = [0,0]
-    if not fseg and PP.altPP_:  # seg doesn't have altPP_
-        alt_fds = copy(PP.altPP_[0].fds)
-        for altPP in PP.altPP_[1:]:  # get fd sequence common for all altPPs:
-            for i, (_fd, fd) in enumerate(zip(alt_fds, altPP.fds)):
-                if _fd != fd:
-                    alt_fds = alt_fds[:i]
-                    break
-        for altPP in PP.altPP_:  # convert altPP.players to CpH
-            for ptuples, alt_fd in zip(altPP.players[0], alt_fds):
-                for ptuple in ptuples[0][:2]:  # latuple and vertuple only
-                    for i, param_name in enumerate(PP_vars):
-                        # retrieve param value from ptuple
-                        param_val = getattr(ptuple, param_name)
-                        # update pPP's valt[fd] to ptuple's param value?
-                        alt_pPP[i].valt[alt_fd] = copy(param_val)  # it will be a list for axis, angle and aangle
-    alt_lays = CpH(H=alt_pPP, valt=alt_valt)
+    alt_ptuple = Cptuple(); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
+    if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
+        alt_ptuple = deepcopy(PP.alt_PP_[0].ptuple); alt_valt = copy(PP.alt_PP_[0].valt)
+        alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
+        for altPP in PP.alt_PP_[1:]:  # get fd sequence common for all altPPs:
+            sum_ptuple(alt_ptuple, altPP.ptuple, PP.fds, PP.fds, fneg=0)
+            Y0,Yn,X0,Xn = alt_box; y0,yn,x0,xn = altPP.box
+            alt_box[:] = min(Y0,y0),max(Yn,yn),min(X0,x0),max(Xn,xn)
+            for i in range(2):
+                alt_valt[i] += altPP.valt[i]
+                alt_rdnt[i] += altPP.rdnt[i]
 
-    pPP = [[] for _ in PP_vars]; valt = [0, 0]  # init each var derH
+    alt_Graph = Cgraph(ptuple=alt_ptuple, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
 
-    repack(pPP, PP.players[0][0], idx_=[0])  # single-element 1st lev
-    if len(PP.players[0])>1:
-        repack(pPP, PP.players[0][1], idx_=[1])  # single-element 2nd lev
-        i=2; last=4
-        idx = 2  # init incremental elevation = i
-        while last<len(PP.players[0]):
-            inpack_derH(pPP, PP.players[0][0], idx_=[idx])  # pack ptuple vars into derH of pPP vars
-            i=last; last+=i  # last=i*2
-            idx+=1  # elevation in derH
+    graph = Cgraph(ptuple=deepcopy(PP.ptuple), valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
-    x0=PP.x0; xn=PP.xn; y0=PP.y0; yn=PP.yn
-    box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn]
-    # update to center (x0,y0) and max_distance (xn,yn) in graph:
-    alt_Graph = Cgraph(valt=copy(alt_lays.valt),derH=[alt_lays], box=copy(box))
-    graph = Cgraph(valt=copy(lays.valt),derH=[pPP],alt_Graph=alt_Graph,box=box)
-
-    return graph  # 1st plevel fd is always der+?
+    return graph
 
 # drafts:
 def inpack_derH(pPP, ptuples, idx_=[]):  # pack ptuple vars in derH of pPP vars, converting macro derH -> micro derH
@@ -379,7 +365,7 @@ def inpack_derH(pPP, ptuples, idx_=[]):  # pack ptuple vars in derH of pPP vars,
         repack(pPP, ptuples[1], idx_+[1])  # single-element 2nd lev
         i=2; last=4
         idx = 2  # init incremental elevation = i
-        while last<len(ptuples):
+        while last<=len(ptuples):
             lev = ptuples[i:last]  # lev is nested, max len_sublev = lenlev-1, etc.
             inpack_derH(pPP, lev, idx_+[idx])  # add idx per sublev
             i=last; last+=i  # last=i*2
@@ -390,7 +376,7 @@ def repack(pPP, ptuple, idx_):  # pack derH in elements of iderH
     for i, param_name in enumerate(PP_vars):
         par = getattr(ptuple, param_name)
         Par = pPP[i]
-        if len(Par > len(idx_)):  # Par is derH of pars
+        if len(Par) > len(idx_):  # Par is derH of pars
             Par[-1] += [par]  # pack par in top lev of Par, added per inpack_derH recursion
         else:
             Par += [[par]]  # add new Par lev, implicitly nested in ptuples?
@@ -426,7 +412,7 @@ def agg_recursion_eval(blob, PP_t):
     fork_rdnt = [1+(G>M), 1+(M>=G)]
     # should be single call of agg_recursion here？
     for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
-        if (valt[fd] > PP_aves[fd] * ave_agg * (blob.rdn+1) * fork_rdnt[fd]) \
+        if (valt[fd] > PP_aves[fd] * ave_agg * (converted_blobt[fd].rdnt[fd]+1) * fork_rdnt[fd]) \
             and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
 
             blob.rdn += 1  # estimate
