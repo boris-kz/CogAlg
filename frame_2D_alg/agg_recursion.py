@@ -77,7 +77,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
-    derH = lambda: list  # unpacked to a list of Cpars, old: derH) node_) H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?
+    aggH = lambda: list  # list of CpH derHs: derH) node_) H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
     fds = list  # or fd, with sub fds in derH?
@@ -138,7 +138,8 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
     # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
     return graph_t
 
-def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, increasingly selective with reduced node.link_.val
+def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
+    # extend with comp_centroid to adjust all links, so centrally similar nodes are less pruned?
 
     regraph_, rreval_ = [],[]
     Reval = 0
@@ -202,6 +203,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
+                    # not revised:
                     dderH, mval, dval, tval = comp_GQ(_G,G)  # comp_G while G.G, H/0G: GQ is one distributed node?
                     ext = [1,distance,[dy,dx]]  # ext -> ext pair: new der_nodes / Graph:
                     derG = Cgraph(valt=[mval,dval], G=[_G,G], derH= dderH+[[ext]], box=[])  # box is redundant to G
