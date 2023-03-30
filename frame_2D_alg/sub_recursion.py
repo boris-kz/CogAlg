@@ -79,7 +79,6 @@ def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
     sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs
 
-
 def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
 
     for P_ in P__:
@@ -129,6 +128,19 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
 
     return dderPs__
 
+def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
+
+    if isinstance(_P, CP):
+        vertuple = comp_ptuple(_P.ptuple, P.ptuple)
+        derQ = [vertuple]; valt=copy(vertuple.valt); rdnt=copy(vertuple.rdnt)
+    else:  # P is derP
+        derQ = comp_derH_(_P.derQ, P.derQ, _P.fds, P.fds)
+        valt = [0,0]; rdnt = [1,1]
+        for i in 0,1:
+            for ptuple in derQ:
+                valt[i] += ptuple.valt[i]; rdnt[i] += ptuple.rdnt[i]
+
+    return CderP(derQ=derQ, valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0)
 
 def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
 

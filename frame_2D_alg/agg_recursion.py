@@ -139,17 +139,20 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
     return graph_t
 
 def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
-    # extend with comp_centroid to adjust all links, so centrally similar nodes are less pruned?
-
+    '''
+    extend with comp_centroid to adjust all links, so centrally similar nodes are less pruned?
+    or centroid match only matters if some large impact, which is a specific consideration?
+    else scale links by combined valt of connected nodes' links, which will be in their aggQ
+    '''
     regraph_, rreval_ = [],[]
     Reval = 0
     while graph_:
         graph = graph_.pop()
-        reval = reval_.pop()
+        reval = reval_.pop()  # each link *= other_G.aggQ.valt
         if reval < aveG:  # same graph, skip re-evaluation:
             regraph_ += [graph]; rreval_ += [0]
             continue
-        while graph.H:  # some links will be removed, graph may split into multiple regraphs, init each with graph.Q node:
+        while graph.H:  # links may be removed, graph may split into multiple regraphs, init each with graph.Q node:
             regraph = CpH()
             node = graph.H.pop()  # node_, not removed below
             val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
@@ -167,8 +170,12 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after 
 def readd_node_layer(regraph, graph_H, node, fd):  # recursive depth-first regraph.Q+=[_node]
 
     for link in [node.link_.Qm, node.link_.Qd][fd]:  # all positive
+
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
+        # draft:
+        link.val *= _val  # *1/n: impact decay with mediation order?
+        # adjust node.valt[fd], before selecting _node?
         if _val > G_aves[fd] and _node in graph_H:
             regraph.H += [_node]
             graph_H.remove(_node)
@@ -583,8 +590,7 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                     sum_pH(graph.alt_derHs, alt_graph.derHs)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.derHs.H[-1].node_).intersection(alt_graph.derHs.H[-1].node_))  # overlap
 
-# simplified alternative to multi-pass version of graph_reval, under revision
-
+# may not be relevant:
 def comp_centroid(G_):  # comp node to average node in Graph, sum >ave nodes into new centroid, recursion while update>ave
 
     update_val = 0  # update val, terminate recursion if low
