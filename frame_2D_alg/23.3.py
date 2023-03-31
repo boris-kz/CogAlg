@@ -998,7 +998,7 @@ def comp_ptuple(_ptuple, ptuple, _fds, fds, fd):
 
     return vertuple, Valt, Rdnt
 
-def comp_derH(pname, _derH, derH, Valt, Rdnt, rn, _fds, fds, ave, first):  # similar sum_derH
+def comp_derH(pname, _derH, derH, _fds, fds, Valt, Rdnt, rn, ave, first):  # similar sum_derH
 
     # lay1 = par or [m,d], default, then test layers 2 and 2+, for lenlay = 1,1,2,4,8..:
     _par = _derH[0]; par = derH[0]

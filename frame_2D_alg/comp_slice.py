@@ -85,6 +85,14 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
 
+class Cpset(ClusterStructure):  # vertuple or higher
+
+    set = list  # compared params
+    ext = list  # L,S,A, in agg+ only
+    n = lambda: 1  # accum count, combine from CpH?
+    valt = lambda: [0,0]
+    rdnt = lambda: [1,1]
+
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = object  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
@@ -168,7 +176,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
                     vertuple = comp_ptuple(_P.ptuple, P.ptuple)
-                    derP= CderP(derQ=[vertuple], valt=copy(vertuple.valt), rdnt=(vertuple.rdnt), P=P, _P=_P, x0=_P.x0, y0=_P.y0)
+                    derP = CderP(derQ=[vertuple], valt=copy(vertuple.valt), rdnt=(vertuple.rdnt), P=P, _P=_P, x0=_P.x0, y0=_P.y0)
                     P.uplink_layers[-2] += [derP]  # uplink_layers[-1] is match_derPs
                     _P.downlink_layers[-2] += [derP]
                 elif (P.x0 + L) < _P.x0:
@@ -480,91 +488,60 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 
     Ptuple.n += 1
 
-def comp_derH_(_derH, derH, fds):  # unpack and compare der layers, if any from der+, no fds, same within PP
+def comp_derH(_derH, derH): # no fds in comp_slice
 
-    dderH_ = []
-    Valt = [0,0]
-    Rdnt = [1,1]
-    lev = 0
-    for i, (_vertuple, vertuple) in enumerate(zip(_derH, derH), start=1):  # i count start from 1, so that it is same with number of minimum element
+    dderH = []; valt = [0,0]; rdnt = [1,1]
+    for i, (_ptuple,ptuple) in enumerate(zip(_derH, derH)):
 
-        if not isinstance(_vertuple.I, list):  # from 1st level, where param is just single par
-            dvertuple, valt, rdnt = comp_ptuple(_vertuple, vertuple)
-            dderH_ += [dvertuple]
-        else:
-            dderH, valt, rdnt = comp_vertuple(_vertuple, vertuple, fds[lev])
-            dderH_ += [dderH]
-        for i in 0,1:
-            Valt[i] += valt[i]
-            Rdnt[i] += rdnt[i]
+        dtuple = comp_vertuple(_ptuple,ptuple) if i else comp_ptuple(_ptuple,ptuple)
+        dderH += [dtuple]
+        for j in 0,1:
+            valt[j] += dtuple.valt[j]; rdnt[j] += dtuple.rdnt[j]
 
-        if lev in (0,1) or not i%(2**lev):  # first 2 levels has single element, consecutive levels has 2**level
-            lev += 1
+    return dderH, valt, rdnt
 
-    return dderH_
+def comp_vertuple(_vertuple, vertuple):
 
+    dtuple=Cpset(n=_vertuple.n)
+    rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
 
-# almost similar with comp_ptuple, probably can merge into comp_ptuple later
-def comp_vertuple(_vertuple, vertuple, fd):
+    for _par, par, ave in zip(_vertuple[:3], vertuple[:3], aves):
+        # loop comparable params, exclude n, rdnt, valt
+        m,d = comp_par(_par[1], par[1]*rn, ave)
+        dtuple.set += [[m,d]]
+        dtuple.valt[0]+=m; dtuple.valt[1]+=d
 
-    vertuple = Cptuple()
-    rn = _vertuple.n / vertuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
-    Rdnt = [1,1]  # not sure we need it at this point
-    Valt = [0,0]
-
-    for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
-        _part = getattr(_vertuple, pname); part = getattr(vertuple, pname)
-        _par = _part[fd]
-        if pname!="x":
-            par = part[fd] * rn
-        else:
-            par = part[fd]
-        m ,d = comp_par(_par, par, ave, Valt, 1 - fd)
-        Valt[0] += m; Valt[1] += d
-        setattr(vertuple, pname, [m,d])
-        vertuple.valt[0] += m; vertuple.valt[1] += d;  # actually vertuple.valt is same as Valt
-
-    return vertuple, Valt, Rdnt
-
+    return dtuple
 
 def comp_ptuple(_ptuple, ptuple):
 
-    vertuple = Cptuple()
+    vertuple = Cpset(n=_ptuple.n)
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
-    Rdnt = [1,1]  # not sure we need it at this point
-    Valt = [0,0]
+    valt=[0,0]; rdnt=[1,1]  # not sure we need rdnt
 
     for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
-    # we only need to check pnames if not i|fd, in combined comp_ptuple+vertuple
+
         _par = getattr(_ptuple, pname); par = getattr(ptuple, pname)
-
-        if pname=="aangle" and isinstance(_par, list):
-            m,d = comp_aangle(_par, par, Valt)
-        elif pname in ("axis","angle"):
-            m,d = comp_angle(pname, _par, par, Valt)
+        if pname=="aangle": m,d = comp_aangle(_par, par)
+        elif pname in ("axis","angle"): m,d = comp_angle(_par, par)
         else:
-            if pname!="x": par *= rn  # normalize by relative accum count
-            if pname=="x" or pname=="I": finv = 1  # not sure here, how to get fd when we doesn't have fd fork in comp_P?
+            if pname!="x": par*=rn  # normalize by relative accum count
+            if pname=="x" or pname=="I": finv = 1
             else: finv=0
-            m,d = comp_par(_par, par, ave, Valt, finv)
+            m,d = comp_par(_par, par, ave, finv)
+        vertuple.set += [[m,d]]
+        vertuple.valt[0] += m; vertuple.valt[1] += d
 
-        Valt[0] += m; Valt[1] += d
-        setattr(vertuple, pname, [m,d])
-        vertuple.valt[0] += m; vertuple.valt[1] += d  # actually vertuple.valt is same as Valt
+    return vertuple
 
-    return vertuple, Valt, Rdnt
-
-
-def comp_par(_param, param, ave, Valt, finv=0):  # comparand is always par or d in [m,d]
+def comp_par(_param, param, ave, finv=0):  # comparand is always par or d in [m,d]
 
     d = _param - param
     if finv: m = ave - abs(d)  # inverse match for primary params, no mag/value correlation
     else:    m = min(_param, param) - ave
-    Valt[0] += m
-    Valt[1] += abs(d)
     return [m,d]
 
-def comp_angle(pname, _angle, angle, Valt=None):  # rn doesn't matter for angles
+def comp_angle(_angle, angle):  # rn doesn't matter for angles
 
     _Dy, _Dx = _angle
     Dy, Dx = angle
@@ -576,11 +553,10 @@ def comp_angle(pname, _angle, angle, Valt=None):  # rn doesn't matter for angles
 
     dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
-    if Valt: Valt[0] += mangle; Valt[1] += abs(dangle)
 
     return [mangle, dangle]
 
-def comp_aangle(_aangle, aangle, Valt):
+def comp_aangle(_aangle, aangle):
 
     _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
     sin_da0, cos_da0, sin_da1, cos_da1 = aangle
@@ -598,7 +574,5 @@ def comp_aangle(_aangle, aangle, Valt):
 
     daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
-
-    Valt[0] += maangle; Valt[1] += abs(daangle)
 
     return [maangle,daangle]

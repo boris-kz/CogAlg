@@ -141,8 +141,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
 def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
     '''
     extend with comp_centroid to adjust all links, so centrally similar nodes are less pruned?
-    or centroid match only matters if some large impact, which is a specific consideration?
-    else scale links by combined valt of connected nodes' links, which will be in their aggQ
+    or centroid match is case-specific, else scale links by combined valt of connected nodes' links, in their aggQ
     '''
     regraph_, rreval_ = [],[]
     Reval = 0
@@ -152,7 +151,7 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after 
         if reval < aveG:  # same graph, skip re-evaluation:
             regraph_ += [graph]; rreval_ += [0]
             continue
-        while graph.H:  # links may be removed, graph may split into multiple regraphs, init each with graph.Q node:
+        while graph.H:  # links may be revalued and removed, splitting graph to regraphs, init each with graph.Q node:
             regraph = CpH()
             node = graph.H.pop()  # node_, not removed below
             val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
@@ -174,7 +173,8 @@ def readd_node_layer(regraph, graph_H, node, fd):  # recursive depth-first regra
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
         # draft:
-        link.val *= _val  # *1/n: impact decay with mediation order?
+        link.val += _val/len(_node.link_) - link.val  # *1/n: interaction decay with mediation order?
+
         # adjust node.valt[fd], before selecting _node?
         if _val > G_aves[fd] and _node in graph_H:
             regraph.H += [_node]
@@ -284,22 +284,23 @@ def op_derH(_derH, derH, op, Mval,Dval, Mrdn,Drdn, idx_=[]):  # idx_: derH indic
     elif _derH or derH:
         pass  # fill into DerH if sum or dderH if comp?
 
-# draft, should be combined into op_derH?
-def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, _fds, fds):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
 
-    dderH = []
-    if _fds[0]==fds[0]:  # else higher fds won't match either
-        dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
-        if (len(_derH)>1 and len(derH)>1) and _fds[1]==fds[1]:
-            dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
-            i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
-            # append Mval, Dval, Mrdn, Drdn?
-            while last < len(derH) and last < len(derH):  # loop _lev, lev, may be nested
-                dderH += comp_derH(_derH[i:last], derH[i:last], comp_ptuple, Mval, Dval, Mrdn, Drdn, idx_ + [idx])
-                i=last; last+=i  # last=i*2
-                idx+=1  # elevation in derH
+def comp_derQ(_derH, derH, _fds, fds):  # fds for agg+, same comp_slice
 
-# old:
+    dderH = []; valt = [0,0]; rdnt = [1,1]
+
+    for i, (_ptuple,ptuple, _fd,fd) in enumerate(zip(_derH, derH, _fds, fds)):
+        if _fd!=fd:
+            break
+        dtuple = comp_vertuple(_ptuple,ptuple) if i else comp_ptuple(_ptuple,ptuple)
+        dderH += [dtuple]
+        for j in 0,1:
+            valt[j] += ptuple.valt[j]; rdnt[j] += ptuple.rdnt[j]
+
+    return dderH, valt, rdnt
+
+# need to decode levs for comp_ext?
+# old, with lev decoding:
 def comp_derH(_derH, derH, Mval,Dval, Mrdn,Drdn):
 
     dderH = []
@@ -329,6 +330,21 @@ def comp_derH(_derH, derH, Mval,Dval, Mrdn,Drdn):
     Lev3: [[dlays, [ddlays,dextp]], ext]: 2 sLevs, 1 ssLev
     Lev4: [[dlays, [ddlays,dextp], [[[dddlays,ddextp]],dextp]], ext]: 3 sLevs, 2 ssLevs, 1 sssLev
 '''
+
+def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, _fds, fds):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
+
+    dderH = []
+    if _fds[0]==fds[0]:  # else higher fds won't match either
+        dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
+        if (len(_derH)>1 and len(derH)>1) and _fds[1]==fds[1]:
+            dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
+            i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
+            # append Mval, Dval, Mrdn, Drdn?
+            while last < len(derH) and last < len(derH):  # loop _lev, lev, may be nested
+                dderH += comp_derH(_derH[i:last], derH[i:last], comp_ptuple, Mval, Dval, Mrdn, Drdn, idx_ + [idx])
+                i=last; last+=i  # last=i*2
+                idx+=1  # elevation in derH
+
 
 def comp_ext(_ext, ext):
     _L,_S,_A = _ext; L,S,A = ext
