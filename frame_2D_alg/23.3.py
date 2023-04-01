@@ -1117,3 +1117,27 @@ def comp_centroid(G_):  # comp PP to average PP in G, sum >ave PPs into new cent
 
     return G_
 
+def comp_derH(_derH, derH, _fds, fds):
+
+    dderH = []; valt = [0,0]; rdnt = [1,1]; elev=0
+
+    for i, (_ptuple,ptuple, _fd,fd) in enumerate(zip(_derH, derH, _fds, fds)):
+        if _fd!=fd:
+            break
+        if elev in (0,1) or not (i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+            elev += 1
+            _ptuple,_ext = _ptuple; ptuple,ext = ptuple  # ext per lev only
+            mext,dext = comp_ext(_ext[0],ext[0])  # comp dext only
+            valt[0]+=sum(mext); valt[1]+=sum(dext)
+            felev=1
+        else:
+            felev=0
+        dtuple = comp_vertuple(_ptuple,ptuple) if i else comp_ptuple(_ptuple,ptuple)
+        for j in 0,1:
+            valt[j] += ptuple.valt[j]; rdnt[j] += ptuple.rdnt[j]
+        if felev:
+            dderH += [[dtuple, [dext, mext]]]
+        else:
+            dderH += [dtuple]
+
+    return dderH, valt, rdnt

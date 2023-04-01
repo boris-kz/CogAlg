@@ -14,9 +14,7 @@ PP_vars = ["I", "M", "Ma", "axis", "angle", "aangle", "G", "Ga", "x", "L"]
 
 def sub_recursion_eval(root):  # for PP or dir_blob
 
-    if isinstance(root, CPP): root_PPm_, root_PPd_ = root.rlayers[0][0], root.dlayers[0][0]
-    else:                     root_PPm_, root_PPd_ = root.PPm_, root.PPd_
-
+    root_PPm_, root_PPd_ = root.rlayers[-1], root.dlayers[-1]
     for fd, PP_ in enumerate([root_PPm_, root_PPd_]):
         mcomb_layers, dcomb_layers, PPm_, PPd_ = [], [], [], []
 
@@ -43,10 +41,13 @@ def sub_recursion_eval(root):  # for PP or dir_blob
                     if PP_layer:
                         if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
                         else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
-            # segs:
-            agg_recursion_eval(PP, [copy(PP.mseg_levels[-1]), copy(PP.dseg_levels[-1])])
+
             # below is pending update
             """
+            # segs:
+            agg_recursion_eval(PP, [copy(PP.mseg_levels[-1]), copy(PP.dseg_levels[-1])])
+            
+            
             # include empty comb_layers:
             if fd:
                 PPmm_ = [PPm_] + mcomb_layers; mVal = sum([PP.players[1] for PP_ in PPmm_ for PP in PP_])
@@ -68,14 +69,13 @@ def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
     P__  = [P_ for P_ in reversed(PP.P__)]  # revert to top down
     P__ = comp_P_der(P__) if PP.fds[-1] else comp_P_rng(P__, PP.rng + 1)   # returns top-down
-    PP.rdn += 2  # two-fork rdn, priority is not known?  rotate?
+    PP.rdnt[PP.fds[-1] ] += 1  # two-fork rdn, priority is not known?  rotate?
 
     sub_segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=PP.fds)
     sub_segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=PP.fds)  # returns bottom-up
     # sub_PPm_, sub_PPd_:
-    sub_PPt = form_PP_root((sub_segm_, sub_segd_), PP.rdn + 1)
-    PP.rlayers[0] = [sub_PPt[0], sum([sub_PP.players[1] for sub_PP in sub_PPt[0]])]
-    PP.dlayers[0] = [sub_PPt[1], sum([sub_PP.players[1] for sub_PP in sub_PPt[1]])]
+    sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdnt[PP.fds[-1]] + 1)
+    PP.rlayers[:] = [sub_PPm_]; PP.dlayers[:] = [sub_PPd_]
 
     sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs
 
@@ -133,14 +133,12 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
     if isinstance(_P, CP):
         vertuple = comp_ptuple(_P.ptuple, P.ptuple)
         derQ = [vertuple]; valt=copy(vertuple.valt); rdnt=copy(vertuple.rdnt)
+        L = len(_P.dert_)
     else:  # P is derP
-        derQ = comp_derH_(_P.derQ, P.derQ, _P.fds, P.fds)
-        valt = [0,0]; rdnt = [1,1]
-        for i in 0,1:
-            for ptuple in derQ:
-                valt[i] += ptuple.valt[i]; rdnt[i] += ptuple.rdnt[i]
+        derQ, rdnt, valt = comp_derH(_P.derQ, P.derQ)
+        L = _P.L
 
-    return CderP(derQ=derQ, valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0)
+    return CderP(derQ=derQ, valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=L)
 
 def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
 
