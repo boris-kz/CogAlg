@@ -391,7 +391,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     seg.derH = derH
     if derQ:
         if fd: seg.derH += derQ  # der+
-        else: seg.derH[len(derH)/2:] = derQ  # rng+, replace last layer
+        else: seg.derH[int(len(derH)/2):] = derQ  # rng+, replace last layer
 
     return seg
 
@@ -402,7 +402,6 @@ def sum2PP(PP_segs, base_rdn, fd):  # sum PP_segs into PP
     PP = CPP(x0=PP_segs[0].x0, rdn=base_rdn, fds=copy(PP_segs[0].fds)+[fd], rlayers=[[]], dlayers=[[]])
     if fd: PP.dseg_levels, PP.mseg_levels = [PP_segs], [[]]  # empty alt_seg_levels
     else:  PP.mseg_levels, PP.dseg_levels = [PP_segs], [[]]
-
     for seg in PP_segs:
         seg.roott[fd] = PP
         # selection should be alt, not fd, only in convert?
@@ -455,7 +454,7 @@ def sum_derH(DerH, derH, fneg=0):  # same fds from comp_derH
 
 def sum_vertuple(Vertuple, vertuple, fneg=0):
 
-    for Part, part in zip(Vertuple.pset, vertuple.pset):
+    for Part, part in zip(Vertuple.Q, vertuple.Q):
         # [mpar,dpar] each
         Part[0] += (-part[0] if fneg else part[0])
         Part[1] += (-part[1] if fneg else part[1])
@@ -507,9 +506,9 @@ def comp_vertuple(_vertuple, vertuple):
     dtuple=CpQ(n=_vertuple.n)
     rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
 
-    for _par, par, ave in zip(_vertuple.pset, vertuple.pset, aves):
+    for _par, par, ave in zip(_vertuple.Q, vertuple.Q, aves):
         m,d = comp_par(_par[1], par[1]*rn, ave)
-        dtuple.pset += [[m,d]]
+        dtuple.Q += [[m,d]]
         dtuple.valt[0]+=m; dtuple.valt[1]+=d
 
     return dtuple
@@ -528,7 +527,7 @@ def comp_ptuple(_ptuple, ptuple):
             if pname=="x" or pname=="I": finv = 1
             else: finv=0
             m,d = comp_par(_par, par, ave, finv)
-        dtuple.pset += [[m,d]]
+        dtuple.Q += [[m,d]]
         dtuple.valt[0] += m; dtuple.valt[1] += d
 
     return dtuple

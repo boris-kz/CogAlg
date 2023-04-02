@@ -312,11 +312,11 @@ def blob2graph(blob, fseg):
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
 
-    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), ptuple=Cptuple(), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), ptuple=Cptuple(), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
-    mblob = Cgraph(fds=copy(PPm_[0].fds), ptuple=Cptuple(), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    dblob = Cgraph(fds=copy(PPd_[0].fds), ptuple=Cptuple(), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -325,7 +325,7 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            sum_ptuple(blobs[fd].ptuple, graph.ptuple, blobs[fd].fds, graph.fds)
+            sum_aggH(blobs[fd].aggH, graph.aggH, blobs[fd].fds, graph.fds)
             for i in range(2):
                 blobs[fd].valt[i] += graph.valt[i]
                 blobs[fd].rdnt[i] += graph.rdnt[i]
@@ -334,8 +334,8 @@ def blob2graph(blob, fseg):
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        sum_ptuple(alt_mblob.ptuple, alt_blob.mgraph.ptuple)
-        sum_ptuple(alt_dblob.ptuple, alt_blob.dgraph.ptuple)
+        sum_aggH(alt_mblob.aggH, alt_blob.mgraph.aggH)
+        sum_aggH(alt_dblob.aggH, alt_blob.dgraph.aggH)
         for i in range(2):
             alt_mblob.valt[i] += alt_blob.mgraph.valt[i]
             alt_mblob.rdnt[i] += alt_blob.mgraph.rdnt[i]
@@ -348,21 +348,23 @@ def blob2graph(blob, fseg):
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
-    alt_ptuple = Cptuple(); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
+    alt_subH = [CpQ(fds=[0])]; alt_aggH = CpQ(Q=[alt_subH],fds=[0]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
     if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
-        alt_ptuple = deepcopy(PP.alt_PP_[0].ptuple); alt_valt = copy(PP.alt_PP_[0].valt)
+        alt_subH[0].Q = [deepcopy(PP.alt_PP_[0].derH)]; alt_valt = copy(PP.alt_PP_[0].valt)
         alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
         for altPP in PP.alt_PP_[1:]:  # get fd sequence common for all altPPs:
-            sum_ptuple(alt_ptuple, altPP.ptuple, PP.fds, PP.fds, fneg=0)
+
+            sum_derH(alt_subH[0].Q[0], altPP.derH)
             Y0,Yn,X0,Xn = alt_box; y0,yn,x0,xn = altPP.box
             alt_box[:] = min(Y0,y0),max(Yn,yn),min(X0,x0),max(Xn,xn)
             for i in range(2):
                 alt_valt[i] += altPP.valt[i]
                 alt_rdnt[i] += altPP.rdnt[i]
 
-    alt_Graph = Cgraph(ptuple=alt_ptuple, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
+    alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
+    subH = CpQ(Q=[PP.derH],fds=[0]); aggH = CpQ(Q=[subH],fds=[0])
+    graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
-    graph = Cgraph(ptuple=deepcopy(PP.ptuple), valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
     return graph
 
@@ -393,28 +395,27 @@ def repack(pPP, ptuple, idx_):  # pack derH in elements of iderH
 
 # move here temporary, for debug purpose
 def agg_recursion_eval(blob, PP_t):
-    from agg_recursion import agg_recursion, CpH
+    from agg_recursion import agg_recursion
     from sub_recursion import PP2graph, blob2graph
 
-    if not isinstance(blob, CpH):
-        fseg = isinstance(blob, CPP)
+    fseg = isinstance(blob, CPP)
 
-        for fd, PP_ in enumerate(PP_t):
-            for i, PP in enumerate(PP_):
-               converted_graph  = PP2graph(PP, fseg=fseg, ifd=fd)  # convert PP to graph
-               PP_[i] = converted_graph
-        if fseg:
-            converted_mblob = PP2graph(blob, fseg=fseg, ifd=0)  # convert root to graph (root default fd = 1?)
-            converted_dblob = PP2graph(blob, fseg=fseg, ifd=1)  # when fseg = True, we need both forks?
-            converted_mblob.node_ = PP_t[0]; converted_dblob.node_ = PP_t[1]
-            converted_blobt = [converted_mblob,converted_dblob]
-            for PP in PP_t[0]: PP.root = converted_blobt[0]
-            for PP in PP_t[1]: PP.root = converted_blobt[1]
+    for fd, PP_ in enumerate(PP_t):
+        for i, PP in enumerate(PP_):
+           converted_graph  = PP2graph(PP, fseg=fseg, ifd=fd)  # convert PP to graph
+           PP_[i] = converted_graph
+    if fseg:
+        converted_mblob = PP2graph(blob, fseg=fseg, ifd=0)  # convert root to graph (root default fd = 1?)
+        converted_dblob = PP2graph(blob, fseg=fseg, ifd=1)  # when fseg = True, we need both forks?
+        converted_mblob.node_ = PP_t[0]; converted_dblob.node_ = PP_t[1]
+        converted_blobt = [converted_mblob,converted_dblob]
+        for PP in PP_t[0]: PP.root = converted_blobt[0]
+        for PP in PP_t[1]: PP.root = converted_blobt[1]
+    else:
+        if blob.mgraph:
+            converted_blobt = [blob.mgraph, blob.dgraph]  # get converted graph
         else:
-            if blob.mgraph:
-                converted_blobt = [blob.mgraph, blob.dgraph]  # get converted graph
-            else:
-                converted_blobt = blob2graph(blob, fseg=fseg)  # convert root to graph
+            converted_blobt = blob2graph(blob, fseg=fseg)  # convert root to graph
 
     M = sum(converted_blobt[0].valt)  # mpplayers.val (but m fork is always empty, so no value here?)
     G = sum(converted_blobt[1].valt)  # dpplayers.val

@@ -247,6 +247,7 @@ def comp_G(_G, G):  # in GQ
         sub_dderH, mval, dval, mrdn, drdn = comp_G_(_node_, node_, f1Q=0)
         Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
         # pack m|dnode_ in m|dderH: implicit?
+
     else: _G.fterm=1  # no G.fterm=1: it has it's own specification?
     '''
     comp alts,val,rdn?
@@ -257,7 +258,7 @@ def comp_G(_G, G):  # in GQ
     return dderH, Mval,Dval, Mrdn,Drdn
 
 '''
-Q pset is has fixed full syntax: all lower composition orders, but represented selectively,
+aggH ( subH ( derH have fixed syntax: all lower composition orders, but represented selectively,
 so each element is [gap, par], where gap is n missing pars before current par.
 '''
 # draft:
@@ -265,115 +266,58 @@ def comp_aggH(_aggH, aggH):  # unpack aggH ( subH ( derH:
 
     daggH = []; valt = [0,0]; rdnt = [1,1]; elev=0
 
-    for i, (_subH, subH) in enumerate(zip(_aggH, aggH)):
+    for i, (_subH, subH) in enumerate(zip(_aggH.Q, aggH.Q)):
         if _aggH.fds[elev]!=aggH.fds[elev]:
             break
-        if elev in (0,1) or not (i+1)%(2**elev): # first 2 levs are single-element, higher levs are 2**elev elements
-            elev+=1
+        if elev in (0,1) or not (i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+            elev+=1  # elevation
         dsubH = []; valt = [0,0]; rdnt = [1,1]; elay=0
-        for j, (_derH, derH) in enumerate(zip(_subH, subH)):
+        for j, (_derH, derH) in enumerate(zip(_subH.Q, subH.Q)):
             if _subH.fds[elay] != subH.fds[elay]:
                 break
             if elay in (0,1) or not (j+1)%(2**elay):  # first 2 levs are single-element, higher levs are 2**elev elements
-                elay+=1
-            dsubH += [comp_derH(_derH, derH, j)]  # comp_par(derH[0]) if j else comp_angle(derH[0]), return CpQ dderH
+                elay+=1  # elevation
+            dsubH += [comp_derH(_derH, derH, j,i)]  # comp_par(derH[0]) if j else comp_angle(derH[0]), return CpQ dderH
         daggH += [CpQ(Q=dsubH)]
+        # add summing valt, rdnt
 
     return CpQ(Q=daggH)
 
-# old:
-def comp_derH(_derH, derH, _fds, fds):
 
-    dderH = []; valt = [0,0]; rdnt = [1,1]; elev=0
+def comp_derH(_derH, derH, j,k):
 
-    for i, (_ptuple,ptuple, _fd,fd) in enumerate(zip(_derH, derH, _fds, fds)):
-        if _fd!=fd:
+    dderH = CpQ; elev=0
+    for i, (_ptuple,ptuple) in enumerate(zip(_derH.Q, derH.Q)):
+
+        if _derH.fds[elev]!=derH.fds[elev]:
             break
         if elev in (0,1) or not (i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
-            elev += 1; flev=1
-        else: flev=0
-        dtuple = comp_vertuple(_ptuple,ptuple, flev) if i else comp_ptuple(_ptuple,ptuple)
-        # comp_angle(pset[0]) if 1st layer in lev: j in looping derHs, vs subH?
-        for j in 0,1:
-            valt[j] += ptuple.valt[j]; rdnt[j] += ptuple.rdnt[j]
-        dderH += [dtuple]
+            elev += 1
+        if j:
+            # we need local versions of comp_vertuple and comp_ptuple, in the same fashion as updated comp_ext
+            if i: dtuple = comp_vertuple(_ptuple, ptuple, dderH)
+            else:
+                if j: dtuple = comp_ptuple(_ptuple, ptuple, dderH)
+                else: dtuple = comp_ext(_ptuple, ptuple, dderH, k)  # comp_angle if k: 1st layer in lev
+        dderH.Q += [dtuple]
 
-    return dderH, valt, rdnt
+    return dderH
 
-# only different for pset[0]: comp_angle if 1st layer in lev?
-def comp_ext(_ext, ext):
+
+def comp_ext(_ext, ext, dderH, k):
     _L,_S,_A = _ext; L,S,A = ext
-
-    dS = _S - S; mS = min(_S, S)  # average distance between connected nodes, single distance if derG
-    dL = _L - L; mL = min(_L, L)
-    if _A and A:  # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
-        if isinstance(_A, list):
-            mA, dA = comp_angle(_A, A)
-        else:  # scalar mA or dA
-            dA = _A - A; mA = min(_A, A)
+    # comp ds only:
+    dS = _S[1] - S[1]; mS = min(_S[1], S[1])  # average distance between connected nodes, single distance if derG
+    dL = _L[1] - L[1]; mL = min(_L[1], L[1])
+    if _A and A:
+        # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
+        if k: dA = _A[1] - A[1]; mA = min(_A[1], A[1])  # scalar mA,dA
+        else: mA, dA = comp_angle(_A, A)
     else:
         mA,dA = 0,0
-    return [mL,mS,mA], [dL,dS,dA]
-
-def op_derH(_derH, derH, op, Mval,Dval, Mrdn,Drdn, idx_=[]):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
-
-    op(_derH[0], derH[0], idx_+[0])  # single-element 1st lev
-    if len(_derH)>1 and len(derH)>1:
-        op(_derH[1], derH[1], idx_+[1])  # single-element 2nd lev
-        i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
-
-        while last<len(derH) and last<len(derH):
-            op_derH(_derH[i:last], derH[i:last], op, Mval,Dval, Mrdn,Drdn, idx_+[idx])  # _lev, lev: incrementally nested
-            i=last; last+=i  # last=i*2
-            idx+=1  # elevation in derH
-
-    elif _derH or derH:
-        pass  # fill into DerH if sum or dderH if comp?
-
-# old:
-def comp_derH(_derH, derH, Mval,Dval, Mrdn,Drdn):
-
-    dderH = []
-    for _Lev, Lev in zip_longest(derH, derH, fillvalue=[]):  # each Lev or subLev is [CpQ|list, ext, valt, rdnt]:
-        if _Lev and Lev:
-            if isinstance(Lev,CpQ):  # players, same for both or test? incr nesting in dplayers?
-                # use extended comp_ptuple instead?
-                dplayers = comp_pH(_Lev, Lev)
-                Mval += dplayers.valt[0]; Mrdn += dplayers.rdnt[0]  # add rdn in form_?
-                Dval += dplayers.valt[1]; Drdn += dplayers.rdnt[1]
-                dderH += [dplayers]
-            else:  # [sub derH, ext, valt, rdnt]
-                dder, Mval, Dval, Mrdn, Drdn = comp_derH(_Lev[0],Lev[0], Mval,Dval, Mrdn,Drdn)  # all not-empty
-                mext, dext = comp_ext(_Lev[1],Lev[1])
-                Mval+=sum(mext); Dval+=sum(dext)
-                dderH += [[dder, [mext,dext]], [Mval,Dval], [Mrdn,Drdn]]
-            if (Mval+Dval) / (Mrdn+Drdn) < ave_G:
-                break
-        else:
-            dderH += [_Lev if _Lev else -Lev]  # difference from null comparand, not sure
-
-    return dderH, Mval,Dval, Mrdn,Drdn
-'''
-    generic for pTree, including each element of pPP (ptuple extended to 2D)?
-    Lev1: lays: CpQ players, 1st ext is added per G.G, 2nd ext per Graph, add subLev nesting per Lev:
-    Lev2: [dlays, ext]: 1 subLev
-    Lev3: [[dlays, [ddlays,dextp]], ext]: 2 sLevs, 1 ssLev
-    Lev4: [[dlays, [ddlays,dextp], [[[dddlays,ddextp]],dextp]], ext]: 3 sLevs, 2 ssLevs, 1 sssLev
-'''
-
-def comp_derH(_derH, derH, Mval, Dval, Mrdn, Drdn, _fds, fds):  # idx_: derH indices, op: comp|sum, lenlev: 1, 1, 2, 4, 8...
-
-    dderH = []
-    if _fds[0]==fds[0]:  # else higher fds won't match either
-        dderH += [comp_ptuple(_derH[0], derH[0])]  # single-element 1st lev
-        if (len(_derH)>1 and len(derH)>1) and _fds[1]==fds[1]:
-            dderH += [comp_ptuple(_derH[1], derH[1])]  # single-element 2nd lev
-            i,idx = 2,2; last=4  # multi-element 2nd+ levs, init incr elevation = i
-            # append Mval, Dval, Mrdn, Drdn?
-            while last < len(derH) and last < len(derH):  # loop _lev, lev, may be nested
-                dderH += comp_derH(_derH[i:last], derH[i:last], comp_ptuple, Mval, Dval, Mrdn, Drdn, idx_ + [idx])
-                i=last; last+=i  # last=i*2
-                idx+=1  # elevation in derH
+    dderH.valt[0] += mL+mS+mA
+    dderH.valt[1] += dL+dS+dA
+    # no rdn?
 
 
 def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
@@ -434,21 +378,21 @@ def sum_G(G, g, fmerge=0):  # g is a node in G.node_
             else:           G.alt_Graph = deepcopy(g.alt_graph)
     else: G.node_ += [g]
 
-# not updated
-def sum_derH(DerH, derH, fext=1):
+# not fully updated
+def sum_aggH(AggH, aggH):
 
-    for i, (Lev, lev) in enumerate(zip_longest(DerH, derH, fillvalue=None)):
-        if lev is not None:
-            if lev:
-                if Lev:
-                    if isinstance(lev,CpQ): sum_pH(Lev,lev)
-                    else:
-                        for Ext,ext in zip(Lev,lev): sum_ext(Ext, ext)
+    for SubH, subH in zip_longest(AggH.Q, aggH.Q, fillvalue=None):
+        if subH:
+            if SubH:
+                for DerH, derH in(zip_longest(SubH.Q, subH.Q, fillvalue=None)):  # derH could be ext here? If yes we need to check and add 
+                    if derH:
+                        if DerH:
+                            sum_derH(DerH, derH)  # probably need to extend sum_derH for ext?
+                        else:
+                            SubH.Q += [deepcopy(derH)] 
+            else:
+                AggH.Q += [deepcopy(subH)]
 
-                else: DerH.insert(i,deepcopy(lev))
-                # for var-length DerH, derH
-            elif Lev is None: DerH += [deepcopy(lev)]
-            else:             DerH[i] = deepcopy(lev)
 
 def add_ext(box, L, extt):  # add ext per composition level
     y,x, y0,yn, x0,xn = box
@@ -620,86 +564,3 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                 for alt_graph in graph.alt_graph_:
                     sum_pH(graph.alt_derHs, alt_graph.derHs)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.derHs.H[-1].node_).intersection(alt_graph.derHs.H[-1].node_))  # overlap
-
-# may not be relevant:
-def comp_centroid(G_):  # comp node to average node in Graph, sum >ave nodes into new centroid, recursion while update>ave
-
-    update_val = 0  # update val, terminate recursion if low
-
-    for G in G_:
-        G_valt = [0,0]  # new total, may delete G
-        G_rdnt = [1,1]  # rdn of PPs to cPPs in other Gs
-        DerNode = Cgraph(ptuple=Cptuple())  # summed across PP_:
-        Valt = [0,0]  # mval, dval
-        Rdnt = [1,1]
-
-        for i, node in enumerate(G.node_):  # comp PP to G centroid, derPP is replaced, use comp_plevels?
-            # both PP core and edge are compared to G core, results are summed or concatenated:
-            vertuple, valt, rdnt = comp_ptuple(G.ptuple, node.ptuple, G.fds, node.fds)  # params norm in comp_ptuple
-            for i in range(2):
-                Valt[i] += valt[i]  # accumulate mval and dval
-                Rdnt[i] += rdnt[i]
-                DerNode.valt[i] += valt[i]
-                DerNode.rdnt[i] += rdnt[i]
-            sum_ptuple(DerNode.ptuple, vertuple)
-
-            # compute rdn:
-            cnode_ = node.cnode_  # sort by derNode value: (add cnode into Cgraph?)
-            cnode_ = sorted(cnode_, key=lambda cnode: sum(cnode[1].valt), reverse=True)
-            rdn = 1
-            fint = [0, 0]
-            for fd in 0, 1:  # sum players per fork
-                for (cnode, CderG, cfint) in cnode_:
-                    if valt[fd] > G_aves[fd]:
-                        fint[fd] = 1  # nodes match, sum der_node in both G and _G:
-                        sum_ptuple(G.ptuple, node.ptuple, G.fds, node.fds)
-                        # not sure here because right now it will be summed twice in both m&d loops
-                    if CderG.valt[fd] > Valt[fd]:  # cPP is instance of PP
-                        if cfint[fd]: G_rdnt[fd] += 1  # n of cPPs redundant to PP, if included and >val
-                    else:
-                        break  # cnode_ is sorted by value
-
-            # below is not updated
-            fnegm = Valt[0] < G_aves[0] * rdn;  fnegd = Valt[1] < G_aves[1] * rdn  # rdn per PP
-            for fd, fneg, in zip([0, 1], [fnegm, fnegd]):
-
-                if (fneg and fint[fd]) or (not fneg and not fint[fd]):  # re-clustering: exclude included or include excluded PP
-                    G.node_[i][2][fd] = 1 -  G.node_[i][2][fd]  # reverse 1-0 or 0-1
-                    update_val += abs(Valt[fd])  # or sum abs mparams?
-                if not fneg:
-                    G_valt[fd] += Valt[fd]
-                    G_rdn += 1  # not sure
-                if fint[fd]:
-                    # include PP in G:
-                    if G_players_t[fd]: sum_players(G_players_t[fd], node.players_t[fd])
-                    else: G_players_t[fd] = copy(node.players_t[fd])  # initialization is simpler
-                    # not revised:
-                    G.node_[i][1] = derNode   # no derNode now?
-                    for i, cnodet in enumerate(node.cnode_):
-                        cG = cnodet[0].root
-                        for j, nodet in enumerate(cG.cnode_):  # get G and replace their derPP
-                            if nodet[0] is node:
-                                cG.cnode_[j][1] = derNode
-                        if cnodet[0] is node: # replace cnode's derNode
-                            G.cnode_[i][1] = derNode
-                G.valt[fd] = G_valt[fd]
-
-        if G_players_t: G.players_t = G_players_t
-
-        # not revised:
-        if G_val < G_aves[fPd] * G_rdn:  # ave rdn-adjusted value per cost of G
-
-            update_val += abs(G_val)  # or sum abs mparams?
-            G_.remove(G)  # Gs are hugely redundant, need to be pruned
-
-            for (node, derNode, fin) in G.node_:  # remove refs to local copy of PP in other Gs
-                for (cnode, _, _) in node.cnode_:
-                    for i, (ccnode, _, _) in enumerate(cnode.cnode_):  # ref of ref
-                        if ccnode is node:
-                            cnode.cnode_.pop(i)  # remove ccnode tuple
-                            break
-
-    if update_val > sum(G_aves):
-        comp_centroid(G_)  # recursion while min update value
-
-    return G_
