@@ -3,8 +3,9 @@ from itertools import zip_longest
 from copy import copy, deepcopy
 import numpy as np
 from frame_blobs import CBlob, flood_fill, assign_adjacents
-from comp_slice import *
 from agg_recursion import *
+from comp_slice import *
+
 '''
 comp_slice_ sub_recursion + utilities
 '''
@@ -138,6 +139,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
         derQ, rdnt, valt = comp_derH(_P.derQ, P.derQ)
         L = _P.L
 
+    # derP is single-layer, links are compared individually?
     return CderP(derQ=derQ, valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=L)
 
 def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
@@ -325,7 +327,7 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            sum_aggH(blobs[fd].aggH, graph.aggH, blobs[fd].fds, graph.fds)
+            sum_aggH(blobs[fd].aggH, graph.aggH)
             for i in range(2):
                 blobs[fd].valt[i] += graph.valt[i]
                 blobs[fd].rdnt[i] += graph.rdnt[i]

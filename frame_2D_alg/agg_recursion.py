@@ -157,21 +157,21 @@ def prune_node_layer(regraph, graph_H, node, fd):  # recursive depth-first regra
 
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
-        link.val += _val/len(_node.link_) - link.val  # *1/n: interaction decay with mediation order?
-        '''
-        adjust link val by node val, representing mediated interactions
-        or node pruning doesn't change connected-node's val, that should be from all links?
-        so it only prunes further mediated evaluation?
-        '''
         if _val > G_aves[fd] and _node in graph_H:
             regraph.H += [_node]
             graph_H.remove(_node)
             regraph.valt[fd] += _val
             prune_node_layer(regraph, graph_H, _node, fd)
+            link.val += _val / len(_node.link_) - link.val  # *1/n: interaction decay with mediation order?
+            '''
+            adjust link val by node val, representing mediated interactions
+            no adjustment of current node until next round?
+            '''
 
 def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 
-    for link in G.link_.Q:  # all positive
+    for link in G.link_.Q:
+        # all positive, define initial graph, eval per node.link_ will be in prune_node_layer
         _G = link.G[1] if link.G[0] is G else link.G[0]
         if _G in G_:  # _G is not removed in prior loop
             gnode_ += [_G]
@@ -199,8 +199,8 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
                         continue
                     # not revised:
                     dderH, mval, dval, tval = comp_GQ(_G,G)  # comp_G while G.G, H/0G: GQ is one distributed node?
-                    ext = [1,distance,[dy,dx]]  # ext -> ext pair: new der_nodes / Graph:
-                    derG = Cgraph(valt=[mval,dval], G=[_G,G], derH= dderH+[[ext]], box=[])  # box is redundant to G
+                    ext = [[1],[distance],[dy,dx]]  # ext -> ext pair: new der_nodes / Graph:
+                    derG = Cgraph(valt=[mval,dval], G=[_G,G], derH=ext+dderH, box=[])  # box is redundant to G
                     # add links:
                     _G.link_.Q += [derG]; _G.link_.val += tval  # combined +-links val
                     G.link_.Q += [derG]; G.link_.val += tval
@@ -257,12 +257,10 @@ def comp_G(_G, G):  # in GQ
     '''
     return dderH, Mval,Dval, Mrdn,Drdn
 
-'''
-aggH ( subH ( derH have fixed syntax: all lower composition orders, but represented selectively,
-so each element is [gap, par], where gap is n missing pars before current par.
-'''
 # draft:
-def comp_aggH(_aggH, aggH):  # unpack aggH ( subH ( derH:
+def comp_aggH(_aggH, aggH):  # aggH ( subH ( derH:
+    # syntax = lower composition orders, represented selectively by Q: name'index'increments
+    # not updated, may need changes similar to comp_derH
 
     daggH = []; valt = [0,0]; rdnt = [1,1]; elev=0
 
@@ -286,29 +284,26 @@ def comp_aggH(_aggH, aggH):  # unpack aggH ( subH ( derH:
 
 def comp_derH(_derH, derH, j,k):
 
-    dderH = CpQ; elev=0
-    for i, (_ptuple,ptuple) in enumerate(zip(_derH.Q, derH.Q)):
+    dderH = CpQ(fds=copy(_derH.fds))
 
-        if _derH.fds[elev]!=derH.fds[elev]:
+    comp_ptuple(_derH.Qd[0], derH.Qd[0], dderH)  # all compared pars are in Qd, including 0der
+    elev = 0
+    for i, (_ptuple,ptuple) in enumerate(zip(_derH.Qd[1:], derH.Qd[1:])):
+
+        if _derH.fds[elev]!=derH.fds[elev]:  # fds start from 2nd lay
             break
-        if elev in (0,1) or not (i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+        if not i%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
             elev += 1
-        if j:
-            # we need local versions of comp_vertuple and comp_ptuple, in the same fashion as updated comp_ext
-            if i: dtuple = comp_vertuple(_ptuple, ptuple, dderH)
-            else:
-                if j: dtuple = comp_ptuple(_ptuple, ptuple, dderH)
-                else: dtuple = comp_ext(_ptuple, ptuple, dderH, k)  # comp_angle if k: 1st layer in lev
-        dderH.Q += [dtuple]
+        if j: comp_vertuple(_ptuple, ptuple, dderH)  # local comps pack results in dderH
+        else: comp_ext(_ptuple, ptuple, dderH, k)  # if 1st derH in subH, comp_angle if 1st subH in aggH?
 
     return dderH
 
-
-def comp_ext(_ext, ext, dderH, k):
+def comp_ext(_ext, ext, dderH, k):  # comp ds only, add Qn?
     _L,_S,_A = _ext; L,S,A = ext
-    # comp ds only:
-    dS = _S[1] - S[1]; mS = min(_S[1], S[1])  # average distance between connected nodes, single distance if derG
-    dL = _L[1] - L[1]; mL = min(_L[1], L[1])
+
+    dS = _S - S; mS = min(_S, S)  # average distance between connected nodes, single distance if derG
+    dL = _L - L; mL = min(_L, L)
     if _A and A:
         # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
         if k: dA = _A[1] - A[1]; mA = min(_A[1], A[1])  # scalar mA,dA
@@ -317,6 +312,8 @@ def comp_ext(_ext, ext, dderH, k):
         mA,dA = 0,0
     dderH.valt[0] += mL+mS+mA
     dderH.valt[1] += dL+dS+dA
+    dderH.Qm += [[mL,mS,mA]]
+    dderH.Qd += [[dL,dS,dA]]
     # no rdn?
 
 
@@ -328,7 +325,7 @@ def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH
         if graph.valt[fd] < aveG:  # form graph if val>min only
             continue
         Graph = Cgraph(fds=copy(graph.H[0].fds)+[fd])  # incr der
-        ''' if mult roots: 
+        ''' if n roots: 
         sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty
         sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
         '''
