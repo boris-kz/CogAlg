@@ -44,32 +44,22 @@ ave_len = 3
 ave_distance = 5
 ave_sparsity = 2
 
-
-class Clink_(ClusterStructure):
-    Q = list
-    val = float
-    Qm = list
-    mval = float
-    Qd = list
-    dval = float
-    '''
+class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
+    ''' ext / agg.sub.derH:
     L = list  # der L, init None
     S = int  # sparsity: ave len link
     A = list  # area|axis: Dy,Dx, ini None
     '''
-
-class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
-
     G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
-    aggH = lambda: list  # list of CpQ derHs: derH) node_) H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?
+    aggH = lambda: list  # list of CQ derHs: derH) node_) H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
     fds = list  # or fd, with sub fds in derH?
     rng = lambda: 1
     box = lambda: [0,0,0,0,0,0]  # y,x, y0,yn, x0,xn
     node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
-    link_ = lambda: Clink_()  # temporary holder for der+ node_, then unique links within graph?
+    link_ = lambda: CQ()  # temporary holder for der+ node_, then unique links within graph?
     fterm = lambda: 0  # G.node_ sub-comp was terminated
     # uH: up-forking Levs if mult roots, not implemented yet
     H = list  # down-forking tree of Levs: slice of nodes
@@ -113,7 +103,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
         while node_:  # all Gs not removed in add_node_layer
             G = node_.pop(); gnode_ = [G]
             val = add_node_layer(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
-            graph_ += [CpQ(H=gnode_, val=val)]
+            graph_ += [CQ(H=gnode_, val=val)]
         # reform graphs by node val:
         regraph_ = graph_reval(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
         if regraph_:
@@ -137,7 +127,7 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after 
             regraph_ += [graph]; rreval_ += [0]
             continue
         while graph.H:  # links may be revalued and removed, splitting graph to regraphs, init each with graph.Q node:
-            regraph = CpQ()
+            regraph = CQ()
             node = graph.H.pop()  # node_, not removed below
             val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
             if val > G_aves[fd]:  # else skip
@@ -153,20 +143,23 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after 
 
 def prune_node_layer(regraph, graph_H, node, fd):  # recursive depth-first regraph.Q+=[_node]
 
-    for link in [node.link_.Qm, node.link_.Qd][fd]:  # all positive
+    relink_=[]; link_ = node.link_.Qd if fd else node.link_.Qm
+    for link in link_:  # all positive, in-graph
 
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
         if _val > G_aves[fd] and _node in graph_H:
+            # or G_aves[fd] * len(_node.link_.Qd if fd else _node.link_.Qm) to adjust for +_node.val in 157?
             regraph.H += [_node]
             graph_H.remove(_node)
             regraph.valt[fd] += _val
             prune_node_layer(regraph, graph_H, _node, fd)
-            link.val += _val / len(_node.link_) - link.val  # *1/n: interaction decay with mediation order?
-            '''
-            adjust link val by node val, representing mediated interactions
-            no adjustment of current node until next round?
-            '''
+            link.val += _val / len(_node.link_) - link.val  # *1/n: interactions decay with mediation order?
+            # adjust link val by _node.val, adjust node.val in next round?
+            relink_+=[link]
+
+    node.link_.Qd[:] if fd else node.link_.Qm[:] = relink_  # contains links to graph nodes only
+
 
 def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 
@@ -275,16 +268,16 @@ def comp_aggH(_aggH, aggH):  # aggH ( subH ( derH:
                 break
             if elay in (0,1) or not (j+1)%(2**elay):  # first 2 levs are single-element, higher levs are 2**elev elements
                 elay+=1  # elevation
-            dsubH += [comp_derH(_derH, derH, j,i)]  # comp_par(derH[0]) if j else comp_angle(derH[0]), return CpQ dderH
-        daggH += [CpQ(Q=dsubH)]
+            dsubH += [comp_derH(_derH, derH, j,i)]  # comp_par(derH[0]) if j else comp_angle(derH[0]), return CQ dderH
+        daggH += [CQ(Q=dsubH)]
         # add summing valt, rdnt
 
-    return CpQ(Q=daggH)
+    return CQ(Q=daggH)
 
 
 def comp_derH(_derH, derH, j,k):
 
-    dderH = CpQ(fds=copy(_derH.fds))
+    dderH = CQ(fds=copy(_derH.fds))
 
     comp_ptuple(_derH.Qd[0], derH.Qd[0], dderH)  # all compared pars are in Qd, including 0der
     elev = 0
@@ -320,7 +313,7 @@ def comp_ext(_ext, ext, dderH, k):  # comp ds only, add Qn?
 def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
 
     Graph_ = []  # Cgraphs
-    for graph in graph_:  # CpQs
+    for graph in graph_:  # CQs
 
         if graph.valt[fd] < aveG:  # form graph if val>min only
             continue
@@ -416,7 +409,7 @@ def sum_H(H, h):  # add g.H to G.H, no eval but possible remove if weak?
     for i, (Lev, lev) in enumerate(zip_longest(H, h, fillvalue=[])):  # root.ex.H maps to node.ex.H[1:]
         if lev:
             if not Lev:  # init:
-                Lev = CpQ(H=[[] for fork in range(2**(i+1))])
+                Lev = CQ(H=[[] for fork in range(2**(i+1))])
             for j, (Fork, fork) in enumerate(zip(Lev.H, lev.H)):
                 if fork:
                     if not Fork: Lev.H[j] = Fork = Cgraph()
@@ -425,7 +418,7 @@ def sum_H(H, h):  # add g.H to G.H, no eval but possible remove if weak?
 # old:
 def comp_pH(_pH, pH):  # recursive unpack derHs ( pplayer ( players ( ptuples -> ptuple:
 
-    mpH, dpH = CpQ(), CpQ()  # new players in same top derH?
+    mpH, dpH = CQ(), CQ()  # new players in same top derH?
 
     for i, (_spH, spH) in enumerate(zip(_pH.H, pH.H)):  # s = sub
         fd = pH.fds[i] if pH.fds else 0  # in derHs or players
@@ -437,7 +430,7 @@ def comp_pH(_pH, pH):  # recursive unpack derHs ( pplayer ( players ( ptuples ->
                 mpH.H += [mtuple]; mpH.valt[0] += mtuple.val; mpH.fds += [0]  # mpH.rdn += mtuple.rdn?
                 dpH.H += [dtuple]; dpH.valt[1] += dtuple.val; dpH.fds += [1]  # dpH.rdn += dtuple.rdn
 
-            elif isinstance(_spH, CpQ):
+            elif isinstance(_spH, CQ):
                 smpH, sdpH = comp_pH(_spH, spH)
                 mpH.H +=[smpH]; mpH.valt[0]+=smpH.valt[0]; mpH.valt[1]+=smpH.valt[1]; mpH.rdn+=smpH.rdn; mpH.fds +=[smpH.fds]  # or 0 | fd?
                 dpH.H +=[sdpH]; dpH.valt[0]+=sdpH.valt[0]; dpH.valt[1]+=sdpH.valt[1]; dpH.rdn+=sdpH.rdn; dpH.fds +=[sdpH.fds]
@@ -445,7 +438,7 @@ def comp_pH(_pH, pH):  # recursive unpack derHs ( pplayer ( players ( ptuples ->
     return mpH, dpH
 
 def sum_pH_(PH_, pH_, fneg=0):
-    for PH, pH in zip_longest(PH_, pH_, fillvalue=[]):  # each is CpQ
+    for PH, pH in zip_longest(PH_, pH_, fillvalue=[]):  # each is CQ
         if pH:
             if PH:
                 for Fork, fork in zip_longest(PH.H, pH.H, fillvalue=[]):
@@ -459,7 +452,7 @@ def sum_pH_(PH_, pH_, fneg=0):
                                     else:          Fork.derH[-1][1] = deepcopy(expplayers)
                         else: PH.H += [deepcopy(fork)]
             else:
-                PH_ += [deepcopy(pH)]  # CpQ
+                PH_ += [deepcopy(pH)]  # CQ
 
 def sum_pH(PH, pH, fneg=0):  # recursive unpack derHs ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
 
@@ -527,7 +520,7 @@ def feedback(root):  # bottom-up update root.H, breadth-first
                     continue
                 for sub_node in node.node_:
                     fd = sub_node.fds[-1] if sub_node.fds else 0
-                    if not root.H: root.H = [CpQ(H=[[],[]])]  # append bottom-up
+                    if not root.H: root.H = [CQ(H=[[],[]])]  # append bottom-up
                     if not root.H[0].H[fd]: root.H[0].H[fd] = Cgraph()
                     # sum nodes in root, sub_nodes in root.H:
                     sum_derH(root.H[0].H[fd].derH, sub_node.derH)
@@ -550,14 +543,14 @@ def add_alt_graph_(graph_t):  # mgraph_, dgraph_
                 for derG in node.link_.Q:  # contour if link.derHs.val < aveGm: link outside the graph
                     for G in [derG.node0, derG.node1]:  # both overlap: in-graph nodes, and contour: not in-graph nodes
                         alt_graph = G.roott[1-fd]
-                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, CpQ):  # not proto-graph or removed
+                        if alt_graph not in graph.alt_graph_ and isinstance(alt_graph, CQ):  # not proto-graph or removed
                             graph.alt_graph_ += [alt_graph]
                             alt_graph.alt_graph_ += [graph]
                             # bilateral assign
     for fd, graph_ in enumerate(graph_t):
         for graph in graph_:
             if graph.alt_graph_:
-                graph.alt_derHs = CpQ()  # players if fsub? der+: derHs[-1] += player, rng+: players[-1] = player?
+                graph.alt_derHs = CQ()  # players if fsub? der+: derHs[-1] += player, rng+: players[-1] = player?
                 for alt_graph in graph.alt_graph_:
                     sum_pH(graph.alt_derHs, alt_graph.derHs)  # accum alt_graph_ params
                     graph.alt_rdn += len(set(graph.derHs.H[-1].node_).intersection(alt_graph.derHs.H[-1].node_))  # overlap

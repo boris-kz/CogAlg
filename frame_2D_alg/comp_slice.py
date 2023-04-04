@@ -84,16 +84,19 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
 
-class CpQ(ClusterStructure):  # vertuple or generic sequence
+class CQ(ClusterStructure):  # vertuple, hierarchy, or generic sequence
 
-    Q = list  # param set | H | sequence
-    N = list  # names'indices if selective representation, in agg+
-    valt = lambda: [0,0]
-    rdnt = lambda: [1,1]  # for all Qs? rdn if par: both m and d are represented?
-    n = lambda: 1  # accum count, combine from CpH?
-    nval = int  # of open links: base alt rep
-    fds = list  # der+|rng+
-    rng = lambda: 1
+    Q = list  # generic sequence or index increments in ptuple, derH, etc
+    Qm = list  # in-graph only
+    mval = float
+    Qd = list  # in-graph only
+    dval = float
+    fds = list
+    n = lambda: 1  # accum count in ptuple
+    rng = lambda: 1  # is it used anywhere?
+    valt = lambda: [0,0]  # if all links, else per Qm,Qd:
+    rdnt = lambda: [1,1]  # redundant if both m and d are represented?
+
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
@@ -444,7 +447,7 @@ def sum_derH(DerH, derH, fneg=0):  # same fds from comp_derH
     for Vertuple, vertuple in zip_longest(DerH, derH, fillvalue=[]):
         if vertuple:
             if Vertuple:
-                if isinstance(vertuple, CpQ):
+                if isinstance(vertuple, CQ):
                     sum_vertuple(Vertuple, vertuple, fneg)
                 else:
                     sum_ptuple(Vertuple, vertuple, fneg)
@@ -494,7 +497,7 @@ def comp_derH(_derH, derH):  # no need to check fds in comp_slice
     dderH = []; valt = [0,0]; rdnt = [1,1]
     for i, (_ptuple,ptuple) in enumerate(zip(_derH, derH)):
 
-        dtuple = comp_vertuple(_ptuple,ptuple) if isinstance(_ptuple, CpQ) else comp_ptuple(_ptuple,ptuple)
+        dtuple = comp_vertuple(_ptuple,ptuple) if isinstance(_ptuple, CQ) else comp_ptuple(_ptuple,ptuple)
         # dtuple = comp_vertuple(_ptuple,ptuple) if i else comp_ptuple(_ptuple,ptuple)
         dderH += [dtuple]
         for j in 0,1:
@@ -504,7 +507,7 @@ def comp_derH(_derH, derH):  # no need to check fds in comp_slice
 
 def comp_vertuple(_vertuple, vertuple):
 
-    dtuple=CpQ(n=_vertuple.n)
+    dtuple=CQ(n=_vertuple.n)
     rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
 
     for _par, par, ave in zip(_vertuple.Q, vertuple.Q, aves):
@@ -516,7 +519,7 @@ def comp_vertuple(_vertuple, vertuple):
 
 def comp_ptuple(_ptuple, ptuple):
 
-    dtuple = CpQ(n=_ptuple.n)
+    dtuple = CQ(n=_ptuple.n)
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:

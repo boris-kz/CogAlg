@@ -43,28 +43,27 @@ def sub_recursion_eval(root):  # for PP or dir_blob
                         if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
                         else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
 
-            # below is pending update
-            """
             # segs:
             agg_recursion_eval(PP, [copy(PP.mseg_levels[-1]), copy(PP.dseg_levels[-1])])
-            
-            
+
             # include empty comb_layers:
             if fd:
-                PPmm_ = [PPm_] + mcomb_layers; mVal = sum([PP.players[1] for PP_ in PPmm_ for PP in PP_])
-                PPmd_ = [PPm_] + dcomb_layers; dVal = sum([PP.players[1] for PP_ in PPmd_ for PP in PP_])
-                root.dlayers = [[PPmd_, mVal], [PPmm_, dVal]]
+                PPmm_ = [PPm_] + mcomb_layers; mVal = sum([PP.valt[0] for PP_ in PPmm_ for PP in PP_])
+                PPmd_ = [PPm_] + dcomb_layers; dVal = sum([PP.valt[1] for PP_ in PPmd_ for PP in PP_])
+                root.dlayers = [PPmd_,PPmm_]
             else:
-                PPdm_ = [PPm_] + mcomb_layers; mVal = sum([PP.players[1] for PP_ in PPdm_ for PP in PP_])
-                PPdd_ = [PPd_] + dcomb_layers; dVal = sum([PP.players[1] for PP_ in PPdd_ for PP in PP_])
-                root.rlayers = [[PPdm_, mVal], [PPdd_, dVal]]
+                PPdm_ = [PPm_] + mcomb_layers; mVal = sum([PP.valt[0] for PP_ in PPdm_ for PP in PP_])
+                PPdd_ = [PPd_] + dcomb_layers; dVal = sum([PP.valt[1] for PP_ in PPdd_ for PP in PP_])
+                root.rlayers = [PPdm_, PPdd_]
             # or higher der val?
             if isinstance(root, CPP):  # root is CPP
-                root.players[1] += PP.players[1]  # vals
+                for i in 0,1:
+                    root.valt[i] += PP.valt[i]  # vals
+                    root.rdnt[i] += PP.rdnt[i]  # ad rdn too?
             else:  # root is CBlob
-                if fd: root.G += PP.alt_players[1] if PP.alt_players else 0
-                else:  root.M += PP.players[1]
-            """
+                if fd: root.G += sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
+                else:  root.M += PP.valt[fd]
+
 
 def sub_recursion(PP):  # evaluate each PP for rng+ and der+
 
@@ -352,10 +351,9 @@ def PP2graph(PP, fseg, ifd=1):
 
     alt_subH = [CpQ(fds=[0])]; alt_aggH = CpQ(Q=[alt_subH],fds=[0]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
     if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
-        alt_subH[0].Q = [deepcopy(PP.alt_PP_[0].derH)]; alt_valt = copy(PP.alt_PP_[0].valt)
+        alt_derH = deepcopy(PP.alt_PP_[0].derH); alt_valt = copy(PP.alt_PP_[0].valt)
         alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
         for altPP in PP.alt_PP_[1:]:  # get fd sequence common for all altPPs:
-
             sum_derH(alt_subH[0].Q[0], altPP.derH)
             Y0,Yn,X0,Xn = alt_box; y0,yn,x0,xn = altPP.box
             alt_box[:] = min(Y0,y0),max(Yn,yn),min(X0,x0),max(Xn,xn)
@@ -363,10 +361,34 @@ def PP2graph(PP, fseg, ifd=1):
                 alt_valt[i] += altPP.valt[i]
                 alt_rdnt[i] += altPP.rdnt[i]
 
-    alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
-    subH = CpQ(Q=[PP.derH],fds=[0]); aggH = CpQ(Q=[subH],fds=[0])
-    graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
+        # convert to Clink_ with Qm, Qd and Q
+        alt_gderH = []
+        for derH in alt_derH:
+            dderH = Clink_()
+            if isinstance(derH, Cptuple):
+                 for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
+                     par = getattr(derH, pname)
+                     dderH.Qd += [par]; dderH.Q += [1]  # for ptuple, there will be just Qd?
+            else:
+                dderH.Qm += [m]; dderH.Qm += [d]; dderH.Q += [1]  # each gap is 1
+            alt_gderH += [dderH]
+        alt_subH[0].Q = [alt_gderH]
 
+    alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
+
+    # convert to Clink_ with Qm, Qd and Q
+    gderH = []
+    for derH in PP.derH:
+        dderH = Clink_()
+        if isinstance(derH, Cptuple):
+             for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
+                 par = getattr(derH, pname)
+                 dderH.Qd += [par]; dderH.Q += [1]  # for ptuple, there will be just Qd?
+        else:
+            dderH.Qm += [m]; dderH.Qm += [d]; dderH.Q += [1]  # each gap is 1
+        gderH += [dderH]
+    subH = CpQ(Q=[gderH],fds=[0]); aggH = CpQ(Q=[subH],fds=[0])
+    graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
     return graph
 
