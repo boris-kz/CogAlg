@@ -34,9 +34,9 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 '''
 # aves defined for rdn+1:
 aveG = 6  # fixed costs per G
-aveGm = 5  # for inclusion in graph
+aveGm = 5
 aveGd = 4
-G_aves = [aveGm, aveGd]
+G_aves = [aveGm, aveGd]  # for inclusion in graph, /ave_len per link
 ave_med = 3  # call cluster_node_layer
 ave_rng = 3  # rng per combined val
 ave_ext = 5  # to eval comp_derH
@@ -143,22 +143,21 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after 
 
 def prune_node_layer(regraph, graph_H, node, fd):  # recursive depth-first regraph.Q+=[_node]
 
-    relink_=[]; link_ = node.link_.Qd if fd else node.link_.Qm
-    for link in link_:  # all positive, in-graph
+    relink_=[]; ave = G_aves[fd]
+    for link in node.link_.Qd if fd else node.link_.Qm:  # all positive, in-graph
 
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
-        if _val > G_aves[fd] and _node in graph_H:
-            # or G_aves[fd] * len(_node.link_.Qd if fd else _node.link_.Qm) to adjust for +_node.val in 157?
+        # ave for link val + connected node val, or decay per mediation order?
+        if _val > ave/ave_len + ave and _node in graph_H:
             regraph.H += [_node]
             graph_H.remove(_node)
             regraph.valt[fd] += _val
             prune_node_layer(regraph, graph_H, _node, fd)
-            link.val += _val / len(_node.link_) - link.val  # *1/n: interactions decay with mediation order?
-            # adjust link val by _node.val, adjust node.val in next round?
+            link.val += _val / len(_node.link_) - link.val  # adjust link val by _node.val, adjust node.val in next round?
             relink_+=[link]
 
-    node.link_.Qd[:] if fd else node.link_.Qm[:] = relink_  # contains links to graph nodes only
+    [node.link_.Qd,node.link_.Qm][fd][:]  = relink_  # contains links to graph nodes only
 
 
 def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
@@ -276,10 +275,10 @@ def comp_aggH(_aggH, aggH):  # aggH ( subH ( derH:
 
 
 def comp_derH(_derH, derH, j,k):
-
     dderH = CQ(fds=copy(_derH.fds))
 
-    comp_ptuple(_derH.Qd[0], derH.Qd[0], dderH)  # all compared pars are in Qd, including 0der
+    dtuple = comp_ptuple(_derH.Qd[0], derH.Qd[0])  # all compared pars are in Qd, including 0der
+    add_dtuple(dderH, dtuple)
     elev = 0
     for i, (_ptuple,ptuple) in enumerate(zip(_derH.Qd[1:], derH.Qd[1:])):
 
@@ -287,12 +286,36 @@ def comp_derH(_derH, derH, j,k):
             break
         if not i%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
             elev += 1
-        if j: comp_vertuple(_ptuple, ptuple, dderH)  # local comps pack results in dderH
-        else: comp_ext(_ptuple, ptuple, dderH, k)  # if 1st derH in subH, comp_angle if 1st subH in aggH?
+        if j: dtuple = comp_vertuple(_ptuple, ptuple)  # local comps pack results in dderH
+        else: dtuple = comp_ext(_ptuple, ptuple, k)  # if 1st derH in subH, comp_angle if 1st subH in aggH?
+
+        add_dtuple(dderH, dtuple)
 
     return dderH
 
-def comp_ext(_ext, ext, dderH, k):  # comp ds only, add Qn?
+def comp_vertuple(_vertuple, vertuple, dderH):
+
+    dtuple=CQ(n=_vertuple.n)
+    rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
+    _idx, idx, d_didx = 0,0,0
+
+    for _i, _didx in enumerate(_vertuple.Q):
+        _idx +=_didx
+        for i, didx in enumerate(vertuple.Q[_i:]):  # idx at i<_i won't match _idx
+            idx += didx
+            if _idx==idx:
+                m,d = comp_par(_vertuple.Qd[_i], vertuple.Qd[i+_i]*rn, aves[idx])
+                dtuple.Qm += [m]; dtuple.Qd += [d]
+                dtuple.Q += [d_didx + _didx]
+                break
+            elif _idx < idx:  # no dpar per _par
+                d_didx += _didx
+                break  # no par search beyond current index
+            # else _idx > idx: continue search
+    return dtuple
+
+
+def comp_ext(_ext, ext, k):  # comp ds only, add Qn?
     _L,_S,_A = _ext; L,S,A = ext
 
     dS = _S - S; mS = min(_S, S)  # average distance between connected nodes, single distance if derG
@@ -303,12 +326,16 @@ def comp_ext(_ext, ext, dderH, k):  # comp ds only, add Qn?
         else: mA, dA = comp_angle(_A, A)
     else:
         mA,dA = 0,0
-    dderH.valt[0] += mL+mS+mA
-    dderH.valt[1] += dL+dS+dA
-    dderH.Qm += [[mL,mS,mA]]
-    dderH.Qd += [[dL,dS,dA]]
-    # no rdn?
 
+    return CQ(Qm=[mL,mS,mA],Qd=[mL,mS,mA], valt=[mL+mS+mA,dL+dS+dA])
+
+def add_dtuple(dderH, dtuple):
+    dderH.Q += [1]  # not sure
+    dderH.Qm += [[dtuple.Qm]]
+    dderH.Qd += [[dtuple.Qd]]
+    dderH.valt[0] += dtuple.valt[0]
+    dderH.valt[1] += dtuple.valt[1]
+    # no rdn?
 
 def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
 
@@ -414,71 +441,6 @@ def sum_H(H, h):  # add g.H to G.H, no eval but possible remove if weak?
                 if fork:
                     if not Fork: Lev.H[j] = Fork = Cgraph()
                     sum_G(Fork, fork)
-
-# old:
-def comp_pH(_pH, pH):  # recursive unpack derHs ( pplayer ( players ( ptuples -> ptuple:
-
-    mpH, dpH = CQ(), CQ()  # new players in same top derH?
-
-    for i, (_spH, spH) in enumerate(zip(_pH.H, pH.H)):  # s = sub
-        fd = pH.fds[i] if pH.fds else 0  # in derHs or players
-        _fd = _pH.fds[i] if _pH.fds else 0
-        if _fd == fd:
-            if isinstance(_spH, Cptuple):
-                mtuple, dtuple = comp_ptuple(_spH, spH, fd)
-                # not sure here, one of the val is always 0?
-                mpH.H += [mtuple]; mpH.valt[0] += mtuple.val; mpH.fds += [0]  # mpH.rdn += mtuple.rdn?
-                dpH.H += [dtuple]; dpH.valt[1] += dtuple.val; dpH.fds += [1]  # dpH.rdn += dtuple.rdn
-
-            elif isinstance(_spH, CQ):
-                smpH, sdpH = comp_pH(_spH, spH)
-                mpH.H +=[smpH]; mpH.valt[0]+=smpH.valt[0]; mpH.valt[1]+=smpH.valt[1]; mpH.rdn+=smpH.rdn; mpH.fds +=[smpH.fds]  # or 0 | fd?
-                dpH.H +=[sdpH]; dpH.valt[0]+=sdpH.valt[0]; dpH.valt[1]+=sdpH.valt[1]; dpH.rdn+=sdpH.rdn; dpH.fds +=[sdpH.fds]
-
-    return mpH, dpH
-
-def sum_pH_(PH_, pH_, fneg=0):
-    for PH, pH in zip_longest(PH_, pH_, fillvalue=[]):  # each is CQ
-        if pH:
-            if PH:
-                for Fork, fork in zip_longest(PH.H, pH.H, fillvalue=[]):
-                    if fork:
-                        if Fork:
-                            if fork.derH:
-                                for (Pplayers, Expplayers),(pplayers, expplayers) in zip(Fork.derH, fork.derH):
-                                    if Pplayers:   sum_pH(Pplayers, pplayers, fneg)
-                                    else:          Fork.derH += [[deepcopy(pplayers),[]]]
-                                    if Expplayers: sum_pH(Expplayers, expplayers, fneg)
-                                    else:          Fork.derH[-1][1] = deepcopy(expplayers)
-                        else: PH.H += [deepcopy(fork)]
-            else:
-                PH_ += [deepcopy(pH)]  # CQ
-
-def sum_pH(PH, pH, fneg=0):  # recursive unpack derHs ( pplayers ( players ( ptuples, no accum across fd: matched in comp_pH
-
-    for SpH, spH, Fd, fd in zip_longest(PH.H, pH.H, PH.fds, pH.fds, fillvalue=None):  # assume same forks
-        if spH:
-            if SpH:
-                if isinstance(spH, Cptuple):  # PH is ptuples, SpH_ is ptuple
-                    sum_ptuple(SpH, spH, fneg=fneg)
-                else:  # PH is players, H is ptuples
-                    sum_pH(SpH, spH, fneg=fneg)
-            else:
-                PH.fds += [fd]
-                PH.H += [deepcopy(spH)]
-    PH.valt[0] += pH.valt[0]; PH.valt[1] += pH.valt[1]
-    PH.rdn += pH.rdn
-    if not PH.L: PH.L = pH.L  # PH.L is empty list by default
-    else:        PH.L += pH.L
-    PH.S += pH.S
-    if isinstance(pH.A, list):
-        if pH.A:
-            if PH.A:
-                PH.A[0] += pH.A[0]; PH.A[1] += pH.A[1]
-            else: PH.A = copy(pH.A)
-    else: PH.A += pH.A
-
-    return PH
 
 # draft
 def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_

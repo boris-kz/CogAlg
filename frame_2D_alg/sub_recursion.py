@@ -313,11 +313,11 @@ def blob2graph(blob, fseg):
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
 
-    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
-    mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CpQ(Q=[CpQ(Q=[])]), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -349,45 +349,21 @@ def blob2graph(blob, fseg):
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
-    alt_subH = [CpQ(fds=[0])]; alt_aggH = CpQ(Q=[alt_subH],fds=[0]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
+    alt_subH = CQ(fds=[0]); alt_aggH = CQ(Q=[alt_subH],fds=[0]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
     if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
-        alt_derH = deepcopy(PP.alt_PP_[0].derH); alt_valt = copy(PP.alt_PP_[0].valt)
+        alt_subH.Q = [deepcopy(PP.alt_PP_[0].derH)]; alt_valt = copy(PP.alt_PP_[0].valt)
         alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
         for altPP in PP.alt_PP_[1:]:  # get fd sequence common for all altPPs:
-            sum_derH(alt_subH[0].Q[0], altPP.derH)
+            sum_derH(alt_subH.Q[0], altPP.derH)
             Y0,Yn,X0,Xn = alt_box; y0,yn,x0,xn = altPP.box
             alt_box[:] = min(Y0,y0),max(Yn,yn),min(X0,x0),max(Xn,xn)
             for i in range(2):
                 alt_valt[i] += altPP.valt[i]
                 alt_rdnt[i] += altPP.rdnt[i]
-
-        # convert to Clink_ with Qm, Qd and Q
-        alt_gderH = []
-        for derH in alt_derH:
-            dderH = Clink_()
-            if isinstance(derH, Cptuple):
-                 for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
-                     par = getattr(derH, pname)
-                     dderH.Qd += [par]; dderH.Q += [1]  # for ptuple, there will be just Qd?
-            else:
-                dderH.Qm += [m]; dderH.Qm += [d]; dderH.Q += [1]  # each gap is 1
-            alt_gderH += [dderH]
-        alt_subH[0].Q = [alt_gderH]
-
     alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
 
-    # convert to Clink_ with Qm, Qd and Q
-    gderH = []
-    for derH in PP.derH:
-        dderH = Clink_()
-        if isinstance(derH, Cptuple):
-             for pname, ave in zip(pnames, aves):  # comp full derH of each param between ptuples:
-                 par = getattr(derH, pname)
-                 dderH.Qd += [par]; dderH.Q += [1]  # for ptuple, there will be just Qd?
-        else:
-            dderH.Qm += [m]; dderH.Qm += [d]; dderH.Q += [1]  # each gap is 1
-        gderH += [dderH]
-    subH = CpQ(Q=[gderH],fds=[0]); aggH = CpQ(Q=[subH],fds=[0])
+
+    subH = CQ(Q=[PP.derH],fds=[0]); aggH = CQ(Q=[subH],fds=[0])
     graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
     return graph
