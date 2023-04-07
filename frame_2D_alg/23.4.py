@@ -133,3 +133,64 @@ def comp_derH(_derH, derH):  # no need to check fds in comp_slice
             valt[j] += dtuple.valt[j]; rdnt[j] += dtuple.rdnt[j]
 
     return dderH, valt, rdnt
+
+def prune_node_layer(regraph, graph_H, node, fd):  # recursive depth-first regraph.Q+=[_node]
+    relink_=[]
+    for link in node.link_.Qd if fd else node.link_.Qm:  # all positive in-graph links, Qm is actually Qr: rng+
+        _node = link.G[1] if link.G[0] is node else link.G[0]
+        _val = [_node.link_.mval, _node.link_.dval][fd]
+        # ave / link val + linked node val:
+        if _val > G_aves[fd] and _node in graph_H:
+            regraph.Q += [_node]
+            graph_H.remove(_node)
+            regraph.valt[fd] += _val
+            prune_node_layer(regraph, graph_H, _node, fd)
+            # adjust link val by _node.val, adjust node.val in next round:
+            link.valt[fd] += (_val / len(_node.link_) * med_decay) - link.valt[fd]
+            relink_+=[link]
+    [node.link_.Qd,node.link_.Qm][fd][:] = relink_  # contains links to graph nodes only
+
+def comp_derH(_derH, derH, j,k):
+
+    dderH = CQ()
+    # we need the same nested looping and if _idx==idx as in comp_vertuple, test if Cptuple for comp_ptuple?
+    # old:
+    dtuple = comp_ptuple(_derH.Q[0], derH.Q[0])  # all compared pars are in Qd, including 0der
+    add_dtuple(dderH, dtuple)
+    elev = 0
+    for i, (_ptuple,ptuple) in enumerate(zip(_derH.Q[1:], derH.Q[1:])):
+
+        if _derH.fds[elev]!=derH.fds[elev]:  # fds start from 2nd lay
+            break
+        if not i%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+            elev += 1
+        if j: dtuple = comp_vertuple(_ptuple, ptuple)  # local comps pack results in dderH
+        else: dtuple = comp_ext(_ptuple, ptuple, k)  # if 1st derH in subH, comp_angle if 1st subH in aggH?
+
+        dderH.fds += _derH.fds[elev]
+        add_dtuple(dderH, dtuple)
+
+    return dderH
+
+def comp_vertuple(_vertuple, vertuple):
+
+    dtuple=CQ(n=_vertuple.n)
+    rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
+    _idx, idx, d_didx = 0,0,0
+
+    for _i, _didx in enumerate(_vertuple.Q):  # i: index in Qd (select param set), idx: index in pnames (full param set)
+        for i, didx in enumerate(vertuple.Q[_i:]): # idx at i<_i won't match _idx
+            if _idx==idx:
+                m,d = comp_par(_vertuple.Qd[_i], vertuple.Qd[i+_i]*rn, aves[idx])
+                dtuple.Qm += [m]; dtuple.Qd += [d]
+                dtuple.Q += [d_didx + _didx]
+                break
+            elif _idx < idx:  # no dpar per _par
+                d_didx += _didx
+                break  # no par search beyond current index
+            # else _idx > idx: continue search
+            idx += didx
+        _idx +=_didx
+
+    return dtuple
+
