@@ -92,7 +92,7 @@ class CQ(ClusterStructure):  # vertuple, hierarchy, or generic sequence
     Qd = list  # in-graph only
     dval = float
     fds = list
-    n = lambda: 1  # accum count in ptuple
+    n = int  # accum count in ptuple
     rng = lambda: 1  # is it used anywhere?
     valt = lambda: [0,0]  # if all links, else per Qm,Qd:
     rdnt = lambda: [1,1]  # redundant if both m and d are represented?

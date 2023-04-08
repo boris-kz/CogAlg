@@ -350,7 +350,7 @@ def blob2graph(blob, fseg):
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
-    alt_derH = CQ(fds=0); alt_subH = CQ(Qd=[alt_derH],Q=[1], fds=[0]); alt_aggH = CQ(Qd=[alt_subH], Q=[1], fds=[0]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
+    alt_derH = CQ(); alt_subH = CQ(Qd=[alt_derH],Q=[1], fds=[0]); alt_aggH = CQ(Qd=[alt_subH], Q=[1], fds=[1]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
     if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
         alt_derH.Qd = [deepcopy(PP.alt_PP_[0].derH)]; alt_valt = copy(PP.alt_PP_[0].valt)
         alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
@@ -362,10 +362,11 @@ def PP2graph(PP, fseg, ifd=1):
                 alt_valt[i] += altPP.valt[i]
                 alt_rdnt[i] += altPP.rdnt[i]
         alt_derH.Q = [1 for _ in range(len(alt_derH.Qd))]
+        alt_derH.fds = [1 for _ in alt_derH.Qd]
     alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
 
-    derH = CQ(Qd=PP.derH, Q=[1 for _ in range(len(PP.derH))], fds=[0])
-    subH = CQ(Qd=[derH],Q=[1], fds=[0]); aggH = CQ(Qd=[subH], Q=[1], fds=[0])
+    derH = CQ(Qd=PP.derH, Q=[1 for _ in range(len(PP.derH))], fds=[1 for _ in PP.derH])
+    subH = CQ(Qd=[derH],Q=[1], fds=[0]); aggH = CQ(Qd=[subH], Q=[1], fds=[1])
     graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
     return graph
