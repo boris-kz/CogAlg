@@ -194,3 +194,18 @@ def comp_vertuple(_vertuple, vertuple):
 
     return dtuple
 
+# replaced by comp_ptuple
+def comp_ext(_ext, ext, k):  # comp ds only, add Qn?
+    _L,_S,_A = _ext; L,S,A = ext
+
+    dS = _S - S; mS = min(_S, S)  # average distance between connected nodes, single distance if derG
+    dL = _L - L; mL = min(_L, L)
+    if _A and A:
+        # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
+        if k: dA = _A[1] - A[1]; mA = min(_A[1], A[1])  # scalar mA,dA
+        else: mA, dA = comp_angle(_A, A)
+    else:
+        mA,dA = 0,0
+
+    return CQ(Qm=[mL,mS,mA],Qd=[mL,mS,mA], valt=[mL+mS+mA,dL+dS+dA])
+

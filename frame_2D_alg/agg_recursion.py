@@ -260,33 +260,35 @@ def comp_G(_G, G):  # in GQ
     return daggH
 
 # draft
-def comp_parH(_parH, parH):  # may compare derH, subH, aggH
+def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuple
 
     dparH = CQ(); elev=0
     _idx, idx, d_didx = 0,0,0
 
-    for _i, _didx in enumerate(_parH.Q):
+    for _i, _didx in enumerate(_parH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
         _idx += _didx
-        for i, didx in enumerate(parH.Q[_i:]):
+        for i, didx in enumerate(parH.Q[_i:]):  # idx at i<_i won't match _idx
             idx += didx
             if _idx==idx:
-                if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
-                    elev+=1  # elevation
-                if _parH.n and parH.n:  # parH is vertuple, ptuple, or ext, no fds
-                    dtuple = comp_ptuple(_parH, parH)
-                    add_dtuple(dparH,dtuple)
-                elif _parH.fds[elev]!=parH.fds[elev]:  # always fds if not n
-                    mH,dH = comp_parH(_parH.Qd[_i], parH.Qd[_i + i])
-                    dparH.Qm += [mH]; dparH.Qd += [dH]
-                    dparH.Q += [d_didx + _didx]
+                if _parH.fds[elev]==parH.fds[elev] and _parH.Qm[_i]+parH.Qd[_i+i] > aveG:  # same-type eval
+                    _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
+                    if sub.n:
+                        dsub = comp_ptuple(_sub,sub)  # sub is vertuple, ptuple, or ext
+                    else:
+                        dsub = comp_parH(_sub,sub)  # keep unpacking
+                    dparH.Qm+=[[dsub.Qm]]; dparH.Qd+=[[dsub.Qd]]; dparH.Q+=[d_didx+_didx]
+                    dparH.valt[0]+=dsub.valt[0]; dparH+=dsub.valt[1]  # add rdnt?
                     dparH.fds += _parH.fds[elev]
-                break
-            elif _idx < idx:  # no dpar per _par
+                    break
+            elif _idx < idx:  # no dsub per _sub
                 d_didx += _didx
-                break  # no par search beyond current index
-            # else _idx > idx: continue search
+                break  # no sub search beyond current index
+            # else _idx>idx: keep searching
+        if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+            elev+=1  # elevation
 
     return dparH
+
 
 def comp_ptuple(_ptuple, ptuple):  # may be ptuple, vertuple, or ext
 
@@ -296,48 +298,23 @@ def comp_ptuple(_ptuple, ptuple):  # may be ptuple, vertuple, or ext
 
     for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd (select param set), idx: index in pnames (full param set)
         _idx += _didx
-        for i, didx in enumerate(ptuple.Q[_i:]): # idx at i<_i won't match _idx
+        for i, didx in enumerate(ptuple.Q[_i:]):
             idx += didx
-            if _idx==idx:
-                _par, par = _ptuple.Qd[_i], ptuple.Qd[i+_i]*rn  # may be scalar, angle, or aangle
+            if _idx==idx and _ptuple.Qm[_i]+ptuple.Qd[_i+i] > aveG:
+                _par, par = _ptuple.Qd[_i], ptuple.Qd[_i+i]*rn  # may be scalar, angle, or aangle
                 if isinstance(par,list):
                     if isinstance(par[0],list): m,d = comp_aangle(_par,par)
                     else: m,d = comp_angle(_par,par)
                 else:
-                    ''' for ptuple only, not sure how to test now:
-                    if pname != "x": par *= rn  # normalize by relative accum count
-                    if pname == "x" or pname == "I": finv = 1
-                    else: finv = 0 '''
-                    m,d = comp_par(_par, par, aves[idx])
-                dtuple.Qm+=[m]; dtuple.Qd+=[d]
-                dtuple.Q+=[d_didx+_didx]
+                    m,d = comp_par(_par, par, aves[idx])  # pname=pnames[idx], but we don't need it
+                dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
+                dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt?
                 break
             elif _idx < idx:  # no dpar per _par
                 d_didx+=_didx
                 break  # no par search beyond current index
-            # else _idx > idx: continue search
+            # else _idx>idx: keep searching
     return dtuple
-
-# replaced by comp_ptuple?
-def comp_ext(_ext, ext, k):  # comp ds only, add Qn?
-    _L,_S,_A = _ext; L,S,A = ext
-
-    dS = _S - S; mS = min(_S, S)  # average distance between connected nodes, single distance if derG
-    dL = _L - L; mL = min(_L, L)
-    if _A and A:
-        # axis: dy,dx only for derG or high-aspect Gs, both val *= aspect?
-        if k: dA = _A[1] - A[1]; mA = min(_A[1], A[1])  # scalar mA,dA
-        else: mA, dA = comp_angle(_A, A)
-    else:
-        mA,dA = 0,0
-
-    return CQ(Qm=[mL,mS,mA],Qd=[mL,mS,mA], valt=[mL+mS+mA,dL+dS+dA])
-
-def add_dtuple(dderH, dtuple):
-    dderH.Q += [1]  # not sure
-    dderH.Qm += [[dtuple.Qm]]; dderH.Qd += [[dtuple.Qd]]
-    dderH.valt[0] += dtuple.valt[0]; dderH.valt[1] += dtuple.valt[1]
-    # no rdn?
 
 
 def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
