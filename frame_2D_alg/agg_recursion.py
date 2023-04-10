@@ -260,30 +260,32 @@ def comp_G(_G, G):  # in GQ
     return daggH
 
 # draft
-def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuple
+def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuples
 
-    dparH = CQ(); elev=0
-    _idx, idx, d_didx = 0,0,0
+    dparH = CQ(); _idx, d_didx, last_i, last_idx, elev = 0,0,0,0,0
 
     for _i, _didx in enumerate(_parH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
-        _idx += _didx
-        for i, didx in enumerate(parH.Q[_i:]):  # idx at i<_i won't match _idx
+        _idx += _didx; idx = last_idx
+        for i, didx in enumerate(parH.Q[last_i:]):  # start with last matching i and idx
             idx += didx
             if _idx==idx:
-                if _parH.fds[elev]==parH.fds[elev] and _parH.Qm[_i]+parH.Qd[_i+i] > aveG:  # same-type eval
+                _fd = _parH.fds[elev]; fd = parH.fds[elev]
+                if _fd==fd and _parH.Qd[_i].valt[fd] + parH.Qd[_i+i].valt[fd] > aveG:  # same-type eval
                     _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
                     if sub.n:
                         dsub = comp_ptuple(_sub,sub)  # sub is vertuple, ptuple, or ext
                     else:
-                        dsub = comp_parH(_sub,sub)  # keep unpacking
-                    dparH.Qm+=[[dsub.Qm]]; dparH.Qd+=[[dsub.Qd]]; dparH.Q+=[d_didx+_didx]
-                    dparH.valt[0]+=dsub.valt[0]; dparH+=dsub.valt[1]  # add rdnt?
-                    dparH.fds += _parH.fds[elev]
+                        dsub = comp_parH(_sub,sub)  # keep unpacking aggH | subH | derH
+                    dparH.fds += [fd]
+                    dparH.Qd+=[dsub]; dparH.Q+=[_didx+d_didx]
+                    dparH.valt[0]+=dsub.valt[0]; dparH.valt[1]+=dsub.valt[1]  # add rdnt?
+                    # set last matching i and idx for next loop:
+                    last_i=i; last_idx=idx
                     break
-            elif _idx < idx:  # no dsub per _sub
-                d_didx += _didx
-                break  # no sub search beyond current index
-            # else _idx>idx: keep searching
+            elif _idx < idx:  # no dsub / _sub
+                d_didx += didx  # += missing didx
+                break  # no parH search beyond _idx
+            # else _idx > idx: continue search
         if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
             elev+=1  # elevation
 
@@ -294,26 +296,31 @@ def comp_ptuple(_ptuple, ptuple):  # may be ptuple, vertuple, or ext
 
     dtuple=CQ(n=_ptuple.n)  # combine with ptuple.n?
     rn = _ptuple.n/ptuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
-    _idx, idx, d_didx = 0,0,0
+    _idx, idx, last_i, last_idx, d_didx = 0,0,0,0,0
 
-    for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd (select param set), idx: index in pnames (full param set)
-        _idx += _didx
-        for i, didx in enumerate(ptuple.Q[_i:]):
+    for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd (select param set), idx: index in full param set
+        _idx += _didx; idx = last_idx
+        for i, didx in enumerate(ptuple.Q[last_i:]):  # start with last matching i and idx
             idx += didx
-            if _idx==idx and _ptuple.Qm[_i]+ptuple.Qd[_i+i] > aveG:
-                _par, par = _ptuple.Qd[_i], ptuple.Qd[_i+i]*rn  # may be scalar, angle, or aangle
-                if isinstance(par,list):
-                    if isinstance(par[0],list): m,d = comp_aangle(_par,par)
-                    else: m,d = comp_angle(_par,par)
-                else:
-                    m,d = comp_par(_par, par, aves[idx])  # pname=pnames[idx], but we don't need it
-                dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
-                dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt?
+            if _idx == idx:
+                if ptuple.Qm: val = _ptuple.Qm[_i]+ptuple.Qm[_i+i]
+                else: val = aveG+1  # default comp for 0der pars,
+                    # set finv=0 for I?
+                if val > aveG:
+                    _par, par = _ptuple.Qd[_i], ptuple.Qd[_i+i]
+                    if isinstance(par,list):
+                        if len(par)==4: m,d = comp_aangle(_par,par)
+                        else: m,d = comp_angle(_par,par)
+                    else:
+                        m,d = comp_par(_par, par*rn, aves[idx])
+                    dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
+                    dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt?
+                last_i=i; last_idx=idx  # last matching i,idx
                 break
             elif _idx < idx:  # no dpar per _par
-                d_didx+=_didx
+                d_didx += didx
                 break  # no par search beyond current index
-            # else _idx>idx: keep searching
+            # else _idx > idx: keep searching
     return dtuple
 
 

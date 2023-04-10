@@ -352,20 +352,46 @@ def PP2graph(PP, fseg, ifd=1):
 
     alt_derH = CQ(); alt_subH = CQ(Qd=[alt_derH],Q=[1], fds=[0]); alt_aggH = CQ(Qd=[alt_subH], Q=[1], fds=[1]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
     if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
-        alt_derH.Qd = [deepcopy(PP.alt_PP_[0].derH)]; alt_valt = copy(PP.alt_PP_[0].valt)
+        pQd = deepcopy(PP.alt_PP_[0].derH); alt_valt = copy(PP.alt_PP_[0].valt)
         alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
         for altPP in PP.alt_PP_[1:]:  # get fd sequence common for all altPPs:
-            sum_derH(alt_derH.Qd[0], altPP.derH)
+            sum_derH(pQd, altPP.derH)
             Y0,Yn,X0,Xn = alt_box; y0,yn,x0,xn = altPP.box
             alt_box[:] = min(Y0,y0),max(Yn,yn),min(X0,x0),max(Xn,xn)
             for i in range(2):
                 alt_valt[i] += altPP.valt[i]
                 alt_rdnt[i] += altPP.rdnt[i]
-        alt_derH.Q = [1 for _ in range(len(alt_derH.Qd))]
-        alt_derH.fds = [1 for _ in alt_derH.Qd]
+        for dderH in pQd:
+            if isinstance(dderH, Cptuple):  # convert ptuple to CQ
+                pQ = CQ(n=dderH.n)
+                for pname in pnames:
+                    par = getattr(dderH, pname)
+                    if pname != "x":  # exclude x
+                        pQ.Qm += [0]; pQ.Qd += [par]; pQ.Q += [0]
+                        if pname not in ["angle", "aangle", "axis"]:
+                            pQ.dval += par; pQ.valt[1] += par
+                alt_derH.Qd += [pQ]
+            else:  # vertuple
+                alt_derH.Qd += [dderH]
+            alt_derH.Q += [1]; alt_derH.fds += [1]
     alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
 
-    derH = CQ(Qd=PP.derH, Q=[1 for _ in range(len(PP.derH))], fds=[1 for _ in PP.derH])
+    Qd = []; Q = []; fds = []
+    for dderH in PP.derH:
+        if isinstance(dderH, Cptuple):  # convert ptuple to CQ
+            pQ = CQ(n=dderH.n)
+            for pname in pnames:
+                par = getattr(dderH, pname)
+                if pname != "x":  # exclude x
+                    pQ.Qm += [0]; pQ.Qd += [par]; pQ.Q += [0]
+                    if pname not in ["angle", "aangle", "axis"]:
+                        pQ.dval += par; pQ.valt[1] += par
+            Qd += [pQ]
+        else:  # vertuple
+            Qd += [dderH]
+        Q += [1]; fds += [1]
+
+    derH = CQ(Qd=Qd, Q=Q, fds=fds)
     subH = CQ(Qd=[derH],Q=[1], fds=[0]); aggH = CQ(Qd=[subH], Q=[1], fds=[1])
     graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
 
