@@ -145,15 +145,15 @@ def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after 
 def prune_node_layer(regraph, graph_H, node, fd): # recursive depth-first regraph.Q+=[_node]
 
     link_ = node.link_.Qd if fd else node.link_.Qm
-    for link in link_:  # all positive in-graph links, Qm is actually Qr: rng+
-
+    for link in link_:
+        # all positive in-graph links, Qm is actually Qr: rng+
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
         link.valt[fd] += (_val / len(_node.link_) * med_decay) - link.valt[fd]
         # link val += norm _node.val, adjust node.val in next round
     relink_=[]
-    for link in  link_:  # prune revalued nodes and links
-
+    for link in  link_:
+        # prune revalued nodes and links:
         _node = link.G[1] if link.G[0] is node else link.G[0]
         _val = [_node.link_.mval, _node.link_.dval][fd]
         # ave / link val + linked node val:
@@ -162,11 +162,12 @@ def prune_node_layer(regraph, graph_H, node, fd): # recursive depth-first regrap
             graph_H.remove(_node)
             regraph.valt[fd] += _val
             relink_ += [link]  # remove link?
-
-    if regraph.valt[fd] > G_aves[fd]:  # else skip, currently in graph_reval, move here?
+    # recursion:
+    if regraph.valt[fd] > G_aves[fd]:
         prune_node_layer(regraph, graph_H, _node, fd)  # not sure about _node
 
     [node.link_.Qd,node.link_.Qm][fd][:] = relink_  # links to in-graph nodes only
+
 
 def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 
@@ -265,62 +266,63 @@ def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuples
     dparH = CQ(); _idx, d_didx, last_i, last_idx, elev = 0,0,0,0,0
 
     for _i, _didx in enumerate(_parH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
-        _idx += _didx; idx = last_idx
-        for i, didx in enumerate(parH.Q[last_i:]):  # start with last matching i and idx
+        _idx += _didx; idx = last_idx+1
+        for i, didx in enumerate(parH.Q[last_i+1:]):  # start with last matching i and idx
             idx += didx
             if _idx==idx:
-                _fd = _parH.fds[elev]; fd = parH.fds[elev]
+                _fd = _parH.fds[elev]; fd = parH.fds[elev]  # fd per lev, not sub
                 if _fd==fd and _parH.Qd[_i].valt[fd] + parH.Qd[_i+i].valt[fd] > aveG:  # same-type eval
                     _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
                     if sub.n:
-                        dsub = comp_ptuple(_sub,sub)  # sub is vertuple, ptuple, or ext
+                        dsub = comp_ptuple(_sub,sub, fd)  # sub is vertuple, ptuple, or ext
                     else:
                         dsub = comp_parH(_sub,sub)  # keep unpacking aggH | subH | derH
                     dparH.fds += [fd]
                     dparH.Qd+=[dsub]; dparH.Q+=[_didx+d_didx]
                     dparH.valt[0]+=dsub.valt[0]; dparH.valt[1]+=dsub.valt[1]  # add rdnt?
-                    # set last matching i and idx for next loop:
-                    last_i=i; last_idx=idx
+                    last_i=i; last_idx=idx  # last matching i,idx
                     break
             elif _idx < idx:  # no dsub / _sub
                 d_didx += didx  # += missing didx
                 break  # no parH search beyond _idx
             # else _idx > idx: continue search
+            idx += 1  # 1 sub/loop
+        _idx += 1
         if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
             elev+=1  # elevation
 
     return dparH
 
 
-def comp_ptuple(_ptuple, ptuple):  # may be ptuple, vertuple, or ext
+def comp_ptuple(_ptuple, ptuple, fd):  # may be ptuple, vertuple, or ext
 
     dtuple=CQ(n=_ptuple.n)  # combine with ptuple.n?
     rn = _ptuple.n/ptuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
     _idx, idx, last_i, last_idx, d_didx = 0,0,0,0,0
 
     for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd (select param set), idx: index in full param set
-        _idx += _didx; idx = last_idx
-        for i, didx in enumerate(ptuple.Q[last_i:]):  # start with last matching i and idx
-            idx += didx
+        _idx += _didx
+        for i, didx in enumerate(ptuple.Q[last_i+1:]):  # start with last matching i and idx
+            idx += didx; idx = last_idx+1
             if _idx == idx:
-                if ptuple.Qm: val = _ptuple.Qm[_i]+ptuple.Qm[_i+i]
-                else: val = aveG+1  # default comp for 0der pars,
-                    # set finv=0 for I?
+                if ptuple.Qm: val = _ptuple.Qd[_i]+ptuple.Qd[_i+i] if fd else _ptuple.Qm[_i]+ptuple.Qm[_i+i]
+                else:         val = aveG+1  # default comp for 0der pars
                 if val > aveG:
                     _par, par = _ptuple.Qd[_i], ptuple.Qd[_i+i]
                     if isinstance(par,list):
                         if len(par)==4: m,d = comp_aangle(_par,par)
                         else: m,d = comp_angle(_par,par)
                     else:
-                        m,d = comp_par(_par, par*rn, aves[idx])
+                        m,d = comp_par(_par, par*rn, aves[idx], finv = not i and not ptuple.Qm)  # finv=0 for 0der I only
                     dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
-                    dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt?
-                last_i=i; last_idx=idx  # last matching i,idx
+                    dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt, rdn = m>d or d>m?)
                 break
             elif _idx < idx:  # no dpar per _par
                 d_didx += didx
                 break  # no par search beyond current index
             # else _idx > idx: keep searching
+            idx += 1
+        _idx += 1
     return dtuple
 
 
