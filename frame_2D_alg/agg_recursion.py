@@ -45,6 +45,8 @@ ave_distance = 5
 ave_sparsity = 2
 med_decay = .5  # decay of induction per med layer
 
+pnames = ["I", "M", "Ma", "axis", "angle", "aangle","G", "Ga", "L"]
+
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
     ''' ext / agg.sub.derH:
     L = list  # der L, init None
@@ -106,68 +108,13 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
             val = add_node_layer(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
             graph_ += [CQ(Q=gnode_, val=val)]
         # reform graphs by node val:
-        regraph_ = graph_reval(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
+        regraph_ = graph_reval_(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd, fsub)  # sum proto-graph node_ params in graph
         graph_t += [graph_]
 
     # add_alt_graph_(graph_t)  # overlap+contour, cluster by common lender (cis graph), combined comp?
     return graph_t
-
-def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
-    '''
-    extend with comp_centroid to adjust all links, so centrally similar nodes are less pruned?
-    or centroid match is case-specific, else scale links by combined valt of connected nodes' links, in their aggQ
-    '''
-    regraph_, rreval_ = [],[]
-    Reval = 0
-    while graph_:
-        graph = graph_.pop()
-        reval = reval_.pop()  # each link *= other_G.aggQ.valt
-        if reval < aveG:  # same graph, skip re-evaluation:
-            regraph_ += [graph]; rreval_ += [0]
-            continue
-        while graph.Q:  # links may be revalued and removed, splitting graph to regraphs, init each with graph.Q node:
-            regraph = CQ()
-            node = graph.Q.pop()  # node_, not removed below
-            val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
-            if val > G_aves[fd]:  # else skip
-                regraph.Q = [node]; regraph.valt[fd] = val  # init for each node, then add _nodes
-                prune_node_layer(regraph, graph.Q, node, fd)  # recursive depth-first regraph.Q+=[_node]
-            reval = graph.valt[fd] - regraph.valt[fd]
-            if regraph.valt[fd] > aveG:
-                regraph_ += [regraph]; rreval_ += [reval]; Reval += reval
-    if Reval > aveG:
-        regraph_ = graph_reval(regraph_, rreval_, fd)  # graph reval while min val reduction
-
-    return regraph_
-
-def prune_node_layer(regraph, graph_H, node, fd): # recursive depth-first regraph.Q+=[_node]
-
-    link_ = node.link_.Qd if fd else node.link_.Qm
-    for link in link_:
-        # all positive in-graph links, Qm is actually Qr: rng+
-        _node = link.G[1] if link.G[0] is node else link.G[0]
-        _val = [_node.link_.mval, _node.link_.dval][fd]
-        link.valt[fd] += (_val / len(_node.link_) * med_decay) - link.valt[fd]
-        # link val += norm _node.val, adjust node.val in next round
-    relink_=[]
-    for link in  link_:
-        # prune revalued nodes and links:
-        _node = link.G[1] if link.G[0] is node else link.G[0]
-        _val = [_node.link_.mval, _node.link_.dval][fd]
-        # ave / link val + linked node val:
-        if _val > G_aves[fd] and _node in graph_H:
-            regraph.Q += [_node]
-            graph_H.remove(_node)
-            regraph.valt[fd] += _val
-            relink_ += [link]  # remove link?
-    # recursion:
-    if regraph.valt[fd] > G_aves[fd]:
-        prune_node_layer(regraph, graph_H, _node, fd)  # not sure about _node
-
-    [node.link_.Qd,node.link_.Qm][fd][:] = relink_  # links to in-graph nodes only
-
 
 def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 
@@ -180,6 +127,61 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
             val += [_G.link_.mval,_G.link_.dval][fd]
             val += add_node_layer(gnode_, G_, _G, fd, val)
     return val
+
+# tentative draft:
+def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
+
+    regraph_, rreval_ = [],[]
+    Reval = 0
+    while graph_:
+        graph = graph_.pop()
+        reval = reval_.pop()  # each link *= other_G.aggQ.valt
+        if reval < aveG:  # same graph, skip re-evaluation:
+            regraph_ += [graph]; rreval_ += [0]
+            continue
+        regraph, reval = graph_reval(graph, fd)  # recursive depth-first node and link revaluation
+        regraph_ += [regraph]; rreval_ += [reval]
+        Reval += reval
+    if Reval > aveG:
+        regraph_ = graph_reval_(regraph_, rreval_, fd)  # graph reval while min val reduction
+
+    return regraph_
+
+# tentative draft:
+def graph_reval(graph, fd):  # recursive depth-first regraph+=[_node] for hierarchical graphs
+
+    Dval = 0
+    for node in graph.Q:
+        for link in node.link_.Qd if fd else node.link_.Qm:
+            # all positive in-graph links, Qm is actually Qr: rng+
+            _node = link.G[1] if link.G[0] is node else link.G[0]
+            _val = [_node.link_.mval, _node.link_.dval][fd]
+            dval = (_val / len([_node.link_.Qm, _node.link_.Qd][fd]) * med_decay) - link.valt[fd]
+            link.valt[fd] += dval  # link val += norm _node.val, adjust node.val in next round
+            Dval += dval
+    reval = 0
+    if Dval > aveG:
+        regraph = CQ()  # init for each node, then add _nodes
+        relink_ = []
+        for node in graph.Q:
+            for link in node.link_.Qd if fd else node.link_.Qm:
+                # prune revalued nodes and links:
+                _node = link.G[1] if link.G[0] is node else link.G[0]
+                _val = [_node.link_.mval, _node.link_.dval][fd]
+                # ave / link val + linked node val:
+                if _val > G_aves[fd] and _node in graph:
+                    regraph.Q += [_node]
+                    graph.remove(_node)
+                    regraph.valt[fd] += _val
+                    relink_ += [link]  # remove link?
+                    reval += _val  # probably wrong
+            [node.link_.Qd, node.link_.Qm][fd][:] = relink_  # links to in-graph nodes only
+        # recursion:
+        if reval > aveG:
+            graph_reval(regraph, fd)  # also recursive node / sub-graph reval?
+
+    else: regraph = graph
+    return regraph, reval
 
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_, or segs inside PP?
@@ -263,11 +265,11 @@ def comp_G(_G, G):  # in GQ
 # draft
 def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuples
 
-    dparH = CQ(); _idx, d_didx, last_i, last_idx, elev = 0,0,0,0,0
+    dparH = CQ(); elev, _idx, d_didx, last_i, last_idx = 0,0,0,-1,-1
 
     for _i, _didx in enumerate(_parH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
         _idx += _didx; idx = last_idx+1
-        for i, didx in enumerate(parH.Q[last_i+1:]):  # start with last matching i and idx
+        for i, didx in enumerate(parH.Q[last_i+1:]):  # start after last matching i and idx
             idx += didx
             if _idx==idx:
                 _fd = _parH.fds[elev]; fd = parH.fds[elev]  # fd per lev, not sub
@@ -285,7 +287,7 @@ def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuples
             elif _idx < idx:  # no dsub / _sub
                 d_didx += didx  # += missing didx
                 break  # no parH search beyond _idx
-            # else _idx > idx: continue search
+            # else _idx>idx: keep searching
             idx += 1  # 1 sub/loop
         _idx += 1
         if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
@@ -298,12 +300,12 @@ def comp_ptuple(_ptuple, ptuple, fd):  # may be ptuple, vertuple, or ext
 
     dtuple=CQ(n=_ptuple.n)  # combine with ptuple.n?
     rn = _ptuple.n/ptuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
-    _idx, idx, last_i, last_idx, d_didx = 0,0,0,0,0
+    _idx, d_didx, last_i, last_idx = 0,0,-1,-1
 
-    for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd (select param set), idx: index in full param set
-        _idx += _didx
-        for i, didx in enumerate(ptuple.Q[last_i+1:]):  # start with last matching i and idx
-            idx += didx; idx = last_idx+1
+    for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd: select param set, idx: index in full param set
+        _idx += _didx; idx = last_idx+1
+        for i, didx in enumerate(ptuple.Q[last_i+1:]):  # start after last matching i and idx
+            idx += didx
             if _idx == idx:
                 if ptuple.Qm: val = _ptuple.Qd[_i]+ptuple.Qd[_i+i] if fd else _ptuple.Qm[_i]+ptuple.Qm[_i+i]
                 else:         val = aveG+1  # default comp for 0der pars
@@ -316,6 +318,7 @@ def comp_ptuple(_ptuple, ptuple, fd):  # may be ptuple, vertuple, or ext
                         m,d = comp_par(_par, par*rn, aves[idx], finv = not i and not ptuple.Qm)  # finv=0 for 0der I only
                     dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
                     dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt, rdn = m>d or d>m?)
+                last_i=i; last_idx=idx  # last matching i,idx
                 break
             elif _idx < idx:  # no dpar per _par
                 d_didx += didx
@@ -339,7 +342,7 @@ def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH
         sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
         '''
         node_,Link_ = [],[]  # form G, keep iG:
-        for iG in graph.H:
+        for iG in graph.Q:
             sum_G(Graph, iG, fmerge=0)  # local subset of lower Gs in new graph
             link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_,dlink_
             Link_ = list(set(Link_ + link_))  # unique links in node_
@@ -367,10 +370,13 @@ def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH
 
 def sum_G(G, g, fmerge=0):  # g is a node in G.node_
 
-    sum_derH(G.derH, g.derH)
+    sum_aggH(G.aggH, g.aggH)
     # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
     # if g.H: sum_H(G.H[1:], g.H)  # not used yet
-    G.valt[0]+=g.valt[0]; G.valt[1]+=g.valt[1]; G.rdn += g.rdn; G.nval += g.nval
+    for i in 0,1:
+        G.valt[i]+=g.valt[i]
+        G.rdnt[i] += g.rdnt[i]
+    G.nval += g.nval
     sum_box(G.box, g.box)
     if fmerge:
         for node in g.node_:
@@ -384,20 +390,31 @@ def sum_G(G, g, fmerge=0):  # g is a node in G.node_
             else:           G.alt_Graph = deepcopy(g.alt_graph)
     else: G.node_ += [g]
 
+# very initial draft
 # not fully updated, should be summing both Qm and Qd, + adjusting didx s in Q by inserted aggH elements.
 def sum_aggH(AggH, aggH):
 
-    for SubH, subH in zip_longest(AggH.Qd, aggH.Qd, fillvalue=None):
-        if subH:
-            if SubH:
-                for DerH, derH in(zip_longest(SubH.Qd, subH.Qd, fillvalue=None)):  # derH could be ext here? If yes we need to check and add
-                    if derH:
-                        if DerH:
-                            sum_derH(DerH.Qd, derH.Qd)
-                        else:
-                            SubH.Q += [deepcopy(derH)]
-            else:
-                AggH.Q += [deepcopy(subH)]
+    Idx, idx, last_i = 0, 0, 0
+    for I, Didx in enumerate(AggH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
+        Idx += Didx
+        for i, didx in enumerate(aggH.Q[last_i:]):  # start with last matching i and idx (shouldn't +1 here, because starting index is inclusive,  only ending index is exclusive)
+            idx += didx
+            if Idx==idx:
+                Sub = AggH.Qd[I]; sub = aggH.Qd[I+i]
+                if AggH.n and aggH.n:
+                    sum_vertuple(Sub, sub)
+                else:
+                    sum_aggH(Sub, sub)
+                last_i = idx
+                break
+
+            elif idx<Idx:
+                AggH.Q.insert[idx, 1]
+                AggH.Q[idx+1] -= 1
+                AggH.Qm.insert[idx, aggH.Qm[idx]]
+                AggH.Qd.insert[idx, aggH.Qd[idx]];
+                break
+
 
 
 def add_ext(box, L, extt):  # add ext per composition level

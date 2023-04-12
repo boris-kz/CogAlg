@@ -209,3 +209,57 @@ def comp_ext(_ext, ext, k):  # comp ds only, add Qn?
 
     return CQ(Qm=[mL,mS,mA],Qd=[mL,mS,mA], valt=[mL+mS+mA,dL+dS+dA])
 
+def graph_reval(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
+    '''
+    extend with comp_centroid to adjust all links, so centrally similar nodes are less pruned?
+    or centroid match is case-specific, else scale links by combined valt of connected nodes' links, in their aggQ
+    '''
+    regraph_, rreval_ = [],[]
+    Reval = 0
+    while graph_:
+        graph = graph_.pop()
+        reval = reval_.pop()  # each link *= other_G.aggQ.valt
+        if reval < aveG:  # same graph, skip re-evaluation:
+            regraph_ += [graph]; rreval_ += [0]
+            continue
+        while graph.Q:  # links may be revalued and removed, splitting graph to regraphs, init each with graph.Q node:
+            regraph = CQ()
+            node = graph.Q.pop()  # node_, not removed below
+            val = [node.link_.mval, node.link_.dval][fd]  # in-graph links only
+            if val > G_aves[fd]:  # else skip
+                regraph.Q = [node]; regraph.valt[fd] = val  # init for each node, then add _nodes
+                prune_node_layer(regraph, graph.Q, node, fd)  # recursive depth-first regraph.Q+=[_node]
+            reval = graph.valt[fd] - regraph.valt[fd]
+            if regraph.valt[fd] > aveG:
+                regraph_ += [regraph]; rreval_ += [reval]; Reval += reval
+    if Reval > aveG:
+        regraph_ = graph_reval(regraph_, rreval_, fd)  # graph reval while min val reduction
+
+    return regraph_
+
+def prune_node_layer(graph_H, node, fd):  # recursive depth-first regraph.Q+=[_node]
+
+    link_ = node.link_.Qd if fd else node.link_.Qm
+    for link in link_:
+        # all positive in-graph links, Qm is actually Qr: rng+
+        _node = link.G[1] if link.G[0] is node else link.G[0]
+        _val = [_node.link_.mval, _node.link_.dval][fd]
+        link.valt[fd] += (_val / len([_node.link_.Qm, _node.link_.Qd][fd]) * med_decay) - link.valt[fd]
+        # link val += norm _node.val, adjust node.val in next round
+    regraph = CQ()  # init for each node, then add _nodes
+    relink_=[]
+    for link in link_:
+        # prune revalued nodes and links:
+        _node = link.G[1] if link.G[0] is node else link.G[0]
+        _val = [_node.link_.mval, _node.link_.dval][fd]
+        # ave / link val + linked node val:
+        if _val > G_aves[fd] and _node in graph_H:
+            regraph.Q += [_node]
+            graph_H.remove(_node)
+            regraph.valt[fd] += _val
+            relink_ += [link]  # remove link?
+    # recursion:
+    if regraph.valt[fd] > G_aves[fd]:
+        prune_node_layer(regraph, graph_H, _node, fd)  # not sure about _node
+
+    [node.link_.Qd,node.link_.Qm][fd][:] = relink_  # links to in-graph nodes only

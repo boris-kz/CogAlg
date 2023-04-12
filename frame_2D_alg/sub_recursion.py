@@ -313,11 +313,11 @@ def blob2graph(blob, fseg):
     PPm_ = blob.PPm_; PPd_ = blob.PPd_
     x0, xn, y0, yn = blob.box
 
-    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CQ(Qd=[CQ(Qd=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    alt_dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CQ(Qd=[CQ(Qd=[])]), rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
-    mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
-    dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CQ(Q=[CQ(Q=[])]), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    mblob = Cgraph(fds=copy(PPm_[0].fds), aggH=CQ(Qd=[CQ(Qd=[])]), alt_Graph=alt_mblob, rng=PPm_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
+    dblob = Cgraph(fds=copy(PPd_[0].fds), aggH=CQ(Qd=[CQ(Qd=[])]), alt_Graph=alt_dblob, rng=PPd_[0].rng, box=[(y0+yn)/2,(x0+xn)/2, y0,yn, x0,xn])
 
     blob.mgraph = mblob  # update graph reference
     blob.dgraph = dblob  # update graph reference
@@ -350,7 +350,8 @@ def blob2graph(blob, fseg):
 # tentative, will be finalized when structure in agg+ is finalized
 def PP2graph(PP, fseg, ifd=1):
 
-    alt_derH = CQ(); alt_subH = CQ(Qd=[alt_derH],Q=[1], fds=[0]); alt_aggH = CQ(Qd=[alt_subH], Q=[1], fds=[1]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
+    alt_derH = CQ();
+    alt_subH = CQ(Qd=[alt_derH],Q=[1], fds=[0]); alt_aggH = CQ(Qd=[alt_subH], Q=[1], fds=[1]); alt_valt = [0,0]; alt_rdnt = [0,0]; alt_box = [0,0,0,0]
     if not fseg and PP.alt_PP_:  # seg doesn't have alt_PP_
         pQd = deepcopy(PP.alt_PP_[0].derH); alt_valt = copy(PP.alt_PP_[0].valt)
         alt_box = copy(PP.alt_PP_[0].box); alt_rdnt = copy(PP.alt_PP_[0].rdnt)
@@ -358,7 +359,7 @@ def PP2graph(PP, fseg, ifd=1):
             sum_derH(pQd, altPP.derH)
             Y0,Yn,X0,Xn = alt_box; y0,yn,x0,xn = altPP.box
             alt_box[:] = min(Y0,y0),max(Yn,yn),min(X0,x0),max(Xn,xn)
-            for i in range(2):
+            for i in 0,1:
                 alt_valt[i] += altPP.valt[i]
                 alt_rdnt[i] += altPP.rdnt[i]
         for dderH in pQd:
@@ -372,7 +373,9 @@ def PP2graph(PP, fseg, ifd=1):
                             pQ.dval += par; pQ.valt[1] += par
                 alt_derH.Qd += [pQ]
             else:  # vertuple
-                alt_derH.Qd += [dderH]
+                QdderH = deepcopy(dderH)
+                QdderH.Qm.pop(-2); QdderH.Qd.pop(-2); QdderH.Q.pop(-2)  # remove x from existing vertuple
+                alt_derH.Qd += [QdderH]
             alt_derH.Q += [1]; alt_derH.fds += [1]
     alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
 
@@ -388,7 +391,9 @@ def PP2graph(PP, fseg, ifd=1):
                         pQ.dval += par; pQ.valt[1] += par
             Qd += [pQ]
         else:  # vertuple
-            Qd += [dderH]
+            QdderH = deepcopy(dderH)
+            QdderH.Qm.pop(-2); QdderH.Qd.pop(-2); QdderH.Q.pop(-2)  # remove x from existing vertuple
+            Qd += [QdderH]
         Q += [1]; fds += [1]
 
     derH = CQ(Qd=Qd, Q=Q, fds=fds)
