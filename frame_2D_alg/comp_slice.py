@@ -506,7 +506,7 @@ def comp_vertuple(_vertuple, vertuple):
 
 def comp_ptuple(_ptuple, ptuple):
 
-    dtuple = CQ(n=_ptuple.n, Q=[1 for par in pnames])
+    dtuple = CQ(n=_ptuple.n, Q=[0 for par in pnames])
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     for pname, ave in zip(pnames, aves):
