@@ -263,3 +263,25 @@ def prune_node_layer(graph_H, node, fd):  # recursive depth-first regraph.Q+=[_n
         prune_node_layer(regraph, graph_H, _node, fd)  # not sure about _node
 
     [node.link_.Qd,node.link_.Qm][fd][:] = relink_  # links to in-graph nodes only
+
+def sum_ext(Ext, ext):
+    for i, param in enumerate(ext):
+        if i<2:  # L,S
+            Ext[i] += param
+        else:  # angle
+            if isinstance(Ext[i], list):
+                Ext[i][0] += param[0]; Ext[i][1] += param[1]
+            else:
+                Ext[i] += param
+
+def sum_H(H, h):  # add g.H to G.H, no eval but possible remove if weak?
+
+    for i, (Lev, lev) in enumerate(zip_longest(H, h, fillvalue=[])):  # root.ex.H maps to node.ex.H[1:]
+        if lev:
+            if not Lev:  # init:
+                Lev = CQ(H=[[] for fork in range(2**(i+1))])
+            for j, (Fork, fork) in enumerate(zip(Lev.H, lev.H)):
+                if fork:
+                    if not Fork: Lev.H[j] = Fork = Cgraph()
+                    sum_G(Fork, fork)
+
