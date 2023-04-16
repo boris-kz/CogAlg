@@ -326,7 +326,7 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for PP in PP_:
             graph = PP2graph(PP, fseg, fd)
-            sum_aggH(blobs[fd].aggH, graph.aggH)
+            op_parH(blobs[fd].aggH, graph.aggH, fcomp=0)
             for i in range(2):
                 blobs[fd].valt[i] += graph.valt[i]
                 blobs[fd].rdnt[i] += graph.rdnt[i]
@@ -336,8 +336,8 @@ def blob2graph(blob, fseg):
     for alt_blob in blob.adj_blobs[0]:  # adj_blobs = [blobs, pose]
         if not alt_blob.mgraph:
             blob2graph(alt_blob, fseg)  # convert alt_blob to graph
-        sum_aggH(alt_mblob.aggH, alt_blob.mgraph.aggH)
-        sum_aggH(alt_dblob.aggH, alt_blob.dgraph.aggH)
+        op_parH(alt_mblob.aggH, alt_blob.mgraph.aggH, fcomp=0)
+        op_parH(alt_dblob.aggH, alt_blob.dgraph.aggH, fcomp=0)
         for i in range(2):
             alt_mblob.valt[i] += alt_blob.mgraph.valt[i]
             alt_mblob.rdnt[i] += alt_blob.mgraph.rdnt[i]
@@ -377,6 +377,7 @@ def PP2graph(PP, fseg, ifd=1):
                 QdderH.Qm.pop(-2); QdderH.Qd.pop(-2); QdderH.Q.pop(-2)  # remove x from existing vertuple
                 alt_derH.Qd += [QdderH]
             alt_derH.Q += [0]; alt_derH.fds += [1]
+    alt_box = [(alt_box[0]+alt_box[1]) /2, (alt_box[2]+alt_box[3]) /2] + alt_box
     alt_Graph = Cgraph(aggH=alt_aggH, valt=alt_valt, rdnt=alt_rdnt, box=alt_box)
 
     Qd = []; Q = []; fds = []
@@ -398,7 +399,9 @@ def PP2graph(PP, fseg, ifd=1):
 
     derH = CQ(Qd=Qd, Q=Q, fds=fds)
     subH = CQ(Qd=[derH],Q=[0], fds=[0]); aggH = CQ(Qd=[subH], Q=[0], fds=[1])
-    graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=copy(PP.box), alt_Graph=alt_Graph)
+
+    box = [(PP.box[0]+PP.box[1]) /2, (PP.box[2]+PP.box[3]) /2] + PP.box
+    graph = Cgraph(aggH=aggH, valt=copy(PP.valt), rndt=copy(PP.rdnt), box=box, alt_Graph=alt_Graph)
 
     return graph
 

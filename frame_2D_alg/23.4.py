@@ -285,3 +285,113 @@ def sum_H(H, h):  # add g.H to G.H, no eval but possible remove if weak?
                     if not Fork: Lev.H[j] = Fork = Cgraph()
                     sum_G(Fork, fork)
 
+def comp_parH(_parH, parH):  # unpack aggH( subH( derH -> ptuples
+
+    dparH = CQ(); elev, _idx, d_didx, last_i, last_idx = 0,0,0,-1,-1
+
+    for _i, _didx in enumerate(_parH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
+        _idx += _didx; idx = last_idx+1
+        for i, didx in enumerate(parH.Q[last_i+1:]):  # start after last matching i and idx
+            idx += didx
+            if _idx==idx:
+                _fd = _parH.fds[elev]; fd = parH.fds[elev]  # fd per lev, not sub
+                if _fd==fd and _parH.Qd[_i].valt[fd] + parH.Qd[_i+i].valt[fd] > aveG:  # same-type eval
+                    _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
+                    if sub.n:
+                        dsub = comp_ptuple(_sub, sub, fd)  # sub is vertuple, ptuple, or ext
+                    else:
+                        dsub = comp_parH(_sub, sub)  # keep unpacking aggH | subH | derH
+                    dparH.valt[0]+=dsub.valt[0]; dparH.valt[1]+=dsub.valt[1]  # add rdnt?
+                    dparH.Qd += [dsub]; dparH.Q += [_didx + d_didx]
+                    dparH.fds += [fd]
+                    last_i=i; last_idx=idx  # last matching i,idx
+                    break
+            elif _idx < idx:  # no dsub / _sub
+                d_didx += didx  # += missing didx
+                break  # no parH search beyond _idx
+            # else _idx>idx: keep searching
+            idx += 1  # 1 sub/loop
+        _idx += 1
+        if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+            elev+=1  # elevation
+
+    return dparH
+
+def comp_ptuple(_ptuple, ptuple, fd):  # may be ptuple, vertuple, or ext
+
+    dtuple=CQ(n=_ptuple.n)  # combine with ptuple.n?
+    rn = _ptuple.n/ptuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
+    _idx, d_didx, last_i, last_idx = 0,0,-1,-1
+
+    for _i, _didx in enumerate(_ptuple.Q):  # i: index in Qd: select param set, idx: index in full param set
+        _idx += _didx; idx = last_idx+1
+        for i, didx in enumerate(ptuple.Q[last_i+1:]):  # start after last matching i and idx
+            idx += didx
+            if _idx == idx:
+                if ptuple.Qm: val = _ptuple.Qd[_i]+ptuple.Qd[_i+i] if fd else _ptuple.Qm[_i]+ptuple.Qm[_i+i]
+                else:         val = aveG+1  # default comp for 0der pars
+                if val > aveG:
+                    _par, par = _ptuple.Qd[_i], ptuple.Qd[_i+i]
+                    if isinstance(par,list):
+                        if len(par)==4: m,d = comp_aangle(_par,par)
+                        else: m,d = comp_angle(_par,par)
+                    else:
+                        m,d = comp_par(_par, par*rn, aves[idx], finv = not i and not ptuple.Qm)  # finv=0 for 0der I only
+                    dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
+                    dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt, rdn = m>d or d>m?)
+                last_i=i; last_idx=idx  # last matching i,idx
+                break
+            elif _idx < idx:  # no dpar per _par
+                d_didx += didx
+                break  # no par search beyond current index
+            # else _idx > idx: keep searching
+            idx += 1
+        _idx += 1
+    return dtuple
+
+def add_ext(box, L, extt):  # add ext per composition level
+    y,x, y0,yn, x0,xn = box
+    dY = yn-y0; dX = xn-x0
+    box[:2] = y/L, x/L  # norm to ave
+    extt += [[L, L/ dY*dX, [dY,dX]]]  # composed L,S,A, norm S = nodes per area
+
+def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
+
+    Graph_ = []  # Cgraphs
+    for graph in graph_:  # CQs
+
+        if graph.valt[fd] < aveG:  # form graph if val>min only
+            continue
+        Graph = Cgraph(fds=copy(graph.Q[0].fds)+[fd])  # incr der
+        ''' if n roots: 
+        sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty
+        sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
+        '''
+        node_,Link_ = [],[]  # form G, keep iG:
+        for iG in graph.Q:
+            sum_G(Graph, iG, fmerge=0)  # local subset of lower Gs in new graph
+            link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_,dlink_
+            Link_ = list(set(Link_ + link_))  # unique links in node_
+            G = Cgraph(fds=copy(iG.fds)+[fd], root=Graph, node_=link_, box=copy(iG.box))  # no sub_nodes in derG, remove if <ave?
+            for derG in link_:
+                sum_box(G.box, derG.G[0].box if derG.G[1] is iG else derG.G[1].box)
+                op_parH(G.aggH, derG.aggH, fcomp=0)  # two-fork derGs are not modified
+                Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]
+            # add_ext(G.box, len(link_), G.derH[-1])  # composed node ext, not in derG.derH (this should be not needed now)
+            # if mult roots: sum_H(G.uH[1:], Graph.uH)
+            node_ += [G]
+        Graph.root = iG.root  # same root, lower derivation is higher composition
+        Graph.node_ = node_  # G| G.G| G.G.G..
+        for derG in Link_:  # sum unique links, not box
+            op_parH(Graph.aggH, derG.aggH, fcomp=0)
+            Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]
+        # we already have ext assigned in comp_G_ (derG.aggH.Qd[0], which is Graph.aggH.Qd[0]), so there's no need to pack Ext here again?
+        Ext = deepcopy(G.aggH.Qd[0])  # 1st Ext
+        for G in node_[1:]:
+            op_parH(Ext,G.aggH.Qd[0], fcomp=0)
+        Graph.aggH.Qd.insert(0, Ext);  Graph.aggH.Q.insert(0,0)
+
+        # if Graph.uH: Graph.val += sum([lev.val for lev in Graph.uH]) / sum([lev.rdn for lev in Graph.uH])  # if val>alt_val: rdn+=len_Q?
+        Graph_ += [Graph]
+
+    return Graph_
