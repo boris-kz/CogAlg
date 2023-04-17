@@ -395,3 +395,27 @@ def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH
         Graph_ += [Graph]
 
     return Graph_
+
+def sum_ptuple(Ptuple, ptuple, fneg=0):
+
+    for pname, ave in zip(pnames, aves):
+        Par = getattr(Ptuple, pname); par = getattr(ptuple, pname)
+
+        if pname in ("angle","axis") and isinstance(Par, list):
+            sin_da0 = (Par[0] * par[1]) + (Par[1] * par[0])  # sin(A+B)= (sinA*cosB)+(cosA*sinB)
+            cos_da0 = (Par[1] * par[1]) - (Par[0] * par[0])  # cos(A+B)=(cosA*cosB)-(sinA*sinB)
+            Par = [sin_da0, cos_da0]
+        elif pname == "aangle" and isinstance(Par, list):
+            _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Par
+            sin_da0, cos_da0, sin_da1, cos_da1 = par
+            sin_dda0 = (_sin_da0 * cos_da0) + (_cos_da0 * sin_da0)
+            cos_dda0 = (_cos_da0 * cos_da0) - (_sin_da0 * sin_da0)
+            sin_dda1 = (_sin_da1 * cos_da1) + (_cos_da1 * sin_da1)
+            cos_dda1 = (_cos_da1 * cos_da1) - (_sin_da1 * sin_da1)
+            Par = [sin_dda0, cos_dda0, sin_dda1, cos_dda1]
+        else:
+            Par += (-par if fneg else par)
+        setattr(Ptuple, pname, Par)
+
+    Ptuple.valt[0] += ptuple.valt[0]; Ptuple.valt[1] += ptuple.valt[1]
+    Ptuple.n += 1
