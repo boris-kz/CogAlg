@@ -56,7 +56,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     '''
     G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
-    aggH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?
+    aggH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
     fds = list  # or fd, with sub fds in derH?
@@ -80,7 +80,7 @@ def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty su
         val = sum([graph.valt[fd] for graph in graph_])
         # intra-graph sub+ comp node:
         if val > ave_sub * root.rdnt[fd]:  # same in blob, same base cost for both forks
-            for graph in graph_: graph.rdn+=1  # estimate, assign to the weaker in feedback
+            for graph in graph_: graph.rdnt[fd]+=1  # estimate, assign to the weaker in feedback
             sub_recursion_g(graph_, fseg, root.fds + [fd])  # divide graph_ in der+|rng+ sub_graphs
         else:
             root.fterm = 1; feedback(root)  # update root.root..H, breadth-first
@@ -127,7 +127,7 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
         if _G in G_:  # _G is not removed in prior loop
             gnode_ += [_G]
             G_.remove(_G)
-            val += [_G.link_.cvalt[0],_G.link_.cvalt[1]][fd]
+            val += _G.link_.valt[fd]
             val += add_node_layer(gnode_, G_, _G, fd, val)
     return val
 
@@ -151,6 +151,7 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
 
     return regraph_
 
+
 def graph_reval(graph, fd):  # reval and prune nodes and links
 
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
@@ -160,7 +161,7 @@ def graph_reval(graph, fd):  # reval and prune nodes and links
         for link in node.link_.Qd if fd else node.link_.Qm:  # Qm=Qr: rng+
             _node = link.G[1] if link.G[0] is node else link.G[0]
             link_val += val + _node.link_.valt[fd]*med_decay - val*med_decay
-        reval += val - link_val  # _node.link_.valt updated in previous round
+        reval += val - link_val  # _node.link_.valt was updated in previous round
         node.link_.valt[fd] = link_val  # update
     rreval = 0
     if reval > aveG:  # prune:
@@ -189,6 +190,11 @@ def graph_reval(graph, fd):  # reval and prune nodes and links
 
     else: regraph = graph
     return regraph, rreval
+'''
+This is exclusive graph segmentation, then fuzzy reclustering at rng+, of out-linked nodes in other graphs
+Fuzzy select in multiple same-fork G_link_s per node, also fuzzy forks?
+distinct from agg+ which clusters graphs.
+'''
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_, or segs inside PP?
 
@@ -207,7 +213,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
                     if not _G or not G:  # or G.val
                         continue
                     daggH = comp_GQ(_G,G)  # comp_G while G.G, H/0G: GQ is one distributed node?
-                    daggH.Qd.insert(0,CQ(Qd=[1,distance,[dy,dx]], Q=[0,0,0]))  # add ext
+                    daggH.Qd.insert(0,CQ(Qd=[1,distance,[dy,dx]], Q=[0,0,0], n=1))  # add ext
                     daggH.Q.insert(0,0)  # no valt += 0der ext?
                     mval, dval = daggH.valt
                     derG = Cgraph(valt=[mval,dval], G=[_G,G], aggH=daggH, box=[])  # box is redundant to G
@@ -267,7 +273,7 @@ def comp_G(_G, G):  # in GQ
     '''
     return daggH
 
-
+# edit according to updates in op_ptuple:
 def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
 
     if fcomp: dparH = CQ()
@@ -281,14 +287,14 @@ def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
             if _idx==idx:
                 if _fd==fd:
                     op=1; _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
-                    if fcomp:  # no low-value comp, but sum|insert regardless
+                    if fcomp:
                         if _val > aveG and val > aveG:
                             if sub.n: dsub = op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
                             else:     dsub = op_parH(_sub, sub, fcomp)  # keep unpacking aggH | subH | derH
                             dparH.valt[0]+=dsub.valt[0]; dparH.valt[1]+=dsub.valt[1]  # add rdnt?
                             dparH.Qd += [dsub]; dparH.Q += [_didx + d_didx]
                             dparH.fds += [fd]
-                    else:
+                    else:  # no eval: no new dparH is formed
                         if sub.n: _=op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
                         else:     _=op_parH(_sub, sub, fcomp)  # keep unpacking aggH | subH | derH
                 last_i=i; last_idx=idx  # last matching i,idx
@@ -300,8 +306,9 @@ def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
                         break  # no parH search beyond _idx
                     # else _idx > idx: keep searching;  also insert parHs as dparHs?
                 elif _val>aveG and val>aveG:
-                    _parH.Q.insert[idx, didx+d_didx]  # reset d_didx?
-                    _parH.Qd.insert[_i, copy(parH.Qd[idx])]  # add sum valt, etc?
+                    _parH.Q.insert(idx, didx+d_didx)  # reset d_didx?
+                    _parH.Qd.insert(_i, copy(parH.Qd[idx]))
+                    # add sum valt, etc?
             idx += 1  # 1 sub/loop
         _idx += 1
         if elev in (0,1) or not (_i+1)%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
@@ -313,7 +320,7 @@ def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
 def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple, or ext
 
     if fcomp:
-        dtuple=CQ(n=_ptuple.n)  # combine with ptuple.n?
+        dtuple=CQ(n=_ptuple.n)  # + ptuple.n / 2: average n?
         rn = _ptuple.n/ptuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
     _idx, d_didx, last_i, last_idx = 0,0,-1,-1
 
@@ -340,23 +347,23 @@ def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple,
                         for j, (P,p) in enumerate(zip(D,d)): D[j] = P-p if fneg else P+p
                     else:
                         _ptuple.Qd[i] += -d if fneg else d
-                    _ptuple.Qm[i] += -ptuple.Qm[_i+i] if fneg else ptuple.Qm[_i+i]
+                    if _ptuple.Qm:
+                        mpar = ptuple.Qm[_i+i]; _ptuple.Qm[i] += -mpar if fneg else mpar
                 last_i=i; last_idx=idx  # last matching i,idx
                 break
-            elif _idx < idx:  # no dpar per _par
-                _ptuple.Q.insert[idx,  didx+d_didx]
-                if idx-1 >=0: _ptuple.Q[idx-1] -= 1
-                # reduce prior Q value by d_didx because we insert new value here, so it should skip lesser value
-                _ptuple.Qm.insert[idx, ptuple.Qm[idx]]
+            elif fcomp:
+                if _idx < idx: d_didx+=didx  # no dpar per _par
+            else: # insert par regardless of _idx < idx:
+                _ptuple.Q.insert[idx, didx+d_didx]
+                _ptuple.Q[idx+1] -= didx+d_didx  # reduce next didx
                 _ptuple.Qd.insert[idx, ptuple.Qd[idx]]
-
-                d_didx += didx
-                break  # no par search beyond current index
+                if _ptuple.Qm: _ptuple.Qm.insert[idx, ptuple.Qm[idx]]
+                d_didx = 0
+            if _idx < idx: break  # no par search beyond current index
             # else _idx > idx: keep searching
             idx += 1
         _idx += 1
     if fcomp: return dtuple
-
 
 # not revised:
 def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
@@ -365,13 +372,14 @@ def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH
     for graph in graph_:  # CQs
         if graph.valt[fd] < aveG:  # form graph if val>min only
             continue
-        Graph = Cgraph(fds=copy(graph.Q[0].fds)+[fd])  # incr der
+        Graph = Cgraph(aggH=deepcopy(graph.Q[0].aggH), fds=copy(graph.Q[0].fds)+[fd])  # incr der
+        # init all Graph params with graph.Q[0]
         ''' if n roots: 
         sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty
         sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
         '''
         node_,Link_ = [],[]  # form G, keep iG:
-        for iG in graph.Q:
+        for iG in graph.Q:  # use graph.Q[1:] after init
             sum_G(Graph, iG, fmerge=0)  # local subset of lower Gs in new graph
             link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_,dlink_
             Link_ = list(set(Link_ + link_))  # unique links in node_
@@ -385,20 +393,20 @@ def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH
             node_ += [G]
         Graph.root = iG.root  # same root, lower derivation is higher composition
         Graph.node_ = node_  # G| G.G| G.G.G..
-        for derG in Link_:  # sum unique links only
-            if Graph.aggH.Q: op_parH(Graph.aggH, derG.aggH, fcomp=0)
-            else:            Graph.aggH = deepcopy(derG.aggH)
-            Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]
+        SubH = deepcopy(Link_[0])
+        for derG in Link_[1:]:  # sum unique links only
+            op_parH(SubH, derG.subH, fcomp=0)
+        Graph.valt[0] += SubH.valt[0]; Graph.valt[1] += SubH.valt[1]
         # if Graph.uH: Graph.val += sum([lev.val for lev in Graph.uH]) / sum([lev.rdn for lev in Graph.uH])  # if val>alt_val: rdn+=len_Q?
+        # tentative:
+        op_parH(Graph.aggH, SubH, fcomp=0)
         Graph_ += [Graph]
 
     return Graph_
 
 def sum_G(G, g, fmerge=0):  # g is a node in G.node_
 
-    if G.aggH.Q: op_parH(G.aggH, g.aggH, fcomp=0)
-    else:        G.aggH = deepcopy(g.aggH)
-
+    op_parH(G.aggH, g.aggH, fcomp=0)  # G.aggH should be initialized
     # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
     # if g.H: sum_H(G.H[1:], g.H)  # not used yet
     for i in 0,1:
