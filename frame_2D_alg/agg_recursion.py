@@ -56,10 +56,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     '''
     G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
-    aggH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
-    valt = lambda: [0,0]
-    rdnt = lambda: [1,1]
-    fds = list  # or fd, with sub fds in derH?
+    pH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
     rng = lambda: 1
     box = lambda: [0,0,0,0,0,0]  # y,x, y0,yn, x0,xn
     # uH: up-forking Levs if mult roots
@@ -152,7 +149,7 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
     return regraph_
 
 
-def graph_reval(graph, fd):  # reval and prune nodes and links
+def graph_reval(graph, fd):  # exclusive graph segmentation by reval,prune nodes and links
 
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
     for node in graph.Q:
@@ -191,8 +188,9 @@ def graph_reval(graph, fd):  # reval and prune nodes and links
     else: regraph = graph
     return regraph, rreval
 '''
-This is exclusive graph segmentation. In rng+, the graph may be extended with out-linked nodes, merged with their graphs, re-segmented.
-Only clusters of of different forks / param sets may overlap?
+In rng+, graph may be extended with out-linked nodes, merged with their graphs and re-segmented to fit fixed processors?
+Clusters of different forks / param sets may overlap, else no use of redundant inclusion?
+No centroid clustering, but cluster may have core subset.
 '''
 
 def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G_s in comp_node_, or segs inside PP?
@@ -368,65 +366,41 @@ sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if
 sum_H(Graph.uH[1:], root.uH)  # root of Graph, init if empty
 '''
 # draft:
-def sum2graph_(graph_, fd, fsub=0):  # sum node and link params into graph, derH in agg+ or player in sub+
+def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+ or player in sub+
 
     Graph_ = []  # Cgraphs
     for graph in graph_:  # CQs
         if graph.valt[fd] < aveG:  # form graph if val>min only
             continue
-        Graph = Cgraph(aggH=deepcopy(graph.Q[0].aggH), fds=copy(graph.Q[0].fds)+[fd])  # incr der
-        Link_,node_ = [],[]
-        add_G(Graph, graph.Q[0], Link_, node_, fd)
-        for iG in graph.Q[1:]:  # form G, keep iG
-            sum_G(Graph, iG, fmerge=0)  # local subset of lower Gs in new graph
-            add_G(Graph, iG, Link_, node_, fd)
+        Graph = Cgraph(aggH=deepcopy(graph.Q[0].aggH))
+        Link_ = []
+        for i, iG in enumerate(graph.Q):  # form G, keep iG as local subset of lower Gs
+            if i: op_parH(Graph.aggH, iG.aggH, fcomp=0)
+            # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
+            # if g.H: sum_H(G.H[1:], g.H)  # not used yet
+            for i in 0, 1:
+                Graph.valt[i] += iG.valt[i]; Graph.rdnt[i] += iG.rdnt[i]
+            sum_box(Graph.box, iG.box)
+            link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_|dlink_
+            Link_[:] = list(set(Link_ + link_))
+            subH = deepcopy(link_[0].aggH)  # init, fd = new Cgraph.aggH fd
+            G = Cgraph(aggH=subH, root=Graph, node_=link_, box=copy(iG.box))
+            for i, derG in enumerate(link_):
+                if i: op_parH(G.aggH, derG.aggH, fcomp=0)
+                sum_box(G.box, derG.G[0].box if derG.G[1] is iG else derG.G[1].box)
+                Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]; Graph.nval += iG.nval
+            Graph.node_ += [G]
+            # if mult roots: sum_H(G.uH[1:], Graph.uH)
         Graph.root = iG.root  # same root, lower derivation is higher composition
-        Graph.node_ = node_  # G| G.G| G.G.G..
         SubH = deepcopy(Link_[0].aggH) # init
         for derG in Link_[1:]:  # sum unique links only
             op_parH(SubH, derG.aggH, fcomp=0)
-        Graph.valt[0] += SubH.valt[0]; Graph.valt[1] += SubH.valt[1]
         # if Graph.uH: Graph.val += sum([lev.val for lev in Graph.uH]) / sum([lev.rdn for lev in Graph.uH])  # if val>alt_val: rdn+=len_Q?
         aggH = Graph.aggH
-        aggH.Qd += [SubH]; aggH.fds+=[fd]; aggH.Q+=[0]  # no gap?
-        aggH.valt[0] += SubH.valt[0]; aggH.valt[1] += SubH.valt[1]  # add rdnt?
+        aggH.Qd += [SubH]; aggH.Q+=[0]; aggH.fds+=[fd]; aggH.valt[0]+=SubH.valt[0]; aggH.valt[1]+=SubH.valt[1]  # add rdnt?
         Graph_ += [Graph]
 
     return Graph_
-
-def add_G(Graph, iG, fd, Link_, node_):
-
-    link_ = [iG.link_.Qm, iG.link_.Qd][fd]  # mlink_,dlink_
-    Link_ = list(set(Link_ + link_))  # unique links in node_
-    G = Cgraph(fds=copy(iG.fds) + [fd], root=Graph, node_=link_, box=copy(iG.box))  # no sub_nodes in derG, remove if <ave?
-    for derG in link_:
-        sum_box(G.box, derG.G[0].box if derG.G[1] is iG else derG.G[1].box)
-        op_parH(G.aggH, derG.aggH, fcomp=0)  # two-fork derGs are not modified
-        Graph.valt[0] += derG.valt[0]; Graph.valt[1] += derG.valt[1]
-    # if mult roots: sum_H(G.uH[1:], Graph.uH)
-    node_ += [G]
-
-def sum_G(G, g, fmerge=0):  # g is a node in G.node_
-
-    op_parH(G.aggH, g.aggH, fcomp=0)  # G.aggH should be initialized
-    # if g.uH: sum_H(G.uH, g.uH[1:])  # sum g->G
-    # if g.H: sum_H(G.H[1:], g.H)  # not used yet
-    for i in 0,1:
-        G.valt[i]+=g.valt[i]
-        G.rdnt[i] += g.rdnt[i]
-    G.nval += g.nval
-    sum_box(G.box, g.box)
-    if fmerge:
-        for node in g.node_:
-            if node not in G.node_: G.node_ += [node]
-        for link in g.Link_.Q:  # redundant?
-            if link not in G.Link_.Q: G.Link_.Q += [link]
-        for alt_graph in g.alt_graph_:
-            if alt_graph not in G.alt_graph: G.alt_graph_ += [alt_graph]
-        if g.alt_Graph:
-            if G.alt_Graph: sum_G(G.alt_Graph, g.alt_Graph)
-            else:           G.alt_Graph = deepcopy(g.alt_graph)
-    else: G.node_ += [g]
 
 def sum_box(Box, box):
     Y, X, Y0, Yn, X0, Xn = Box;  y, x, y0, yn, x0, xn = box
@@ -459,6 +433,7 @@ def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per g
 
     return RVal, DVal  # or SVal= RVal+DVal, separate for each fork of sub+?
 
+# old:
 def feedback(root):  # bottom-up update root.H, breadth-first
 
     fbV = aveG+1
