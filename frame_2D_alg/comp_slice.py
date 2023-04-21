@@ -89,6 +89,7 @@ class CQ(ClusterStructure):  # vertuple, hierarchy, or generic sequence
     Q = list  # generic sequence or index increments in ptuple, derH, etc
     Qm = list  # in-graph only
     Qd = list
+    ext = lambda: [[],[]]  # [ms,ds], per subH only
     valt = lambda: [0,0]  # in-graph vals
     rdnt = lambda: [1,1]  # none if represented m and d?
     out_valt = lambda: [0,0]  # of non-graph links, as alt?

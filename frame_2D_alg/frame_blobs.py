@@ -31,8 +31,7 @@
 
 import sys
 import numpy as np
-from collections import deque, namedtuple
-from itertools import zip_longest
+from collections import deque
 from draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
@@ -277,9 +276,9 @@ if __name__ == "__main__":
     from utils import imread
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//toucan_small.png')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
-    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
     argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-e', '--extra', help='run frame_recursive after frame_blobs', type=int, default=0)

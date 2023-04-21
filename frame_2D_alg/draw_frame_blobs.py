@@ -28,7 +28,7 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
     Highlight the blob the mouse is hovering on and its
     adjacents.
     """
-    print("Preparing for visualization...", end="")
+    print("Preparing for visualization ...", end="")
     blob_cls = blob_[0].__class__
     height, width = idmap.shape
     if window_size is None:
@@ -86,7 +86,8 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
 
     cv.namedWindow(winname)
     cv.setMouseCallback(winname, mouse_call)
-    print()
+    print("hit 'q' to exit")
+
     while True:
         cv.imshow(winname,
                   cv.resize(img,
