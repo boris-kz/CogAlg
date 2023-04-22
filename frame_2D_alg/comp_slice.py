@@ -29,7 +29,7 @@ import sys
 import numpy as np
 from itertools import zip_longest
 from copy import deepcopy, copy
-from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
+from class_cluster import ClusterStructure, NoneType
 
 ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
 ave = 5  # ave direct m, change to Ave_min from the root intra_blob?

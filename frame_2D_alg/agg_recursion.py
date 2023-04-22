@@ -1,11 +1,8 @@
-import sys
-import numpy as np
-from itertools import zip_longest
-from copy import deepcopy, copy
-from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
-import math as math
-from comp_slice import *
 
+import numpy as np
+from copy import deepcopy, copy
+from class_cluster import ClusterStructure
+from comp_slice import ave_sub, ave_nsub, ave_agg, ave_dI, ave_M, ave_Ma, ave_daxis, ave_dangle, ave_daangle, ave_G, ave_Ga, ave_L, ave_mval, ave_dval, CQ, comp_angle, comp_aangle, comp_par
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -105,7 +102,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
         while node_:  # all Gs not removed in add_node_layer
             G = node_.pop(); gnode_ = [G]
             val = add_node_layer(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
-            graph_+= [CQ(Q=gnode_, val=val)]  # or valt=valt?
+            graph_ += [gnode_, val]
         # prune graphs by node val:
         regraph_ = graph_reval_(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
         if regraph_:
@@ -134,21 +131,23 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
     regraph_, rreval_ = [],[]
     Reval = 0
     while graph_:
-        graph = graph_.pop()
+        graph,val = graph_.pop()
         reval = reval_.pop()  # each link *= other_G.aggH.valt
-        if graph.valt[fd] > aveG:
+        if val > aveG:
             if reval < aveG:  # same graph, skip re-evaluation:
-                regraph_+=[graph]; rreval_+=[0]
+                regraph_+=[[graph,val]]; rreval_+=[0]
             else:
-                regraph, reval = graph_reval(graph, fd)  # recursive depth-first node and link revaluation
-                regraph_+=[regraph]; Reval+=reval; rreval_+=[reval]
+                regraph, rval, reval = graph_reval(graph, val, fd)  # recursive depth-first node and link revaluation
+                if rval>aveG:
+                    regraph_+=[[regraph,rval]]; Reval+=reval; rreval_+=[reval]
         # else remove graph
     if Reval > aveG:
         regraph_ = graph_reval_(regraph_, rreval_, fd)  # graph reval while min val reduction
 
     return regraph_
 
-def graph_reval(graph, fd):  # exclusive graph segmentation by reval,prune nodes and links
+def graph_reval(graph, gval, fd):  # exclusive graph segmentation by reval,prune nodes and links
+    # need to return gval, etc.
 
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
     for node in graph.Q:
@@ -285,19 +284,15 @@ def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
                                 dsub = op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
                             else:  # sub is pH
                                 dsub = op_parH(_sub, sub, 0, fcomp)  # keep unpacking aggH | subH | derH
-                                if sub.ext:
-                                    for _par, par in zip(_sub.ext[1], sub.ext[1]):  # comp ds only
-                                        if isinstance(par, list): m,d = comp_angle(_par, par)
-                                        else: m,d = comp_par(_par,par, ave_L)
-                                        dparH.ext[0]+=[m]; dparH.ext[1]+=[d]
-                                        dparH.valt[0]+=m; dparH.valt[1]+=d
+                                if sub.ext[1]: comp_ext(_sub.ext[1],sub.ext[1], dsub)
                             dparH.valt[0]+=dsub.valt[0]; dparH.valt[1]+=dsub.valt[1]  # add rdnt?
                             dparH.Qd += [dsub]; dparH.Q += [_didx+d_didx]
                             dparH.fds += [fd]
                     else:  # no eval: no new dparH
                         if sub.n: op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
-                        else:     op_parH(_sub, sub, fcomp)  # keep unpacking aggH | subH | derH
-                        # not sure about summing ext
+                        else:
+                            op_parH(_sub, sub, fcomp)  # keep unpacking aggH | subH | derH
+                            if sub.ext[1]: sum_ext(_sub.ext, sub.ext)
                 last_i=i; last_idx=idx  # last matching i,idx
                 break
             elif fcomp:
@@ -340,16 +335,15 @@ def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple,
                         if isinstance(par,list):
                             if len(par)==4: m,d = comp_aangle(_par,par)
                             else: m,d = comp_angle(_par,par)
-                        else:
-                            m,d = comp_par(_par, par*rn, aves[idx], finv = not i and not ptuple.Qm)  # finv=0 if 0der I
+                        else: m,d = comp_par(_par, par*rn, aves[idx], finv = not i and not ptuple.Qm)
+                            # finv=0 if 0der I
                         dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.Q+=[d_didx+_didx]
                         dtuple.valt[0]+=m; dtuple.valt[1]+=d  # no rdnt, rdn = m>d or d>m?)
                 else:  # sum ptuple
                     D, d = _ptuple.Qd[_i], ptuple.Qd[_i+i]
                     if isinstance(d, list):  # angle or aangle
                         for j, (P,p) in enumerate(zip(D,d)): D[j] = P-p if fneg else P+p
-                    else:
-                        _ptuple.Qd[i] += -d if fneg else d
+                    else: _ptuple.Qd[i] += -d if fneg else d
                     if _ptuple.Qm:
                         mpar = ptuple.Qm[_i+i]; _ptuple.Qm[i] += -mpar if fneg else mpar
                 last_i=i; last_idx=idx  # last matching i,idx
@@ -367,6 +361,26 @@ def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple,
             idx += 1
         _idx += 1
     if fcomp: return dtuple
+
+def comp_ext(_ext, ext, dsub):
+    # comp ds:
+    (_L,_S,_A), (L,S,A) = _ext, ext
+    dL=_L-L; mL=ave-abs(dL); dS=_S/_L-S/L; mS=ave-abs(dS)
+    if isinstance(A,list): mA, dA = comp_angle(_A,A)
+    else:
+        dA=_A-A; mA=ave-abs(dA)
+    dsub.ext[0][:]= mL,mS,mA; dsub.ext[1][:]= dL,dS,dA
+    dsub.valt[0] += mL+mS+mA; dsub.valt[1] += dL+dS+dA
+
+def sum_ext(_ext, ext):
+    _dL,_dS,_dA = _ext[1]; dL,dS,dA = ext[1]
+    if isinstance(dA,list):
+        _dA[0]+=dA[0]; _dA[1]+=dA[1]
+    else: _dA+=dA
+    _ext[1][:] = _dL+dL,_dS+dS, _dA
+    if ext[0]:
+        for i, _par, par in enumerate(zip(_ext[0],ext[0])):
+            _ext[i] = _par+par
 
 ''' if n roots: 
 sum_derH(Graph.uH[0][fd].derH,root.derH) or sum_G(Graph.uH[0][fd],root)? init if empty

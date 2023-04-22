@@ -2,10 +2,14 @@
 Agg_recursion eval and PP->graph conversion
 '''
 
+from comp_slice import PP_aves, pnames, ave_agg, ave_nsub
+from comp_slice import Cptuple, CPP, CQ
+from comp_slice import sum_derH
+from agg_recursion import Cgraph, agg_recursion, op_parH
+from copy import copy, deepcopy
+
 # move here temporary, for debug purpose
 def agg_recursion_eval(blob, PP_t):
-    from agg_recursion import agg_recursion
-    from sub_recursion import PP2graph, blob2graph
 
     fseg = isinstance(blob, CPP)
 
@@ -31,7 +35,7 @@ def agg_recursion_eval(blob, PP_t):
     valt = [M, G]
     fork_rdnt = [1+(G>M), 1+(M>=G)]
     for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
-        if (valt[fd] > PP_aves[fd] * ave_agg * (converted_blobt[fd].rdnt[fd]+1) * fork_rdnt[fd]) \
+        if (valt[fd] > PP_aves[fd] * ave_agg * (converted_blobt[fd].pH.rdnt[fd]+1) * fork_rdnt[fd]) \
             and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
 
             blob.rdn += 1  # estimate
@@ -72,7 +76,7 @@ def blob2graph(blob, fseg):
     for fd, PP_ in enumerate([PPm_,PPd_]):  # if any
         for i, PP in enumerate(PP_):
             graph = PP2graph(PP, fseg, fd)
-            if i: op_parH(blobs[fd].pH, graph.pH, [], fcomp=0)
+            if i: op_parH(blobs[fd].pH, graph.pH, fcomp=0)
             else: blobs[fd].pH = deepcopy(graph.pH)
             graph.root = blobs[fd]
             blobs[fd].node_ += [graph]
@@ -170,4 +174,3 @@ def repack(pPP, ptuple, idx_):  # pack derH in elements of iderH
             Par[-1] += [par]  # pack par in top lev of Par, added per inpack_derH recursion
         else:
             Par += [[par]]  # add new Par lev, implicitly nested in ptuples?
-
