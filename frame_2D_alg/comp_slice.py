@@ -118,7 +118,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P uplink_ or downlink_: binary tree with latuple root and vertuple forks
 
-    derQ = list  # last player only, max ntuples in layer = ntuples in lower layers: 1, 1, 2, 4, 8...
+    derQ = list  # max ntuples per layer = ntuples in lower layers: 1, 1, 2, 4, 8...
     fds = list  # fd: der+|rng+, forming m,d per par of derH, same for clustering by m->rng+ or d->der+
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]  # mrdn + uprdn if branch overlap?
@@ -335,9 +335,8 @@ def form_PP_root(seg_t, base_rdn):  # form PPs from match-connected segs
         for PP in PP_:
             for P_ in PP.P__:
                 for P in P_:
-                    P.roott[fd] = PP  # update root from seg to PP
                     if fd:
-                        PPm = P.roott[0]
+                        PPm = P.roott[0].roott[0]  # get PP from P.seg, prevent seg is replaced by PP, because we need to access P.seg in sub+ later
                         if PPm not in PP.alt_PP_:
                             PP.alt_PP_ += [PPm]  # bilateral assignment of alt_PPs
                         if PP not in PPm.alt_PP_:
@@ -373,6 +372,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
     L = len(P.dert_) if isinstance(P,CP) else P.L
     seg = CPP(P__= seg_Ps, uplink_layers=[miss_uplink_], downlink_layers = [miss_downlink_], fds=copy(fds)+[fd],
               box=[P.y0, P.y0+len(seg_Ps), P.x0, P.x0+L-1])
+    P.roott[fd] = seg  # first and last P doesn't belong to any seg or PP? Else we need to assign it too
     derH = []
     derQ = deepcopy(P.uplink_layers[-1][fd][0].derQ) if len(seg_Ps)>1 else []  # 1 up derP per P in stack
     for P in seg_Ps[1:-1]:
@@ -388,6 +388,7 @@ def sum2seg(seg_Ps, fd, fds):  # sum params of vertically connected Ps into segm
                 seg.nval += derP.valt[fd]  # negative link
                 seg.nderP_ += [derP]
     P = seg_Ps[-1]  # sum last P only, last P uplink_layers are not part of seg:
+    P.roott[fd] = seg
     L = len(P.dert_) if isinstance(P,CP) else P.L
     sum_derH(derH, [P.ptuple] if isinstance(P,CP) else P.derQ)
     seg.box[2] = min(seg.box[2],P.x0); seg.box[3] = max(seg.box[3],P.x0+L-1)

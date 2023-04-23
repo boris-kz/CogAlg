@@ -102,7 +102,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
         while node_:  # all Gs not removed in add_node_layer
             G = node_.pop(); gnode_ = [G]
             val = add_node_layer(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
-            graph_ += [gnode_, val]
+            graph_+=[gnode_,val]
         # prune graphs by node val:
         regraph_ = graph_reval_(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
         if regraph_:
@@ -137,7 +137,7 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
             if reval < aveG:  # same graph, skip re-evaluation:
                 regraph_+=[[graph,val]]; rreval_+=[0]
             else:
-                regraph, rval, reval = graph_reval(graph, val, fd)  # recursive depth-first node and link revaluation
+                regraph, reval, rval = graph_reval(graph, val, fd)  # recursive depth-first node and link revaluation
                 if rval>aveG:
                     regraph_+=[[regraph,rval]]; Reval+=reval; rreval_+=[reval]
         # else remove graph
@@ -146,11 +146,11 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
 
     return regraph_
 
-def graph_reval(graph, gval, fd):  # exclusive graph segmentation by reval,prune nodes and links
-    # need to return gval, etc.
+def graph_reval(graph, Val, fd):  # exclusive graph segmentation by reval,prune nodes and links
+    # need to return Val, etc.
 
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
-    for node in graph.Q:
+    for node,val in graph.Q:
         link_val = 0
         val = node.link_.valt[fd]
         for link in node.link_.Qd if fd else node.link_.Qm:  # Qm=Qr: rng+
@@ -177,14 +177,15 @@ def graph_reval(graph, gval, fd):  # exclusive graph segmentation by reval,prune
                     if link_val < aveG:  # prune link, else no change
                         link_.remove(link)
                         rreval += link_val
+                Val+=val  #?
                 regraph.Q += [node]; regraph.valt[fd] += node.link_.valt[fd]
         # recursion:
-        if rreval > aveG:
-            regraph, reval = graph_reval(graph, fd)
+        if rreval > aveG and Val > aveG:
+            regraph, reval, Val = graph_reval(graph, Val, fd)  # not sure about Val
             rreval+= reval
 
     else: regraph = graph
-    return regraph, rreval
+    return regraph, rreval, Val
 '''
 In rng+, graph may be extended with out-linked nodes, merged with their graphs and re-segmented to fit fixed processors?
 Clusters of different forks / param sets may overlap, else no use of redundant inclusion?
@@ -207,7 +208,7 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
                 for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
                     if not _G or not G:  # or G.val
                         continue
-                    dpH = comp_GQ(_G,G)  # comp_G while G.G, H/0G: GQ is one distributed node?
+                    dpH = op_parH(_G.pH, G.pH, fcomp=1)  # comp layers while lower match?
                     dpH.ext[1] = [1,distance,[dy,dx]]  # pack in ds
                     mval, dval = dpH.valt
                     derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
@@ -225,8 +226,8 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
     if not f1Q:
         return dpH_  # else no return, packed in links
 
-
-def comp_GQ(_G, G):  # compare lower-derivation G.G.s, pack results in mderH_,dderH_
+# may be obsolete:
+def comp_pH(_G, G):  # compare lower-derivation G.G.s, pack results in mderH_,dderH_
 
     dpH_ = CQ(); Tval= aveG+1
 
@@ -238,9 +239,9 @@ def comp_GQ(_G, G):  # compare lower-derivation G.G.s, pack results in mderH_,dd
         _G = _G.G; G = G.G
         Tval = sum(dpH_.valt) / sum(dpH_.rdnt)
 
-    return dpH_  # ext added in comp_G_, not within GQ
+    return dpH_  # ext added in comp_G_, not within derH
 
-def comp_G(_G, G):  # in GQ
+def comp_G(_G, G):  # in derH
 
     Mval, Dval = 0,0
     Mrdn, Drdn = 1,1
