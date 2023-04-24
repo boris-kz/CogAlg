@@ -93,8 +93,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
 
     mnode_,dnode_ = [],[]  # Gs with >0 +ve fork links:
     for G in G_:
-        if G.link_.Qm:
-            mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
+        if G.link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
         if G.link_.Qd: dnode_ += [G]
     graph_t = []
     for fd, node_ in enumerate([mnode_, dnode_]):
@@ -147,7 +146,6 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
     return regraph_
 
 def graph_reval(graph, Val, fd):  # exclusive graph segmentation by reval,prune nodes and links
-    # need to return Val, etc.
 
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
     for node,val in graph.Q:
@@ -226,46 +224,9 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
     if not f1Q:
         return dpH_  # else no return, packed in links
 
-# may be obsolete:
-def comp_pH(_G, G):  # compare lower-derivation G.G.s, pack results in mderH_,dderH_
-
-    dpH_ = CQ(); Tval= aveG+1
-
-    while (_G and G) and Tval > aveG:  # same-scope if sub+, no agg+ G.G
-        dpH = comp_G(_G, G)
-        dpH_.Qd += [dpH]; dpH_.Q += [0]
-        for i in 0,1:
-            dpH_.valt[i] += dpH.valt[i]; dpH_.rdnt[i] += dpH.rdnt[i]
-        _G = _G.G; G = G.G
-        Tval = sum(dpH_.valt) / sum(dpH_.rdnt)
-
-    return dpH_  # ext added in comp_G_, not within derH
-
-def comp_G(_G, G):  # in derH
-
-    Mval, Dval = 0,0
-    Mrdn, Drdn = 1,1
-    _pH, pH = _G.pH, G.pH  # same for G or derG now
-
-    dpH = op_parH(_pH, pH, fcomp=1)
-    # spec:
-    _node_, node_ = _G.node_, G.node_  # link_ if fd, sub_node should be empty
-    # below is not updated
-    if (Mval+Dval)* sum(_G.pH.valt)*sum(G.pH.valt) * len(_node_)*len(node_) > aveG:  # / rdn?
-
-        sub_dderH, mval, dval, mrdn, drdn = comp_G_(_node_, node_, f1Q=0)
-        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
-        # pack m|dnode_ in m|dderH: implicit?
-
-    else: _G.fterm=1  # no G.fterm=1: it has it's own specification?
     '''
-    comp alts,val,rdn?
-    comp H in comp_G_?
-    select >ave m|d vars only: addressable salient mset / dset in derH? 
-    cluster per var or set if recurring across root: type eval if root M|D?
+    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
     '''
-    return dpH
-
 
 def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
 

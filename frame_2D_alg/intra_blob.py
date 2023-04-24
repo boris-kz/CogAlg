@@ -86,7 +86,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                 if vvG > 0:  # below-average G, eval for comp_r...
                 elif vvG > 0:  # above-average G, eval for comp_a...
             '''
-    if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
+    # if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
 
     return spliced_layers
 
@@ -94,8 +94,8 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 def cluster_fork_recursive(blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa):
 
     if verbose:
-        if fBa: print('\na fork\n')
-        else:   print('\nr fork\n')
+        if fBa: print('fork:', '-'.join(blob.prior_forks))
+        else:   print('fork:', '-'.join(blob.prior_forks))
     # form sub_blobs:
     sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__.fill(False))
     '''
@@ -107,7 +107,7 @@ def cluster_fork_recursive(blob, spliced_layers, new_dert__, sign__, new_mask__,
     blob.rdn += adj_rdn
     for sub_blob in sub_blobs: sub_blob.rdn += adj_rdn
     assign_adjacents(adj_pairs)
-    if render: visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (froot_Ba = {blob.fBa}, froot_Ba = {blob.prior_forks[-1] == 'a'})")
+    # if render: visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (froot_Ba = {blob.fBa}, froot_Ba = {blob.prior_forks[-1] == 'a'})")
 
     if fBa: sublayers = blob.dlayers
     else:   sublayers = blob.rlayers

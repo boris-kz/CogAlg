@@ -6,7 +6,7 @@ formed blobs interactively.
 import sys
 import numpy as np
 import cv2 as cv
-from utils import blank_image, over_draw
+from utils import blank_image, paint_over
 
 MIN_WINDOW_WIDTH = 640
 MIN_WINDOW_HEIGHT = 480
@@ -29,45 +29,54 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
     adjacents.
     """
     print("Preparing for visualization ...", end="")
+
     blob_cls = blob_[0].__class__
     height, width = idmap.shape
+
+    # Prepare the image
     if window_size is None:
         window_size = (
             max(width, MIN_WINDOW_WIDTH),
             max(height, MIN_WINDOW_HEIGHT),
         )
     background = blank_image((height, width))
+
+    # Prepare blob ID map
     for blob in blob_:
-        over_draw(background, None, blob.box,
-                  mask=blob.mask__,
-                  fill_color=[blob.sign * 32] * 3)
+        paint_over(background, None, blob.box,
+                   mask=blob.mask__,
+                   fill_color=[blob.sign * 32] * 3)
 
     idmap = cv.resize(idmap.astype('uint64'), window_size,
                       interpolation=cv.INTER_NEAREST)
     img = background.copy()
-    blobid = [-1]
+    state = dict(
+        blob_id=-1,
+        layer=0,
+    )
 
     def mouse_call(event, x, y, flags, param):
-        x = min(window_size[0] - 1, max(x, 0))
-        y = min(window_size[1] - 1, max(y, 0))
+        wx, wy = window_size
+        x = max(0, min(wx - 1, x))
+        y = max(0, min(wy - 1, y))
         if event == cv.EVENT_MOUSEMOVE:
-            if blobid[0] != idmap[y, x]:
-                blobid[0] = idmap[y, x]
+            if state['blob_id'] != idmap[y, x]:
+                state['blob_id'] = idmap[y, x]
                 # override color of the blob
                 img[:] = background.copy()
-                blob = blob_cls.get_instance(blobid[0])
+                blob = blob_cls.get_instance(state['blob_id'])
                 if blob is None:
                     print("\r", end="\t\t\t\t\t\t\t")
                     sys.stdout.flush()
                     return
-                over_draw(img, None, blob.box,
-                          mask=blob.mask__,
-                          fill_color=WHITE)
+                paint_over(img, None, blob.box,
+                           mask=blob.mask__,
+                           fill_color=WHITE)
                 # ... and its adjacents
                 for adj_blob, pose in zip(*blob.adj_blobs):
-                    over_draw(img, None, adj_blob.box,
-                              mask=adj_blob.mask__,
-                              fill_color=POSE2COLOR[pose])
+                    paint_over(img, None, adj_blob.box,
+                               mask=adj_blob.mask__,
+                               fill_color=POSE2COLOR[pose])
 
 
                 # ... print blobs properties.
@@ -81,6 +90,7 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
                       "M = ",blob.M,
                       "A =", blob.A,
                       "box =", blob.box,
+                      "fork =", blob.prior_forks,
                       end="\t\t\t")
                 sys.stdout.flush()
 

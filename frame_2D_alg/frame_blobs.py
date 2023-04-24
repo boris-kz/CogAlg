@@ -111,19 +111,20 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     frame = CBlob(I = I, Dy = Dy, Dx = Dx, dert__=dert__, prior_forks=["g"], rlayers = [blob_])  # dlayers = []: no comp_a yet
 
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
-    if render: visualize_blobs(idmap, frame.rlayers[0])
 
     if intra:  # omit for testing frame_blobs without intra_blob
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
         frame.rlayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
+        if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
         # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
     '''
     if use_c:  # old version, no longer updated:
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     '''
+    if render: visualize_blobs(idmap, frame.rlayers[0])
     return frame
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation

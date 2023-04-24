@@ -420,7 +420,6 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
     Ptuple.valt[0] += ptuple.valt[0]; Ptuple.valt[1] += ptuple.valt[1]
     Ptuple.n += 1
 
-
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
 
     if isinstance(_P, CP):
@@ -436,3 +435,150 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.uplink, c
 
     # derP is single-layer, links are compared individually, but higher layers have multiple vertuples?
     return CderP(derQ=derQ, valt=Valt, rdnt=Rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=L)
+
+def comp_GQ(_G, G):  # compare lower-derivation G.G.s, pack results in mderH_,dderH_
+
+    dpH_ = CQ(); Tval= aveG+1
+
+    while (_G and G) and Tval > aveG:  # same-scope if sub+, no agg+ G.G
+        dpH = comp_G(_G, G)
+        dpH_.Qd += [dpH]; dpH_.Q += [0]
+        for i in 0,1:
+            dpH_.valt[i] += dpH.valt[i]; dpH_.rdnt[i] += dpH.rdnt[i]
+        _G = _G.G; G = G.G
+        Tval = sum(dpH_.valt) / sum(dpH_.rdnt)
+
+    return dpH_  # ext added in comp_G_, not within derH
+
+def comp_G(_G, G):  # in derH
+
+    Mval, Dval = 0,0
+    Mrdn, Drdn = 1,1
+    _pH, pH = _G.pH, G.pH  # same for G or derG now
+
+    dpH = op_parH(_pH, pH, fcomp=1)
+    # spec:
+    _node_, node_ = _G.node_, G.node_  # link_ if fd, sub_node should be empty
+    # below is not updated
+    if (Mval+Dval)* sum(_G.pH.valt)*sum(G.pH.valt) * len(_node_)*len(node_) > aveG:  # / rdn?
+
+        sub_dderH, mval, dval, mrdn, drdn = comp_G_(_node_, node_, f1Q=0)
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+        # pack m|dnode_ in m|dderH: implicit?
+
+    else: _G.fterm=1  # no G.fterm=1: it has it's own specification?
+    return dpH
+
+def sub_recursion_eval(root):  # for PP or dir_blob
+
+    root_PPm_, root_PPd_ = root.rlayers[-1], root.dlayers[-1]
+    for fd, PP_ in enumerate([root_PPm_, root_PPd_]):
+        mcomb_layers, dcomb_layers, PPm_, PPd_ = [], [], [], []
+
+        for PP in PP_:
+            # fd = _P.valt[1]+P.valt[1] > _P.valt[0]+_P.valt[0]  # if exclusive comp fork per latuple in P| vertuple in derP?
+            if fd:  # add root to derP for der+:
+                for P_ in PP.P__[1:-1]:  # skip 1st and last row
+                    for P in P_:
+                        for derP in P.uplink_layers[-1][fd]:
+                            derP.roott[fd] = PP
+                comb_layers = dcomb_layers; PP_layers = PP.dlayers; PPd_ += [PP]
+            else:
+                comb_layers = mcomb_layers; PP_layers = PP.rlayers; PPm_ += [PP]
+
+            val = PP.valt[fd]; alt_val = sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0   # for fork rdn:
+            ave = PP_aves[fd] * (PP.rdnt[fd] + 1 + (alt_val > val))
+            if val > ave and len(PP.P__) > ave_nsub:
+                sub_recursion(PP)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
+                ave*=2  # 1+PP.rdn incr
+                # splice deeper layers between PPs into comb_layers:
+                for i, (comb_layer, PP_layer) in enumerate(zip_longest(comb_layers, PP_layers, fillvalue=[])):
+                    if PP_layer:
+                        if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
+                        else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
+            # segs:
+            agg_recursion_eval(PP, [copy(PP.mseg_levels[-1]), copy(PP.dseg_levels[-1])])
+            # include empty comb_layers:
+            if fd:
+                PPmm_ = [PPm_] + mcomb_layers; mVal = sum([PP.valt[0] for PP_ in PPmm_ for PP in PP_])
+                PPmd_ = [PPm_] + dcomb_layers; dVal = sum([PP.valt[1] for PP_ in PPmd_ for PP in PP_])
+                root.dlayers = [PPmd_,PPmm_]
+            else:
+                PPdm_ = [PPm_] + mcomb_layers; mVal = sum([PP.valt[0] for PP_ in PPdm_ for PP in PP_])
+                PPdd_ = [PPd_] + dcomb_layers; dVal = sum([PP.valt[1] for PP_ in PPdd_ for PP in PP_])
+                root.rlayers = [PPdm_, PPdd_]
+            # or higher der val?
+            if isinstance(root, CPP):  # root is CPP
+                for i in 0,1:
+                    root.valt[i] += PP.valt[i]  # vals
+                    root.rdnt[i] += PP.rdnt[i]  # ad rdn too?
+            else:  # root is CBlob
+                if fd: root.G += sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
+                else:  root.M += PP.valt[fd]
+
+
+def sub_recursion(PP):  # evaluate PP for rng+ and der+
+
+    P__  = [P_ for P_ in reversed(PP.P__)]  # revert bottom-up to top-down
+    P__ = comp_P_der(P__) if PP.fds[-1] else comp_P_rng(P__, PP.rng + 1)   # returns top-down
+    PP.rdnt[PP.fds[-1] ] += 1  # two-fork rdn, priority is not known?  rotate?
+
+    sub_segm_ = form_seg_root([copy(P_) for P_ in P__], fd=0, fds=PP.fds)
+    sub_segd_ = form_seg_root([copy(P_) for P_ in P__], fd=1, fds=PP.fds)  # returns bottom-up
+    # sub_PPm_, sub_PPd_:
+    sub_PPm_, sub_PPd_ = form_PP_root((sub_segm_, sub_segd_), PP.rdnt[PP.fds[-1]] + 1)
+    PP.rlayers[:] = [sub_PPm_]; PP.dlayers[:] = [sub_PPd_]
+
+    sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs
+
+def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
+
+    for P_ in P__:
+        for P in P_:  # add 2 link layers: rng_derP_ and match_rng_derP_:
+            P.uplink_layers += [[],[[],[]]]; P.downlink_layers += [[],[[],[]]]
+
+    for y, _P_ in enumerate(P__[:-rng]):  # higher compared row, skip last rng: no lower comparand rows
+        for x, _P in enumerate(_P_):
+            # get linked Ps at dy = rng-1:
+            for pri_derP in _P.downlink_layers[-3][0]:  # fd always = 0 here
+                pri_P = pri_derP.P
+                # compare linked Ps at dy = rng:
+                for ini_derP in pri_P.downlink_layers[0]:
+                    P = ini_derP.P
+                    # add new Ps, their link layers and reset their roots:
+                    if P not in [P for P_ in P__ for P in P_]:
+                        append_P(P__, P)
+                        P.uplink_layers += [[],[[],[]]]; P.downlink_layers += [[],[[],[]]]
+                    derP = comp_P(_P, P)
+                    P.uplink_layers[-2] += [derP]
+                    _P.downlink_layers[-2] += [derP]
+
+    return P__
+
+def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.downlinks
+
+    if isinstance(P__[0][0].ptuple, Cptuple):
+        for P_ in P__:
+            for P in P_: P.ptuple = [P.ptuple]
+
+    dderPs__ = []  # derP__ = [[] for P_ in P__[:-1]]  # init derP rows, exclude bottom P row
+    for P_ in P__[1:-1]:  # higher compared row, exclude 1st: no +ve uplinks, and last: no +ve downlinks
+        # not revised:
+        dderPs_ = []  # row of dderPs
+        for P in P_:
+            if isinstance(P.ptuple, Cptuple): P.ptuple = [P.ptuple]
+            dderPs = []  # dderP for each _derP, derP pair in P links
+            for _derP in P.uplink_layers[-1][1]:  # fd=1
+                for derP in P.downlink_layers[-1][1]:
+                    # there maybe no x overlap between recomputed Ls of _derP and derP, compare anyway,
+                    # mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)?
+                    # gap: neg_olp, ave = olp-neg_olp?
+                    dderP = comp_P(_derP, derP)  # form higher vertical derivatives of derP.players,
+                    # or comp derP.players[1] only: it's already diffs of all lower players?
+                    derP.uplink_layers[0] += [dderP]  # pre-init layer per derP
+                    _derP.downlink_layers[0] += [dderP]
+                    dderPs_ += [dderP]  # actually it could be dderPs_ ++ [derPP]
+                # compute x overlap between dderP'__P and P, in form_seg_ or comp_layer?
+            dderPs_ += dderPs  # row of dderPs
+        dderPs__ += [dderPs_]
+    return dderPs__

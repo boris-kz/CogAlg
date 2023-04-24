@@ -31,9 +31,9 @@ import numpy as np
 
 # -----------------------------------------------------------------------------
 # Input:
-IMAGE_PATH = "./images/raccoon.jpg"
+IMAGE_PATH = "../images/raccoon.jpg"
 # Outputs:
-OUTPUT_PATH = "./images/g_SAD_x/"
+OUTPUT_PATH = "../images/g_SAD_x/"
 
 # -----------------------------------------------------------------------------
 # Functions
