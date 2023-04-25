@@ -62,7 +62,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     blob.prior_forks.extend('r')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
-                        cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa=0)
+                        spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa=0)
 
                 if blob.G > aveB*aveBa * blob.rdn:  # above-average G, eval for comp_a
                     # root values for sub_blobs:
@@ -74,7 +74,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     blob.prior_forks.extend('a')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
-                        cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa=1)
+                        spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa=1)
             '''
             exclusive forks version:
             
@@ -115,9 +115,9 @@ def cluster_fork_recursive(blob, spliced_layers, new_dert__, sign__, new_mask__,
     sublayers += [sub_blobs]  # r|a fork- specific sub_blobs, then add deeper layers of mixed-fork sub_blobs:
     sublayers += intra_blob_root(blob, render, verbose, fBa)  # recursive eval cross-comp range| angle| slice per blob
 
-    spliced_layers = [spliced_layer + sublayer for spliced_layer, sublayer in
-                      zip_longest(spliced_layers, sublayers, fillvalue=[])]
-    return spliced_layers
+    new_spliced_layers = [spliced_layer + sublayer for spliced_layer, sublayer in
+                          zip_longest(spliced_layers, sublayers, fillvalue=[])]
+    return new_spliced_layers
 
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)

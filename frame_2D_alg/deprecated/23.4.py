@@ -582,3 +582,94 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, compare P.uplinks to P.dow
             dderPs_ += dderPs  # row of dderPs
         dderPs__ += [dderPs_]
     return dderPs__
+
+def comp_der(derP):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
+    _P, P = derP._P, derP.P
+    # tentative:
+    elev = int( np.sqrt( len(derP.derQ)-1))
+    i = elev if elev < 3 else 2 ** (elev - 1)  # elev counts from 0, init index = 0,1,2,4,8...
+    j = elev + 1 if elev < 2 else 2 ** elev  # last index
+    if len(_P.ptuple)>j-1 and len(P.ptuple)>j-1: # ptuples are derHs, extend derP.derQ:
+        comp_layer(derP, i,j)
+
+def comp_rng(derP):  # forms vertical derivatives of params per P in _P.uplink, conditional ders from norm and DIV comp
+    _P, P = derP._P, derP.P
+    if isinstance(P.ptuple, Cptuple):
+        vertuple = comp_ptuple(_P.ptuple, P.ptuple)
+        derP.derQ = [vertuple]; derP.valt = copy(vertuple.valt); derP.rdnt = copy(vertuple.rdnt)
+    else:
+        comp_layer(derP, 0, min(len(_P.derH)-1,len(P.derH)-1))  # this is actually comp derH, works the same here
+    derP.L = len(_P.dert_)
+
+
+def form_seg_root(P__, fd, fds):  # form segs from Ps
+
+    for P_ in P__[1:]:  # scan bottom-up, append link_layers[-1] with branch-rdn adjusted matches in link_layers[-2]:
+        for P in P_: link_eval(P.uplink_layers, fd)  # uplinks_layers[-2] matches -> uplinks_layers[-1]
+                     # forms both uplink and downlink layers[-1]
+    seg_ = []
+    for P_ in reversed(P__):  # get a row of Ps bottom-up, different copies per fPd
+        while P_:
+            P = P_.pop(0)
+            if P.uplink_layers[-1][fd]:  # last matching derPs layer is not empty
+                form_seg_(seg_, P__, [P], fd, fds)  # test P.matching_uplink_, not known in form_seg_root
+            else:
+                seg_.append( sum2seg([P], fd, fds))  # no link_s, terminate seg_Ps = [P]
+    return seg_
+
+def link_eval(link_layers, fd):
+    # sort derPs in link_layers[-2] by their value param:
+    derP_ = sorted( link_layers[-2], key=lambda derP: derP.valt[fd], reverse=True)
+
+    for i, derP in enumerate(derP_):
+        if not fd:
+            rng_eval(derP, fd)  # reset derP.valt, derP.rdn
+        mrdn = derP.valt[1-fd] > derP.valt[fd]  # sum because they are valt
+        derP.rdnt[fd] += not mrdn if fd else mrdn
+
+        if derP.valt[fd] > vaves[fd] * derP.rdnt[fd] * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
+            link_layers[-1][fd].append(derP)
+            derP._P.downlink_layers[-1][fd] += [derP]
+            # misses = link_layers[-2] not in link_layers[-1], sum as PP.nvalt[fd] in sum2seg and sum2PP
+# ?
+def rng_eval(derP, fd):  # compute value of combined mutual derPs: overlap between P uplinks and _P downlinks
+
+    _P, P = derP._P, derP.P
+    common_derP_ = []
+
+    for _downlink_layer, uplink_layer in zip(_P.downlink_layers[1::2], P.uplink_layers[1::2]):
+        # overlap between +ve P uplinks and +ve _P downlinks:
+        common_derP_ += list( set(_downlink_layer[fd]).intersection(uplink_layer[fd]))
+    rdn = 1
+    olp_val = 0
+    nolp = len(common_derP_)
+    for derP in common_derP_:
+        rdn += derP.valt[fd] > derP.valt[1-fd]
+        olp_val += derP.valt[fd]  # olp_val not reset for every derP?
+        derP.valt[fd] = olp_val / nolp
+    '''
+    for i, derP in enumerate( sorted( link_layers[-2], key=lambda derP: derP.params[fPd].val, reverse=True)):
+    if fPd: derP.rdn += derP.params[fPd].val > derP.params[1-fPd].val  # mP > dP
+    else: rng_eval(derP, fPd)  # reset derP.val, derP.rdn
+    if derP.params[fPd].val > vaves[fPd] * derP.rdn * (i+1):  # ave * rdn to stronger derPs in link_layers[-2]
+    '''
+#    derP.rdn += (rdn / nolp) > .5  # no fractional rdn?
+
+def form_seg_(seg_, P__, seg_Ps, fd, fds):  # form contiguous segments of vertically matching Ps
+
+    if len(seg_Ps[-1].uplink_layers[-1][fd]) > 1:  # terminate seg
+        seg_.append( sum2seg( seg_Ps, fd, fds))  # convert seg_Ps to CPP seg
+    else:
+        uplink_ = seg_Ps[-1].uplink_layers[-1][fd]
+        if uplink_ and len(uplink_[0]._P.downlink_layers[-1][fd])==1:
+            # one P.uplink AND one _P.downlink: add _P to seg, uplink_[0] is sole upderP:
+            P = uplink_[0]._P
+            [P_.remove(P) for P_ in P__ if P in P_]  # remove P from P__ so it's not inputted in form_seg_root
+            seg_Ps += [P]  # if P.downlinks in seg_down_misses += [P]
+            if seg_Ps[-1].uplink_layers[-1][fd]:
+                form_seg_(seg_, P__, seg_Ps, fd, fds)  # recursive compare sign of next-layer uplinks
+            else:
+                seg_.append( sum2seg(seg_Ps, fd, fds))
+        else:
+            seg_.append( sum2seg(seg_Ps, fd, fds))  # terminate seg at 0 matching uplink
+

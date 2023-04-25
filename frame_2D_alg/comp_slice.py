@@ -485,7 +485,7 @@ def comp_vertuple(_vertuple, vertuple):
     dtuple=CQ(n=_vertuple.n, Q=copy(_vertuple.Q))  # no selection here
     rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
 
-    for _par, par, ave in zip(_vertuple.Q, vertuple.Q, aves):
+    for _par, par, ave in zip(_vertuple.Qd, vertuple.Qd, aves):
 
         m,d = comp_par(_par[1], par[1]*rn, ave)
         dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.valt[0]+=m; dtuple.valt[1]+=d
