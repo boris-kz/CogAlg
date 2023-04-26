@@ -128,7 +128,7 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
 def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
 
     regraph_, rreval_ = [],[]
-    Reval = 0
+
     while graph_:
         graph,val = graph_.pop()
         reval = reval_.pop()  # each link *= other_G.aggH.valt
@@ -138,9 +138,9 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
             else:
                 regraph, reval, rval = graph_reval(graph, val, fd)  # recursive depth-first node and link revaluation
                 if rval>aveG:
-                    regraph_+=[[regraph,rval]]; Reval+=reval; rreval_+=[reval]
+                    regraph_+=[[regraph,rval]]; rreval_+=[reval]
         # else remove graph
-    if Reval > aveG:
+    if max([reval for reval in rreval_]) > aveG:
         regraph_ = graph_reval_(regraph_, rreval_, fd)  # graph reval while min val reduction
 
     return regraph_

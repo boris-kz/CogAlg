@@ -672,4 +672,11 @@ def form_seg_(seg_, P__, seg_Ps, fd, fds):  # form contiguous segments of vertic
                 seg_.append( sum2seg(seg_Ps, fd, fds))
         else:
             seg_.append( sum2seg(seg_Ps, fd, fds))  # terminate seg at 0 matching uplink
+'''
+    mseg_levels = list  # from 1st agg_recursion[fPd], seg_levels[0] is seg_, higher seg_levels are segP_..s
+    dseg_levels = list
+    uplink_layers = lambda: [[]]  # the links here will be derPPs from discontinuous comp, not in layers?
+    downlink_layers = lambda: [[]]
+
+'''
 

@@ -35,7 +35,7 @@ def sub_recursion_eval(root):  # for PP or dir_blob
                     if PP_layer:
                         if i > len(comb_layers) - 1: comb_layers += [PP_layer]  # add new r|d layer
                         else: comb_layers[i] += PP_layer  # splice r|d PP layer into existing layer
-            # no segs but may keep pruned sub_PPs?
+            # sub_PPs / sub+?
             # include empty comb_layers: # revise?
             if fd:
                 PPmm_ = [PPm_] + mcomb_layers; mVal = sum([PP.valt[0] for PP_ in PPmm_ for PP in PP_])
@@ -61,7 +61,8 @@ def sub_recursion(PP):  # evaluate PP for rng+ and der+
     P__ = comp_P_der(P__) if PP.fds[-1] else comp_P_rng(P__, PP.rng + 1)   # returns top-down
     PP.rdnt[PP.fds[-1] ] += 1  # two-fork rdn, priority is not known?  rotate?
 
-    sub_PPm_, sub_PPd_ = form_PP_root([copy(P_) for P_ in P__], [copy(P_) for P_ in P__], PP.rdnt[PP.fds[-1]] + 1, fds=PP.fds)
+    cP__ = [copy(P_) for P_ in P__]
+    sub_PPm_, sub_PPd_ = form_PP_root(cP__,cP__, fds=PP.fds)
     PP.rlayers[:] = [sub_PPm_]
     PP.dlayers[:] = [sub_PPd_]
     sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs
