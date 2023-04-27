@@ -100,7 +100,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
         graph_ = []  # init graphs by link val:
         while node_:  # all Gs not removed in add_node_layer
             G = node_.pop(); gnode_ = [G]
-            val = add_node_layer(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
+            val = init_graph(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
             graph_+=[gnode_,val]
         # prune graphs by node val:
         regraph_ = graph_reval_(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
@@ -112,7 +112,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
     return graph_t
 
 # not revised
-def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
+def init_graph(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 
     for link in G.link_.Q:
         # all positive links init graph, eval node.link_ in prune_node_layer
@@ -121,7 +121,7 @@ def add_node_layer(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G
             gnode_ += [_G]
             G_.remove(_G)
             val += _G.link_.valt[fd]
-            val += add_node_layer(gnode_, G_, _G, fd, val)
+            val += init_graph(gnode_, G_, _G, fd, val)
     return val
 
 
