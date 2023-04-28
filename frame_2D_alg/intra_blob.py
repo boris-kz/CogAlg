@@ -10,7 +10,6 @@
 import numpy as np
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
-from draw_frame_blobs import visualize_blobs
 from itertools import zip_longest
 from comp_slice import comp_slice_root
 

@@ -32,7 +32,7 @@
 import sys
 import numpy as np
 from collections import deque
-from draw_frame_blobs import visualize_blobs
+from visualization.draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
 

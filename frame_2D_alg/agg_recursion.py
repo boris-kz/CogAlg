@@ -169,12 +169,15 @@ def graph_reval(graph, Val, fd):  # exclusive graph segmentation by reval,prune 
                     rreval += link.pH.valt[fd] + val*med_decay - link.pH.valt[fd]*med_decay  # else same as rreval += link_.val
             else:
                 link_ = node.link_.Qd if fd else node.link_.Qm  # prune node links only:
+                remove_link_ = []
                 for link in link_:
                     _node = link.G[1] if link.G[0] is node else link.G[0]  # add med_link_ val to link val:
                     link_val = link.pH.valt[fd] + _node.link_.valt[fd]*med_decay - link.pH.valt[fd]*med_decay
                     if link_val < aveG:  # prune link, else no change
-                        link_.remove(link)
+                        remove_link_ += [link]
                         rreval += link_val
+                while remove_link_:
+                    link_.remove(remove_link_.pop(0))
                 Val+=val  #?
                 regraph.Q += [node]; regraph.valt[fd] += node.link_.valt[fd]
         # recursion:

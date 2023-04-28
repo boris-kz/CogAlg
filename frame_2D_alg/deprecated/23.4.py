@@ -677,6 +677,52 @@ def form_seg_(seg_, P__, seg_Ps, fd, fds):  # form contiguous segments of vertic
     dseg_levels = list
     uplink_layers = lambda: [[]]  # the links here will be derPPs from discontinuous comp, not in layers?
     downlink_layers = lambda: [[]]
-
 '''
 
+def form_PP_t(P__, base_rdn):  # form PPs from derP.valt[fd] -connected Ps
+    PP_t = []
+    for fd in 0, 1:
+        fork_P__ = reversed([copy(P_) for P_ in P__][1:])  # scan bottom-up, copy per fd
+        iPP_ = []
+        for P_ in fork_P__:
+            for P in P_:
+                if P.link_t[fd]: iPP_ += [P]  # all Ps with +ve links, not in PPs yet
+        PP_,rePP_ = [],[]
+        while iPP_:  # all PPs not removed in init_PP_
+            P = iPP_.pop(); qPP = [P]  # iPPs are single-P, not sure
+            PP_ += [init_PP(qPP, iPP_, P, fd, val=0)]  # flood-fill qPPs with vertically matched | diffed Ps
+        # prune PPs by P val:
+        rePP_ = [reval_PP(qPP, aveB, fd, base_rdn) for qPP in PP_]  # qPP = [qPP,val]
+        if rePP_:
+            PP_[:] = [sum2PP(rePP, fd) for rePP in rePP_]
+        PP_t += [rePP_]
+    return PP_t  # add_alt_PPs_(graph_t)?
+
+def init_PP(qPP, iPP_, P, fd, val):  # recursive qPP_+=[_P]
+    for derP in P.link_t[fd]:  # all positive links init PP
+        _P = derP._G
+        if _P in iPP_:  # _P is not removed in prior loop
+            qPP += [_P]
+            iPP_.remove(_P)
+            val += derP.valt[fd]
+            val += init_PP(qPP, iPP_, _P, fd, val)
+    return [qPP, val]
+
+# partial draft
+def link_eval(P, fd, qPP):  # prune P.link_ as in graph_reval, accum pre_PP_ and reval
+
+    # if not fd: rng_eval(derP, fd)  # reset derP.valt, derP.rdn
+    # mrdn = derP.valt[1 - fd] > derP.valt[fd]
+    # derP.rdnt[fd] += not mrdn if fd else mrdn
+    reval = 0
+    for i, derP in enumerate(P.link_t[fd]):
+        med_val = 0
+        val = derP.valt[fd]
+        for link in derP._P.link_t[fd]:  # _P.link_t was updated in previous round
+            if link != derP: med_val += link.valt[fd]  # not circular link
+        if val + med_val * med_decay < vaves[fd] * derP.rdnt[fd] * (len(derP.rngQ) - 2):  # ave * rdn to stronger|prior derPs?
+            del (P.link_t[fd][i])
+            reval += val  # no P.valt to adjust?
+    # add section to prune Ps, as graph_reval
+    # append pre_PP in P.roott[fd] with P or merge in _P.roott[fd] if any,
+    # term pre_PP if empty pre_PP link__
