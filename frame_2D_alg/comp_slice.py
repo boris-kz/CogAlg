@@ -173,9 +173,8 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
-                    vertuple = comp_ptuple(_P.ptuple, P.ptuple)
-                    valt = copy(vertuple.valt); rdnt = copy(vertuple.rdnt)
-                    derP = CderP(rngQ=[[vertuple], 1], valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=len(_P.dert_))
+                    vertuple = comp_ptuple(_P.ptuple, P.ptuple); valt = copy(vertuple.valt); rdnt = copy(vertuple.rdnt)
+                    derP = CderP(rngQ=[[vertuple],1], valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=len(_P.dert_))
                     P.link_+=[derP]  # all links
                     if valt[0] > aveB*rdnt[0]: P.link_t[0] += [derP]  # +ve links, fork overlap?
                     if valt[1] > aveB*rdnt[1]: P.link_t[1] += [derP]
@@ -219,13 +218,13 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 params.G = np.hypot(*params.angle)  # Dy, Dx  # recompute G, Ga, which can't reconstruct M, Ma
                 params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
-                params.L = L; params.x = x-L/2
+                params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
                 P_.append( CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_))
             _mask = mask
         # pack last P, same as above:
         if not _mask:
             params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
-            L = len(Pdert_); params.L = L; params.x = x-L/2
+            L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
             P_.append(CP(ptuple=params, x0=x - (L - 1), y0=y, dert_=Pdert_))
         P__ += [P_]
 
@@ -242,107 +241,104 @@ def form_PP_t(P__, base_rdn):  # form PPs of derP.valt[fd] - connected Ps
         while fork_P__:
             P = fork_P__.pop(0)
             if P.link_t[fd]:
-                qPP = [[P], 0]  # init PP is queue of node Ps
+                qPP = [[P], 0]  # init PP is a queue of node Ps and their summed Val
                 for derP in P.link_t[fd]:
                     if derP._P in fork_P__:
                         qPP[0] += [derP._P]
                         qPP[1] += derP.valt[fd]
                         fork_P__.remove(derP._P)
-                PP_ += [qPP]
-        # prune PP links by med val:
-        rePP_ = reval_PP_(PP_, [aveB for _ in PP_], fd)  # qPP = [qPP,val], aveB to be adjusted for rdn?
+                PP_ += [qPP + [ave+1]]  # + [ini reval]
+        # prune Ps by med link val:
+        rePP_ = reval_PP_(PP_, fd)  # qPP = [qPP,val,reval]
         if rePP_:
             PP_[:] = [sum2PP(rePP, base_rdn, fd) for rePP in rePP_]
         PP_t += [rePP_]
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
+def reval_PP_(PP_, fd):  # recursive eval Ps for rePP, prune weakly connected Ps
 
-def reval_PP_(PP_, ave, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
-
-    rePP_, reval_ = [],[]
-
+    rePP_ = []
     while PP_:  # init P__
-        P_,val = PP_.pop(0)
-        reval = 0
+        P_,val, reval = PP_.pop(0)
         if val > ave:
             if reval < ave:  # same graph, skip re-evaluation:
-                rePP_+= [[P_,val]]; reval_+=[0]
+                rePP_+= [[P_,val,0]]  # reval=0
             else:
-                rePP, reval = reval_P_(P_, ave, fd)  # recursive node and link revaluation by med val
-                if rePP[1] > ave:  # adjusted val
-                    rePP_ += [rePP]; reval_ += [reval]
-    if max([reval for reval in reval_]) > ave:  # if any
-        rePP_ = reval_PP_(rePP_, ave, fd)
+                rePP = reval_P_(P_, fd)  # recursive node and link revaluation by med val
+                if rePP[1] > ave:  # min adjusted val
+                    rePP_ += [rePP]
+    if max([rePP[2] for rePP in rePP_]) > ave:  # if any min reval
+        rePP_[:] = reval_PP_(rePP_, fd)
+    else:
+        return rePP_
 
-    return rePP_
+# draft:
+def reval_P_(P_, fd):  # prune qPP by link_ val adjusted by _P.val
 
-def reval_P_(qPP, ave, fd):  # prune qPP by link_ val adjusted by _P.val
+    for i, P in enumerate(P_):
+        P, val, dir_link_ = med_eval(P.link_t[fd], old_link_=[], med_val_=[], dir_link_=P.link_t[fd], fd=fd)  # recursive,
+        P.link_t[fd][:] = dir_link_
+        P_[i] = [P,val] # appends combined link val to P, prunes P.link_t[fd]
+    # prune P_:
+    Val, reval = 0, 0  # reval from P links only?
+    for P, val in P_:
+        if val < vaves[fd]:
+            for link in P.link_t[fd]:  # prune links
+                _P = link._P
+                _link_ = _P.link_t[fd]
+                if link in _link_:
+                    _link_.remove(link); reval += link.valt[fd]  # direct links only?
+        else: Val += val
+    # recursion:
+    if reval > aveB:
+        reval_P_(P_, fd)
+    else:
+        return [P_, Val, reval]
 
-    reval = 0
+# draft
+def med_eval(last_link_, old_link_, med_val_, dir_link_, fd):  # reval, prune links
 
-    for P in qPP[0]:
-        # draft 2-level med_eval: recursive eval of mediated link_s per _P, __P_, ___P__, etc, while last layer val
-        med_val_, pre_link_ = [],[]  # per P
-        for derP in P.link_t[fd]:
-            med_val = 0
-            for link in derP._P.link_t[fd]:  # _P.link_t was updated in previous round
-                if link!=derP: med_val += link.valt[fd]  # not circular link
-            Val = med_val*med_decay
-            med_val_ += [Val]  # init vals of all evaluated mediated links
-            pre_link_ += derP._P.link_t[fd]  # evaluated mediated links
-            # extend med_eval, fold into recursive med_eval():
-            if Val > ave:
-                _med_val = 0
-                for link in derP._P.link_t[fd]:
-                    for _link in link._P.link_t[fd]:
-                        if _link not in pre_link_:
-                            _med_val += _link.valt[fd]  # not circular link
-                            pre_link_ += _link
-                _Val = _med_val * (med_decay**2)
-                if _Val > ave:
-                    med_eval(derP._P.link_t[fd])  # extend med_eval
-    # not revised:
-    rreval = 0
-    if reval > aveB:  # prune:
-        rePP = [[], 0]  # reformed proto-PP
-        for P in qPP[0]:
-            val = sum([link.valt[fd] for link in P.link_t[fd]])
-            if val < vaves[fd]:  # prune revalued P and its links
-                for link in P.link_t[fd]:
-                    _P = link._P
-                    _link_ =_P.link_t[fd]
-                    if link in _link_: _link_.remove(link)
-                    rreval += link.valt[fd] + val*med_decay - link.valt[fd]*med_decay  # else same as rreval += link_.val
-            else:
-                link_ = P.link_t[fd]  # prune P links only:
-                remove_link_ = []
-                for link in link_:
-                    _P = link._P
-                    _val = sum([_link.valt[fd] for _link in _P.link_t[fd]])
-                    link_val = link.valt[fd] + _val*med_decay - link.valt[fd]*med_decay
-                    if link_val < aveB:  # prune link, else no change
-                        remove_link_ += [link]
-                        rreval += link_val
-                while remove_link_:
-                    link_.remove(remove_link_.pop(0))
-                Val+=val
-                rePP[0] += [P]; rePP[1] += sum([link.valt[fd] for link in P.link_t[fd]])
-        # recursion:
-        if rreval > aveB and Val > ave:
-            rePP, reval = reval_P_(rePP, Val, fd)  # not sure about Val
-            rreval += reval
+    curr_link_, med_val = [],0
 
-    else: rePP = qPP
-    return [rePP,Val], rreval
+    for llink in last_link_:
+        if len(med_val_)==1: fdir = 1;  # last_link_ is direct links
+        else: fdir=0
+        for _link in llink._P.link_t[fd]:
+            if _link not in old_link_:  # not a circular link
+                val =_link.valt[fd]; med_val+=val
+                old_link_ += [_link]  # evaluated mediated links
+                curr_link_+= [_link]  # current link layer,-> last_link_ in recursion
+            if fdir:
+                dmed_val = llink.valt[fd] + med_val * med_decay
+                if dmed_val > ave: dir_link_ += [_link]
+                else: pass  # adjust other links and vals:
+                '''
+                for link, med_val in zip(P.link_t[fd],
+                    prune_llink_ = []; del_val = 0
+                for llink, val in zip(last_link_,llink_val_):
+                    if val < aveB:
+                        prune_llink_+=[llink]; del_val += val
+                        llink.P.link_t[fd].remove(llink)
+                        llink._P.link_t[fd].remove(llink)
+                for llink in prune_llink_:
+                last_link_.remove(llink)
+                '''
+    Val = med_val * (med_decay ** (len(med_val_)+1))
+    med_val_ += [Val]
+    if Val > aveB:  # val of last med layer
+        med_eval(curr_link_, old_link_, med_val_, dir_link_, fd)  # eval next med layer
+    else:
+        Val = sum([link.valt[fd] for link in last_link_]) + sum(med_val_)
+        return last_link_, Val, dir_link_
 
 # not fully updated
-def sum2PP(prePP, base_rdn, fds, fd):  # sum PP_segs into PP
+def sum2PP(prePP, base_rdn, fd):  # sum PP_segs into PP
 
     P_, val = prePP  # not sure on how to pack val here
     from sub_recursion import append_P
 
-    PP = CPP(rngH = [Cptuple()], x0=P_[0].x0, rdn=base_rdn, fds=copy(fds)+[fd], rlayers=[[]], dlayers=[[]])
+    PP = CPP(rngH = [Cptuple()], x0=P_[0].x0, rdn=base_rdn, rlayers=[[]], dlayers=[[]])
 
     rngQ = [[], 0]
     PP.box = [P_[0].y0, 0, P_[0].x0, 0]
@@ -601,4 +597,3 @@ def comp_aangle(_aangle, aangle):
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
-
