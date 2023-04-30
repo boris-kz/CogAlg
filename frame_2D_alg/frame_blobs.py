@@ -101,6 +101,8 @@ class CBlob(ClusterStructure):
 
 def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=False):
 
+    Y, X = image.shape[:2]
+
     if verbose: start_time = time()
     dert__ = comp_pixel(image)
 
@@ -108,7 +110,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-    frame = CBlob(I = I, Dy = Dy, Dx = Dx, dert__=dert__, prior_forks=["g"], rlayers = [blob_])  # dlayers = []: no comp_a yet
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, prior_forks=["g"], rlayers=[blob_], box=(0, Y, 0, X))  # dlayers = []: no comp_a yet
 
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -124,7 +126,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
         dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     '''
-    if render: visualize_blobs(idmap, frame.rlayers[0])
+    if render: visualize_blobs(frame)
     return frame
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation

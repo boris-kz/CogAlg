@@ -96,7 +96,7 @@ def cluster_fork_recursive(blob, spliced_layers, new_dert__, sign__, new_mask__,
         if fBa: print('fork:', '-'.join(blob.prior_forks))
         else:   print('fork:', '-'.join(blob.prior_forks))
     # form sub_blobs:
-    sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__.fill(False))
+    sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__)
     '''
     adjust per average sub_blob, depending on which fork is weaker, or not taken at all:
     sub_blob.rdn += 1 -|+ min(sub_blob_val, alt_blob_val) / max(sub_blob_val, alt_blob_val):
