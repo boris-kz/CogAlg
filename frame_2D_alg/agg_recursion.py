@@ -54,7 +54,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
     pH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
-    H = list  # down-forking tree of Levs: slice of nodes
+    H = list  # replace with node_ per pH[i]? down-forking tree of Levs: slice of nodes
     # uH: up-forking Levs if mult roots
     node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
     link_ = lambda: CQ()  # temporary holder for der+ node_, then unique links within graph?

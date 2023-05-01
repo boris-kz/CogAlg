@@ -212,6 +212,8 @@ class MetaCluster(type):
     '''
 
     def get_instance(cls, cluster_id):
+        if cluster_id < 0:
+            return None
         try:
             return cls._instances[cluster_id]()
         except IndexError:

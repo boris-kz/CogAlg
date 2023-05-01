@@ -708,21 +708,54 @@ def init_PP(qPP, iPP_, P, fd, val):  # recursive qPP_+=[_P]
             val += init_PP(qPP, iPP_, _P, fd, val)
     return [qPP, val]
 
-# partial draft
-def link_eval(P, fd, qPP):  # prune P.link_ as in graph_reval, accum pre_PP_ and reval
+def reval_P_(P_, fd):  # prune qPP by (link_ + mediated link__) val
+    reval = 0  # recursion val
 
-    # if not fd: rng_eval(derP, fd)  # reset derP.valt, derP.rdn
-    # mrdn = derP.valt[1 - fd] > derP.valt[fd]
-    # derP.rdnt[fd] += not mrdn if fd else mrdn
-    reval = 0
-    for i, derP in enumerate(P.link_t[fd]):
-        med_val = 0
-        val = derP.valt[fd]
-        for link in derP._P.link_t[fd]:  # _P.link_t was updated in previous round
-            if link != derP: med_val += link.valt[fd]  # not circular link
-        if val + med_val * med_decay < vaves[fd] * derP.rdnt[fd] * (len(derP.rngQ) - 2):  # ave * rdn to stronger|prior derPs?
-            del (P.link_t[fd][i])
-            reval += val  # no P.valt to adjust?
-    # add section to prune Ps, as graph_reval
-    # append pre_PP in P.roott[fd] with P or merge in _P.roott[fd] if any,
-    # term pre_PP if empty pre_PP link__
+    for i, P in enumerate(P_):
+        P_val = 0; remove_ = []
+        for link in P.link_t[fd]:
+            # recursive mediated link layers eval-> med_valH:
+            _,_,med_valH = med_eval(link._P.link_t[fd], old_link_=[], med_valH=[], fd=fd)
+            # link val + mlinks val + Mlinks val:
+            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_t[fd]])*med_decay + sum(med_valH)
+            if link_val < vaves[fd]:
+                remove_+= [link]; reval += link_val
+            else: P_val += link_val
+        for link in remove_:
+            P.link_t[fd].remove(link)  # prune weak links
+            link._P.link_t[fd].remove(link)  # bidirectional remove
+        P_[i] = [P,P_val]  # adds comb links val to P
+    # prune P_:
+    Val = 0  # reval from P links only
+    for P, val in P_:
+        if val < vaves[fd]:
+            for link in P.link_t[fd]:  # prune links, direct only?
+                _P = link._P
+                _link_ = _P.link_t[fd]
+                if link in _link_:
+                    _link_.remove(link); reval += link.valt[fd]
+        else: Val += val
+
+    if reval > aveB: P_, Val, reval = reval_P_(P_, fd)  # recursion
+    else: return [P_, Val, reval]
+
+def sum_rngH(RngH, rngH, fneg=0):
+
+    for DerQ, derQ  in zip_longest(RngH, rngH, fillvalue=[]):
+        if derQ:
+            if DerQ:
+                for Vertuple, vertuple  in zip_longest(DerQ[0], derQ[0], fillvalue=[]):
+                    if vertuple:
+                        if Vertuple:
+                            if isinstance(vertuple, CQ):
+                                sum_vertuple(Vertuple, vertuple, fneg)
+                            else:
+                                sum_ptuple(Vertuple, vertuple, fneg)
+                        else:
+                            DerQ[0] += [deepcopy(vertuple)]
+                DerQ[1] += derQ[1]  # sum nlink
+            else:
+                RngQ[0] += [deepcopy(vertuple)]
+
+# rlayers = list  # or mlayers: Ps or sub_PPs from sub_recursion within PP?
+# dlayers = list  # or alayers

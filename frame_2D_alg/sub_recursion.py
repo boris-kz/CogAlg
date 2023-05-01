@@ -4,11 +4,8 @@ import numpy as np
 
 from comp_slice import PP_aves, ave_nsub, ave_g, ave_ga
 from comp_slice import CP, Cptuple, CderP, CPP
-from comp_slice import comp_ptuple, comp_vertuple, comp_angle
-from comp_slice import form_seg_root, form_PP_root
-
+from comp_slice import comp_ptuple, comp_vertuple, comp_angle, form_PP_t
 from agg_convert import agg_recursion_eval
-
 '''
 comp_slice_ sub_recursion + utilities
 '''
@@ -62,7 +59,7 @@ def sub_recursion(PP):  # evaluate PP for rng+ and der+
     PP.rdnt[PP.fds[-1] ] += 1  # two-fork rdn, priority is not known?  rotate?
 
     cP__ = [copy(P_) for P_ in P__]
-    sub_PPm_, sub_PPd_ = form_PP_root(cP__,cP__, fds=PP.fds)
+    sub_PPm_, sub_PPd_ = form_PP_t(cP__, base_rdn=PP.rdnt[PP.fds[-1]], fds=PP.fds)
     PP.rlayers[:] = [sub_PPm_]
     PP.dlayers[:] = [sub_PPd_]
     sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs
@@ -97,7 +94,7 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, over the same derPs
 
     for P_ in P__[1:]:  # exclude 1st row: no +ve uplinks
         for P in P_:
-            for derP in P.uplink_[1]:  # fd=1
+            for derP in P.link_[1]:  # fd=1
                 _P, P = derP._P, derP.P
                 i= len(derP.derQ)-1
                 j= 2*i

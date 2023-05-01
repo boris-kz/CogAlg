@@ -132,11 +132,11 @@ def visualize_blobs(frame, layer='r', window_size=None, winname="Blobs"):
         elif event == cv.EVENT_LBUTTONUP:
             blob = state.blob_cls.get_instance(state.blob_id)
             if flags & cv.EVENT_FLAG_CTRLKEY:       # Look into rlayer
-                if blob.rlayers and blob.rlayers[0]:
+                if blob.rlayers and blob.rlayers[0] and blob is not None:
                     state.layers_stack.append((blob, 'r'))
                     reset_state()
             elif flags & cv.EVENT_FLAG_SHIFTKEY:    # Look into dlayer
-                if blob.dlayers and blob.dlayers[0]:
+                if blob.dlayers and blob.dlayers[0] and blob is not None:
                     state.layers_stack.append((blob, 'd'))
                     reset_state()
             else:                                   # Go back to parent
