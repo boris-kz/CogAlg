@@ -145,15 +145,15 @@ class CPP(CderP):  # derP params include P.ptuple
     alt_rdn = int  # overlapping redundancy between core and edge
     alt_PP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
     altuple = list  # summed from alt_PP_, sub comp support, agg comp suppression?
-    nval = int
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
-    P_cnt = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
-    derP_cnt = int  # redundant per P
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
-    nderP_ = list  # miss links, add with nvalt for complemented PP?
     mask__ = bool
-    link__ = list  # combined P link_t[fd] s?
+    link__ = list  # combined P link_t[fd] s, may overlap between Ps within line
+    nlink__ = list  # miss links, add with nvalt for complemented PP?
+    nval = int
+    P_cnt = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
+    derP_cnt = int  # redundant per P
     P__ = list  # input + derPs, derH[0][1]?
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
@@ -163,7 +163,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
     from sub_recursion import sub_recursion_eval, rotate_P_, agg_recursion_eval
 
-    P__ = slice_blob(blob, verbose=False)  # form 2D array of Ps: blob slices in dert__
+    P__ = slice_blob(blob, verbose=verbose)  # form 2D array of Ps: blob slices in dert__
     # rotate each P to align it with the direction of P gradient:
     rotate_P_(P__, blob.dert__, blob.mask__)  # rotated Ps are sparse or overlap via redundant derPs, results are not biased?
     # scan rows top-down, comp y-adjacent, x-overlapping Ps, form derP__:
@@ -174,7 +174,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
                     vertuple = comp_ptuple(_P.ptuple, P.ptuple); valt = copy(vertuple.valt); rdnt = copy(vertuple.rdnt)
-                    derP = CderP(derH=[[[vertuple],[_P,P], 0]], valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=len(_P.dert_))
+                    derP = CderP(derH=[[[vertuple],[_P,P],0]], valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=len(_P.dert_))
                     P.link_+=[derP]  # all links
                     if valt[0] > aveB*rdnt[0]: P.link_t[0] += [derP]  # +ve links, fork overlap?
                     if valt[1] > aveB*rdnt[1]: P.link_t[1] += [derP]
@@ -183,11 +183,11 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
         _P_ = P_
     PPm_,PPd_ = form_PP_t(P__, base_rdn=2)
     blob.PPm_, blob.PPd_ = PPm_, PPd_
-    blob.derH = [[[], [PPm_,PPd_], 0]]
-
+    blob.derH = [[[], [PPm_,PPd_], [0,1]]]  # special case for blob, pack node_t and fd_t
     # re comp, cluster:
     sub_recursion_eval(blob)  # intra PP, add rlayers, dlayers, seg_levels to select PPs, sum M,G
-    agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # cross PP, Cgraph conversion doesn't replace PPs?
+    # pending update
+    # agg_recursion_eval(blob, [copy(blob.PPm_), copy(blob.PPd_)])  # cross PP, Cgraph conversion doesn't replace PPs?
 
 
 def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -201,33 +201,33 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
 
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple slices -> Ps:
         P_ = []
-        _mask = True
-        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
-
+        _mask = True  # mask the cell before 1st dert
+        for x, (dert, mask) in enumerate(zip(dert_, mask_)):
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
-            g, ga, ri, angle, aangle = dert[1], dert[2], dert[3], list(dert[4:6]), list(dert[6:])
+
+            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
-                if _mask:  # ini P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
+                if _mask:  # ini P params with first unmasked dert
                     Pdert_ = [dert]
-                    params = Cptuple(M=ave_g-g,Ma=ave_ga-ga,I=ri, angle=angle, aangle=aangle)
+                    params = Cptuple(M=ave_g-g,Ma=ave_ga-ga,I=ri, angle=[dy,dx], aangle=[sin_da0, cos_da0, sin_da1, cos_da1])
                 else:
                     # dert and _dert are not masked, accumulate P params:
-                    params.M+=ave_g-g; params.Ma+=ave_ga-ga; params.I+=ri; params.angle[0]+=angle[0]; params.angle[1]+=angle[1]
-                    params.aangle = [sum(aangle_tuple) for aangle_tuple in zip(params.aangle, aangle)]
-                    Pdert_.append(dert)
+                    params.M+=ave_g-g; params.Ma+=ave_ga-ga; params.I+=ri; params.angle[0]+=dy; params.angle[1]+=dx
+                    params.aangle = [_par+par for _par,par in zip(params.aangle, [sin_da0, cos_da0, sin_da1, cos_da1])]
+                    Pdert_ += [[dert]]
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 params.G = np.hypot(*params.angle)  # Dy, Dx  # recompute G, Ga, which can't reconstruct M, Ma
                 params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
                 params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
-                P_.append( CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_))
+                P_+=[CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
             _mask = mask
         # pack last P, same as above:
         if not _mask:
             params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
             L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_.append(CP(ptuple=params, x0=x - (L - 1), y0=y, dert_=Pdert_))
+            P_ += [CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
         P__ += [P_]
 
     blob.P__ = P__
@@ -293,7 +293,7 @@ def reval_P_(P_, fd):  # prune qPP by (link_ + mediated link__) val
         if P_val < vaves[fd]:
             prune_ += [P]
         else:
-            Val += P_val  # adds comb links val to P
+            Val += P_val  # add comb links val to P
     for P in prune_:
         for link in P.link_t[fd]:  # prune direct links only?
             _P = link._P
@@ -325,49 +325,47 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
 # not fully updated
 def sum2PP(qPP, base_rdn, fd):  # sum PP_segs into PP
 
+    from sub_recursion import append_P
+
     P_, val, _ = qPP
     # init:
     P = P_[0]
-    derH = [[P.link_t[fd][0], P.link_t[fd], fd]]
-    if len(P.link_t[fd])>1:
-        sum_links(derH, P.link_t[fd][1:])
-    # ptuple_ = [P.ptuple] if isinstance(P.ptuple, Cptuple) else P.ptuple
-    PP = CPP(derH=[[[P.ptuple], P_,fd]], box=[P.y0, P_[-1].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn)
+    derP = P.link_t[fd][0]
+    derH = [[deepcopy(derP.derH[0][0]), copy(derP.derH[0][1]), fd]]
+    PP = CPP(derH=[[[P.ptuple], P_,fd]], box=[P.y0, P_[-1].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn, link_=[derP], P__=[[P]])
     PP.valt[fd] = val; PP.rdnt[fd] += base_rdn
+    if len(P.link_t[fd])>1: sum_links(PP, derH, P.link_t[fd][1:], fd)
     # accum:
     for i, P in enumerate(P_):
         P.roott[fd] = PP
         if i:  # not init
-            sum_links(derH, P.link_t[fd])  # sum links into new layer
-            sum_ptuple_(PP.derH[0][0], P.ptuple)
-            # in sum2PPP: if isinstance(P.ptuple, Cptuple) else sum_derH(PP.derH, P.ptuple)
-            # this should be added to sum_derH: PP.derH[0][0][1] += [P]  # pack node_
-            PP.link_ = list(set(PP.link_ + P.link_))  # unique links only?
-            # same for link_t?
+            sum_ptuple_(PP.derH[0][0], P.ptuple if isinstance(P.ptuple, list) else [P.ptuple])
+            sum_links(PP, derH, P.link_t[fd], fd)  # sum links into new layer
+            PP.link_ += P.link_t[fd]
+            # actually, the links may overlap betweep Ps of the same row?
+            PP.nlink_ += [nlink for nlink in P.link_ if nlink not in P.link_t[fd]]
             PP.box[0] = min(PP.box[0], P.y0)  # y0
             PP.box[2] = min(PP.box[2], P.x0)  # x0
             PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
+
+    # we still need this, else we won't have P__ for sub_recursion
+    # pack P into PP.P__
+    if not PP.P__: PP.P__.append([P])  # pack 1st P
+    else: append_P(PP.P__, P)  # pa
 
     PP.derH += derH  # can't be empty
     return PP
 
 # draft:
-def sum_links(derH, link_):
+def sum_links(PP, derH, link_, fd):
 
     for derP in link_:
         sum_derH(derH, derP.derH)
-        for derP_P in derP.derH[0][1]:  # pack ndoe_
-            if derP_P not in derH[0][1]:
-                derH[0][1] += [derP_P]
     for derP in link_:
-        # positive links: update valt and rdnt
         if derP in link_:
             for i in 0, 1:
                 PP.rdnt[i] += derP.rdnt[i]
-        # negative links: update nval and nderP
-        else:
-            PP.nval += derP.valt[fd]  # negative link
-            PP.nderP_ += [derP]
+                PP.valt[i] += derP.valt[i]
 
 def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
 
@@ -386,15 +384,10 @@ def sum_derH(DerH, derH, fneg=0):  # same fds from comp_derH
     for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
         if h:
             if H:
-                for Vertuple, vertuple in zip_longest(H[0], h[0], fillvalue=[]):  # H[0] is ptuple_
-                    if vertuple:
-                        if Vertuple:
-                            if isinstance(vertuple, CQ):
-                                sum_vertuple(Vertuple, vertuple, fneg)
-                            else:
-                                sum_ptuple(Vertuple, vertuple, fneg)
-                        elif not fneg:
-                            H[0] += [deepcopy(vertuple)]
+                sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
+                for node in h[1]:  # H[1] is node_, pack node_
+                    if node not in H[1]:
+                        H[1] += [node]
             else:
                 DerH += [[deepcopy(h[0]), copy(h[1]), h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
 
@@ -412,8 +405,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 
     for pname, ave in zip(pnames, aves):
         Par = getattr(Ptuple, pname); par = getattr(ptuple, pname)
-        # angle or aangle:
-        if isinstance(Par, list):
+        if isinstance(Par, list):  # angle or aangle
             for j, (P,p) in enumerate(zip(Par,par)): Par[j] = P-p if fneg else P+p
         else:
             Par += (-par if fneg else par)

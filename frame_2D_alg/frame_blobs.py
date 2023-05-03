@@ -172,7 +172,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, fseg=False, prior_for
                 blob = CBlob(sign=sign__[y, x], root_dert__=dert__, prior_forks=['g'])
                 if prior_forks: # update prior forks in deep blob
                     blob.prior_forks= prior_forks.copy()
-                blob_.append(blob)
+                blob_ += [blob]
                 idmap[y, x] = blob.id
                 y0, yn = y, y
                 x0, xn = x, x
@@ -220,7 +220,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, fseg=False, prior_for
                             # same-sign dert:
                             if blob.sign == sign__[y2, x2]:
                                 idmap[y2, x2] = blob.id  # add blob ID to each dert
-                                unfilled_derts.append((y2, x2))
+                                unfilled_derts += [(y2, x2)]
                         # else check if same-signed
                         elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
@@ -265,13 +265,13 @@ def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
         # bilateral assignments
         '''
         if f_segment_by_direction:  # pose is not needed
-            blob1.adj_blobs.append(blob2)
-            blob2.adj_blobs.append(blob1)
+            blob1.adj_blobs += [blob2]
+            blob2.adj_blobs += [blob1]
         '''
-        blob1.adj_blobs[0].append(blob2)
-        blob1.adj_blobs[1].append(pose2)
-        blob2.adj_blobs[0].append(blob1)
-        blob2.adj_blobs[1].append(pose1)
+        blob1.adj_blobs[0] += [blob2]
+        blob1.adj_blobs[1] += [pose2]
+        blob2.adj_blobs[0] += [blob1]
+        blob2.adj_blobs[1] += [pose1]
 
 
 if __name__ == "__main__":

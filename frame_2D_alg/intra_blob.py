@@ -42,9 +42,9 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                 AveB = aveB * (blob.rdn+1)  # comp_slice is doubling the costs, likely higher, adjust per nsub_blobs?
                 if blob.G * (1/blob.Ga) > AveB * pcoef:  # value of comp_slice_blob is proportional to angle stability?
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
-                    comp_slice_root(blob, verbose=True)
+                    comp_slice_root(blob, verbose=verbose)
                     blob.prior_forks.extend('p')
-                    if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs.append(blob)
+                    if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs += [blob]
             else:
                 ext_dert__, ext_mask__ = extend_dert(blob)  # dert__+= 1: cross-comp in larger kernels
                 ''' 
@@ -132,10 +132,10 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     ext_dert__ = []
     for dert in blob.root_dert__:
         if isinstance(dert,list):  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
-            ext_dert__.append(dert[0][y0e:yne, x0e:xne])
-            ext_dert__.append(dert[1][y0e:yne, x0e:xne])
+            ext_dert__ += [dert[0][y0e:yne, x0e:xne]]
+            ext_dert__ += [dert[1][y0e:yne, x0e:xne]]
         else:
-            ext_dert__.append(dert[y0e:yne, x0e:xne])
+            ext_dert__ += [dert[y0e:yne, x0e:xne]]
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
     # extend mask__:
     ext_mask__ = np.pad(blob.mask__,
