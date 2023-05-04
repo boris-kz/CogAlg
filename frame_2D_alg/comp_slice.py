@@ -81,7 +81,6 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     x = int  # median: x0+L/2
     L = int  # len dert_ in P, area in PP
     n = lambda: 1  # accum count, combine from CpH?
-    # meaningless, for convenience only:
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
 
@@ -174,7 +173,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
                     vertuple = comp_ptuple(_P.ptuple, P.ptuple); valt = copy(vertuple.valt); rdnt = copy(vertuple.rdnt)
-                    derP = CderP(derH=[[[vertuple],[_P,P],0]], valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=len(_P.dert_))
+                    derP = CderP(derH=[[[vertuple],[[_P],[P]],0]], valt=valt, rdnt=rdnt, P=P, _P=_P, x0=_P.x0, y0=_P.y0, L=len(_P.dert_))
                     P.link_+=[derP]  # all links
                     if valt[0] > aveB*rdnt[0]: P.link_t[0] += [derP]  # +ve links, fork overlap?
                     if valt[1] > aveB*rdnt[1]: P.link_t[1] += [derP]
@@ -214,47 +213,49 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                     # dert and _dert are not masked, accumulate P params:
                     params.M+=ave_g-g; params.Ma+=ave_ga-ga; params.I+=ri; params.angle[0]+=dy; params.angle[1]+=dx
                     params.aangle = [_par+par for _par,par in zip(params.aangle, [sin_da0, cos_da0, sin_da1, cos_da1])]
-                    Pdert_ += [[dert]]
+                    Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
-                params.G = np.hypot(*params.angle)  # Dy, Dx  # recompute G, Ga, which can't reconstruct M, Ma
-                params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
+                params.G = np.hypot(*params.angle)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
+                params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
-                params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
+                params.L = L; params.x = x-L/2; params.valt = [params.M+params.Ma, params.G+params.Ga]
                 P_+=[CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
             _mask = mask
         # pack last P, same as above:
         if not _mask:
-            params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)
-            L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
+            params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)
+            L = len(Pdert_); params.L = L; params.x = x-L/2; params.valt=[params.M+params.Ma,params.G+params.Ga]
             P_ += [CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
         P__ += [P_]
 
     blob.P__ = P__
     return P__
 
-
 def form_PP_t(P__, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
 
     PP_t = []
     for fd in 0, 1:
-        fork_P__ = ([P for P_ in reversed(P__[1:]) for P in P_])  # scan bottom-up, flat?
-        PP_ = []
-        while fork_P__:
-            P = fork_P__.pop(0)
-            if P.link_t[fd]:
-                qPP = [[P], 0]  # init PP is a queue of node Ps and their summed Val
-                for derP in P.link_t[fd]:
-                    if derP._P in fork_P__:
-                        qPP[0] += [derP._P]
-                        qPP[1] += derP.valt[fd]
-                        fork_P__.remove(derP._P)
-                PP_ += [qPP + [ave+1]]  # + [ini reval]
-        # prune Ps by mediated links val:
-        rePP_ = reval_PP_(PP_, fd)  # qPP = [qPP,val,reval]
-        if rePP_:
-            PP_ = [sum2PP(rePP, base_rdn, fd) for rePP in rePP_]
-        PP_t += [PP_]
+        fork_P__ = ([copy(P_) for P_ in reversed(P__)])  # scan bottom-up
+        PP_ = []; packed_P_ = []  # form initial sequence-PPs:
+        for P_ in fork_P__:
+            for P in P_:
+                if P not in packed_P_:
+                    qPP = [[[P]], P.ptuple.valt[fd]]  # init PP is 2D queue of node Ps and sum([P.val+P.link_val])
+                    uplink_ = P.link_t[fd]; uuplink_ = []  # next-line links for recursive search
+                    while uplink_:
+                        for derP in uplink_:
+                            if derP._P not in packed_P_:
+                                qPP[0].insert(0, [derP._P])  # pack top down
+                                qPP[1] += derP.valt[fd]
+                                packed_P_ += [derP._P]
+                                uuplink_ += derP._P.link_t[fd]
+                        uplink_ = uuplink_
+                        uuplink_ = []
+                    PP_ += [qPP + [ave+1]]  # + [ini reval]
+        # prune qPPs by med links val:
+        rePP_ = reval_PP_(PP_, fd)  # each PP = [qPP, val, reval]
+        PP_t += [[sum2PP(PP, base_rdn, fd) for PP in rePP_]]  # CPP_, may be empty
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
@@ -262,38 +263,41 @@ def reval_PP_(PP_, fd):  # recursive eval Ps for rePP, prune weakly connected Ps
 
     rePP_ = []
     while PP_:  # init P__
-        P_,val, reval = PP_.pop(0)
+        P__, val, reval = PP_.pop(0)
         if val > ave:
             if reval < ave:  # same graph, skip re-evaluation:
-                rePP_+= [[P_,val,0]]  # reval=0
+                rePP_ += [[P__,val,0]]  # reval=0
             else:
-                rePP = reval_P_(P_, fd)  # recursive node and link revaluation by med val
+                rePP = reval_P_(P__, fd)  # recursive node and link revaluation by med val
                 if rePP[1] > ave:  # min adjusted val
                     rePP_ += [rePP]
-    if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # if any min reval
-        rePP_[:] = reval_PP_(rePP_, fd)
+    if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
+        rePP_ = reval_PP_(rePP_, fd)
+
     return rePP_
 
-# draft:
-def reval_P_(P_, fd):  # prune qPP by (link_ + mediated link__) val
-    reval = 0  # recursion val
-    Val, prune_ = 0, []  # Val = reval from P links only
-    for i, P in enumerate(P_):
-        P_val = 0; remove_ = []
-        for link in P.link_t[fd]:
-            # recursive mediated link layers eval-> med_valH:
-            _,_,med_valH = med_eval(link._P.link_t[fd], old_link_=[], med_valH=[], fd=fd)
-            # link val + mlinks val + Mlinks val:
-            link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_t[fd]])*med_decay + sum(med_valH)
-            if link_val < vaves[fd]:
-                remove_+= [link]; reval += link_val
-            else: P_val += link_val
-        for link in remove_:
-            P.link_t[fd].remove(link)  # prune weak links
-        if P_val < vaves[fd]:
-            prune_ += [P]
-        else:
-            Val += P_val  # add comb links val to P
+def reval_P_(P__, fd):  # prune qPP by (link_ + mediated link__) val
+
+    reval = 0  # recursion value
+    Val, prune_ = 0, []   # Val = reval from P links only
+    for P_ in P__:
+        for P in P_:
+            P_val = 0; remove_ = []
+            for link in P.link_t[fd]:
+                # recursive mediated link layers eval-> med_valH:
+                _,_,med_valH = med_eval(link._P.link_t[fd], old_link_=[], med_valH=[], fd=fd)
+                # link val + mlinks val + Mlinks val:
+                link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_t[fd]])*med_decay + sum(med_valH)
+                if link_val < vaves[fd]:
+                    remove_+= [link]; reval += link_val
+                else: P_val += link_val
+            for link in remove_:
+                P.link_t[fd].remove(link)  # prune weak links
+            if P_val < vaves[fd]:
+                prune_ += [P]
+            else:
+                Val += P_val  # add comb links val to P
+
     for P in prune_:
         for link in P.link_t[fd]:  # prune direct links only?
             _P = link._P
@@ -302,8 +306,8 @@ def reval_P_(P_, fd):  # prune qPP by (link_ + mediated link__) val
                 _link_.remove(link); reval += link.valt[fd]
 
     if reval > aveB:
-        P_,Val,reval = reval_P_(P_, fd)  # recursion
-    return [P_, Val, reval]
+        P__,Val,reval = reval_P_(P__, fd)  # recursion
+    return [P__, Val, reval]
 
 def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
 
@@ -317,7 +321,8 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
                 med_val += _link.valt[fd]
     med_val *= med_decay ** (len(med_valH) + 1)
     med_valH += [med_val]
-    if med_val > aveB:  # last med layer val -> likely next med layer val
+    if med_val > aveB:
+        # last med layer val -> likely next med layer val
         curr_link_, old_link_, med_valH = med_eval(curr_link_, old_link_, med_valH, fd)  # eval next med layer
 
     return curr_link_, old_link_, med_valH
@@ -325,47 +330,52 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
 # not fully updated
 def sum2PP(qPP, base_rdn, fd):  # sum PP_segs into PP
 
-    from sub_recursion import append_P
-
-    P_, val, _ = qPP
+    P__, val, _ = qPP
     # init:
-    P = P_[0]
-    derP = P.link_t[fd][0]
-    derH = [[deepcopy(derP.derH[0][0]), copy(derP.derH[0][1]), fd]]
-    PP = CPP(derH=[[[P.ptuple], P_,fd]], box=[P.y0, P_[-1].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn, link_=[derP], P__=[[P]])
-    PP.valt[fd] = val; PP.rdnt[fd] += base_rdn
-    if len(P.link_t[fd])>1: sum_links(PP, derH, P.link_t[fd][1:], fd)
+    P = P__[0][0]
+    if P.link_t[fd]:
+        derP = P.link_t[fd][0]
+        derH = [[deepcopy(derP.derH[0][0]), copy(derP.derH[0][1]), fd]]
+        if len(P.link_t[fd]) > 1: sum_links(derH, P.link_t[fd][1:], fd)
+    else: derH = []
+    PP = CPP(derH=[[[P.ptuple], [[P]],fd]], box=[P.y0, P__[-1][0].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn, link__=[[copy(P.link_t[fd])]])
+    PP.valt[fd] = val
+    PP.rdnt[fd] += base_rdn
+    PP.nlink__ += [[nlink for nlink in P.link_ if nlink not in P.link_t[fd]]]
     # accum:
-    for i, P in enumerate(P_):
-        P.roott[fd] = PP
-        if i:  # not init
-            sum_ptuple_(PP.derH[0][0], P.ptuple if isinstance(P.ptuple, list) else [P.ptuple])
-            sum_links(PP, derH, P.link_t[fd], fd)  # sum links into new layer
-            PP.link_ += P.link_t[fd]
-            # actually, the links may overlap betweep Ps of the same row?
-            PP.nlink_ += [nlink for nlink in P.link_ if nlink not in P.link_t[fd]]
-            PP.box[0] = min(PP.box[0], P.y0)  # y0
-            PP.box[2] = min(PP.box[2], P.x0)  # x0
-            PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
-
-    # we still need this, else we won't have P__ for sub_recursion
-    # pack P into PP.P__
-    if not PP.P__: PP.P__.append([P])  # pack 1st P
-    else: append_P(PP.P__, P)  # pa
-
-    PP.derH += derH  # can't be empty
+    for i, P_ in enumerate(P__):  # top-down
+        P_ = []
+        for j, P in enumerate(P_):
+            P.roott[fd] = PP
+            if i or j:  # not init
+                sum_ptuple_(PP.derH[0][0], P.ptuple if isinstance(P.ptuple, list) else [P.ptuple])
+                P_ += [P]
+                if derH: sum_links(PP, derH, P.link_t[fd], fd)  # sum links into new layer
+                PP.link__ += [[P.link_t[fd]]]  # pack top down
+                # the links may overlap between Ps of the same row?
+                PP.nlink__ += [[nlink for nlink in P.link_ if nlink not in P.link_t[fd]]]
+                PP.box[0] = min(PP.box[0], P.y0)  # y0
+                PP.box[2] = min(PP.box[2], P.x0)  # x0
+                PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
+        PP.derH[0][0] += [P_]  # pack new P top down
+    PP.derH += derH
     return PP
 
-# draft:
-def sum_links(PP, derH, link_, fd):
+# not fully updated:
+def sum_links(DerH, P, fd, fneg=0):
 
-    for derP in link_:
-        sum_derH(derH, derP.derH)
-    for derP in link_:
-        if derP in link_:
-            for i in 0, 1:
-                PP.rdnt[i] += derP.rdnt[i]
-                PP.valt[i] += derP.valt[i]
+    for derP in P.link_t[fd]:
+        derH = derP.derH
+        for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
+            if h:
+                if H:
+                    sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
+                    for node_ in h[1]:  # H[1] is node__, pack node__
+                        H[1] += [node_]
+                else:
+                    DerH += [[deepcopy(h[0]), copy(h[1]), h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
+
+
 
 def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
 
@@ -379,17 +389,6 @@ def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
             elif not fneg:
                 Ptuple_ += [deepcopy(vertuple)]
 
-def sum_derH(DerH, derH, fneg=0):  # same fds from comp_derH
-
-    for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
-        if h:
-            if H:
-                sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
-                for node in h[1]:  # H[1] is node_, pack node_
-                    if node not in H[1]:
-                        H[1] += [node]
-            else:
-                DerH += [[deepcopy(h[0]), copy(h[1]), h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
 
 def sum_vertuple(Vertuple, vertuple, fneg=0):
 
