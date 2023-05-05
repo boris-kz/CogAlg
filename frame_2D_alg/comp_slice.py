@@ -136,11 +136,12 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 
 class CPP(CderP):  # derP params include P.ptuple
 
-    derH = list  # layer = [ptuple_,node_,fd], += link/rng+| lay/der+? 1st plevel, zipped with alt_derH in comp_derH
+    derH = lambda: [CQ()]  # list of layers: [ptuple_,node_,fd], += link/rng+| lay/der+? 1st plevel, zipped with alt_derH in comp_derH
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]  # recursion count + Rdn / nderPs + mrdn + uprdn if branch overlap?
     Rdn = int  # for accumulation only?
     rng = lambda: 1
+    nval = int  # of links to alt PPs?
     alt_rdn = int  # overlapping redundancy between core and edge
     alt_PP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
     altuple = list  # summed from alt_PP_, sub comp support, agg comp suppression?
@@ -148,15 +149,13 @@ class CPP(CderP):  # derP params include P.ptuple
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
     mask__ = bool
-    link__ = list  # combined P link_t[fd] s, may overlap between Ps within line
-    nlink__ = list  # miss links, add with nvalt for complemented PP?
-    nval = int
-    P_cnt = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
-    derP_cnt = int  # redundant per P
-    P__ = list  # input + derPs, derH[0][1]?
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
-
+    # link__ = list  # combined P link_t[fd] s,
+    # nlink__ = list  # miss links, add with nvalt for complemented PP?
+    # P_cnt = int  # len 2D derP__ in levels[0][fPd]?  ly = len(derP__), also x, y?
+    # derP_cnt = int  # redundant per P
+    # P__ = list  # derH[0][1]
 
 def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
@@ -278,8 +277,8 @@ def reval_PP_(PP_, fd):  # recursive eval Ps for rePP, prune weakly connected Ps
 
 def reval_P_(P__, fd):  # prune qPP by (link_ + mediated link__) val
 
-    reval = 0  # recursion value
-    Val, prune_ = 0, []   # Val = reval from P links only
+    prune_ = []; Val, reval = 0,0  # comb PP val and recursion value
+
     for P_ in P__:
         for P in P_:
             P_val = 0; remove_ = []
@@ -296,8 +295,7 @@ def reval_P_(P__, fd):  # prune qPP by (link_ + mediated link__) val
             if P_val < vaves[fd]:
                 prune_ += [P]
             else:
-                Val += P_val  # add comb links val to P
-
+                Val += P_val
     for P in prune_:
         for link in P.link_t[fd]:  # prune direct links only?
             _P = link._P
@@ -327,55 +325,52 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
 
     return curr_link_, old_link_, med_valH
 
-# not fully updated
+
 def sum2PP(qPP, base_rdn, fd):  # sum PP_segs into PP
 
     P__, val, _ = qPP
-    # init:
-    P = P__[0][0]
-    if P.link_t[fd]:
-        derP = P.link_t[fd][0]
-        derH = [[deepcopy(derP.derH[0][0]), copy(derP.derH[0][1]), fd]]
-        if len(P.link_t[fd]) > 1: sum_links(derH, P.link_t[fd][1:], fd)
-    else: derH = []
-    PP = CPP(derH=[[[P.ptuple], [[P]],fd]], box=[P.y0, P__[-1][0].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn, link__=[[copy(P.link_t[fd])]])
+    PP = CPP(box=[P__[0][0].y0,P__[-1][0].y0,P__[0][0].x0,P__[0][0].x0+len(P__[0][0].dert_)], rdn=base_rdn)
     PP.valt[fd] = val
     PP.rdnt[fd] += base_rdn
-    PP.nlink__ += [[nlink for nlink in P.link_ if nlink not in P.link_t[fd]]]
     # accum:
+    Ptuple = Cptuple; node__ = []
+    derH = [CQ()]  # layer Q: ptuple|vertuple, Qm: node__, fds: fd; if needed: Qd: link__, valt, rdnt, nval?
     for i, P_ in enumerate(P__):  # top-down
-        P_ = []
+        node_ = []
         for j, P in enumerate(P_):
             P.roott[fd] = PP
-            if i or j:  # not init
-                sum_ptuple_(PP.derH[0][0], P.ptuple if isinstance(P.ptuple, list) else [P.ptuple])
-                P_ += [P]
-                if derH: sum_links(PP, derH, P.link_t[fd], fd)  # sum links into new layer
-                PP.link__ += [[P.link_t[fd]]]  # pack top down
-                # the links may overlap between Ps of the same row?
-                PP.nlink__ += [[nlink for nlink in P.link_ if nlink not in P.link_t[fd]]]
-                PP.box[0] = min(PP.box[0], P.y0)  # y0
-                PP.box[2] = min(PP.box[2], P.x0)  # x0
-                PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
-        PP.derH[0][0] += [P_]  # pack new P top down
-    PP.derH += derH
+            sum_ptuple(Ptuple, P.ptuple)
+            node_ += [P]
+            for derP in P.link_t[fd]:
+                sum_derH(derH, derP.derH)  # sum links into new layer
+            PP.box[0] = min(PP.box[0], P.y0)  # y0
+            PP.box[2] = min(PP.box[2], P.x0)  # x0
+            PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
+        node__ += node_
+
+    layer0 = CQ(Q=Ptuple, Qm=node__, fds=fd)
+    PP.derH = [layer0, derH]
     return PP
 
-# not fully updated:
-def sum_links(DerH, P, fd, fneg=0):
+# not revised:
+def sum_derH(DerH, derH, fsamerow=0, fneg=0):
 
-    for derP in P.link_t[fd]:
-        derH = derP.derH
-        for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
-            if h:
-                if H:
-                    sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
-                    for node_ in h[1]:  # H[1] is node__, pack node__
-                        H[1] += [node_]
-                else:
-                    DerH += [[deepcopy(h[0]), copy(h[1]), h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
-
-
+    for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
+        if h:
+            if H:
+                sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
+                if fsamerow:  # pack Ps
+                    for Node_, node_ in zip_longest(H[1], h[1], fillvalue=[]):  # H[1] is node__, pack node__
+                        if node_:
+                            if Node_:
+                                Node_ += node_  # merge node _ in a same row
+                            else:
+                                Node_[:] = copy(node_)  # shallow copy, different list of same objects within
+                else:  # pack lower rows
+                     for node_ in h[1]:
+                         H[1] += [node_]
+            else:
+                DerH += [[deepcopy(h[0]), [copy(node_) for node_ in h[1]], h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
 
 def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
 
@@ -388,7 +383,6 @@ def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
                     sum_ptuple(Vertuple, vertuple, fneg)
             elif not fneg:
                 Ptuple_ += [deepcopy(vertuple)]
-
 
 def sum_vertuple(Vertuple, vertuple, fneg=0):
 

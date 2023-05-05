@@ -48,3 +48,36 @@ def sub_recursion(PP):  # evaluate PP for rng+ and der+
     PP.rlayers[:] = [sub_PPm_]
     PP.dlayers[:] = [sub_PPd_]
     sub_recursion_eval(PP)  # add rlayers, dlayers, seg_levels to select sub_PPs
+
+def sum2PP(qPP, base_rdn, fd):  # sum PP_segs into PP
+
+    P__, val, _ = qPP
+    # init:
+    P = P__[0][0]
+    if P.link_t[fd]:
+        derP = P.link_t[fd][0]
+        derH = [[deepcopy(derP.derH[0][0]), copy(derP.derH[0][1]), fd]]
+        if len(P.link_t[fd]) > 1: sum_links(derH, P.link_t[fd][1:], fd)
+    else: derH = []
+    PP = CPP(derH=[[[P.ptuple], [[P]],fd]], box=[P.y0, P__[-1][0].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn, link__=[[copy(P.link_t[fd])]])
+    PP.valt[fd] = val
+    PP.rdnt[fd] += base_rdn
+    PP.nlink__ += [[nlink for nlink in P.link_ if nlink not in P.link_t[fd]]]
+    # accum:
+    for i, P_ in enumerate(P__):  # top-down
+        P_ = []
+        for j, P in enumerate(P_):
+            P.roott[fd] = PP
+            if i or j:  # not init
+                sum_ptuple_(PP.derH[0][0], P.ptuple if isinstance(P.ptuple, list) else [P.ptuple])
+                P_ += [P]
+                if derH: sum_links(PP, derH, P.link_t[fd], fd)  # sum links into new layer
+                PP.link__ += [[P.link_t[fd]]]  # pack top down
+                # the links may overlap between Ps of the same row?
+                PP.nlink__ += [[nlink for nlink in P.link_ if nlink not in P.link_t[fd]]]
+                PP.box[0] = min(PP.box[0], P.y0)  # y0
+                PP.box[2] = min(PP.box[2], P.x0)  # x0
+                PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
+        PP.derH[0][0] += [P_]  # pack new P top down
+    PP.derH += derH
+    return PP
