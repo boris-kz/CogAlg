@@ -13,34 +13,22 @@ ave_rotate = 10
 # n and val should be excluded?
 PP_vars = ["I", "M", "Ma", "axis", "angle", "aangle", "G", "Ga", "x", "L"]
 
-def sub_recursion_eval(root):  # for PP or dir_blob
+def sub_recursion_eval(root, PP_, fd):  # for PP or blob
 
-    root_PP__, fd_ = [root.derH[-1][1]], [root.derH[-1][2] if isinstance(root, CPP) else root.derH[-1][2]]
-    if isinstance(root, CPP):
-        root_PP__, fd_ = [root.derH[-1][1]], [root.derH[-1][2]]
-    else:
-        root_PP__, fd_ = root.derH[-1][1], root.derH[-1][2]  # for blob, node and fd is node_t and fd_t
+    for PP in PP_:  # fd = _P.valt[1]+P.valt[1] > _P.valt[0]+_P.valt[0]  # if exclusive comp fork per latuple|vertuple?
+        # fork val, rdn:
+        val = PP.valt[fd]; alt_val = sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
+        ave = PP_aves[fd] * (PP.rdnt[fd] + 1 + (alt_val > val))
+        if val > ave and len(PP.P__) > ave_nsub:
+            sub_recursion(PP, fd)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
+        if isinstance(root, CPP):
+            for i in 0,1:
+                root.valt[i] += PP.valt[i]  # vals
+                root.rdnt[i] += PP.rdnt[i]  # ad rdn too?
+        else:  # root is Blob
+            if fd: root.G += sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
+            else:  root.M += PP.valt[fd]
 
-    for fd, PP_ in zip(fd_, root_PP__):
-        PPm_, PPd_ = [], []
-
-        for PP in PP_:  # fd = _P.valt[1]+P.valt[1] > _P.valt[0]+_P.valt[0]  # if exclusive comp fork per latuple|vertuple?
-            if fd:  PPd_ += [PP]
-            else:   PPm_ += [PP]
-            # fork val, rdn:
-            val = PP.valt[fd]; alt_val = sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
-            ave = PP_aves[fd] * (PP.rdnt[fd] + 1 + (alt_val > val))
-            if val > ave and len(PP.P__) > ave_nsub:
-                sub_recursion(PP, fd)  # comp_P_der | comp_P_rng in PPs -> param_layer, sub_PPs
-
-            # root is PP:
-            if isinstance(root, CPP):
-                for i in 0,1:
-                    root.valt[i] += PP.valt[i]  # vals
-                    root.rdnt[i] += PP.rdnt[i]  # ad rdn too?
-            else:  # root is Blob
-                if fd: root.G += sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
-                else:  root.M += PP.valt[fd]
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+
 
@@ -50,7 +38,9 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+
 
     cP__ = [copy(P_) for P_ in P__]
     sub_PPm_, sub_PPd_ = form_PP_t(cP__, base_rdn=PP.rdnt[PP.derH[-1][2]])
-    sub_recursion_eval(PP)  # add layers to select sub_PPs
+    for i, PP_ in enumerate(sub_PPm_, sub_PPd_):
+        if PP.valt[i] > ave*PP.rdnt[i]:
+            sub_recursion_eval(PP, PP_, fd=i)  # add layers to select sub_PPs
 
 # __Ps compared in rng+ can be mediated through multiple layers of _Ps, with results are summed in derQ of the same link_[0].
 # The number of layers is represented in corresponding PP.rng.
@@ -251,32 +241,64 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
 
     return new_P
 
-# draft, copied from sum2PP
+
 def sum2PPP(qPPP, base_rdn, fd):  # sum PP_segs into PP
+    pass
 
-    PP_, val, _ = qPPP
-    from sub_recursion import append_P
-    # init:
-    P = P_[0]
-    derH = [[P.link_t[fd][0], P.link_t[fd], fd]]
-    if len(P.link_t[fd])>1: sum_links(derH, P.link_t[fd][1:])
-    # ptuple_ = [P.ptuple] if isinstance(P.ptuple, Cptuple) else P.ptuple
-    PP = CPP(derH=[[[P.ptuple], P_,fd]], box=[P.y0, P_[-1].y0, P.x0, P.x0 + len(P.dert_)], rdn=base_rdn)
-    PP.valt[fd] = val; PP.rdnt[fd] += base_rdn
-    # accum:
-    for i, P in enumerate(P_):
-        P.roott[fd] = PP
-        if i:  # not init
-            sum_links(derH, P.link_t[fd])
-            sum_ptuple_(PP.derH[0][0], P.ptuple)
-            # if isinstance(P.ptuple, Cptuple) else sum_derH(PP.derH, P.ptuple)
-            PP.link_ = list(set(PP.link_ + P.link_))  # unique links only?
-            # same for link_t?
-            PP.box[0] = min(PP.box[0], P.y0)  # y0
-            PP.box[2] = min(PP.box[2], P.x0)  # x0
-            PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
-        # sum links into new layer
-    if derH: # pack new derH
-        PP.derH += derH  # 1st element of PP.derH is a derQ with only Cptuple
+# not revised:
+def sum_derH(DerH, derH, fsamerow=0, fneg=0):
+    for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
+        if h:
+            if H:
+                sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
+                if fsamerow:  # pack Ps
+                    for Node_, node_ in zip_longest(H[1], h[1], fillvalue=[]):  # H[1] is node__, pack node__
+                        if node_:
+                            if Node_:
+                                Node_ += node_  # merge node _ in a same row
+                            else:
+                                Node_[:] = copy(node_)  # shallow copy, different list of same objects within
+                else:  # pack lower rows
+                    for node_ in h[1]:
+                        H[1] += [node_]
+            else:
+                DerH += [[deepcopy(h[0]), [copy(node_) for node_ in h[1]], h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
 
-    return PPP
+
+def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
+
+    for Vertuple, vertuple in zip_longest(Ptuple_, ptuple_, fillvalue=[]):  # H[0] is ptuple_
+        if vertuple:
+            if Vertuple:
+                if isinstance(vertuple, CQ):
+                    sum_vertuple(Vertuple, vertuple, fneg)
+                else:
+                    sum_ptuple(Vertuple, vertuple, fneg)
+            elif not fneg:
+                Ptuple_ += [deepcopy(vertuple)]
+
+# copy from agg+:
+def feedback(root):  # bottom-up update root.H, breadth-first
+
+    fbV = aveG+1
+    while root and fbV > aveG:
+        if all([[node.fterm for node in root.node_]]):  # forward was terminated in all nodes
+            root.fterm = 1
+            fbval, fbrdn = 0,0
+            for node in root.node_:
+                # node.node_ may empty when node is converted graph
+                if node.node_ and not node.node_[0].box:  # link_ feedback is redundant, params are already in node.derH
+                    continue
+                for sub_node in node.node_:
+                    fd = sub_node.fds[-1] if sub_node.fds else 0
+                    if not root.H: root.H = [CQ(H=[[],[]])]  # append bottom-up
+                    if not root.H[0].H[fd]: root.H[0].H[fd] = Cgraph()
+                    # sum nodes in root, sub_nodes in root.H:
+                    sum_parH(root.H[0].H[fd].derH, sub_node.derH)
+                    sum_H(root.H[1:], sub_node.H)  # sum_G(sub_node.H forks)?
+            for Lev in root.H:
+                fbval += Lev.val; fbrdn += Lev.rdn
+            fbV = fbval/max(1, fbrdn)
+            root = root.root
+        else:
+            break
