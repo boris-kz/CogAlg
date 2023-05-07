@@ -81,3 +81,21 @@ def sum2PP(qPP, base_rdn, fd):  # sum PP_segs into PP
         PP.derH[0][0] += [P_]  # pack new P top down
     PP.derH += derH
     return PP
+
+def comp_P_der(P__):  # der+ sub_recursion in PP.P__, over the same derPs
+
+    if isinstance(P__[0][0].ptuple, Cptuple):
+        for P_ in P__:
+            for P in P_:
+                P.ptuple = [P.ptuple]
+
+    for P_ in P__[1:]:  # exclude 1st row: no +ve uplinks
+        for P in P_:
+            for derP in P.link_t[1]:  # fd=1
+                _P, P = derP._P, derP.P
+                i= len(derP.derQ)-1
+                j= 2*i
+                if len(_P.derH)>j-1 and len(P.derH)>j-1:  # extend derP.derH:
+                    comp_layer(derP, i,j)
+
+    return P__
