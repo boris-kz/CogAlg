@@ -4,7 +4,7 @@ import numpy as np
 
 from comp_slice import PP_aves, ave, ave_nsub, ave_g, ave_ga
 from comp_slice import CP, Cptuple, CderP, CPP
-from comp_slice import comp_ptuple, comp_vertuple, comp_angle, form_PP_t
+from comp_slice import sum_vertuple, comp_ptuple, comp_vertuple, comp_angle, form_PP_t
 from agg_convert import agg_recursion_eval
 '''
 comp_slice_ sub_recursion + utilities
@@ -32,8 +32,7 @@ def sub_recursion_eval(root, PP_, fd):  # for PP or blob
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+
 
-    P__  = [P_ for P_ in reversed(PP.P__)]  # revert bottom-up to top-down
-    P__ = comp_P_der(P__) if fd else comp_P_rng(P__, PP.rng + 1)   # returns top-down
+    P__ = comp_P_der(PP.P__) if fd else comp_P_rng(PP.P__, PP.rng + 1)   # returns top-down
     PP.rdnt[fd] += 1  # two-fork rdn, priority is not known?  rotate?
 
     cP__ = [copy(P_) for P_ in P__]
@@ -47,76 +46,47 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+
 # mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
 
 
-def comp_P_rng(P__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
+def comp_P_rng(iP__, rng):  # rng+ sub_recursion in PP.P__, switch to rng+n to skip clustering?
 
-    for P_ in reversed(P__[:-rng]):  # lower compared row, bottom up: link_t is uplinks, skip last rng: no higher comparand rows
-        for P in P_:
-            link_ = []  # replaces P.link_t[0]
-            Vertuple = None  # replaces P.derH
-
+    P__ = []
+    for iP_ in reversed(iP__[:-rng]):  # lower compared row, bottom up: link_t is uplinks, skip last rng: no higher rows
+        P_ = []
+        for P in iP_:
+            link_= []
             for derP in P.link_t[0]:  # mlinks
                 _P = derP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
                     __P = _derP._P  # next layer of Ps
                     vertuple = comp_ptuple(P.ptuple, __P.ptuple)
-                    if Vertuple: sum_vertuple(Vertuple, vertuple)
-                    else: Vertuple = deepcopy(vertuple)
-                    new_derP = CderP(derH=[[vertuple]])
-                    new_derP.valt = copy(vertuple.valt); new_derP.rdnt = copy(vertuple.rdnt)
-                    new_derP.L = len(derP._P.dert_)
-                    link_ += [new_derP]
-
-            P.derH[:] = [[Vertuple]]  # nested to extend in der+
-            P.link_t[0][:] = link_  # replace old links
+                    sum_vertuple(P.derH[0][0], vertuple)
+                    link_ += [CderP(derH=[[vertuple]], _P=__P, P=P, valt = copy(vertuple.valt), rdnt = copy(vertuple.rdnt),
+                                    fds=copy(__P.fds), L = len(__P.dert_), x0 = min(P.x0, __P.x0), y0 = min(P.y0, __P.y0))]
+            P_ += [CP(link_t=[link_,P.link_t[1]])]  # keep Qd?
+            # add box and other params
+        P__+= [P_]
     return P__
 
 # draft
-def comp_P_der(P__):  # der+ sub_recursion in PP.P__, over the same derPs
+def comp_P_der(P__):  # der+ sub_recursion in PP.P__, over the same Ps and derPs, extend P.derH, bilaterally?
 
-    for P_ in reversed(P__[:-1]):  # exclude 1st row: no +ve uplinks
+    for P_ in reversed(P__[:-1]):  # exclude 1st row: no +ve uplinks (reversed to scan it bottom up)
         for P in P_:
+            PLay = []
             for derP in P.link_t[1]:  # fd=1
-                _P, P = derP._P, derP.P
-                i= len(derP.derQ)-1
-                j= 2*i
-                if len(_P.derH)>j-1 and len(P.derH)>j-1:  # extend derP.derH:
-                    comp_layer(derP, i,j)
+                _P = derP._P
+                _extend = len(_P.derH) == len(P.derH)
+                _derLay, derLay = P.derH[-1], _P.derH[-1+_extend]  # comp top layer only, no selection per sub-layer till agg+
+                linkLay = []
+                for i, (_vertuple, vertuple, Dtuple) in enumerate(zip_longest(_derLay, derLay, PLay, fillvalue=CQ())):
+                    dtuple = comp_vertuple(_vertuple, vertuple)
+                    linkLay += [dtuple]
+                    sum_vertuple(Dtuple, dtuple)
+                    if not _extend: sum_vertuple(_P.derH[-1][i], dtuple)  # bilateral sum
+                if _extend: _P.derH += [deepcopy(linkLay)]  # bilateral init new _Lay
+                derP.derH += [linkLay]
+            P.derH += [PLay]
+
     return P__
-
-def comp_layer(derP, i,j):  # list derH and derQ, single der+ count=elev, eval per PP
-
-    for _ptuple, ptuple in zip(derP._P.ptuple[i:j], derP.P.ptuple[i:j]):  # P.ptuple is derH
-
-        dtuple = comp_vertuple(_ptuple, ptuple)
-        derP.derH += [dtuple]
-        for k in 0, 1:
-            derP.valt[k] += dtuple.valt[k]
-            derP.rdnt[k] += dtuple.rdnt[k]
-
-'''
-replace rotate_P_ with directly forming orthogonal Ps:
-'''
-def slice_blob_ortho(blob):
-
-    P_ = []
-    while blob.dert__:
-        dert = blob.dert__.pop()
-        P = CP(dert_= [dert])  # init cross-P per dert
-        # need to find/combine adjacent _dert in the direction of gradient:
-        _dert = blob.dert__.pop()
-        mangle,dangle = comp_angle(dert.angle, _dert.angle)
-        if mangle > ave:
-            P.dert_ += [_dert]  # also sum ptuple, etc.
-        else:
-            P_ += [P]
-            P = CP(dert_= [_dert])  # init cross-P per missing dert
-            # add recursive function to find/combine adjacent _dert in the direction of gradient:
-            _dert = blob.dert__.pop()
-            mangle, dangle = comp_angle(dert.angle, _dert.angle)
-            if mangle > ave:
-                P.dert_ += [_dert]  # also sum ptuple, etc.
-            else:
-                pass  # add recursive slice_blob
 
 
 def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient

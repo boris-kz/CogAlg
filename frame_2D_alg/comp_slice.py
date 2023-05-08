@@ -101,7 +101,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = lambda: Cptuple()  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
-    derH = list  # added in sub+
+    derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
     x0 = int
     y0 = int  # for vertical gap in PP.P__
@@ -141,7 +141,7 @@ class CPP(CderP):
 
     ptuple = lambda: Cptuple()  # summed P__ ptuples, = 0th derLay
     P__ = list  # 2D array of nodes, may be sub-PPs
-    derH = list  # sum vertuple_ s added in sub+
+    derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # fd per derLay
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]  # recursion count + Rdn / nderPs + mrdn + uprdn if branch overlap?
@@ -187,7 +187,7 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
     for i, PP_ in enumerate([PPm_, PPd_]):  # derH, fds per PP
         if sum([PP.valt[i] for PP in PP_]) > ave * sum([PP.rdnt[i] for PP in PP_]):
             sub_recursion_eval(blob, PP_, fd=i)  # intra PP
-            agg_recursion_eval(blob, copy(PP_))  # cross PP, Cgraph conversion doesn't replace PPs?
+            # agg_recursion_eval(blob, copy(PP_))  # cross PP, Cgraph conversion doesn't replace PPs?
 
 
 def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
@@ -256,8 +256,8 @@ def form_PP_t(P__, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
                     PP_ += [qPP + [ave+1]]  # + [ini reval]
         # prune qPPs by med links val:
         rePP_= reval_PP_(PP_, fd)  # PP = [qPP,val,reval]
-        CPP_ = [sum2PP(PP, base_rdn, fd) for PP in rePP_]  # may be empty
-        PP_t += [CPP_]
+        CPP_ = [sum2PP(PP, base_rdn, fd) for PP in rePP_]
+        PP_t += [CPP_]  # may be empty
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
@@ -277,6 +277,7 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
         rePP_ = reval_PP_(rePP_, fd)
 
     return rePP_
+
 
 def reval_P_(P__, fd):  # prune qPP by (link_ + mediated link__) val
 
@@ -323,32 +324,31 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
     med_val *= med_decay ** (len(med_valH) + 1)
     med_valH += [med_val]
     if med_val > aveB:
-        # last med layer val -> likely next med layer val
+        # last med layer val-> likely next med layer val
         curr_link_, old_link_, med_valH = med_eval(curr_link_, old_link_, med_valH, fd)  # eval next med layer
 
     return curr_link_, old_link_, med_valH
 
 
-def sum2PP(qPP, base_rdn, fd):  # sum PP_segs into PP
+def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 
     P__, val, _ = qPP
     # init:
     P0 = P__[0][0]
     PP = CPP(box=[P0.y0,P__[-1][0].y0,P0.x0,P0.x0+len(P0.dert_)], fds=[fd], P__ = P__)
     PP.valt[fd] = val; PP.rdnt[fd] += base_rdn
-    vertuple = None
     # accum:
     for P_ in P__:  # top-down
         for P in P_:  # left-to-right
             P.roott[fd] = PP
             sum_ptuple(PP.ptuple, P.ptuple)
-            for derP in P.link_t[fd]:  # sum links in new layer, single vertuple per derH:
-                if vertuple: sum_vertuple(vertuple, derP.derH[0][0])
-                else: vertuple = deepcopy(derP.derH[0][0])
+            for derP in P.link_t[fd]:  # derH before feedback is 1 vertuple / 1 layer
+                sum_vertuple(P.derH[0][0], derP.derH[0][0])  # sum link vertuple
+                # bilateral sum in derP._P.derH?
+            sum_vertuple(PP.derH[0][0], P.derH[0][0])  # sum P vertuple
             PP.box[0] = min(PP.box[0], P.y0)  # y0
             PP.box[2] = min(PP.box[2], P.x0)  # x0
             PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
-    PP.derH=[[vertuple]]  # derH before feedback is single-layer single vertuple
 
     return PP
 
@@ -379,12 +379,12 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 
 def comp_vertuple(_vertuple, vertuple):
 
-    dtuple=CQ(n=_vertuple.n, Q=copy(_vertuple.Q))  # no selection here
+    dtuple=CQ(n=_vertuple.n, Q=copy(_vertuple.Q))
     rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
 
     for _par, par, ave in zip(_vertuple.Qd, vertuple.Qd, aves):
 
-        m,d = comp_par(_par[1], par[1]*rn, ave)
+        m,d = comp_par(_par, par*rn, ave)
         dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.valt[0]+=m; dtuple.valt[1]+=d
 
     return dtuple
@@ -476,4 +476,3 @@ def slice_blob_ortho(blob):
                 P.dert_ += [_dert]  # also sum ptuple, etc.
             else:
                 pass  # add recursive slice_blob
-

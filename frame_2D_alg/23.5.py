@@ -99,3 +99,14 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, over the same derPs
                     comp_layer(derP, i,j)
 
     return P__
+
+def comp_layer(derP, i,j):  # list derH and derQ, single der+ count=elev, eval per PP
+
+    for _ptuple, ptuple in zip(derP._P.derH[i:j], derP.P.derH[i:j]):  # P.ptuple is derH
+
+        dtuple = comp_vertuple(_ptuple, ptuple)
+        derP.derH += [dtuple]
+        for k in 0, 1:
+            derP.valt[k] += dtuple.valt[k]
+            derP.rdnt[k] += dtuple.rdnt[k]
+
