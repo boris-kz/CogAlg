@@ -40,7 +40,7 @@ flip_ave_FPP = 0  # flip large FPPs only (change to 0 for debug purpose)
 div_ave = 200
 ave_rmP = .7  # the rate of mP decay per relative dX (x shift) = 1: initial form of distance
 ave_ortho = 20
-aveB = 50
+aveB = 50  # same for m and d?
 # comp_param coefs:
 ave_dI = ave_inv
 ave_M = ave  # replace the rest with coefs:
@@ -103,13 +103,14 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     ptuple = lambda: Cptuple()  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
     derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
+    valt = lambda: [0,0]  # for derH only
+    rdnt = lambda: [1,1]
     x0 = int
     y0 = int  # for vertical gap in PP.P__
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
     link_ = list  # all links
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
     roott = lambda: [None,None]  # m,d PP that contain this P
-    rdn = int  # blob-level redundancy, ignore for now
     dxdert_ = list  # only in Pd
     Pd_ = list  # only in Pm
     # if comp_dx:
@@ -120,8 +121,8 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
 
     derH = list  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
     fds = list
-    valt = lambda: [0, 0]  # summed rngQ vals
-    rdnt = lambda: [1, 1]  # mrdn + uprdn if branch overlap?
+    valt = lambda: [0,0]  # summed rngQ vals
+    rdnt = lambda: [1,1]  # mrdn + uprdn if branch overlap?
     _P = object  # higher comparand
     P = object  # lower comparand
     roott = lambda: [None,None]  # for der++
@@ -173,11 +174,13 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
-                    vertuple = comp_ptuple(_P.ptuple, P.ptuple); valt = copy(vertuple.valt); rdnt = copy(vertuple.rdnt)
-                    derP = CderP(derH=[[vertuple]],fds=[0], valt=valt,rdnt=rdnt, P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
+                    vertuple = comp_ptuple(_P.ptuple, P.ptuple)
+                    mval = sum(vertuple.Qm); dval = sum(vertuple.Qd)
+                    mrdn = 1+dval>mval; drdn = 1+(not mrdn)
+                    derP = CderP(derH=[[vertuple]],fds=[0], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
                     P.link_+=[derP]  # all links
-                    if valt[0] > aveB*rdnt[0]: P.link_t[0] += [derP]  # +ve links, fork overlap?
-                    if valt[1] > aveB*rdnt[1]: P.link_t[1] += [derP]
+                    if mval > aveB*mrdn: P.link_t[0] += [derP]  # +ve links, fork overlap?
+                    if dval > aveB*drdn: P.link_t[1] += [derP]
                 elif (P.x0 + L) < _P.x0:
                     break  # no xn overlap, stop scanning lower P_
         _P_ = P_
@@ -278,7 +281,6 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
 
     return rePP_
 
-
 def reval_P_(P__, fd):  # prune qPP by (link_ + mediated link__) val
 
     prune_ = []; Val, reval = 0,0  # comb PP value and recursion value
@@ -332,7 +334,7 @@ def med_eval(last_link_, old_link_, med_valH, fd):  # compute med_valH
 
 def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 
-    P__, val, _ = qPP
+    P__, val, _ = qPP  # proto-PP is a list
     # init:
     P0 = P__[0][0]
     PP = CPP(box=[P0.y0,P__[-1][0].y0,P0.x0,P0.x0+len(P0.dert_)], fds=[fd], P__ = P__)
@@ -342,10 +344,9 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
         for P in P_:  # left-to-right
             P.roott[fd] = PP
             sum_ptuple(PP.ptuple, P.ptuple)
-            for derP in P.link_t[fd]:  # derH before feedback is 1 vertuple / 1 layer
-                sum_vertuple(P.derH[0][0], derP.derH[0][0])  # sum link vertuple
-                # bilateral sum in derP._P.derH?
-            sum_vertuple(PP.derH[0][0], P.derH[0][0])  # sum P vertuple
+            for derP in P.link_t[fd]:  # comp_slice derH is 1 vertuple in 1 layer, sum in P, not _P: up only?
+                sum_vertuple(P.derH[0][0], derP.derH[0][0])
+            sum_vertuple(PP.derH[0][0], P.derH[0][0])  # ->PP vertuple
             PP.box[0] = min(PP.box[0], P.y0)  # y0
             PP.box[2] = min(PP.box[2], P.x0)  # x0
             PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
@@ -356,8 +357,12 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 def sum_vertuple(Vertuple, vertuple, fneg=0):
 
     for i, (m, d) in enumerate(zip(vertuple.Qm, vertuple.Qd)):
-        Vertuple.Qm[i] += -m if fneg else m
-        Vertuple.Qd[i] += -d if fneg else d
+        if len(Vertuple.Qm)>i:
+            Vertuple.Qm[i] += -m if fneg else m
+            Vertuple.Qd[i] += -d if fneg else d
+        else:   # for empty CQ
+            Vertuple.Qm += [-m if fneg else m]
+            Vertuple.Qd += [-d if fneg else m]
     for i in 0,1:
         Vertuple.valt[i] += vertuple.valt[i]
         Vertuple.rdnt[i] += vertuple.rdnt[i]

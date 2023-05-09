@@ -100,6 +100,29 @@ def comp_P_der(P__):  # der+ sub_recursion in PP.P__, over the same derPs
 
     return P__
 
+def comp_P_der(P__):  # form new Ps in der+ PP.P__, extend link.derH, P.derH, _P.derH for select links?
+
+    for P_ in reversed(P__[:-1]):  # exclude 1st row: no +ve uplinks (reversed to scan it bottom up)
+        for P in P_:
+            PLay = []  # new layer in P.derH
+            for derP in P.link_t[1]:  # fd=1
+                _P = derP._P
+                dL = len(_P.derH) > len(P.derH)  # dL = 0|1: _P.derH was extended by other P, compare _P.derH[-2]:
+                _derLay, derLay = P.derH[-1], _P.derH[-(1+dL)]  # comp top P layer, no subLay selection till agg+
+                linkLay = []
+                for i, (_vertuple, vertuple, Dtuple) in enumerate(zip_longest(_derLay, derLay, PLay, fillvalue=[])):
+                    dtuple = comp_vertuple(_vertuple, vertuple)  # max two vertuples in 2nd layer
+                    linkLay += [dtuple]
+                    if Dtuple: sum_vertuple(Dtuple, dtuple)
+                    else: PLay += [dtuple]  # init Dtuple
+                    if dL: sum_vertuple(_P.derH[-1][i], dtuple)  # bilateral sum
+                if not dL: _P.derH += [linkLay]  # init Lay
+                derP.derH += [linkLay]
+                # or selective by linkLay valt, in the whole link_t?
+            P.derH += [PLay]
+    return P__
+
+
 def comp_layer(derP, i,j):  # list derH and derQ, single der+ count=elev, eval per PP
 
     for _ptuple, ptuple in zip(derP._P.derH[i:j], derP.P.derH[i:j]):  # P.ptuple is derH
