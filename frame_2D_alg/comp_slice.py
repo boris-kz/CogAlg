@@ -80,7 +80,7 @@ class CQ(ClusterStructure):  # vertuple, hierarchy, or generic sequence
     out_valt = lambda: [0,0]  # of non-graph links, as alt?
     fds = list
     rng = lambda: 1  # is it used anywhere?
-    n = int  # accum count in ptuple
+    n = lambda: 1  # accum count
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, derH per par in derP, or PP
 
@@ -94,7 +94,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     Ga = float
     x = int  # median: x0+L/2
     L = int  # len dert_ in P, area in PP
-    n = lambda: 1  # accum count, combine from CpH?
+    n = lambda: 1
     valt = lambda: [0,0]
     rdnt = lambda: [1,1]
 
@@ -103,7 +103,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     ptuple = lambda: Cptuple()  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
     derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
-    valt = lambda: [0,0]  # for derH only
+    valt = lambda: [0,0]  # of fork links, represented in derH
     rdnt = lambda: [1,1]
     x0 = int
     y0 = int  # for vertical gap in PP.P__
@@ -121,7 +121,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
 
     derH = list  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
     fds = list
-    valt = lambda: [0,0]  # summed rngQ vals
+    valt = lambda: [0,0]  # also of derH
     rdnt = lambda: [1,1]  # mrdn + uprdn if branch overlap?
     _P = object  # higher comparand
     P = object  # lower comparand
@@ -144,7 +144,7 @@ class CPP(CderP):
     P__ = list  # 2D array of nodes, may be sub-PPs
     derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # fd per derLay
-    valt = lambda: [0,0]
+    valt = lambda: [0,0]  # summed fork links vals
     rdnt = lambda: [1,1]  # recursion count + Rdn / nderPs + mrdn + uprdn if branch overlap?
     Rdn = int  # for accumulation only?
     rng = lambda: 1
@@ -179,8 +179,10 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
                     mrdn = 1+dval>mval; drdn = 1+(not mrdn)
                     derP = CderP(derH=[[vertuple]],fds=[0], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
                     P.link_+=[derP]  # all links
-                    if mval > aveB*mrdn: P.link_t[0] += [derP]  # +ve links, fork overlap?
-                    if dval > aveB*drdn: P.link_t[1] += [derP]
+                    if mval > aveB*mrdn:
+                        P.link_t[0]+=[derP]; P.valt[0]+=mval; P.rdnt[0]+=mrdn  # +ve links, fork overlap?
+                    if dval > aveB*drdn:
+                        P.link_t[1]+=[derP]; P.valt[1]+=dval; P.rdnt[1]+=drdn
                 elif (P.x0 + L) < _P.x0:
                     break  # no xn overlap, stop scanning lower P_
         _P_ = P_
@@ -245,7 +247,7 @@ def form_PP_t(P__, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
         for P_ in fork_P__:
             for P in P_:
                 if P not in packed_P_:
-                    qPP = [[[P]], P.ptuple.valt[fd]]  # init PP is 2D queue of node Ps and sum([P.val+P.link_val])
+                    qPP = [[[P]], P.valt[fd]]  # init PP is 2D queue of node Ps and sum([P.val+P.link_val])
                     uplink_ = P.link_t[fd]; uuplink_ = []  # next-line links for recursive search
                     while uplink_:
                         for derP in uplink_:
@@ -291,8 +293,8 @@ def reval_P_(P__, fd):  # prune qPP by (link_ + mediated link__) val
             for link in P.link_t[fd]:
                 # recursive mediated link layers eval-> med_valH:
                 _,_,med_valH = med_eval(link._P.link_t[fd], old_link_=[], med_valH=[], fd=fd)
-                # link val + mlinks val + Mlinks val:
-                link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_t[fd]])*med_decay + sum(med_valH)
+                # link val + mlinks val: single med order, no med_valH in comp_slice?:
+                link_val = link.valt[fd] + sum([mlink.valt[fd] for mlink in link._P.link_t[fd]]) * med_decay  # + med_valH
                 if link_val < vaves[fd]:
                     remove_+= [link]; reval += link_val
                 else: P_val += link_val
