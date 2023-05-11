@@ -53,24 +53,26 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
             mVal, dVal, mRdn, dRdn = 0,0,0,0
-            Vertuple = CQ()
+            Mtuple, Dtuple = [],[]
             for iderP in P.link_t[0]:  # mlinks
                 _P = iderP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
                     __P = _derP._P  # next layer of Ps
-                    vertuple = comp_ptuple(P.ptuple, __P.ptuple)
-                    mval = sum(vertuple.Qm); dval = sum(vertuple.Qd)
-                    mrdn = 1+ dval>mval; drdn = 1+(not mrdn)
-                    derP = CderP(derH=[[vertuple]], _P=__P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
+                    # comp_P through 73?
+                    (mtuple, dtuple) = comp_ptuple(P.ptuple, __P.ptuple)
+                    mval = sum(mtuple); dval = sum(dtuple)
+                    mrdn = 1+dval>mval; drdn = 1+(not mrdn)
+                    derP = CderP(derH=[[[mtuple,dtuple]]], _P=__P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
                                  L=len(__P.dert_), x0=min(P.x0,__P.x0), y0=min(P.y0,__P.y0))
-                    link_ += [derP]  # all links
-                    if mval > aveB * mrdn:
-                        sum_vertuple(Vertuple, vertuple)  # for +ve mlinks, fork overlap, up only, not bilateral
-                        link_m+=[derP]; mVal+=mval; mRdn+=mrdn
-                    if dval > aveB * drdn:
+                    link_ += [derP]  # all uplinks, not bilateral
+                    if mval > aveB*mrdn:
+                        link_m+=[derP]; mVal+=mval; mRdn+=mrdn  # +ve links, fork selection in form_PP_t
+                        for Par, par in zip_longest(Mtuple,mtuple, fillvalue=0): Par+=par
+                    if dval > aveB*drdn:
                         link_d+=[derP]; dVal+=dval; dRdn+=drdn
+                        for Par, par in zip_longest(Dtuple,dtuple, fillvalue=0): Par+=par
             if mVal > ave_P * mRdn:  # form new Ps in rng+ PP:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[Vertuple]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mtuple,Dtuple]]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
                       valt=[mVal,dVal], rdnt=[mRdn,dRdn], link_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
@@ -81,30 +83,33 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
     for iP_ in reversed(iP__[:-1]):  # lower compared row, follow uplinks, no uplinks in last row
         P_ = []
         for P in iP_:
-            P_vert0, P_vert1 = CQ(),CQ()  # 1st and 2nd layers in P
+            Mtuple, Dtuple, Mtuple1, Dtuple1 = [],[],[],[]  # 1st and 2nd layers in P
             link_, link_m, link_d = [],[],[]  # for new P
             mVal, dVal, mRdn, dRdn = 0,0,0,0
             for iderP in P.link_t[1]:  # dlinks
                 _P = iderP._P
+                # comp_P through 110?
                 dL = len(_P.derH) > len(P.derH)  # 0|1: extended _P.derH: not with bottom-up? comp _P.derH[-2]:
-                _vert0, vert0 = P.derH[-1][0], _P.derH[-(1+dL)][0]  # can be simpler but less general
-                vert1 = comp_vertuple(_vert0, vert0)  # 1-vertuple derH before feedback
-                mval = sum(vert1.Qm)+iderP.valt[0]  # sum from both layers
-                dval = sum(vert1.Qd)+iderP.valt[1]
-                mrdn = 1+dval>mval + iderP.rdnt[0]
-                drdn = 1+(not mrdn)+ iderP.rdnt[1]
-                derP = CderP(derH=[[vert0],[vert1]], _P=_P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
+                _vert0, vert0 = P.derH[-1][0], _P.derH[-(1+dL)][0]  # can be simpler but less generic
+                # 1-vertuple derH before feedback
+                (mtuple, dtuple) = comp_vertuple(_vert0, vert0, P.n/_P.n)
+                mval = sum(mtuple)+iderP.valt[0]
+                dval = sum(dtuple)+iderP.valt[1]  # sum from both layers
+                mrdn = 1+dval>mval; drdn = 1+(not mrdn)
+                derP = CderP(derH=[[[mtuple,dtuple]]], _P=_P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
                              L=len(_P.dert_), x0=min(P.x0,_P.x0), y0=min(P.y0,_P.y0))
-                link_ += [derP]  # all links
-                if mval > aveB * mrdn:  # +ve mlinks, fork overlap?
-                    link_m+=[derP]; mVal+=mval; mRdn+=mrdn
-                if dval > aveB * drdn:
+                link_ += [derP]  # all uplinks, not bilateral
+                if mval > aveB*mrdn:
+                    link_m+=[derP]; mVal+=mval; mRdn+=mrdn  # +ve links, fork selection in form_PP_t
+                    for Par, par in zip_longest(Mtuple, vert0[0], fillvalue=0): Par+=par
+                    for Par, par in zip_longest(Mtuple1, mtuple, fillvalue=0): Par+=par
+                if dval > aveB*drdn:
                     link_d+=[derP]; dVal+=dval; dRdn+=drdn
-                    sum_vertuple(P_vert0, vert0)  # +ve dlinks, unique: up only
-                    sum_vertuple(P_vert1, vert1)
+                    for Par, par in zip_longest(Mtuple, vert0[1], fillvalue=0): Par+=par
+                    for Par, par in zip_longest(Dtuple1, dtuple, fillvalue=0): Par+=par
             if dVal > ave_P * dRdn:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[P_vert0],[P_vert1]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
-                          valt=[mVal,dVal], rdnt=[mRdn,dRdn], rdnlink_=link_, link_t=[link_m,link_d])]
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[Mtuple,Dtuple],[Mtuple1,Dtuple1]], dert_=copy(P.dert_), fds=copy(P.fds)+[0],
+                          x0=P.x0, y0=P.y0, valt=[mVal,dVal], rdnt=[mRdn,dRdn], rdnlink_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
 

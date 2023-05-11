@@ -133,3 +133,27 @@ def comp_layer(derP, i,j):  # list derH and derQ, single der+ count=elev, eval p
             derP.valt[k] += dtuple.valt[k]
             derP.rdnt[k] += dtuple.rdnt[k]
 
+'''
+replace rotate_P_ with directly forming axis-orthogonal Ps:
+'''
+def slice_blob_ortho(blob):
+
+    P_ = []
+    while blob.dert__:
+        dert = blob.dert__.pop()
+        P = CP(dert_= [dert])  # init cross-P per dert
+        # need to find/combine adjacent _dert in the direction of gradient:
+        _dert = blob.dert__.pop()
+        mangle,dangle = comp_angle(dert.angle, _dert.angle)
+        if mangle > ave:
+            P.dert_ += [_dert]  # also sum ptuple, etc.
+        else:
+            P_ += [P]
+            P = CP(dert_= [_dert])  # init cross-P per missing dert
+            # add recursive function to find/combine adjacent _dert in the direction of gradient:
+            _dert = blob.dert__.pop()
+            mangle, dangle = comp_angle(dert.angle, _dert.angle)
+            if mangle > ave:
+                P.dert_ += [_dert]  # also sum ptuple, etc.
+            else:
+                pass  # add recursive slice_blob

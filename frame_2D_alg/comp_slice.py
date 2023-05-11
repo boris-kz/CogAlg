@@ -167,23 +167,28 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
     P__ = slice_blob(blob, verbose=verbose)  # form 2D array of Ps: blob slices in dert__
     # rotate each P to align it with the direction of P gradient:
     rotate_P_(P__, blob.dert__, blob.mask__)  # rotated Ps are sparse or overlap via redundant derPs, results are not biased?
-    # scan rows top-down, comp y-adjacent, x-overlapping Ps, form derP__:
+    # scan rows top-down, comp y-adjacent, x-overlapping Ps to form derPs:
     _P_ = P__[0]  # higher row
     for P_ in P__[1:]:  # lower row
         for P in P_:
+            Mtuple, Dtuple = [],[]
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
-                    vertuple = comp_ptuple(_P.ptuple, P.ptuple)
-                    mval = sum(vertuple.Qm); dval = sum(vertuple.Qd)
+                    # comp_P through 189?
+                    (mtuple, dtuple) = comp_ptuple(_P.ptuple, P.ptuple)
+                    mval = sum(mtuple); dval = sum(dtuple)
                     mrdn = 1+dval>mval; drdn = 1+(not mrdn)
-                    derP = CderP(derH=[[vertuple]],fds=[0], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
+                    derP = CderP(derH=[[[mtuple,dtuple]]],fds=[0], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
                     P.link_+=[derP]  # all links
                     if mval > aveB*mrdn:
-                        P.link_t[0]+=[derP]; P.valt[0]+=mval; P.rdnt[0]+=mrdn  # +ve links, fork overlap?
+                        P.link_t[0]+=[derP]; P.valt[0]+=mval; P.rdnt[0]+=mrdn  # +ve links, fork selection in form_PP_t
+                        for Par, par in zip_longest(Mtuple,mtuple, fillvalue=0): Par+=par
                     if dval > aveB*drdn:
                         P.link_t[1]+=[derP]; P.valt[1]+=dval; P.rdnt[1]+=drdn
+                        for Par, par in zip_longest(Mtuple,mtuple, fillvalue=0): Par+=par
                 elif (P.x0 + L) < _P.x0:
+                    P.derH=[[[Mtuple,Dtuple]]]  # single vertuple
                     break  # no xn overlap, stop scanning lower P_
         _P_ = P_
     PPm_,PPd_ = form_PP_t(P__, base_rdn=2)
@@ -225,13 +230,13 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 params.G = np.hypot(*params.angle)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
                 params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
-                params.L = L; params.x = x-L/2; params.valt = [params.M+params.Ma, params.G+params.Ga]
+                params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
                 P_+=[CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
             _mask = mask
         # pack last P, same as above:
         if not _mask:
             params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)
-            L = len(Pdert_); params.L = L; params.x = x-L/2; params.valt=[params.M+params.Ma,params.G+params.Ga]
+            L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
             P_ += [CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
         P__ += [P_]
 
@@ -347,6 +352,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
             P.roott[fd] = PP
             sum_ptuple(PP.ptuple, P.ptuple)
             for derP in P.link_t[fd]:  # comp_slice derH is 1 vertuple in 1 layer, sum in P, not _P: up only?
+            # unpack sum_vertuple:
                 sum_vertuple(P.derH[0][0], derP.derH[0][0])
             sum_vertuple(PP.derH[0][0], P.derH[0][0])  # ->PP vertuple
             PP.box[0] = min(PP.box[0], P.y0)  # y0
@@ -355,20 +361,14 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 
     return PP
 
-
+# not needed?
 def sum_vertuple(Vertuple, vertuple, fneg=0):
 
-    for i, (m, d) in enumerate(zip(vertuple.Qm, vertuple.Qd)):
-        if len(Vertuple.Qm)>i:
-            Vertuple.Qm[i] += -m if fneg else m
-            Vertuple.Qd[i] += -d if fneg else d
-        else:   # for empty CQ
-            Vertuple.Qm += [-m if fneg else m]
-            Vertuple.Qd += [-d if fneg else m]
-    for i in 0,1:
-        Vertuple.valt[i] += vertuple.valt[i]
-        Vertuple.rdnt[i] += vertuple.rdnt[i]
-    Vertuple.n += 1
+    for i, (Tuple,tuple) in enumerate(zip_longest(Vertuple, vertuple, fillvalue=[])):
+        for j, (Par,par) in enumerate(zip_longest(Tuple, tuple, fillvalue=0)):
+            p = -par if fneg else par
+            Tuple[j] += p
+
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
 
@@ -384,21 +384,19 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
     Ptuple.n += 1
 
 
-def comp_vertuple(_vertuple, vertuple):
+def comp_vertuple(_vertuple, vertuple, rn):
 
-    dtuple=CQ(n=_vertuple.n, Q=copy(_vertuple.Q))
-    rn = _vertuple.n/vertuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
-
+    mtuple, dtuple = [],[]
     for _par, par, ave in zip(_vertuple.Qd, vertuple.Qd, aves):
 
         m,d = comp_par(_par, par*rn, ave)
-        dtuple.Qm+=[m]; dtuple.Qd+=[d]; dtuple.valt[0]+=m; dtuple.valt[1]+=d
+        dtuple+=[m]; dtuple+=[d]
 
-    return dtuple
+    return [mtuple, dtuple]
 
 def comp_ptuple(_ptuple, ptuple):
 
-    dtuple = CQ(n=_ptuple.n, Q=[0 for par in pnames])
+    mtuple, dtuple = [],[]
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     for pname, ave in zip(pnames, aves):
@@ -411,10 +409,10 @@ def comp_ptuple(_ptuple, ptuple):
             if pname=="x" or pname=="I": finv = 1
             else: finv=0
             m,d = comp_par(_par, par, ave, finv)
+        mtuple += [m]
+        dtuple += [d]
 
-        dtuple.Qm += [m]; dtuple.Qd += [d]; dtuple.valt[0] += m; dtuple.valt[1] += d
-
-    return dtuple
+    return [mtuple, dtuple]
 
 def comp_par(_param, param, ave, finv=0):  # comparand is always par or d in [m,d]
 
@@ -458,28 +456,3 @@ def comp_aangle(_aangle, aangle):
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 
     return [maangle,daangle]
-
-'''
-replace rotate_P_ with directly forming axis-orthogonal Ps:
-'''
-def slice_blob_ortho(blob):
-
-    P_ = []
-    while blob.dert__:
-        dert = blob.dert__.pop()
-        P = CP(dert_= [dert])  # init cross-P per dert
-        # need to find/combine adjacent _dert in the direction of gradient:
-        _dert = blob.dert__.pop()
-        mangle,dangle = comp_angle(dert.angle, _dert.angle)
-        if mangle > ave:
-            P.dert_ += [_dert]  # also sum ptuple, etc.
-        else:
-            P_ += [P]
-            P = CP(dert_= [_dert])  # init cross-P per missing dert
-            # add recursive function to find/combine adjacent _dert in the direction of gradient:
-            _dert = blob.dert__.pop()
-            mangle, dangle = comp_angle(dert.angle, _dert.angle)
-            if mangle > ave:
-                P.dert_ += [_dert]  # also sum ptuple, etc.
-            else:
-                pass  # add recursive slice_blob
