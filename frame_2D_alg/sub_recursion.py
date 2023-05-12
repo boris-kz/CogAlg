@@ -4,7 +4,7 @@ import numpy as np
 
 from comp_slice import PP_aves, ave, aveB, ave_nsub, ave_g, ave_ga
 from comp_slice import CP, CQ, Cptuple, CderP, CPP
-from comp_slice import sum_vertuple, sum_derH, comp_ptuple, comp_vertuple, comp_angle, form_PP_t
+from comp_slice import comp_P, sum_vertuple, sum_derH, comp_ptuple, comp_vertuple, comp_angle, form_PP_t
 from agg_convert import agg_recursion_eval
 '''
 comp_slice_ sub_recursion + utilities
@@ -58,42 +58,29 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
                 _P = iderP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
                     __P = _derP._P  # next layer of Ps
-                    # comp_P through 73?
-                    mtuple, dtuple = comp_ptuple(P.ptuple, __P.ptuple)
-                    mval = sum(mtuple); dval = sum(dtuple)
-                    mrdn = 1+dval>mval; drdn = 1+(not mrdn)
-                    derP = CderP(derH=[[mtuple,dtuple]], _P=__P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
-                                 L=len(__P.dert_), x0=min(P.x0,__P.x0), y0=min(P.y0,__P.y0))
-                    link_ += [derP]  # all uplinks, not bilateral
-                    if mval > aveB*mrdn:
-                        link_m+=[derP]; mVal+=mval; mRdn+=mrdn  # +ve links, fork selection in form_PP_t
-                        sum_vertuple(Mtuple, mtuple)
-                    if dval > aveB*drdn:
-                        link_d+=[derP]; dVal+=dval; dRdn+=drdn
-                        sum_vertuple(Dtuple, dtuple)
+                    comp_P(__P,P, Mtuple,Dtuple, [link_,link_m,link_d], [mVal,dVal], [mRdn,dRdn], fd=0)
             if mVal > ave_P * mRdn:  # form new Ps in rng+ PP:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[Mtuple,Dtuple]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mtuple,Dtuple]]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
                       valt=[mVal,dVal], rdnt=[mRdn,dRdn], link_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
 
+# draft
 def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.derH, P.derH, _P.derH
 
     P__ = []
     for iP_ in reversed(iP__[:-1]):  # lower compared row, follow uplinks, no uplinks in last row
         P_ = []
         for P in iP_:
-            Mtuple, Dtuple, Mtuple1, Dtuple1 = [],[],[],[]  # 1st and 2nd layers in P
+            Mt0, Dt0, Mt1, Dt1 = [],[],[],[]  # 1st and 2nd layers in P
+            Mtuple=[Mt0,Mt1], Dtuple=[Dt0,Dt1]
             link_, link_m, link_d = [],[],[]  # for new P
             mVal, dVal, mRdn, dRdn = 0,0,0,0
             for iderP in P.link_t[1]:  # dlinks
                 _P = iderP._P
-                # comp_P through 110?
-                dL = len(_P.derH) > len(P.derH)  # 0|1: extended _P.derH: not with bottom-up? comp _P.derH[-2]:
-                # Each derH element is [mtuple, dtuple], so we need to retrieve dvert0 here
-                # but why _vert0 is from P, vert0 is from _P?
-                _vert0, (vert0, dvert0) = P.derH[-1][0], _P.derH[-(1+dL)]  # can be simpler but less generic
-                # 1-vertuple derH before feedback
+                comp_P(_P,P, Mtuple,Dtuple, [link_,link_m,link_d], [mVal,dVal], [mRdn,dRdn], fd=1, valt=iderP.valt)
+                # the below should be replaced by comp_P:
+                _vert0, vert0 = P.derH[-1][0], _P.derH[-1][0]  # 1-vertuple derH before feedback
                 mtuple, dtuple = comp_vertuple(_vert0, vert0, P.n/_P.n)
                 mval = sum(mtuple)+iderP.valt[0]
                 dval = sum(dtuple)+iderP.valt[1]  # sum from both layers
@@ -110,7 +97,7 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
                     sum_vertuple(Dtuple, dvert0)
                     sum_vertuple(Dtuple1, dtuple)
             if dVal > ave_P * dRdn:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[Mtuple,Dtuple],[Mtuple1,Dtuple1]], dert_=copy(P.dert_), fds=copy(P.fds)+[0],
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mt0,Dt0],[Mt1,Dt1]]], dert_=copy(P.dert_), fds=copy(P.fds)+[1],
                           x0=P.x0, y0=P.y0, valt=[mVal,dVal], rdnt=[mRdn,dRdn], rdnlink_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
