@@ -1,3 +1,5 @@
+# utf-8
+
 """
 Provide the function visualize_blobs to display
 formed blobs interactively.
@@ -5,7 +7,7 @@ formed blobs interactively.
 
 import sys
 import numpy as np
-import cv2 as cv
+import matplotlib.pyplot as plt
 
 from types import SimpleNamespace
 
@@ -25,7 +27,7 @@ POSE2COLOR = {
 MASKING_VAL = 128  # Pixel at this value can be over-written
 
 
-def visualize_blobs(frame, layer='r', window_size=None, winname="Blobs"):
+def visualize_blobs(frame, layer='r'):
     """
     Visualize blobs after clustering.
     Highlight the blob the mouse is hovering on and its
@@ -36,25 +38,59 @@ def visualize_blobs(frame, layer='r', window_size=None, winname="Blobs"):
         The frame of layer to visualize.
     layer : str, optional
         The layer to visualize. Must be 'r' or 'd'. Defaults to 'r'.
-    window_size : tuple, optional
-        The size of the window to display.
-    winname : str, optional
-        The name of the window. Defaults to "Blobs".
     """
     print("Preparing for visualization ...", end="")
 
     height, width = frame.dert__[0].shape
-    if window_size is None:
-        window_size = (
-            max(width, MIN_WINDOW_WIDTH),
-            max(height, MIN_WINDOW_HEIGHT),
-        )
 
     # Prepare state object
     state = SimpleNamespace(
-        img=None, background=None, idmap=None, blob_id=None, img_slice=None, blob_cls=None,
+        img=blank_image((height, width)),
+        background=blank_image((height, width)),
+        idmap=np.full((height, width), -1, 'int64'),
+        gradient=np.zeros((2, height, width), float),
+        gradient_mask=np.zeros((height, width), bool),
+        blob_id=None, img_slice=None, blob_cls=None,
         layers_stack=[(frame, layer)],
+        # flags
+        show_gradient=True, quiver=None,
     )
+
+    fig, ax = plt.subplots()
+    fig.canvas.set_window_title("Blob Visualization")
+    imshow_obj = ax.imshow(state.img)
+
+    def update_gradient():
+        if state.quiver is not None:
+            state.quiver.remove()
+            state.quiver = None
+
+        blob = state.blob_cls.get_instance(state.blob_id)
+        if blob is None or not state.show_gradient:
+            return
+        # Reset gradient
+        state.gradient[:] = 1e-3
+        state.gradient_mask[:] = False
+
+        # Use indexing to get the gradient of the blob
+        dy__, dx__ = state.gradient
+        y0, yn, x0, xn = blob.box
+        box_slice = slice(y0, yn), slice(x0, xn)
+        dy_slice = dy__[state.img_slice][box_slice][~blob.mask__]
+        dx_slice = dx__[state.img_slice][box_slice][~blob.mask__]
+        dy_index = 4 if len(blob.dert__) > 5 else 1
+        dy_slice[:] = blob.dert__[dy_index][~blob.mask__]
+        dx_slice[:] = blob.dert__[dy_index + 1][~blob.mask__]
+        state.gradient_mask[state.img_slice][box_slice] = ~blob.mask__
+        iy, ix = state.gradient_mask.nonzero()
+
+        # Apply quiver
+        state.quiver = ax.quiver(ix, iy, dx_slice, dy_slice)
+
+    def update_img():
+        update_gradient()
+        imshow_obj.set_data(state.img)
+        fig.canvas.draw_idle()
 
     def reset_state():
         frame, layer = state.layers_stack[-1]
@@ -74,90 +110,103 @@ def visualize_blobs(frame, layer='r', window_size=None, winname="Blobs"):
         x0e = max(0, x0 - 1)
         xne = min(rX, xn + 1)  # e is for extended
         state.img_slice = slice(y0e, yne), slice(x0e, xne)
-        state.background = blank_image((height, width))
-        idmap = np.full((height, width), -1).astype('int64')
+        state.background[:] = MASKING_VAL
+        state.idmap[:] = -1
         # Prepare blob ID map and background
         for blob in blob_:
-            paint_over(idmap[state.img_slice], None, blob.box,
+            paint_over(state.idmap[state.img_slice], None, blob.box,
                        mask=blob.mask__,
                        fill_color=blob.id)
             paint_over(state.background[state.img_slice], None, blob.box,
                        mask=blob.mask__,
                        fill_color=[blob.sign * 32] * 3)
         state.img = state.background.copy()
-        state.idmap = cv.resize(idmap.astype('uint64'), window_size,
-                          interpolation=cv.INTER_NEAREST)
         state.blob_id = -1
+        update_img()
 
     reset_state()
-    def mouse_call(event, x, y, flags, param):
-        wx, wy = window_size
-        x = max(0, min(wx - 1, x))
-        y = max(0, min(wy - 1, y))
-        blob_id = state.idmap[y, x]
-        if event == cv.EVENT_MOUSEMOVE:
-            if state.blob_id != blob_id:
-                state.blob_id = blob_id
-                # override color of the blob
-                state.img[:] = state.background[:]
-                blob = state.blob_cls.get_instance(state.blob_id)
-                if blob is None:
-                    print("\r", end="\t\t\t\t\t\t\t")
-                    sys.stdout.flush()
-                    return
-                paint_over(state.img[state.img_slice], None, blob.box,
-                           mask=blob.mask__,
-                           fill_color=WHITE)
-                # ... and its adjacents
-                for adj_blob, pose in zip(*blob.adj_blobs):
-                    paint_over(state.img[state.img_slice], None, adj_blob.box,
-                               mask=adj_blob.mask__,
-                               fill_color=POSE2COLOR[pose])
 
-
-                # ... print blobs properties.
-                print("\rblob:",
-                      "id =", blob.id,
-                      "sign =", "'+'" if blob.sign else "'-'",
-                      "I =", blob.I,
-                      "Dy =", blob.Dy,
-                      "Dx =", blob.Dx,
-                      "G =", blob.G,
-                      "M = ",blob.M,
-                      "A =", blob.A,
-                      "box =", blob.box,
-                      "fork =", ''.join(blob.prior_forks),
-                      end="\t\t\t")
-                sys.stdout.flush()
-        elif event == cv.EVENT_LBUTTONUP:
+    def on_mouse_movement(event):
+        """Highlight the blob the mouse is hovering on."""
+        if event.xdata is None or event.ydata is None:
+            blob_id = -1
+        else:
+            blob_id = state.idmap[round(event.ydata), round(event.xdata)]
+        if state.blob_id != blob_id:
+            state.blob_id = blob_id
+            # override color of the blob
+            state.img[:] = state.background[:]
             blob = state.blob_cls.get_instance(state.blob_id)
-            if flags & cv.EVENT_FLAG_CTRLKEY:       # Look into rlayer
-                if blob.rlayers and blob.rlayers[0] and blob is not None:
-                    state.layers_stack.append((blob, 'r'))
-                    reset_state()
-            elif flags & cv.EVENT_FLAG_SHIFTKEY:    # Look into dlayer
-                if blob.dlayers and blob.dlayers[0] and blob is not None:
-                    state.layers_stack.append((blob, 'd'))
-                    reset_state()
-            else:                                   # Go back to parent
-                if (len(state.layers_stack) > 1):
-                    state.layers_stack.pop()
-                    reset_state()
+            if blob is None:
+                print("\r"f"│{' ' * 10}│{' ' * 6}│"
+                      f"{' ' * 10}│{' ' * 10}│{' ' * 10}│{' ' * 10}│"
+                      f"{' ' * 10}│{' ' * 10}│{' ' * 16}│{' ' * 10}│",
+                      end="")
+                sys.stdout.flush()
+                update_img()
+                return
 
+            # ... print blobs properties.
+            print("\r"f"│{blob.id:^10}│{'+' if blob.sign else '-':^6}│"
+                  f"{blob.I:^10.2e}│{blob.Dy:^10.2e}│{blob.Dx:^10.2e}│{blob.G:^10.2e}│"
+                  f"{blob.M:^10.2e}│{blob.A:^10.2e}│"
+                  f"{'-'.join(map(str, blob.box)):^16}│"
+                  f"{blob.prior_forks:^10}│",
+                  end="")
+            sys.stdout.flush()
 
-    cv.namedWindow(winname)
-    cv.setMouseCallback(winname, mouse_call)
+            # paint over the blob ...
+            paint_over(state.img[state.img_slice], None, blob.box,
+                       mask=blob.mask__,
+                       fill_color=WHITE)
+            # ... and its adjacents
+            for adj_blob, pose in zip(*blob.adj_blobs):
+                paint_over(state.img[state.img_slice], None, adj_blob.box,
+                           mask=adj_blob.mask__,
+                           fill_color=POSE2COLOR[pose])
+            # Finally, update the image
+            update_img()
+
+    def on_click(event):
+        """Transition between layers."""
+        blob = state.blob_cls.get_instance(state.blob_id)
+        if event.key == "control":       # Look into rlayer
+            if blob.rlayers and blob.rlayers[0] and blob is not None:
+                state.layers_stack.append((blob, 'r'))
+                reset_state()
+        elif event.key == "shift":    # Look into dlayer
+            if blob.dlayers and blob.dlayers[0] and blob is not None:
+                state.layers_stack.append((blob, 'd'))
+                reset_state()
+        else:
+            if (len(state.layers_stack) > 1):
+                state.layers_stack.pop()
+                reset_state()
+
+    def on_key_press(event):
+        if event.key == 'd':
+            state.show_gradient = not state.show_gradient
+            update_img()
+
+    fig.canvas.mpl_connect('motion_notify_event', on_mouse_movement)
+    fig.canvas.mpl_connect('button_release_event', on_click)
+    fig.canvas.mpl_connect('key_press_event', on_key_press)
+
     print("hit 'q' to exit")
+    print("hit 'd' to toggle show gradient")
+    print("blob:")
+    print(f"┌{'─'*10}┬{'─'*6}┬{'─'*10}┬{'─'*10}┬{'─'*10}┬{'─'*10}"
+          f"┬{'─'*10}┬{'─'*10}┬{'─'*16}┬{'─'*10}┐")
+    print(f"|{'id':^10}│{'sign':^6}│{'I':^10}│{'Dy':^10}│{'Dx':^10}│{'G':^10}│"
+          f"{'M':^10}│{'A':^10}│{'box':^16}│{'fork':^10}│")
+    print(f"├{'─' * 10}┼{'─' * 6}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}┼{'─' * 10}"
+          f"┼{'─' * 10}┼{'─' * 10}┼{'─' * 16}┼{'─' * 10}┤")
 
-    while True:
-        cv.imshow(winname,
-                  cv.resize(state.img,
-                            window_size,
-                            interpolation=cv.INTER_NEAREST))
-        if cv.waitKey(1) == ord('q'):
-            break
-    cv.destroyAllWindows()
+
+    plt.show()
+
     print()
+
 
 def blank_image(shape, fill_val=None):
     '''Create an empty numpy array of desired shape.'''

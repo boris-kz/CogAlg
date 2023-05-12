@@ -2,7 +2,7 @@ from itertools import (repeat, accumulate, chain, starmap, tee)
 import numbers
 import numpy as np
 
-import cv2
+import matplotlib.pyplot as plt
 
 # ----------------------------------------------------------------------------
 # Constants
@@ -123,7 +123,7 @@ def array2image(a):
 def imread(filename, raise_if_not_read=True):
     "Read an image in grayscale, return array."
     try:
-        return cv2.imread(filename, 0).astype(float)
+        return np.mean(plt.imread(filename), axis=2).astype(float)
     except AttributeError:
         if raise_if_not_read:
             raise SystemError('image is not read')
@@ -134,7 +134,7 @@ def imread(filename, raise_if_not_read=True):
 
 def imwrite(filename, img):
     "Write image with cv2.imwrite."
-    cv2.imwrite(filename, img)
+    plt.imwrite(filename, img)
 
 # ----------------------------------------------------------------------------
 # Blob slicing

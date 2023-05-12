@@ -73,7 +73,7 @@ class CBlob(ClusterStructure):
     Mdx = float
     Ddx = float
     # derivation hierarchy:
-    prior_forks = list
+    prior_forks = str
     fBa = bool  # in root_blob: next fork is comp angle, else comp_r
     rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
     rng = int  # comp range, set before intra_comp
@@ -106,11 +106,12 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     if verbose: start_time = time()
     dert__ = comp_pixel(image)
 
-    blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3] > 0, verbose=verbose)  # dert__[3] is g, https://en.wikipedia.org/wiki/Flood_fill
+    blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3] > 0,
+                                         prior_forks='', verbose=verbose)  # dert__[3] is g, https://en.wikipedia.org/wiki/Flood_fill
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, prior_forks=["g"], rlayers=[blob_], box=(0, Y, 0, X))  # dlayers = []: no comp_a yet
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, prior_forks='', rlayers=[blob_], box=(0, Y, 0, X))  # dlayers = []: no comp_a yet
 
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -151,7 +152,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
 '''
 
-def flood_fill(dert__, sign__, verbose=False, mask__=None, fseg=False, prior_forks=[]):
+def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=False):
 
     if mask__ is None: height, width = dert__[0].shape  # init dert__
     else:              height, width = mask__.shape  # intra dert__
@@ -169,9 +170,7 @@ def flood_fill(dert__, sign__, verbose=False, mask__=None, fseg=False, prior_for
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
 
-                blob = CBlob(sign=sign__[y, x], root_dert__=dert__, prior_forks=['g'])
-                if prior_forks: # update prior forks in deep blob
-                    blob.prior_forks= prior_forks.copy()
+                blob = CBlob(sign=sign__[y, x], root_dert__=dert__, prior_forks=prior_forks)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
                 y0, yn = y, y

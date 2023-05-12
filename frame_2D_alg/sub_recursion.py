@@ -4,7 +4,7 @@ import numpy as np
 
 from comp_slice import PP_aves, ave, aveB, ave_nsub, ave_g, ave_ga
 from comp_slice import CP, CQ, Cptuple, CderP, CPP
-from comp_slice import sum_vertuple, comp_ptuple, comp_vertuple, comp_angle, form_PP_t
+from comp_slice import sum_vertuple, sum_derH, comp_ptuple, comp_vertuple, comp_angle, form_PP_t
 from agg_convert import agg_recursion_eval
 '''
 comp_slice_ sub_recursion + utilities
@@ -59,20 +59,20 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
                 for _derP in _P.link_t[0]:  # next layer of mlinks
                     __P = _derP._P  # next layer of Ps
                     # comp_P through 73?
-                    (mtuple, dtuple) = comp_ptuple(P.ptuple, __P.ptuple)
+                    mtuple, dtuple = comp_ptuple(P.ptuple, __P.ptuple)
                     mval = sum(mtuple); dval = sum(dtuple)
                     mrdn = 1+dval>mval; drdn = 1+(not mrdn)
-                    derP = CderP(derH=[[[mtuple,dtuple]]], _P=__P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
+                    derP = CderP(derH=[[mtuple,dtuple]], _P=__P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
                                  L=len(__P.dert_), x0=min(P.x0,__P.x0), y0=min(P.y0,__P.y0))
                     link_ += [derP]  # all uplinks, not bilateral
                     if mval > aveB*mrdn:
                         link_m+=[derP]; mVal+=mval; mRdn+=mrdn  # +ve links, fork selection in form_PP_t
-                        for Par, par in zip_longest(Mtuple,mtuple, fillvalue=0): Par+=par
+                        sum_vertuple(Mtuple, mtuple)
                     if dval > aveB*drdn:
                         link_d+=[derP]; dVal+=dval; dRdn+=drdn
-                        for Par, par in zip_longest(Dtuple,dtuple, fillvalue=0): Par+=par
+                        sum_vertuple(Dtuple, dtuple)
             if mVal > ave_P * mRdn:  # form new Ps in rng+ PP:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mtuple,Dtuple]]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[Mtuple,Dtuple]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
                       valt=[mVal,dVal], rdnt=[mRdn,dRdn], link_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
@@ -90,23 +90,25 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
                 _P = iderP._P
                 # comp_P through 110?
                 dL = len(_P.derH) > len(P.derH)  # 0|1: extended _P.derH: not with bottom-up? comp _P.derH[-2]:
-                _vert0, vert0 = P.derH[-1][0], _P.derH[-(1+dL)][0]  # can be simpler but less generic
+                # Each derH element is [mtuple, dtuple], so we need to retrieve dvert0 here
+                # but why _vert0 is from P, vert0 is from _P?
+                _vert0, (vert0, dvert0) = P.derH[-1][0], _P.derH[-(1+dL)]  # can be simpler but less generic
                 # 1-vertuple derH before feedback
-                (mtuple, dtuple) = comp_vertuple(_vert0, vert0, P.n/_P.n)
+                mtuple, dtuple = comp_vertuple(_vert0, vert0, P.n/_P.n)
                 mval = sum(mtuple)+iderP.valt[0]
                 dval = sum(dtuple)+iderP.valt[1]  # sum from both layers
                 mrdn = 1+dval>mval; drdn = 1+(not mrdn)
-                derP = CderP(derH=[[[mtuple,dtuple]]], _P=_P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
+                derP = CderP(derH=[[mtuple,dtuple]], _P=_P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
                              L=len(_P.dert_), x0=min(P.x0,_P.x0), y0=min(P.y0,_P.y0))
                 link_ += [derP]  # all uplinks, not bilateral
                 if mval > aveB*mrdn:
                     link_m+=[derP]; mVal+=mval; mRdn+=mrdn  # +ve links, fork selection in form_PP_t
-                    for Par, par in zip_longest(Mtuple, vert0[0], fillvalue=0): Par+=par
-                    for Par, par in zip_longest(Mtuple1, mtuple, fillvalue=0): Par+=par
+                    sum_vertuple(Mtuple, vert0)
+                    sum_vertuple(Mtuple1, mtuple)
                 if dval > aveB*drdn:
                     link_d+=[derP]; dVal+=dval; dRdn+=drdn
-                    for Par, par in zip_longest(Mtuple, vert0[1], fillvalue=0): Par+=par
-                    for Par, par in zip_longest(Dtuple1, dtuple, fillvalue=0): Par+=par
+                    sum_vertuple(Dtuple, dvert0)
+                    sum_vertuple(Dtuple1, dtuple)
             if dVal > ave_P * dRdn:
                 P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[Mtuple,Dtuple],[Mtuple1,Dtuple1]], dert_=copy(P.dert_), fds=copy(P.fds)+[0],
                           x0=P.x0, y0=P.y0, valt=[mVal,dVal], rdnt=[mRdn,dRdn], rdnlink_=link_, link_t=[link_m,link_d])]
@@ -264,37 +266,6 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
 def sum2PPP(qPPP, base_rdn, fd):  # sum PP_segs into PP
     pass
 
-# not revised:
-def sum_derH(DerH, derH, fsamerow=0, fneg=0):
-    for H, h in zip_longest(DerH, derH, fillvalue=[]):  # each H is [ptuple_, node_, fd]
-        if h:
-            if H:
-                sum_ptuple_(H[0], h[0], fneg)  # H[0] is ptuple_, sum ptuples
-                if fsamerow:  # pack Ps
-                    for Node_, node_ in zip_longest(H[1], h[1], fillvalue=[]):  # H[1] is node__, pack node__
-                        if node_:
-                            if Node_:
-                                Node_ += node_  # merge node _ in a same row
-                            else:
-                                Node_[:] = copy(node_)  # shallow copy, different list of same objects within
-                else:  # pack lower rows
-                    for node_ in h[1]:
-                        H[1] += [node_]
-            else:
-                DerH += [[deepcopy(h[0]), [copy(node_) for node_ in h[1]], h[2]]]  # ptuple_,node_,fd (deepcopy node_ causes endless recursion)
-
-
-def sum_ptuple_(Ptuple_, ptuple_, fneg=0):  # same fds from comp_derH
-
-    for Vertuple, vertuple in zip_longest(Ptuple_, ptuple_, fillvalue=[]):  # H[0] is ptuple_
-        if vertuple:
-            if Vertuple:
-                if isinstance(vertuple, CQ):
-                    sum_vertuple(Vertuple, vertuple, fneg)
-                else:
-                    sum_ptuple(Vertuple, vertuple, fneg)
-            elif not fneg:
-                Ptuple_ += [deepcopy(vertuple)]
 
 # copy from agg+:
 def feedback(root):  # bottom-up update root.H, breadth-first

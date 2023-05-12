@@ -69,7 +69,7 @@ vaves = [ave_mval, ave_dval]
 PP_aves = [ave_mPP, ave_dPP]
 
 
-class CQ(ClusterStructure):  # vertuple, hierarchy, or generic sequence
+class CQ(ClusterStructure):  # generic sequence or hierarchy
 
     Q = list  # generic sequence or index increments in ptuple, derH, etc
     Qm = list  # in-graph only
@@ -80,7 +80,7 @@ class CQ(ClusterStructure):  # vertuple, hierarchy, or generic sequence
     out_valt = lambda: [0,0]  # of non-graph links, as alt?
     fds = list
     rng = lambda: 1  # is it used anywhere?
-    n = lambda: 1  # accum count
+    n = lambda: 1  # accum count, not needed?
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, derH per par in derP, or PP
 
@@ -94,17 +94,17 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     Ga = float
     x = int  # median: x0+L/2
     L = int  # len dert_ in P, area in PP
-    n = lambda: 1
-    valt = lambda: [0,0]
-    rdnt = lambda: [1,1]
+    n = lambda: 1  # not needed?
+
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = lambda: Cptuple()  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
-    derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
+    derH = lambda: [[[],[]]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
     valt = lambda: [0,0]  # of fork links, represented in derH
     rdnt = lambda: [1,1]
+    # n = lambda: 1
     x0 = int
     y0 = int  # for vertical gap in PP.P__
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -142,7 +142,7 @@ class CPP(CderP):
 
     ptuple = lambda: Cptuple()  # summed P__ ptuples, = 0th derLay
     P__ = list  # 2D array of nodes, may be sub-PPs
-    derH = lambda: [[CQ()]]  # 1vertuple / 1layer in comp_slice, extend in der+
+    derH = lambda: [[[],[]]]  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # fd per derLay
     valt = lambda: [0,0]  # summed fork links vals
     rdnt = lambda: [1,1]  # recursion count + Rdn / nderPs + mrdn + uprdn if branch overlap?
@@ -156,6 +156,8 @@ class CPP(CderP):
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
     fdiv = NoneType
     mask__ = bool
+    link_ = list  # all links summed from Ps
+    link_t = lambda: [[],[]]  # +ve rlink_, dlink_
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
 
@@ -164,31 +166,21 @@ def comp_slice_root(blob, verbose=False):  # always angle blob, composite dert c
 
     from sub_recursion import sub_recursion_eval, rotate_P_, agg_recursion_eval
 
-    P__ = slice_blob(blob, verbose=verbose)  # form 2D array of Ps: blob slices in dert__
-    # rotate each P to align it with the direction of P gradient:
-    rotate_P_(P__, blob.dert__, blob.mask__)  # rotated Ps are sparse or overlap via redundant derPs, results are not biased?
+    P__ = slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
+    rotate_P_(P__, blob.dert__, blob.mask__)  # reform Ps around centers along G, sides may overlap
     # scan rows top-down, comp y-adjacent, x-overlapping Ps to form derPs:
     _P_ = P__[0]  # higher row
     for P_ in P__[1:]:  # lower row
         for P in P_:
-            Mtuple, Dtuple = [],[]
+            Mtuple, Dtuple = [], []
+            links = [P.link_, P.link_t[0], P.link_t[1]]  # for new P
+            Valt = [0, 0]; Rdnt = [0, 0]
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
-                    # comp_P through 189?
-                    (mtuple, dtuple) = comp_ptuple(_P.ptuple, P.ptuple)
-                    mval = sum(mtuple); dval = sum(dtuple)
-                    mrdn = 1+dval>mval; drdn = 1+(not mrdn)
-                    derP = CderP(derH=[[[mtuple,dtuple]]],fds=[0], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
-                    P.link_+=[derP]  # all links
-                    if mval > aveB*mrdn:
-                        P.link_t[0]+=[derP]; P.valt[0]+=mval; P.rdnt[0]+=mrdn  # +ve links, fork selection in form_PP_t
-                        for Par, par in zip_longest(Mtuple,mtuple, fillvalue=0): Par+=par
-                    if dval > aveB*drdn:
-                        P.link_t[1]+=[derP]; P.valt[1]+=dval; P.rdnt[1]+=drdn
-                        for Par, par in zip_longest(Mtuple,mtuple, fillvalue=0): Par+=par
+                    comp_P(_P,P, Mtuple,Dtuple, links, Valt, Rdnt, fd=0)
                 elif (P.x0 + L) < _P.x0:
-                    P.derH=[[[Mtuple,Dtuple]]]  # single vertuple
+                    P.derH=[[Mtuple,Dtuple]]  # single vertuple
                     break  # no xn overlap, stop scanning lower P_
         _P_ = P_
     PPm_,PPd_ = form_PP_t(P__, base_rdn=2)
@@ -351,43 +343,90 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
         for P in P_:  # left-to-right
             P.roott[fd] = PP
             sum_ptuple(PP.ptuple, P.ptuple)
-            for derP in P.link_t[fd]:  # comp_slice derH is 1 vertuple in 1 layer, sum in P, not _P: up only?
-            # unpack sum_vertuple:
-                sum_vertuple(P.derH[0][0], derP.derH[0][0])
-            sum_vertuple(PP.derH[0][0], P.derH[0][0])  # ->PP vertuple
+            # already done in comp_P:
+            # for derP in P.link_t[fd]:  # uplinks only: no sum in _P, 1-vertuple layers, 1 in comp_slice, 2 in der+:
+            #    [sum_vertuple(L[0],l[0]) for L,l in zip((P.derH, derP.derH))]  # loop 1|2 layers
+            [sum_vertuple(L[0],l[0]) for L,l in zip((PP.derH, P.derH))]
+            PP.link_ += P.link_
+            for Link_,link_ in zip(PP.link_t, P.link_t):
+                Link_ += link_  # all unique links in PP, to replace n
             PP.box[0] = min(PP.box[0], P.y0)  # y0
             PP.box[2] = min(PP.box[2], P.x0)  # x0
             PP.box[3] = max(PP.box[3], P.x0 + len(P.dert_))  # xn
 
     return PP
 
-# not needed?
-def sum_vertuple(Vertuple, vertuple, fneg=0):
 
-    for i, (Tuple,tuple) in enumerate(zip_longest(Vertuple, vertuple, fillvalue=[])):
-        for j, (Par,par) in enumerate(zip_longest(Tuple, tuple, fillvalue=0)):
-            p = -par if fneg else par
-            Tuple[j] += p
+def sum_derH(DerH, derH):  # derH is layers, not selective here. Sum both forks in each node to comp alt fork
 
+    for Layer, layer in zip_longest(DerH, derH, fillvalue=None):
+        if Layer:
+            if layer:
+                for Vertuple, vertuple in zip_longest(Layer, layer, fillvalue=None):
+                    if Vertuple:
+                        if vertuple:
+                            sum_vertuple(Vertuple, vertuple)
+                    else:
+                        Layer += [deepcopy(vertuple)]
+        else:
+            DerH += [deepcopy(layer)]
+
+
+def sum_vertuple(Vertuple, vertuple, fneg=0):  # [mtuple,dtuple]
+
+    # one of the tuples may be empty?
+    [sum_tuple(Tuple,tuple,fneg) for Tuple,tuple in zip(Vertuple, vertuple)]
+
+def sum_tuple(Tuple,tuple, fneg=0):  # mtuple or dtuple
+
+    for i, (Par, par) in enumerate(zip_longest(Tuple, tuple, fillvalue=None)):
+        if par:
+            if Par:
+                Tuple[i] = Par + -par if fneg else par
+            elif not fneg:
+                Tuple += [par]
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
 
     for pname, ave in zip(pnames, aves):
         Par = getattr(Ptuple, pname); par = getattr(ptuple, pname)
+
         if isinstance(Par, list):  # angle or aangle
             for j, (P,p) in enumerate(zip(Par,par)): Par[j] = P-p if fneg else P+p
         else:
             Par += (-par if fneg else par)
         setattr(Ptuple, pname, Par)
 
-    Ptuple.valt[0] += ptuple.valt[0]; Ptuple.valt[1] += ptuple.valt[1]
     Ptuple.n += 1
+
+# draft:
+def comp_P(_P,P, Mtuple, Dtuple, links, Valt, Rdnt, fd, valt=None):
+
+    if fd:
+        _tuple, tuple = P.derH[-1][0][1], _P.derH[-1][0][1]  # 1-vertuple derH before feedback
+        comp = comp_vertuple  # compare ds only
+    else:
+        _tuple, tuple = _P.ptuple, P.ptuple
+        comp = comp_ptuple
+    mtuple,dtuple = comp(_tuple, tuple)
+    mval = sum(mtuple); if fd: mval += valt[0]
+    dval = sum(dtuple); if fd: dval += valt[1]
+    mrdn = 1+dval>mval; drdn = 1+(not mrdn)
+
+    derP = CderP(derH=[[[mtuple,dtuple]]],fds=P.fds+[fd], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
+    links[0] += [derP]  # all links
+    if mval > aveB*mrdn:
+        links[1]+=[derP]; Valt[0]+=mval; Rdnt[0]+=mrdn  # +ve links, fork selection in form_PP_t
+        sum_tuple(Mtuple, mtuple)
+    if dval > aveB*drdn:
+        links[2]+=[derP]; Valt[1]+=dval; Rdnt[1]+=drdn
+        sum_tuple(Dtuple, dtuple)
 
 
 def comp_vertuple(_vertuple, vertuple, rn):
 
     mtuple, dtuple = [],[]
-    for _par, par, ave in zip(_vertuple.Qd, vertuple.Qd, aves):
+    for _par, par, ave in zip(_vertuple[1], vertuple[1], aves):  # compare ds only?
 
         m,d = comp_par(_par, par*rn, ave)
         dtuple+=[m]; dtuple+=[d]
@@ -396,7 +435,7 @@ def comp_vertuple(_vertuple, vertuple, rn):
 
 def comp_ptuple(_ptuple, ptuple):
 
-    mtuple, dtuple = [],[]
+    mtuple, dtuple = [],[]  # in the order of ("I", "M", "Ma", "axis", "angle", "aangle","G", "Ga", "x", "L")
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     for pname, ave in zip(pnames, aves):

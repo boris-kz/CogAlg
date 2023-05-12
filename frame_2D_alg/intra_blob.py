@@ -31,7 +31,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 
     for blob in blob_:  # fork-specific blobs, print('Processing blob number ' + str(bcount))
 
-        blob.prior_forks = root_blob.prior_forks.copy()  # increment forking sequence: g -> r|a, a -> p
+        # increment forking sequence: g -> r|a, a -> p
         blob.root_dert__= root_blob.dert__
         blob_height = blob.box[1] - blob.box[0];  blob_width = blob.box[3] - blob.box[2]
 
@@ -42,8 +42,8 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                 AveB = aveB * (blob.rdn+1)  # comp_slice is doubling the costs, likely higher, adjust per nsub_blobs?
                 if blob.G * (1/blob.Ga) > AveB * pcoef:  # value of comp_slice_blob is proportional to angle stability?
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
+                    blob.prior_forks += 'p'
                     comp_slice_root(blob, verbose=verbose)
-                    blob.prior_forks.extend('p')
                     if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs += [blob]
             else:
                 ext_dert__, ext_mask__ = extend_dert(blob)  # dert__+= 1: cross-comp in larger kernels
@@ -58,10 +58,10 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     # comp_r 4x4:
                     new_dert__, new_mask__ = comp_r(ext_dert__, blob.rng, ext_mask__)
                     sign__ = ave * (blob.rdn+1) - new_dert__[3] > 0  # m__ = ave - g__
-                    blob.prior_forks.extend('r')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
-                        spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa=0)
+                        spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__,
+                                                                    new_mask__, verbose, render, fBa=0)
 
                 if blob.G > aveB*aveBa * blob.rdn:  # above-average G, eval for comp_a
                     # root values for sub_blobs:
@@ -70,10 +70,10 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                     new_dert__, new_mask__ = comp_a(ext_dert__, ext_mask__)
                     Ave = ave * (blob.rdn + 1)
                     sign__ = (new_dert__[1] - Ave) + (Ave * pcoef - new_dert__[2]) > 0  # val_comp_slice_= dev_gr + inv_dev_ga
-                    blob.prior_forks.extend('a')
                     # if min Ly and Lx, dert__>=1: form, splice sub_blobs:
                     if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
-                        spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa=1)
+                        spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__,
+                                                                    new_mask__, verbose, render, fBa=1)
             '''
             exclusive forks version:
             
@@ -91,12 +91,12 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 
 
 def cluster_fork_recursive(blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa):
-
+    fork = 'a' if fBa else 'r'
     if verbose:
-        if fBa: print('fork:', '-'.join(blob.prior_forks))
-        else:   print('fork:', '-'.join(blob.prior_forks))
+        print('fork:', blob.prior_forks + fork)
     # form sub_blobs:
-    sub_blobs, idmap, adj_pairs = flood_fill(new_dert__, sign__, verbose=False, mask__=new_mask__)
+    sub_blobs, idmap, adj_pairs = \
+        flood_fill(new_dert__, sign__, prior_forks=blob.prior_forks + fork, verbose=False, mask__=new_mask__)
     '''
     adjust per average sub_blob, depending on which fork is weaker, or not taken at all:
     sub_blob.rdn += 1 -|+ min(sub_blob_val, alt_blob_val) / max(sub_blob_val, alt_blob_val):
@@ -152,7 +152,7 @@ def print_deep_blob_forking(deep_layers):
             if isinstance(deep_blob_layer,list):
                 check_deep_blob(deep_blob_layer,i)
             else:
-                print('blob num = '+str(i)+', forking = '+'->'.join(deep_blob_layer.prior_forks))
+                print('blob num = '+str(i)+', forking = '+'->'.join([*deep_blob_layer.prior_forks]))
 
     for i, deep_layer in enumerate(deep_layers):
         if len(deep_layer)>0:
