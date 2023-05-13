@@ -11,7 +11,7 @@ import numpy as np
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
 from itertools import zip_longest
-from comp_slice import comp_slice_root
+from frame_2D_alg.vectorize_edge_blob.comp_slice import comp_slice_root
 
 # filters, All *= rdn:
 ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different

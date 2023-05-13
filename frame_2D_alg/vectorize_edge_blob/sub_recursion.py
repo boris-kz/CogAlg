@@ -1,14 +1,10 @@
-from itertools import zip_longest
 from copy import copy, deepcopy
 import numpy as np
 
-from comp_slice import PP_aves, ave, aveB, ave_nsub, ave_g, ave_ga
-from comp_slice import CP, CQ, Cptuple, CderP, CPP
-from comp_slice import comp_P, sum_vertuple, sum_derH, comp_ptuple, comp_vertuple, comp_angle, form_PP_t
-from agg_convert import agg_recursion_eval
-'''
-comp_slice_ sub_recursion + utilities
-'''
+from frame_2D_alg.vectorize_edge_blob.comp_slice import PP_aves, ave, ave_nsub, ave_g, ave_ga
+from frame_2D_alg.vectorize_edge_blob.comp_slice import CP, CQ, Cptuple, CderP, CPP
+from frame_2D_alg.vectorize_edge_blob.comp_slice import comp_P, comp_angle, form_PP_t
+
 ave_rotate = 10
 ave_P = 10
 # n and val should be excluded?
@@ -41,6 +37,7 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
     for i, sub_PP_ in enumerate([sub_PPm_, sub_PPd_]):
         if PP.valt[i] > ave * PP.rdnt[i]:
             sub_recursion_eval(PP, sub_PP_, fd=i)
+            # agg_recursion_eval(PP, copy(sub_PP_))  # cross sub_PPs, Cgraph conversion doesn't replace PPs?
 
 # mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
 # __Ps in rng+ are mediated by PP.rng layers of _Ps:
@@ -52,134 +49,38 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
         P_ = []
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
-            mVal, dVal, mRdn, dRdn = 0,0,0,0
+            Valt = [0,0]; Rdnt = [0,0]
             Mtuple, Dtuple = [],[]
             for iderP in P.link_t[0]:  # mlinks
                 _P = iderP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
                     __P = _derP._P  # next layer of Ps
-                    comp_P(__P,P, Mtuple,Dtuple, [link_,link_m,link_d], [mVal,dVal], [mRdn,dRdn], fd=0)
-            if mVal > ave_P * mRdn:  # form new Ps in rng+ PP:
+                    comp_P(P,__P, Mtuple,Dtuple, link_,link_m,link_d, Valt, Rdnt, fd=0)
+            if Valt[0] > ave_P * Rdnt[0]:
+                # add new P in rng+ PP:
                 P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mtuple,Dtuple]]], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
-                      valt=[mVal,dVal], rdnt=[mRdn,dRdn], link_=link_, link_t=[link_m,link_d])]
+                      valt=Valt, rdnt=Rdnt, link_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
 
-# draft
 def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.derH, P.derH, _P.derH
 
     P__ = []
     for iP_ in reversed(iP__[:-1]):  # lower compared row, follow uplinks, no uplinks in last row
         P_ = []
         for P in iP_:
-            Mt0, Dt0, Mt1, Dt1 = [],[],[],[]  # 1st and 2nd layers in P
-            Mtuple=[Mt0,Mt1], Dtuple=[Dt0,Dt1]
+            Mt0, Dt0, Mtuple, Dtuple = [],[],[],[]  # 1st and 2nd layers
             link_, link_m, link_d = [],[],[]  # for new P
-            mVal, dVal, mRdn, dRdn = 0,0,0,0
+            Valt = [0,0]; Rdnt = [0,0]
             for iderP in P.link_t[1]:  # dlinks
                 _P = iderP._P
-                comp_P(_P,P, Mtuple,Dtuple, [link_,link_m,link_d], [mVal,dVal], [mRdn,dRdn], fd=1, valt=iderP.valt)
-                # the below should be replaced by comp_P:
-                _vert0, vert0 = P.derH[-1][0], _P.derH[-1][0]  # 1-vertuple derH before feedback
-                mtuple, dtuple = comp_vertuple(_vert0, vert0, P.n/_P.n)
-                mval = sum(mtuple)+iderP.valt[0]
-                dval = sum(dtuple)+iderP.valt[1]  # sum from both layers
-                mrdn = 1+dval>mval; drdn = 1+(not mrdn)
-                derP = CderP(derH=[[mtuple,dtuple]], _P=_P, P=P, valt=[mval,dval], rdnt=[mrdn,drdn], fds=copy(P.fds),
-                             L=len(_P.dert_), x0=min(P.x0,_P.x0), y0=min(P.y0,_P.y0))
-                link_ += [derP]  # all uplinks, not bilateral
-                if mval > aveB*mrdn:
-                    link_m+=[derP]; mVal+=mval; mRdn+=mrdn  # +ve links, fork selection in form_PP_t
-                    sum_vertuple(Mtuple, vert0)
-                    sum_vertuple(Mtuple1, mtuple)
-                if dval > aveB*drdn:
-                    link_d+=[derP]; dVal+=dval; dRdn+=drdn
-                    sum_vertuple(Dtuple, dvert0)
-                    sum_vertuple(Dtuple1, dtuple)
-            if dVal > ave_P * dRdn:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mt0,Dt0],[Mt1,Dt1]]], dert_=copy(P.dert_), fds=copy(P.fds)+[1],
-                          x0=P.x0, y0=P.y0, valt=[mVal,dVal], rdnt=[mRdn,dRdn], rdnlink_=link_, link_t=[link_m,link_d])]
+                comp_P(_P, P, Mtuple, Dtuple, link_,link_m,link_d, Valt, Rdnt, fd=1, derP=iderP, Mt0=Mt0, Dt0=Dt0)
+            if Valt[1] > ave_P * Rdnt[1]:
+                # add new P in der+ PP:
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[[[Mt0,Dt0]],[[Mtuple,Dtuple]]], dert_=copy(P.dert_), fds=copy(P.fds)+[1],
+                          x0=P.x0, y0=P.y0, valt=Valt, rdnt=Rdnt, rdnlink_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
-
-
-def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
-
-    yn, xn = dert__[0].shape[:2]
-    for P_ in P__:
-        for P in P_:
-            daxis = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
-            while P.ptuple.G * abs(daxis) > ave_rotate:
-                P.ptuple.axis = P.ptuple.angle
-                rotate_P(P, dert__, mask__, yn, xn)  # recursive reform P along new axis in blob.dert__
-                _, daxis = comp_angle(P.ptuple.axis, P.ptuple.angle)
-            # store P.daxis to adjust params?
-
-def rotate_P(P, dert__t, mask__, yn, xn):
-
-    L = len(P.dert_)
-    rdert_ = [P.dert_[int(L/2)]]  # init rotated dert_ with old central dert
-
-    ycenter = int(P.y0 + P.ptuple.axis[0]/2)  # can be negative
-    xcenter = int(P.x0 + abs(P.ptuple.axis[1]/2))  # always positive
-    Dy, Dx = P.ptuple.angle
-    dy = Dy/L; dx = abs(Dx/L)  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
-    # scan left:
-    rx=xcenter-dx; ry=ycenter-dy; rdert=1  # to start while:
-    while rdert and rx>=0 and ry>=0 and np.ceil(ry)<yn:
-        rdert = form_rdert(rx,ry, dert__t, mask__)
-        if rdert:
-            rdert_.insert(0, rdert)
-        rx += dx; ry += dy  # next rx, ry
-    P.x0 = rx+dx; P.y0 = ry+dy  # revert to leftmost
-    # scan right:
-    rx=xcenter+dx; ry=ycenter+dy; rdert=1  # to start while:
-    while rdert and ry>=0 and np.ceil(rx)<xn and np.ceil(ry)<yn:
-        rdert = form_rdert(rx,ry, dert__t, mask__)
-        if rdert:
-            rdert_ += [rdert]
-            rx += dx; ry += dy  # next rx,ry
-    # form rP:
-    # initialization:
-    rdert = rdert_[0]; _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; ndert_=[rdert]
-    # accumulation:
-    for rdert in rdert_[1:]:
-        _, g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
-        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
-        ndert_ += [rdert]
-    # re-form gradients:
-    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
-    ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
-    # add n,val,L,x,axis?
-    # replace P:
-    P.ptuple=ptuple; P.dert_=ndert_
-
-
-def form_rdert(rx,ry, dert__t, mask__):
-
-    # coord, distance of four int-coord derts, overlaid by float-coord rdert in dert__, int for indexing
-    # always in dert__ for intermediate float rx,ry:
-    x1 = int(np.floor(rx)); dx1 = abs(rx - x1)
-    x2 = int(np.ceil(rx));  dx2 = abs(rx - x2)
-    y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
-    y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
-
-    # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
-    # approximation, square of rpixel is rotated, won't fully match not-rotated derts
-    mask = mask__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
-         + mask__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
-         + mask__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
-         + mask__[y2, x2] * (1 - np.hypot(dx2, dy2))
-    mask = int(mask)  # summed mask is fractional, round to 1|0
-    if not mask:
-        ptuple = []
-        for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
-            param = dert__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
-                  + dert__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
-                  + dert__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
-                  + dert__[y2, x2] * (1 - np.hypot(dx2, dy2))
-            ptuple += [param]
-        return ptuple
 
 
 def append_P(P__, P):  # pack P into P__ in top down sequence

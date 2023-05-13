@@ -2,9 +2,9 @@
 Cross-compare blobs with incrementally mediated adjacency, forming blobs of blobs
 '''
 
-from class_cluster import ClusterStructure, NoneType, comp_param, Cdert
+from class_cluster import ClusterStructure, comp_param
 from frame_blobs import CBlob
-from comp_slice import ave, ave_daangle, ave_dx, ave_Ma, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
+from frame_2D_alg.vectorize_edge_blob.comp_slice import ave, ave_daangle, ave_dx, ave_Ma, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
 from intra_blob import intra_blob_root
 import numpy as np
 import cv2
