@@ -299,3 +299,27 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
                           x0=P.x0, y0=P.y0, valt=[mVal,dVal], rdnt=[mRdn,dRdn], rdnlink_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
+
+def comp_P(_P,P, Mtuple, Dtuple, link_,link_m,link_d, Valt, Rdnt, fd, derP=None, Mt0=None, Dt0=None):  #  last three if der+
+
+    if fd:
+        _dtuple, dtuple = _P.derH[-1][0][1], P.derH[-1][0][1]  # 1-vertuple derH before feedback, compare dtuple
+        mtuple,dtuple = comp_dtuple(_dtuple, dtuple, rn=len(_P.link_t[1])/len(P.link_t[1]))  # comp_tuple
+    else:
+        mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple)
+    mval = sum(mtuple)
+    if fd: mval += derP.valt[0]
+    dval = sum(dtuple)
+    if fd: dval += derP.valt[1]
+    mrdn = 1+ dval>mval; drdn = 1+(not mrdn)
+
+    derP = CderP(derH=[[[mtuple,dtuple]]],fds=P.fds+[fd], valt=[mval,dval],rdnt=[mrdn,drdn], P=P,_P=_P, x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
+    link_ += [derP]  # all links
+    if mval > aveB*mrdn:
+        link_m+=[derP]; Valt[0]+=mval; Rdnt[0]+=mrdn  # +ve links, fork selection in form_PP_t
+        sum_tuple(Mtuple, mtuple)
+        if fd: sum_tuple(Mt0, derP.derH[0][0][0])
+    if dval > aveB*drdn:
+        link_d+=[derP]; Valt[1]+=dval; Rdnt[1]+=drdn
+        sum_tuple(Dtuple, dtuple)
+        if fd: sum_tuple(Dt0, derP.derH[0][0][1])

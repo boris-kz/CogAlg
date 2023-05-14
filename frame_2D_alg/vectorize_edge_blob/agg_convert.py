@@ -1,44 +1,33 @@
 '''
 Agg_recursion eval and PP->graph conversion
 '''
-
-from comp_slice import PP_aves, pnames, ave_agg, ave_nsub
-from comp_slice import Cptuple, CPP, CQ
-from comp_slice import sum_derH
-from agg_recursion import Cgraph, agg_recursion, op_parH
+from .agg_recursion import Cgraph, agg_recursion, op_parH
 from copy import copy, deepcopy
+from .classes import CQ, Cptuple, CP, CderP, CPP
+from .filters import PP_vars, PP_aves, ave_nsub, ave_agg
 
 # move here temporary, for debug purpose
-def agg_recursion_eval(blob, PP_t):
+# not fully updated
+def agg_recursion_eval(blob, PP_, ifd):
 
     fseg = isinstance(blob, CPP)
 
-    for fd, PP_ in enumerate(PP_t):
-        for i, PP in enumerate(PP_):
-           converted_graph  = PP2graph(PP, fseg=fseg, ifd=fd)  # convert PP to graph
-           PP_[i] = converted_graph
+    for i, PP in enumerate(PP_):
+       converted_graph  = PP2graph(PP, fseg=fseg, ifd=ifd)  # convert PP to graph
+       PP_[i] = converted_graph
     if fseg:
-        converted_mblob = PP2graph(blob, fseg=fseg, ifd=0)  # convert root to graph (root default fd = 1?)
-        converted_dblob = PP2graph(blob, fseg=fseg, ifd=1)  # when fseg = True, we need both forks?
-        converted_mblob.node_ = PP_t[0]; converted_dblob.node_ = PP_t[1]
-        converted_blobt = [converted_mblob,converted_dblob]
-        for PP in PP_t[0]: PP.root = converted_blobt[0]
-        for PP in PP_t[1]: PP.root = converted_blobt[1]
+        converted_blob = PP2graph(blob, fseg=fseg, ifd=ifd)  # convert root to graph (root default fd = 1?)
+        for PP in PP_: PP.root = converted_blob
     else:
-        if blob.mgraph:
-            converted_blobt = [blob.mgraph, blob.dgraph]  # get converted graph
-        else:
-            converted_blobt = blob2graph(blob, fseg=fseg)  # convert root to graph
+        converted_blob = blob2graph(blob, fseg=fseg)  # convert root to graph
 
-    M = sum(converted_blobt[0].pH.valt)  # mpplayers.val (but m fork is always empty, so no value here?)
-    G = sum(converted_blobt[1].pH.valt)  # dpplayers.val
-    valt = [M, G]
-    fork_rdnt = [1+(G>M), 1+(M>=G)]
-    for fd, PP_ in enumerate(PP_t):  # PPm_, PPd_
-        if (valt[fd] > PP_aves[fd] * ave_agg * (converted_blobt[fd].pH.rdnt[fd]+1) * fork_rdnt[fd]) \
-            and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
-            converted_blobt[fd].pH.rdnt[fd] += 1  # estimate
-            agg_recursion(converted_blobt[fd], fseg=fseg)
+    Val = converted_blob.valt[ifd]
+    fork_rdnt = [1+(converted_blob.valt[ifd] > converted_blob.valt[1-ifd]), 1+(converted_blob.valt[1-ifd] > converted_blob.valt[ifd])]
+
+    if (Val > PP_aves[ifd] * ave_agg * (converted_blob.rdnt[fd]+1) * fork_rdnt[fd]) \
+        and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
+        converted_blobt[fd].pH.rdnt[fd] += 1  # estimate
+        agg_recursion(converted_blobt[fd], fseg=fseg)
 
 # old
 def frame2graph(frame, fseg, Cgraph):  # for frame_recursive

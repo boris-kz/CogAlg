@@ -91,3 +91,24 @@ class CPP(CderP):
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove
+
+
+class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
+    ''' ext / agg.sub.derH:
+    L = list  # der L, init None
+    S = int  # sparsity: ave len link
+    A = list  # area|axis: Dy,Dx, ini None
+    '''
+    G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
+    root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
+    pH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
+    H = list  # replace with node_ per pH[i]? down-forking tree of Levs: slice of nodes
+    # uH: up-forking Levs if mult roots
+    node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
+    link_ = lambda: CQ()  # temporary holder for der+ node_, then unique links within graph?
+    fterm = lambda: 0  # G.node_ sub-comp was terminated
+    rng = lambda: 1
+    box = lambda: [0,0,0,0,0,0]  # y,x, y0,yn, x0,xn
+    nval = int  # of open links: base alt rep
+    alt_graph_ = list  # contour + overlapping contrast graphs
+    alt_Graph = None  # conditional, summed and concatenated params of alt_graph_

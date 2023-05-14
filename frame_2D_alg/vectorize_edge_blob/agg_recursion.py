@@ -1,8 +1,9 @@
-
 import numpy as np
 from copy import deepcopy, copy
-from class_cluster import ClusterStructure
-from comp_slice import ave_sub, ave_nsub, ave_agg, ave_dI, ave_M, ave_Ma, ave_daxis, ave_dangle, ave_daangle, ave_G, ave_Ga, ave_L, ave_mval, ave_dval, CQ, comp_angle, comp_aangle, comp_par
+from .classes import CQ, Cgraph
+from .filters import aves, ave, ave_nsub, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
+from .comp_slice import comp_angle, comp_aangle, comp_par
+
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -29,41 +30,6 @@ Fork selection should be per var or co-derived der layer or agg level.
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
-# aves defined for rdn+1:
-aveG = 6  # fixed costs per G
-aveGm = 5
-aveGd = 4
-G_aves = [aveGm, aveGd]  # for inclusion in graph, /ave_len per link
-ave_med = 3  # call cluster_node_layer
-ave_rng = 3  # rng per combined val
-ave_ext = 5  # to eval comp_derH
-ave_len = 3
-ave_distance = 5
-ave_sparsity = 2
-med_decay = .5  # decay of induction per med layer
-
-pnames = ["I", "M", "Ma", "axis", "angle", "aangle","G", "Ga", "L"]
-aves = [ave_dI, ave_M, ave_Ma, ave_daxis, ave_dangle, ave_daangle, ave_G, ave_Ga, ave_L, ave_mval, ave_dval]
-
-class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
-    ''' ext / agg.sub.derH:
-    L = list  # der L, init None
-    S = int  # sparsity: ave len link
-    A = list  # area|axis: Dy,Dx, ini None
-    '''
-    G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
-    root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
-    pH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
-    H = list  # replace with node_ per pH[i]? down-forking tree of Levs: slice of nodes
-    # uH: up-forking Levs if mult roots
-    node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
-    link_ = lambda: CQ()  # temporary holder for der+ node_, then unique links within graph?
-    fterm = lambda: 0  # G.node_ sub-comp was terminated
-    rng = lambda: 1
-    box = lambda: [0,0,0,0,0,0]  # y,x, y0,yn, x0,xn
-    nval = int  # of open links: base alt rep
-    alt_graph_ = list  # contour + overlapping contrast graphs
-    alt_Graph = None  # conditional, summed and concatenated params of alt_graph_
 
 
 def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
@@ -103,7 +69,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
             val = init_graph(gnode_, node_, G, fd, val=0)  # recursive depth-first gnode_+=[_G]
             graph_+=[gnode_,val]
         # prune graphs by node val:
-        regraph_ = graph_reval_(graph_, [aveG for graph in graph_], fd)  # init reval_ to start
+        regraph_ = graph_reval_(graph_, [G_aves[fd] for graph in graph_], fd)  # init reval_ to start
         if regraph_:
             graph_[:] = sum2graph_(regraph_, fd)  # sum proto-graph node_ params in graph
         graph_t += [graph_]
@@ -128,6 +94,7 @@ def init_graph(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after pruning weakly connected nodes
 
     regraph_, rreval_ = [],[]
+    aveG = G_aves[fd]
 
     while graph_:
         graph,val = graph_.pop()
@@ -147,7 +114,9 @@ def graph_reval_(graph_, reval_, fd):  # recursive eval nodes for regraph, after
 
 def graph_reval(graph, Val, fd):  # exclusive graph segmentation by reval,prune nodes and links
 
+    aveG = G_aves[fd]
     reval = 0  # reval proto-graph nodes by all positive in-graph links:
+
     for node,val in graph.Q:
         link_val = 0
         val = node.link_.valt[fd]
@@ -215,10 +184,10 @@ def comp_G_(G_, pri_G_=None, f1Q=1, fsub=0):  # cross-comp Graphs if f1Q, else G
                     derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
                     # add links:
                     _G.link_.Q += [derG]; G.link_.Q += [derG]  # no didx, no ext_valt accum?
-                    if mval > aveGm:
+                    if mval > ave_Gm:
                         _G.link_.Qm += [derG]; _G.link_.valt[0] += mval
                         G.link_.Qm += [derG]; G.link_.valt[0] += mval
-                    if dval > aveGd:
+                    if dval > ave_Gd:
                         _G.link_.Qd += [derG]; _G.link_.valt[1] += dval
                         G.link_.Qd += [derG]; G.link_.valt[1] += dval
 
@@ -244,7 +213,7 @@ def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
                 if _fd==fd:
                     _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
                     if fcomp:
-                        if _val > aveG and val > aveG:
+                        if _val > G_aves[fd] and val > G_aves[fd]:
                             if sub.n:  # sub is ptuple
                                 dsub = op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
                             else:  # sub is pH
@@ -282,6 +251,7 @@ def op_parH(_parH, parH, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
 
 def op_ptuple(_ptuple, ptuple, fcomp, fd=0, fneg=0):  # may be ptuple, vertuple, or ext
 
+    aveG = G_aves[fd]
     if fcomp:
         dtuple=CQ(n=_ptuple.n)  # + ptuple.n / 2: average n?
         rn = _ptuple.n/ptuple.n  # normalize param as param*rn for n-invariant ratio: _param/ param*rn = (_param/_n)/(param/n)
@@ -356,7 +326,7 @@ def sum2graph_(graph_, fd):  # sum node and link params into graph, derH in agg+
 
     Graph_ = []  # Cgraphs
     for graph in graph_:  # CQs
-        if graph.valt[fd] < aveG:  # form graph if val>min only
+        if graph.valt[fd] < G_aves[fd]:  # form graph if val>min only
             continue
         Graph = Cgraph(pH=deepcopy(graph.Q[0].pH))
         Link_ = []

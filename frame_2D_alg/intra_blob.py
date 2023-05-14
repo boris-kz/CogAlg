@@ -11,7 +11,7 @@ import numpy as np
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
 from itertools import zip_longest
-from frame_2D_alg.vectorize_edge_blob.comp_slice import comp_slice_root
+from frame_2D_alg.vectorize_edge_blob.root import vectorize_root
 
 # filters, All *= rdn:
 ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different
@@ -43,7 +43,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                 if blob.G * (1/blob.Ga) > AveB * pcoef:  # value of comp_slice_blob is proportional to angle stability?
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
                     blob.prior_forks += 'p'
-                    comp_slice_root(blob, verbose=verbose)
+                    vectorize_root(blob, verbose=verbose)
                     if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs += [blob]
             else:
                 ext_dert__, ext_mask__ = extend_dert(blob)  # dert__+= 1: cross-comp in larger kernels
@@ -91,12 +91,12 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 
 
 def cluster_fork_recursive(blob, spliced_layers, new_dert__, sign__, new_mask__, verbose, render, fBa):
+
     fork = 'a' if fBa else 'r'
-    if verbose:
-        print('fork:', blob.prior_forks + fork)
+    if verbose: print('fork:', blob.prior_forks + fork)
     # form sub_blobs:
     sub_blobs, idmap, adj_pairs = \
-        flood_fill(new_dert__, sign__, prior_forks=blob.prior_forks + fork, verbose=False, mask__=new_mask__)
+        flood_fill(new_dert__, sign__, prior_forks=blob.prior_forks + fork, verbose=verbose, mask__=new_mask__)
     '''
     adjust per average sub_blob, depending on which fork is weaker, or not taken at all:
     sub_blob.rdn += 1 -|+ min(sub_blob_val, alt_blob_val) / max(sub_blob_val, alt_blob_val):

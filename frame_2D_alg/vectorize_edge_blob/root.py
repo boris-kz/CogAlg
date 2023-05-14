@@ -1,7 +1,17 @@
 # warnings.filterwarnings('error')
 # import warnings  # to detect overflow issue, in case of infinity loop
+from itertools import zip_longest
+import sys
+import numpy as np
+from copy import copy, deepcopy
+from .classes import Cptuple, CP, CPP, CderP
+from .filters import ave, ave_g, ave_ga, ave_rotate
+from .comp_slice import comp_slice, comp_angle
+from .agg_convert import agg_recursion_eval
+from .sub_recursion import sub_recursion_eval
+
 '''
-Comp_slice is a terminal fork of intra_blob.
+Vectorize is a terminal fork of intra_blob.
 -
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -25,30 +35,19 @@ This process is a reduced-dimensionality (2D->1D) version of cross-comp and clus
 As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
 (likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
 '''
-import sys
-import numpy as np
-from itertools import zip_longest
-from copy import copy
-
-from .classes import CQ, Cptuple, CP, CderP, CPP
-from .filters import (
-    aves, vaves, PP_vars, PP_aves,
-    ave_inv, ave, ave_g, ave_ga,
-    flip_ave, flip_ave_FPP,
-    div_ave,
-    ave_rmP, ave_ortho, aveB, ave_dI, ave_M, ave_Ma, ave_G, ave_Ga, ave_L,
-    ave_x, ave_dx, ave_dy, ave_daxis, ave_dangle, ave_daangle,
-    ave_mval, ave_mPP, ave_dPP, ave_splice,
-    ave_nsub, ave_sub, ave_agg, ave_overlap, ave_rotate,
-    med_decay,
-)
-from .comp_slice import comp_slice
 
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    slice_blob(blob, verbose=False)  # form 2D array of Ps: horizontal blob slices in dert__
-    rotate_P_(blob)  # reform Ps around centers along G, sides may overlap
-    comp_slice(blob, verbose=verbose)  # scan rows top-down, comp y-adjacent, x-overlapping Ps to form derPs
+    slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
+    # default?
+    rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
+    # conditional?
+    comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # re compare PPs, cluster in graphs:
+    for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):  # derH, fds per PP
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            sub_recursion_eval(blob, PP_, fd=fd)  # intra PP
+            agg_recursion_eval(blob, copy(PP_), ifd=fd)  # cross PP, Cgraph conversion doesn't replace PPs?
 
 '''
 this is too involved for initial Ps, most of that is only needed for final rotated Ps?
@@ -184,9 +183,8 @@ def form_rdert(rx,ry, dert__t, mask__):
         ptuple += [param]
     return ptuple
 
-'''
-replace rotate_P_ with directly forming axis-orthogonal Ps:
-'''
+
+# slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
 def slice_blob_ortho(blob):
 
     P_ = []
@@ -209,4 +207,71 @@ def slice_blob_ortho(blob):
             else:
                 pass  # add recursive slice_blob
 
+
+def append_P(P__, P):  # pack P into P__ in top down sequence
+
+    current_ys = [P_[0].y0 for P_ in P__]  # list of current-layer seg rows
+    if P.y0 in current_ys:
+        if P not in P__[current_ys.index(P.y0)]:
+            P__[current_ys.index(P.y0)].append(P)  # append P row
+    elif P.y0 > current_ys[0]:  # P.y0 > largest y in ys
+        P__.insert(0, [P])
+    elif P.y0 < current_ys[-1]:  # P.y0 < smallest y in ys
+        P__.append([P])
+    elif P.y0 < current_ys[0] and P.y0 > current_ys[-1]:  # P.y0 in between largest and smallest value
+        for i, y in enumerate(current_ys):  # insert y if > next y
+            if P.y0 > y: P__.insert(i, [P])  # PP.P__.insert(P.y0 - current_ys[-1], [P])
+
+
+def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP | =3: P is CderPP | =4: P is CaggPP
+
+    if not Ptype:  # assign Ptype based on instance type if no input type is provided
+        if isinstance(P, CPP):     Ptype = 2
+        elif isinstance(P, CderP): Ptype = 1
+        else:                      Ptype = 0  # CP
+
+    uplink_layers, downlink_layers = P.uplink_layers, P.downlink_layers  # local copy of link layers
+    P.uplink_layers, P.downlink_layers = [], []  # reset link layers
+    roott = P.roott  # local copy
+    P.roott = [None, None]
+    if Ptype == 1:
+        P_derP, _P_derP = P.P, P._P  # local copy of derP.P and derP._P
+        P.P, P._P = None, None  # reset
+    elif Ptype == 2:
+        mseg_levels, dseg_levels = P.mseg_levels, P.dseg_levels
+        P__ = P.P__
+        P.mseg_levels, P.dseg_levels, P.P__ = [], [], []  # reset
+    elif Ptype == 3:
+        PP_derP, _PP_derP = P.PP, P._PP  # local copy of derP.P and derP._P
+        P.PP, P._PP = None, None  # reset
+    elif Ptype == 4:
+        gPP_, cPP_ = P.gPP_, P.cPP_
+        mlevels, dlevels = P.mlevels, P.dlevels
+        P.gPP_, P.cPP_, P, P.mlevels, P.dlevels = [], [], [], []  # reset
+
+    new_P = deepcopy(P)  # copy P with empty root and link layers, reassign link layers:
+    new_P.uplink_layers += copy(uplink_layers)
+    new_P.downlink_layers += copy(downlink_layers)
+
+    # shallow copy to create new list
+    P.uplink_layers, P.downlink_layers = copy(uplink_layers), copy(downlink_layers)  # reassign link layers
+    P.roott = roott  # reassign root
+    # reassign other list params
+    if Ptype == 1:
+        new_P.P, new_P._P = P_derP, _P_derP
+        P.P, P._P = P_derP, _P_derP
+    elif Ptype == 2:
+        P.mseg_levels, P.dseg_levels = mseg_levels, dseg_levels
+        new_P.P__ = copy(P__)
+        new_P.mseg_levels, new_P.dseg_levels = copy(mseg_levels), copy(dseg_levels)
+    elif Ptype == 3:
+        new_P.PP, new_P._PP = PP_derP, _PP_derP
+        P.PP, P._PP = PP_derP, _PP_derP
+    elif Ptype == 4:
+        P.gPP_, P.cPP_ = gPP_, cPP_
+        P.roott = roott
+        new_P.gPP_, new_P.cPP_ = [], []
+        new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
+
+    return new_P
 

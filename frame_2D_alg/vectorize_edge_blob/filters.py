@@ -22,17 +22,22 @@ ave_daxis = 2
 ave_dangle = 2  # vertical difference between angles
 ave_daangle = 2
 ave_mval = ave_dval = 10  # should be different
+vaves = [ave_mval, ave_dval]
+ave_P = 10
 ave_mPP = 10
 ave_dPP = 10
+PP_aves = [ave_mPP, ave_dPP]
+ave_Gm = 10
+ave_Gd = 10
+G_aves = [ave_Gm, ave_Gd]
+
 ave_splice = 10
 ave_nsub = 1
 ave_sub = 2  # cost of calling sub_recursion and looping
 ave_agg = 3  # cost of agg_recursion
 ave_overlap = 10
-med_decay = .5
+ave_distance = 3
+med_decay = .5  # decay of induction per med layer
 PP_vars = ["I", "M", "Ma", "axis", "angle", "aangle", "G", "Ga", "x", "L"]
 aves = [ave_dI, ave_M, ave_Ma, ave_daxis, ave_dangle, ave_daangle, ave_G, ave_Ga, ave_dx, ave_L, ave_mval, ave_dval]
-vaves = [ave_mval, ave_dval]
-PP_aves = [ave_mPP, ave_dPP]
 ave_rotate = 10
-ave_P = 10
