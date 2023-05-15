@@ -5,12 +5,12 @@ from .classes import CderP, CPP
 from .filters import ave, aves, vaves, PP_vars, ave_dangle, ave_daangle,med_decay, aveB
 
 '''
-comp_slice traces blob axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
+comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
 These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high internal match) blobs.
 (high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
 '''
 
-def comp_slice(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
+def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
     P__ = blob.P__
     _P_ = P__[0]  # higher row
@@ -18,7 +18,7 @@ def comp_slice(blob, verbose=False):  # always angle blob, composite dert core p
         for P in P_:
             link_,link_m,link_d = [],[],[]  # empty in initial Ps
             Valt = [0,0]; Rdnt = [0,0]
-            DerH = [[],[]]
+            DerH = [[[],[]]]
             for _P in _P_:  # test for x overlap(_P,P) in 8 directions, derts are positive in all Ps:
                 _L = len(_P.dert_); L = len(P.dert_)
                 if (P.x0 - 1 < _P.x0 + _L) and (P.x0 + L > _P.x0):
@@ -26,8 +26,8 @@ def comp_slice(blob, verbose=False):  # always angle blob, composite dert core p
                 elif (P.x0 + L) < _P.x0:
                     break  # no xn overlap, stop scanning lower P_
             if link_:
-                P.derH=[[DerH]]  # single [Mtuple, Dtuple] here
-                P.link_=link_; P.link_t=[link_m,link_d]; P.valt=Valt; P.rdnt = Rdnt
+                P.derH=[DerH]  # single [Mtuple, Dtuple] here
+                P.link_=link_; P.link_t=[link_m,link_d]; P.valt=Valt; P.rdnt=Rdnt
         _P_ = P_
     PPm_,PPd_ = form_PP_t(P__, base_rdn=2)
     blob.PPm_, blob.PPd_  = PPm_, PPd_
@@ -151,8 +151,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 
     return PP
 
-
-def sum_derH(DerH, derH):  # derH is layers, not selective here. Sum both forks in each node, mtuple is for future param select
+def sum_derH(DerH, derH, fd=2):  # derH is layers, not selective here. Sum mtuple is for future param select
 
     for Layer, layer in zip_longest(DerH, derH, fillvalue=None):
         if layer != None:
@@ -160,12 +159,12 @@ def sum_derH(DerH, derH):  # derH is layers, not selective here. Sum both forks 
                 for Vertuple, vertuple in zip_longest(Layer, layer, fillvalue=None):  # vertuple is [mtuple, dtuple]
                     if vertuple != None:
                         if Vertuple != None:
-                            sum_vertuple(Vertuple, vertuple)
+                            if fd==2: sum_vertuple(Vertuple, vertuple)  # not fork-selective
+                            else: sum_tuple(Vertuple[fd], vertuple[fd])
                         else:
                             Layer += [deepcopy(vertuple)]
             else:
                 DerH += [deepcopy(layer)]
-
 
 def sum_vertuple(Vertuple, vertuple):  # [mtuple,dtuple]
 
@@ -196,46 +195,47 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
             Par += (-par if fneg else par)
         setattr(Ptuple, pname, Par)
 
-    Ptuple.n += 1
+    Ptuple.n += 1  # not needed?
 
 
-def comp_P(_P,P, link_,link_m,link_d, Valt, Rdnt, DerH, fd, derP=None, DerLay=None):  #  last two if der+
+def comp_P(_P,P, link_,link_m,link_d, Valt, Rdnt, DerH, fd=0, derP=None, DerLay=None):  #  last two if der+
 
-    # compare last layer only, lower layers have already been compared forming derP.derH
+    # compare last layer only, lower layers of _P,P have already been compared forming derP.derH
     if fd:
         # der+: extend old link
         derLay=[]  # new derP layer
         Mval,Dval, Mrdn,Drdn = 0,0,0,0
-        for i, (_vertuple, vertuple) in enumerate(zip_longest(_P.derH[-1], P.derH[-1])):  # last Lay of any length
+        # compare last Lay of any length:
+        for i, (_vertuple, vertuple) in enumerate(zip_longest(_P.derH[-1], P.derH[-1])):
             mtuple, dtuple = comp_dtuple(_vertuple[1], vertuple[1], rn=len(_P.link_t[1])/len(P.link_t[1]))
             if DerLay:
                 sum_tuple(DerLay[i][0],mtuple); sum_tuple(DerLay[i][1],dtuple)
             else:
-                DerLay += [copy(mtuple),copy(dtuple)]
+                DerLay += [[deepcopy(mtuple), deepcopy(dtuple)]]
             derLay += [[mtuple, dtuple]]
             mval = sum(dtuple); dval = sum(dtuple)
-            mrdn = 1+dval>mval; drdn = 1+(not mrdn)  # define per par?
+            mrdn = 1+(dval>mval); drdn = 1+(1-mrdn)  # define per par?
             Mval+=mval; Dval+=dval
             Mrdn+=mrdn; Drdn+=drdn
-        derP.derH += [derLay]; derP.fds+=[fd]
-        derP.valt[0]+=Mval; derP.valt[1]+=Dval; derP.rdnt[0]+=Mrdn; derP.rdnt[1]+=Drdn
+        derP.fds+=[fd]; derP.valt[0]+=Mval; derP.valt[1]+=Dval; derP.rdnt[0]+=Mrdn; derP.rdnt[1]+=Drdn
     else:
         # rng+: add new link
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple)
         Mval = sum(mtuple); Dval = sum(dtuple)
-        Mrdn = 1+Dval>Mval; Drdn = 1+(not Mrdn)
+        Mrdn = 1+(Dval>Mval); Drdn = 1+(1-Mrdn)
         derP = CderP(derH=[[[mtuple,dtuple]]], fds=P.fds+[fd], valt=[Mval,Dval],rdnt=[Mrdn,Drdn], P=P,_P=_P,x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
 
     link_ += [derP]  # all links
     if Mval > aveB*Mrdn:
         link_m+=[derP]; Valt[0]+=Mval; Rdnt[0]+=Mrdn  # +ve links, fork selection in form_PP_t
-        # not sure:
-        if fd: sum_derH(DerH, derP.derH, fd)  # old layers, both forks or fd only: update sum_derH?
-        else: sum_tuple(DerH[0], mtuple)  # Mtuple only?
+        if fd: sum_derH(DerH, derP.derH, fd=0)  # sum fork of old layers
+        else: sum_tuple(DerH[0][0], mtuple)
     if Dval > aveB*Drdn:
         link_d+=[derP]; Valt[1]+=Dval; Rdnt[1]+=Drdn
-        if fd: sum_derH(DerH, derP.derH, fd)  # old layers, both forks or fd only?
-        else: sum_tuple(DerH[1], dtuple)  # Dtuple only?
+        if fd: sum_derH(DerH, derP.derH, fd=1)
+        else: sum_tuple(DerH[0][1], dtuple)
+
+    if fd: derP.derH += [derLay]  # DerH must be summed above with old derP.derH
 
 
 def comp_dtuple(_ituple, ituple, rn):

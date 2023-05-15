@@ -21,15 +21,15 @@ ave_dy = 5
 ave_daxis = 2
 ave_dangle = 2  # vertical difference between angles
 ave_daangle = 2
+
 ave_mval = ave_dval = 10  # should be different
 vaves = [ave_mval, ave_dval]
-ave_P = 10
-ave_mPP = 10
-ave_dPP = 10
-PP_aves = [ave_mPP, ave_dPP]
-ave_Gm = 10
-ave_Gd = 10
-G_aves = [ave_Gm, ave_Gd]
+ave_Pm = ave_Pd = 10
+P_aves = [ave_Pm,ave_Pd]
+ave_PPm = ave_PPm = 10
+PP_aves = [ave_PPm,ave_PPm]
+ave_Gm = ave_Gd = 10
+G_aves = [ave_Gm,ave_Gd]
 
 ave_splice = 10
 ave_nsub = 1

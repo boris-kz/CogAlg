@@ -39,9 +39,9 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
-    # default?
+    # if Daxis?:
     rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
-    # conditional?
+    # if sum P.M + P.Ma?:
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # re compare PPs, cluster in graphs:
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):  # derH, fds per PP
@@ -123,8 +123,7 @@ def rotate_P(P, dert__t, mask__, yn, xn):
     rx=xcenter-dx; ry=ycenter-dy; rdert=1  # to start while:
     while rdert and rx>=0 and ry>=0 and np.ceil(ry)<yn:
         rdert = form_rdert(rx,ry, dert__t, mask__)
-        # terminate the sequence if dert is outside the blob (masked or out of bound)
-        if rdert is None: break
+        if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_.insert(0, rdert)
         rx += dx; ry += dy  # next rx, ry
     P.x0 = rx+dx; P.y0 = ry+dy  # revert to leftmost
@@ -132,8 +131,7 @@ def rotate_P(P, dert__t, mask__, yn, xn):
     rx=xcenter+dx; ry=ycenter+dy; rdert=1  # to start while:
     while rdert and ry>=0 and np.ceil(rx)<xn and np.ceil(ry)<yn:
         rdert = form_rdert(rx,ry, dert__t, mask__)
-        # terminate the sequence if dert is outside the blob (masked or out of bound)
-        if rdert is None: break
+        if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]
         rx += dx; ry += dy  # next rx,ry
     # form rP:
@@ -160,8 +158,7 @@ def form_rdert(rx,ry, dert__t, mask__):
     y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
     y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
 
-    try:
-        # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
+    try:  # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
         # approximation, square of rpixel is rotated, won't fully match not-rotated derts
         mask = mask__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
              + mask__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
@@ -173,7 +170,7 @@ def form_rdert(rx,ry, dert__t, mask__):
         mask = 1
     if mask:
         return None
-    # if rdert is still inside the blob, return it
+    # return rdert if inside the blob
     ptuple = []
     for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
         param = dert__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
