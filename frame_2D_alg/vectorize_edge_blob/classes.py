@@ -31,7 +31,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = lambda: Cptuple()  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
-    derH = lambda: [[[[],[]]]]  # 1vertuple / 1layer in comp_slice, extend in der+
+    derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
     valt = lambda: [0,0]  # of fork links, represented in derH
     rdnt = lambda: [1,1]
@@ -73,24 +73,19 @@ class CPP(CderP):
 
     ptuple = lambda: Cptuple()  # summed P__ ptuples, = 0th derLay
     P__ = list  # 2D array of nodes, may be sub-PPs
-    derH = lambda: [[[[],[]]]]  # 1vertuple / 1layer in comp_slice, extend in der+
+    derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # fd per derLay
-    valt = lambda: [0,0]  # summed fork links vals
-    rdnt = lambda: [1,1]  # recursion count + Rdn / nderPs + mrdn + uprdn if branch overlap?
-    Rdn = int  # for accumulation only?
+    valt = lambda: [0,0]  # link Vals
+    rdnt = lambda: [1,1]  # link Rdns
+    Rdn = int  # for accumulation only? or recursion count?
     rng = lambda: 1
-    nval = int  # of links to alt PPs?
-    alt_rdn = int  # overlapping redundancy between core and edge
-    alt_PP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
-    altuple = list  # summed from alt_PP_, sub comp support, agg comp suppression?
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
-    fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
-    fdiv = NoneType
+    fdiv = NoneType  # if div_comp?
     mask__ = bool
     link_ = list  # all links summed from Ps
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
-    cPP_ = list  # rdn reps in other PPPs, to eval and remove
+    cPP_ = list  # rdn reps in other PPPs, to eval and remove?
 
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
@@ -101,7 +96,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     '''
     G = lambda: None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     root = lambda: None  # root graph or derH G, element of ex.H[-1][fd]
-    pH = lambda: CQ()  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
+    pH = list  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+, lev/sub+?  subH if derG
     H = list  # replace with node_ per pH[i]? down-forking tree of Levs: slice of nodes
     # uH: up-forking Levs if mult roots
     node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs

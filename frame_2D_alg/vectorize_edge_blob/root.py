@@ -44,10 +44,12 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
     # if sum P.M + P.Ma?:
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # re compare PPs, cluster in graphs:
-    for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):  # derH, fds per PP
+    for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
+        # extend derH, fds / PP, no feedback: no derH, valt in blob?
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            sub_recursion_eval(blob, PP_, fd=fd)  # intra PP
-            agg_recursion_eval(blob, copy(PP_), ifd=fd)  # cross PP, Cgraph conversion doesn't replace PPs?
+            sub_recursion_eval(blob, PP_, fd=fd)  # intra PP,
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):  # adjusted by sub+, ave*agg_coef?
+            agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
 '''
 this is too involved for initial Ps, most of that is only needed for final rotated Ps?
@@ -62,11 +64,10 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     if verbose: print("Converting to image...")
 
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple slices -> Ps:
+        if verbose: print(f"\rConverting to image... Processing line {y + 1}/{height}", end=""); sys.stdout.flush()
         P_ = []
-        _mask = True  # mask the cell before 1st dert
+        _mask = True  # mask -1st dert
         for x, (dert, mask) in enumerate(zip(dert_, mask_)):
-            if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
-
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
@@ -92,6 +93,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             P_ += [CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
         P__ += [P_]
 
+    if verbose: print("\r", end="")
     blob.P__ = P__
     return P__
 

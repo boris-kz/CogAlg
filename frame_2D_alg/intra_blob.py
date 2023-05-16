@@ -8,10 +8,11 @@
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
 '''
 import numpy as np
+from itertools import zip_longest
+
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
-from itertools import zip_longest
-from frame_2D_alg.vectorize_edge_blob.root import vectorize_root
+from vectorize_edge_blob import vectorize_root
 
 # filters, All *= rdn:
 ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different
@@ -43,8 +44,8 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                 if blob.G * (1/blob.Ga) > AveB * pcoef:  # value of comp_slice_blob is proportional to angle stability?
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
                     blob.prior_forks += 'p'
+                    if verbose: print('fork: p')  # if render and blob.A < 100: deep_blobs += [blob]
                     vectorize_root(blob, verbose=verbose)
-                    if verbose: print('\nslice_blob fork\n')  # if render and blob.A < 100: deep_blobs += [blob]
             else:
                 ext_dert__, ext_mask__ = extend_dert(blob)  # dert__+= 1: cross-comp in larger kernels
                 ''' 

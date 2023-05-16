@@ -161,7 +161,8 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
     if mask__ is not None:
         idmap[mask__] = EXCLUDED_ID
     if verbose:
-        step = 100 / height / width  # progress % percent per pixel
+        n_masked = 0 if mask__ is None else mask__.sum()
+        step = 100 / (height * width - n_masked)  # progress % percent per pixel
         progress = 0.0; print(f"\rClustering... {round(progress)} %", end="");  sys.stdout.flush()
     blob_ = []
     adj_pairs = set()
@@ -234,7 +235,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                     blob.Ga = (blob.Cos_da0 + 1) + (blob.Cos_da1 + 1)  # +1 for all positives
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
-    if verbose: print("")
+    if verbose: print("\r", end="")
 
     return blob_, idmap, adj_pairs
 

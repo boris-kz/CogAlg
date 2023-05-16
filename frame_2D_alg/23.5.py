@@ -323,3 +323,11 @@ def comp_P(_P,P, Mtuple, Dtuple, link_,link_m,link_d, Valt, Rdnt, fd, derP=None,
         link_d+=[derP]; Valt[1]+=dval; Rdnt[1]+=drdn
         sum_tuple(Dtuple, dtuple)
         if fd: sum_tuple(Dt0, derP.derH[0][0][1])
+
+'''
+    nvalt = int  # of links to alt PPs?
+    alt_rdn = int  # overlapping redundancy between core and edge
+    alt_PP_ = list  # adjacent alt-fork PPs per PP, from P.roott[1] in sum2PP
+    altuple = list  # summed from alt_PP_, sub comp support, agg comp suppression?
+    fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
+'''

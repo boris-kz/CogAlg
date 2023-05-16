@@ -223,6 +223,7 @@ def comp_P(_P,P, link_,link_m,link_d, Valt, Rdnt, DerH, fd=0, derP=None, DerLay=
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple)
         Mval = sum(mtuple); Dval = sum(dtuple)
         Mrdn = 1+(Dval>Mval); Drdn = 1+(1-Mrdn)
+        # replace with greyscale rdn: Dval/Mval?
         derP = CderP(derH=[[[mtuple,dtuple]]], fds=P.fds+[fd], valt=[Mval,Dval],rdnt=[Mrdn,Drdn], P=P,_P=_P,x0=_P.x0,y0=_P.y0,L=len(_P.dert_))
 
     link_ += [derP]  # all links

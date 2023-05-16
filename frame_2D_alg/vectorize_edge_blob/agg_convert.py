@@ -8,26 +8,25 @@ from .filters import PP_vars, PP_aves, ave_nsub, ave_agg
 
 # move here temporary, for debug purpose
 # not fully updated
-def agg_recursion_eval(blob, PP_, ifd):
+def agg_recursion_eval(blob, PP_, fd):
 
     fseg = isinstance(blob, CPP)
-
     for i, PP in enumerate(PP_):
-       converted_graph  = PP2graph(PP, fseg=fseg, ifd=ifd)  # convert PP to graph
-       PP_[i] = converted_graph
+        converted_graph  = PP2graph(PP, fseg=fseg, ifd=fd)  # convert PP to graph
+        PP_[i] = converted_graph
     if fseg:
-        converted_blob = PP2graph(blob, fseg=fseg, ifd=ifd)  # convert root to graph (root default fd = 1?)
+        converted_blob = PP2graph(blob, fseg=fseg, ifd=fd)  # convert root to graph (root default fd = 1?)
         for PP in PP_: PP.root = converted_blob
     else:
         converted_blob = blob2graph(blob, fseg=fseg)  # convert root to graph
 
-    Val = converted_blob.valt[ifd]
-    fork_rdnt = [1+(converted_blob.valt[ifd] > converted_blob.valt[1-ifd]), 1+(converted_blob.valt[1-ifd] > converted_blob.valt[ifd])]
+    Val = converted_blob.valt[fd]
+    fork_rdnt = [1+(converted_blob.valt[fd] > converted_blob.valt[1-fd]), 1+(converted_blob.valt[1-fd] > converted_blob.valt[fd])]
 
-    if (Val > PP_aves[ifd] * ave_agg * (converted_blob.rdnt[fd]+1) * fork_rdnt[fd]) \
+    if (Val > PP_aves[fd] * ave_agg * (converted_blob.rdnt[fd]+1) * fork_rdnt[fd]) \
         and len(PP_) > ave_nsub : # and converted_blob[0].alt_rdn < ave_overlap:
-        converted_blobt[fd].pH.rdnt[fd] += 1  # estimate
-        agg_recursion(converted_blobt[fd], fseg=fseg)
+        converted_blob.rdnt[fd] += 1  # estimate
+        agg_recursion(converted_blob, fseg=fseg)
 
 # old
 def frame2graph(frame, fseg, Cgraph):  # for frame_recursive
