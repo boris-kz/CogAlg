@@ -72,16 +72,19 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     ptuple = lambda: Cptuple()  # summed P__ ptuples, = 0th derLay
-    P__ = list  # 2D array of nodes, may be sub-PPs
     derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
-    fds = list  # fd per derLay
+    # pack in rngH?
+    aggH = list  # nested hierarchy from agg+, if any
+    fds = list  # fd per derLay or H if HH
     valt = lambda: [0,0]  # link Vals
     rdnt = lambda: [1,1]  # link Rdns
     Rdn = int  # for accumulation only? or recursion count?
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
+    fterm = int  # sub-comp was terminated
     fdiv = NoneType  # if div_comp?
     mask__ = bool
+    P__ = list  # 2D array of nodes: Ps or sub-PPs
     link_ = list  # all links summed from Ps
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
     roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
@@ -101,7 +104,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     # uH: up-forking Levs if mult roots
     node_ = list  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
     link_ = lambda: CQ()  # temporary holder for der+ node_, then unique links within graph?
-    fterm = lambda: 0  # G.node_ sub-comp was terminated
+    valt = lambda: [0,0]
+    rdnt = lambda: [1,1]
+    fterm = int  # node_ sub-comp was terminated
     rng = lambda: 1
     box = lambda: [0,0,0,0,0,0]  # y,x, y0,yn, x0,xn
     nval = int  # of open links: base alt rep

@@ -12,7 +12,7 @@ from itertools import zip_longest
 
 from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_r, comp_a
-from vectorize_edge_blob import vectorize_root
+from vectorize_edge_blob.root import vectorize_root
 
 # filters, All *= rdn:
 ave = 50   # cost / dert: of cross_comp + blob formation, same as in frame blobs, use rcoef and acoef if different
