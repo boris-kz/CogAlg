@@ -9,15 +9,15 @@ def sub_recursion_eval(root, PP_, fd):  # for PP or blob
 
     for PP in PP_:  # fd = _P.valt[1]+P.valt[1] > _P.valt[0]+_P.valt[0]  # if exclusive comp fork per latuple|vertuple?
         # fork val, rdn:
-        val = PP.valt[fd]; alt_val = sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
-        ave = PP_aves[fd] * (PP.rdnt[fd] + 1 + (alt_val > val))
-        if val > ave and len(PP.P__) > ave_nsub:
+        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P__) > ave_nsub:
             sub_recursion(PP, fd)  # comp_der | comp_rng in PPs -> param_layer, sub_PPs
+        else:
+            PP.fterm = 1
         if isinstance(root, CPP):
             for fd in 0,1:
                 root.valt[fd] += PP.valt[fd]; root.rdnt[fd] += PP.rdnt[fd]  # add rdn?
         else:  # root is Blob
-            if fd: root.G += sum([alt_PP.valt[fd] for alt_PP in PP.alt_PP_]) if PP.alt_PP_ else 0
+            if fd: root.G += PP.valt[1-fd]
             else:  root.M += PP.valt[fd]
 
 
@@ -27,18 +27,21 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
     PP.rdnt[fd] += PP.valt[fd] > PP.valt[1-fd]
     # link Rdn += PP rdn?
     cP__ = [copy(P_) for P_ in P__]
-    sub_PPm_, sub_PPd_ = form_PP_t(cP__, base_rdn=PP.rdnt[fd])
+    PP.P__ = [form_PP_t(cP__, base_rdn=PP.rdnt[fd])]  # P__ = [sub_PPm_, sub_PPd_]
 
-    for fd, sub_PP_ in enumerate([sub_PPm_, sub_PPd_]):
-        if PP.valt[fd] > ave * PP.rdnt[fd]:
-            sub_recursion_eval(PP, sub_PP_, fd=fd)
-        else:
-            feedback(PP, fd)  # update derH, valt, rdnt, add rngH: rng lays are not represented in derH?
+    for fd, sub_PP_ in enumerate(PP.P__):
+        for sub_PP in sub_PP_:
+            sub_PP.roott[fd] = PP
+        sub_recursion_eval(PP, sub_PP_, fd=fd)
+        if isinstance(PP.root, CPP) and all([node.fterm for node in sub_PP_]):  # not blob, forward was terminated in all nodes
+            feedback(PP, fd)  # update derH, valt, rdnt, append rngH with derH if fd==0
+        '''
         if PP.valt[fd] > ave * PP.rdnt[fd]:  # adjusted by sub+, ave*agg_coef?
             agg_recursion_eval(PP, copy(sub_PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
         else:
-            feedback(PP, fd)  # add aggH: levs of rngH( derH?
-
+            feedback(PP, fd)  # add aggH, if any: 
+        implicit nesting: rngH(derH / sub+fb, aggH(subH / agg+fb: subH is new order of rngH(derH?
+        '''
 
 # mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
 # __Ps in rng+ are mediated by PP.rng layers of _Ps:
@@ -88,19 +91,26 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
 def sum2PPP(qPPP, base_rdn, fd):  # sum PP_segs into PP
     pass
 
-# draft
+
 def feedback(root, fd):  # bottom-up update root.derH, breadth-first, separate for each fork?
 
     ave = G_aves[root.fds[-1]]
     fbV = ave+1
 
-    while root and fbV > ave:
-        if all([[node.fterm for node in root.node_]]):  # forward was terminated in all nodes
+    while isinstance(root,CPP) and fbV > ave:  # no fb to blob
+        # if sub+ is terminated in all nodes:
+        if all([[node.fterm for node in root.P__[fd]]]):
+            # derH->rngH after sub+, comp in agg+ only:
+            if isinstance(root.root, Cblob):
+                root.derH = [root.derH]  # init convert to rngH
+            elif not fd:
+                root.derH += []  # add rngLay
             root.fterm = 1
             fbval, fbrdn = 0,1
-            for node in root.node_:
-                for sub_node in node.node_:
-                    sum_derH(root.derH, sub_node.derH)  # node.derH is summed in root.derH in sum2PP?
+            for node in root.P__[fd]:
+                for sub_node in node.P__[fd]:
+                    # sum sub_node.derH into last rngLay only:
+                    sum_derH(root.derH[-1], sub_node.derH)  # root.derH += node.derH in sum2PP
                     fbval += sub_node.valt[fd]
                     fbrdn += sub_node.rdnt[fd]
             fbV = fbval/fbrdn

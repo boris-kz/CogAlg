@@ -41,14 +41,13 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
     slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
     # if Daxis?:
     rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
-    # if sum P.M + P.Ma?:
+    # if sum(P.M s + P.Ma s)?:
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # re compare PPs, cluster in graphs:
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
-        # extend derH, fds / PP, no feedback: no derH, valt in blob?
+        sub_recursion_eval(blob, PP_, fd=fd)  # intra PP
+        # no feedback to blob?
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            sub_recursion_eval(blob, PP_, fd=fd)  # intra PP,
-        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):  # adjusted by sub+, ave*agg_coef?
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
 '''
@@ -273,4 +272,3 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
         new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
 
     return new_P
-
