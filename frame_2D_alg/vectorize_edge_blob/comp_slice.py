@@ -179,7 +179,7 @@ def sum_tuple(Ptuple,ptuple, fneg=0):  # mtuple or dtuple
 
     for i, (Par, par) in enumerate(zip_longest(Ptuple, ptuple, fillvalue=None)):
         if par != None:
-            if Par:
+            if Par != None:
                 Ptuple[i] = Par + -par if fneg else par
             elif not fneg:
                 Ptuple += [par]

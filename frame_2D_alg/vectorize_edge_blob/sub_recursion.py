@@ -1,24 +1,19 @@
 from copy import copy, deepcopy
-import numpy as np
-from .filters import PP_aves, ave, ave_nsub, P_aves, G_aves
-from .classes import CP, CQ, CderP, CPP
+from .filters import PP_aves, ave_nsub, P_aves, G_aves
+from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_derH
-from .agg_convert import agg_recursion_eval
 
-def sub_recursion_eval(root, PP_, fd):  # for PP or blob
 
-    for PP in PP_:  # fd = _P.valt[1]+P.valt[1] > _P.valt[0]+_P.valt[0]  # if exclusive comp fork per latuple|vertuple?
-        # fork val, rdn:
+def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no rngH, valt,rdnt in blob?
+
+    for PP in PP_:
+        # fork val, rdn, no select per ptuple:
         if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P__) > ave_nsub:
-            sub_recursion(PP, fd)  # comp_der | comp_rng in PPs -> param_layer, sub_PPs
+            sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
         else:
             PP.fterm = 1
-        if isinstance(root, CPP):
-            for fd in 0,1:
-                root.valt[fd] += PP.valt[fd]; root.rdnt[fd] += PP.rdnt[fd]  # add rdn?
-        else:  # root is Blob
-            if fd: root.G += PP.valt[1-fd]
-            else:  root.M += PP.valt[fd]
+            if all([[node.fterm for node in root.P__[fd]]]) and isinstance(root,CPP):  # not blob
+                feedback(PP, fd)  # always starts with PP.P__= CPs, updates root rngH, valt, rdnt
 
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
@@ -27,14 +22,12 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
     PP.rdnt[fd] += PP.valt[fd] > PP.valt[1-fd]
     # link Rdn += PP rdn?
     cP__ = [copy(P_) for P_ in P__]
-    PP.P__ = [form_PP_t(cP__, base_rdn=PP.rdnt[fd])]  # P__ = [sub_PPm_, sub_PPd_]
+    PP.P__ = form_PP_t(cP__,base_rdn=PP.rdnt[fd])  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
         for sub_PP in sub_PP_:
-            sub_PP.roott[fd] = PP
+            sub_PP.root = PP
         sub_recursion_eval(PP, sub_PP_, fd=fd)
-        if isinstance(PP.root, CPP) and all([node.fterm for node in sub_PP_]):  # not blob, forward was terminated in all nodes
-            feedback(PP, fd)  # update derH, valt, rdnt, append rngH with derH if fd==0
         '''
         if PP.valt[fd] > ave * PP.rdnt[fd]:  # adjusted by sub+, ave*agg_coef?
             agg_recursion_eval(PP, copy(sub_PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
@@ -88,32 +81,37 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
     return P__
 
 
-def sum2PPP(qPPP, base_rdn, fd):  # sum PP_segs into PP
-    pass
+# draft:
+def feedback(root, fd):  # bottom-up update root.rngH, breadth-first, separate for each fork?
 
+    fCP = 1  # bottom layer
+    VAL = 0; RDN = 1  # sum across layers
+    RngH, DerH = [],[]  # new rng|der lays, not in root.derH
+    root.derH = [root.derH]
 
-def feedback(root, fd):  # bottom-up update root.derH, breadth-first, separate for each fork?
+    while True:
+        root.fterm = 1
+        Val = 0; Rdn = 1
+        DerLay = []  # not in root.derH
+        for PP in root.P__[fd]:
+            if fCP:
+                for P_ in PP.P__:
+                    for P in P_:  # sum in root, PP was updated in sum2PP:
+                        sum_derH(DerLay, P.derH[-1]); Val += P.valt[fd]; Rdn += P.rdnt[fd]
+            else:  # sum in PP:
+                sum_derH(DerLay, PP.derH[-1]); Val += PP.valt[fd]; Rdn += PP.rdnt[fd]
+        DerH += [DerLay]
+        if fd:  # der+
+            root.derH[-1] += [DerLay]   # new der lay in last derH
+        else:  # rng+, derH->rngH:
+            root.derH += RngH if RngH else [DerH]  # append new rng lays or rng lay = terminated DerH?
+            RngH += [DerH]  # not sure; comp in agg+ only
 
-    ave = G_aves[root.fds[-1]]
-    fbV = ave+1
-
-    while isinstance(root,CPP) and fbV > ave:  # no fb to blob
-        # if sub+ is terminated in all nodes:
-        if all([[node.fterm for node in root.P__[fd]]]):
-            # derH->rngH after sub+, comp in agg+ only:
-            if isinstance(root.root, Cblob):
-                root.derH = [root.derH]  # init convert to rngH
-            elif not fd:
-                root.derH += []  # add rngLay
-            root.fterm = 1
-            fbval, fbrdn = 0,1
-            for node in root.P__[fd]:
-                for sub_node in node.P__[fd]:
-                    # sum sub_node.derH into last rngLay only:
-                    sum_derH(root.derH[-1], sub_node.derH)  # root.derH += node.derH in sum2PP
-                    fbval += sub_node.valt[fd]
-                    fbrdn += sub_node.rdnt[fd]
-            fbV = fbval/fbrdn
-            root = root.root
-        else:
+        root.valt[fd] += Val; root.rdnt[fd] += Rdn
+        VAL += Val; RDN += Rdn
+        root = root.root
+        fCP = 0  # higher layers
+        # continue while sub+ terminated in all nodes and root is not blob:
+        if VAL/RDN < G_aves[root.fds[-1]] or not isinstance(root,CPP) or not all([[node.fterm for node in root.P__[fd]]]):
             break
+        # locals are lost if not all nodes are terminated, they should be kept to accumulate for future terminated nodes?
