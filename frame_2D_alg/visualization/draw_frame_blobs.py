@@ -85,7 +85,7 @@ def visualize_blobs(frame, layer='r'):
         iy, ix = state.gradient_mask.nonzero()
 
         # Apply quiver
-        state.quiver = ax.quiver(ix, iy, dx_slice, dy_slice)
+        state.quiver = ax.quiver(ix, iy, dx_slice, -dy_slice)
 
     def update_img():
         update_gradient()

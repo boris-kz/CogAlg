@@ -1,4 +1,4 @@
-from frame_2D_alg.class_cluster import ClusterStructure, NoneType
+from class_cluster import ClusterStructure, NoneType
 
 class CQ(ClusterStructure):  # generic sequence or hierarchy
 
@@ -18,7 +18,6 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     I = int  # [m,d] in higher layers:
     M = int
     Ma = float
-    axis = lambda: [1, 0]  # ini dy=1,dx=0, old angle after rotation
     angle = lambda: [0, 0]  # in latuple only, replaced by float in vertuple
     aangle = lambda: [0, 0, 0, 0]
     G = float  # for comparison, not summation:
@@ -30,12 +29,12 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple = Cptuple  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), ?[n, val, x, L, A]?
+    ptuple = Cptuple  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
     derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
     valt = lambda: [0,0]  # of fork links, represented in derH
     rdnt = lambda: [1,1]
-    # n = lambda: 1
+    axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
     x0 = int
     y0 = int  # for vertical gap in PP.P__
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -79,7 +78,7 @@ class CPP(CderP):
     Rdn = int  # for accumulation or separate recursion count?
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
-    fterm = int  # sub-comp was terminated
+    # fterm = int  # sub-comp was terminated
     fdiv = NoneType  # if div_comp?
     mask__ = bool
     P__ = list  # 2D array of nodes: Ps or sub-PPs
@@ -87,6 +86,7 @@ class CPP(CderP):
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
     root = NoneType  # PPPm|PPPd containing this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove?
+    fb_ = lambda: [[[],[],0,1]]  # DerH,RngH,VAL,RDN: feedback accumulated across nodes
 
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
