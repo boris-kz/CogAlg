@@ -331,3 +331,41 @@ def comp_P(_P,P, Mtuple, Dtuple, link_,link_m,link_d, Valt, Rdnt, fd, derP=None,
     altuple = list  # summed from alt_PP_, sub comp support, agg comp suppression?
     fPPm = NoneType  # PPm if 1, else PPd; not needed if packed in PP_
 '''
+def feedback(root, fd, fb):  # bottom-up update root.rngH, breadth-first, separate for each fork?
+
+    DerLay, VAL, RDN = fb  # new rng|der lays, not in root.derH, summed across fb layers and nodes
+    while True:
+        Val = 0; Rdn = 1
+        DerLay = []  # not in root.derH
+        root.fterm = 1; root.derH = [root.derH]  # derH->rngH
+        for PP in root.P__[fd]:
+            [sum_vertuple(T,t) for T,t in zip(DerLay,PP.derH[-1])]; Val += PP.valt[fd]; Rdn += PP.rdnt[fd]
+        DerH += [DerLay]
+        if fd:  # der+
+            root.derH[-1] += [DerLay]   # or DerH?  new der lay in last derH
+        else:  # rng+
+            root.derH += RngH if RngH else [DerH]  # append new rng lays or rng lay = terminated DerH?
+            RngH += [DerH]  # not sure; comp in agg+ only
+
+        root.valt[fd] += Val; root.rdnt[fd] += Rdn
+        VAL += Val; RDN += Rdn
+        root = root.root
+        # continue while sub+ terminated in all nodes and root is not blob:
+        if not isinstance(root,CPP) or not all([[node.fterm for node in root.P__[fd]]]) or VAL/RDN < G_aves[root.fds[-1]]:
+            root.fb += [DerH, RngH, VAL, RDN]  # for future root termination.
+            break
+
+def comp_angle(_angle, angle):  # rn doesn't matter for angles
+
+    _Dy, _Dx = _angle
+    Dy, Dx = angle
+    _G = np.hypot(_Dy,_Dx); G = np.hypot(Dy,Dx)
+    sin = Dy / (.1 if G == 0 else G);     cos = Dx / (.1 if G == 0 else G)
+    _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
+    sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+
+    dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
+
+    return [mangle, dangle]

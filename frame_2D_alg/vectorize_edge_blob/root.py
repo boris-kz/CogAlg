@@ -104,7 +104,7 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
     yn, xn = dert__[0].shape[:2]
     for P_ in P__:
         for P in P_:
-            daxis = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
+            daxis = P.ptuple.angle[0] / P.ptuple.G  # dy: deviation from horizontal axis
             # recursive reform P along new G angle in blob.dert__:
             # P.daxis for future reval?
             while P.ptuple.G * abs(daxis) > ave_rotate:
@@ -114,35 +114,33 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
 def rotate_P(P, dert__t, mask__, yn, xn):
 
-    L = len(P.dert_)
-    rdert_ = [P.dert_[L//2]]  # init rotated dert_ with old central dert
-    ycenter = P.y0  # P center coords
-    xcenter = P.x0 + L//2
     sin = P.ptuple.angle[0] / P.ptuple.G
     cos = P.ptuple.angle[1] / P.ptuple.G
-    if cos < 0: sin,cos = -sin,-cos
-    # dx always >= 0, dy can be < 0
-    assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
-    P.axis = (sin,cos)  # last P angle
+    P.axis = (sin, cos)  # last P angle
+    if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
+    # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
+    y0,yn,x0,xn = P.box
+    ycenter = (y0+yn) //2; xcenter = (x0+xn) //2
+    rdert_ = []
     # scan left:
     rx=xcenter; ry=ycenter
     while True:  # terminating condition is in form_rdert()
         rdert = form_rdert(rx,ry, dert__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
-        rdert_ = [rdert] + rdert_   # add to left
+        rdert_[0].insert(rdert)  # append left
         rx-=cos; ry-=sin  # next rx,ry
-    P.x0 = rx; yleft = ry
+    x0 = rx; yleft = ry
     # scan right:
-    rx=xcenter; ry=ycenter
+    rx=xcenter+cos; ry=ycenter+sin  # center dert was included in scan left
     while True:
         rdert = form_rdert(rx,ry, dert__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
-        rdert_ += [rdert]
+        rdert_ += [rdert]  # append right
         rx+=cos; ry+=sin  # next rx,ry
-    P.y0 = min(yleft, ry) # P may go up-right or down-right
+    P.box = [min(yleft,ry), max(yleft,ry), x0, rx]  # P may go up-right or down-right
     # form rP:
-    # initialization:
-    rdert = rdert_[0]; _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    rdert = rdert_[0]  # initialization:
+    _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
     for rdert in rdert_[1:]:
         _, g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
@@ -178,19 +176,17 @@ def form_rdert(rx,ry, dert__t, mask__):
         mask__[y1, x1] * k1 +
         mask__[y2, x1] * k2 +
         mask__[y1, x2] * k3 +
-        mask__[y2, x2] * k4) / K
-
+        mask__[y2, x2] * k4
+           ) / K
     if round(mask):  # summed mask is fractional, round to 1|0
         return None  # return rdert if inside the blob
-    ptuple = []
-    for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
-        param = (
-            dert__[y1, x1] * k1 +
-            dert__[y2, x1] * k2 +
-            dert__[y1, x2] * k3 +
-            dert__[y2, x2] * k4) / K
-        ptuple += [param]
 
+    ptuple = [(dert__[y1, x1] * k1
+             + dert__[y2, x1] * k2
+             + dert__[y1, x2] * k3
+             + dert__[y2, x2] * k4
+             ) / K
+             for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
 
 

@@ -156,15 +156,20 @@ def sum_derH(DerH, derH, fd=2):  # derH is layers, not selective here. Sum mtupl
     for Layer, layer in zip_longest(DerH, derH, fillvalue=None):
         if layer != None:
             if Layer != None:
-                for Vertuple, vertuple in zip_longest(Layer, layer, fillvalue=None):  # vertuple is [mtuple, dtuple]
-                    if vertuple != None:
-                        if Vertuple != None:
-                            if fd==2: sum_vertuple(Vertuple, vertuple)  # not fork-selective
-                            else: sum_tuple(Vertuple[fd], vertuple[fd])
-                        else:
-                            Layer += [deepcopy(vertuple)]
+                sum_layer(Layer, layer, fd=2)
             else:
                 DerH += [deepcopy(layer)]
+
+def sum_layer(Layer, layer, fd=2):
+
+    for Vertuple, vertuple in zip_longest(Layer, layer, fillvalue=None):  # vertuple is [mtuple, dtuple]
+        if vertuple != None:
+            if Vertuple != None:
+                if fd==2: sum_vertuple(Vertuple, vertuple)  # not fork-selective
+                else: sum_tuple(Vertuple[fd], vertuple[fd])
+            else:
+                Layer += [deepcopy(vertuple)]
+
 
 def sum_vertuple(Vertuple, vertuple):  # [mtuple,dtuple]
 
@@ -251,14 +256,14 @@ def comp_dtuple(_ituple, ituple, rn):
 
 def comp_ptuple(_ptuple, ptuple):
 
-    mtuple, dtuple = [],[]  # in the order of ("I", "M", "Ma", "axis", "angle", "aangle","G", "Ga", "x", "L")
+    mtuple, dtuple = [],[]  # in the order of ("I", "M", "Ma", "angle", "aangle","G", "Ga", "x", "L")
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
     for pname, ave in zip(PP_vars, aves):
         _par = getattr(_ptuple, pname)
         par = getattr(ptuple, pname)
         if pname=="aangle": m,d = comp_aangle(_par, par)
-        elif pname in ("axis","angle"): m,d = comp_angle(_par, par)
+        elif pname == "angle": m,d = comp_angle(_par, par)
         else:
             if pname!="x": par*=rn  # normalize by relative accum count
             if pname=="x" or pname=="I": finv = 1
@@ -284,9 +289,8 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
     sin = Dy / (.1 if G == 0 else G);     cos = Dx / (.1 if G == 0 else G)
     _sin = _Dy / (.1 if _G == 0 else _G); _cos = _Dx / (.1 if _G == 0 else _G)
     sin_da = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-
-    dangle = np.arctan2(sin_da, cos_da)  # scalar, vertical difference between angles
+    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    dangle = sin_da
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
 
     return [mangle, dangle]
@@ -307,6 +311,7 @@ def comp_aangle(_aangle, aangle):
     gay = np.arctan2((-sin_dda0 - sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in y?
     gax = np.arctan2((-sin_dda0 + sin_dda1), (cos_dda0 + cos_dda1))  # gradient of angle in x?
 
+    # daangle = sin_dda0 + sin_dda1?
     daangle = np.arctan2(gay, gax)  # diff between aangles, probably wrong
     maangle = ave_daangle - abs(daangle)  # inverse match, not redundant as summed
 

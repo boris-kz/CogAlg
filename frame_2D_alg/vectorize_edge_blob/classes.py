@@ -35,8 +35,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     valt = lambda: [0,0]  # of fork links, represented in derH
     rdnt = lambda: [1,1]
     axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
-    x0 = int
-    y0 = int  # for vertical gap in PP.P__
+    box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
     link_ = list  # all links
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
@@ -56,8 +55,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     _P = object  # higher comparand
     P = object  # lower comparand
     roott = lambda: [None,None]  # for der++
-    x0 = int
-    y0 = int
+    box = lambda: [0,0,0,0]  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
     L = int
     fdx = NoneType  # if comp_dx
 '''
