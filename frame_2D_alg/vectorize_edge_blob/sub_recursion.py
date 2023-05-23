@@ -5,7 +5,6 @@ from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_vertuple, sum_layer, sum_derH
 
 
-# draft:
 def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no rngH, valt,rdnt in blob?
 
     term = 1
@@ -15,33 +14,32 @@ def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no rngH, valt,
             term = 0
             sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
         else:
-            Ders=[0]  # init feedback from PP.P__ Ps, "0" means nesting depth = layer
+            Ders=[0,[]]  # init feedback from PP.P__ Ps, nesting depth=layer
             for P_ in PP.P__[1:]:  # no derH in top row
                 for P in P_:
-                    sum_layer(Ders, P.derH[-1])
+                    sum_layer(Ders[1], P.derH[-1])
             PP.derH = [PP.derH]  # derH->rngH
             if isinstance(root, CPP):
                 # exclude blob
-                if fd: root.derH[-1] += [Ders]  # append derLay in last rngLay
-                else:  root.derH += [[Ders]]  # append rngLay derH in root rngH
-                # extension of root derH:
+                if fd: root.derH[-1] += [Ders[1]]  # append derLay in last rngLay
+                else:  root.derH += [[Ders[1]]]  # append rngLay derH in root rngH
                 root.fb_ += [[Ders, PP.valt[fd], PP.rdnt[fd]]]  # from sum2PP
-
+                # to extend root.derH:
     if term and isinstance(root, CPP):
-        feedback(root, fd)  # upward recursive, eval forward only
+        feedback(root, fd)  # upward recursive, forward eval only
 
-# draft
-def feedback(root, fd):
+def feedback(root, fd):  # append new der layers to root
 
-    Ders=[]; Val=0; Rdn=0
-    for ders, val, rdn in root.fb_:
+    Val=0; Rdn=0; Ders = [0,[]]  # Ders = [nesting,feedback]
 
-        sum_parH(Ders, ders)  # Ders and ders are layer|derH|rngH, append Ders nesting level if missing?
+    while root.fb_:
+        ders, val, rdn = root.fb_.pop()
+        sum_ders(Ders[1],ders[1], Ders[0],ders[0], fd)  # Ders,ders are layer|derH|rngH, append Ders nesting if missing
         root.valt[fd] += val; root.rdnt[fd] += rdn
         Val += val; Rdn += rdn
 
     root.derH = [root.derH]  # derH->rngH
-    append_parH(root.derH, Ders)  # root.derH is layer)derH)rngH, Ders is layer|derH|rngH
+    sum_ders(root.derH,Ders[1], 2,Ders[0])  # root.derH is layer) derH) rngH, Ders is layer|derH|rngH
 
     if isinstance(root.root, CPP):
         root = root.root
@@ -49,10 +47,32 @@ def feedback(root, fd):
         if len(root.fb_) == len(root.P__[fd]):  # all nodes terminated, fed back to root.fb_
             feedback(root, fd)
     '''
-     PP.derH is layer) derH before feedback, but three-level nesting after feedback: layer) derH) rngH
-     Feedback dpars may have any of these nesting depths, incremented during prior feedback.
-     use sum_parH(root.derH, dpars), sum_parH(Dpars, dpars) with max nesting?
+     PP.derH: layer) derH before feedback, or layer) derH) rngH.. after feedback
+     fb Ders: Initial nesting is layer, incremented in recursive feedback.
     '''
+# draft
+def sum_ders(iDers, iders, Nest, nest, fd):  # nest: nesting depth of ders: 0 if layer, 1 if derH, 2 if rngH..
+
+    # equalize nesting:
+    while Nest > nest:  # sum in last element of Ders
+        Ders = Ders[-1]; Nest -= 1
+    while Nest < nest:  # add nesting to Ders
+        Ders[:] = [Ders]; Nest += 1
+    # draft, combine with equalize nesting?:
+    if fd:
+        Ders = iDers[-1]; ders=iders; Nest -= 1
+    else:
+        Ders = iDers; ders = [iders]; nest += 1
+
+    # sum or append ders in Ders, for deeper feedback:
+    for Der,der in zip_longest(Ders,ders, fillvalue=None):
+        if der != None:
+            if Der != None:
+                if nest==0: sum_vertuple(Der,der)
+                else: sum_ders(Der,der,Nest-1,nest-1, fd)
+            else:
+                Ders += [deepcopy(der)]
+
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
@@ -63,9 +83,9 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
     PP.P__ = form_PP_t(cP__,base_rdn=PP.rdnt[fd])  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
-        for sub_PP in sub_PP_:
-            sub_PP.root = PP
-        sub_recursion_eval(PP, sub_PP_, fd=fd)
+        if sub_PP_:  # der+ | rng+
+            for sub_PP in sub_PP_: sub_PP.root = PP
+            sub_recursion_eval(PP, sub_PP_, fd=fd)
         '''
         if PP.valt[fd] > ave * PP.rdnt[fd]:  # adjusted by sub+, ave*agg_coef?
             agg_recursion_eval(PP, copy(sub_PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
