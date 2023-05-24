@@ -32,8 +32,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     ptuple = Cptuple  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
     derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
     fds = list  # per derLay
-    valt = lambda: [0,0]  # of fork links, represented in derH
-    rdnt = lambda: [1,1]
+    # convert to valH, rdnH?
+    valH = lambda: [[0,0]]  # of fork links, represented in derH
+    rdnH = lambda: [[1,1]]
     axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -69,15 +70,13 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     ptuple = Cptuple  # summed P__ ptuples, = 0th derLay
-    derH = list  # 1vert)1lay in comp_slice, extend in der+, extend to rngH in feedback, no comp rngH till agg+
-    fds = list  # fd per derLay
-    valt = lambda: [0,0]  # link Vals
-    rdnt = lambda: [1,1]  # link Rdns
+    derH = list  # 1vert)1lay in comp_slice, extend in der+, extend to rngH in feedback if fb==0, no comp rngH till agg+
+    valH = lambda: [[0,0]]  # Valts map to derH
+    rdnH = lambda: [[1,1]]  # Rdnts map to derH
     Rdn = int  # for accumulation or separate recursion count?
+    fds = list  # fd per derLay
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
-    # fterm = int  # sub-comp was terminated
-    fdiv = NoneType  # if div_comp?
     mask__ = bool
     P__ = list  # 2D array of nodes: Ps or sub-PPs
     link_ = list  # all links summed from Ps
@@ -85,7 +84,7 @@ class CPP(CderP):
     root = NoneType  # PPPm|PPPd containing this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove?
     fb_ = list  # [[new_ders,val,rdn]]: [feedback per node]
-
+    # fdiv = NoneType  # if div_comp?
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
     ''' ext / agg.sub.derH:

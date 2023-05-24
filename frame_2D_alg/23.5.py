@@ -369,3 +369,25 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
     mangle = ave_dangle - abs(dangle)  # inverse match, not redundant as summed across sign
 
     return [mangle, dangle]
+
+def sum_ders(Fback, fback, fd):
+
+    if fd!=_fd:  # add nesting if switch between der+ and rng+ terminates last derH or rngH:
+        Ders = iDers; ders = [iders]; Nest = iNest; nest = inest+1
+    else:
+        Ders = iDers[-1]; ders=iders; Nest = iNest-1; nest = inest
+    # equalize nesting:
+    while Nest > nest:  # sum in last element of Ders
+        Ders = Ders[-1]; Nest -= 1
+    while Nest < nest:  # add nesting to Ders
+        Ders[:] = [Ders]; Nest += 1
+
+    # sum or append ders in Ders, for deeper feedback:
+    for Der,der in zip_longest(Ders,ders, fillvalue=None):
+        if der != None:
+            if Der != None:
+                if nest==0: sum_vertuple(Der,der)
+                else: sum_ders(Der,der,Nest-1,nest-1, fd)
+            else:
+                Ders += [deepcopy(der)]
+
