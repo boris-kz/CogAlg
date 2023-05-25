@@ -9,12 +9,12 @@ def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derH,valH,r
 
     term = 1
     for PP in PP_:
-        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P__) > ave_nsub:  # no select per ptuple
+        if PP.valH[-1][fd] > PP_aves[fd] * PP.rdnH[-1][fd] and len(PP.P__) > ave_nsub:  # no select per ptuple
             term = 0
             sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
         elif isinstance(root, CPP):
-            root.fd_ += [[PP.derH[-1], [fd], PP.valH[-1][fd], PP.rdnH[-1][fd]]]
-            # feed back last layer, added in sum2PP
+            root.fb_ += [[[PP.derH[-1]],[[fd]], PP.valH[-1][fd],PP.rdnH[-1][fd]]]  # [derH, fd_H, valH, rdnH]
+            # feedback last layer, added in sum2PP
     if term and isinstance(root, CPP):
         feedback(root, fd)  # upward recursive extend root.derH, forward eval only
 
@@ -23,42 +23,47 @@ def feedback(root, fd):  # append new der layers to root
 
     Fback = root.fb_.pop()  # init with 1st fback ders: derH, fds, valH, rdnH
     while root.fb_:
-        sum_ders(Fback, root.fb_.pop())  # sum fback in Fback, add Fback nesting if missing
-    # append Fback params to root params:
-    root.derH += Fback[0]
-    root.fds  += Fback[1]
-    root.valH += Fback[2]
-    root.rdnH += Fback[3]
-    if isinstance(root.root, CPP):
-        root = root.root
-        root.fb_ += [Fback]
-        if len(root.fb_) == len(root.P__[fd]):  # all nodes terminated, fed back to root.fb_
-            feedback(root, fd)
-    '''
-     PP.derH: layer) derH before feedback, indefinitely nested layer) derH) rngH... after feedback
-     fb Ders: append to root.derH, nesting is incremented in recursive feedback.
-    '''
-# draft
-def sum_ders(Fback, fback):  # sum or append fb in Fb, for deeper feedback:
+        sum_fback(Fback, root.fb_.pop())  # sum | append fback in Fback
+    derH,fd_H,valH,rdnH = Fback
+    # concat Fback param layers to root param layers:
+    root.derH+=derH; root.fd_H+=fd_H; root.valH+=valH; root.rdnH+=rdnH
 
-    DerH, Fds, ValH, RdnH = Fback
-    derH, fds, valH, rdnH = fback
-    while True:
-        for Lay, Fd, Val, Rdn, lay, fd, val, rdn in zip_longest(
-            DerH, Fds, ValH, RdnH, derH, fds, valH, rdnH, fillvalue=None):  # loop bottom-up,
-            # terminate summation at 1st None or Fd!=fd?
-            # not sure:
-            if lay != None and Lay != None and Fd==fd:
-                sum_layer(Lay,lay); Val+=val; Rdn+=rdn
-            # else append copy?
+    if isinstance(root.roott[fd], CPP):
+        root = root.roott[fd]
+        root.fb_ += [Fback]
+        if len(root.fb_) == len(root.P__[fd]):  # all nodes term, fed back to root.fb_
+            feedback(root, fd)
+            # derH=[1st layer] in sum2PP, deeper layers(forks appended by recursive feedback:
+
+# draft
+def sum_fback(Fback, fback):  # sum or append fb in Fb, for deeper feedback:
+
+    DerH, ValH, RdnH = Fback
+    derH, valH, rdnH = fback
+
+    for Lay, Valt, Rdnt, lay, valt, rdnt in zip_longest(
+        DerH, ValH, RdnH, derH, valH, rdnH, fillvalue=[]):  # loop bottom-up
+        if lay:
+            if Lay: # loop all possible forks: len=2^depth, but sparse: [] if no fback, no need for fd_H:
+                for i, (Fork,fork, Val,Rdn, val,rdn) in enumerate(zip(Lay,lay, Valt,valt, Rdnt,rdnt)):
+                    # all per fork, valt and rdnt here are actually lists, not pairs
+                    if Fork and fork:
+                        sum_layer(Fork, fork)
+                    else:
+                        Fork += fork  # stays empty if fork is empty
+                    fd = i>len(fork)/2  # sum left|right half of forks, which maps to top-layer fd:
+                    Valt[fd] += val; Rdnt[fd] += rdn
+            else:
+                DerH+=[deepcopy(lay)]; ValH+=[copy(valt)]; RdnH+=[copy(rdnt)]
+
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
     P__ = comp_der(PP.P__) if fd else comp_rng(PP.P__, PP.rng+1)   # returns top-down
-    PP.rdnt[fd] += PP.valt[fd] > PP.valt[1-fd]
+    PP.rdnH[-1][fd] += PP.valH[-1][fd] > PP.valH[-1][1-fd]
     # link Rdn += PP rdn?
     cP__ = [copy(P_) for P_ in P__]
-    PP.P__ = form_PP_t(cP__,base_rdn=PP.rdnt[fd])  # P__ = sub_PPm_, sub_PPd_
+    PP.P__ = form_PP_t(cP__,base_rdn=PP.rdnH[-1][fd])  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
         if sub_PP_:  # der+ | rng+
@@ -71,9 +76,9 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
             feedback(PP, fd)  # add aggH, if any: 
         implicit nesting: rngH(derH / sub+fb, aggH(subH / agg+fb: subH is new order of rngH(derH?
         '''
-# mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
-# __Ps in rng+ are mediated by PP.rng layers of _Ps:
 
+# mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
+# __Ps: above PP.rng layers of _Ps:
 def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+n to skip clustering?
 
     P__ = []

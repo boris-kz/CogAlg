@@ -39,14 +39,12 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
-    # if Daxis?:
     rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
-    # if sum(P.M s + P.Ma s)?:
+    # if sum(P.M s + P.Ma s):
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # re compare PPs, cluster in graphs:
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
-        sub_recursion_eval(blob, PP_, fd=fd)  # intra PP
-        # no feedback to blob?
+        sub_recursion_eval(blob, PP_, fd=fd)  # intra PP, no blob fb
+        # compare PPs, cluster in graphs:
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
@@ -122,7 +120,7 @@ def rotate_P(P, dert__t, mask__):
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
     # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     y0,yn,x0,xn = P.box
-    ycenter = (y0+yn) //2; xcenter = (x0+xn) //2
+    ycenter = (y0+yn)//2; xcenter = (x0+xn)//2
     rdert_ = []
     # scan left:
     rx=xcenter; ry=ycenter
@@ -182,11 +180,11 @@ def form_rdert(rx,ry, dert__t, mask__):
            ) / K
     if round(mask):  # summed mask is fractional, round to 1|0
         return None  # return rdert if inside the blob
-
-    ptuple = [(dert__[y1, x1] * k1
-             + dert__[y2, x1] * k2
-             + dert__[y1, x2] * k3
-             + dert__[y2, x2] * k4
+    ptuple = [(
+        dert__[y1, x1] * k1 +
+        dert__[y2, x1] * k2 +
+        dert__[y1, x2] * k3 +
+        dert__[y2, x2] * k4
              ) / K
              for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple

@@ -391,3 +391,29 @@ def sum_ders(Fback, fback, fd):
             else:
                 Ders += [deepcopy(der)]
 
+def sum_fback(Fback, fback):  # sum or append fb in Fb, for deeper feedback:
+
+    DerH, Fd_H, ValH, RdnH = Fback
+    derH, fd_H, valH, rdnH = fback
+
+    for Lay, Fd_, Valt, Rdnt, lay, fd_, valt, rdnt in zip_longest(
+        DerH, Fd_H, ValH, RdnH, derH, fd_H, valH, rdnH, fillvalue=[]):  # loop bottom-up
+        if lay:
+            if Lay: # loop all possible forks: len=2^depth, but sparse: [] if no fback, no need for fd_H:
+                for Fork, fork in zip(Lay, lay):
+                    if Fork and fork:
+                        sum_layer(Fork, fork)
+                    else:
+                        Fork += fork  # stays empty if fork is empty
+                for i in 0,1:
+                    Valt[i]+=valt[i]; Rdnt[i]+=rdnt[i]  # sum across all deeper forks?
+            else:
+                DerH+=[deepcopy(lay)]; ValH+=[copy(valt)]; RdnH+=[copy(rdnt)]
+                '''
+                old:
+                for Fork, Fd in zip(Lay, Fd_):
+                    for fork, fd in zip(lay, fd_):
+                        if Fd==fd:
+                            sum_layer(Fork,fork)
+                            break  # we need integer fds now: index in the list of all possible forks?
+                '''

@@ -1,6 +1,6 @@
 from class_cluster import ClusterStructure, NoneType
 
-class CQ(ClusterStructure):  # generic sequence or hierarchy
+class CQ(ClusterStructure):  # generic links
 
     Q = list  # generic sequence or index increments in ptuple, derH, etc
     Qm = list  # in-graph only
@@ -9,9 +9,11 @@ class CQ(ClusterStructure):  # generic sequence or hierarchy
     valt = lambda: [0,0]  # in-graph vals
     rdnt = lambda: [1,1]  # none if represented m and d?
     out_valt = lambda: [0,0]  # of non-graph links, as alt?
-    fds = list
-    rng = lambda: 1  # is it used anywhere?
-    n = lambda: 1  # accum count, not needed?
+    fds = list  # not used?
+    rng = lambda: 1  # not used?
+
+class CH(ClusterStructure):  # generic hierarchy, or that's most of a node?
+      pass
 
 class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, derH per par in derP, or PP
 
@@ -22,18 +24,15 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     aangle = lambda: [0, 0, 0, 0]
     G = float  # for comparison, not summation:
     Ga = float
-    x = int  # median: x0+L/2
-    L = int  # len dert_ in P, area in PP
-    n = lambda: 1  # not needed?
+    L = int  # replaces n, still redundant to len dert_ in P, nlinks in PP or graph
 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = Cptuple  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
     derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
-    fds = list  # per derLay
-    # convert to valH, rdnH?
-    valH = lambda: [[0,0]]  # of fork links, represented in derH
+    fds = list  # derH params:
+    valH = lambda: [[0,0]]
     rdnH = lambda: [[1,1]]
     axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
@@ -70,11 +69,11 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     ptuple = Cptuple  # summed P__ ptuples, = 0th derLay
-    derH = list  # 1vert)1lay in comp_slice, extend in der+, extend to rngH in feedback if fb==0, no comp rngH till agg+
+    derH = list  # 1vert'1lay in comp_slice, extend in sub+, no comp rngH till agg+
+    fd_H = list  # fd_/layer, ?>1 from deep fb
     valH = lambda: [[0,0]]  # Valts map to derH
     rdnH = lambda: [[1,1]]  # Rdnts map to derH
-    Rdn = int  # for accumulation or separate recursion count?
-    fds = list  # fd per derLay
+    Rdn = int  # for accumulation or separate recursion count
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     mask__ = bool

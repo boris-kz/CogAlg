@@ -31,10 +31,11 @@
 
 import sys
 import numpy as np
+from time import time
 from collections import deque
 from visualization.draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure
-# from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax, from time import time
+# from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
@@ -276,7 +277,6 @@ def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
 
 if __name__ == "__main__":
     import argparse
-    from time import time
     from utils import imread
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
