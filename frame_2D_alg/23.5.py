@@ -417,3 +417,88 @@ def sum_fback(Fback, fback):  # sum or append fb in Fb, for deeper feedback:
                             sum_layer(Fork,fork)
                             break  # we need integer fds now: index in the list of all possible forks?
                 '''
+x = P.x0; y = min(P.y0,P.yn)
+sin,cos = P.axis
+G = 0
+for dert in P.dert_:
+
+    G+=dert[1]
+    x+=cos; y+=sin
+    if G > P.ptuple.G // 2:
+        x -= cos/2; y -= sin/2
+        break
+
+def sum_derH(Que, que):  # sum or append fb in Fb, for deeper feedback:
+
+    DerH, ValH, RdnH = Que; derH, valH, rdnH = que
+
+    for Lay,Val_,Rdn_, lay,val_,rdn_ in zip_longest(DerH,ValH,RdnH, derH,valH,rdnH, fillvalue=[]):  # loop bottom-up
+        if lay:
+            if Lay:  # all possible forks: len=2^depth, mostly empty
+                for i, (Fork,fork, Val,Rdn,val,rdn) in enumerate(zip(Lay,lay, Val_,Rdn_,val_,rdn_)):
+                    if fork:
+                        if Fork: sum_layer(Fork, fork)
+                        else:    Lay[i] = fork
+                        Val+=val; Rdn+=rdn
+            else:
+                DerH+=[deepcopy(lay)]; ValH+=[copy(val_)]; RdnH+=[copy(rdn_)]
+# old
+def sum_layer(Layer, layer, fd=2):
+
+    for Vertuple, vertuple in zip_longest(Layer, layer, fillvalue=None):  # vertuple is [mtuple, dtuple]
+        if vertuple != None:
+            if Vertuple != None:
+                if fd==2: sum_vertuple(Vertuple, vertuple)  # not fork-selective
+                else: sum_tuple(Vertuple[fd], vertuple[fd])
+            else:
+                Layer += [deepcopy(vertuple)]
+# old
+def sum_vertuple(Vertuple, vertuple):  # [mtuple,dtuple]
+
+    for Ptuple, ptuple in zip_longest(Vertuple, vertuple, fillvalue=None):
+        if ptuple != None:
+            if Ptuple != None:
+                sum_tuple(Ptuple, ptuple)
+            else:
+                Vertuple += deepcopy(vertuple)
+
+def comp_P(_P,P, link_,link_m,link_d, Valt, Rdnt, Lay, fd=0, derP=None, DerLay=None):  #  last two if der+
+
+    # compare last layer only, lower layers of _P,P have already been compared forming derP.derH
+    if fd:
+        # der+: extend old link
+        derLay=[]  # new derP layer
+        Mval,Dval, Mrdn,Drdn = 0,0,0,0
+        # compare last Lay of any length:
+        for i, (_vertuple, vertuple) in enumerate(zip_longest(_P.derH[-1], P.derH[-1])):
+            mtuple, dtuple = comp_dtuple(_vertuple[1], vertuple[1], rn = len(_P.link_t[1])/len(P.link_t[1]))
+            if DerLay:
+                sum_tuple(DerLay[i][0],mtuple); sum_tuple(DerLay[i][1],dtuple)
+            else:
+                DerLay += [[deepcopy(mtuple), deepcopy(dtuple)]]
+            derLay += [[mtuple, dtuple]]
+            mval = sum(dtuple); dval = sum(dtuple)
+            mrdn = 1+(dval>mval); drdn = 1+(1-mrdn)  # define per par?
+            Mval+=mval; Dval+=dval
+            Mrdn+=mrdn; Drdn+=drdn
+        derP.fds+=[fd]; derP.valt[0]+=Mval; derP.valt[1]+=Dval; derP.rdnt[0]+=Mrdn; derP.rdnt[1]+=Drdn
+    else:
+        # rng+: add new link
+        mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple)
+        Mval = sum(mtuple); Dval = sum(dtuple)
+        Mrdn = 1+(Dval>Mval); Drdn = 1+(1-Mrdn)
+        # replace with greyscale rdn: Dval/Mval?
+        derP = CderP(derH=[[[mtuple,dtuple]]], fds=P.fds+[fd], valt=[Mval,Dval],rdnt=[Mrdn,Drdn], P=P,_P=_P,
+                     box=copy(_P.box),L=len(_P.dert_))  # or recompute box from means?
+    link_ += [derP]  # all links
+    if Mval > aveB*Mrdn:
+        link_m+=[derP]; Valt[0]+=Mval; Rdnt[0]+=Mrdn  # +ve links, fork selection in form_PP_t
+        if fd: sum_layer(Lay, derP.derH[-1], fd=0)  # sum fork of old layers
+        else:  sum_tuple(Lay[0][0], mtuple)
+    if Dval > aveB*Drdn:
+        link_d+=[derP]; Valt[1]+=Dval; Rdnt[1]+=Drdn
+        if fd: sum_layer(Lay, derP.derH, fd=1)
+        else:  sum_tuple(Lay[0][1], dtuple)
+
+    if fd: derP.derH += [derLay]  # DerH must be summed above with old derP.derH
+

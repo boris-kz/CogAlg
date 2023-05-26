@@ -70,19 +70,19 @@ class CPP(CderP):
 
     ptuple = Cptuple  # summed P__ ptuples, = 0th derLay
     derH = list  # 1vert'1lay in comp_slice, extend in sub+, no comp rngH till agg+
-    fd_H = list  # fd_/layer, ?>1 from deep fb
-    valH = lambda: [[0,0]]  # Valts map to derH
-    rdnH = lambda: [[1,1]]  # Rdnts map to derH
-    Rdn = int  # for accumulation or separate recursion count
+    valH = list  # per derH( layer( fork
+    rdnH = list
+    fd = int  # global?
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     mask__ = bool
     P__ = list  # 2D array of nodes: Ps or sub-PPs
     link_ = list  # all links summed from Ps
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
-    root = NoneType  # PPPm|PPPd containing this PP
+    roott = lambda: [None,None]  # PPPm|PPPd containing this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove?
     fb_ = list  # [[new_ders,val,rdn]]: [feedback per node]
+    Rdn = int  # for accumulation or separate recursion count?
     # fdiv = NoneType  # if div_comp?
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
