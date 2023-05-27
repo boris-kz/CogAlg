@@ -63,7 +63,8 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
         P_ = []
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
-            Lay, ValH, RdnH = [],[],[]
+            Lay, ValH, RdnH = [[[],[]]],[[0,0]],[[1,1]]
+            # not sure
             for iderP in P.link_t[0]:  # mlinks
                 _P = iderP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
@@ -83,7 +84,8 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
         P_ = []
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
-            Lay, ValH, RdnH = [],[],[]
+            Lay, ValH, RdnH = [[[],[]]],[[0,0]],[[1,1]]
+            # not sure
             for iderP in P.link_t[1]:  # dlinks
                 if iderP._P.link_t[1]:  # else no _P links and derH to compare
                     _P = iderP._P
