@@ -29,11 +29,10 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple = Cptuple  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
-    derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
-    fds = list  # derH params:
-    valH = lambda: [[0,0]]
-    rdnH = lambda: [[1,1]]
+    ptuple = list  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
+    derT = list  # mH,dH pair, 1vertuple / 1layer in comp_slice, extend in der+
+    valT = lambda: [[0,0]]
+    rdnT = lambda: [[1,1]]
     axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -48,10 +47,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
-    derH = list  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
-    fds = list
-    valt = lambda: [0,0]  # also of derH
-    rdnt = lambda: [1,1]  # mrdn + uprdn if branch overlap?
+    derT = list  # vertuple_ per layer, unless implicit? sum links / rng+, layers / der+?
+    valT = lambda: [0,0]  # also of derH
+    rdnT = lambda: [1,1]  # mrdn + uprdn if branch overlap?
     _P = object  # higher comparand
     P = object  # lower comparand
     roott = lambda: [None,None]  # for der++
@@ -68,10 +66,10 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 
 class CPP(CderP):
 
-    ptuple = Cptuple  # summed P__ ptuples, = 0th derLay
-    derH = list  # 1vert'1lay in comp_slice, extend in sub+, no comp rngH till agg+
-    valH = list  # per derH( layer( fork
-    rdnH = list
+    ptuple = list  # summed P__ ptuples, = 0th derLay
+    derT = list  # mH,dH pair, 1vert'1lay in comp_slice, extend in sub+, no comp rngH till agg+
+    valT = list  # per derT( H( layer( fork
+    rdnT = list
     fd = int  # global?
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn

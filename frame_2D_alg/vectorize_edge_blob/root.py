@@ -4,6 +4,7 @@ from itertools import zip_longest
 import sys
 import numpy as np
 from copy import copy, deepcopy
+from itertools import product
 from .classes import Cptuple, CP, CPP, CderP
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle
@@ -49,7 +50,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
 '''
-this is too involved for initial Ps, most of that is only needed for final rotated Ps?
+or only needed for final rotated Ps?
 '''
 def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
@@ -82,14 +83,14 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
                 params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
-                P_+=[CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
+                P_+=[CP(ptuple=params, box=[y,y, x-L,x-1], dert_=Pdert_)]
             _mask = mask
             x += 1
         # pack last P, same as above:
         if not _mask:
             params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)
             L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
+            P_ += [CP(ptuple=params, box=[y,y, x-L,x-1], dert_=Pdert_)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
@@ -120,7 +121,7 @@ def rotate_P(P, dert__t, mask__):
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
     # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     y0,yn,x0,xn = P.box
-    ycenter = (y0+yn)//2; xcenter = (x0+xn)//2
+    ycenter = (y0+yn)/2; xcenter = (x0+xn)/2
     rdert_ = []
     # scan left:
     rx=xcenter; ry=ycenter
@@ -167,10 +168,10 @@ def form_rdert(rx,ry, dert__t, mask__):
         return None
     # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1
     # approximation, square of rpixel is rotated, won't fully match not-rotated derts
-    k1 = 1 - np.hypot(dx1, dy1)
-    k2 = 1 - np.hypot(dx1, dy2)
-    k3 = 1 - np.hypot(dx2, dy1)
-    k4 = 1 - np.hypot(dx2, dy2)
+    k1 = 2 - dx1*dx1 - dy1*dy1
+    k2 = 2 - dx1*dx1 - dy2*dy2
+    k3 = 2 - dx2*dx2 - dy1*dy1
+    k4 = 2 - dx2*dx2 - dy2*dy2
     K = k1 + k2 + k3 + k4
     mask = (
         mask__[y1, x1] * k1 +
@@ -191,27 +192,75 @@ def form_rdert(rx,ry, dert__t, mask__):
 
 
 # slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
-def slice_blob_ortho(blob):
+def slice_blob_ortho(blob, verbose=False):
+    from .hough_P import new_rt_olp_array, hough_check
+    Y, X = blob.mask__.shape
 
+    # Get thetas and positions:
+    dy__, dx__ = blob.dert__[4:6]  # Get blob derts' angle
+    y__, x__ = np.indices((Y, X))  # Get blob derts' position
+    theta__ = np.arctan2(dy__, dx__)  # Compute theta
+
+    if verbose:
+        step = 100 / (~blob.mask__).sum()  # progress % percent per pixel
+        progress = 0.0; print(f"\rFilling... {round(progress)} %", end="");  sys.stdout.flush()
+    # derts with same rho and theta lies on the same line
+    # floodfill derts with similar rho and theta
     P_ = []
-    while blob.dert__:
-        dert = blob.dert__.pop()
-        P = CP(dert_= [dert])  # init cross-P per dert
-        # need to find/combine adjacent _dert in the direction of gradient:
-        _dert = blob.dert__.pop()
-        mangle,dangle = comp_angle(dert.angle, _dert.angle)
-        if mangle > ave:
-            P.dert_ += [_dert]  # also sum ptuple, etc.
-        else:
-            P_ += [P]
-            P = CP(dert_= [_dert])  # init cross-P per missing dert
-            # add recursive function to find/combine adjacent _dert in the direction of gradient:
-            _dert = blob.dert__.pop()
-            mangle, dangle = comp_angle(dert.angle, _dert.angle)
-            if mangle > ave:
-                P.dert_ += [_dert]  # also sum ptuple, etc.
-            else:
-                pass  # add recursive slice_blob
+    filled = blob.mask__.copy()
+    for y in y__[:, 0]:
+        for x in x__[0]:
+            # initialize P at first unfilled dert found
+            if not filled[y, x]:
+                P = CP(box=[y, y+1, x, x+1])
+                to_fill = [(y, x)]                  # dert indices to floodfill
+                rt_olp__ = new_rt_olp_array((Y, X)) # overlap of rho theta (line) space
+                while to_fill:                      # floodfill for one P
+                    y2, x2 = to_fill.pop()          # get next dert index to fill
+                    if x2 < 0 or x2 >= X or y2 < 0 or y2 >= Y:  # skip if out of bounds
+                        continue
+                    if filled[y2, x2]:              # skip if already filled
+                        continue
+                    # check if dert is almost on the same line and have similar gradient angle
+                    new_rt_olp__ = hough_check(rt_olp__, y2, x2, theta__[y2, x2])
+                    if not new_rt_olp__.any():
+                        continue
+
+                    filled[y2, x2] = True       # mark as filled
+                    rt_olp__[:] = new_rt_olp__  # update overlap
+                    # accumulate P params:
+                    dert = tuple(param__[y2, x2] for param__ in blob.dert__)
+                    _, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert  # skip i
+                    if dx < 0: dy, dx = -dy, -dx  # rotate dy, dx 180 deg if dx < 0
+                    P.ptuple.M += ave_g - g; P.ptuple.Ma += ave_ga - ga; P.ptuple.I += ri; P.ptuple.angle[0] += dy; P.ptuple.angle[1] += dx
+                    P.ptuple.aangle = [_par + par for _par, par in
+                                     zip(P.ptuple.aangle, [sin_da0, cos_da0, sin_da1, cos_da1])]
+                    P.dert_ += [(y2, x2, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1)]
+
+                    if y2 < P.box[0]: P.box[0] = y2
+                    if y2 + 1 > P.box[1]: P.box[1] = y2 + 1
+                    if x2 < P.box[2]: P.box[2] = x2
+                    if x2 + 1 > P.box[3]: P.box[3] = x2 + 1
+                    # add neighbors to fill
+                    to_fill += [*product(range(y2-1, y2+2), range(x2-1, x2+2))]
+                if not rt_olp__.any():
+                    raise ValueError
+                P.ptuple.G = np.hypot(*P.ptuple.angle)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
+                P.ptuple.Ga = (P.ptuple.aangle[1] + 1) + (P.ptuple.aangle[3] + 1)  # Cos_da0, Cos_da1
+                P.ptuple.L = len(P.dert_)
+                # axis_angle = rt_olp__.nonzero()[0].mean()  # mean theta
+                # P.axis = np.sin(axis_angle), np.cos(axis_angle)
+                if P.ptuple.G == 0:
+                    P.axis = 0, 1
+                    print([(dy, dx) for y2, x2, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 in P.dert_])
+                else:
+                    P.axis = P.ptuple.angle[0] / P.ptuple.G, P.ptuple.angle[1] / P.ptuple.G
+                P_ += [P]
+                if verbose:
+                    progress += P.ptuple.L * step; print(f"\rFilling... {round(progress)} %", end=""); sys.stdout.flush()
+    blob.P__ = [P_]
+    if verbose: print("\r\t\t\t\t\t\t\t\r", end="")
+    return P_
 
 
 def append_P(P__, P):  # pack P into P__ in top down sequence

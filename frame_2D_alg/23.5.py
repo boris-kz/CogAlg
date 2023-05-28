@@ -502,3 +502,56 @@ def comp_P(_P,P, link_,link_m,link_d, Valt, Rdnt, Lay, fd=0, derP=None, DerLay=N
 
     if fd: derP.derH += [derLay]  # DerH must be summed above with old derP.derH
 
+def sum_tuple(Ptuple,ptuple, fneg=0):  # mtuple or dtuple
+
+    for i, (Par, par) in enumerate(zip_longest(Ptuple, ptuple, fillvalue=None)):
+        if par != None:
+            if Par != None:
+                Ptuple[i] = Par + -par if fneg else par
+            elif not fneg:
+                Ptuple += [par]
+
+def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
+
+    mask__ = blob.mask__  # same as positive sign here
+    dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
+    dert__ = [zip(*dert_) for dert_ in dert__]  # convert 1D array of 10-tuple rows into 2D array of 10-tuples per blob
+    P__ = []
+    height, width = mask__.shape
+    if verbose: print("Converting to image...")
+
+    for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple slices -> Ps:
+        if verbose: print(f"\rConverting to image... Processing line {y + 1}/{height}", end=""); sys.stdout.flush()
+        P_ = []
+        _mask = True  # mask -1st dert
+        x = 0
+        for dert, mask in zip(dert_, mask_):
+            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
+            if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
+                if _mask:  # ini P params with first unmasked dert
+                    Pdert_ = [dert]
+                    params = Cptuple(I=ri,M=ave_g-g,Ma=ave_ga-ga, angle=[dy,dx], aangle=[sin_da0, cos_da0, sin_da1, cos_da1])
+                else:
+                    # dert and _dert are not masked, accumulate P params:
+                    params.M+=ave_g-g; params.Ma+=ave_ga-ga; params.I+=ri; params.angle[0]+=dy; params.angle[1]+=dx
+                    params.aangle = [_par+par for _par,par in zip(params.aangle,[sin_da0,cos_da0,sin_da1,cos_da1])]
+                    Pdert_ += [dert]
+            elif not _mask:
+                # _dert is not masked, dert is masked, terminate P:
+                params.G = np.hypot(*params.angle)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
+                params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
+                L = len(Pdert_)
+                params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
+                P_+=[CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
+            _mask = mask
+            x += 1
+        # pack last P, same as above:
+        if not _mask:
+            params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)
+            L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
+            P_ += [CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
+        P__ += [P_]
+
+    if verbose: print("\r", end="")
+    blob.P__ = P__
+    return P__

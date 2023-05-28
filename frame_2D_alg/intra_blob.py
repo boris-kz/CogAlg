@@ -53,7 +53,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                 if aveBa < 1: blobs of ~average G are processed by both forks
                 if aveBa > 1: blobs of ~average G are not processed:
                 '''
-                if blob.G < aveB * blob.rdn:  # below-average G, eval for comp_r
+                if blob.G < aveB * blob.rdn and blob.sign:  # below-average G, eval for comp_r
                     # root values for sub_blobs:
                     blob.fBa = 0; blob.rng = root_blob.rng + 1; blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn
                     # comp_r 4x4:
@@ -64,7 +64,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
                         spliced_layers[:] = cluster_fork_recursive( blob, spliced_layers, new_dert__, sign__,
                                                                     new_mask__, verbose, render, fBa=0)
 
-                if blob.G > aveB*aveBa * blob.rdn:  # above-average G, eval for comp_a
+                if blob.G > aveB*aveBa * blob.rdn and not blob.sign:  # above-average G, eval for comp_a
                     # root values for sub_blobs:
                     blob.fBa = 1; blob.rdn = root_blob.rdn + 1.5  # comp cost * fork rdn
                     # comp_a 2x2:

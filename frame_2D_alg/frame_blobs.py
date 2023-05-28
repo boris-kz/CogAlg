@@ -236,7 +236,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                     blob.Ga = (blob.Cos_da0 + 1) + (blob.Cos_da1 + 1)  # +1 for all positives
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
-    if verbose: print("\r", end="")
+    if verbose: print("\r\t\t\t\t\t\t\t\r", end="")
 
     return blob_, idmap, adj_pairs
 
