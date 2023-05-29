@@ -20,8 +20,8 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     I = int  # [m,d] in higher layers:
     M = int
     Ma = float
-    angle = lambda: [0, 0]  # in latuple only, replaced by float in vertuple
-    aangle = lambda: [0, 0, 0, 0]
+    angle = lambda: [0,0]  # in latuple only, replaced by float in vertuple
+    aangle = lambda: [0,0,0,0]
     G = float  # for comparison, not summation:
     Ga = float
     L = int  # replaces n, still redundant to len dert_ in P, nlinks in PP or graph
@@ -30,9 +30,9 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple = list  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
-    derT = list  # mH,dH pair, 1vertuple / 1layer in comp_slice, extend in der+
-    valT = lambda: [[0,0]]
-    rdnT = lambda: [[1,1]]
+    derT = lambda: [[],[]]  # ptuple) fork) layer) H)T:  1ptuple, 1fork, 1layer in comp_slice, extend in der+ and fb
+    valT = lambda: [[[0]],[[0]]]
+    rdnT = lambda: [[[1]],[[1]]]
     axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
@@ -67,9 +67,9 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     ptuple = list  # summed P__ ptuples, = 0th derLay
-    derT = list  # mH,dH pair, 1vert'1lay in comp_slice, extend in sub+, no comp rngH till agg+
-    valT = list  # per derT( H( layer( fork
-    rdnT = list
+    derT = lambda: [[],[]]  # ptuple) fork) layer) H)T: 1ptuple, 1fork, 1layer in comp_slice, extend in sub+ and fb
+    valT = lambda: [[],[]]  # per derT( H( layer( fork
+    rdnT = lambda: [[],[]]
     fd = int  # global?
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn

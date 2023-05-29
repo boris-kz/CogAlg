@@ -142,10 +142,14 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, see comp_pix
     d_upright__ = bottomleft__ - topright__
     d_upleft__ = bottomright__ - topleft__
 
+    # rotate back to 0 deg:
+    dy__ = 0.5 * (d_upleft__ + d_upright__)
+    dx__ = 0.5 * (d_upleft__ - d_upright__)
+
     G__ = np.hypot(d_upright__, d_upleft__)  # 2x2 kernel gradient (variation), match = inverse deviation, for sign_ only
     rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
 
-    return (topleft__, d_upleft__, d_upright__, G__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    return (topleft__, dy__, dx__, G__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed dert__ = (i__, dy__, dx__, g__, ri__) for readability in deeper functions
 '''
     old version:
