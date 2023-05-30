@@ -71,28 +71,27 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
                     Pdert_ = [dert]
-                    # I, M, Ma, angle, aangle, G, Ga, L
-                    params = [ri,ave_g-g,ave_ga-ga,[dy,dx],[sin_da0, cos_da0, sin_da1, cos_da1], 0, 0, 0]
+                    I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
+                    Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params:
-                    params[0] +=ri; params[1]+=ave_g-g; params[2]+=ave_ga-ga  # I, M, Ma
-                    params[3][0]+=dy; params[3][1]+=dx  # angle
-                    params[4] = [_par+par for _par,par in zip(params[4],[sin_da0,cos_da0,sin_da1,cos_da1])]  # aangle
+                    I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
+                    Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
                     Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
-                params[5] = np.hypot(*params[3])  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
-                params[6] = (params[4][1]+1) + (params[4][3]+1)  # Cos_da0, Cos_da1
+                G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
+                Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
-                params[7] = L # params.valt = [params.M+params.Ma, params.G+params.Ga]
-                P_+=[CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
+                # params.valt = [params.M+params.Ma, params.G+params.Ga]
+                P_+=[CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
             _mask = mask
             x += 1
         # pack last P, same as above:
         if not _mask:
-            params[5] = np.hypot(*params[3]); params[6] = (params[4][1]+1) + (params[4][3]+1)
-            L = len(Pdert_); params[7] = L   # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
+            G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
+            L = len(Pdert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
+            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
@@ -104,22 +103,24 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
     P__, dert__, mask__ = blob.P__, blob.dert__, blob.mask__
 
-    yn, xn = dert__[0].shape[:2]
     for P_ in P__:
         for P in P_:
-            daxis = P.ptuple.angle[0] / P.ptuple.G  # dy: deviation from horizontal axis
+            daxis = P.ptuple[3][0] / P.ptuple[5]  # dy: deviation from horizontal axis
             # recursive reform P along new G angle in blob.dert__:
             # P.daxis for future reval?
-            while P.ptuple.G * abs(daxis) > ave_rotate:
-                rotate_P(P, dert__, mask__)
-                maxis, daxis = comp_angle(P.ptuple.angle, P.axis)
+            step_size = 1.0     # first rotation always reaches P gradient angle
+            while P.ptuple[5] * abs(daxis) > ave_rotate and step_size > 1e-4:
+                rotate_P(P, dert__, mask__, step_size)
+                maxis, daxis = comp_angle(P.ptuple[3], P.axis)
+                step_size /= 2  # step_size is halved after each iteration
 
+def rotate_P(P, dert__t, mask__, step_size):
 
-def rotate_P(P, dert__t, mask__):
+    sin_g = P.ptuple[3][0] / P.ptuple[5]
+    cos_g = P.ptuple[3][1] / P.ptuple[5]
+    new_axis = get_new_axis(*P.axis, sin_g, cos_g, step_size) # step_size <= 1.0, with 1.0 being full rotation
+    sin, cos = new_axis
 
-    sin = P.ptuple.angle[0] / P.ptuple.G
-    cos = P.ptuple.angle[1] / P.ptuple.G
-    P.axis = (sin, cos)  # last P angle
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
     # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     y0,yn,x0,xn = P.box
@@ -140,8 +141,8 @@ def rotate_P(P, dert__t, mask__):
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]  # append right
         rx+=cos; ry+=sin  # next rx,ry
-    P.box = [min(yleft,ry), max(yleft,ry), x0, rx]  # P may go up-right or down-right
     # form rP:
+    if not rdert_: return
     rdert = rdert_[0]  # initialization:
     G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
@@ -150,11 +151,12 @@ def rotate_P(P, dert__t, mask__):
         I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
         dert_ += [rdert]
     # re-form gradients:
-    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
-    ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
     # replace P:
-    P.ptuple = ptuple; P.dert_ = dert_
-
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.dert_ = dert_
+    P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
+    P.axis = new_axis
 
 def form_rdert(rx,ry, dert__t, mask__):
 
@@ -192,6 +194,15 @@ def form_rdert(rx,ry, dert__t, mask__):
              for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
 
+def get_new_axis(s1, c1, s2, c2, step_size):
+    if s1*s2 + c1*c2 < 0:  # angle difference between axes is > 90 deg
+        s2 = -s2; c2 = -c2  # flip target axis2
+
+    u = s1 * (1 - step_size) + s2 * step_size # new axis is weighted sum of axes
+    v = c1 * (1 - step_size) + c2 * step_size
+    norm = np.hypot(u, v)
+
+    return (u/norm, v/norm)  # normalized new axis
 
 # slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
 def slice_blob_ortho(blob, verbose=False):
@@ -331,3 +342,25 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
         new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
 
     return new_P
+
+# draft
+def rotate_P_ave(blob):  # rotate each P to align it with direction of P gradient
+
+    P__, dert__, mask__ = blob.P__, blob.dert__, blob.mask__
+
+    for P_ in P__:
+        for P in P_:
+            daxis = P.ptuple.angle[0] / P.ptuple.G  # dy: deviation from horizontal axis
+            _daxis = 0
+            G = P.ptuple.G
+            while abs(daxis)*G > ave_rotate:  # recursive reform P along new G angle in blob.dert__, P.daxis for future reval?
+
+                rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
+                maxis, daxis = comp_angle(P.ptuple.angle, P.axis)
+                ddaxis = daxis +_daxis  # cancel-out if opposite-sign
+                # test oscillation:
+                if ddaxis*G < ave_rotate:
+                    # pseudo:
+                    rotate_P(P, dert__, mask__, ave_a=(P.ptuple.angle+P.axis)/2)  # rescan in the direction of ave_a, if any
+                    break
+

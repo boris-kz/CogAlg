@@ -1,46 +1,50 @@
 from itertools import zip_longest
+import numpy as np
 from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsub, P_aves, G_aves
 from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_unpack
 
 
-def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derH,valH,rdnH in blob
+def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,rdnT in blob
 
     term = 1
     for PP in PP_:
-        if PP.valH[-1][fd] > PP_aves[fd] * PP.rdnH[-1][fd] and len(PP.P__) > ave_nsub:  # no select per ptuple
+        if np.sum(PP.valT[fd][-1]) > PP_aves[fd] * np.sum(PP.rdnT[fd][-1]) and len(PP.P__) > ave_nsub:
             term = 0
             sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
         elif isinstance(root, CPP):
-            root.fb_ += [[[PP.derH[-1]], PP.valH[-1][fd],PP.rdnH[-1][fd]]]  # [derH, valH, rdnH]
+            root.fb_ += [[[PP.derT[fd][-1]], PP.valT[fd][-1],PP.rdnT[fd][-1]]]  # [derT,valT,rdnT]
             # feedback last layer, added in sum2PP
     if term and isinstance(root, CPP):
-        feedback(root, fd)  # upward recursive extend root.derH, forward eval only
+        feedback(root, fd)  # upward recursive extend root.derT, forward eval only
 
 
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = root.fb_.pop()  # init with 1st fback ders: derH, fds, valH, rdnH
+    Fback = root.fb_.pop()  # init with 1st fback ders: derT, fds, valT, rdnT
     while root.fb_:
         sum_unpack(Fback, root.fb_.pop())  # sum | append fback in Fback
-    derH,valH,rdnH = Fback
-    root.derH+=derH; root.valH+=valH; root.rdnH+=rdnH  # concat Fback layers to root layers
+    derT,valT,rdnT = Fback
+    for i in 0,1:
+        root.derT[i]+=derT[i]; root.valT[i]+=valT[i]; root.rdnT[i]+=rdnT[i]  # concat Fback layers to root layers
 
     if isinstance(root.roott[fd], CPP):
         root = root.roott[fd]
         root.fb_ += [Fback]
         if len(root.fb_) == len(root.P__[fd]):  # all nodes term, fed back to root.fb_
-            feedback(root, fd)  # derH=[1st layer] in sum2PP, deeper layers(forks appended by recursive feedback
+            feedback(root, fd)  # derT=[1st layer] in sum2PP, deeper layers(forks appended by recursive feedback
 
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
+    if fd: [[nest(P,0) for P in P_] for P_ in PP.P__]  # add layers and forks?
+
     P__ = comp_der(PP.P__) if fd else comp_rng(PP.P__, PP.rng+1)   # returns top-down
-    PP.rdnH[-1][fd] += PP.valH[-1][fd] > PP.valH[-1][1-fd]
+    PP.rdnT[fd][-1] += np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1-fd][-1])
     # link Rdn += PP rdn?
     cP__ = [copy(P_) for P_ in P__]
-    PP.P__ = form_PP_t(cP__,base_rdn=PP.rdnH[-1][fd])  # P__ = sub_PPm_, sub_PPd_
+    PP.P__ = form_PP_t(cP__,base_rdn=np.sum(PP.rdnT[fd][-1]))  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
         if sub_PP_:  # der+ | rng+
@@ -51,7 +55,7 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
             agg_recursion_eval(PP, copy(sub_PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
         else:
             feedback(PP, fd)  # add aggH, if any: 
-        implicit nesting: rngH(derH / sub+fb, aggH(subH / agg+fb: subH is new order of rngH(derH?
+        implicit nesting: rngH(derT / sub+fb, aggH(subH / agg+fb: subH is new order of rngH(derT?
         '''
 
 # mderP * (ave_olp_L / olp_L)? or olp(_derP._P.L, derP.P.L)? gap: neg_olp, ave = olp-neg_olp?
@@ -63,36 +67,45 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
         P_ = []
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
-            Lay, ValH, RdnH = [[[],[]]],[[0,0]],[[1,1]]
+            derT,valT,rdnT = [[],[]],[0,0],[1,1]
             # not sure
             for iderP in P.link_t[0]:  # mlinks
                 _P = iderP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
                     __P = _derP._P  # next layer of Ps
-                    comp_P(P,__P, link_,link_m,link_d, Lay, ValH, RdnH, fd=0)
-            if ValH[0][0] > P_aves[0] * RdnH[0][0]:  # not sure
+                    comp_P(P,__P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
+            if np.sum(valT[0]) > P_aves[0] * np.sum(rdnT[0]):  # not sure
                 # add new P in rng+ PP:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[Lay], dert_=copy(P.dert_), fd=0, box=copy(P.box),
-                          valH=ValH, rdnH=RdnH, link_=link_, link_t=[link_m,link_d])]
+                P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_), fd=0, box=copy(P.box),
+                          derT=[derT], valT=valT, rdnT=rdnT, link_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
 
-def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.derH, P.derH, _P.derH
+def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.derT, P.derT, _P.derT
 
     P__ = []
     for iP_ in reversed(iP__[:-1]):  # lower compared row, follow uplinks, no uplinks in last row
         P_ = []
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
-            Lay, ValH, RdnH = [[[],[]]],[[0,0]],[[1,1]]
+            derT,valT,rdnT = [[],[]],[0,0],[1,1]
             # not sure
             for iderP in P.link_t[1]:  # dlinks
-                if iderP._P.link_t[1]:  # else no _P links and derH to compare
+                if iderP._P.link_t[1]:  # else no _P links and derT to compare
                     _P = iderP._P
-                    comp_P(_P, P, link_,link_m,link_d, Lay, ValH, RdnH, fd=1, derP=iderP)
-            if ValH[0][1] > P_aves[1] * RdnH[0][1]:
+                    comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=1, derP=iderP)
+            if np.sum(valT[1]) > P_aves[1] * np.sum(rdnT[1]):
                 # add new P in der+ PP:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[P.derH+[Lay]], dert_=copy(P.dert_), fd=1, box=copy(P.box),
-                          valH=ValH, rdnH=RdnH, rdnlink_=link_, link_t=[link_m,link_d])]
+                P_ += [CP(ptuple=deepcopy(P.ptuple), dert_=copy(P.dert_), fd=1, box=copy(P.box),
+                          derT=[P.derT+[derT]], valT=valT, rdnT=rdnT, rdnlink_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
+
+def nest(P, depth):  
+    
+    # depth is the number brackets before the tested one: P.valT[0], P.valT[0][0], etc,
+    # add two levels in der+: layers ( forks?
+
+    if not isinstance(P.valT[0],list):
+        P.derT[0]=[P.derT[0]]; P.valT[0]=[P.valT[0]]; P.rdnT[0]=[P.rdnT[0]]
+        P.derT[1]=[P.derT[1]]; P.valT[1]=[P.valT[1]]; P.rdnT[1]=[P.rdnT[1]]
