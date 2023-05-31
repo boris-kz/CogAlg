@@ -31,8 +31,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
 
     ptuple = list  # latuple: I, M, Ma, G, Ga, angle(Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
     derT = lambda: [[],[]]  # ptuple) fork) layer) H)T:  1ptuple, 1fork, 1layer in comp_slice, extend in der+ and fb
-    valT = lambda: [[[0]],[[0]]]
-    rdnT = lambda: [[[1]],[[1]]]
+    valT = lambda: [0,0]
+    rdnT = lambda: [1,1]
     axis = lambda: [0,1]  # prior slice angle, init sin=0,cos=1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     dert_ = list  # array of pixel-level derts, redundant to uplink_, only per blob?
