@@ -88,7 +88,7 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
         P_ = []
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
-            derT,valT,rdnT = [[],[]],[0,0],[1,1]
+            derT,valT,rdnT = [[],[]],[[],[]],[[],[]]
             # not sure
             for iderP in P.link_t[1]:  # dlinks
                 if iderP._P.link_t[1]:  # else no _P links and derT to compare
@@ -96,7 +96,7 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
                     comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=1, derP=iderP)
             if np.sum(valT[1]) > P_aves[1] * np.sum(rdnT[1]):
                 # add new P in der+ PP:
-                DerT = deepcopy(P.derT); ValT = deepcopy(P.valtT); RdnT = deepcopy(P.rdnT)
+                DerT = deepcopy(P.derT); ValT = deepcopy(P.valT); RdnT = deepcopy(P.rdnT)
                 for i in 0,1:
                     DerT[i]+=derT[i]; ValT[i]+=valT[i]; RdnT[i]+=rdnT[i]
 
@@ -106,7 +106,7 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
     return P__
 
 
-def nest(P, depth, ddepth=2):  # default is nest twice: tuple->fork->layer
+def nest(P, depth, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
     # not yet implemented:
     # depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc
 
@@ -115,7 +115,12 @@ def nest(P, depth, ddepth=2):  # default is nest twice: tuple->fork->layer
         while cdepth < ddepth:
             P.derT[0]=[P.derT[0]]; P.valT[0]=[P.valT[0]]; P.rdnT[0]=[P.rdnT[0]]
             P.derT[1]=[P.derT[1]]; P.valT[1]=[P.valT[1]]; P.rdnT[1]=[P.rdnT[1]]
-
-            # for derP_ in P.link_t:
-            # add nesting per fd?
             cdepth += 1
+
+    for derP in P.link_t[1]:
+        if not isinstance(derP.valT[0],list):
+            cdepth = 1  # at least ptuple
+            while cdepth < ddepth:
+                derP.derT[0]=[derP.derT[0]]; derP.valT[0]=[derP.valT[0]]; derP.rdnT[0]=[derP.rdnT[0]]
+                derP.derT[1]=[derP.derT[1]]; derP.valT[1]=[derP.valT[1]]; derP.rdnT[1]=[derP.rdnT[1]]
+                cdepth += 1

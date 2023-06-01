@@ -75,7 +75,7 @@ Alex Pitertsev, $2000 for porting line_comp to Julia, June
 
 2023:  
 
-Kok Wei Chee, $7200: lead developer, January-April
+Kok Wei Chee, $9100: team developer, January-May
 
-Khanh Nguyen, $500, team developer, April
+Khanh Nguyen, $1700, team developer, April-May
 
