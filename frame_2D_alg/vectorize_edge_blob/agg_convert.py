@@ -92,3 +92,26 @@ def repack(pPP, ptuple, idx_):  # pack derH in elements of iderH
             Par[-1] += [par]  # pack par in top lev of Par, added per inpack_derH recursion
         else:
             Par += [[par]]  # add new Par lev, implicitly nested in ptuples?
+
+# temporary, not used here:
+# _,_,med_valH = med_eval(link._P.link_t[fd], old_link_=[], med_valH=[], fd=fd)  # recursive += mediated link layer
+
+def med_eval(last_link_, old_link_, med_valH, fd):  # recursive eval of mediated link layers, in form_graph only?
+
+    curr_link_ = []; med_val = 0
+    # compute med_valH, layer= val of links mediated by incremental number of nodes:
+
+    for llink in last_link_:
+        for _link in llink._P.link_t[fd]:
+            if _link not in old_link_:  # not-circular link
+                old_link_ += [_link]  # evaluated mediated links
+                curr_link_ += [_link]  # current link layer,-> last_link_ in recursion
+                med_val += np.sum(_link.valT[fd])
+    med_val *= med_decay ** (len(med_valH) + 1)
+    med_valH += [med_val]
+    if med_val > aveB:
+        # last med layer val-> likely next med layer val
+        curr_link_, old_link_, med_valH = med_eval(curr_link_, old_link_, med_valH, fd)  # eval next med layer
+
+    return curr_link_, old_link_, med_valH
+

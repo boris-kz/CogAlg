@@ -198,11 +198,11 @@ def form_rdert(rx,ry, dert__t, mask__):
              for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
 
-# slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
-def slice_blob_ortho(blob, verbose=False):
+
+def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
+
     from .hough_P import new_rt_olp_array, hough_check
     Y, X = blob.mask__.shape
-
     # Get thetas and positions:
     dy__, dx__ = blob.dert__[4:6]  # Get blob derts' angle
     y__, x__ = np.indices((Y, X))  # Get blob derts' position
@@ -219,7 +219,9 @@ def slice_blob_ortho(blob, verbose=False):
         for x in x__[0]:
             # initialize P at first unfilled dert found
             if not filled[y, x]:
-                P = CP(box=[y, y+1, x, x+1])
+                M = 0; Ma = 0; I = 0; Dy = 0; Dx = 0; Sin_da0 = 0; Cos_da0 = 0; Sin_da1 = 0; Cos_da1 = 0
+                dert_ = []
+                box = [y, y, x, x]
                 to_fill = [(y, x)]                  # dert indices to floodfill
                 rt_olp__ = new_rt_olp_array((Y, X)) # overlap of rho theta (line) space
                 while to_fill:                      # floodfill for one P
@@ -236,37 +238,34 @@ def slice_blob_ortho(blob, verbose=False):
                     filled[y2, x2] = True       # mark as filled
                     rt_olp__[:] = new_rt_olp__  # update overlap
                     # accumulate P params:
-                    dert = tuple(param__[y2, x2] for param__ in blob.dert__)
-                    _, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert  # skip i
-                    if dx < 0: dy, dx = -dy, -dx  # rotate dy, dx 180 deg if dx < 0
-                    P.ptuple.M += ave_g - g; P.ptuple.Ma += ave_ga - ga; P.ptuple.I += ri; P.ptuple.angle[0] += dy; P.ptuple.angle[1] += dx
-                    P.ptuple.aangle = [_par + par for _par, par in
-                                     zip(P.ptuple.aangle, [sin_da0, cos_da0, sin_da1, cos_da1])]
-                    P.dert_ += [(y2, x2, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1)]
+                    dert = tuple(param__[y2, x2] for param__ in blob.dert__[1:])
+                    g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert  # skip i
+                    M += ave_g - g; Ma += ave_ga - ga; I += ri; Dy += dy; Dx += dx
+                    Sin_da0 += sin_da0; Cos_da0 += cos_da0; Sin_da1 += sin_da1; Cos_da1 += cos_da1
+                    dert_ += [(y2, x2, *dert)]  # unpack x, y, add dert to P
 
-                    if y2 < P.box[0]: P.box[0] = y2
-                    if y2 + 1 > P.box[1]: P.box[1] = y2 + 1
-                    if x2 < P.box[2]: P.box[2] = x2
-                    if x2 + 1 > P.box[3]: P.box[3] = x2 + 1
+                    if y2 < box[0]: box[0] = y2
+                    if y2 > box[1]: box[1] = y2
+                    if x2 < box[2]: box[2] = x2
+                    if x2 > box[3]: box[3] = x2
                     # add neighbors to fill
                     to_fill += [*product(range(y2-1, y2+2), range(x2-1, x2+2))]
                 if not rt_olp__.any():
                     raise ValueError
-                P.ptuple.G = np.hypot(*P.ptuple.angle)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
-                P.ptuple.Ga = (P.ptuple.aangle[1] + 1) + (P.ptuple.aangle[3] + 1)  # Cos_da0, Cos_da1
-                P.ptuple.L = len(P.dert_)
-                # axis_angle = rt_olp__.nonzero()[0].mean()  # mean theta
-                # P.axis = np.sin(axis_angle), np.cos(axis_angle)
-                if P.ptuple.G == 0:
-                    P.axis = 0, 1
-                    print([(dy, dx) for y2, x2, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 in P.dert_])
+                G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
+                Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
+                L = len(dert_)
+                if G == 0:
+                    axis = 0, 1
                 else:
-                    P.axis = P.ptuple.angle[0] / P.ptuple.G, P.ptuple.angle[1] / P.ptuple.G
-                P_ += [P]
+                    axis = Dy / G, Dx / G
+
+                P_ += [CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L],
+                          box=box, dert_=dert_, axis=axis)]
                 if verbose:
-                    progress += P.ptuple.L * step; print(f"\rFilling... {round(progress)} %", end=""); sys.stdout.flush()
+                    progress += L * step; print(f"\rFilling... {round(progress)} %", end=""); sys.stdout.flush()
     blob.P__ = [P_]
-    if verbose: print("\r\t\t\t\t\t\t\t\r", end="")
+    if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
     return P_
 
 

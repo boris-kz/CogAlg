@@ -1,8 +1,8 @@
 import numpy as np
-THETA_RES = 180         # bins per 180 degrees
-UNIT_RHO_RES = 10       # bins per 1 unit of rho
+THETA_RES = 360         # bins per 180 degrees
+UNIT_RHO_RES = 20       # bins per 1 unit of rho
 RHO_TOL_BINS = 10       # tolerance for rho (number of bins)
-THETA_TOL_BINS = 4      # tolerance for theta (number of bins)
+THETA_TOL_BINS = 10     # tolerance for theta (number of bins)
 THETA_TOL = THETA_TOL_BINS / THETA_RES * np.pi
 
 def hough_check(rt_olp__, x, y, t):

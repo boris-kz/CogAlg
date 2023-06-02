@@ -34,7 +34,7 @@ import numpy as np
 from time import time
 from collections import deque
 from visualization.draw_frame_blobs import visualize_blobs
-from class_cluster import ClusterStructure
+from class_cluster import ClusterStructure, ipar
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
@@ -49,45 +49,45 @@ EXCLUDED_ID = -2
 
 class CBlob(ClusterStructure):
     # comp_pixel:
-    I = float
-    Dy = float
-    Dx = float
-    G = float
-    A = float  # blob area
-    sign = bool
+    sign : bool = None
+    I : float = 0.0
+    Dy : float = 0.0
+    Dx : float = 0.0
+    G : float = 0.0
+    A : float = 0.0 # blob area
     # composite params:
-    M = float  # summed PP.M, for both types of recursion?
-    box = list  # x0, xn, y0, yn
-    mask__ = object
-    dert__ = object
-    root_dert__ = object
-    adj_blobs = list
-    fopen = bool
+    M : float = 0.0 # summed PP.M, for both types of recursion?
+    box : tuple = (0, 0, 0, 0)  # x0, xn, y0, yn
+    mask__ : object = None
+    dert__ : object = None
+    root_dert__ : object = None
+    adj_blobs : list = ipar([])  # adjacent blobs
+    fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_angle:
-    Sin_da0 = float
-    Cos_da0 = float
-    Sin_da1 = float
-    Cos_da1 = float
-    Ga = float
+    Sin_da0 : float = 0.0
+    Cos_da0 : float = 0.0
+    Sin_da1 : float = 0.0
+    Cos_da1 : float = 0.0
+    Ga : float = 0.0
     # comp_dx:
-    Mdx = float
-    Ddx = float
+    Mdx : float = 0.0
+    Ddx : float = 0.0
     # derivation hierarchy:
-    prior_forks = str
-    fBa = bool  # in root_blob: next fork is comp angle, else comp_r
-    rdn = lambda: 1.0  # redundancy to higher blob layers, or combined?
-    rng = int  # comp range, set before intra_comp
-    P__ = list  # input + derPs, common root for downward layers and upward PP_s:
-    rlayers = list  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
-    dlayers = list  # separate for range and angle forks per blob
-    PPm_ = list  # mblobs in frame
-    PPd_ = list  # dblobs in frame
-    valt = list  # PPm_ val, PPd_ val, += M,G?
-    fsliced = bool  # from comp_slice
-    root = object  # frame or from frame_bblob
-    mgraph = lambda: None  # reference to converted blob
-    dgraph = lambda: None  # reference to converted blob
+    prior_forks : str = ''
+    fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
+    rdn : float = 1.0  # redundancy to higher blob layers, or combined?
+    rng : int = 1  # comp range, set before intra_comp
+    P__ : list = ipar([])  # input + derPs, common root for downward layers and upward PP_s:
+    rlayers : list = ipar([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
+    dlayers : list = ipar([])  # separate for range and angle forks per blob
+    PPm_ : list = ipar([])  # mblobs in frame
+    PPd_ : list = ipar([])  # dblobs in frame
+    valt : list = ipar([])  # PPm_ val, PPd_ val, += M,G?
+    fsliced : bool = False  # from comp_slice
+    root : object = None  # frame or from frame_bblob
+    mgraph : object = None  # reference to converted blob
+    dgraph : object = None  # reference to converted blob
 
 '''
     Conventions:
@@ -112,7 +112,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, prior_forks='', rlayers=[blob_], box=(0, Y, 0, X))  # dlayers = []: no comp_a yet
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, rlayers=[blob_], box=(0, Y, 0, X))  # dlayers = []: no comp_a yet
 
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -240,7 +240,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                     blob.Ga = (blob.Cos_da0 + 1) + (blob.Cos_da1 + 1)  # +1 for all positives
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
-    if verbose: print("\r\t\t\t\t\t\t\t\r", end="")
+    if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
     return blob_, idmap, adj_pairs
 

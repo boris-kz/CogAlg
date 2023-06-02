@@ -22,17 +22,17 @@ def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,r
 
 def feedback(root, fd):  # append new der layers to root
 
-    Fback = root.fb_.pop()  # init with 1st fback ders: derT, fds, valT, rdnT
-    while root.fb_:
-        sum_unpack(Fback, root.fb_.pop())  # sum | append fback in Fback
+    Fback = root.fback_.pop()  # init with 1st fback derT,valT,rdnT
+    while root.fback_:
+        sum_unpack(Fback, root.fback_.pop())  # sum | append fback in Fback
     derT,valT,rdnT = Fback
     for i in 0,1:
         root.derT[i]+=derT[i]; root.valT[i]+=valT[i]; root.rdnT[i]+=rdnT[i]  # concat Fback layers to root layers
 
     if isinstance(root.roott[fd], CPP):
         root = root.roott[fd]
-        root.fb_ += [Fback]
-        if len(root.fb_) == len(root.P__[fd]):  # all nodes term, fed back to root.fb_
+        root.fback_ += [Fback]
+        if len(root.fback_) == len(root.P__[fd]):  # all nodes term, fed back to root.fback_
             feedback(root, fd)  # derT=[1st layer] in sum2PP, deeper layers(forks appended by recursive feedback
 
 
@@ -111,16 +111,15 @@ def nest(P, depth, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->la
     # depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc
 
     if not isinstance(P.valT[0],list):
-        cdepth = 1  # at least ptuple
-        while cdepth < ddepth:
+        curr_depth = 0
+        while curr_depth < ddepth:
             P.derT[0]=[P.derT[0]]; P.valT[0]=[P.valT[0]]; P.rdnT[0]=[P.rdnT[0]]
             P.derT[1]=[P.derT[1]]; P.valT[1]=[P.valT[1]]; P.rdnT[1]=[P.rdnT[1]]
-            cdepth += 1
+            curr_depth += 1
 
-    for derP in P.link_t[1]:
-        if not isinstance(derP.valT[0],list):
-            cdepth = 1  # at least ptuple
-            while cdepth < ddepth:
+        for derP in P.link_t[1]:
+            curr_depth = 0
+            while curr_depth < ddepth:
                 derP.derT[0]=[derP.derT[0]]; derP.valT[0]=[derP.valT[0]]; derP.rdnT[0]=[derP.rdnT[0]]
                 derP.derT[1]=[derP.derT[1]]; derP.valT[1]=[derP.valT[1]]; derP.rdnT[1]=[derP.rdnT[1]]
-                cdepth += 1
+                curr_depth += 1
