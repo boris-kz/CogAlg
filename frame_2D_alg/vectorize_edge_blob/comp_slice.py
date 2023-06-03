@@ -17,7 +17,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
     for P_ in P__[1:]:  # lower row
         for P in P_:
             link_,link_m,link_d = [],[],[]  # empty in initial Ps
-            derT=[[],[]]; valT=[0,0]; rdnT=[1,1]
+            derT=[[],[]]; valT=[0,0]; rdnT=[1,1]  # to sum links in comp_P
             for _P in _P_:
                 _L = len(_P.dert_); L = len(P.dert_); _x0=_P.box[2]; x0=P.box[2]
                 # test for x overlap(_P,P) in 8 directions, all derts positive:
@@ -27,7 +27,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
                     break  # no xn overlap, stop scanning lower P_
             if link_:
                 P.link_=link_; P.link_t=[link_m,link_d]
-                P.derT=derT; P.valT=valT; P.rdnT=rdnT  # single Mtuple, Dtuple derT
+                P.derT=derT; P.valT=valT; P.rdnT=rdnT  # single Mtuple, Dtuple
         _P_ = P_
     PPm_,PPd_ = form_PP_t(P__, base_rdn=2)
     blob.PPm_, blob.PPd_  = PPm_, PPd_
@@ -69,7 +69,7 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
     rePP_ = []
     while PP_:  # init P__
         P__, valt, reval = PP_.pop(0)
-        Ave = ave * 1+(valt[fd] < valt[1-fd])  # also * PP.rdnT[fd]?
+        Ave = ave * 1+(valt[fd] < valt[1-fd])  # * PP.rdnT[fd]?
         if valt[fd] > Ave:
             if reval < Ave:  # same graph, skip re-evaluation:
                 rePP_ += [[P__,valt,0]]  # reval=0
@@ -117,27 +117,29 @@ def reval_P_(P__, fd):  # prune qPP by link_val + mediated link__val
 def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 
     P__,_,_ = qPP  # proto-PP is a list
-    PP = CPP(box=copy(P__[0][0].box), fd=fd, P__ = P__)
-    DerT,ValT,RdnT = [[],[]],[[],[]],[[],[]]
+    P = deepcopy(P__[0][0])
+    # init:
+    Ptuple, DerT,ValT,RdnT, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d) \
+    = P.ptuple, P.derT, P.valT, P.rdnT, P.box, P.link_, P.link_t
+    PP = CPP(fd=fd, P__=P__)
     # accum:
-    for P_ in P__:  # top-down
-        for P in P_:  # left-to-right
+    for i, P_ in enumerate(P__):  # top-down
+        for j, P in enumerate(P_):  # left-to-right
             P.roott[fd] = PP
-            sum_ptuple(PP.ptuple, P.ptuple)
-            if P.derT[0]:  # P links and both forks are not empty
-                for i in 0,1:
-                    if isinstance(P.valT[0], list):  # der+: H = 1fork) 1layer before feedback
-                        sum_unpack([DerT[i],ValT[i],RdnT[i]], [P.derT[i],P.valT[i],P.rdnT[i]])
-                    else:  # rng+: 1 vertuple
-                        sum_ptuple(DerT[i], P.derT[i]); ValT[i]+=P.valT[i]; RdnT[i]+=P.rdnT[i]
-                PP.link_ += P.link_
-                for Link_,link_ in zip(PP.link_t, P.link_t):
-                    Link_ += link_  # all unique links in PP, to replace n
-            Y0,Yn,X0,Xn = PP.box; y0,yn,x0,xn = P.box
-            PP.box = [min(Y0,y0), max(Yn,yn), min(X0,x0), max(Xn,xn)]
-    if DerT[0]:
-        for i in 0,1:
-            PP.derT[i]+=[DerT[i]]; PP.valT[i]+=[ValT[i]]; PP.rdnT[i]+=[RdnT[i]]
+            if i or j:  # exclude init P
+                sum_ptuple(Ptuple, P.ptuple)
+                Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
+                y0,yn,x0,xn = P.box
+                Y0=min(Y0,y0); Yn=max(Yn,yn); X0=min(X0,x0); Xn=max(Xn,xn)
+                if P.derT[0]:
+                    for k in 0,1:
+                        if isinstance(P.valT[0], list):  # der+: H = 1fork) 1layer before feedback
+                            sum_unpack([DerT[k],ValT[k],RdnT[k]], [P.derT[k],P.valT[k],P.rdnT[k]])
+                        else:  # rng+: 1 vertuple
+                            sum_ptuple(DerT[k], P.derT[k]); ValT[k]+=P.valT[k]; RdnT[k]+=P.rdnT[k]
+
+    PP.ptuple, PP.derT, PP.valT, PP.rdnT, PP.box, PP.link_, PP.link_t \
+    = Ptuple, DerT, ValT, RdnT, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d)
     return PP
 
 
@@ -169,7 +171,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
                 Ptuple += [copy(par)]
 
 
-def comp_P(_P,P, link_,link_m,link_d, LayT, ValT, RdnT, fd=0, derP=None):  #  derP if der+
+def comp_P(_P,P, link_,link_m,link_d, LayT,ValT,RdnT, fd=0, derP=None):  #  derP if fd==1
 
     aveP = P_aves[fd]
     rn = len(_P.dert_)/ len(P.dert_)
@@ -200,9 +202,7 @@ def comp_P(_P,P, link_,link_m,link_d, LayT, ValT, RdnT, fd=0, derP=None):  #  de
         if fd: sum_unpack([LayT[1],ValT[1],RdnT[1]], [derP.derT[1][-1],derP.valT[1][-1],derP.rdnT[1][-1]])
         else:
             sum_ptuple(LayT[1],dtuple); ValT[1]+=dval; RdnT[1]+=drdn
-    if fd:
-        for i in 0,1:  # LayT must be summed above with old derP.derT
-            derP.derT[i]+=[LayT[i]]; derP.valT[i]+=[ValT[i]]; derP.rdnT[i]+=[RdnT[i]]
+
 
 
 def comp_unpack(Que,que, rn):  # recursive unpack nested sequence to compare final ptuples

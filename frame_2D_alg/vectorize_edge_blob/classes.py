@@ -1,5 +1,4 @@
-from class_cluster import ClusterStructure, z
-# z: initialize param value
+from class_cluster import ClusterStructure, init_params as z
 
 # not needed?
 class CQ(ClusterStructure):  # generic links
@@ -79,7 +78,7 @@ class CPP(CderP):
     P__ : list = z([])  # 2D array of nodes: Ps or sub-PPs
     link_ : list = z([])  # all links summed from Ps
     link_t : list = z([[],[]])  # +ve rlink_, dlink_
-    roott : list = z([None, None])  # PPPm|PPPd containing this PP
+    roott : list = z([None, None])  # PPPm|PPPd containing this PP, for sub+ only
     cPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     # temporary:
     fback_ : list = z([])  # [feedback derT,valT,rdnT per node]
@@ -89,20 +88,22 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     G : object = None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
+    fd: int = 0
     parT : list = z([[],[]])  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+,lev/sub+? subH if derG
-    id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation
+    id_T : list = z([[],[]])  # indices in the list of all possible layers|forks, for sparse representation
     valT : list = z([[],[]])
     rdnT : list = z([[],[]])
-    node_: list = z([])  # single-fork, conceptually H[0], concat sub-node_s in ex.H levs
-    wH : list = z([])  # down-forking tree of Levs: slice of nodes
-    root : object = None  # | root_: ~node_ but different forks?
-    uH : list = z([])  # up-forking Levs if multiple roots
+    # top md_sets vs md_T: mix of m|d per salient param, sum per set?
+    node_: list = z([])  # same-fork: wH[0]? concat sub-node_s in ex.H levs
+    wH :   list = z([])  # down-forking tree of node Levs, forks in id_T?
+    root_: list = z([])  # agg+|sub+ forks: msets?
+    uH :   list = z([])  # up-forking tree of root Levs, if multiple roots, separate id_T?
     link_: list = z([])  # temporary holder for der+ node_, then unique links within graph?
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
     rng : int = 1
     box : list = z([0,0,0,0,0,0])  # y,x, y0,yn, x0,xn
     nval : int = 0  # of open links: base alt rep
-    alt_graph_ : list = z([])  # contour + overlapping contrast graphs
+    alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
     fback_ : list = z([])  # [feedback derT,valT,rdnT per node]
