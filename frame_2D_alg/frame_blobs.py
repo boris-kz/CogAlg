@@ -34,7 +34,7 @@ import numpy as np
 from time import time
 from collections import deque
 from visualization.draw_frame_blobs import visualize_blobs
-from class_cluster import ClusterStructure, ipar
+from class_cluster import ClusterStructure, init_param as z
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
@@ -61,7 +61,7 @@ class CBlob(ClusterStructure):
     mask__ : object = None
     dert__ : object = None
     root_dert__ : object = None
-    adj_blobs : list = ipar([])  # adjacent blobs
+    adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_angle:
@@ -78,12 +78,12 @@ class CBlob(ClusterStructure):
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
     rng : int = 1  # comp range, set before intra_comp
-    P__ : list = ipar([])  # input + derPs, common root for downward layers and upward PP_s:
-    rlayers : list = ipar([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
-    dlayers : list = ipar([])  # separate for range and angle forks per blob
-    PPm_ : list = ipar([])  # mblobs in frame
-    PPd_ : list = ipar([])  # dblobs in frame
-    valt : list = ipar([])  # PPm_ val, PPd_ val, += M,G?
+    P__ : list = z([])  # input + derPs, common root for downward layers and upward PP_s:
+    rlayers : list = z([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
+    dlayers : list = z([])  # separate for range and angle forks per blob
+    PPm_ : list = z([])  # mblobs in frame
+    PPd_ : list = z([])  # dblobs in frame
+    valt : list = z([])  # PPm_ val, PPd_ val, += M,G?
     fsliced : bool = False  # from comp_slice
     root : object = None  # frame or from frame_bblob
     mgraph : object = None  # reference to converted blob

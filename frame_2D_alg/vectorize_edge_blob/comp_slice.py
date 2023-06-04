@@ -117,10 +117,10 @@ def reval_P_(P__, fd):  # prune qPP by link_val + mediated link__val
 def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
 
     P__,_,_ = qPP  # proto-PP is a list
-    P = deepcopy(P__[0][0])
     # init:
+    P = (P__[0][0])
     Ptuple, DerT,ValT,RdnT, (Y0,Yn,X0,Xn), Link_, (Link_m,Link_d) \
-    = P.ptuple, P.derT, P.valT, P.rdnT, P.box, P.link_, P.link_t
+    = deepcopy(P.ptuple),deepcopy(P.derT),deepcopy(P.valT),deepcopy(P.rdnT),copy(P.box),copy(P.link_),copy(P.link_t)
     PP = CPP(fd=fd, P__=P__)
     # accum:
     for i, P_ in enumerate(P__):  # top-down
