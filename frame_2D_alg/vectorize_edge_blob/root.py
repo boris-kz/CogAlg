@@ -269,6 +269,73 @@ def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
     return P_
 
 
+def slice_blob_flow(blob, verbose=False):  # version of slice_blob_ortho
+
+    # find the derts with gradient pointing at current dert:
+    _yx_ = np.indices(blob.mask__.shape)[:, ~blob.mask__].T  # blob derts' position
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        sc_ = np.divide(blob.dert__[4:6], blob.dert__[1])[:, ~blob.mask__].T    # blob derts' angle
+    uv_ = np.zeros_like(sc_)        # (u, v) points to one of the eight neighbor cells
+    u_, v_ = uv_.T                  # unpack u, v
+    s_, c_ = sc_.T                  # unpack sin, cos
+    u_[0.5 <= s_] = 1              # down, down left or down right
+    u_[(-0.5 < s_) & (s_ < 0.5)] = 0  # left or right
+    u_[s_ <= -0.5] = -1              # up, up-left or up-right
+    v_[0.5 <= c_] = 1              # right, up-right or down-right
+    v_[(-0.5 < c_) & (c_ < 0.5)] = 0  # up or down
+    v_[c_ <= -0.5] = -1              # left, up-left or down-left
+    yx_ = _yx_ + uv_                # compute target cell position
+    m__ = (yx_.reshape(-1, 1, 2) == _yx_).all(axis=2)   # mapping from _yx_ to yx_
+    def get_p(a):
+        nz = a.nonzero()[0]
+        if len(nz) == 0:    return -1
+        elif len(nz) == 1:  return nz[0]
+        else:               raise ValueError
+    p_ = [*map(get_p, m__)]       # reduced mapping from _yx_ to yx_
+    n_ = m__.sum(axis=0) # find n, number of gradient sources per cell
+
+    # cluster Ps, start from cells without any gradient source
+    P_ = []
+    for i in range(len(n_)):
+        if n_[i] == 0:                  # start from cell without any gradient source
+            I = 0; M = 0; Ma = 0; Dy = 0; Dx = 0; Sin_da0 = 0; Cos_da0 = 0; Sin_da1 = 0; Cos_da1 = 0
+            dert_ = []
+            y, x = _yx_[i]
+            box = [y, y, x, x]
+
+            j = i
+            while True:      # while there is a dert to follow
+                y, x = _yx_[j]      # get dert position
+                dert = [par__[y, x] for par__ in blob.dert__[1:]]  # dert params at _y, _x, skip i
+                g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
+                I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+                dert_ += [(y, x, *dert)]
+                if y < box[0]: box[0] = y
+                if y > box[1]: box[1] = y
+                if x < box[2]: box[2] = x
+                if x > box[3]: box[3] = x
+
+                # remove all gradient sources from the cell
+                while True:
+                    try:
+                        k = p_.index(j)
+                        p_[k] = -1
+                    except ValueError as e:
+                        if "is not in list" not in str(e):
+                            raise e
+                        break
+                if p_[j] != -1:
+                    j = p_[j]
+                else:
+                    break
+            G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
+            L = len(dert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
+            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=dert_)]
+
+    blob.P__ = [P_]
+
+    return blob.P__
+
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
     current_ys = [P_[0].y0 for P_ in P__]  # list of current-layer seg rows

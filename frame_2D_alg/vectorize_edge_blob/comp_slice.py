@@ -38,20 +38,24 @@ def form_PP_t(P__, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
     PP_t = []
     for fd in 0,1:
         fork_P__ = ([copy(P_) for P_ in reversed(P__)])  # scan bottom-up
-        qPP_ = []; packed_P_ = []  # form initial sequence-PPs:
+        qPP_ = []  # form initial sequence-PPs:
         for P_ in fork_P__:
             for P in P_:
-                if P not in packed_P_:
-                    qPP = [[P]]; valt = [0,0]  # init PP is 2D queue of Ps, + valt of all layers?
+                if not P.roott[fd]:
+                    qPP = [[P]]  # init PP is 2D queue of Ps, + valt of all layers?
+                    P.roott[fd]=qPP; valt = [0,0]
                     uplink_ = P.link_t[fd]; uuplink_ = []
                     # next-line links for recursive search
                     while uplink_:
                         for derP in uplink_:
-                            if derP._P not in packed_P_:
-                                qPP.insert(0, [derP._P])  # pack top down
-                                for i in 0,1:
-                                    valt[i] += np.sum(derP.valT[i])
-                                packed_P_ += [derP._P]
+                            _P = derP._P; _qPP = _P.roott[fd]
+                            if _qPP:
+                                for i in 0, 1: valt[i] += _qPP[1][i]
+                                merge(qPP[0],_qPP[0])  # merge P__s, not sure how to align them
+                            else:
+                                qPP[0].insert(0,_P)  # pack top down
+                                _P.root[fd] = qPP
+                                for i in 0,1: valt[i] += np.sum(derP.valT[i])
                                 uuplink_ += derP._P.link_t[fd]
                         uplink_ = uuplink_
                         uuplink_ = []
@@ -63,6 +67,29 @@ def form_PP_t(P__, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
 
     return PP_t  # add_alt_PPs_(graph_t)?
 
+# draft
+def merge(P__, _P__):  # the P__s should not have shared Ps
+
+    '''
+    not sure how align P__s at the moment
+    _P__ = [_P for _P_ in _qPP[0] for _P in _P_]
+    if derP._P in _P__:
+        for _P_ in _qPP[0]:  # pack Ps into P__ based on y
+            for _P in _P_:
+                if _P is not derP._P and _P not in _P__:
+                    # pack P into P__ in top down sequence
+                    current_ys = [P_[0].box[0] for P_ in P__]  # list of current-layer seg rows
+                    if P.box[0] in current_ys:
+                        if P not in P__[current_ys.index(P.box[0])]:
+                            P__[current_ys.index(P.box[0])].append(P)  # append P row
+                    elif P.box[0] > current_ys[0]:  # P.y0 > largest y in ys
+                        P__.insert(0, [P])
+                    elif P.box[0] < current_ys[-1]:  # P.y0 < smallest y in ys
+                        P__.append([P])
+                    elif P.box[0] < current_ys[0] and P.box[0] > current_ys[-1]:  # P.y0 in between largest and smallest value
+                        for i, y in enumerate(current_ys):  # insert y if > next y
+                            if P.box[0] > y: P__.insert(i, [P])  # PP.P__.insert(P.y0 - current_ys[-1], [P])
+    '''
 
 def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
 

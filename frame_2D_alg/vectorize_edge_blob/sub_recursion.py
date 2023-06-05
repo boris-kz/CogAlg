@@ -38,13 +38,18 @@ def feedback(root, fd):  # append new der layers to root
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
-    if fd: [[nest(P,0) for P in P_] for P_ in PP.P__]  # add layers(forks to Ps and links
+    if fd:
+        [[nest(P) for P in P_] for P_ in PP.P__]  # add layers and forks?
+        P__ = comp_der(PP.P__)  # returns top-down
+        PP.rdnT[fd][-1][-1][-1] += np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1 - fd][-1])
+        base_rdn = PP.rdnT[fd][-1][-1][-1]  # link Rdn += PP rdn?
+    else:
+        P__ = comp_rng(PP.P__, PP.rng + 1)
+        PP.rdnT[fd] += PP.valT[fd] > PP.valT[1 - fd]
+        base_rdn = PP.rdnT[fd]
 
-    P__ = comp_der(PP.P__) if fd else comp_rng(PP.P__, PP.rng+1)   # returns top-down
-    PP.rdnT[fd][-1] += np.sum(PP.valT[fd][-1]) > np.sum(PP.valT[1-fd][-1])
-    # link Rdn += PP rdn?
     cP__ = [copy(P_) for P_ in P__]
-    PP.P__ = form_PP_t(cP__,base_rdn=np.sum(PP.rdnT[fd][-1]))  # P__ = sub_PPm_, sub_PPd_
+    PP.P__ = form_PP_t(cP__, base_rdn=base_rdn)  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
         if sub_PP_:  # der+ | rng+
@@ -68,7 +73,6 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
         for P in iP_:
             link_, link_m, link_d = [],[],[]  # for new P
             derT,valT,rdnT = [[],[]],[0,0],[1,1]
-            # not sure
             for iderP in P.link_t[0]:  # mlinks
                 _P = iderP._P
                 for _derP in _P.link_t[0]:  # next layer of mlinks
@@ -106,9 +110,8 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
     return P__
 
 
-def nest(P, depth, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
-    # not yet implemented:
-    # depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc
+def nest(P, ddepth=3):  # default ddepth is nest 3 times: tuple->fork->layer->H
+    # agg+ adds depth: number brackets before the tested bracket: P.valT[0], P.valT[0][0], etc?
 
     if not isinstance(P.valT[0],list):
         curr_depth = 0
