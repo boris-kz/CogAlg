@@ -42,6 +42,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
     slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
     rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
     # if sum(P.M s + P.Ma s):
+    # fill-in | prune adjacent Ps in select blobs?
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
         sub_recursion_eval(blob, PP_, fd=fd)  # intra PP, no blob fb
@@ -70,20 +71,19 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
-                    Pdert_ = [dert]
+                    Pdert_ = [dert+[[]]]  # add root_
                     I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
                     Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params:
                     I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
                     Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
-                    Pdert_ += [dert]
+                    Pdert_ += [dert+[[]]]  # add root_
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
                 Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
-                L = len(Pdert_)
-                # params.valt = [params.M+params.Ma, params.G+params.Ga]
+                L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
                 P_+=[CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
             _mask = mask
             x += 1

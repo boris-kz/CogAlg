@@ -73,7 +73,7 @@ class CPP(CderP):
     valT : list = z([[],[]])  # nesting parallel to derT
     rdnT : list = z([[],[]])
     mask__ : object = None
-    P__ : list = z([])  # 2D array of nodes: Ps or sub-PPs
+    P_ : list = z([])  # array of nodes: Ps or sub-PPs
     link_ : list = z([])  # all links summed from Ps
     link_t: list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # PPPm | PPPd containing this PP, for sub+ only

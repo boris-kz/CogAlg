@@ -4,7 +4,7 @@ from copy import copy, deepcopy
 from .filters import PP_aves, ave_nsub, P_aves, G_aves
 from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_unpack
-
+from dataclasses import replace
 
 def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derT,valT,rdnT in blob
 
@@ -48,7 +48,7 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
         PP.rdnT[fd] += PP.valT[fd] > PP.valT[1 - fd]
         base_rdn = PP.rdnT[fd]
 
-    cP__ = [copy(P_) for P_ in P__]
+    cP__ = [[replace(P, roott=[None, None]) for P in P_] for P_ in P__]
     PP.P__ = form_PP_t(cP__, base_rdn=base_rdn)  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
