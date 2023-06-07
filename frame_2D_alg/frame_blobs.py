@@ -35,6 +35,7 @@ from time import time
 from collections import deque
 from visualization.draw_frame_blobs import visualize_blobs
 from class_cluster import ClusterStructure, init_param as z
+from dataclasses import replace
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
@@ -60,7 +61,7 @@ class CBlob(ClusterStructure):
     box : tuple = (0, 0, 0, 0)  # x0, xn, y0, yn
     mask__ : object = None
     dert__ : object = None
-    root_dert__ : object = None
+    dert_roots__ : object = None  # map to dert__
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -78,7 +79,7 @@ class CBlob(ClusterStructure):
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
     rng : int = 1  # comp range, set before intra_comp
-    P__ : list = z([])  # input + derPs, common root for downward layers and upward PP_s:
+    P_ : list = z([])  # input + derPs, no internal sub-recursion
     rlayers : list = z([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers : list = z([])  # separate for range and angle forks per blob
     PPm_ : list = z([])  # mblobs in frame
@@ -102,18 +103,19 @@ class CBlob(ClusterStructure):
 
 def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=False):
 
-    Y, X = image.shape[:2]
-
     if verbose: start_time = time()
+    Y, X = image.shape[:2]
     dert__ = comp_pixel(image)
+    dert_roots__ = [[[] for dert in dert_] for dert_ in dert__]
 
     blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3] > 0,
                                          prior_forks='', verbose=verbose)  # dert__[3] is g, https://en.wikipedia.org/wiki/Flood_fill
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, rlayers=[blob_], box=(0, Y, 0, X))  # dlayers = []: no comp_a yet
 
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, dert_roots__=dert_roots__, rlayers=[blob_], box=(0, Y, 0, X))
+    # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
     if intra:  # omit for testing frame_blobs without intra_blob

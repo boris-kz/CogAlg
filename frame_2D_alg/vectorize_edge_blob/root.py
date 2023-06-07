@@ -40,9 +40,9 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
-    rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
-    # if sum(P.M s + P.Ma s):
-    # fill-in | prune adjacent Ps in select blobs?
+    rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
+    form_link_(blob)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
+
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
         sub_recursion_eval(blob, PP_, fd=fd)  # intra PP, no blob fb
@@ -50,14 +50,18 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
+def form_link_(blob):  # trace adjacent Ps by adjacent dert roots, fill|prune if missing or redundant, add to P.link_ if >ave*rdn
+    pass
+
 '''
-or only needed for final rotated Ps?
+or only compute params needed for rotate_P_?
 '''
 def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
 
     mask__ = blob.mask__  # same as positive sign here
     dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
-    dert__ = [zip(*dert_) for dert_ in dert__]  # convert 1D array of 10-tuple rows into 2D array of 10-tuples per blob
+    dert__ = [zip(*dert_) for dert_ in dert__]  # convert 1D array of 10-tuple rows into 2D array of 10-tuples per select blob
+    blob.dert__ = dert__
     P__ = []
     height, width = mask__.shape
     if verbose: print("Converting to image...")
@@ -71,33 +75,44 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
-                    Pdert_ = [dert+[[]]]  # add root_
+                    Pdert_ = [dert]
                     I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
                     Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params:
                     I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
                     Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
-                    Pdert_ += [dert+[[]]]  # add root_
+                    Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
                 Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-                P_+=[CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
+                P_ += [Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, blob.root__)]
             _mask = mask
             x += 1
         # pack last P, same as above:
         if not _mask:
             G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
             L = len(Pdert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
+            P_ += [Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, blob.root__)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
     blob.P__ = P__
     return P__
 
+def Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, root__):
+
+    P = CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y, y, x-L, x-1], dert_=Pdert_)
+    P.dert_roots_ = [[P] for dert in Pdert_]
+
+    bx = P.box[2]
+    while bx < P.box[3]:  # x0->xn
+        root__[y][bx] += [P]
+        bx += 1
+
+    return P
 
 def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
@@ -118,7 +133,7 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
                     rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
                     break
 
-def rotate_P(P, dert__t, mask__, ave_a):
+def rotate_P(P, dert__, mask__, ave_a):
 
     if ave_a is None:
         sin, cos = np.divide(P.ptuple[3], P.ptuple[5])
@@ -133,7 +148,7 @@ def rotate_P(P, dert__t, mask__, ave_a):
     # scan left:
     rx=xcenter; ry=ycenter
     while True:  # terminating condition is in form_rdert()
-        rdert = form_rdert(rx,ry, dert__t, mask__)
+        rdert = form_rdert(rx,ry, dert__, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ = [rdert] + rdert_  # append left
         rx-=cos; ry-=sin  # next rx,ry
@@ -141,7 +156,7 @@ def rotate_P(P, dert__t, mask__, ave_a):
     # scan right:
     rx=xcenter+cos; ry=ycenter+sin  # center dert was included in scan left
     while True:
-        rdert = form_rdert(rx,ry, dert__t, mask__)
+        rdert = form_rdert(rx,ry, dert__, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]  # append right
         rx+=cos; ry+=sin  # next rx,ry
@@ -162,7 +177,7 @@ def rotate_P(P, dert__t, mask__, ave_a):
     P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
     P.axis = new_axis
 
-def form_rdert(rx,ry, dert__t, mask__):
+def form_rdert(rx,ry, dert__, mask__):
 
     Y, X = mask__.shape
     # coord, distance of four int-coord derts, overlaid by float-coord rdert in dert__, int for indexing
@@ -176,26 +191,24 @@ def form_rdert(rx,ry, dert__t, mask__):
         return None
     # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1
     # approximation, square of rpixel is rotated, won't fully match not-rotated derts
-    k1 = 2 - dx1*dx1 - dy1*dy1
-    k2 = 2 - dx1*dx1 - dy2*dy2
-    k3 = 2 - dx2*dx2 - dy1*dy1
-    k4 = 2 - dx2*dx2 - dy2*dy2
-    K = k1 + k2 + k3 + k4
+    k0 = 2 - dx1*dx1 - dy1*dy1
+    k1 = 2 - dx1*dx1 - dy2*dy2
+    k2 = 2 - dx2*dx2 - dy1*dy1
+    k3 = 2 - dx2*dx2 - dy2*dy2
+    K = k0 + k1 + k2 + k3
     mask = (
-        mask__[y1, x1] * k1 +
-        mask__[y2, x1] * k2 +
-        mask__[y1, x2] * k3 +
-        mask__[y2, x2] * k4
+        mask__[y1, x1] * k0 +
+        mask__[y2, x1] * k1 +
+        mask__[y1, x2] * k2 +
+        mask__[y2, x2] * k3
            ) / K
     if round(mask):  # summed mask is fractional, round to 1|0
         return None  # return rdert if inside the blob
-    ptuple = [(
-        dert__[y1, x1] * k1 +
-        dert__[y2, x1] * k2 +
-        dert__[y1, x2] * k3 +
-        dert__[y2, x2] * k4
-             ) / K
-             for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
+
+    ptuple = []
+    for par0, par1, par2, par3 in (zip(dert__[y1,x1][1:], dert__[y2,x1][1:], dert__[y1,x2][1:], dert__[y2,x2][1:])):  # skip i
+        ptuple += [(par0*k0 + par1*k1 + par2*k2 + par3*k3) / K]
+
     return ptuple
 
 

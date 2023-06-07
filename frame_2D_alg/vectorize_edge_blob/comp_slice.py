@@ -10,28 +10,26 @@ comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slic
 These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high internal match) blobs.
 (high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
 
-Ps and P_s are no longer horizontal, we need to redesign all processes involving P__, starting with comp_slice.
-It should be flat P_, connectivity needs to be traced through root_s of derts adjacent to P.dert_, possibly forking. 
+Ps can be any angle, packed in flat P_, connectivity is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-# not updated:
+# draft:
 def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
-    P_ = blob.P_
+    P_ = blob.P_  # must be contiguous, gaps to be filled after slice_blob
+
     for P in P_:
-        link_,link_m,link_d = [],[],[]  # empty in initial Ps
+        link_m,link_d = [],[]  # empty in initial Ps
         derT=[[],[]]; valT=[0,0]; rdnT=[1,1]  # to sum links in comp_P
-        # old:
-        for _P in _P_:
+
+        for _P in P.link_:
             _L = len(_P.dert_); L = len(P.dert_); _x0=_P.box[2]; x0=P.box[2]
-            # test for x overlap(_P,P) in 8 directions, all derts positive:
+            # test for x overlap(_P,P) in 8 directions, all derts positive?:
             if (x0 - 1 < _x0 + _L) and (x0 + L > _x0):
-                comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
-            elif (x0 + L) < _x0:
-                break  # no xn overlap, stop scanning lower P_
-        if link_:
-            P.link_=link_; P.link_t=[link_m,link_d]
+                comp_P(_P,P, P.link_,link_m,link_d, derT,valT,rdnT, fd=0)
+        if P.link_:
+            P.link_t=[link_m,link_d]
             P.derT=derT; P.valT=valT; P.rdnT=rdnT  # single Mtuple, Dtuple
         _P_ = P_
     PPm_,PPd_ = form_PP_t(P_, base_rdn=2)
