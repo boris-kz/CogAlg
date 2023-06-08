@@ -1,4 +1,14 @@
 from class_cluster import ClusterStructure, init_param as z
+'''
+    Conventions:
+    postfix 't' denotes tuple, multiple ts is a nested tuple
+    postfix '_' denotes array name, vs. same-name elements
+    prefix '_'  denotes prior of two same-name variables
+    prefix 'f'  denotes flag
+    1-3 letter names are normally scalars, except for P and similar classes, 
+    capitalized variables are normally summed small-case variables,
+    longer names are normally classes
+'''
 
 # not needed?
 class CQ(ClusterStructure):  # generic links
@@ -36,7 +46,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnT : list = z([1,1])
     axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
     dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
-    dert_roots_: list = z([])  # root Ps per dert
+    dert_ext_: list = z([])  # external params: roots and coords per dert
     link_ : list = z([])  # all links
     link_t : list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # mPP,dPP that contain this P

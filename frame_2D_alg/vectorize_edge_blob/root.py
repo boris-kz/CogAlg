@@ -50,9 +50,6 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
-def form_link_(blob):  # trace adjacent Ps by adjacent dert roots, fill|prune if missing or redundant, add to P.link_ if >ave*rdn
-    pass
-
 '''
 or only compute params needed for rotate_P_?
 '''
@@ -61,7 +58,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     mask__ = blob.mask__  # same as positive sign here
     dert__ = zip(*blob.dert__)  # convert 10-tuple of 2D arrays into 1D array of 10-tuple blob rows
     dert__ = [zip(*dert_) for dert_ in dert__]  # convert 1D array of 10-tuple rows into 2D array of 10-tuples per select blob
-    blob.dert__ = dert__
+    blob.dert__ = deepcopy(dert__)
     P__ = []
     height, width = mask__.shape
     if verbose: print("Converting to image...")
@@ -88,53 +85,55 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
                 Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-                P_ += [Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, blob.root__)]
+                P_ += [Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, blob.dert_ext__)]
             _mask = mask
             x += 1
         # pack last P, same as above:
         if not _mask:
             G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
             L = len(Pdert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, blob.root__)]
+            P_ += [Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, blob.dert_ext__)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
     blob.P__ = P__
     return P__
 
-def Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, root__):
+def Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, dert_ext__):
 
     P = CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y, y, x-L, x-1], dert_=Pdert_)
-    P.dert_roots_ = [[P] for dert in Pdert_]
+    P.dert_ext_ = [[P] for dert in Pdert_]
 
     bx = P.box[2]
-    while bx < P.box[3]:  # x0->xn
-        root__[y][bx] += [P]
+    while bx <= P.box[3]:
+        dert_ext__[y][bx] += [P]
         bx += 1
 
     return P
 
 def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
-    P__, dert__, mask__ = blob.P__, blob.dert__, blob.mask__
+    P_, dert__, dert_ext__, mask__ = blob.P_, blob.dert__, blob.dert_ext__, blob.mask__
 
-    for P_ in P__:
-        for P in P_:
-            daxis = P.ptuple[3][0] / P.ptuple[5]  # dy: deviation from horizontal axis
-            _daxis = 0
-            G = P.ptuple[5]
-            while abs(daxis)*G > ave_rotate:  # recursive reform P along new G angle in blob.dert__, P.daxis for future reval?
+    for P in P_:
+        daxis = P.ptuple[3][0] / P.ptuple[5]  # dy: deviation from horizontal axis
+        _daxis = 0
+        G = P.ptuple[5]
+        while abs(daxis)*G > ave_rotate:  # recursive reform P along new G angle in blob.dert__, P.daxis for future reval?
 
-                rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
-                maxis, daxis = comp_angle(P.ptuple[3], P.axis)
-                ddaxis = daxis +_daxis  # cancel-out if opposite-sign
-                # terminate if oscillation
-                if ddaxis*G < ave_rotate:
-                    rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
-                    break
+            rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
+            maxis, daxis = comp_angle(P.ptuple[3], P.axis)
+            ddaxis = daxis +_daxis  # cancel-out if opposite-sign
+            # terminate if oscillation
+            if ddaxis*G < ave_rotate:
+                rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
+                break
+        # update blob.dert_ext__ with final rotated P here?
+
 
 def rotate_P(P, dert__, mask__, ave_a):
 
+    dert_ext_ = []  # new P.dert_ext_
     if ave_a is None:
         sin, cos = np.divide(P.ptuple[3], P.ptuple[5])
     else:
@@ -152,6 +151,8 @@ def rotate_P(P, dert__, mask__, ave_a):
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ = [rdert] + rdert_  # append left
         rx-=cos; ry-=sin  # next rx,ry
+        P.dert_ext_ += [[[P],ry,rx]] + dert_ext_  # add external params: roots and coords per dert
+        # blob.dert_ext__ should be updated after last rotation
     x0 = rx; yleft = ry
     # scan right:
     rx=xcenter+cos; ry=ycenter+sin  # center dert was included in scan left
@@ -160,6 +161,7 @@ def rotate_P(P, dert__, mask__, ave_a):
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]  # append right
         rx+=cos; ry+=sin  # next rx,ry
+        dert_ext_ += [[[P],ry,rx]]
     # form rP:
     if not rdert_: return
     rdert = rdert_[0]  # initialization:
@@ -174,6 +176,7 @@ def rotate_P(P, dert__, mask__, ave_a):
     # replace P:
     P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
     P.dert_ = dert_
+    P.dert_ext_ = dert_ext_
     P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
     P.axis = new_axis
 
@@ -206,10 +209,45 @@ def form_rdert(rx,ry, dert__, mask__):
         return None  # return rdert if inside the blob
 
     ptuple = []
-    for par0, par1, par2, par3 in (zip(dert__[y1,x1][1:], dert__[y2,x1][1:], dert__[y1,x2][1:], dert__[y2,x2][1:])):  # skip i
+    for par0, par1, par2, par3 in (zip(dert__[y1,x1][1:],dert__[y2,x1][1:],dert__[y1,x2][1:],dert__[y2,x2][1:])):  # skip i
         ptuple += [(par0*k0 + par1*k1 + par2*k2 + par3*k3) / K]
 
     return ptuple
+
+# partial draft:
+def form_link_(blob):  # trace adjacent Ps by adjacent dert roots, fill|prune if missing or redundant, add to P.link_ if >ave*rdn
+
+    for P in blob.P_:
+        # separate the below into form_link_P(P, blob):
+        up_y_,up_x_,down_y_,down_x_ = [],[],[],[]
+        up_indices, down_indices = [],[]
+        up_rim_, down_rim_ = [],[]  # pseudo, here we need to map P.axis to up and down indices (each is 3 out of 8) in dert rim
+
+        for roots,y,x in P.dert_ext_:
+            dert_rim, ext_rim = [],[]
+            ix, iy = int(y), int(x)
+            # relative coords of 3x3 dert rim, loop clockwise:
+            for i, (dy,dx) in enumerate([[-1,-1], [-1,0], [-1,1], [0,1], [1,1], [1,0], [1,-1], [0,-1]]):
+                rim_y=iy+dy; rim_x=ix+dx
+                if i in up_indices and (rim_y not in up_y_ and rim_x not in up_x_):
+                    up_y_ += [rim_y]; up_x_ += [rim_x]
+                    up_rim_ += [[blob.dert__[rim_y, rim_x], blob.dert_ext__[rim_y, rim_x]]]  # up-adjacent derts and roots
+                elif i in down_indices and (rim_y not in down_y_ and rim_x not in down_x_):
+                    down_y_ += [rim_y]; down_x_ += [rim_x]
+                    down_rim_ += [[blob.dert__[rim_y, rim_x], blob.dert_ext__[rim_y, rim_x]]]  # up-adjacent derts and roots
+
+        # scan rim roots up and down from current P, recursive replace rim_ while blob and newly formed adj_P:
+        for dert, (roots,ry,rx) in up_rim_:  # roots should be added / removed in rotate_P_, these are not initial [P]
+            if roots:
+                for rdn, _P in enumerate(sorted(roots, key=(roots.ptuple[5]))):  # sort by G, rdn for lower-G _Ps only
+                    if _P.ptuple[5] > ave*(rdn+1):
+                        P.link_ += _P  # uplinks only
+                        form_link_P(_P, blob)  # the sequence above
+            elif dert[5] > ave*len(up_rim_):
+                pass  # form new P with adapted form_rdert()?
+
+        for dert, (roots,ry,rx) in down_rim_:
+            pass  # mostly the same as above?
 
 
 def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
