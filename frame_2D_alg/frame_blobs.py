@@ -61,7 +61,7 @@ class CBlob(ClusterStructure):
     box : tuple = (0, 0, 0, 0)  # x0, xn, y0, yn
     mask__ : object = None
     dert__ : object = None
-    dert_ext__ : object = None  # map to dert__
+    dert_roots__ : object = None  # map to dert__
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -107,13 +107,13 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     Y, X = image.shape[:2]
     dert__ = comp_pixel(image)
 
-    blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3] > 0,
-                                         prior_forks='', verbose=verbose)  # dert__[3] is g, https://en.wikipedia.org/wiki/Flood_fill
+    blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3]>0, prior_forks='', verbose=verbose)
+    # dert__[3] is g, https://en.wikipedia.org/wiki/Flood_fill
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
 
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, root_dert__=dert__, dert__=dert__, rlayers=[blob_], box=(0, Y, 0, X))
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, dert__=dert__, rlayers=[blob_], box=(0, Y, 0, X))
     # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -234,7 +234,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in dert__])  # add None__ for m__?
-                blob.dert_ext__= [[[] for dert in dert_[x0:xn]] for dert_ in dert__[0][y0:yn]]
+                blob.dert_roots__ = [[[] for dert in dert_[x0:xn]] for dert_ in dert__[0][y0:yn]]
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)  # recompute G

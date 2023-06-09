@@ -175,3 +175,16 @@ def merge(qPP, _P__, fd):  # the P__s should not have shared Ps
                     if _y0 > prior_y0 and _y0 < current_y0:
                         P__.insert(current_y0, [_P])
                     prior_y0 = current_y0
+'''
+    for dert, roots in up_rim_:
+        if roots:
+            for rdn, up_P in enumerate(sorted(roots, key=roots.ptuple[5] or get_G)):  # sort by G, rdn for lower-G _Ps only
+                if up_P.ptuple[5] > ave*(rdn+1):  # rdn: up-fork redundancy
+                    P.link_ += [up_P]  # represent uplinks only
+                    form_link_(up_P, blob)
+        elif dert[9] > ave*len(up_rim_):  # no adj root in strong dert, -= fork redundancy?
+            up_P = rotate_P(None, blob.dert__, blob.mask__, ave, center=[y,x,dert])  # form new P from central dert
+            if up_P.ptuple[5] > ave * (rdn + 1):  # rdn: up-fork redundancy
+                P.link_ += [up_P]  # represent uplinks only
+                form_link_(up_P, blob)
+'''

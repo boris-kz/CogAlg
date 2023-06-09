@@ -104,7 +104,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     id_T : list = z([[],[]])  # indices in the list of all possible layers|forks, for sparse representation
     valT : list = z([[],[]])
     rdnT : list = z([[],[]])
-    # top md_sets vs md_T: mix of m|d per salient param, sum per set?
+    # T: m,d of pset: params selected in G, or mix of par?
     node_: list = z([])  # same-fork: wH[0], variable nesting? concat sub-node_s in ex.H levs
     wH :   list = z([])  # down-forking tree of node Levs, forks in id_T?
     root_: list = z([])  # agg+|sub+ forks: msets?
