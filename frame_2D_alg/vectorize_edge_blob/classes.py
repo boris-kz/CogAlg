@@ -1,7 +1,7 @@
 from class_cluster import ClusterStructure, init_param as z
 '''
     Conventions:
-    postfix 't' denotes tuple, multiple ts is a nested tuple
+    postfix 't' denotes tuple, multiple ts is a nested tuple, 'T' for indefinite nesting
     postfix '_' denotes array name, vs. same-name elements
     prefix '_'  denotes prior of two same-name variables
     prefix 'f'  denotes flag
@@ -100,11 +100,11 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     G : object = None  # same-scope lower-der|rng G.G.G., or [G0,G1] in derG, None in PP
     fd: int = 0
+    # T is m,d of pset: params selected in G, for separate eval:
     parT : list = z([[],[]])  # aggH( subH( derH H: Lev+= node tree slice/fb, Lev/agg+,lev/sub+? subH if derG
-    id_T : list = z([[],[]])  # indices in the list of all possible layers|forks, for sparse representation
+    id_T : list = z([[],[]])  # indices in the list of all possible layers | forks, for sparse representation
     valT : list = z([[],[]])
     rdnT : list = z([[],[]])
-    # T: m,d of pset: params selected in G, or mix of par?
     node_: list = z([])  # same-fork: wH[0], variable nesting? concat sub-node_s in ex.H levs
     wH :   list = z([])  # down-forking tree of node Levs, forks in id_T?
     root_: list = z([])  # agg+|sub+ forks: msets?

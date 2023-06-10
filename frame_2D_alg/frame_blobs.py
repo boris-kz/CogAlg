@@ -58,7 +58,7 @@ class CBlob(ClusterStructure):
     A : float = 0.0 # blob area
     # composite params:
     M : float = 0.0 # summed PP.M, for both types of recursion?
-    box : tuple = (0, 0, 0, 0)  # x0, xn, y0, yn
+    box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
     dert__ : object = None
     dert_roots__ : object = None  # map to dert__
@@ -113,7 +113,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
 
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, dert__=dert__, rlayers=[blob_], box=(0, Y, 0, X))
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, dert__=dert__, rlayers=[blob_], box=(0,Y,0,X))
     # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 

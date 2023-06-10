@@ -188,3 +188,72 @@ def merge(qPP, _P__, fd):  # the P__s should not have shared Ps
                 P.link_ += [up_P]  # represent uplinks only
                 form_link_(up_P, blob)
 '''
+def rotate_P(P, dert__, mask__, ave_a, center=None):
+
+    dert_ext_ = []  # new P.dert_ext_, or not used in rotation?
+
+    if center:  # form new P from central dert
+        ycenter, xcenter, dert = center
+        sin,cos = dert[3]/dert[9], dert[4]/dert[9]  # dy,dx / G
+        P = CP()
+    else:  # rotate arg P
+        if ave_a is None: sin,cos = np.divide(P.ptuple[3], P.ptuple[5])
+        else:             sin,cos = np.divide(ave_a, np.hypot(*ave_a))
+        if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
+        y0,yn,x0,xn = P.box
+        ycenter = (y0+yn)/2; xcenter = (x0+xn)/2
+    new_axis = sin, cos
+    rdert_ = []
+    # scan left:
+    rx=xcenter; ry=ycenter
+    while True:  # terminating condition is in form_rdert()
+        rdert = form_rdert(rx,ry, dert__, mask__)
+        if rdert is None: break  # dert is not in blob: masked or out of bound
+        rdert_ = [rdert] + rdert_  # append left
+        rx-=cos; ry-=sin  # next rx,ry
+        dert_ext_ += [[[P],ry,rx]] + dert_ext_  # append left external params: roots and coords per dert
+    x0 = rx; yleft = ry
+    # scan right:
+    rx=xcenter+cos; ry=ycenter+sin  # center dert was included in scan left
+    while True:
+        rdert = form_rdert(rx,ry, dert__, mask__)
+        if rdert is None: break  # dert is not in blob: masked or out of bound
+        rdert_ += [rdert]  # append right
+        rx+=cos; ry+=sin  # next rx,ry
+        dert_ext_ += [[[P],ry,rx]]
+    # form rP:
+    if not rdert_: return
+    rdert = rdert_[0]  # initialization:
+    G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    # accumulation:
+    for rdert in rdert_[1:]:
+        g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        dert_ += [rdert]
+    # re-form gradients:
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
+    # replace P:
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.dert_ = dert_
+    P.dert_ext_ = dert_ext_
+    P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
+    P.axis = new_axis
+
+    if center: return P
+
+def Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, dert_roots__):
+
+    P = CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y, y, x-L, x-1], dert_=Pdert_)
+
+    # or after rotate?
+    center_x = int((P.box[2] + P.box[3]) /2)
+    P.dert_ext_ = [[[P], y, center_x] for dert in Pdert_]
+
+    bx = P.box[2]
+    while bx <= P.box[3]:
+        dert_roots__[y][bx] += [P]
+        bx += 1
+
+    return P
+
+def r
