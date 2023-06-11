@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from .classes import CQ, Cgraph
 from .filters import aves, ave, ave_nsub, ave_sub, ave_agg, G_aves, med_decay, ave_distance, ave_Gm, ave_Gd
-from .comp_slice import comp_angle, comp_aangle, comp_par
+from .comp_slice import comp_angle, comp_aangle
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -32,24 +32,30 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 '''
 
 
-def agg_recursion(root, fseg):  # compositional recursion in root.PP_, pretty sure we still need fseg, process should be different
+def agg_recursion(root):  # compositional recursion in root.PP_
 
     mgraph_, dgraph_ = form_graph_(root, fsub=0)  # node.H cross-comp and graph clustering, comp frng pplayers
 
-    for fd, graph_ in enumerate([mgraph_,dgraph_]):  # eval graphs for sub+ and agg+:
-        val = sum([graph.pH.valt[fd] for graph in graph_])
-        # intra-graph sub+ comp node:
-        if val > ave_sub * root.pH.rdnt[fd]:  # same in blob, same base cost for both forks
-            for graph in graph_: graph.rdnt[fd]+=1  # estimate, assign to the weaker in feedback
-            sub_recursion_g(graph_, fseg, root.fds + [fd])  # divide graph_ in der+|rng+ sub_graphs
+    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]  # Valt = [np.sum(root.valT[i]) for i in [0,1]]
+    # eval graphs for sub+, ~sub_recursion_eval?:
+    for fd, graph_ in enumerate([mgraph_,dgraph_]):
+        val = sum([np.sum(graph.valT[fd]) for graph in graph_])
+        rdn = sum([np.sum(graph.rdnT[fd]) for graph in graph_]) + Rdnt[fd]
+        # intra-graph sub+:
+        if val > ave_sub * rdn:  # same in blob, same base cost for both forks
+            for graph in graph_: graph.rdnT[-1][fd] += 1  # estimate, assign to the weaker in feedback
+            sub_recursion(graph_, fd)  # divide graph_ in der+|rng+ sub_graphs
         else:
-            root.fterm = 1; feedback(root)  # update root.root..H, breadth-first
-        # cross-graph agg+ comp graph:
-        if val > G_aves[fd] * ave_agg * root.pH.rdnt[fd] and len(graph_) > ave_nsub:
-            for graph in graph_: graph.rdn+=1  # estimate
-            agg_recursion(root, fseg=fseg)  # replaces root.H
+            feedback(root)  # update root.root..H, breadth-first
+    # eval graph_ for agg+: ~agg_recursion_eval?:
+    Rdnt = [np.sum(root.rdnT[i]) for i in [0,1]]; Valt = [np.sum(root.valT[i]) for i in [0,1]]  # updated in sub+
+
+    for fd, graph_ in enumerate([mgraph_, dgraph_]):  # eval graphs for sub+ and agg+:
+        if Valt[fd] > G_aves[fd] * ave_agg * Rdnt[fd] and len(graph_) > ave_nsub:
+            for graph in graph_: graph.rdnT[-1][fd] += 1  # estimate
+            agg_recursion(root)  # replaces root.H
         else:
-            root.fterm = 1; feedback(root)  # update root.root..H, breadth-first
+            feedback(root)  # update root.root..H, breadth-first
 
 
 def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is node in GG graph
@@ -59,8 +65,8 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
 
     mnode_,dnode_ = [],[]  # Gs with >0 +ve fork links:
     for G in G_:
-        if G.link_.Qm: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
-        if G.link_.Qd: dnode_ += [G]
+        if G.link_t[0]: mnode_ += [G]  # all nodes with +ve links, not clustered in graphs yet
+        if G.link_t[1]: dnode_ += [G]
     graph_t = []
     for fd, node_ in enumerate([mnode_, dnode_]):
         graph_ = []  # init graphs by link val:
@@ -80,7 +86,7 @@ def form_graph_(root, fsub): # form derH in agg+ or sub-pplayer in sub+, G is no
 # not revised
 def init_graph(gnode_, G_, G, fd, val):  # recursive depth-first gnode_+=[_G]
 
-    for link in G.link_.Q:
+    for link in G.link_:
         # all positive links init graph, eval node.link_ in prune_node_layer
         _G = link.G[1] if link.G[0] is G else link.G[0]
         if _G in G_:  # _G is not removed in prior loop
@@ -365,7 +371,7 @@ def sum_box(Box, box):
     Box[:] = [Y + y, X + x, min(X0, x0), max(Xn, xn), min(Y0, y0), max(Yn, yn)]
 
 # draft
-def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
+def sub_recursion(graph_, RVal=0, DVal=0):  # rng+: extend G_ per graph, der+: replace G_ with derG_
 
     for graph in graph_:
         node_ = graph.node_
@@ -376,17 +382,16 @@ def sub_recursion_g(graph_, fseg, fds, RVal=0, DVal=0):  # rng+: extend G_ per g
             Rval = sum([sum(sub_mgraph.valt) for sub_mgraph in sub_mgraph_])
             # eval if Val>cost of call, else feedback per sub_mgraph?
             if RVal + Rval > ave_sub * graph.rdn:
-                rval, dval = sub_recursion_g(sub_mgraph_, fseg=fseg, fds=fds+[0], RVal=Rval, DVal=DVal)
+                rval, dval = sub_recursion(sub_mgraph_, RVal=Rval, DVal=DVal)
                 RVal += rval+dval
             # der+:
             Dval = sum([sum(sub_dgraph.valt) for sub_dgraph in sub_dgraph_])
             if DVal + Dval > ave_sub * graph.rdn:
-                rval, dval = sub_recursion_g(sub_dgraph_, fseg=fseg, fds=fds+[1], RVal=Rval, DVal=DVal)
+                rval, dval = sub_recursion(sub_dgraph_, RVal=Rval, DVal=DVal)
                 Dval += rval+dval
             RVal += Rval
             DVal += Dval
         else:
-            graph.fterm = 1  # forward is terminated, graph.node_ is empty or weak
             feedback(graph)  # bottom-up feedback to update root.H
 
     return RVal, DVal  # or SVal= RVal+DVal, separate for each fork of sub+?

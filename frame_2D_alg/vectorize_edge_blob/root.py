@@ -10,6 +10,8 @@ from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle
 from .agg_convert import agg_recursion_eval
 from .sub_recursion import sub_recursion_eval
+from class_cluster import ClusterStructure, init_param as z
+
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -93,22 +95,22 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                     Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
                     Pdert_ += [dert]
             elif not _mask:
-                # _dert is not masked, dert is masked, terminate P:
-                G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
-                Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
-                L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-                P_ += [CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
+                # _dert is not masked, dert is masked, pack P:
+                P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
             _mask = mask
             x += 1
-        # pack last P, same as above:
-        if not _mask:
-            G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
-            L = len(Pdert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
+        if not _mask:  # pack last P:
+            P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
 
     if verbose: print("\r", end="")
     blob.P_ = P_
     return P_
+
+def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
+
+    G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
+    L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
+    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)
 
 
 def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
@@ -126,8 +128,8 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
             if ddaxis * P.ptuple[5] < ave_rotate:  # terminate if oscillation
                 rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
                 break
-        for y,x,_ in P.dert_ext_:
-            blob.dert_roots__[y][x] += [P]  # final rotated P
+        for _, y,x in P.dert_ext_:
+            blob.dert_roots__[int(y)][int(x)] += [P]  # final rotated P
 
 def rotate_P(P, dert__, mask__, ave_a, center=None):
 
@@ -222,12 +224,8 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
     up_y_,up_x_,down_y_,down_x_ = [],[],[],[]
     up_rim_, down_rim_ = [],[]
     '''
-    draft:
-    oct_=[]
-    for octant in octants:
-        oct_ += [[octant[0] + P.axis[0], octant[1] + P.axis[1]]
-    up_indices = oct_[:2]
-    down_indices = oct_[4:]
+    up_indices = [up[i] += P.axis[i] for i in 0,1]
+    down_indices = [down[i] += P.axis[i] for i in 0,1]
     '''
     for roots,y,x in P.dert_ext_:
         ix, iy = int(y), int(x)
@@ -255,6 +253,9 @@ def scan_P_rim(P, blob, rim_, cP_, fup):  # scan rim roots up and down from curr
 
     for dert, roots, y,x in rim_:
         if roots:  # set(link_+ roots): TypeError: unhashable type: 'CP, probably is due to the changes of class cluster
+            # link_ = z(roots+link_)
+            # Field(name=None,type=None,default=<dataclasses._MISSING_TYPE object at 0x000001CC0C0DA148>,default_factory=<function init_param.<locals>.<lambda> at 0x000001CC127F5708>,init=True,repr=False,hash=None,compare=True,metadata=mappingproxy({}),_field_type=None)
+            # if link_[0]: TypeError: 'Field' object is not subscriptable
             link_ += [root for root in roots if root not in link_]  # unique only
         else:  # no adj root
             y0,yn,x0,xn = blob.box
@@ -287,9 +288,9 @@ def scan_P_rim(P, blob, rim_, cP_, fup):  # scan rim roots up and down from curr
                     break
                 rot_val = abs(daxis) * P.ptuple[5]
             for y,x,_ in P.dert_ext_:
-                blob.dert_roots__[y][x] += [P]  # final rotated P
-            if fup:  P.link_ += [_P]  # represent uplinks only
-            else:   _P.link_ += [P]
+                blob.dert_roots__[int(y)][int(x)] += [P]  # final rotated P
+            if fup: P.link_ += [_P]  # represent uplinks only
+            else:  _P.link_ += [P]
             blob.P_ += [_P]
             form_link_(_P, cP_, blob)
         else:

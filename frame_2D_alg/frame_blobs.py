@@ -75,6 +75,7 @@ class CBlob(ClusterStructure):
     Mdx : float = 0.0
     Ddx : float = 0.0
     # derivation hierarchy:
+    root_dert__ : list = z([])  # from root blob, to extend dert__
     prior_forks : str = ''
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
@@ -177,7 +178,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
 
-                blob = CBlob(sign=sign__[y, x], prior_forks=prior_forks)
+                blob = CBlob(sign=sign__[y, x], root_dert__=dert__, prior_forks=prior_forks)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
                 y0, yn = y, y
@@ -233,7 +234,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 # terminate blob
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
-                blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in dert__])  # add None__ for m__?
+                blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])  # add None__ for m__?
                 blob.dert_roots__ = [[[] for dert in dert_[x0:xn]] for dert_ in dert__[0][y0:yn]]
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses

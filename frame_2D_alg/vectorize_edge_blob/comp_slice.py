@@ -10,28 +10,24 @@ comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slic
 These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high internal match) blobs.
 (high match or match of angle: M | Ma, roughly corresponds to low gradient: G | Ga)
 
-Ps can be any angle, packed in flat P_, connectivity is traced through root_s of derts adjacent to P.dert_, possibly forking. 
+P: any angle, connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-# draft:
 def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite dert core param is v_g + iv_ga
 
-    P_ = blob.P_  # must be contiguous, gaps to be filled after slice_blob
+    P_ = blob.P_  # must be contiguous, gaps filled after slice_blob
 
     for P in P_:
-        link_m,link_d = [],[]  # empty in initial Ps
+        link_,link_m,link_d = [],[],[]  # empty in initial Ps
         derT=[[],[]]; valT=[0,0]; rdnT=[1,1]  # to sum links in comp_P
-
         for _P in P.link_:
-            _L = len(_P.dert_); L = len(P.dert_); _x0=_P.box[2]; x0=P.box[2]
-            # test for x overlap(_P,P) in 8 directions, all derts positive?:
-            if (x0 - 1 < _x0 + _L) and (x0 + L > _x0):
-                comp_P(_P,P, P.link_,link_m,link_d, derT,valT,rdnT, fd=0)
+            comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
+            P.link_ = link_  # convert from Ps to derPs
         if P.link_:
             P.link_t=[link_m,link_d]
             P.derT=derT; P.valT=valT; P.rdnT=rdnT  # single Mtuple, Dtuple
-        _P_ = P_
+
     PPm_,PPd_ = form_PP_t(P_, base_rdn=2)
     blob.PPm_, blob.PPd_  = PPm_, PPd_
 
@@ -40,9 +36,9 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
 
     PP_t = []
     for fd in 0,1:
-        qPP_ = []  # form initial sequence-PPs:
+        qPP_ = []  # initial sequence-PPs
         for P in copy(P_):
-            if not P.roott[fd]:
+            if not P.roott[fd]:  # else already packed in qPP
                 qPP = [[[P]]]  # init PP is 2D queue of Ps, + valt of all layers?
                 P.roott[fd]=qPP; valt = [0,0]
                 uplink_ = P.link_t[fd]; uuplink_ = []
@@ -50,7 +46,7 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps'val
                 while uplink_:
                     for derP in uplink_:
                         _P = derP._P; _qPP = _P.roott[fd]
-                        if _qPP:
+                        if _qPP:  # merge _qPP in qPP:
                             for i in 0, 1: valt[i] += _qPP[1][i]
                             for qP in _qPP.P_:
                                 qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
