@@ -256,4 +256,134 @@ def Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x,
 
     return P
 
-def r
+def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
+
+    slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
+    rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
+    cP_ = copy(blob.P_)  # for popping here, in scan_rim
+    while cP_:
+        form_link_(cP_.pop(0), cP_, blob)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
+
+    comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
+        sub_recursion_eval(blob, PP_, fd=fd)  # intra PP, no blob fb
+        # compare PPs, cluster in graphs:
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
+'''
+or only compute params needed for rotate_P_?
+'''
+def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps, ~1D Ps, in select smooth edge (high G, low Ga) blobs
+
+    mask__ = blob.mask__  # same as positive sign here
+    dert__ = zip(*blob.dert__)  # convert ptuple of 2D arrays to ptuple of 1D arrays: blob rows
+    dert__ = [list(zip(*dert_)) for dert_ in dert__]  # convert ptuple of 1D arrays to 2D array of ptuples
+    blob.dert__ = dert__
+    P_ = []
+    height, width = mask__.shape
+    if verbose: print("Converting to image...")
+
+    for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple slices -> Ps:
+        if verbose: print(f"\rConverting to image... Processing line {y + 1}/{height}", end=""); sys.stdout.flush()
+        _mask = True  # mask -1st dert
+        x = 0
+        for (i, *dert), mask in zip(dert_, mask_):
+            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
+            if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
+                if _mask:  # ini P params with first unmasked dert
+                    Pdert_ = [dert]
+                    I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
+                    Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
+                else:
+                    # dert and _dert are not masked, accumulate P params:
+                    I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
+                    Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
+                    Pdert_ += [dert]
+            elif not _mask:
+                # _dert is not masked, dert is masked, pack P:
+                P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
+            _mask = mask
+            x += 1
+        if not _mask:  # pack last P:
+            P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
+
+    if verbose: print("\r", end="")
+    blob.P_ = P_
+    return P_
+
+def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
+
+    G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
+    L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
+    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)
+
+def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
+
+    P_, dert__, mask__ = blob.P_, blob.dert__, blob.mask__
+
+    for P in P_:
+        G = P.ptuple[5]
+        daxis = P.ptuple[3][0] / G  # dy: deviation from horizontal axis
+        _daxis = 0
+        while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.dert__ along new G angle:
+            rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any, P.daxis for future reval?
+            maxis, daxis = comp_angle(P.ptuple[3], P.axis)
+            ddaxis = daxis +_daxis  # cancel-out if opposite-sign
+            if ddaxis * P.ptuple[5] < ave_rotate:  # terminate if oscillation
+                rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
+                break
+        for _, y,x in P.dert_ext_:
+            blob.dert_roots__[int(y)][int(x)] += [P]  # final rotated P
+
+def rotate_P(P, dert__, mask__, ave_a, center=None):
+
+    dert_ext_ = []  # new P.dert_ext_, or not used in rotation?
+
+    if center:  # form new P from central dert
+        ycenter, xcenter, dert = center
+        sin,cos = dert[3]/dert[9], dert[4]/dert[9]  # dy,dx / G
+        P = CP()
+    else:  # rotate arg P
+        if ave_a is None: sin,cos = np.divide(P.ptuple[3], P.ptuple[5])
+        else:             sin,cos = np.divide(ave_a, np.hypot(*ave_a))
+        if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
+        y0,yn,x0,xn = P.box
+        ycenter = (y0+yn)/2; xcenter = (x0+xn)/2
+    new_axis = sin, cos
+    rdert_ = []
+    # scan left:
+    rx=xcenter; ry=ycenter
+    while True:  # terminating condition is in form_rdert()
+        rdert = form_rdert(rx,ry, dert__, mask__)
+        if rdert is None: break  # dert is not in blob: masked or out of bound
+        rdert_ = [rdert] + rdert_  # append left
+        rx-=cos; ry-=sin  # next rx,ry
+        dert_ext_.insert(0, [[[P],ry,rx]])  # append left external params: roots and coords per dert
+    x0 = rx; yleft = ry
+    # scan right:
+    rx=xcenter+cos; ry=ycenter+sin  # center dert was included in scan left
+    while True:
+        rdert = form_rdert(rx,ry, dert__, mask__)
+        if rdert is None: break  # dert is not in blob: masked or out of bound
+        rdert_ += [rdert]  # append right
+        rx+=cos; ry+=sin  # next rx,ry
+        dert_ext_ += [[[P],ry,rx]]
+    # form rP:
+    if not rdert_: return
+    rdert = rdert_[0]  # initialization:
+    G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    # accumulation:
+    for rdert in rdert_[1:]:
+        g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        dert_ += [rdert]
+    # re-form gradients:
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
+    # replace P:
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.dert_ = dert_
+    P.dert_ext_ = dert_ext_
+    P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
+    P.axis = new_axis
+
+    if center: return P  # when forming new P from dert

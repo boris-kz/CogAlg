@@ -53,7 +53,7 @@ def visualize_blobs(frame, layer='r'):
         blob_id=None, img_slice=None, blob_cls=None,
         layers_stack=[(frame, layer)],
         # flags
-        show_gradient=True, quiver=None,
+        show_gradient=False, quiver=None,
     )
 
     fig, ax = plt.subplots()
@@ -104,12 +104,15 @@ def visualize_blobs(frame, layer='r'):
 
         state.blob_cls = blob_[0].__class__
         y0, yn, x0, xn = frame.box
-        rY, rX = frame.root_dert__[0].shape
-        y0e = max(0, y0 - 1)
-        yne = min(rY, yn + 1)
-        x0e = max(0, x0 - 1)
-        xne = min(rX, xn + 1)  # e is for extended
-        state.img_slice = slice(y0e, yne), slice(x0e, xne)
+        if frame.root_dert__:
+            rY, rX = frame.root_dert__[0].shape
+            y0e = max(0, y0 - 1)
+            yne = min(rY, yn + 1)
+            x0e = max(0, x0 - 1)
+            xne = min(rX, xn + 1)  # e is for extended
+            state.img_slice = slice(y0e, yne), slice(x0e, xne)
+        else:
+            state.img_slice = slice(None), slice(None)
         state.background[:] = MASKING_VAL
         state.idmap[:] = -1
         # Prepare blob ID map and background
