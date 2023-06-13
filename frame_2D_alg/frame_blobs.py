@@ -60,7 +60,7 @@ class CBlob(ClusterStructure):
     M : float = 0.0 # summed PP.M, for both types of recursion?
     box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
-    dert__ : object = None
+    der__t : object = None
     dert_roots__ : object = None  # map to dert__
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
@@ -106,15 +106,15 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
 
     if verbose: start_time = time()
     Y, X = image.shape[:2]
-    dert__ = comp_pixel(image)
+    der__t = comp_pixel(image)
 
-    blob_, idmap, adj_pairs = flood_fill(dert__, sign__= ave-dert__[3]>0, prior_forks='', verbose=verbose)
+    blob_, idmap, adj_pairs = flood_fill(der__t, sign__= ave-der__t[3]>0, prior_forks='', verbose=verbose)
     # dert__[3] is g, https://en.wikipedia.org/wiki/Flood_fill
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
 
-    frame = CBlob(I=I, Dy=Dy, Dx=Dx, dert__=dert__, rlayers=[blob_], box=(0,Y,0,X))
+    frame = CBlob(I=I, Dy=Dy, Dx=Dx, der__t=der__t, rlayers=[blob_], box=(0,Y,0,X))
     # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -234,7 +234,7 @@ def flood_fill(dert__, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 # terminate blob
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
-                blob.dert__ = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])  # add None__ for m__?
+                blob.der__t = tuple([param_dert__[y0:yn, x0:xn] for param_dert__ in blob.root_dert__])  # add None__ for m__?
                 blob.dert_roots__ = [[[] for dert in dert_[x0:xn]] for dert_ in dert__[0][y0:yn]]
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses

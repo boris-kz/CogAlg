@@ -48,14 +48,16 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
     dert_ext_: list = z([])  # external params: roots and coords per dert
     link_ : list = z([])  # all links
-    link_t : list = z([[],[]])  # +ve rlink_, dlink_
+    link_t: list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # mPP,dPP that contain this P
-    box : list = z([0,0,0,0])  # y0,yn, x0,xn
-    # optional:
+    y : int = 0
+    x : int = 0
+    ''' optional:
     dxdert_ : list = z([])  # only in Pd
     Pd_ : list = z([])  # only in Pm
     Mdx : int = 0  # if comp_dx
     Ddx : int = 0
+    '''
 
 class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 

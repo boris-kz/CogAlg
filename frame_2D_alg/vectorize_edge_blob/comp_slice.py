@@ -23,7 +23,7 @@ def comp_slice(blob, verbose=False):  # high-G, smooth-angle blob, composite der
         derT=[[],[]]; valT=[0,0]; rdnT=[1,1]  # to sum links in comp_P
         for _P in P.link_:
             comp_P(_P,P, link_,link_m,link_d, derT,valT,rdnT, fd=0)
-            P.link_ = link_  # convert from Ps to derPs
+            P.link_ = link_  # convert links from Ps to derPs
         if P.link_:
             P.link_t=[link_m,link_d]
             P.derT=derT; P.valT=valT; P.rdnT=rdnT  # single Mtuple, Dtuple
@@ -120,8 +120,10 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
     P_,_,_ = qPP  # proto-PP is a list
     # init:
     P = (P_[0])
-    Ptuple, DerT,ValT,RdnT, (Y0,Yn,X0,Xn), Link_,Link_m,Link_d \
-    = deepcopy(P.ptuple),deepcopy(P.derT),deepcopy(P.valT),deepcopy(P.rdnT),copy(P.box),copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1])
+    Ptuple, DerT,ValT,RdnT, Link_,Link_m,Link_d, y,x = \
+    deepcopy(P.ptuple),deepcopy(P.derT),deepcopy(P.valT),deepcopy(P.rdnT), copy(P.link_),copy(P.link_t[0]),copy(P.link_t[1], P.y,P.x)
+    L = Ptuple[7]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2  # side-accumulated sin,cos
+    Y0 = y-Dy; Yn = y+Dy; X0 = x-Dx; Xn = x+Dx
     PP = CPP(fd=fd, P_=P_)
     # accum:
     for i, P in enumerate(P_):
@@ -129,8 +131,8 @@ def sum2PP(qPP, base_rdn, fd):  # sum Ps and links into PP
         if i:  # exclude init P
             sum_ptuple(Ptuple, P.ptuple)
             Link_+=P.link_; Link_m+=P.link_t[0]; Link_d+=P.link_t[1]
-            y0,yn,x0,xn = P.box
-            Y0=min(Y0,y0); Yn=max(Yn,yn); X0=min(X0,x0); Xn=max(Xn,xn)
+            L=P.tuple[7]; Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y=P.y; x=P.x
+            Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x-Dx))
             if P.derT[0]:
                 for j in 0,1:
                     if isinstance(P.valT[0], list):  # der+: H = 1fork) 1layer before feedback
